@@ -26,6 +26,7 @@ import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
 import { browserStorage, loadRun, saveKey, saveRun } from "./save";
+import { boardBaseFov, fovForZoom, pinchZoom, wheelZoom } from "./view-zoom";
 import {
   loadSettings,
   prefersReducedMotion,
@@ -98,7 +99,7 @@ pivot.rotation.order = "YXZ";
 pivot.add(assembly);
 scene.add(pivot);
 
-const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(boardBaseFov, 1, 0.1, 1000);
 camera.position.set(0, 3, 8);
 camera.lookAt(0, 0, 0);
 const handCamera = new THREE.OrthographicCamera(-4, 4, 4, -4, 0.1, 100);
@@ -261,6 +262,7 @@ function addToBoard(block: CardBlock, cell: Cell): RenderedBlock {
 const cameraDirection = new THREE.Vector3(0, 3, 8).normalize();
 const initialCameraDistance = Math.hypot(3, 8);
 let cameraDistance = initialCameraDistance;
+let boardZoom = 1;
 const cameraTarget = new THREE.Vector3();
 type CameraMove = {
   startAt: number;
@@ -305,7 +307,9 @@ function desiredCamera(): { distance: number; target: THREE.Vector3 } {
     z: Math.max(Math.abs(min.z - 0.5 - center.z), Math.abs(max.z + 0.5 - center.z)),
   };
   const radius = Math.hypot(extents.x, extents.y, extents.z) * cubeSize;
-  const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+  // Framing uses the neutral lens. The player's zoom stays in effect after a
+  // placement or resize instead of being cancelled by an automatic camera move.
+  const verticalFov = THREE.MathUtils.degToRad(boardBaseFov);
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
   const limitingFov = Math.min(verticalFov, horizontalFov);
   return {
@@ -317,6 +321,12 @@ function desiredCamera(): { distance: number; target: THREE.Vector3 } {
 function applyCamera(): void {
   camera.position.copy(cameraTarget).addScaledVector(cameraDirection, cameraDistance);
   camera.lookAt(cameraTarget);
+}
+
+function applyBoardZoom(zoom: number): void {
+  boardZoom = zoom;
+  camera.fov = fovForZoom(zoom);
+  camera.updateProjectionMatrix();
 }
 
 function scheduleCameraMove(): void {
@@ -547,6 +557,20 @@ type BoardDrag = {
 };
 let boardDrag: BoardDrag | null = null;
 let suppressClickUntil = 0;
+const touches = new Map<number, { x: number; y: number }>();
+let pinch: { zoom: number; distance: number } | null = null;
+
+function touchSpread(): number {
+  const [first, second] = [...touches.values()];
+  return first && second ? Math.hypot(second.x - first.x, second.y - first.y) : 0;
+}
+
+let lastZoomSoundAt = -Infinity;
+function soundZoom(): void {
+  const now = performance.now();
+  if (now - lastZoomSoundAt > 350) playSfx("view.zoom");
+  lastZoomSoundAt = now;
+}
 
 function showInspection(block: CardBlock | undefined, clientX: number, clientY: number): void {
   const label = block && inspectBlock(block);
@@ -1302,6 +1326,20 @@ function finishBoardDrag(): void {
 
 const onPointerDown = (event: PointerEvent) => {
   if (pendingAction) return;
+  if (event.pointerType === "touch") {
+    touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (touches.size >= 2) {
+      // A second finger changes the gesture, never places or discards a card.
+      if (drag) finishDrag(false);
+      if (boardDrag) finishBoardDrag();
+      pinch = { zoom: boardZoom, distance: touchSpread() };
+      for (const id of touches.keys()) renderer.domElement.setPointerCapture(id);
+      suppressClickUntil = performance.now() + 400;
+      soundZoom();
+      return;
+    }
+    if (pinch) return;
+  }
   tooltip.hidden = true;
   const source = pickBlock(event.clientX, event.clientY, handBlocks);
   if (source?.block.traits.attachable) {
@@ -1337,6 +1375,15 @@ const onPointerDown = (event: PointerEvent) => {
   };
 };
 const onPointerMove = (event: PointerEvent) => {
+  const finger = touches.get(event.pointerId);
+  if (finger) {
+    finger.x = event.clientX;
+    finger.y = event.clientY;
+    if (pinch) {
+      if (touches.size >= 2) applyBoardZoom(pinchZoom(pinch.zoom, pinch.distance, touchSpread()));
+      return;
+    }
+  }
   if (drag?.pointerId === event.pointerId) {
     drag.lastX = event.clientX;
     drag.lastY = event.clientY;
@@ -1397,6 +1444,14 @@ const onPointerLeave = () => {
   renderer.domElement.style.cursor = "default";
 };
 const onPointerUp = (event: PointerEvent) => {
+  if (event.pointerType === "touch") {
+    touches.delete(event.pointerId);
+    if (pinch) {
+      suppressClickUntil = performance.now() + 400;
+      if (touches.size === 0) pinch = null;
+      return;
+    }
+  }
   const wasDragging = Boolean(drag?.active || boardDrag?.active);
   if (drag?.pointerId === event.pointerId) {
     drag.lastX = event.clientX;
@@ -1416,6 +1471,14 @@ const onPointerUp = (event: PointerEvent) => {
   );
 };
 const onPointerCancel = (event: PointerEvent) => {
+  if (event.pointerType === "touch") {
+    touches.delete(event.pointerId);
+    if (pinch) {
+      suppressClickUntil = performance.now() + 400;
+      if (touches.size === 0) pinch = null;
+      return;
+    }
+  }
   if (drag?.pointerId === event.pointerId) finishDrag(false);
   if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
   tooltip.hidden = true;
@@ -1434,7 +1497,6 @@ const onClick = (event: MouseEvent) => {
   showSelection();
   updateDiscardCount();
 };
-
 /** Click or tap the bin: discard the selected hand blocks as one discard. */
 discardArea.addEventListener("click", () => {
   if (pendingAction || drag?.active || !game.inStage) return;
@@ -1445,12 +1507,26 @@ discardArea.addEventListener("click", () => {
     playSfx("action.denied");
   }
 });
+const onWheel = (event: WheelEvent) => {
+  if (menus.isOpen) return;
+  event.preventDefault();
+  applyBoardZoom(wheelZoom(boardZoom, event.deltaY, event.deltaMode));
+  soundZoom();
+};
+const onBlur = () => {
+  if (drag) finishDrag(false);
+  if (boardDrag) finishBoardDrag();
+  touches.clear();
+  pinch = null;
+};
 renderer.domElement.addEventListener("pointerdown", onPointerDown);
 renderer.domElement.addEventListener("pointermove", onPointerMove);
 renderer.domElement.addEventListener("pointerleave", onPointerLeave);
 renderer.domElement.addEventListener("pointerup", onPointerUp);
 renderer.domElement.addEventListener("pointercancel", onPointerCancel);
 renderer.domElement.addEventListener("click", onClick);
+renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+window.addEventListener("blur", onBlur);
 
 const resize = () => {
   const { width, height } = host.getBoundingClientRect();
@@ -1515,6 +1591,8 @@ if (import.meta.hot) {
     renderer.domElement.removeEventListener("pointerup", onPointerUp);
     renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
     renderer.domElement.removeEventListener("click", onClick);
+    renderer.domElement.removeEventListener("wheel", onWheel);
+    window.removeEventListener("blur", onBlur);
     if (pendingAction?.kind === "discard") pendingAction.effects.forEach((e) => e.finish());
     appearing.forEach(({ effect }) => effect.finish());
     renderedBlocks.slice().forEach(disposeCube);

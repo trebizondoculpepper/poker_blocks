@@ -258,6 +258,10 @@ const entries = [
     prompt: "A soft light card slide ending in a gentle tap, tidy",
     durationSeconds: 0.5,
   },
+  {
+    id: "view.zoom",
+    trigger: "A wheel zoom burst or two-finger pinch begins on the playing field",
+  },
 ] as const satisfies readonly SoundEffect[];
 
 /** Every registered sound. Add new entries to the list above. */
