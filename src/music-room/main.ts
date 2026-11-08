@@ -2,8 +2,8 @@
 // /music.html. It lists every `*-loop.ogg` in music/loops/ with the tempo and beat count
 // from its sidecar. Clicking a loop fades it in on the next bar.
 import "./style.css";
-import { createBeatClock } from "./beat-clock";
-import { fadeCurve, fadeKinds, type FadeKind } from "./fade";
+import { createBeatClock } from "../audio/beat-clock";
+import { fadeCurve, fadeKinds, type FadeKind } from "../audio/music-fade";
 import { fitTaps, snapToLoop, type LoopTempo } from "./tap-tempo";
 
 type LoopInfo = {

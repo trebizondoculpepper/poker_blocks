@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { fadeCurve, fadeGain, fadeKinds, logFadeCurve, type FadeKind } from "./fade";
+import { fadeCurve, fadeGain, fadeKinds, logFadeCurve, type FadeKind } from "./music-fade";
 
 describe("logarithmic fade", () => {
   it("runs from silence to full level and back", () => {
