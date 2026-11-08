@@ -262,6 +262,10 @@ const entries = [
     id: "view.zoom",
     trigger: "A wheel zoom burst or two-finger pinch begins on the playing field",
   },
+  {
+    id: "ui.screenshot",
+    trigger: "The player starts a whole-window 4K screenshot with the keyboard shortcut",
+  },
 ] as const satisfies readonly SoundEffect[];
 
 /** Every registered sound. Add new entries to the list above. */

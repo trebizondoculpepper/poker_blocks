@@ -12,6 +12,7 @@
     "sfx": "node --env-file-if-exists=.env scripts/generate-sfx.ts"
   },
   "dependencies": {
+    "html-to-image": "^1.11.13",
     "three": "^0.187.0"
   },
   "devDependencies": {

@@ -27,6 +27,7 @@ import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
 import { browserStorage, loadRun, saveKey, saveRun } from "./save";
 import { boardBaseFov, fovForZoom, pinchZoom, wheelZoom } from "./view-zoom";
+import { bindScreenshotShortcut } from "./screenshot";
 import {
   loadSettings,
   prefersReducedMotion,
@@ -105,7 +106,7 @@ camera.lookAt(0, 0, 0);
 const handCamera = new THREE.OrthographicCamera(-4, 4, 4, -4, 0.1, 100);
 handCamera.position.set(0, 3, 8);
 handCamera.lookAt(0, 0, 0);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.autoClear = false;
@@ -1227,6 +1228,7 @@ if (materialsRoom) {
 } else {
   menus.showTitle();
 }
+const unbindScreenshot = bindScreenshotShortcut(host, renderer, render);
 stat("action").addEventListener("click", takeNextAction);
 
 // ----- Developer console: ~ (or `) drops it down -----
@@ -1583,6 +1585,7 @@ frame = requestAnimationFrame(animate);
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    unbindScreenshot();
     cancelAnimationFrame(frame);
     observer.disconnect();
     renderer.domElement.removeEventListener("pointerdown", onPointerDown);

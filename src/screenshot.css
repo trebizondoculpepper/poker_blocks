@@ -1,0 +1,30 @@
+.screenshot-notice {
+  position: fixed;
+  z-index: 100;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  padding: 10px 14px;
+  border: 1px solid #8191a7;
+  border-radius: 8px;
+  background: #1c2739f2;
+  color: #f6f0e3;
+  box-shadow: 0 10px 28px #0007;
+  font:
+    600 14px system-ui,
+    sans-serif;
+}
+
+.screenshot-notice[hidden] {
+  display: none;
+}
+
+.screenshot-notice button {
+  margin-left: 8px;
+  padding: 5px 9px;
+  border: 1px solid #9ce6d7;
+  border-radius: 5px;
+  background: #9ce6d7;
+  color: #122031;
+  font: inherit;
+  cursor: pointer;
+}
