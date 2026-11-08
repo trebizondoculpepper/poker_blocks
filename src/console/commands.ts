@@ -19,6 +19,12 @@ export type ConsoleHost = {
   newGame(): void;
   /** Go to the main menu (the title screen). */
   home(): void;
+  /** The dev room open now ("dev0", "dev1", ...), or null in the normal game. */
+  room(): string | null;
+  /** The dev rooms there are. */
+  rooms(): readonly string[];
+  /** Open a dev room with a fresh run (null: the normal game, new run). */
+  resetRoom(room: string | null): void;
   /** Decide the current stage now (a developer shortcut); false outside a stage. */
   forceOutcome(outcome: "won" | "lost"): boolean;
   musicTracks(): readonly string[];
@@ -160,6 +166,19 @@ export const COMMANDS: readonly ConsoleCommand[] = [
     run(host) {
       host.home();
       return "main menu";
+    },
+  },
+  {
+    name: "reset",
+    usage: "[room]",
+    help: "start the current room afresh, or open a dev room with a fresh run: reset dev2",
+    complete: (host, args) => (args.length ? [] : host.rooms()),
+    run(host, [room]) {
+      const target = room ? room.toLowerCase() : host.room();
+      if (target && !host.rooms().includes(target))
+        return fail(`reset: no room "${room}" (rooms are ${host.rooms().join(", ")})`);
+      host.resetRoom(target);
+      return target ? `resetting ${target}` : "new run";
     },
   },
   {

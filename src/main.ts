@@ -382,6 +382,8 @@ const storage = browserStorage();
  */
 const roomParams = new URLSearchParams(window.location.search);
 const roomName = roomParams.get("room");
+/** The dev rooms, for the console's reset command. */
+const devRooms = ["dev0", "dev1", "dev2"];
 const materialsRoom = roomName === "dev1";
 const passivesRoom = roomName === "dev2";
 const materialDevRoom = roomName === "dev0" || roomName === "dev" || materialsRoom;
@@ -1291,6 +1293,21 @@ createConsole({
     menus.closeAll();
   },
   home: () => menus.showTitle(),
+  room: () => (roomName === "dev" ? "dev0" : devRooms.includes(roomName ?? "") ? roomName : null),
+  rooms: () => devRooms,
+  resetRoom(room) {
+    if (!room) {
+      startRun(newSession());
+      menus.closeAll();
+      return;
+    }
+    // Dev rooms restart through their own URL (?room=...&restart=true), which skips the
+    // saved run and starts afresh.
+    const url = new URL(window.location.href);
+    url.searchParams.set("room", room);
+    url.searchParams.set("restart", "true");
+    window.location.assign(url);
+  },
   forceOutcome(outcome) {
     if (pendingAction || !game.forceOutcome(outcome)) return false;
     shownScore = game.state.round.score;

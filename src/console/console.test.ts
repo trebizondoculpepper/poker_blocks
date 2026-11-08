@@ -17,6 +17,9 @@ function fakeHost() {
     next: () => void calls.push("next"),
     newGame: () => void calls.push("new"),
     home: () => void calls.push("home"),
+    room: () => null,
+    rooms: () => ["dev0", "dev1", "dev2"],
+    resetRoom: (room: string | null) => void calls.push(`reset ${room}`),
     forceOutcome: (outcome: "won" | "lost") => game.forceOutcome(outcome),
     musicTracks: () => ["style-noir", "solitaire-boss"],
     musicNow: () => now,
@@ -77,6 +80,14 @@ describe("the commands", () => {
     expect(lost.game.state.round.movesLeft).toBe(0);
     expect(lost.calls).toContain("next");
     expect(calls).not.toContain("next");
+  });
+
+  it("resets a dev room by name, or the current game", () => {
+    const { text, calls } = fakeHost();
+    expect(text("reset dev2")).toEqual(["resetting dev2"]);
+    expect(text("reset")).toEqual(["new run"]);
+    expect(text("reset dev9")[0]).toMatch(/no room/);
+    expect(calls).toEqual(["reset dev2", "reset null"]);
   });
 
   it("goes home to the main menu", () => {
