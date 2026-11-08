@@ -2,7 +2,7 @@
  * Game music: seamless loops from music/loops/, switched on the bar like the music room.
  *
  * Switching from A to B: on the next bar line B enters on the same beat, playing at A's
- * tempo; the two crossfade (logarithmic by default); A stops when B is fully up; then,
+ * tempo; the two crossfade over two bars (square-law by default); A stops when B is fully up; then,
  * after an optional delay, the tempo eases to B's natural speed like a tape machine.
  * All loops follow one beat clock, so beats stay locked throughout.
  */
@@ -20,7 +20,8 @@ export type LoopInfo = {
 export type MusicTrack = { id: string; url: string; info: LoopInfo };
 
 export type SwitchOptions = {
-  fadeSeconds: number;
+  /** Crossfade length in bars (4 beats each) at the outgoing tempo. */
+  fadeBars: number;
   fadeKind: FadeKind;
   /** Hold the outgoing tempo this long after the fade before easing. */
   easeDelaySeconds: number;
@@ -28,8 +29,8 @@ export type SwitchOptions = {
 };
 
 export const defaultSwitch: SwitchOptions = {
-  fadeSeconds: 4,
-  fadeKind: "logarithmic",
+  fadeBars: 2,
+  fadeKind: "exponential",
   easeDelaySeconds: 0,
   easeSeconds: 5,
 };
@@ -113,6 +114,9 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
     voice.source.addEventListener("ended", () => fading.delete(voice));
   }
 
+  /** Seconds that `bars` bars last at `tempo` BPM. */
+  const barsToSeconds = (bars: number, tempo: number) => (bars * 4 * 60) / tempo;
+
   function rateCurve(start: number, seconds: number, tempo: number): Float32Array {
     const curve = new Float32Array(128);
     for (let i = 0; i < curve.length; i++) {
@@ -142,7 +146,7 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
         current.gain.gain.setValueCurveAtTime(
           fadeCurve(options.fadeKind, true),
           at,
-          options.fadeSeconds,
+          barsToSeconds(options.fadeBars, track.info.tempo_bpm),
         );
         return;
       }
@@ -153,8 +157,10 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
       const from = clock.tempoAt(at);
       const to = track.info.tempo_bpm;
       const beat = clock.beatAt(at);
+      // The tempo holds at `from` through the fade, so its bars are a fixed length.
+      const fadeSeconds = barsToSeconds(options.fadeBars, from);
       clock.ramp(at, 0, from);
-      const easeAt = at + options.fadeSeconds + options.easeDelaySeconds;
+      const easeAt = at + fadeSeconds + options.easeDelaySeconds;
       clock.ramp(easeAt, options.easeSeconds, to);
 
       const outgoing = current;
@@ -170,17 +176,9 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
       }
       incoming.source.playbackRate.setValueAtTime(1, easeAt + options.easeSeconds);
       outgoing.gain.gain.cancelScheduledValues(at);
-      outgoing.gain.gain.setValueCurveAtTime(
-        fadeCurve(options.fadeKind, false),
-        at,
-        options.fadeSeconds,
-      );
-      incoming.gain.gain.setValueCurveAtTime(
-        fadeCurve(options.fadeKind, true),
-        at,
-        options.fadeSeconds,
-      );
-      retire(outgoing, at + options.fadeSeconds);
+      outgoing.gain.gain.setValueCurveAtTime(fadeCurve(options.fadeKind, false), at, fadeSeconds);
+      incoming.gain.gain.setValueCurveAtTime(fadeCurve(options.fadeKind, true), at, fadeSeconds);
+      retire(outgoing, at + fadeSeconds);
       current = incoming;
     },
 
