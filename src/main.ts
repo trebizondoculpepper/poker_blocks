@@ -28,7 +28,6 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import {
   cellKey,
   faceFromDirection,
-  faceFromNormal,
   faceNormal,
   type Cell,
   type Face,
