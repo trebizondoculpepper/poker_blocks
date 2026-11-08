@@ -90,7 +90,7 @@ export function createMusicController(
         if (woundDown) return;
         beforeWindDown = player.current;
         woundDown = true;
-        player.windDown(3);
+        player.windDown();
       }),
     windUp: () => request(() => start(beforeWindDown)),
     get woundDown() {

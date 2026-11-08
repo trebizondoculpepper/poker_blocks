@@ -87,7 +87,7 @@ describe("music controller", () => {
     music.unlock();
     music.switchToRandomStageTrack();
     music.windDown();
-    expect(log.at(-1)).toBe("windDown 3");
+    expect(log.at(-1)).toBe("windDown undefined");
     expect(music.current).toBeNull();
     expect(music.woundDown).toBe(true);
   });

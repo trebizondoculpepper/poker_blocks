@@ -15,7 +15,7 @@ export type WindShape = {
 };
 
 export const defaultWind: WindShape = {
-  downSeconds: 3,
+  downSeconds: 4.5,
   slowdown: 1.6,
   silentTail: 0.15,
   upSeconds: 2,
