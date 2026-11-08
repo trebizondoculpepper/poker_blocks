@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1020" />
+    <title>Listening Room</title>
+  </head>
+  <body>
+    <main class="room">
+      <header class="room-header">
+        <h1>Listening room</h1>
+        <p class="room-intro">
+          Every sound in <code>src/audio/sfx-registry.ts</code>. Click a row or press its number key
+          to play it.
+        </p>
+        <div class="room-controls">
+          <button type="button" id="play-all">Play all</button>
+          <button type="button" id="stop">Stop</button>
+          <label>
+            Volume
+            <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8" />
+          </label>
+          <label>
+            Pitch <output id="pitch-value">1.00×</output>
+            <input id="pitch" type="range" min="0.5" max="2" step="0.05" value="1" />
+          </label>
+          <label class="check">
+            <input id="jitter" type="checkbox" />
+            Random pitch ±8%
+          </label>
+          <button type="button" id="chain">Line chain ×5</button>
+        </div>
+      </header>
+      <ol id="sounds" class="sounds"></ol>
+    </main>
+    <script type="module" src="/src/listening-room/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,102 @@
+# Sound design
+
+Every sound the game needs, the moment it plays, and whether it exists yet. The rules these sounds support are in [game.md](game.md).
+
+## Approach
+
+- **One registry.** [`src/audio/sfx-registry.ts`](../src/audio/sfx-registry.ts) lists each sound: its id, trigger, generation prompt, duration and number of variants. Game code refers to sounds only by id.
+- **Generated once, locally.** `npm run sfx` (which runs `scripts/generate-sfx.ts`) calls the ElevenLabs sound-effects API for any registry entry that has no file yet. The key comes from `ELEVENLABS_API_KEY` in your environment. The results are committed under `src/assets/sfx/<id>.<variant>.mp3`, so builds and CI never need the key. Pass ids to generate only those sounds, and `--force` to regenerate files that already exist.
+- **Every action has a sound.** Game code calls `playSfx(id)` from [`src/audio/sfx.ts`](../src/audio/sfx.ts) for each player action and notable event. The id is type-checked against the registry.
+- **Register first, generate later.** A registry entry needs only an `id` and a `trigger`. The prompt and generation settings are optional, and a sound with no audio file plays silently. This lets anyone, including coding agents, add the sound for a new action without writing a prompt or generating audio. Audio is generated in batches: `npm run sfx -- --list` shows which entries still need a prompt and which are ready to generate. The rules for agents are in [AGENTS.md](../AGENTS.md).
+- **Checked by a test.** [`sfx-registry.test.ts`](../src/audio/sfx-registry.test.ts) checks that ids are unique and well formed, that each entry has a trigger, and that every audio file belongs to a registry entry. Missing audio is allowed.
+- **Listening room.** With the dev server running, open `/sfx.html` to hear every sound. It shows each sound's trigger and prompt, and has volume, pitch and random-pitch controls, plus a preview of a scoring chain at rising pitch. Number keys play sounds 1 to 10, and Esc stops playback. It is a development page and is not part of the production build.
+- **One style.** Every prompt has a shared style line appended (`sfxStyle`): clean, tactile, dry, no music and no voice. This keeps the set sounding like one game.
+- **Variety without extra files.** Sounds that repeat often (dealing, line scores, counter ticks) are played at slightly random pitch. A chain of line scores replays one sound at rising pitch, instead of using a separate file for each step. Add variants only where pitch changes alone sound repetitive.
+- **Additions keep score readable.** Sounds for adding to a score and for multiplying it must be easy to tell apart, so players can hear what kind of combination happened.
+
+Status: **generated** means the file exists. **Registered** means the entry exists but has no audio yet. **Planned** means the sound is not in the registry yet. Add a planned sound to the registry when the feature it belongs to is built.
+
+## Hand and placement (current game)
+
+| Id                 | Plays when                                                          | Status    |
+| ------------------ | ------------------------------------------------------------------- | --------- |
+| `card.select`      | A card block is clicked and becomes selected                        | generated |
+| `card.deselect`    | A selected block is clicked and becomes unselected                  | generated |
+| `card.pickup`      | A drag starts on a hand block                                       | generated |
+| `card.drag.snap`   | A valid attachment face comes under the dragged block               | generated |
+| `card.drag.return` | A dragged block is dropped on nothing and returns to the hand       | generated |
+| `card.place.fly`   | A placed block flies to its cell, growing to full size              | generated |
+| `card.attach`      | A placed block lands and locks into its cell                        | generated |
+| `discard.hover`    | A dragged block moves over the discard bin                          | generated |
+| `card.discard`     | A block is dropped in the discard bin and dissolves                 | generated |
+| `card.deal`        | A new block is drawn into the hand                                  | generated |
+| `action.denied`    | An action is refused: no plays or discards left, or an invalid drop | generated |
+| `board.rotate`     | The player drags to rotate the structure (quiet, optional)          | planned   |
+| `card.inspect`     | The hover tooltip opens (very subtle, optional)                     | planned   |
+
+## Scoring and rounds
+
+| Id                   | Plays when                                                                    | Status    |
+| -------------------- | ----------------------------------------------------------------------------- | --------- |
+| `score.line`         | One line scores; replayed at rising pitch for each line in a chain            | generated |
+| `score.big`          | A play scores a large amount or a strong hand                                 | generated |
+| `score.hand.pair`    | A line scores a pair or two pair                                              | planned   |
+| `score.hand.set`     | A line scores three or four of a kind                                         | planned   |
+| `score.hand.five`    | A line scores a five-card hand: straight, flush, full house or straight flush | planned   |
+| `score.hand.special` | A line scores a hand that needs a modified deck, such as five of a kind       | planned   |
+| `score.total.tick`   | The running total counts up                                                   | planned   |
+| `score.target.near`  | The running total gets close to the target                                    | planned   |
+| `plays.last`         | The last play of the round begins                                             | planned   |
+| `round.start`        | The deck is shuffled and the centre block appears                             | planned   |
+| `round.cleared`      | The running total reaches the target score                                    | generated |
+| `round.failed`       | Plays run out before the target is reached                                    | generated |
+
+## Modifiers and materials
+
+| Id                        | Plays when                                                                        | Status  |
+| ------------------------- | --------------------------------------------------------------------------------- | ------- |
+| `modifier.held.trigger`   | A modifier block in the hand affects play                                         | planned |
+| `modifier.placed.trigger` | A modifier block on the field affects play                                        | planned |
+| `score.add`               | An effect adds to a score                                                         | planned |
+| `score.multiply`          | An effect multiplies a score (must sound clearly different from `score.add`)      | planned |
+| `effect.retrigger`        | An effect fires again                                                             | planned |
+| `material.<name>`         | A card's material affects scoring (one per material, once materials are designed) | planned |
+| `hand.upgrade`            | A hand type's base score is upgraded                                              | planned |
+| `block.destroy`           | A block is removed from the field (if removal is adopted)                         | planned |
+| `block.explode`           | An explosive block goes off (if adopted)                                          | planned |
+
+## Coins and shop
+
+| Id                   | Plays when                                          | Status  |
+| -------------------- | --------------------------------------------------- | ------- |
+| `coin.earn`          | Coins are earned, from a round win or a block       | planned |
+| `coin.spend`         | Coins are spent                                     | planned |
+| `shop.open`          | The shop opens after a boss round                   | planned |
+| `shop.buy`           | A block is bought                                   | planned |
+| `shop.cannot_afford` | The player tries to buy something they can't afford | planned |
+| `deck.add_block`     | A bought block joins the deck                       | planned |
+| `shop.leave`         | The player leaves the shop for the next round       | planned |
+
+## Bosses and the run
+
+| Id                  | Plays when                                                    | Status  |
+| ------------------- | ------------------------------------------------------------- | ------- |
+| `boss.intro`        | A boss round begins and shows its rule                        | planned |
+| `boss.rule.applied` | A boss restriction affects play                               | planned |
+| `run.won`           | The final boss round is beaten (bigger than `round.cleared`)  | planned |
+| `run.lost`          | A round is lost and the run ends (bigger than `round.failed`) | planned |
+
+## Interface
+
+| Id         | Plays when                      | Status  |
+| ---------- | ------------------------------- | ------- |
+| `ui.hover` | The pointer moves over a button | planned |
+| `ui.click` | A button is pressed             | planned |
+| `ui.back`  | A menu or panel is closed       | planned |
+
+## Open questions
+
+1. **Playback in the game:** none of the generated sounds are played yet. A player module (`src/audio/sfx.ts`, using Web Audio) and hooks at each trigger are still to be built.
+2. **Volume and muting:** master volume, a mute toggle, and whether to respect the system's reduced-motion setting by playing fewer or quieter effects.
+3. **Music:** background music is outside this registry. Decide whether to have any, and how it would be generated.
+4. **Review:** listen to the generated takes and regenerate any that miss with a revised prompt (`npm run sfx -- <id> --force`).
