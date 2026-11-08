@@ -34,30 +34,30 @@ describe("fillSlots", () => {
 });
 
 describe("discarding several blocks at once", () => {
-  it("uses one discard for the whole selection and refills each slot", () => {
+  it("uses one discard for the whole selection, then appends replacements", () => {
     const game = session();
     const [a, b, c, d, e] = game.state.hand;
     expect(game.discard([b.id, d.id])).not.toBeNull();
     expect(game.state.round.discardsLeft).toBe(1);
     expect(game.state.discardPile).toEqual([b, d]);
-    const drawn = game.refillHand([1, 3]);
-    expect(game.state.hand).toEqual([a, drawn[0], c, drawn[1], e]);
+    const drawn = game.refillHand();
+    expect(game.state.hand).toEqual([a, c, e, ...drawn]);
   });
 
   it("refills up to the dealer's hand size, not a fixed five", () => {
     const game = session(7);
     expect(game.state.hand).toHaveLength(7);
     game.discard(game.state.hand.slice(0, 3).map(({ id }) => id));
-    game.refillHand([0, 1, 2]);
+    game.refillHand();
     expect(game.state.hand).toHaveLength(7);
   });
 
   it("is refused with no discards left, or with a card not in the hand", () => {
     const game = session();
     game.discard(game.state.hand[0].id);
-    game.refillHand(0);
+    game.refillHand();
     game.discard(game.state.hand[0].id);
-    game.refillHand(0);
+    game.refillHand();
     const before = game.state;
     expect(game.discard([before.hand[0].id, before.hand[1].id])).toBeNull();
     expect(game.state).toBe(before);
@@ -70,7 +70,7 @@ describe("discarding several blocks at once", () => {
     const game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck, () => 0);
     const discards = game.state.round.discardsLeft;
     game.discard(game.state.hand.slice(0, 2).map(({ id }) => id));
-    game.refillHand([0, 1]);
+    game.refillHand();
     const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
     const snapshot = fromSaveRecord(record, standardDeck, dealerRegistry)!;
     const restored = GameSession.fromSnapshot(

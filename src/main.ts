@@ -458,8 +458,6 @@ type PendingAction =
       kind: "play";
       /** One flight per block played: a single block, or a line in selection order. */
       flights: Flight[];
-      /** Hand slots the played blocks left, refilled in order. */
-      slots: number[];
       startedAt: number;
       /** Every running dissolve, for clean-up. */
       effects: ReturnType<typeof createMaterialise>[];
@@ -467,8 +465,6 @@ type PendingAction =
   | {
       kind: "discard";
       sources: RenderedBlock[];
-      /** Hand slots the discarded blocks left, refilled in order. */
-      slots: number[];
       startedAt: number;
       effects: ReturnType<typeof createMaterialise>[];
     };
@@ -1055,8 +1051,8 @@ function settleAppearing(blocks: readonly RenderedBlock[]): void {
   }
 }
 
-function refillSlot(slot: number | readonly number[]): void {
-  const drawn = game.refillHand(slot);
+function refillHand(): void {
+  const drawn = game.refillHand();
   const replacements: RenderedBlock[] = [];
   for (const block of drawn) {
     const rendered = createCube(block, cubeSize / 3, "hand");
@@ -1123,9 +1119,8 @@ function startPlacement(sources: readonly RenderedBlock[], candidate: Candidate)
   const landed = next.field.slice(-sources.length);
   const played = new Set(ids);
   selected = new Set([...selected].filter((id) => !played.has(id)));
-  const slots = sources.map(({ handSlot }) => handSlot!).sort((a, b) => a - b);
   for (const source of sources) handBlocks.splice(handBlocks.indexOf(source), 1);
-  layoutHand();
+  syncHandSlots();
   // The cameras use different projections. Match each hand cube's screen position and
   // apparent size in the board view, then let the assembly carry it as it wobbles.
   handCamera.updateWorldMatrix(true, false);
@@ -1158,7 +1153,7 @@ function startPlacement(sources: readonly RenderedBlock[], candidate: Candidate)
       handedOver: false,
     };
   });
-  pendingAction = { kind: "play", flights, slots, startedAt: performance.now(), effects: [] };
+  pendingAction = { kind: "play", flights, startedAt: performance.now(), effects: [] };
   playSfx("card.place.fly");
   updateHud();
   return true;
@@ -1173,9 +1168,8 @@ function startDiscard(sources: readonly RenderedBlock[]): boolean {
   if (game.state.coins > coinsBefore) playSfx("passive.coins");
   if (game.state.passiveRack.length > passivesBefore) playSfx("passive.granted");
   passiveRackView?.render(game.state.passiveRack);
-  const slots = sources.map(({ handSlot }) => handSlot!).sort((a, b) => a - b);
   for (const source of sources) handBlocks.splice(handBlocks.indexOf(source), 1);
-  layoutHand();
+  syncHandSlots();
   const gone = new Set(sources.map(({ block }) => block.id));
   selected = new Set([...selected].filter((id) => !gone.has(id)));
   const effects = sources.map((source) => {
@@ -1186,7 +1180,6 @@ function startDiscard(sources: readonly RenderedBlock[]): boolean {
   pendingAction = {
     kind: "discard",
     sources: [...sources],
-    slots,
     startedAt: performance.now(),
     effects,
   };
@@ -1289,10 +1282,10 @@ function updateAction(now: number, delta: number): void {
     playSfx("card.attach");
     announceScore(now);
     scheduleCameraMove();
-    refillSlot(action.slots);
+    refillHand();
   } else {
     action.sources.forEach(disposeCube);
-    refillSlot(action.slots);
+    refillHand();
   }
   autosave();
 }

@@ -58,14 +58,14 @@ describe("hand reordering", () => {
     expect(game.state).toBe(before);
   });
 
-  it("refills into the slot the played card left, keeping hand order", () => {
+  it("packs survivors left and appends drawn cards on the right", () => {
     const game = session();
     const [a, b, c, d, e] = game.state.hand;
     game.play({ cardId: c.id });
-    const [drawn] = game.refillHand(2);
-    expect(game.state.hand).toEqual([a, b, drawn, d, e]);
+    const [drawn] = game.refillHand();
+    expect(game.state.hand).toEqual([a, b, d, e, drawn]);
     game.discard(a.id);
     const [next] = game.refillHand();
-    expect(game.state.hand).toEqual([b, drawn, d, e, next]);
+    expect(game.state.hand).toEqual([b, d, e, drawn, next]);
   });
 });

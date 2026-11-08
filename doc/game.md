@@ -42,7 +42,7 @@ On each turn the player does one of the following:
 - **Play a line:** with several hand blocks selected, drag them (any one carries the rest) onto a face: they are placed as a straight line running out from that face, in the order they were selected, as **one play**, and the field is scored once as a normal chain. A line that would reach a block already on the field is refused whole. On an empty field it can be the first play (the line runs east from the centre).
 - **Discard:** remove one or more hand blocks, including before the first play. Select blocks and click the bin, select blocks and drag any one of them to the bin (the selection goes with it), or drag a single unselected block to the bin. Each discard uses one discard allowance however many blocks it removes, and does not score. When no discards are left, the bin refuses the drop with a red X. _(A cap on blocks per discard may come later from dealers or passives; for now the whole hand may go.)_
 
-After either action, the hand is refilled from the deck up to the stage dealer's hand size (5 for the base dealer), or until the deck runs out. Drawn blocks take the places of the ones that were played or discarded.
+After either action, the hand is refilled from the deck up to the stage dealer's hand size (5 for the base dealer), or until the deck runs out. Surviving blocks pack left in their current order; drawn blocks join at the right.
 
 At any time the player can also drag a block within the hand to change its position. Reordering is free: it is not a play or discard, uses nothing and does not refill the hand. Hand order matters for effects that read it, and it is saved with the run.
 

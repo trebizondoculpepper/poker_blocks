@@ -2,7 +2,7 @@ import type { CardBlock } from "./cards";
 import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
 import type { GameState, PlayAction } from "./game-state";
-import { fillSlots, insertAt, moveItem } from "./zones";
+import { moveItem } from "./zones";
 import { ledgerTotal, stageRewardLedger, type StageReward } from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
 import {
@@ -282,23 +282,11 @@ export class GameSession {
     return next ? this.currentState : null;
   }
 
-  /**
-   * Refill the hand up to the dealer's hand size. Drawn cards go at `slot` (the gap left by
-   * the card just played or discarded), or into each of several gaps in turn, so the hand
-   * keeps its order; without a slot they go at the end.
-   */
-  refillHand(slot?: number | readonly number[]): CardBlock[] {
+  /** Refill up to the dealer's hand size, appending new cards after the survivors. */
+  refillHand(): CardBlock[] {
     if (!this.inStage) return [];
-    const before = this.currentState.hand;
-    // The dealer decides how many to draw (its hand size); the session decides where.
     const result = this.activeDealer.refillHand(this.currentState, this.random);
-    const hand =
-      slot === undefined
-        ? result.state.hand
-        : typeof slot === "number"
-          ? insertAt(before, slot, result.drawn)
-          : fillSlots(before, slot, result.drawn);
-    this.currentState = { ...result.state, hand };
+    this.currentState = result.state;
     return result.drawn;
   }
 

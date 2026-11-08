@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { tweenValue } from "./easing";
 import "./passive-rack.css";
 import { passiveDefinitions, type PassiveBlock, type PassiveDefinition } from "./passives";
 
@@ -12,6 +13,9 @@ type RenderedPassive = {
   mesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
   edges: THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>;
   texture: THREE.CanvasTexture;
+  targetX: number;
+  arrivalAt: number | null;
+  item: HTMLElement;
 };
 
 /** Each face gets the block's own symbol; this texture is mapped onto all six cube faces. */
@@ -85,22 +89,31 @@ export function createPassiveRack(
   camera.lookAt(0, 0, 0);
   const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
   const edgeGeometry = new THREE.EdgesGeometry(geometry);
-  let rendered: RenderedPassive[] = [];
+  const rendered = new Map<string, RenderedPassive>();
+  let liftedId: string | null = null;
 
   const clear = () => {
-    for (const { mesh, edges, texture } of rendered) {
+    for (const { mesh, edges, texture } of rendered.values()) {
       scene.remove(mesh);
       mesh.material.dispose();
       edges.material.dispose();
       texture.dispose();
     }
-    rendered = [];
+    rendered.clear();
   };
 
   return {
     element,
     render(rack) {
-      clear();
+      const ids = new Set(rack.map(({ id }) => id));
+      for (const [id, entry] of rendered) {
+        if (ids.has(id)) continue;
+        scene.remove(entry.mesh);
+        entry.mesh.material.dispose();
+        entry.edges.material.dispose();
+        entry.texture.dispose();
+        rendered.delete(id);
+      }
       // Room for every slot the rack has, filled or not.
       const slotCount = Math.max(rack.length, options.capacity ?? rack.length, 1);
       const width = slotCount * slotWidth + (slotCount - 1) * slotGap;
@@ -109,38 +122,52 @@ export function createPassiveRack(
       camera.right = (width / canvasHeight) * 1.15;
       camera.updateProjectionMatrix();
       slots.replaceChildren(renderer.domElement);
+      let arrivals = 0;
       for (const [index, block] of rack.entries()) {
-        const definition = passiveDefinitions.get(block.definitionId);
-        const appearance = block.traits.appearance ?? definition;
-        const texture = faceTexture(appearance);
-        const material = new THREE.MeshStandardMaterial({
-          map: texture,
-          roughness: 0.7,
-          metalness: 0.12,
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.x =
+        let entry = rendered.get(block.id);
+        if (!entry) {
+          const definition = passiveDefinitions.get(block.definitionId);
+          const appearance = block.traits.appearance ?? definition;
+          const texture = faceTexture(appearance);
+          const material = new THREE.MeshStandardMaterial({
+            map: texture,
+            roughness: 0.7,
+            metalness: 0.12,
+          });
+          const mesh = new THREE.Mesh(geometry, material);
+          const edges = new THREE.LineSegments(
+            edgeGeometry,
+            new THREE.LineBasicMaterial({ color: appearance.palette.edge }),
+          );
+          mesh.add(edges);
+          scene.add(mesh);
+          const item = document.createElement("div");
+          item.className = "passive-item";
+          item.setAttribute("role", "img");
+          item.setAttribute("aria-label", block.traits.inspectable.inspect());
+          item.tabIndex = 0;
+          item.dataset.passiveId = block.id;
+          item.addEventListener("pointerdown", (event) => options.onPickUp?.(block, event));
+          const description = document.createElement("span");
+          description.className = "passive-description";
+          description.textContent = block.traits.inspectable.inspect();
+          item.append(description);
+          entry = {
+            id: block.id,
+            mesh,
+            edges,
+            texture,
+            targetX: 0,
+            arrivalAt: performance.now() + arrivals++ * 180,
+            item,
+          };
+          rendered.set(block.id, entry);
+          mesh.scale.setScalar(0.001);
+        }
+        entry.targetX =
           (index - (slotCount - 1) / 2) * ((2.3 * (slotWidth + slotGap)) / canvasHeight);
-        const edges = new THREE.LineSegments(
-          edgeGeometry,
-          new THREE.LineBasicMaterial({ color: appearance.palette.edge }),
-        );
-        mesh.add(edges);
-        scene.add(mesh);
-        rendered.push({ id: block.id, mesh, edges, texture });
-
-        const item = document.createElement("div");
-        item.className = "passive-item";
-        item.setAttribute("role", "img");
-        item.setAttribute("aria-label", block.traits.inspectable.inspect());
-        item.tabIndex = 0;
-        item.dataset.passiveId = block.id;
-        item.addEventListener("pointerdown", (event) => options.onPickUp?.(block, event));
-        const description = document.createElement("span");
-        description.className = "passive-description";
-        description.textContent = block.traits.inspectable.inspect();
-        item.append(description);
-        slots.append(item);
+        if (entry.mesh.scale.x === 0.001) entry.mesh.position.x = entry.targetX + 0.65;
+        slots.append(entry.item);
       }
       for (let empty = rack.length; empty < slotCount; empty++) {
         const slot = document.createElement("div");
@@ -151,11 +178,24 @@ export function createPassiveRack(
       renderer.render(scene, camera);
     },
     lift(id) {
-      for (const passive of rendered) passive.mesh.visible = passive.id !== id;
+      liftedId = id;
+      for (const passive of rendered.values()) passive.mesh.visible = passive.id !== id;
       renderer.render(scene, camera);
     },
     frame(time, reducedMotion) {
-      for (const [index, { mesh }] of rendered.entries()) {
+      for (const [index, entry] of [...rendered.values()].entries()) {
+        const { mesh, targetX, arrivalAt, item } = entry;
+        const arrived = arrivalAt === null || time >= arrivalAt || reducedMotion;
+        mesh.visible = arrived && entry.id !== liftedId;
+        item.style.visibility = arrived ? "" : "hidden";
+        if (arrived) {
+          mesh.position.x += (targetX - mesh.position.x) * (reducedMotion ? 1 : 0.18);
+          mesh.scale.setScalar(
+            arrivalAt === null || reducedMotion ? 1 : tweenValue(0.001, 1, time - arrivalAt, 360),
+          );
+          if (arrivalAt !== null && (reducedMotion || time - arrivalAt >= 360))
+            entry.arrivalAt = null;
+        }
         const angle = reducedMotion ? 0 : time * 0.00028;
         mesh.rotation.set(
           0.28 + (reducedMotion ? 0 : Math.sin(time * 0.00037 + index) * 0.12),
@@ -163,7 +203,7 @@ export function createPassiveRack(
           0,
         );
       }
-      if (rendered.length) renderer.render(scene, camera);
+      if (rendered.size) renderer.render(scene, camera);
     },
     dispose() {
       clear();
