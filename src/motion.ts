@@ -42,8 +42,10 @@ export function rockAngle(rock: Rock, elapsedSeconds: number): number {
   return rock.amplitude * Math.sin(rock.phase + rock.rate * elapsedSeconds);
 }
 
-/** How much faster, and how much smaller, a selected block's rock becomes: a vibration. */
-export const selectedRockFactor = 3;
+/** A selected block's rock becomes a vibration: this many times faster... */
+export const selectedSpeedFactor = 5;
+/** ...and this many times smaller in swing. */
+export const selectedSwingFactor = 4;
 /** Seconds to ease most of the way into, or out of, the selected vibration. */
 export const selectedEaseSeconds = 0.35;
 
@@ -57,8 +59,8 @@ export type RockState = {
 
 /**
  * Advance a rock by `delta` seconds. Selected blocks ease toward vibrating
- * `selectedRockFactor` times faster with `selectedRockFactor` times less swing; deselected
- * ones ease back. Returns the new state and the angle to show.
+ * `selectedSpeedFactor` times faster with `selectedSwingFactor` times less swing;
+ * deselected ones ease back. Returns the new state and the angle to show.
  */
 export function stepRock(
   rock: Rock,
@@ -69,10 +71,11 @@ export function stepRock(
   const target = selected ? 1 : 0;
   const ease = 1 - Math.exp(-delta / (selectedEaseSeconds / 3));
   const excitement = state.excitement + (target - state.excitement) * ease;
-  const factor = 1 + (selectedRockFactor - 1) * excitement;
-  const angle = state.angle + rock.rate * factor * delta;
+  const speed = 1 + (selectedSpeedFactor - 1) * excitement;
+  const swing = 1 + (selectedSwingFactor - 1) * excitement;
+  const angle = state.angle + rock.rate * speed * delta;
   return {
     state: { angle, excitement },
-    angle: (rock.amplitude / factor) * Math.sin(rock.phase + angle),
+    angle: (rock.amplitude / swing) * Math.sin(rock.phase + angle),
   };
 }

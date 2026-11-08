@@ -65,7 +65,7 @@ describe("selected vibration", () => {
     return state;
   };
 
-  it("eases in to three times the speed and a third of the swing", () => {
+  it("eases in to five times the speed and a quarter of the swing", () => {
     const half = run(true, 0.05);
     expect(half.excitement).toBeGreaterThan(0);
     expect(half.excitement).toBeLessThan(0.9);
@@ -73,9 +73,9 @@ describe("selected vibration", () => {
     expect(full.excitement).toBeCloseTo(1, 3);
     const before = full.angle;
     const after = stepRock(rock, full, true, 0.1).state.angle;
-    expect(after - before).toBeCloseTo(0.3, 2);
+    expect(after - before).toBeCloseTo(0.5, 2);
     const shown = stepRock(rock, { angle: Math.PI / 2, excitement: 1 }, true, 0).angle;
-    expect(shown).toBeCloseTo(0.1, 3);
+    expect(shown).toBeCloseTo(0.075, 3);
   });
 
   it("eases back out when deselected, without jumping", () => {
