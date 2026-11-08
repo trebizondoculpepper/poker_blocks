@@ -7,6 +7,11 @@ export type BlockAppearance = {
   geometry: THREE.BufferGeometry;
   textures: THREE.CanvasTexture[];
   materials: THREE.MeshStandardMaterial[];
+  /**
+   * Materials for the block once it is on the table, when they differ from the hand's
+   * (glass and crystal refract there). Swap them in when the block lands.
+   */
+  boardMaterials?: THREE.MeshStandardMaterial[];
   edgeColor: number;
   edgeOpacity: number;
 };
@@ -115,50 +120,69 @@ function drawSteel(g: CanvasRenderingContext2D, random: () => number): void {
     }
 }
 
-function drawGlass(g: CanvasRenderingContext2D, random: () => number, prismatic: boolean): void {
-  gradient(
-    g,
-    prismatic
-      ? [
-          // Alpha in the body colour is what makes the block see-through; the printed
-          // rank, suit and rims stay solid.
-          [0, "#7958ba66"],
-          [0.26, "#60c5e655"],
-          [0.53, "#f6a1c855"],
-          [0.78, "#e5ca6d55"],
-          [1, "#628bdb66"],
-        ]
-      : [
-          [0, "#b9e6ef40"],
-          [0.45, "#6aafc033"],
-          [1, "#e2f9fa40"],
-        ],
-  );
-  for (let n = -5; n < 12; n++) {
-    g.save();
-    g.translate(n * 47, 0);
-    g.rotate(-0.3);
-    g.fillStyle = prismatic ? ["#ffd4ec55", "#d6f8ff60", "#ffedab55"][(n + 5) % 3] : "#ffffff25";
-    g.fillRect(0, -60, 14, 400);
-    g.restore();
+/**
+ * Glass: a pane of clear glass in a lead-and-steel came, like one panel of a stained-glass
+ * lantern (each face of the block is one pane; the material tints them). The pane carries
+ * low alpha so it reads as clear; the frame and print are solid.
+ */
+function drawGlass(g: CanvasRenderingContext2D, random: () => number): void {
+  g.clearRect(0, 0, SIZE, SIZE);
+  gradient(g, [
+    [0, "#f4fbff38"],
+    [0.5, "#dff1f730"],
+    [1, "#f8fdff38"],
+  ]);
+  // Seeds: the small bubbles of hand-made glass.
+  for (let n = 0; n < 14; n++) {
+    g.strokeStyle = "#ffffff70";
+    g.lineWidth = 1;
+    g.beginPath();
+    g.ellipse(
+      30 + random() * 196,
+      30 + random() * 196,
+      1 + random() * 3,
+      1 + random() * 2,
+      random() * 3,
+      0,
+      Math.PI * 2,
+    );
+    g.stroke();
   }
-  if (prismatic) {
-    for (let n = 0; n < 32; n++) {
-      const x = random() * SIZE,
-        y = random() * SIZE,
-        radius = 2 + random() * 5;
-      g.strokeStyle = "#fffbe2aa";
-      g.lineWidth = 1;
-      g.beginPath();
-      g.moveTo(x - radius, y);
-      g.lineTo(x + radius, y);
-      g.moveTo(x, y - radius);
-      g.lineTo(x, y + radius);
-      g.stroke();
-    }
+  // The came: a dark metal frame with a bright bevel along its inner edge.
+  g.strokeStyle = "#262b30";
+  g.lineWidth = 30;
+  g.strokeRect(0, 0, SIZE, SIZE);
+  g.strokeStyle = "#8c969e";
+  g.lineWidth = 3;
+  g.strokeRect(16, 16, SIZE - 32, SIZE - 32);
+  g.strokeStyle = "#4a535b";
+  g.lineWidth = 2;
+  g.strokeRect(3, 3, SIZE - 6, SIZE - 6);
+}
+
+/** Prismatic crystal: nearly clear, with faint rainbow fire; the cut does the rest. */
+function drawPrismatic(g: CanvasRenderingContext2D, random: () => number): void {
+  g.clearRect(0, 0, SIZE, SIZE);
+  gradient(g, [
+    [0, "#c9b8ff30"],
+    [0.3, "#b8f0ff28"],
+    [0.55, "#ffd0ea28"],
+    [0.8, "#fff1b828"],
+    [1, "#b8c8ff30"],
+  ]);
+  for (let n = 0; n < 24; n++) {
+    const x = random() * SIZE,
+      y = random() * SIZE,
+      radius = 2 + random() * 5;
+    g.strokeStyle = "#ffffffaa";
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(x - radius, y);
+    g.lineTo(x + radius, y);
+    g.moveTo(x, y - radius);
+    g.lineTo(x, y + radius);
+    g.stroke();
   }
-  border(g, prismatic ? "#f6d9ff" : "#e7ffff", 9);
-  border(g, prismatic ? "#594c9a" : "#40859a", 2);
 }
 
 function drawGold(g: CanvasRenderingContext2D, random: () => number): void {
@@ -313,8 +337,10 @@ function faceTexture(
       drawSteel(g, random);
       break;
     case "glass":
+      drawGlass(g, random);
+      break;
     case "prismatic":
-      drawGlass(g, random, kind === "prismatic");
+      drawPrismatic(g, random);
       break;
     case "gold":
       drawGold(g, random);
@@ -359,33 +385,111 @@ function faceTexture(
   return texture;
 }
 
-function surface(texture: THREE.CanvasTexture, kind: BlockMaterial): THREE.MeshStandardMaterial {
-  if (kind === "glass" || kind === "prismatic") {
-    // See-through from the texture's alpha (not `transmission`: the hand is drawn in its
-    // own pass, where a transmissive block would have nothing behind it to refract).
-    // Clearcoat keeps the hard, bright reflections glass has even where it is clear;
-    // prismatic glass adds a thin-film iridescence that shifts hue with the view angle.
-    return new THREE.MeshPhysicalMaterial({
-      map: texture,
-      roughness: 0.08,
-      metalness: 0,
-      ior: 1.5,
-      clearcoat: 1,
-      clearcoatRoughness: 0.04,
-      specularIntensity: 1,
-      transparent: true,
-      opacity: 1,
-      depthWrite: false,
-      ...(kind === "prismatic"
-        ? {
-            iridescence: 1,
-            iridescenceIOR: 1.8,
-            iridescenceThicknessMinimum: 150,
-            iridescenceThicknessMaximum: 900,
-          }
-        : {}),
-    });
+/** Reflections for glass and crystal; set once by the game (see setGlassEnvironment). */
+let glassEnvironment: THREE.Texture | null = null;
+
+/** Give glass and crystal something to reflect (a PMREM environment map). */
+export function setGlassEnvironment(texture: THREE.Texture): void {
+  glassEnvironment = texture;
+}
+
+/**
+ * Where a face lets light through: white where the canvas is see-through (the pane), black
+ * where it is solid (frame, print). Used as a transmissionMap, so the frame and the rank
+ * and suit stay opaque while the glass between them refracts.
+ */
+function clearMask(texture: THREE.CanvasTexture): THREE.CanvasTexture {
+  const source = texture.image as HTMLCanvasElement;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = SIZE;
+  const g = canvas.getContext("2d")!;
+  const pixels = source.getContext("2d")!.getImageData(0, 0, SIZE, SIZE);
+  const data = pixels.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const clear = data[i + 3] < 150 ? 255 : 0;
+    data[i] = data[i + 1] = data[i + 2] = clear;
+    data[i + 3] = 255;
   }
+  g.putImageData(pixels, 0, 0);
+  return new THREE.CanvasTexture(canvas);
+}
+
+/** Stained glass: each of the six panes has its own tint. BoxGeometry face order. */
+const paneTints = [0xff9aa8, 0xffd27a, 0xf4fbff, 0x8fe3b0, 0x8fb4ff, 0xc9a6ff];
+
+/**
+ * Glass and crystal in the hand: see-through from the texture's alpha. The hand is drawn in
+ * its own pass with nothing behind it, so real refraction (transmission) would have nothing
+ * to bend; that version is used on the table instead (see clearOnTable).
+ */
+function clearInHand(
+  texture: THREE.CanvasTexture,
+  kind: "glass" | "prismatic",
+  tint: number,
+): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    map: texture,
+    color: tint,
+    roughness: 0.06,
+    metalness: 0,
+    ior: kind === "prismatic" ? 2.33 : 1.5,
+    clearcoat: 1,
+    clearcoatRoughness: 0.03,
+    envMap: glassEnvironment,
+    envMapIntensity: kind === "prismatic" ? 1.6 : 1.1,
+    transparent: true,
+    depthWrite: false,
+    ...(kind === "prismatic" ? prismaticFire : {}),
+  });
+}
+
+/** Thin-film colour play that shifts with the view angle: the crystal's fire. */
+const prismaticFire = {
+  iridescence: 1,
+  iridescenceIOR: 1.8,
+  iridescenceThicknessMinimum: 150,
+  iridescenceThicknessMaximum: 900,
+};
+
+/**
+ * Glass and crystal on the table: physically based transmission, so what is behind them
+ * (other blocks, the baize) is seen bent through them. Prismatic crystal is far more
+ * refractive (diamond-like IOR, a thick body) and splits light into colours (dispersion);
+ * glass panes are thin, so they shift the view only a little. The frame and print stay
+ * opaque through the transmission mask.
+ */
+function clearOnTable(
+  texture: THREE.CanvasTexture,
+  mask: THREE.CanvasTexture,
+  kind: "glass" | "prismatic",
+  tint: number,
+  size: number,
+): THREE.MeshPhysicalMaterial {
+  const prismatic = kind === "prismatic";
+  return new THREE.MeshPhysicalMaterial({
+    map: texture,
+    // Through a pane the tint is lighter than its face colour, so it still reads as clear.
+    color: prismatic ? tint : new THREE.Color(tint).lerp(new THREE.Color(0xffffff), 0.45),
+    roughness: prismatic ? 0.02 : 0.05,
+    metalness: 0,
+    transmission: 1,
+    transmissionMap: mask,
+    ior: prismatic ? 2.33 : 1.52,
+    thickness: prismatic ? size * 0.9 : size * 0.12,
+    dispersion: prismatic ? 4 : 0.2,
+    // Crystal deepens in colour through its body; thin panes do not.
+    attenuationColor: new THREE.Color(tint),
+    attenuationDistance: prismatic ? size * 6 : Infinity,
+    clearcoat: 1,
+    clearcoatRoughness: 0.02,
+    specularIntensity: 1,
+    envMap: glassEnvironment,
+    envMapIntensity: prismatic ? 1.6 : 1.1,
+    ...(prismatic ? prismaticFire : {}),
+  });
+}
+
+function surface(texture: THREE.CanvasTexture, kind: BlockMaterial): THREE.MeshStandardMaterial {
   if (kind === "ice") {
     return new THREE.MeshPhysicalMaterial({
       map: texture,
@@ -404,6 +508,21 @@ function surface(texture: THREE.CanvasTexture, kind: BlockMaterial): THREE.MeshS
   });
 }
 
+const edgeColors: Record<BlockMaterial, number> = {
+  paper: 0x6b6c73,
+  wood: 0x76502b,
+  steel: 0x303a40,
+  // The came between panes: dark metal.
+  glass: 0x2a2f34,
+  // Facet lines of the cut stone.
+  prismatic: 0xf2e8ff,
+  gold: 0x9c661e,
+  delft: 0x48709c,
+  terracotta: 0x733d2b,
+  ice: 0xd3f7ff,
+  meat: 0x6b2538,
+};
+
 export function createBlockAppearance(
   identity: IdentityTrait,
   kind: BlockMaterial,
@@ -412,7 +531,30 @@ export function createBlockAppearance(
   const geometry =
     kind === "meat"
       ? new RoundedBoxGeometry(size, size, size, 3, size * 0.09)
-      : new THREE.BoxGeometry(size, size, size);
+      : kind === "prismatic"
+        ? // One segment makes the rounding a flat bevel: chamfered edges, like a square cut.
+          new RoundedBoxGeometry(size, size, size, 1, size * 0.14)
+        : new THREE.BoxGeometry(size, size, size);
+  const edgeColor = edgeColors[kind];
+  const edgeOpacity = kind === "meat" ? 0 : kind === "ice" ? 0.65 : kind === "prismatic" ? 0.55 : 1;
+
+  if (kind === "glass" || kind === "prismatic") {
+    const texture = faceTexture(identity, kind, false);
+    const mask = clearMask(texture);
+    // Glass panes are each tinted; crystal is one clear stone.
+    const tints = kind === "glass" ? paneTints : paneTints.map(() => 0xffffff);
+    const inHand = tints.map((tint) => clearInHand(texture, kind, tint));
+    const onTable = tints.map((tint) => clearOnTable(texture, mask, kind, tint, size));
+    return {
+      geometry,
+      textures: [texture, mask],
+      materials: inHand,
+      boardMaterials: onTable,
+      edgeColor,
+      edgeOpacity,
+    };
+  }
+
   const sideTexture = faceTexture(identity, kind, false);
   const sideMaterial = surface(sideTexture, kind);
   // BoxGeometry order is +X, -X, +Y, -Y, +Z, -Z. Wood reveals end grain on Y.
@@ -430,18 +572,7 @@ export function createBlockAppearance(
     geometry,
     textures: endTexture ? [sideTexture, endTexture] : [sideTexture],
     materials,
-    edgeColor: {
-      paper: 0x6b6c73,
-      wood: 0x76502b,
-      steel: 0x303a40,
-      glass: 0xc8faff,
-      prismatic: 0xe4bfff,
-      gold: 0x9c661e,
-      delft: 0x48709c,
-      terracotta: 0x733d2b,
-      ice: 0xd3f7ff,
-      meat: 0x6b2538,
-    }[kind],
-    edgeOpacity: kind === "meat" ? 0 : kind === "glass" || kind === "ice" ? 0.65 : 1,
+    edgeColor,
+    edgeOpacity,
   };
 }

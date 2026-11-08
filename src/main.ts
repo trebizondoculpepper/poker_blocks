@@ -14,7 +14,8 @@ import { tweenValue } from "./easing";
 import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
 import { createMaterialise } from "./visual/materialise";
 import { createCardRoom } from "./visual/card-room";
-import { createBlockAppearance } from "./visual/block-appearance";
+import { createBlockAppearance, setGlassEnvironment } from "./visual/block-appearance";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
@@ -120,6 +121,10 @@ const boardFill = new THREE.DirectionalLight(0xffffff, 1.3);
 boardFill.position.set(-3, 6, 7);
 scene.add(boardFill);
 const cardRoom = createCardRoom(scene, renderer);
+// Something for glass and crystal to reflect: a soft studio room, prefiltered once.
+setGlassEnvironment(
+  new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture,
+);
 
 /** Blocks being dragged sit on this layer and are drawn last, above everything else. */
 const dragLayer = 1;
@@ -147,7 +152,11 @@ type RenderedBlock = {
   cube: THREE.Mesh;
   geometry: THREE.BufferGeometry;
   textures: THREE.CanvasTexture[];
+  /** The materials in use now (hand or table). */
   materials: THREE.MeshStandardMaterial[];
+  handMaterials: THREE.MeshStandardMaterial[];
+  /** Glass and crystal refract on the table, so they change material when they land. */
+  boardMaterials: THREE.MeshStandardMaterial[];
   edgeGeometry: THREE.EdgesGeometry;
   edgeMaterial: THREE.LineBasicMaterial;
   location: "board" | "hand";
@@ -184,11 +193,11 @@ function createCube(
   size: number,
   location: RenderedBlock["location"],
 ): RenderedBlock {
-  const { geometry, textures, materials, edgeColor, edgeOpacity } = createBlockAppearance(
-    block.traits.identity,
-    materialOf(block),
-    size,
-  );
+  const appearance = createBlockAppearance(block.traits.identity, materialOf(block), size);
+  const { geometry, textures, edgeColor, edgeOpacity } = appearance;
+  const handMaterials = appearance.materials;
+  const boardMaterials = appearance.boardMaterials ?? handMaterials;
+  const materials = location === "board" ? boardMaterials : handMaterials;
   const cube = new THREE.Mesh(geometry, materials);
   cube.castShadow = cube.receiveShadow = true;
   const edgeGeometry = new THREE.EdgesGeometry(geometry);
@@ -205,6 +214,8 @@ function createCube(
     geometry,
     textures,
     materials,
+    handMaterials,
+    boardMaterials,
     edgeGeometry,
     edgeMaterial,
     location,
@@ -217,12 +228,22 @@ function createCube(
   return rendered;
 }
 
+/** A block has landed on the table: glass and crystal switch to their refracting version. */
+function useBoardMaterials(rendered: RenderedBlock): void {
+  if (rendered.materials === rendered.boardMaterials) return;
+  rendered.materials = rendered.boardMaterials;
+  rendered.cube.material = rendered.boardMaterials;
+  showSelection();
+}
+
 function disposeCube(rendered: RenderedBlock): void {
   rendered.cube.removeFromParent();
   renderedBlocks.splice(renderedBlocks.indexOf(rendered), 1);
   rendered.geometry.dispose();
   rendered.textures.forEach((texture) => texture.dispose());
-  new Set(rendered.materials).forEach((material) => material.dispose());
+  new Set([...rendered.handMaterials, ...rendered.boardMaterials]).forEach((material) =>
+    material.dispose(),
+  );
   rendered.edgeGeometry.dispose();
   rendered.edgeMaterial.dispose();
 }
@@ -945,6 +966,7 @@ function updateAction(now: number, delta: number): void {
   pendingAction = null;
   if (action.kind === "play") {
     action.source.location = "board";
+    useBoardMaterials(action.source);
     action.source.cell = action.cell;
     action.source.baseY = action.cell.y * cubeSize - 0.45;
     action.source.rock = null;
