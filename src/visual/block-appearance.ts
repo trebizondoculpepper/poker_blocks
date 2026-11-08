@@ -200,27 +200,40 @@ function drawPrismatic(g: CanvasRenderingContext2D, random: () => number): void 
   }
 }
 
-function drawGold(g: CanvasRenderingContext2D, random: () => number): void {
-  gradient(g, [
-    [0, "#fff0a4"],
-    [0.22, "#a96d18"],
-    [0.5, "#f4cf54"],
-    [0.75, "#b57a22"],
-    [1, "#ffdf6d"],
-  ]);
-  for (let n = 0; n < 34; n++) {
-    g.fillStyle = n % 3 === 0 ? "#fff5bd22" : "#51310818";
-    g.fillRect(0, random() * SIZE, SIZE, 1 + random() * 2);
-  }
-  border(g, "#714710", 8);
-  border(g, "#ffef9e", 2);
-  for (const x of [29, SIZE - 29])
-    for (const y of [29, SIZE - 29]) {
-      g.fillStyle = "#ffe9a2";
-      g.beginPath();
-      g.arc(x, y, 5, 0, Math.PI * 2);
-      g.fill();
-    }
+/**
+ * Gold: one solid, polished block. The face is plain gold; the gloss and the warm
+ * reflections come from the material, not the texture.
+ */
+function drawGold(g: CanvasRenderingContext2D): void {
+  g.fillStyle = "#d4a12a";
+  g.fillRect(0, 0, SIZE, SIZE);
+}
+
+/**
+ * Paper: one playing card per face, its corners rounded, so the block reads as six cards
+ * joined at their edges. The dark corners are the gaps where the cards' corners meet.
+ */
+function drawPaper(g: CanvasRenderingContext2D): void {
+  g.fillStyle = "#4d4a45";
+  g.fillRect(0, 0, SIZE, SIZE);
+  const card = new Path2D();
+  card.roundRect(3, 3, SIZE - 6, SIZE - 6, 26);
+  g.save();
+  g.shadowColor = "#00000066";
+  g.shadowBlur = 6;
+  g.fillStyle = "#f6f0e3";
+  g.fill(card);
+  g.restore();
+  // The card's own printed frame, inset like a real card's.
+  g.strokeStyle = "#b8b0a2";
+  g.lineWidth = 3;
+  g.beginPath();
+  g.roundRect(18, 18, SIZE - 36, SIZE - 36, 14);
+  g.stroke();
+  // A faint edge highlight where the card's rim catches the light.
+  g.strokeStyle = "#ffffffaa";
+  g.lineWidth = 2;
+  g.stroke(card);
 }
 
 type Crack = { x: number; y: number }[];
@@ -376,9 +389,7 @@ function faceTexture(
   const random = randomFor(identity, kind, endGrain);
   switch (kind) {
     case "paper":
-      g.fillStyle = "#f6f0e3";
-      g.fillRect(0, 0, SIZE, SIZE);
-      border(g, "#b8b0a2", 6);
+      drawPaper(g);
       break;
     case "wood":
       drawWood(g, random, endGrain);
@@ -393,7 +404,7 @@ function faceTexture(
       drawPrismatic(g, random);
       break;
     case "gold":
-      drawGold(g, random);
+      drawGold(g);
       break;
     case "terracotta":
       drawTerracotta(g, random, potteryCracks(identity));
@@ -493,6 +504,8 @@ function clearInHand(
 
 /** Thin-film colour play that shifts with the view angle: the crystal's fire. */
 const prismaticFire = {
+  // Every bevel shaded as its own flat facet: hard edges, like a cut gem.
+  flatShading: true,
   iridescence: 1,
   iridescenceIOR: 1.8,
   iridescenceThicknessMinimum: 150,
@@ -646,6 +659,29 @@ function woodHeight(texture: THREE.CanvasTexture, identity: IdentityTrait): THRE
   return new THREE.CanvasTexture(canvas);
 }
 
+/** Gold: perfectly smooth, but the rank and suit are engraved. */
+function goldHeight(identity: IdentityTrait): THREE.CanvasTexture {
+  const { canvas, g } = heightCanvas();
+  stampPrint(g, identity, "#404040");
+  return new THREE.CanvasTexture(canvas);
+}
+
+/** Paper: each card stands slightly proud, its rounded rim dipping into the gaps. */
+function paperHeight(): THREE.CanvasTexture {
+  const { canvas, g } = heightCanvas();
+  g.fillStyle = "#202020";
+  g.fillRect(0, 0, SIZE, SIZE);
+  g.save();
+  g.shadowColor = "#000000";
+  g.shadowBlur = 8;
+  g.fillStyle = "#b0b0b0";
+  g.beginPath();
+  g.roundRect(3, 3, SIZE - 6, SIZE - 6, 26);
+  g.fill();
+  g.restore();
+  return new THREE.CanvasTexture(canvas);
+}
+
 /** Terracotta: its pitted surface, with the cracks cut in. */
 function terracottaHeight(
   texture: THREE.CanvasTexture,
@@ -661,12 +697,12 @@ function terracottaHeight(
  * map: wood grain, terracotta pitting, meat marbling, ice cracks. 0 is flat.
  */
 const patternRelief: Record<BlockMaterial, number> = {
-  paper: 0.4,
+  paper: 2,
   wood: 2.5,
   steel: 0,
   glass: 0,
   prismatic: 0,
-  gold: 1.2,
+  gold: 1.5,
   terracotta: 3,
   ice: 1.5,
   meat: 2,
@@ -691,11 +727,24 @@ function surface(
       ...relief,
     });
   }
+  if (kind === "gold") {
+    // Polished solid gold: fully metallic, low roughness, a light clearcoat for gloss.
+    return new THREE.MeshPhysicalMaterial({
+      map: texture,
+      ...relief,
+      metalness: 1,
+      roughness: 0.1,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.05,
+      envMap: glassEnvironment,
+      envMapIntensity: 2.2,
+    });
+  }
   return new THREE.MeshStandardMaterial({
     map: texture,
     ...relief,
-    roughness: kind === "gold" ? 0.28 : 0.75,
-    metalness: kind === "gold" ? 0.55 : 0,
+    roughness: 0.75,
+    metalness: 0,
   });
 }
 
@@ -754,11 +803,23 @@ export function createBlockAppearance(
     kind === "meat"
       ? new RoundedBoxGeometry(size, size, size, 3, size * 0.09)
       : kind === "prismatic"
-        ? // One segment makes the rounding a flat bevel: chamfered edges, like a square cut.
+        ? // One segment makes the rounding a flat bevel: a chamfer, like a square cut. The
+          // materials shade each facet flat, so the bevels meet the faces at hard edges.
           new RoundedBoxGeometry(size, size, size, 1, size * 0.14)
-        : new THREE.BoxGeometry(size, size, size);
+        : kind === "gold"
+          ? // Softly rounded edges, as a casting comes out of the mould.
+            new RoundedBoxGeometry(size, size, size, 5, size * 0.12)
+          : new THREE.BoxGeometry(size, size, size);
   const edgeColor = edgeColors[kind];
-  const edgeOpacity = kind === "meat" ? 0 : kind === "ice" ? 0.65 : kind === "prismatic" ? 0.55 : 1;
+  // Rounded castings (meat, gold) have no hard edges to outline.
+  const edgeOpacity =
+    kind === "meat" || kind === "gold"
+      ? 0
+      : kind === "ice"
+        ? 0.65
+        : kind === "prismatic"
+          ? 0.55
+          : 1;
 
   if (kind === "glass" || kind === "prismatic") {
     const texture = faceTexture(identity, kind, false);
@@ -798,11 +859,15 @@ export function createBlockAppearance(
   }
 
   const carvedHeight = (texture: THREE.CanvasTexture) =>
-    kind === "wood"
-      ? woodHeight(texture, identity)
-      : kind === "terracotta"
-        ? terracottaHeight(texture, identity)
-        : undefined;
+    kind === "gold"
+      ? goldHeight(identity)
+      : kind === "paper"
+        ? paperHeight()
+        : kind === "wood"
+          ? woodHeight(texture, identity)
+          : kind === "terracotta"
+            ? terracottaHeight(texture, identity)
+            : undefined;
   const sideTexture = faceTexture(identity, kind, false);
   const sideHeight = carvedHeight(sideTexture);
   const sideMaterial = surface(sideTexture, kind, sideHeight);
