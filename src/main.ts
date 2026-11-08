@@ -120,11 +120,25 @@ boardFill.position.set(-3, 6, 7);
 scene.add(boardFill);
 const cardRoom = createCardRoom(scene, renderer);
 
+/** Blocks being dragged sit on this layer and are drawn last, above everything else. */
+const dragLayer = 1;
+for (const light of handScene.children) light.layers.enable(dragLayer);
+
+function setDragLayer(cube: THREE.Object3D, dragging: boolean): void {
+  cube.traverse((object) => (dragging ? object.layers.set(dragLayer) : object.layers.set(0)));
+}
+
 function render(): void {
   renderer.clear();
   renderer.render(scene, camera);
   renderer.clearDepth();
+  handCamera.layers.set(0);
   renderer.render(handScene, handCamera);
+  // Dragged blocks last, on a fresh depth buffer, so nothing can clip into them.
+  renderer.clearDepth();
+  handCamera.layers.set(dragLayer);
+  renderer.render(handScene, handCamera);
+  handCamera.layers.set(0);
 }
 
 type RenderedBlock = {
@@ -718,6 +732,8 @@ function updateCandidate(): void {
   if (drag.candidate && cellKey(drag.candidate.cell) !== previousCell) playSfx("card.drag.snap");
 }
 
+const awayFromCamera = new THREE.Vector3();
+const fanOffset = new THREE.Vector3();
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 const dragPoint = new THREE.Vector3();
 function moveDraggedBlock(): void {
@@ -726,10 +742,15 @@ function moveDraggedBlock(): void {
   if (raycaster.ray.intersectPlane(dragPlane, dragPoint)) {
     drag.source.cube.position.copy(dragPoint).add(drag.grabOffset);
     // Carried blocks trail the dragged one in a small fanned stack behind it.
+    // Each is pushed a whole block further from the camera (straight back along its view,
+    // so the fan on screen is unchanged) and never intersects the one in front.
+    handCamera.getWorldDirection(awayFromCamera);
     drag.group.forEach((rendered, index) => {
+      const step = index + 1;
       rendered.cube.position
         .copy(drag!.source.cube.position)
-        .add(new THREE.Vector3(0.28 * (index + 1), 0.22 * (index + 1), -0.4 * (index + 1)));
+        .add(fanOffset.set(0.28 * step, 0.22 * step, 0))
+        .addScaledVector(awayFromCamera, cubeSize * step);
     });
   }
 }
@@ -1161,6 +1182,8 @@ function finishDrag(drop: boolean): void {
     const refusedAtBin = drop && activeDrag.refused;
     const reorderSlot = drop ? activeDrag.reorderSlot : null;
     drag = null;
+    for (const rendered of [activeDrag.source, ...activeDrag.group])
+      setDragLayer(rendered.cube, false);
     showCandidate(null);
     discardArea.classList.remove("is-target", "is-refused");
     if (refusedAtBin) flashRefused(discardArea);
@@ -1263,6 +1286,7 @@ const onPointerMove = (event: PointerEvent) => {
         const source = drag.source;
         drag.group = selectedHandBlocks().filter((rendered) => rendered !== source);
       }
+      for (const rendered of [drag.source, ...drag.group]) setDragLayer(rendered.cube, true);
       renderer.domElement.setPointerCapture(event.pointerId);
       changeMotionRate(normalMotionRate / 10);
       playSfx("card.pickup");
