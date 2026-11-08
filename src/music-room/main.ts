@@ -5,7 +5,14 @@ import "./style.css";
 import { createBeatClock } from "./beat-clock";
 import { logFadeCurve } from "./fade";
 
-type LoopInfo = { tempo_bpm: number; beats: number; loop_seconds: number; source?: string };
+type LoopInfo = {
+  tempo_bpm: number;
+  beats: number;
+  loop_seconds: number;
+  /** Where beat 1 of a bar falls in the loop; 0 when the loop starts on a downbeat. */
+  first_beat_seconds?: number;
+  source?: string;
+};
 type Track = { id: string; group: string; name: string; url: string; info: LoopInfo };
 
 const audioUrls = import.meta.glob<string>("../../music/**/*-loop.ogg", {
@@ -76,11 +83,11 @@ const fading = new Set<Voice>();
 let clock: ReturnType<typeof createBeatClock> | null = null;
 let switchToken = 0;
 
-/** Seconds into a loop for a shared beat position. */
+/** Seconds into a loop for a shared beat position (beat 0 is the loop's first downbeat). */
 function offsetFor(track: Track, beat: number): number {
-  const { beats, loop_seconds } = track.info;
+  const { beats, loop_seconds, first_beat_seconds = 0 } = track.info;
   const within = ((beat % beats) + beats) % beats;
-  return (within / beats) * loop_seconds;
+  return (first_beat_seconds + (within / beats) * loop_seconds) % loop_seconds;
 }
 
 function startVoice(
