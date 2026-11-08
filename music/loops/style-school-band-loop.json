@@ -1,0 +1,14 @@
+{
+  "source": "school-band.ogg",
+  "tempo_bpm": 131.7716,
+  "beats_per_bar": 4,
+  "loop_start_seconds": 18.1973,
+  "loop_end_seconds": 120.192,
+  "loop_seconds": 101.9947,
+  "bars": 56,
+  "match_score": 0.959,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beats": 224,
+  "first_beat_seconds": 1.4647
+}

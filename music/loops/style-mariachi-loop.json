@@ -1,0 +1,14 @@
+{
+  "source": "mariachi.ogg",
+  "tempo_bpm": 132.0095,
+  "beats_per_bar": 4,
+  "loop_start_seconds": 31.872,
+  "loop_end_seconds": 126.4107,
+  "loop_seconds": 94.5387,
+  "bars": 52,
+  "match_score": 0.969,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beats": 208,
+  "first_beat_seconds": 0.9497
+}
