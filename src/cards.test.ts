@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { cardName, ranks, standardDeck, suits } from "./cards";
 import { drawCards, startingHandSize } from "./deal";
+import { toggleBlockSelection } from "./traits/selectable";
 
 describe("standard deck", () => {
   it("contains each of the 52 rank and suit combinations once", () => {
@@ -32,5 +33,19 @@ describe("standard deck", () => {
     expect(new Set([...firstDraw.cards, ...secondDraw.cards]).size).toBe(6);
     expect(secondDraw.cards.every((block) => !secondDraw.deck.includes(block))).toBe(true);
     expect(standardDeck).toHaveLength(52);
+  });
+
+  it("toggles multiple selectable blocks independently", () => {
+    const [featured, handCard] = standardDeck;
+    const one = toggleBlockSelection(new Set(), featured);
+    const two = toggleBlockSelection(one, handCard);
+    expect([...two]).toEqual([featured.id, handCard.id]);
+    expect([...toggleBlockSelection(two, featured)]).toEqual([handCard.id]);
+    expect(
+      toggleBlockSelection(two, {
+        ...featured,
+        traits: { identity: featured.traits.identity },
+      }),
+    ).toBe(two);
   });
 });

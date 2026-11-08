@@ -2,6 +2,7 @@ import "./style.css";
 import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock, type IdentityTrait } from "./cards";
 import { drawCards, startingHandSize } from "./deal";
+import { toggleBlockSelection, type Selection } from "./traits/selectable";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -57,8 +58,22 @@ const sun = new THREE.DirectionalLight(0xffffff, 2.4);
 sun.position.set(-3, 6, 7);
 scene.add(sun);
 
+type RenderedBlock = {
+  block: CardBlock;
+  cube: THREE.Mesh;
+  material: THREE.MeshStandardMaterial;
+  edgeMaterial: THREE.LineBasicMaterial;
+  baseY: number;
+  location: "featured" | "hand";
+};
+
 const resources: { dispose(): void }[] = [];
-function createCube(block: CardBlock, size: number): THREE.Mesh {
+const renderedBlocks: RenderedBlock[] = [];
+function createCube(
+  block: CardBlock,
+  size: number,
+  location: RenderedBlock["location"],
+): RenderedBlock {
   const geometry = new THREE.BoxGeometry(size, size, size);
   const texture = makeFaceTexture(block.traits.identity);
   const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.65 });
@@ -68,12 +83,64 @@ function createCube(block: CardBlock, size: number): THREE.Mesh {
   cube.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
   scene.add(cube);
   resources.push(geometry, texture, material, edgeGeometry, edgeMaterial);
-  return cube;
+  const rendered = { block, cube, material, edgeMaterial, baseY: 0, location };
+  renderedBlocks.push(rendered);
+  return rendered;
 }
 
-const featuredCube = createCube(featured, 2.4);
-featuredCube.position.y = -0.45;
-const handCubes = hand.map((block) => createCube(block, 0.8));
+const featuredBlock = createCube(featured, 2.4, "featured");
+featuredBlock.baseY = -0.45;
+const handBlocks = hand.map((block) => createCube(block, 0.8, "hand"));
+
+let selected: Selection = new Set();
+const showSelection = () => {
+  renderedBlocks.forEach(({ block, cube, material, edgeMaterial, baseY, location }) => {
+    const active = selected.has(block.id);
+    material.emissive.setHex(0xffffff);
+    material.emissiveIntensity = active ? 0.16 : 0;
+    edgeMaterial.color.setHex(active ? 0x65f4dd : 0x6b6c73);
+    cube.scale.setScalar(active ? (location === "hand" ? 1.08 : 1.03) : 1);
+    cube.position.y = baseY + (active ? (location === "hand" ? 0.12 : 0.06) : 0);
+  });
+  const selectedNames = renderedBlocks
+    .filter(({ block }) => selected.has(block.id))
+    .map(({ block }) => cardName(block.traits.identity));
+  host.setAttribute(
+    "aria-label",
+    `A large rotating ${cardName(featured.traits.identity)} block and a five-card hand at the top: ${names}. ${deck.length} cards remain in the deck. Selected: ${selectedNames.join(", ") || "none"}.`,
+  );
+};
+showSelection();
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const pickBlock = (event: MouseEvent | PointerEvent): RenderedBlock | undefined => {
+  const bounds = renderer.domElement.getBoundingClientRect();
+  pointer.set(
+    ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
+    -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
+  );
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObjects(
+    renderedBlocks.map(({ cube }) => cube),
+    false,
+  )[0];
+  return renderedBlocks.find(({ cube }) => cube === hit?.object);
+};
+
+const onClick = (event: MouseEvent) => {
+  const target = pickBlock(event);
+  if (!target) return;
+  selected = toggleBlockSelection(selected, target.block);
+  showSelection();
+};
+const onPointerMove = (event: PointerEvent) => {
+  renderer.domElement.style.cursor = pickBlock(event)?.block.traits.selectable
+    ? "pointer"
+    : "default";
+};
+renderer.domElement.addEventListener("click", onClick);
+renderer.domElement.addEventListener("pointermove", onPointerMove);
 
 const resize = () => {
   const { width, height } = host.getBoundingClientRect();
@@ -86,9 +153,11 @@ const resize = () => {
   camera.top = halfHeight;
   camera.bottom = -halfHeight;
   camera.updateProjectionMatrix();
-  handCubes.forEach((cube, index) => {
-    cube.position.set((index - 2) * 1.2, halfHeight - 0.75, 0);
+  handBlocks.forEach((rendered, index) => {
+    rendered.baseY = halfHeight - 0.75;
+    rendered.cube.position.x = (index - 2) * 1.2;
   });
+  showSelection();
   renderer.setSize(width, height);
   renderer.render(scene, camera);
 };
@@ -99,8 +168,7 @@ resize();
 
 let frame = 0;
 const animate = (time: number) => {
-  featuredCube.rotation.y = time * 0.00025;
-  handCubes.forEach((cube) => {
+  renderedBlocks.forEach(({ cube }) => {
     cube.rotation.y = time * 0.00025;
   });
   renderer.render(scene, camera);
@@ -112,6 +180,8 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     cancelAnimationFrame(frame);
     observer.disconnect();
+    renderer.domElement.removeEventListener("click", onClick);
+    renderer.domElement.removeEventListener("pointermove", onPointerMove);
     resources.forEach((resource) => resource.dispose());
     renderer.dispose();
   });

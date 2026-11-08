@@ -13,11 +13,15 @@ export type IdentityTrait = {
 };
 
 export type CardBlock = {
-  traits: { identity: IdentityTrait };
+  id: string;
+  traits: { identity: IdentityTrait; selectable?: Record<string, never> };
 };
 
 export const standardDeck: readonly CardBlock[] = suits.flatMap((suit) =>
-  ranks.map((rank) => ({ traits: { identity: { rank, suit } } })),
+  ranks.map((rank) => ({
+    id: `${rank}-${suit.name}`,
+    traits: { identity: { rank, suit }, selectable: {} },
+  })),
 );
 
 export function cardName(identity: IdentityTrait): string {

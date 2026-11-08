@@ -29,11 +29,11 @@ These names and payloads are examples, not a frozen API.
 
 ## Selectable trait
 
-A block with the `selectable` trait can respond to a player click and enter a selected state. Selection is separate from the block's identity: the card remains the same rank and suit. The behavior belongs to the trait, not to a particular card or block type.
+A block with the `selectable` trait can respond to a player click or tap. The trait toggles that block's selected state; selecting one block does not clear other selections. Clicking the same block again unselects it. Selection marks cards the player intends to operate on, whether they are in the hand or the large center area. Selection is separate from identity: the card remains the same rank and suit. The toggle behavior belongs to the trait, not to a particular card or block type.
 
-Possible visual cues for selection are a small upward lift, a bright edge or halo, a modest increase in face brightness, and a slightly larger scale. A combination of lift and bright edge may be clearer than bloom alone, particularly for the small hand blocks. True bloom remains an option if a softer glow is wanted later.
+The initial visual cue is a bright edge, slight lift, modest face brightening, and a small increase in scale. The hand and center blocks can use different strengths for these cues. True bloom remains an option if a softer glow is wanted later.
 
-The selection scope (one selected block or several), whether clicking again clears selection, and the final visual treatment are still to be decided.
+What an operation does to the selected cards is still to be decided.
 
 ## Architecture to discuss
 

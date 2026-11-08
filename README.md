@@ -1,6 +1,6 @@
 # Poker Blocks
 
-A new browser puzzle game project. The current demo draws six unique cards: one large rotating cube in the center and five smaller cubes in a hand at the top. Each cube shows its card's rank and suit on every face. Reload to deal again. More game rules and interaction are still to be designed.
+A new browser puzzle game project. The current demo draws six unique cards: one large rotating cube in the center and five smaller cubes in a hand at the top. Each cube shows its card's rank and suit on every face. Click or tap cards to toggle selection; reload to deal again. More game rules are still to be designed.
 
 The agreed game principles and open architecture questions are recorded in [doc/game-architecture.md](doc/game-architecture.md). Keep future project documents in `doc/`.
 
@@ -20,10 +20,10 @@ Use Node.js 26 or a supported recent Node.js release.
 
 ```sh
 npm install
-npm run dev
+./dev-server.sh
 ```
 
-Open the URL printed by Vite+. Other commands:
+The script installs dependencies if needed, then starts the dev server on all network interfaces. Extra arguments go to Vite+ (for example, `./dev-server.sh --port 5174`). Open the URL printed by Vite+. Other commands:
 
 ```sh
 npm run check   # format, lint, and type-check
