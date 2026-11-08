@@ -27,6 +27,13 @@ export const materialNames: Record<BlockMaterial, string> = {
   fire: "Fire",
 };
 
+/** Materials you can see into or through; their blocks carry the transparent trait. */
+export const transparentMaterials: ReadonlySet<BlockMaterial> = new Set([
+  "prismatic",
+  "ice",
+  "fire",
+]);
+
 export function materialOf(block: CardBlock): BlockMaterial {
   return block.traits.material?.kind ?? "paper";
 }
@@ -56,6 +63,7 @@ export function makeDevDeck(seed: number): readonly CardBlock[] {
       traits: {
         ...card.traits,
         material: { kind },
+        ...(transparentMaterials.has(kind) ? { transparent: {} } : {}),
         inspectable: inspectable(`${cardName(card.traits.identity)} · ${materialNames[kind]}`),
       },
     };

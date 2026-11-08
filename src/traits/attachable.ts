@@ -30,6 +30,19 @@ export function faceFromNormal(normal: Cell): Face {
   return face;
 }
 
+/**
+ * The face a surface direction points out of: its strongest axis. Works on bevelled or
+ * rounded blocks too, where a hit can land on a slanted surface between two faces.
+ */
+export function faceFromDirection(direction: Cell): Face {
+  const ax = Math.abs(direction.x);
+  const ay = Math.abs(direction.y);
+  const az = Math.abs(direction.z);
+  if (ax >= ay && ax >= az) return direction.x >= 0 ? "east" : "west";
+  if (ay >= az) return direction.y >= 0 ? "up" : "down";
+  return direction.z >= 0 ? "south" : "north";
+}
+
 export function attachmentCell(
   trait: AttachableTrait | undefined,
   target: Cell,

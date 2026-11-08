@@ -21,10 +21,18 @@ import {
   type RockState,
 } from "./motion";
 import { createMaterialise } from "./visual/materialise";
+import { isTransparent } from "./traits/transparent";
 import { createCardRoom } from "./visual/card-room";
 import { createBlockAppearance, setReflectionEnvironment } from "./visual/block-appearance";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./traits/attachable";
+import {
+  cellKey,
+  faceFromDirection,
+  faceFromNormal,
+  faceNormal,
+  type Cell,
+  type Face,
+} from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
@@ -248,14 +256,6 @@ function createCube(
   return rendered;
 }
 
-/** A block has landed on the table: glass and crystal switch to their refracting version. */
-function useBoardMaterials(rendered: RenderedBlock): void {
-  if (rendered.materials === rendered.boardMaterials) return;
-  rendered.materials = rendered.boardMaterials;
-  rendered.cube.material = rendered.boardMaterials;
-  showSelection();
-}
-
 function disposeCube(rendered: RenderedBlock): void {
   rendered.cube.removeFromParent();
   renderedBlocks.splice(renderedBlocks.indexOf(rendered), 1);
@@ -459,6 +459,13 @@ type PendingAction =
       fromPosition: THREE.Vector3;
       fromRotation: THREE.Quaternion;
       fromScale: number;
+      /**
+       * The table's version of the block, waiting in its cell. As the flying block lands it
+       * dissolves away while this one dissolves in (the same noise as dealing).
+       */
+      target: RenderedBlock | null;
+      /** The two dissolves, started once the flight reaches its cell. */
+      effects: ReturnType<typeof createMaterialise>[];
     }
   | {
       kind: "discard";
@@ -738,12 +745,8 @@ function pickAttachment(clientX: number, clientY: number): Candidate | null {
   if (!hit?.face) return null;
   const target = boardBlocks.find(({ cube }) => cube === hit.object);
   if (!target?.cell) return null;
-  const normal = hit.face.normal;
-  const face = faceFromNormal({
-    x: Math.round(normal.x),
-    y: Math.round(normal.y),
-    z: Math.round(normal.z),
-  });
+  // The strongest axis, so a hit on a bevel or rounded edge still picks a face.
+  const face = faceFromDirection(hit.face.normal);
   const cell = game.dealer.placementFor(game.state, target.block.id, face);
   return cell ? { target, face, cell } : null;
 }
@@ -928,6 +931,29 @@ function refillSlot(slot: number | readonly number[]): void {
   }
 }
 
+/** Seconds into a play when the flight has reached its cell and the handover starts. */
+const handoverAt = 1;
+/** Seconds the handover dissolve takes. */
+const handoverSeconds = 0.55;
+
+/**
+ * Transparent blocks (the trait) hand over with a dissolve once they land, from their hand
+ * preview to their table version; opaque blocks just land.
+ */
+function needsHandover(rendered: RenderedBlock): boolean {
+  return isTransparent(rendered.block);
+}
+
+/** The table's version of a block, in its cell but not yet visible (it dissolves in). */
+function landing(block: CardBlock, cell: Cell): RenderedBlock {
+  const target = createCube(block, cubeSize, "board");
+  target.cell = cell;
+  target.baseY = cell.y * cubeSize - 0.45;
+  target.cube.position.set(cell.x * cubeSize, target.baseY, cell.z * cubeSize);
+  target.cube.visible = false;
+  return target;
+}
+
 function startPlacement(source: RenderedBlock, candidate: Candidate): boolean {
   const next = game.play({
     cardId: source.block.id,
@@ -967,6 +993,8 @@ function startPlacement(source: RenderedBlock, candidate: Candidate): boolean {
     fromPosition: source.cube.position.clone(),
     fromRotation: source.cube.quaternion.clone(),
     fromScale: source.cube.scale.x,
+    target: needsHandover(source) ? landing(placedBlock.block, cell) : null,
+    effects: [],
   };
   playSfx("card.place.fly");
   updateHud();
@@ -1025,19 +1053,49 @@ function updateAction(now: number, delta: number): void {
     action.source.cube.position.lerpVectors(action.fromPosition, placementTarget, progress);
     action.source.cube.quaternion.copy(action.fromRotation).slerp(placementRotation, progress);
     action.source.cube.scale.setScalar(THREE.MathUtils.lerp(action.fromScale, 3, progress));
+    // Landed: the flying preview burns away as the table's version burns in, in place.
+    if (action.target && !action.effects.length && elapsed >= handoverAt) {
+      for (const cube of [action.source.cube, action.target.cube]) {
+        cube.children.forEach((edge) => (edge.visible = false));
+        cube.updateWorldMatrix(true, true);
+      }
+      action.target.cube.visible = true;
+      action.effects.push(
+        // The preview gives way exactly where the table's version arrives: the same noise,
+        // so every point shows one or the other, never neither.
+        createMaterialise(action.source.cube, {
+          seconds: handoverSeconds,
+          replaced: true,
+          reduced: reducedMotion,
+        }),
+        createMaterialise(action.target.cube, { seconds: handoverSeconds, reduced: reducedMotion }),
+      );
+    }
+    action.effects.forEach((effect) => effect.update(delta));
   } else {
     action.effects.forEach((effect) => effect.update(delta));
   }
-  if (elapsed < 1) return;
+  // A play lasts until its handover dissolve has finished, which ends after the flight.
+  const lasts = action.kind === "play" && action.target ? handoverAt + handoverSeconds + 0.05 : 1;
+  if (elapsed < lasts) return;
   pendingAction = null;
-  if (action.kind === "play") {
+  if (action.kind === "play" && action.target) {
+    action.effects.forEach((effect) => effect.finish());
+    disposeCube(action.source);
+    action.target.cube.visible = true;
+    action.target.cube.children.forEach((edge) => (edge.visible = true));
+    placed.set(cellKey(action.cell), action.target);
+    showSelection();
+  } else if (action.kind === "play") {
+    // Same look in hand and on the table: the flying block simply stays.
     action.source.location = "board";
-    useBoardMaterials(action.source);
     action.source.cell = action.cell;
     action.source.baseY = action.cell.y * cubeSize - 0.45;
     action.source.rock = null;
     action.source.handSlot = null;
     placed.set(cellKey(action.cell), action.source);
+  }
+  if (action.kind === "play") {
     playSfx("card.attach");
     announceScore(now);
     updateRotationCenter(action.cell);
@@ -1671,7 +1729,7 @@ if (import.meta.hot) {
     renderer.domElement.removeEventListener("click", onClick);
     renderer.domElement.removeEventListener("wheel", onWheel);
     window.removeEventListener("blur", onBlur);
-    if (pendingAction?.kind === "discard") pendingAction.effects.forEach((e) => e.finish());
+    pendingAction?.effects.forEach((e) => e.finish());
     appearing.forEach(({ effect }) => effect.finish());
     renderedBlocks.slice().forEach(disposeCube);
     ghostGeometry.dispose();

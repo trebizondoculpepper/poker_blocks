@@ -71,12 +71,18 @@ export function createMaterialise(
     reduced = false,
     glow = "#ffb347",
     out = false,
+    replaced = false,
   }: {
     seconds?: number;
     reduced?: boolean;
     glow?: string;
     /** Boil away instead of in. */
     out?: boolean;
+    /**
+     * Give way to another object dissolving in at the same place and moment: shown exactly
+     * where that one is not yet, so between them nothing is ever missing.
+     */
+    replaced?: boolean;
   } = {},
 ) {
   const progress = { value: out ? 1 : 0 };
@@ -92,6 +98,7 @@ export function createMaterialise(
     matEdge: { value: reduced ? 0 : EDGE },
     matGlow: { value: new Color(glow) },
     matReduced: { value: reduced ? 1 : 0 },
+    matReplaced: { value: replaced ? 1 : 0 },
   };
   const copies = new Map<Material, Material>();
   const meshes: {
@@ -125,6 +132,7 @@ export function createMaterialise(
         uniform float matEdge;
         uniform vec3 matGlow;
         uniform float matReduced;
+        uniform float matReplaced;
         ${NOISE}
         ${shader.fragmentShader}`
         .replace(
@@ -140,8 +148,13 @@ export function createMaterialise(
             // whole sweep, so the thing comes in steadily, not all at once.
             float matNoise = clamp(matFbm(matAt) * 1.6 + 0.5, 0.0, 1.0);
             float matCut = mix(-matEdge, 1.0 + matEdge, matProgress);
-            if (matNoise > matCut) discard;
-            matRim = 1.0 - smoothstep(0.0, matEdge, matCut - matNoise);
+            if (matReplaced > 0.5) {
+              // The complement: here only where the arriving object is not yet.
+              if (matNoise <= matCut) discard;
+            } else {
+              if (matNoise > matCut) discard;
+              matRim = 1.0 - smoothstep(0.0, matEdge, matCut - matNoise);
+            }
           }`,
         )
         .replace(
@@ -149,7 +162,7 @@ export function createMaterialise(
           `#include <dithering_fragment>
           // The burning edge: orange, white-hot at its very front.
           gl_FragColor.rgb += mix(matGlow, vec3(1.0, 0.97, 0.9), matRim * matRim) * matRim * 4.0;
-          if (matReduced > 0.5) gl_FragColor.a *= matProgress;`,
+          if (matReduced > 0.5) gl_FragColor.a *= matReplaced > 0.5 ? 1.0 - matProgress : matProgress;`,
         );
     };
     copies.set(original, made);
@@ -170,8 +183,8 @@ export function createMaterialise(
   const finish = () => {
     if (!running) return;
     running = false;
-    // Boiled away: nothing of it left to see.
-    if (out) root.visible = false;
+    // Boiled away (or replaced): nothing of it left to see.
+    if (out || replaced) root.visible = false;
     for (const { mesh, material, castShadow } of meshes) {
       mesh.material = material;
       mesh.castShadow = castShadow;

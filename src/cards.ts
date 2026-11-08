@@ -1,3 +1,4 @@
+import type { TransparentTrait } from "./traits/transparent";
 import { faces, type AttachableTrait } from "./traits/attachable";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
 import { scorable, type ScorableTrait } from "./traits/scorable";
@@ -26,6 +27,8 @@ export type CardBlock = {
     inspectable?: InspectableTrait;
     scorable?: ScorableTrait;
     material?: { kind: BlockMaterial };
+    /** See-through (fire, ice, crystal); see traits/transparent.ts. */
+    transparent?: TransparentTrait;
   };
 };
 

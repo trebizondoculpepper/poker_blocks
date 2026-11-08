@@ -28,3 +28,14 @@ describe("the dev1 materials sampler", () => {
     });
   }
 });
+
+describe("the transparent trait", () => {
+  it("marks exactly the see-through materials", async () => {
+    const { transparentMaterials } = await import("./materials");
+    const { isTransparent } = await import("./traits/transparent");
+    for (const card of makeDevDeck(7)) {
+      expect(isTransparent(card)).toBe(transparentMaterials.has(materialOf(card)));
+    }
+    expect([...transparentMaterials].sort()).toEqual(["fire", "ice", "prismatic"]);
+  });
+});

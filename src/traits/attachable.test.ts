@@ -27,3 +27,13 @@ describe("attachable trait", () => {
     expect(attachmentCell(undefined, origin, "north", new Set())).toBeNull();
   });
 });
+
+describe("faceFromDirection", () => {
+  it("picks the strongest axis, even on a bevel", async () => {
+    const { faceFromDirection } = await import("./attachable");
+    expect(faceFromDirection({ x: 0, y: 1, z: 0 })).toBe("up");
+    expect(faceFromDirection({ x: 0.71, y: 0.7, z: 0 })).toBe("east");
+    expect(faceFromDirection({ x: 0.1, y: -0.2, z: -0.97 })).toBe("north");
+    expect(faceFromDirection({ x: 0.577, y: 0.577, z: 0.577 })).toBe("east");
+  });
+});
