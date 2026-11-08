@@ -1,6 +1,6 @@
 # Poker Blocks
 
-A browser puzzle game project. The current demo draws six unique cards: one large cube in play and five smaller cubes in a hand at the bottom. Each cube shows its card's rank and suit on every face. Click or tap cards to toggle selection. Drag a hand cube onto an exposed face of any cube in play to attach it; the dealer refills the hand from the remaining deck. The placed structure gently wobbles around its center of gravity, and you can drag it to rotate it horizontally and vertically. The camera eases back to fit the growing structure while the hand stays fixed. Reload to deal again. More game rules are still to be designed.
+A browser puzzle game project. The current demo draws six unique cards: one large cube in play and five smaller cubes in a hand at the bottom. Each cube shows its card's rank and suit on every face. Hover over any card to inspect it; click or tap to toggle selection. Drag a hand cube onto an exposed face of any cube in play to attach it; the dealer refills the hand from the remaining deck. The placed structure gently wobbles around its center of gravity, and you can drag it to rotate it horizontally and vertically. The camera eases back to fit the growing structure while the hand stays fixed. Reload to deal again. More game rules are still to be designed.
 
 The agreed game principles and open architecture questions are recorded in [doc/game-architecture.md](doc/game-architecture.md). Keep future project documents in `doc/`.
 

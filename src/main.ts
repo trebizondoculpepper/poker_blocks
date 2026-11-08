@@ -15,12 +15,18 @@ import {
   type Face,
 } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
+import { inspectBlock } from "./traits/inspectable";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
 app.innerHTML = '<main class="scene" role="application" aria-label="Poker Blocks"></main>';
 
 const host = app.querySelector<HTMLDivElement>(".scene")!;
+const tooltip = document.createElement("div");
+tooltip.className = "inspect-tooltip";
+tooltip.setAttribute("role", "tooltip");
+tooltip.hidden = true;
+host.append(tooltip);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111726);
 const handScene = new THREE.Scene();
@@ -287,6 +293,21 @@ type BoardDrag = {
 let boardDrag: BoardDrag | null = null;
 let suppressClickUntil = 0;
 
+function showInspection(block: CardBlock | undefined, clientX: number, clientY: number): void {
+  const label = block && inspectBlock(block);
+  if (!label) {
+    tooltip.hidden = true;
+    return;
+  }
+  tooltip.textContent = label;
+  tooltip.hidden = false;
+  const bounds = host.getBoundingClientRect();
+  const left = clientX - bounds.left + 14;
+  const top = clientY - bounds.top + 14;
+  tooltip.style.left = `${Math.max(8, Math.min(left, bounds.width - tooltip.offsetWidth - 8))}px`;
+  tooltip.style.top = `${Math.max(8, Math.min(top, bounds.height - tooltip.offsetHeight - 8))}px`;
+}
+
 function showSelection(): void {
   renderedBlocks.forEach(({ block, material }) => {
     const active = selected.has(block.id);
@@ -471,6 +492,7 @@ function finishBoardDrag(): void {
 }
 
 const onPointerDown = (event: PointerEvent) => {
+  tooltip.hidden = true;
   const source = pickBlock(event.clientX, event.clientY, handBlocks);
   if (source?.block.traits.attachable) {
     drag = {
@@ -506,6 +528,7 @@ const onPointerMove = (event: PointerEvent) => {
       changeMotionRate(normalMotionRate / 10);
     }
     if (drag.active) {
+      tooltip.hidden = true;
       moveDraggedBlock();
       updateCandidate();
       renderer.domElement.style.cursor = "grabbing";
@@ -526,6 +549,7 @@ const onPointerMove = (event: PointerEvent) => {
       changeMotionRate(0);
     }
     if (boardDrag.active) {
+      tooltip.hidden = true;
       manualYaw += dx * 0.005;
       manualPitch += dy * 0.005;
       applyBoardWobble();
@@ -537,8 +561,18 @@ const onPointerMove = (event: PointerEvent) => {
     pickBlock(event.clientX, event.clientY, handBlocks) ??
     pickBlock(event.clientX, event.clientY, [...placed.values()]);
   renderer.domElement.style.cursor = hovered?.block.traits.selectable ? "pointer" : "default";
+  showInspection(
+    event.pointerType === "touch" ? undefined : hovered?.block,
+    event.clientX,
+    event.clientY,
+  );
+};
+const onPointerLeave = () => {
+  tooltip.hidden = true;
+  renderer.domElement.style.cursor = "default";
 };
 const onPointerUp = (event: PointerEvent) => {
+  const wasDragging = Boolean(drag?.active || boardDrag?.active);
   if (drag?.pointerId === event.pointerId) {
     drag.lastX = event.clientX;
     drag.lastY = event.clientY;
@@ -546,10 +580,19 @@ const onPointerUp = (event: PointerEvent) => {
   }
   if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
   renderer.domElement.style.cursor = "default";
+  const hovered =
+    pickBlock(event.clientX, event.clientY, handBlocks) ??
+    pickBlock(event.clientX, event.clientY, [...placed.values()]);
+  showInspection(
+    wasDragging || event.pointerType === "touch" ? undefined : hovered?.block,
+    event.clientX,
+    event.clientY,
+  );
 };
 const onPointerCancel = (event: PointerEvent) => {
   if (drag?.pointerId === event.pointerId) finishDrag(false);
   if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
+  tooltip.hidden = true;
   renderer.domElement.style.cursor = "default";
 };
 const onClick = (event: MouseEvent) => {
@@ -563,6 +606,7 @@ const onClick = (event: MouseEvent) => {
 };
 renderer.domElement.addEventListener("pointerdown", onPointerDown);
 renderer.domElement.addEventListener("pointermove", onPointerMove);
+renderer.domElement.addEventListener("pointerleave", onPointerLeave);
 renderer.domElement.addEventListener("pointerup", onPointerUp);
 renderer.domElement.addEventListener("pointercancel", onPointerCancel);
 renderer.domElement.addEventListener("click", onClick);
@@ -620,6 +664,7 @@ if (import.meta.hot) {
     observer.disconnect();
     renderer.domElement.removeEventListener("pointerdown", onPointerDown);
     renderer.domElement.removeEventListener("pointermove", onPointerMove);
+    renderer.domElement.removeEventListener("pointerleave", onPointerLeave);
     renderer.domElement.removeEventListener("pointerup", onPointerUp);
     renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
     renderer.domElement.removeEventListener("click", onClick);

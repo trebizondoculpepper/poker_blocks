@@ -1,4 +1,5 @@
 import { faces, type AttachableTrait } from "./traits/attachable";
+import { inspectable, type InspectableTrait } from "./traits/inspectable";
 
 export const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"] as const;
 
@@ -20,13 +21,19 @@ export type CardBlock = {
     identity: IdentityTrait;
     selectable?: Record<string, never>;
     attachable?: AttachableTrait;
+    inspectable?: InspectableTrait;
   };
 };
 
 export const standardDeck: readonly CardBlock[] = suits.flatMap((suit) =>
   ranks.map((rank) => ({
     id: `${rank}-${suit.name}`,
-    traits: { identity: { rank, suit }, selectable: {}, attachable: { faces } },
+    traits: {
+      identity: { rank, suit },
+      selectable: {},
+      attachable: { faces },
+      inspectable: inspectable(cardName({ rank, suit })),
+    },
   })),
 );
 
