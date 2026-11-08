@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { logFadeCurve } from "./fade";
+import { fadeCurve, fadeGain, fadeKinds, logFadeCurve, type FadeKind } from "./fade";
 
 describe("logarithmic fade", () => {
   it("runs from silence to full level and back", () => {
@@ -20,5 +20,33 @@ describe("logarithmic fade", () => {
     expect(db[3]).toBeCloseTo(0);
     // Halfway through, the level is -30 dB: far quieter than a linear fade's 0.5.
     expect(curve[2]).toBeLessThan(0.05);
+  });
+});
+
+describe("fade shapes", () => {
+  const kinds = Object.keys(fadeKinds) as FadeKind[];
+
+  it("all run from 0 to 1 and fall as the mirror of their rise", () => {
+    for (const kind of kinds) {
+      const up = fadeCurve(kind, true, 9);
+      const down = fadeCurve(kind, false, 9);
+      expect(up[0]).toBe(0);
+      expect(up.at(-1)).toBe(1);
+      expect([...down]).toEqual([...up].reverse());
+    }
+  });
+
+  it("have their characteristic midpoints", () => {
+    expect(fadeGain("linear", 0.5)).toBeCloseTo(0.5);
+    expect(fadeGain("equal-power", 0.5)).toBeCloseTo(Math.SQRT1_2);
+    expect(fadeGain("s-curve", 0.5)).toBeCloseTo(0.5);
+    expect(fadeGain("exponential", 0.5)).toBeCloseTo(0.25);
+    expect(20 * Math.log10(fadeGain("logarithmic", 0.5))).toBeCloseTo(-30);
+  });
+
+  it("keeps equal-power fades at constant combined power", () => {
+    for (const t of [0.1, 0.3, 0.5, 0.8]) {
+      expect(fadeGain("equal-power", t) ** 2 + fadeGain("equal-power", 1 - t) ** 2).toBeCloseTo(1);
+    }
   });
 });

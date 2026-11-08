@@ -3,7 +3,7 @@
 // from its sidecar. Clicking a loop fades it in on the next bar.
 import "./style.css";
 import { createBeatClock } from "./beat-clock";
-import { logFadeCurve } from "./fade";
+import { fadeCurve, fadeKinds, type FadeKind } from "./fade";
 
 type LoopInfo = {
   tempo_bpm: number;
@@ -50,6 +50,9 @@ const volume = element<HTMLInputElement>("volume");
 const fade = element<HTMLInputElement>("fade");
 const fadeValue = element<HTMLOutputElement>("fade-value");
 const ease = element<HTMLInputElement>("ease");
+const fadeShape = element<HTMLSelectElement>("fade-shape");
+for (const [kind, label] of Object.entries(fadeKinds)) fadeShape.add(new Option(label, kind));
+const fadeKind = (): FadeKind => fadeShape.value as FadeKind;
 const easeValue = element<HTMLOutputElement>("ease-value");
 const click = element<HTMLInputElement>("click");
 const status = element<HTMLParagraphElement>("status");
@@ -143,7 +146,7 @@ async function select(track: Track): Promise<void> {
     clock = createBeatClock(at, track.info.tempo_bpm);
     current = startVoice(track, buffer, at, 0, track.info.tempo_bpm);
     // The first loop fades in too, over the same logarithmic curve.
-    current.gain.gain.setValueCurveAtTime(logFadeCurve(true), at, Number(fade.value));
+    current.gain.gain.setValueCurveAtTime(fadeCurve(fadeKind(), true), at, Number(fade.value));
     render();
     return;
   }
@@ -177,8 +180,8 @@ async function select(track: Track): Promise<void> {
   }
   incoming.source.playbackRate.setValueAtTime(1, easeAt + easeSeconds);
   outgoing.gain.gain.cancelScheduledValues(at);
-  outgoing.gain.gain.setValueCurveAtTime(logFadeCurve(false), at, seconds);
-  incoming.gain.gain.setValueCurveAtTime(logFadeCurve(true), at, seconds);
+  outgoing.gain.gain.setValueCurveAtTime(fadeCurve(fadeKind(), false), at, seconds);
+  incoming.gain.gain.setValueCurveAtTime(fadeCurve(fadeKind(), true), at, seconds);
   // A stops as soon as B is fully faded up.
   outgoing.source.stop(at + seconds);
   fading.add(outgoing);

@@ -11,8 +11,8 @@
       <header class="room-header">
         <h1>Music room</h1>
         <p class="room-intro">
-          Loops from <code>music/loops/</code>. Click a loop: on the next bar it fades in
-          (logarithmically) on the same beat, at the current tempo; the old loop stops once the fade
+          Loops from <code>music/loops/</code>. Click a loop: on the next bar it fades in (shape
+          selectable) on the same beat, at the current tempo; the old loop stops once the fade
           completes, then the tempo eases to the new loop's own speed like a tape machine.
         </p>
         <div class="room-controls">
@@ -24,6 +24,10 @@
           <label>
             Crossfade <output id="fade-value">4 s</output>
             <input id="fade" type="range" min="0.5" max="12" step="0.5" value="4" />
+          </label>
+          <label>
+            Fade shape
+            <select id="fade-shape"></select>
           </label>
           <label>
             Tempo ease <output id="ease-value">5 s</output>
