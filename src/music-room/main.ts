@@ -50,6 +50,8 @@ const volume = element<HTMLInputElement>("volume");
 const fade = element<HTMLInputElement>("fade");
 const fadeValue = element<HTMLOutputElement>("fade-value");
 const ease = element<HTMLInputElement>("ease");
+const easeDelay = element<HTMLInputElement>("ease-delay");
+const delayValue = element<HTMLOutputElement>("delay-value");
 const fadeShape = element<HTMLSelectElement>("fade-shape");
 for (const [kind, label] of Object.entries(fadeKinds)) fadeShape.add(new Option(label, kind));
 const fadeKind = (): FadeKind => fadeShape.value as FadeKind;
@@ -162,8 +164,8 @@ async function select(track: Track): Promise<void> {
   const beat = clock.beatAt(at);
   // 1. Hold A's tempo through the crossfade; B plays at A's speed, beats matched.
   clock.ramp(at, 0, from);
-  // 2. After the fade, ease B to its natural tempo.
-  const easeAt = at + seconds;
+  // 2. After the fade, and an optional delay at A's tempo, ease B to its natural tempo.
+  const easeAt = at + seconds + Number(easeDelay.value);
   clock.ramp(easeAt, easeSeconds, to);
 
   const outgoing = current;
@@ -269,4 +271,5 @@ volume.addEventListener("input", () =>
 );
 fade.addEventListener("input", () => (fadeValue.textContent = `${fade.value} s`));
 ease.addEventListener("input", () => (easeValue.textContent = `${ease.value} s`));
+easeDelay.addEventListener("input", () => (delayValue.textContent = `${easeDelay.value} s`));
 requestAnimationFrame(tick);
