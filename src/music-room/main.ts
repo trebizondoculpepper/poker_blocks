@@ -74,7 +74,10 @@ const easeDelay = element<HTMLInputElement>("ease-delay");
 const delayValue = element<HTMLOutputElement>("delay-value");
 const fadeShape = element<HTMLSelectElement>("fade-shape");
 for (const [kind, label] of Object.entries(fadeKinds)) fadeShape.add(new Option(label, kind));
+fadeShape.value = "exponential";
 const fadeKind = (): FadeKind => fadeShape.value as FadeKind;
+/** The crossfade length in seconds: the slider counts bars (4 beats) at `tempo` BPM. */
+const fadeSeconds = (tempo: number): number => (Number(fade.value) * 4 * 60) / tempo;
 const easeValue = element<HTMLOutputElement>("ease-value");
 const click = element<HTMLInputElement>("click");
 const status = element<HTMLParagraphElement>("status");
@@ -172,8 +175,12 @@ async function select(track: Track): Promise<void> {
     const at = context.currentTime + 0.05;
     clock = createBeatClock(at, track.info.tempo_bpm);
     current = startVoice(track, buffer, at, 0, track.info.tempo_bpm);
-    // The first loop fades in too, over the same logarithmic curve.
-    current.gain.gain.setValueCurveAtTime(fadeCurve(fadeKind(), true), at, Number(fade.value));
+    // The first loop fades in too, over the same curve and number of bars.
+    current.gain.gain.setValueCurveAtTime(
+      fadeCurve(fadeKind(), true),
+      at,
+      fadeSeconds(track.info.tempo_bpm),
+    );
     render();
     return;
   }
@@ -182,9 +189,10 @@ async function select(track: Track): Promise<void> {
   const now = context.currentTime + 0.05;
   // Fades always start on the next bar line, with the incoming loop entering on the same beat.
   const at = clock.timeOfBeat(Math.ceil(clock.beatAt(now) / 4) * 4);
-  const seconds = Number(fade.value);
   const easeSeconds = Number(ease.value);
   const from = clock.tempoAt(at);
+  // A's tempo holds through the fade, so its bars are a fixed length.
+  const seconds = fadeSeconds(from);
   const to = track.info.tempo_bpm;
   const beat = clock.beatAt(at);
   // 1. Hold A's tempo through the crossfade; B plays at A's speed, beats matched.
@@ -414,7 +422,8 @@ element<HTMLButtonElement>("stop").addEventListener("click", stop);
 volume.addEventListener("input", () =>
   master?.gain.setTargetAtTime(Number(volume.value), audio().context.currentTime, 0.05),
 );
-fade.addEventListener("input", () => (fadeValue.textContent = `${fade.value} s`));
+const barsLabel = () => `${fade.value} ${fade.value === "1" ? "bar" : "bars"}`;
+fade.addEventListener("input", () => (fadeValue.textContent = barsLabel()));
 ease.addEventListener("input", () => (easeValue.textContent = `${ease.value} s`));
 easeDelay.addEventListener("input", () => (delayValue.textContent = `${easeDelay.value} s`));
 requestAnimationFrame(tick);
