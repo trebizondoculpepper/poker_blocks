@@ -1,6 +1,7 @@
 import "./style.css";
 import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock, type IdentityTrait } from "./cards";
+import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
 import { refillHand } from "./dealer";
 import { drawCards, startingHandSize } from "./deal";
 import { tweenValue } from "./easing";
@@ -23,8 +24,11 @@ const host = app.querySelector<HTMLDivElement>(".scene")!;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111726);
 const handScene = new THREE.Scene();
+const pivot = new THREE.Group();
 const assembly = new THREE.Group();
-scene.add(assembly);
+pivot.rotation.order = "YXZ";
+pivot.add(assembly);
+scene.add(pivot);
 
 const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 1000);
 camera.position.set(0, 3, 8);
@@ -92,6 +96,21 @@ type RenderedBlock = {
 const renderedBlocks: RenderedBlock[] = [];
 const placed = new Map<string, RenderedBlock>();
 const cubeSize = 2.4;
+let massCenter: MassCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
+const pivotCell = new THREE.Vector3();
+
+function updateRotationCenter(cell: Cell): void {
+  massCenter = addCell(massCenter, cell);
+  const center = centerOfGravity(massCenter);
+  const next = new THREE.Vector3(
+    center.x * cubeSize,
+    center.y * cubeSize - 0.45,
+    center.z * cubeSize,
+  );
+  pivot.position.add(next.clone().sub(pivotCell).applyQuaternion(pivot.quaternion));
+  pivotCell.copy(next);
+  assembly.position.copy(pivotCell).multiplyScalar(-1);
+}
 function createCube(
   block: CardBlock,
   size: number,
@@ -138,6 +157,7 @@ function addToBoard(block: CardBlock, cell: Cell): RenderedBlock {
   rendered.baseY = cell.y * cubeSize - 0.45;
   rendered.cube.position.set(cell.x * cubeSize, rendered.baseY, cell.z * cubeSize);
   placed.set(cellKey(cell), rendered);
+  updateRotationCenter(cell);
   return rendered;
 }
 
@@ -166,20 +186,19 @@ function desiredCamera(): { distance: number; target: THREE.Vector3 } {
     y: Math.max(...cells.map(({ y }) => y)),
     z: Math.max(...cells.map(({ z }) => z)),
   };
-  const horizontalRadius =
-    Math.hypot(
-      Math.max(Math.abs(min.x - 0.5), Math.abs(max.x + 0.5)),
-      Math.max(Math.abs(min.z - 0.5), Math.abs(max.z + 0.5)),
-    ) * cubeSize;
-  const middleY = ((min.y + max.y) / 2) * cubeSize - 0.45;
-  const verticalRadius = ((max.y - min.y + 1) * cubeSize) / 2;
-  const radius = Math.hypot(horizontalRadius, verticalRadius);
+  const center = centerOfGravity(massCenter);
+  const extents = {
+    x: Math.max(Math.abs(min.x - 0.5 - center.x), Math.abs(max.x + 0.5 - center.x)),
+    y: Math.max(Math.abs(min.y - 0.5 - center.y), Math.abs(max.y + 0.5 - center.y)),
+    z: Math.max(Math.abs(min.z - 0.5 - center.z), Math.abs(max.z + 0.5 - center.z)),
+  };
+  const radius = Math.hypot(extents.x, extents.y, extents.z) * cubeSize;
   const verticalFov = THREE.MathUtils.degToRad(camera.fov);
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
   const limitingFov = Math.min(verticalFov, horizontalFov);
   return {
     distance: Math.max(initialCameraDistance, (radius / Math.sin(limitingFov / 2)) * 1.2),
-    target: new THREE.Vector3(0, middleY + 0.5, 0),
+    target: pivot.position.clone().add(new THREE.Vector3(0, 0.5, 0)),
   };
 }
 
@@ -257,18 +276,22 @@ type Drag = {
   lastY: number;
 };
 let drag: Drag | null = null;
+type BoardDrag = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  lastX: number;
+  lastY: number;
+  active: boolean;
+};
+let boardDrag: BoardDrag | null = null;
 let suppressClickUntil = 0;
 
 function showSelection(): void {
-  renderedBlocks.forEach(({ block, cube, material, edgeMaterial, baseY, location }) => {
+  renderedBlocks.forEach(({ block, material }) => {
     const active = selected.has(block.id);
     material.emissive.setHex(0xffffff);
-    material.emissiveIntensity = active ? 0.16 : 0;
-    edgeMaterial.color.setHex(active ? 0x65f4dd : 0x6b6c73);
-    cube.scale.setScalar(active && location === "hand" ? 1.08 : 1);
-    if (!(drag?.active && drag.source.block.id === block.id)) {
-      cube.position.y = baseY + (active && location === "hand" ? 0.12 : 0);
-    }
+    material.emissiveIntensity = active ? 0.28 : 0;
   });
   const selectedNames = renderedBlocks
     .filter(({ block }) => selected.has(block.id))
@@ -373,7 +396,8 @@ function moveDraggedBlock(): void {
   }
 }
 
-let spinSpeed = 0.25;
+const normalSpinSpeed = 0.05;
+let spinSpeed = normalSpinSpeed;
 let speedFrom = spinSpeed;
 let speedTo = spinSpeed;
 let speedChangeAt = performance.now();
@@ -416,7 +440,7 @@ function finishDrag(drop: boolean): void {
       activeDrag.source.cube.position.z = 0;
       layoutHand();
     }
-    changeSpeed(0.25);
+    changeSpeed(normalSpinSpeed);
     suppressClickUntil = performance.now() + 250;
     if (renderer.domElement.hasPointerCapture(activeDrag.pointerId)) {
       renderer.domElement.releasePointerCapture(activeDrag.pointerId);
@@ -426,18 +450,41 @@ function finishDrag(drop: boolean): void {
   }
 }
 
+function finishBoardDrag(): void {
+  if (!boardDrag) return;
+  const finished = boardDrag;
+  boardDrag = null;
+  if (!finished.active) return;
+  changeSpeed(normalSpinSpeed);
+  suppressClickUntil = performance.now() + 250;
+  if (renderer.domElement.hasPointerCapture(finished.pointerId)) {
+    renderer.domElement.releasePointerCapture(finished.pointerId);
+  }
+}
+
 const onPointerDown = (event: PointerEvent) => {
   const source = pickBlock(event.clientX, event.clientY, handBlocks);
-  if (!source?.block.traits.attachable) return;
-  drag = {
-    source,
+  if (source?.block.traits.attachable) {
+    drag = {
+      source,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      active: false,
+      candidate: null,
+    };
+    return;
+  }
+  if (!pickBlock(event.clientX, event.clientY, [...placed.values()])) return;
+  boardDrag = {
     pointerId: event.pointerId,
     startX: event.clientX,
     startY: event.clientY,
     lastX: event.clientX,
     lastY: event.clientY,
     active: false,
-    candidate: null,
   };
 };
 const onPointerMove = (event: PointerEvent) => {
@@ -448,11 +495,31 @@ const onPointerMove = (event: PointerEvent) => {
       drag.active = true;
       renderer.domElement.setPointerCapture(event.pointerId);
       scene.add(drag.source.cube);
-      changeSpeed(0.025);
+      changeSpeed(normalSpinSpeed / 10);
     }
     if (drag.active) {
       moveDraggedBlock();
       updateCandidate();
+      renderer.domElement.style.cursor = "grabbing";
+      return;
+    }
+  }
+  if (boardDrag?.pointerId === event.pointerId) {
+    const dx = event.clientX - boardDrag.lastX;
+    const dy = event.clientY - boardDrag.lastY;
+    boardDrag.lastX = event.clientX;
+    boardDrag.lastY = event.clientY;
+    if (
+      !boardDrag.active &&
+      Math.hypot(event.clientX - boardDrag.startX, event.clientY - boardDrag.startY) > 8
+    ) {
+      boardDrag.active = true;
+      renderer.domElement.setPointerCapture(event.pointerId);
+      changeSpeed(0);
+    }
+    if (boardDrag.active) {
+      pivot.rotation.y += dx * 0.005;
+      pivot.rotation.x += dy * 0.005;
       renderer.domElement.style.cursor = "grabbing";
       return;
     }
@@ -468,10 +535,12 @@ const onPointerUp = (event: PointerEvent) => {
     drag.lastY = event.clientY;
     finishDrag(true);
   }
+  if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
   renderer.domElement.style.cursor = "default";
 };
 const onPointerCancel = (event: PointerEvent) => {
   if (drag?.pointerId === event.pointerId) finishDrag(false);
+  if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
   renderer.domElement.style.cursor = "default";
 };
 const onClick = (event: MouseEvent) => {
@@ -523,7 +592,7 @@ const animate = (time: number) => {
   const delta = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
   lastTime = time;
   spinSpeed = currentSpeed(time);
-  assembly.rotation.y += spinSpeed * delta;
+  pivot.rotation.y += spinSpeed * delta;
   updateCamera(time);
   handBlocks.forEach(({ cube, rock }) => {
     if (!rock) return;

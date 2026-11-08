@@ -31,7 +31,7 @@ These names and payloads are examples, not a frozen API.
 
 A block with the `selectable` trait can respond to a player click or tap. The trait toggles that block's selected state; selecting one block does not clear other selections. Clicking the same block again unselects it. Selection marks cards the player intends to operate on, whether they are in the hand or the large center area. Selection is separate from identity: the card remains the same rank and suit. The toggle behavior belongs to the trait, not to a particular card or block type.
 
-The initial visual cue is a bright edge, slight lift, modest face brightening, and a small increase in scale. The hand and center blocks can use different strengths for these cues. True bloom remains an option if a softer glow is wanted later.
+The current visual cue is face illumination only. Selection does not change a block's size or position, so connected cubes remain aligned. True bloom remains an option if a softer glow is wanted later.
 
 What an operation does to the selected cards is still to be decided.
 
@@ -44,6 +44,8 @@ The dealer is a rule system, rather than a block. After a successful attachment 
 When dragging starts, the structure's rotation speed eases to one-tenth of normal over half a second. On drop or cancel it eases back over half a second. Small numeric easing helpers live in `src/easing.ts` for later animations.
 
 The hand is rendered as a fixed overlay with its own camera. Only the structure uses the perspective board camera. After a block attaches, the board camera waits one second, then eases over two seconds to a distance calculated from the grid's bounding box, so the growing structure stays visible. The hand's size and position do not follow that camera move.
+
+All standard cubes currently have equal mass. The structure keeps a running sum of block grid positions and divides by the block count to find its true center of gravity after each attachment. The rotation pivot moves to that center while preserving the existing block positions. Automatic rotation is one-fifth of its original speed. Dragging any placed block rotates the structure on horizontal and vertical axes; a click without dragging still toggles selection.
 
 ## Architecture to discuss
 
