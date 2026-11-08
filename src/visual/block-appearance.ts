@@ -223,7 +223,67 @@ function drawGold(g: CanvasRenderingContext2D, random: () => number): void {
     }
 }
 
-function drawTerracotta(g: CanvasRenderingContext2D, random: () => number): void {
+type Crack = { x: number; y: number }[];
+
+/**
+ * Hairline cracks running in from the edges, as on old pottery: each starts at a random
+ * point on a side, wanders inward and sometimes forks. Seeded per card so the colour and
+ * the relief agree.
+ */
+function potteryCracks(identity: IdentityTrait): Crack[] {
+  const random = randomFor(identity, "terracotta", true);
+  const cracks: Crack[] = [];
+  const count = 3 + Math.floor(random() * 4);
+  for (let n = 0; n < count; n++) {
+    const side = Math.floor(random() * 4);
+    const along = 20 + random() * (SIZE - 40);
+    let x = side === 0 ? 0 : side === 1 ? SIZE : along;
+    let y = side === 2 ? 0 : side === 3 ? SIZE : along;
+    // Heading inward from that side, give or take.
+    let heading = [0, Math.PI, Math.PI / 2, -Math.PI / 2][side] + (random() - 0.5) * 0.9;
+    const crack: Crack = [{ x, y }];
+    const steps = 4 + Math.floor(random() * 6);
+    for (let step = 0; step < steps; step++) {
+      heading += (random() - 0.5) * 1.1;
+      const length = 6 + random() * 14;
+      x += Math.cos(heading) * length;
+      y += Math.sin(heading) * length;
+      crack.push({ x, y });
+      if (random() < 0.25) {
+        // A short fork off this point.
+        const forkHeading = heading + (random() < 0.5 ? -1 : 1) * (0.5 + random() * 0.6);
+        cracks.push([
+          { x, y },
+          {
+            x: x + Math.cos(forkHeading) * (8 + random() * 14),
+            y: y + Math.sin(forkHeading) * (8 + random() * 14),
+          },
+        ]);
+      }
+    }
+    cracks.push(crack);
+  }
+  return cracks;
+}
+
+function strokeCracks(
+  g: CanvasRenderingContext2D,
+  cracks: Crack[],
+  color: string,
+  width: number,
+): void {
+  g.strokeStyle = color;
+  g.lineWidth = width;
+  g.lineJoin = "round";
+  g.lineCap = "round";
+  for (const crack of cracks) {
+    g.beginPath();
+    crack.forEach(({ x, y }, index) => (index ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.stroke();
+  }
+}
+
+function drawTerracotta(g: CanvasRenderingContext2D, random: () => number, cracks: Crack[]): void {
   gradient(g, [
     [0, "#e6a174"],
     [0.5, "#b65d3d"],
@@ -241,6 +301,9 @@ function drawTerracotta(g: CanvasRenderingContext2D, random: () => number): void
     g.lineTo(SIZE, 45 + n * 54);
     g.stroke();
   }
+  // Cracks: a dark line with a pale chipped lip beside it.
+  strokeCracks(g, cracks, "#f2b48a66", 3);
+  strokeCracks(g, cracks, "#3a1a0fcc", 1.4);
 }
 
 function drawIce(g: CanvasRenderingContext2D, random: () => number): void {
@@ -333,7 +396,7 @@ function faceTexture(
       drawGold(g, random);
       break;
     case "terracotta":
-      drawTerracotta(g, random);
+      drawTerracotta(g, random, potteryCracks(identity));
       break;
     case "ice":
       drawIce(g, random);
@@ -474,7 +537,148 @@ function clearOnTable(
   });
 }
 
-function surface(texture: THREE.CanvasTexture, kind: BlockMaterial): THREE.MeshStandardMaterial {
+// ----- Bump maps: height in grey (white is raised), red channel read by three.js -----
+
+function heightCanvas(): { canvas: HTMLCanvasElement; g: CanvasRenderingContext2D } {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = SIZE;
+  const g = canvas.getContext("2d");
+  if (!g) throw new Error("Canvas 2D is unavailable");
+  g.fillStyle = "#808080";
+  g.fillRect(0, 0, SIZE, SIZE);
+  return { canvas, g };
+}
+
+/** The rank and suit, stamped: pressed slightly into the face. */
+function stampPrint(g: CanvasRenderingContext2D, identity: IdentityTrait, shade: string): void {
+  g.fillStyle = shade;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.font = "bold 80px system-ui, sans-serif";
+  g.fillText(identity.rank, 128, 100);
+  g.font = "94px Georgia, serif";
+  g.fillText(identity.suit.symbol, 128, 180);
+}
+
+/**
+ * Steel's relief: brush grooves along `angle`, a raised rim with a groove inside it, domed
+ * rivets at the corners and the stamped rank and suit.
+ */
+function steelHeight(identity: IdentityTrait, angle: number): THREE.CanvasTexture {
+  const { canvas, g } = heightCanvas();
+  const random = randomFor(identity, "steel", false);
+  g.save();
+  g.translate(SIZE / 2, SIZE / 2);
+  g.rotate(angle);
+  for (let n = 0; n < 700; n++) {
+    const shade = 112 + Math.floor(random() * 32);
+    g.strokeStyle = `rgb(${shade}, ${shade}, ${shade})`;
+    g.lineWidth = 1;
+    const x = -SIZE + random() * SIZE * 2;
+    const y = -SIZE + random() * SIZE * 2;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + 40 + random() * 220, y);
+    g.stroke();
+  }
+  g.restore();
+  // The rim: a raised plate edge, then a pressed groove just inside it.
+  g.strokeStyle = "#d8d8d8";
+  g.lineWidth = 18;
+  g.strokeRect(0, 0, SIZE, SIZE);
+  g.strokeStyle = "#4a4a4a";
+  g.lineWidth = 3;
+  g.strokeRect(13, 13, SIZE - 26, SIZE - 26);
+  for (const x of [29, SIZE - 29])
+    for (const y of [29, SIZE - 29]) {
+      const dome = g.createRadialGradient(x - 2, y - 2, 1, x, y, 11);
+      dome.addColorStop(0, "#ffffff");
+      dome.addColorStop(0.7, "#c8c8c8");
+      dome.addColorStop(1, "#808080");
+      g.fillStyle = dome;
+      g.beginPath();
+      g.arc(x, y, 11, 0, Math.PI * 2);
+      g.fill();
+      // The screwdriver slot.
+      g.strokeStyle = "#606060";
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(x - 5, y + 2);
+      g.lineTo(x + 5, y - 3);
+      g.stroke();
+    }
+  stampPrint(g, identity, "#5a5a5a");
+  return new THREE.CanvasTexture(canvas);
+}
+
+/** Glass: the came stands proud of the panes, which are flat. */
+function glassHeight(): THREE.CanvasTexture {
+  const { canvas, g } = heightCanvas();
+  g.fillStyle = "#606060";
+  g.fillRect(0, 0, SIZE, SIZE);
+  g.strokeStyle = "#e0e0e0";
+  g.lineWidth = 30;
+  g.strokeRect(0, 0, SIZE, SIZE);
+  g.strokeStyle = "#ffffff";
+  g.lineWidth = 6;
+  g.strokeRect(6, 6, SIZE - 12, SIZE - 12);
+  return new THREE.CanvasTexture(canvas);
+}
+
+/** A height map from a face's own pattern, softened so it reads as gentle relief. */
+function reliefFrom(texture: THREE.CanvasTexture): {
+  canvas: HTMLCanvasElement;
+  g: CanvasRenderingContext2D;
+} {
+  const { canvas, g } = heightCanvas();
+  g.filter = "grayscale(1) contrast(0.45)";
+  g.drawImage(texture.image as HTMLCanvasElement, 0, 0);
+  g.filter = "none";
+  return { canvas, g };
+}
+
+/** Wood: the grain, plus the rank, suit and key lines carved into the surface. */
+function woodHeight(texture: THREE.CanvasTexture, identity: IdentityTrait): THREE.CanvasTexture {
+  const { canvas, g } = reliefFrom(texture);
+  border(g, "#383838", 7);
+  border(g, "#505050", 2.5);
+  stampPrint(g, identity, "#303030");
+  return new THREE.CanvasTexture(canvas);
+}
+
+/** Terracotta: its pitted surface, with the cracks cut in. */
+function terracottaHeight(
+  texture: THREE.CanvasTexture,
+  identity: IdentityTrait,
+): THREE.CanvasTexture {
+  const { canvas, g } = reliefFrom(texture);
+  strokeCracks(g, potteryCracks(identity), "#202020", 2.2);
+  return new THREE.CanvasTexture(canvas);
+}
+
+/**
+ * How strongly each material's own pattern reads as relief, when it has no hand-made height
+ * map: wood grain, terracotta pitting, meat marbling, ice cracks. 0 is flat.
+ */
+const patternRelief: Record<BlockMaterial, number> = {
+  paper: 0.4,
+  wood: 2.5,
+  steel: 0,
+  glass: 0,
+  prismatic: 0,
+  gold: 1.2,
+  terracotta: 3,
+  ice: 1.5,
+  meat: 2,
+};
+
+function surface(
+  texture: THREE.CanvasTexture,
+  kind: BlockMaterial,
+  /** A hand-made height map; otherwise the face pattern doubles as its own bump map. */
+  height?: THREE.CanvasTexture,
+): THREE.MeshStandardMaterial {
+  const relief = { bumpMap: height ?? texture, bumpScale: patternRelief[kind] };
   if (kind === "ice") {
     return new THREE.MeshPhysicalMaterial({
       map: texture,
@@ -484,10 +688,12 @@ function surface(texture: THREE.CanvasTexture, kind: BlockMaterial): THREE.MeshS
       clearcoatRoughness: 0.38,
       transparent: true,
       opacity: 0.94,
+      ...relief,
     });
   }
   return new THREE.MeshStandardMaterial({
     map: texture,
+    ...relief,
     roughness: kind === "gold" ? 0.28 : 0.75,
     metalness: kind === "gold" ? 0.55 : 0,
   });
@@ -519,9 +725,15 @@ function brushAngles(identity: IdentityTrait): number[] {
  * direction (anisotropyRotation matches the face's scratches), so each face catches the
  * light differently as the block turns.
  */
-function brushedSteel(texture: THREE.CanvasTexture, angle: number): THREE.MeshPhysicalMaterial {
+function brushedSteel(
+  texture: THREE.CanvasTexture,
+  height: THREE.CanvasTexture,
+  angle: number,
+): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
     map: texture,
+    bumpMap: height,
+    bumpScale: 3,
     metalness: 1,
     roughness: 0.34,
     anisotropy: 0.9,
@@ -551,13 +763,18 @@ export function createBlockAppearance(
   if (kind === "glass" || kind === "prismatic") {
     const texture = faceTexture(identity, kind, false);
     const mask = clearMask(texture);
+    const height = kind === "glass" ? glassHeight() : null;
     // Glass panes are each tinted; crystal is one clear stone.
     const tints = kind === "glass" ? paneTints : paneTints.map(() => 0xffffff);
     const inHand = tints.map((tint) => clearInHand(texture, kind, tint));
     const onTable = tints.map((tint) => clearOnTable(texture, mask, kind, tint, size));
+    // The came stands proud of the panes.
+    if (height)
+      for (const material of [...inHand, ...onTable])
+        material.setValues({ bumpMap: height, bumpScale: 2.5 });
     return {
       geometry,
-      textures: [texture, mask],
+      textures: height ? [texture, mask, height] : [texture, mask],
       materials: inHand,
       boardMaterials: onTable,
       edgeColor,
@@ -568,20 +785,31 @@ export function createBlockAppearance(
   if (kind === "steel") {
     const angles = brushAngles(identity);
     const textures = angles.map((angle) => faceTexture(identity, kind, false, angle));
+    const heights = angles.map((angle) => steelHeight(identity, angle));
     return {
       geometry,
-      textures,
-      materials: textures.map((texture, face) => brushedSteel(texture, angles[face])),
+      textures: [...textures, ...heights],
+      materials: textures.map((texture, face) =>
+        brushedSteel(texture, heights[face], angles[face]),
+      ),
       edgeColor,
       edgeOpacity,
     };
   }
 
+  const carvedHeight = (texture: THREE.CanvasTexture) =>
+    kind === "wood"
+      ? woodHeight(texture, identity)
+      : kind === "terracotta"
+        ? terracottaHeight(texture, identity)
+        : undefined;
   const sideTexture = faceTexture(identity, kind, false);
-  const sideMaterial = surface(sideTexture, kind);
+  const sideHeight = carvedHeight(sideTexture);
+  const sideMaterial = surface(sideTexture, kind, sideHeight);
   // BoxGeometry order is +X, -X, +Y, -Y, +Z, -Z. Wood reveals end grain on Y.
   const endTexture = kind === "wood" ? faceTexture(identity, kind, true) : null;
-  const endMaterial = endTexture ? surface(endTexture, kind) : sideMaterial;
+  const endHeight = endTexture ? carvedHeight(endTexture) : undefined;
+  const endMaterial = endTexture ? surface(endTexture, kind, endHeight) : sideMaterial;
   const materials = [
     sideMaterial,
     sideMaterial,
@@ -592,7 +820,9 @@ export function createBlockAppearance(
   ];
   return {
     geometry,
-    textures: endTexture ? [sideTexture, endTexture] : [sideTexture],
+    textures: [sideTexture, endTexture, sideHeight, endHeight].filter(
+      (texture): texture is THREE.CanvasTexture => texture !== null && texture !== undefined,
+    ),
     materials,
     edgeColor,
     edgeOpacity,
