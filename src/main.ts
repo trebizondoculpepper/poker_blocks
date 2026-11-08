@@ -22,7 +22,7 @@ import {
 } from "./motion";
 import { createMaterialise } from "./visual/materialise";
 import { createCardRoom } from "./visual/card-room";
-import { createBlockAppearance, setGlassEnvironment } from "./visual/block-appearance";
+import { createBlockAppearance, setReflectionEnvironment } from "./visual/block-appearance";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
@@ -133,8 +133,8 @@ const boardFill = new THREE.DirectionalLight(0xffffff, 1.3);
 boardFill.position.set(-3, 6, 7);
 scene.add(boardFill);
 const cardRoom = createCardRoom(scene, renderer);
-// Something for glass and crystal to reflect: a soft studio room, prefiltered once.
-setGlassEnvironment(
+// Something for crystal and metals to reflect: a soft studio room, prefiltered once.
+setReflectionEnvironment(
   new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture,
 );
 

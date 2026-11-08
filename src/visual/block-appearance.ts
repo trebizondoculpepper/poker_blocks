@@ -140,46 +140,6 @@ function drawSteel(g: CanvasRenderingContext2D, random: () => number, angle: num
 }
 
 /**
- * Glass: a pane of clear glass in a lead-and-steel came, like one panel of a stained-glass
- * lantern (each face of the block is one pane; the material tints them). The pane carries
- * low alpha so it reads as clear; the frame and print are solid.
- */
-function drawGlass(g: CanvasRenderingContext2D, random: () => number): void {
-  g.clearRect(0, 0, SIZE, SIZE);
-  gradient(g, [
-    [0, "#f4fbff38"],
-    [0.5, "#dff1f730"],
-    [1, "#f8fdff38"],
-  ]);
-  // Seeds: the small bubbles of hand-made glass.
-  for (let n = 0; n < 14; n++) {
-    g.strokeStyle = "#ffffff70";
-    g.lineWidth = 1;
-    g.beginPath();
-    g.ellipse(
-      30 + random() * 196,
-      30 + random() * 196,
-      1 + random() * 3,
-      1 + random() * 2,
-      random() * 3,
-      0,
-      Math.PI * 2,
-    );
-    g.stroke();
-  }
-  // The came: a dark metal frame with a bright bevel along its inner edge.
-  g.strokeStyle = "#262b30";
-  g.lineWidth = 30;
-  g.strokeRect(0, 0, SIZE, SIZE);
-  g.strokeStyle = "#8c969e";
-  g.lineWidth = 3;
-  g.strokeRect(16, 16, SIZE - 32, SIZE - 32);
-  g.strokeStyle = "#4a535b";
-  g.lineWidth = 2;
-  g.strokeRect(3, 3, SIZE - 6, SIZE - 6);
-}
-
-/**
  * Fire: an open iron frame, nothing in the openings. Everything left transparent here is
  * cut away by the material, so only the bars (and the iron rank and suit) remain.
  */
@@ -415,9 +375,6 @@ function faceTexture(
     case "steel":
       drawSteel(g, random, brushAngle);
       break;
-    case "glass":
-      drawGlass(g, random);
-      break;
     case "fire":
       drawFireFrame(g);
       break;
@@ -469,12 +426,12 @@ function faceTexture(
   return texture;
 }
 
-/** Reflections for glass, crystal and steel; set once by the game (see setGlassEnvironment). */
-let glassEnvironment: THREE.Texture | null = null;
+/** Reflections for crystal, steel, gold and iron; set once by the game (see setReflectionEnvironment). */
+let reflectionEnvironment: THREE.Texture | null = null;
 
-/** Give glass and crystal something to reflect (a PMREM environment map). */
-export function setGlassEnvironment(texture: THREE.Texture): void {
-  glassEnvironment = texture;
+/** Give the shiny materials something to reflect (a PMREM environment map). */
+export function setReflectionEnvironment(texture: THREE.Texture): void {
+  reflectionEnvironment = texture;
 }
 
 /**
@@ -498,9 +455,6 @@ function clearMask(texture: THREE.CanvasTexture): THREE.CanvasTexture {
   return new THREE.CanvasTexture(canvas);
 }
 
-/** Stained glass: each of the six panes has its own tint. BoxGeometry face order. */
-const paneTints = [0xff9aa8, 0xffd27a, 0xf4fbff, 0x8fe3b0, 0x8fb4ff, 0xc9a6ff];
-
 /**
  * Glass and crystal in the hand: see-through from the texture's alpha. The hand is drawn in
  * its own pass with nothing behind it, so real refraction (transmission) would have nothing
@@ -519,7 +473,7 @@ function clearInHand(
     ior: kind === "prismatic" ? 2.33 : 1.5,
     clearcoat: 1,
     clearcoatRoughness: 0.03,
-    envMap: glassEnvironment,
+    envMap: reflectionEnvironment,
     envMapIntensity: kind === "prismatic" ? 1.6 : 1.1,
     transparent: true,
     depthWrite: false,
@@ -569,7 +523,7 @@ function clearOnTable(
     clearcoat: 1,
     clearcoatRoughness: 0.02,
     specularIntensity: 1,
-    envMap: glassEnvironment,
+    envMap: reflectionEnvironment,
     envMapIntensity: prismatic ? 1.6 : 1.1,
     ...(prismatic ? prismaticFire : {}),
   });
@@ -649,8 +603,8 @@ function steelHeight(identity: IdentityTrait, angle: number): THREE.CanvasTextur
   return new THREE.CanvasTexture(canvas);
 }
 
-/** Glass: the came stands proud of the panes, which are flat. */
-function glassHeight(): THREE.CanvasTexture {
+/** Fire: the iron frame stands proud; the openings are cut away anyway. */
+function frameHeight(): THREE.CanvasTexture {
   const { canvas, g } = heightCanvas();
   g.fillStyle = "#606060";
   g.fillRect(0, 0, SIZE, SIZE);
@@ -725,7 +679,6 @@ const patternRelief: Record<BlockMaterial, number> = {
   paper: 2,
   wood: 2.5,
   steel: 0,
-  glass: 0,
   prismatic: 0,
   gold: 1.5,
   terracotta: 3,
@@ -762,7 +715,7 @@ function surface(
       roughness: 0.1,
       clearcoat: 0.6,
       clearcoatRoughness: 0.05,
-      envMap: glassEnvironment,
+      envMap: reflectionEnvironment,
       envMapIntensity: 2.2,
     });
   }
@@ -790,8 +743,7 @@ const edgeColors: Record<BlockMaterial, number> = {
   paper: 0x6b6c73,
   wood: 0x76502b,
   steel: 0x303a40,
-  // The came between panes: dark metal.
-  glass: 0x2a2f34,
+  // The fire's iron frame.
   fire: 0x2a2f34,
   // Facet lines of the cut stone.
   prismatic: 0xf2e8ff,
@@ -828,7 +780,7 @@ function brushedSteel(
     roughness: 0.42,
     anisotropy: 0.85,
     anisotropyRotation: angle,
-    envMap: glassEnvironment,
+    envMap: reflectionEnvironment,
     envMapIntensity: 0.7,
     clearcoat: 0.15,
     clearcoatRoughness: 0.3,
@@ -853,8 +805,7 @@ export function createBlockAppearance(
           : new THREE.BoxGeometry(size, size, size);
   // See-through blocks are a hair smaller than a cell, so where they touch a neighbour the
   // two faces are not in the same plane and do not flicker (z-fight) through each other.
-  if (["glass", "prismatic", "fire", "paper", "ice"].includes(kind))
-    geometry.scale(0.985, 0.985, 0.985);
+  if (["prismatic", "fire", "paper", "ice"].includes(kind)) geometry.scale(0.985, 0.985, 0.985);
   const edgeColor = edgeColors[kind];
   // Rounded castings (meat, gold) and the cut-cornered cards (paper) have no box edges to outline.
   const edgeOpacity =
@@ -866,26 +817,20 @@ export function createBlockAppearance(
           ? 0.55
           : 1;
 
-  if (kind === "glass" || kind === "prismatic") {
+  if (kind === "prismatic") {
+    // One clear stone: the same material on all six faces.
     const texture = faceTexture(identity, kind, false);
     const mask = clearMask(texture);
-    const height = kind === "glass" ? glassHeight() : null;
-    // Glass panes are each tinted; crystal is one clear stone.
-    const tints = kind === "glass" ? paneTints : paneTints.map(() => 0xffffff);
-    const inHand = tints.map((tint) => clearInHand(texture, kind, tint));
-    const onTable = tints.map((tint) => clearOnTable(texture, mask, kind, tint, size));
-    // The came stands proud of the panes.
-    if (height)
-      for (const material of [...inHand, ...onTable])
-        material.setValues({ bumpMap: height, bumpScale: 2.5 });
+    const inHand = clearInHand(texture, kind, 0xffffff);
+    const onTable = clearOnTable(texture, mask, kind, 0xffffff, size);
     return {
       geometry,
-      textures: height ? [texture, mask, height] : [texture, mask],
-      materials: inHand,
-      boardMaterials: onTable,
+      textures: [texture, mask],
+      materials: Array.from({ length: 6 }, () => inHand),
+      boardMaterials: Array.from({ length: 6 }, () => onTable),
       edgeColor,
       edgeOpacity,
-      ...(kind === "prismatic" ? { extras: [createCrystalFire(geometry)] } : {}),
+      extras: [createCrystalFire(geometry)],
     };
   }
 
@@ -893,14 +838,14 @@ export function createBlockAppearance(
     // An open iron frame with the fire burning inside: the openings are cut away
     // (alphaTest) and both sides drawn, so the far bars show through.
     const texture = faceTexture(identity, kind, false);
-    const height = glassHeight();
+    const height = frameHeight();
     const iron = new THREE.MeshStandardMaterial({
       map: texture,
       bumpMap: height,
       bumpScale: 2.5,
       metalness: 0.75,
       roughness: 0.5,
-      envMap: glassEnvironment,
+      envMap: reflectionEnvironment,
       envMapIntensity: 0.8,
       alphaTest: 0.5,
       side: THREE.DoubleSide,
