@@ -1,0 +1,12 @@
+{
+  "source": "take2-spacey-sax.wav",
+  "tempo_bpm": 132.51,
+  "beats_per_bar": 4,
+  "loop_start_seconds": 36.2696,
+  "loop_end_seconds": 187.8262,
+  "loop_seconds": 151.5566,
+  "bars": 84,
+  "match_score": 0.9961,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 44100
+}
