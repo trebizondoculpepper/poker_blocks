@@ -25,7 +25,11 @@ describe("dealer", () => {
   it("places the first play at the centre without a target, using one play", () => {
     const state = baseDealer.startGame(standardDeck, () => 0);
     const first = baseDealer.play(state, { cardId: state.hand[0].id })!;
-    expect(first.field).toEqual([{ block: state.hand[0], cell: { x: 0, y: 0, z: 0 } }]);
+    expect(first.field[0].cell).toEqual({ x: 0, y: 0, z: 0 });
+    expect(first.field[0].block.id).toBe(state.hand[0].id);
+    expect(first.field[0].block.traits.selectable).toBeUndefined();
+    expect(state.hand[0].traits.selectable).toEqual({});
+    expect(first.field[0].block.traits.inspectable?.inspect()).toBe("Ace of Spades");
     expect(first.round.movesLeft).toBe(5);
     expect(baseDealer.play(first, { cardId: first.hand[0].id })).toBeNull();
   });
@@ -45,7 +49,9 @@ describe("dealer", () => {
     const cardId = state.hand[0].id;
     const targetId = state.field[0].block.id;
     const played = baseDealer.play(state, { cardId, targetId, face: "east" })!;
-    expect(played.field[1]).toEqual({ block: state.hand[0], cell: { x: 1, y: 0, z: 0 } });
+    expect(played.field[1].cell).toEqual({ x: 1, y: 0, z: 0 });
+    expect(played.field[1].block.id).toBe(state.hand[0].id);
+    expect(played.field[1].block.traits.selectable).toBeUndefined();
     expect(played.hand).toHaveLength(4);
     expect(played.round.movesLeft).toBe(4);
     expect(state.hand).toHaveLength(5);
@@ -53,6 +59,15 @@ describe("dealer", () => {
       baseDealer.play(played, { cardId: played.hand[0].id, targetId, face: "east" }),
     ).toBeNull();
     expect(new Set(allCards(played)).size).toBe(52);
+  });
+
+  it("makes a returned field block selectable when it is dealt into a later hand", () => {
+    const state = baseDealer.startGame(standardDeck, () => 0);
+    const placed = baseDealer.play(state, { cardId: state.hand[0].id })!.field[0].block;
+    const redrawn = baseDealer.refillHand({ ...state, hand: [], deck: [placed] }, () => 0);
+    expect(redrawn.drawn[0].id).toBe(placed.id);
+    expect(redrawn.drawn[0].traits.selectable).toEqual({});
+    expect(placed.traits.selectable).toBeUndefined();
   });
 
   it("moves a discarded card into the discard pile and refills the hand", () => {

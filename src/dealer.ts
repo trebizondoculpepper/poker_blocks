@@ -4,6 +4,7 @@ import { drawCards } from "./deal";
 import type { GameState, PlayAction, StageRules } from "./game-state";
 import { scoreField } from "./scoring";
 import { attachmentCell, cellKey, type Cell, type Face } from "./traits/attachable";
+import { withSelectable, withoutSelectable } from "./traits/selectable";
 
 export type RoundOutcome = "playing" | "won" | "lost";
 
@@ -69,9 +70,10 @@ export const baseDealer: Dealer = {
   refillHand(state, random = Math.random) {
     const missing = Math.max(0, this.handSize - state.hand.length);
     const draw = drawCards(state.deck, Math.min(missing, state.deck.length), random);
+    const drawn = draw.cards.map(withSelectable);
     return {
-      state: { ...state, deck: draw.deck, hand: [...state.hand, ...draw.cards] },
-      drawn: draw.cards,
+      state: { ...state, deck: draw.deck, hand: [...state.hand, ...drawn] },
+      drawn,
     };
   },
 
@@ -95,7 +97,7 @@ export const baseDealer: Dealer = {
     const block = state.hand.find(({ id }) => id === action.cardId);
     const cell = this.placementFor(state, action.targetId, action.face);
     if (!block || !cell) return null;
-    const field = [...state.field, { block, cell }];
+    const field = [...state.field, { block: withoutSelectable(block), cell }];
     const gained = scoreField(field).reduce((total, { points }) => total + points, 0);
     return {
       ...state,

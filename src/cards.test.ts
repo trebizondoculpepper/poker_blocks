@@ -22,7 +22,8 @@ describe("standard deck", () => {
   });
 
   it("names the card represented by a block", () => {
-    expect(cardName({ rank: "3", suit: suits[1] })).toBe("3 of hearts");
+    expect(cardName({ rank: "3", suit: suits[1] })).toBe("3 of Hearts");
+    expect(cardName({ rank: "K", suit: suits[1] })).toBe("King of Hearts");
   });
 
   it("draws a featured block and a distinct five-block hand", () => {

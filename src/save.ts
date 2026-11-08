@@ -4,6 +4,7 @@ import type { Dealer } from "./dealer";
 import type { Phase, SessionSnapshot } from "./game-session";
 import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
+import { withoutSelectable } from "./traits/selectable";
 
 /**
  * Saved runs store card ids, not CardBlock objects: some traits hold functions, and the
@@ -71,7 +72,10 @@ export function fromSaveRecord(
     const { state } = record;
     const field = state.field.map(({ cardId, cell }) => {
       if (![cell?.x, cell?.y, cell?.z].every(Number.isInteger)) throw new Error("bad cell");
-      return { block: resolve(cardId), cell: { x: cell.x, y: cell.y, z: cell.z } };
+      return {
+        block: withoutSelectable(resolve(cardId)),
+        cell: { x: cell.x, y: cell.y, z: cell.z },
+      };
     });
     const restored: GameState = {
       field,
@@ -109,11 +113,15 @@ export function browserStorage(): SaveStorage | null {
 }
 
 /** Save a run, or clear the save once the run is over. Returns false if storage failed. */
-export function saveRun(storage: SaveStorage | null, snapshot: SessionSnapshot): boolean {
+export function saveRun(
+  storage: SaveStorage | null,
+  snapshot: SessionSnapshot,
+  key = saveKey,
+): boolean {
   if (!storage) return false;
   try {
-    if (snapshot.phase === "over") storage.removeItem(saveKey);
-    else storage.setItem(saveKey, JSON.stringify(toSaveRecord(snapshot)));
+    if (snapshot.phase === "over") storage.removeItem(key);
+    else storage.setItem(key, JSON.stringify(toSaveRecord(snapshot)));
     return true;
   } catch {
     return false;
@@ -124,10 +132,11 @@ export function loadRun(
   storage: SaveStorage | null,
   cards: readonly CardBlock[],
   dealers: Registry<Dealer>,
+  key = saveKey,
 ): SessionSnapshot | null {
   if (!storage) return null;
   try {
-    const raw = storage.getItem(saveKey);
+    const raw = storage.getItem(key);
     return raw ? fromSaveRecord(JSON.parse(raw), cards, dealers) : null;
   } catch {
     return null;

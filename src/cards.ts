@@ -1,6 +1,7 @@
 import { faces, type AttachableTrait } from "./traits/attachable";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
 import { scorable, type ScorableTrait } from "./traits/scorable";
+import type { BlockMaterial } from "./materials";
 
 export const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"] as const;
 
@@ -24,6 +25,7 @@ export type CardBlock = {
     attachable?: AttachableTrait;
     inspectable?: InspectableTrait;
     scorable?: ScorableTrait;
+    material?: { kind: BlockMaterial };
   };
 };
 
@@ -47,7 +49,11 @@ export function cardName(identity: IdentityTrait): string {
     Q: "queen",
     K: "king",
   };
-  return `${rankNames[identity.rank] ?? identity.rank} of ${identity.suit.name}`;
+  const rank = rankNames[identity.rank] ?? identity.rank;
+  const suit = identity.suit.name;
+  const displayRank = `${rank[0].toUpperCase()}${rank.slice(1)}`;
+  const displaySuit = `${suit[0].toUpperCase()}${suit.slice(1)}`;
+  return `${displayRank} of ${displaySuit}`;
 }
 
 /** Standard base points: 2–10 as printed, J=11, Q=12, K=13, A=14. */

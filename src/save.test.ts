@@ -50,6 +50,7 @@ describe("save records", () => {
     const json = JSON.parse(JSON.stringify(toSaveRecord(session.snapshot())));
     const snapshot = fromSaveRecord(json, standardDeck, dealerRegistry)!;
     expect(snapshot).toEqual(session.snapshot());
+    expect(snapshot.state.field[0].block.traits.selectable).toBeUndefined();
     const resumed = GameSession.fromSnapshot(
       dealerRegistry,
       demoSessionConfig,
@@ -85,6 +86,16 @@ describe("save records", () => {
 });
 
 describe("run storage", () => {
+  it("keeps dev-room and normal saves separate", () => {
+    const storage = memoryStorage();
+    const session = playedSession();
+    expect(saveRun(storage, session.snapshot(), "poker-blocks.dev-run")).toBe(true);
+    expect(loadRun(storage, standardDeck, dealerRegistry)).toBeNull();
+    expect(loadRun(storage, standardDeck, dealerRegistry, "poker-blocks.dev-run")).toEqual(
+      session.snapshot(),
+    );
+  });
+
   it("saves, loads and clears a run", () => {
     const storage = memoryStorage();
     const session = playedSession();
