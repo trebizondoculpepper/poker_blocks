@@ -213,20 +213,16 @@ function drawGold(g: CanvasRenderingContext2D): void {
 }
 
 /**
- * Paper: one playing card per face, its corners rounded, so the block reads as six cards
- * joined at their edges. The dark corners are the gaps where the cards' corners meet.
+ * Paper: one playing card per face, its corners rounded, so the block reads as six sheets
+ * of card joined at their edges around nothing. The corners are left transparent and cut
+ * away by the material, so the hollow inside shows through.
  */
 function drawPaper(g: CanvasRenderingContext2D): void {
-  g.fillStyle = "#4d4a45";
-  g.fillRect(0, 0, SIZE, SIZE);
+  g.clearRect(0, 0, SIZE, SIZE);
   const card = new Path2D();
   card.roundRect(3, 3, SIZE - 6, SIZE - 6, 26);
-  g.save();
-  g.shadowColor = "#00000066";
-  g.shadowBlur = 6;
   g.fillStyle = "#f6f0e3";
   g.fill(card);
-  g.restore();
   // The card's own printed frame, inset like a real card's.
   g.strokeStyle = "#b8b0a2";
   g.lineWidth = 3;
@@ -743,6 +739,18 @@ function surface(
       envMapIntensity: 2.2,
     });
   }
+  if (kind === "paper") {
+    // Six sheets around nothing: the rounded corners are cut out (alphaTest), and both
+    // sides of each sheet are drawn so the inside of the box shows through the gaps.
+    return new THREE.MeshStandardMaterial({
+      map: texture,
+      ...relief,
+      roughness: 0.8,
+      metalness: 0,
+      alphaTest: 0.5,
+      side: THREE.DoubleSide,
+    });
+  }
   return new THREE.MeshStandardMaterial({
     map: texture,
     ...relief,
@@ -816,9 +824,9 @@ export function createBlockAppearance(
             new RoundedBoxGeometry(size, size, size, 5, size * 0.12)
           : new THREE.BoxGeometry(size, size, size);
   const edgeColor = edgeColors[kind];
-  // Rounded castings (meat, gold) have no hard edges to outline.
+  // Rounded castings (meat, gold) and the cut-cornered cards (paper) have no box edges to outline.
   const edgeOpacity =
-    kind === "meat" || kind === "gold"
+    kind === "meat" || kind === "gold" || kind === "paper"
       ? 0
       : kind === "ice"
         ? 0.65
