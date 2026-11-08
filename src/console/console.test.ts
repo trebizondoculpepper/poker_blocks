@@ -1,0 +1,89 @@
+import { describe, expect, it } from "vite-plus/test";
+import { standardDeck } from "../cards";
+import { dealerRegistry } from "../dealer";
+import { GameSession } from "../game-session";
+import { demoSessionConfig } from "../session-config";
+import { completionsAt, remember, splitStatements, tokenise } from "./command-line";
+import { candidates, runLine, type ConsoleHost } from "./commands";
+import { isConsoleKey } from "./console-view";
+
+function fakeHost() {
+  const game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck);
+  const calls: string[] = [];
+  let now: string | null = null;
+  const host: ConsoleHost = {
+    game: () => game,
+    screen: () => "game",
+    next: () => void calls.push("next"),
+    newGame: () => void calls.push("new"),
+    musicTracks: () => ["style-noir", "solitaire-boss"],
+    musicNow: () => now,
+    playMusic: (id) => void (now = id),
+    stopMusic: () => void (now = null),
+    clear: () => void calls.push("clear"),
+    history: () => ["help", "status"],
+  };
+  return { host, calls, game, text: (line: string) => runLine(host, line).map((l) => l.text) };
+}
+
+describe("the console key", () => {
+  it("is backquote or tilde", () => {
+    expect(isConsoleKey("Backquote", "`")).toBe(true);
+    expect(isConsoleKey("Backquote", "~")).toBe(true);
+    expect(isConsoleKey("KeyA", "a")).toBe(false);
+  });
+});
+
+describe("the command line", () => {
+  it("splits statements and words like Quake", () => {
+    expect(splitStatements('echo "a;b"; help')).toEqual(['echo "a;b"', "help"]);
+    expect(tokenise('echo "two words" x')).toEqual(["echo", "two words", "x"]);
+  });
+
+  it("keeps history without an immediate repeat", () => {
+    expect(remember(["a"], "a")).toEqual(["a"]);
+    expect(remember(["a"], "b")).toEqual(["a", "b"]);
+  });
+
+  it("completes command names and music tracks", () => {
+    const { host } = fakeHost();
+    const at = (line: string) =>
+      completionsAt(line, line.length, (before) => candidates(host, before)).matches;
+    expect(at("mu")).toEqual(["music"]);
+    expect(at("music sol")).toEqual(["solitaire-boss"]);
+  });
+});
+
+describe("the commands", () => {
+  it("lists the commands", () => {
+    expect(fakeHost().text("help")[0]).toMatch(/^Commands/);
+  });
+
+  it("reports the game's status", () => {
+    const { text } = fakeHost();
+    const lines = text("status");
+    expect(lines[0]).toMatch(/phase stage-1/);
+    expect(lines[2]).toMatch(/^hand \d+/);
+  });
+
+  it("switches music and refuses unknown tracks", () => {
+    const { text } = fakeHost();
+    text("music style-noir");
+    expect(text("music")).toEqual(["style-noir"]);
+    expect(text("music nope")[0]).toMatch(/no track/);
+    expect(text("music list")).toContain("* style-noir");
+  });
+
+  it("runs several statements and reports unknown ones", () => {
+    const { text, calls } = fakeHost();
+    expect(text("clear; echo hi")).toEqual(["hi"]);
+    expect(calls).toEqual(["clear"]);
+  });
+
+  it("evaluates anything else as JavaScript with game in scope", () => {
+    const { text, game } = fakeHost();
+    expect(text("game.state.hand.length")).toEqual([String(game.state.hand.length)]);
+    expect(text("1 +")[0]).toMatch(/Unexpected|SyntaxError|expected/i);
+    expect(text('echo("from js")')).toEqual(["from js"]);
+  });
+});

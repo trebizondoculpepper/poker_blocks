@@ -15,6 +15,8 @@ export type MenuCallbacks = {
 export type Menus = {
   showTitle(): void;
   showSettings(): void;
+  /** Close the title and settings screens, back to the game. */
+  closeAll(): void;
   readonly isOpen: boolean;
 };
 
@@ -235,6 +237,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   return {
     showTitle,
+    closeAll,
     showSettings() {
       settingsFrom = "game";
       showSettings();

@@ -1,0 +1,245 @@
+/**
+ * The console's commands, and running a line, as in simulation_of_boring_things: a line
+ * that starts with a command's name runs Quake-style (`music style-noir`); anything else is
+ * JavaScript with the commands as functions and `game` in scope (`game.state.hand.length`).
+ * The app is reached only through `ConsoleHost`, so this module is pure but for what the
+ * host does.
+ */
+import { cardName, type CardBlock } from "../cards";
+import type { GameSession } from "../game-session";
+import { splitStatements, tokenise } from "./command-line";
+
+/** What the console may do to the app. */
+export type ConsoleHost = {
+  game(): GameSession;
+  /** The screen showing: title, settings or the game. */
+  screen(): string;
+  /** Press the HUD's next-action button (next stage, shop, new round). */
+  next(): void;
+  newGame(): void;
+  musicTracks(): readonly string[];
+  musicNow(): string | null;
+  playMusic(id: string): void;
+  stopMusic(): void;
+  /** Clear the console's screen. */
+  clear(): void;
+  history(): readonly string[];
+};
+
+export type Printed = string | readonly string[] | void;
+
+export type ConsoleCommand = {
+  name: string;
+  usage: string;
+  help: string;
+  complete?(host: ConsoleHost, args: readonly string[]): readonly string[];
+  run(host: ConsoleHost, args: readonly string[]): Printed;
+};
+
+export type ConsoleLine = { text: string; tone: "echo" | "output" | "error" };
+
+const fail = (text: string): never => {
+  throw new Error(text);
+};
+
+const cards = (blocks: readonly CardBlock[]): string =>
+  blocks.length ? blocks.map((b) => cardName(b.traits.identity)).join(", ") : "(none)";
+
+export const COMMANDS: readonly ConsoleCommand[] = [
+  {
+    name: "help",
+    usage: "[command]",
+    help: "list the commands, or say what one does",
+    complete: () => COMMANDS.map((c) => c.name),
+    run(_host, [name]) {
+      if (name) {
+        const c = COMMAND_BY_NAME.get(name.toLowerCase());
+        if (!c) return fail(`help: no command "${name}"`);
+        return `${c.name} ${c.usage}  ${c.help}`.replace(/ {3,}/, "  ");
+      }
+      return [
+        "Commands (Tab completes; ; separates; anything else is JavaScript, with these as functions and game in scope):",
+        ...COMMANDS.map((c) => `  ${`${c.name} ${c.usage}`.padEnd(24)}${c.help}`),
+      ];
+    },
+  },
+  {
+    name: "clear",
+    usage: "",
+    help: "clear the screen",
+    run: (host) => host.clear(),
+  },
+  {
+    name: "echo",
+    usage: "<text>",
+    help: "print the text",
+    run: (_host, args) => args.join(" "),
+  },
+  {
+    name: "history",
+    usage: "",
+    help: "the lines typed, oldest first",
+    run: (host) => host.history().map((l, i) => `${String(i + 1).padStart(3)}  ${l}`),
+  },
+  {
+    name: "status",
+    usage: "",
+    help: "the screen, phase, score and what is left",
+    run(host) {
+      const game = host.game();
+      const { round, hand, deck, field, discardPile } = game.state;
+      return [
+        `screen ${host.screen()}  round ${game.round}  phase ${game.phase}  dealer ${game.dealer.name}`,
+        `score ${round.score} / ${round.targetScore}  moves ${round.movesLeft}  discards ${round.discardsLeft}`,
+        `hand ${hand.length}  deck ${deck.length}  field ${field.length}  discarded ${discardPile.length}`,
+        `music ${host.musicNow() ?? "(silent)"}`,
+      ];
+    },
+  },
+  {
+    name: "hand",
+    usage: "",
+    help: "the cards in hand, left to right",
+    run: (host) => cards(host.game().state.hand),
+  },
+  {
+    name: "field",
+    usage: "",
+    help: "the cards on the table, with their cells",
+    run(host) {
+      const field = host.game().state.field;
+      if (!field.length) return "(empty)";
+      return field.map(
+        ({ block, cell }) =>
+          `  ${cardName(block.traits.identity)}  (${cell.x}, ${cell.y}, ${cell.z})`,
+      );
+    },
+  },
+  {
+    name: "deck",
+    usage: "",
+    help: "the cards left in the deck, in draw order",
+    run: (host) => cards(host.game().state.deck),
+  },
+  {
+    name: "next",
+    usage: "",
+    help: "press the next-action button: next stage, shop or round",
+    run(host) {
+      host.next();
+      return `phase ${host.game().phase}`;
+    },
+  },
+  {
+    name: "newgame",
+    usage: "",
+    help: "start a new run",
+    run(host) {
+      host.newGame();
+      return "new run";
+    },
+  },
+  {
+    name: "music",
+    usage: "[list|stop|<track>]",
+    help: "what is playing, the loops, or switch to one",
+    complete: (host, args) => (args.length ? [] : ["list", "stop", ...host.musicTracks()]),
+    run(host, [word]) {
+      if (!word) return host.musicNow() ?? "(silent)";
+      if (word === "list") {
+        const now = host.musicNow();
+        return host.musicTracks().map((id) => `${id === now ? "*" : " "} ${id}`);
+      }
+      if (word === "stop") {
+        host.stopMusic();
+        return "music stopped";
+      }
+      if (!host.musicTracks().includes(word))
+        return fail(`music: no track "${word}" (music list shows them)`);
+      host.playMusic(word);
+      return `switching to ${word} on the next bar`;
+    },
+  },
+];
+
+const COMMAND_BY_NAME = new Map(COMMANDS.map((c) => [c.name, c]));
+
+/** What the word being completed may become, given the words before it. */
+export function candidates(host: ConsoleHost, before: readonly string[]): readonly string[] {
+  if (!before.length) return COMMANDS.map((c) => c.name);
+  return COMMAND_BY_NAME.get(before[0].toLowerCase())?.complete?.(host, before.slice(1)) ?? [];
+}
+
+/** A value as the console shows it. */
+export function formatValue(value: unknown): string[] {
+  if (value === undefined) return [];
+  if (typeof value === "string") return [value];
+  if (typeof value === "function") return [`[function ${value.name || "anonymous"}]`];
+  try {
+    const text = JSON.stringify(value, null, 2);
+    return (text ?? Object.prototype.toString.call(value)).split("\n");
+  } catch {
+    // Circular or unserialisable: name its type instead.
+    return [Object.prototype.toString.call(value)];
+  }
+}
+
+/** Evaluate JavaScript with the commands as functions and `game` in scope. */
+export function evaluate(
+  source: string,
+  host: ConsoleHost,
+  print: (lines: string[]) => void,
+): unknown {
+  const scope: Record<string, unknown> = {};
+  for (const c of COMMANDS)
+    scope[c.name] = (...args: unknown[]) => {
+      const printed = c.run(
+        host,
+        args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))),
+      );
+      if (printed !== undefined) print(typeof printed === "string" ? [printed] : [...printed]);
+    };
+  scope.game = host.game();
+  const names = Object.keys(scope);
+  let fn: (...args: unknown[]) => unknown;
+  try {
+    // oxlint-disable-next-line typescript/no-implied-eval -- the console evaluates typed JavaScript
+    fn = new Function(...names, `"use strict"; return (${source}\n);`) as typeof fn;
+  } catch {
+    // oxlint-disable-next-line typescript/no-implied-eval -- the console evaluates typed JavaScript
+    fn = new Function(...names, `"use strict"; ${source}`) as typeof fn;
+  }
+  return fn(...names.map((n) => scope[n]));
+}
+
+/**
+ * Run a line typed at the console: each statement as a command if it starts with one's
+ * name, else the whole line as JavaScript. Returns what it prints, errors included.
+ */
+export function runLine(host: ConsoleHost, line: string): ConsoleLine[] {
+  const out: ConsoleLine[] = [];
+  const print = (lines: string[], tone: ConsoleLine["tone"] = "output") =>
+    out.push(...lines.map((text) => ({ text, tone })));
+  const statements = splitStatements(line);
+  const first = tokenise(statements[0] ?? "")[0]?.toLowerCase();
+  const javascript = !first || !COMMAND_BY_NAME.has(first) || /^[\w$]+\s*\(/.test(line.trim());
+  try {
+    if (javascript) {
+      if (line.trim()) print(formatValue(evaluate(line, host, print)));
+      return out;
+    }
+    for (const statement of statements) {
+      const [name, ...args] = tokenise(statement);
+      const c = COMMAND_BY_NAME.get(name.toLowerCase());
+      if (!c) {
+        print([`no command "${name}" (help lists them)`], "error");
+        continue;
+      }
+      const printed = c.run(host, args);
+      if (printed !== undefined) print(typeof printed === "string" ? [printed] : [...printed]);
+    }
+  } catch (e) {
+    print([e instanceof Error ? e.message : String(e)], "error");
+  }
+  return out;
+}

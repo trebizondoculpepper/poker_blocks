@@ -374,3 +374,87 @@ body,
     transform: none;
   }
 }
+
+/* ----- Developer console (~) ----- */
+.game-console {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45vh;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 8px 16px 6px;
+  background: #0d0f10e6;
+  border-bottom: 2px solid #ffb000;
+  box-shadow: 0 4px 18px #000a;
+  color: #e9e1c8;
+  font:
+    13px/1.35 ui-monospace,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
+  animation: game-console-drop 150ms ease-out;
+}
+.game-console[hidden],
+.game-console-catcher[hidden] {
+  display: none;
+}
+@keyframes game-console-drop {
+  from {
+    transform: translateY(-100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-console {
+    animation: none;
+  }
+}
+@media (max-width: 600px) {
+  .game-console {
+    height: 38vh;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+.game-console-catcher {
+  position: fixed;
+  inset: 0;
+  z-index: 1099;
+}
+.game-console-log {
+  flex: 1;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.game-console-line.is-echo {
+  color: #ffb000;
+}
+.game-console-line.is-error {
+  color: #f0584f;
+}
+.game-console-line.is-output {
+  color: #c9d6dc;
+}
+.game-console-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  border-top: 1px solid #ffb00055;
+  padding-top: 4px;
+  color: #ffb000;
+}
+.game-console-row input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  caret-color: #ffb000;
+}

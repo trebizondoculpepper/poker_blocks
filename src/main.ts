@@ -19,6 +19,7 @@ import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createMenus } from "./menus";
+import { createConsole } from "./console/console-view";
 import { musicTracks } from "./audio/music-catalog";
 import { defaultMusicPlan, pickTrack, type MusicScene } from "./audio/music-plan";
 import { createMusicPlayer } from "./audio/music-player";
@@ -1050,6 +1051,25 @@ const menus = createMenus(host, settings, {
 });
 menus.showTitle();
 stat("action").addEventListener("click", takeNextAction);
+
+// ----- Developer console: ~ (or `) drops it down -----
+createConsole({
+  game: () => game,
+  screen: () => screen,
+  next: takeNextAction,
+  newGame() {
+    if (devRoom) cards = makeDevDeck(devSeed(true));
+    startRun(new GameSession(dealerRegistry, demoSessionConfig, cards));
+    menus.closeAll();
+  },
+  musicTracks: () => musicIds,
+  musicNow: () => music.current,
+  playMusic(id) {
+    music.unlock();
+    void music.play(id);
+  },
+  stopMusic: () => music.stop(),
+});
 
 function finishDrag(drop: boolean): void {
   if (!drag) return;
