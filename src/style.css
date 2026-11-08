@@ -61,7 +61,7 @@ body,
 
 .hud-heading,
 .deck-hud > span,
-.discard-caption {
+.discard-area > span {
   color: #9ce6d7;
   font-size: 11px;
   font-weight: 800;
@@ -111,12 +111,50 @@ body,
   font-size: 11px;
 }
 
-.discard-caption {
+.discard-area {
   position: absolute;
-  z-index: 1;
-  bottom: 20px;
-  left: 48px;
+  z-index: 2;
+  bottom: 22px;
+  left: 22px;
+  display: flex;
+  width: 112px;
+  height: 112px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 2px solid #8191a777;
+  border-radius: 8px;
+  background: #1c2739d9;
+  box-shadow: 0 10px 28px #0004;
+  font-family: system-ui, sans-serif;
   pointer-events: none;
+  transition:
+    border-color 150ms,
+    box-shadow 150ms,
+    background 150ms;
+}
+
+.discard-icon {
+  width: 58px;
+  height: 58px;
+  color: #9ce6d7;
+  fill: currentColor;
+  image-rendering: pixelated;
+}
+
+.discard-icon-cutout {
+  fill: #1c2739;
+}
+
+.discard-area.is-target {
+  border-color: #9ce6d7;
+  background: #294b58;
+  box-shadow: 0 0 24px #65f4dd88;
+}
+
+.discard-area.is-exhausted {
+  opacity: 0.45;
 }
 
 @media (max-width: 700px) {
@@ -135,8 +173,16 @@ body,
     padding: 10px 12px;
   }
 
-  .discard-caption {
-    bottom: 90px;
-    left: 16px;
+  .discard-area {
+    top: 194px;
+    bottom: auto;
+    left: 12px;
+    width: 74px;
+    height: 78px;
+  }
+
+  .discard-icon {
+    width: 42px;
+    height: 42px;
   }
 }

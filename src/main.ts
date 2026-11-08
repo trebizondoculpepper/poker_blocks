@@ -2,20 +2,12 @@ import "./style.css";
 import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock, type IdentityTrait } from "./cards";
 import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
-import { refillHand } from "./dealer";
-import { drawCards, startingHandSize } from "./deal";
+import { dealerRegistry } from "./dealer";
+import { GameSession } from "./game-session";
 import { tweenValue } from "./easing";
 import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
-import { initialRound, recordDiscard, recordPlay } from "./round";
 import { createMaterialise } from "./visual/materialise";
-import {
-  attachmentCell,
-  cellKey,
-  faceFromNormal,
-  faceNormal,
-  type Cell,
-  type Face,
-} from "./traits/attachable";
+import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 
@@ -40,10 +32,17 @@ const deckHud = document.createElement("aside");
 deckHud.className = "deck-hud";
 deckHud.innerHTML = '<span>DECK</span><strong data-stat="deck"></strong><small>cards left</small>';
 host.append(deckHud);
-const discardCaption = document.createElement("div");
-discardCaption.className = "discard-caption";
-discardCaption.textContent = "DISCARD";
-host.append(discardCaption);
+const discardArea = document.createElement("div");
+discardArea.className = "discard-area";
+discardArea.setAttribute("aria-label", "Discard area");
+discardArea.innerHTML = `
+  <svg class="discard-icon" viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges">
+    <path d="M6 1h4v2H6zM3 3h10v2H3zM4 6h8v7h-1v2H5v-2H4z" />
+    <path class="discard-icon-cutout" d="M6 8h1v5H6zM9 8h1v5H9z" />
+  </svg>
+  <span>DISCARD</span>
+`;
+host.append(discardArea);
 const stat = (name: string) => host.querySelector<HTMLElement>(`[data-stat="${name}"]`)!;
 const tooltip = document.createElement("div");
 tooltip.className = "inspect-tooltip";
@@ -53,31 +52,6 @@ host.append(tooltip);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111726);
 const handScene = new THREE.Scene();
-const discardBin = new THREE.Group();
-const binBodyMaterial = new THREE.MeshStandardMaterial({
-  color: 0x436977,
-  metalness: 0.35,
-  roughness: 0.4,
-  side: THREE.DoubleSide,
-});
-const binRimMaterial = new THREE.MeshStandardMaterial({
-  color: 0x81d4c2,
-  metalness: 0.4,
-  roughness: 0.25,
-  emissive: 0x65f4dd,
-  emissiveIntensity: 0,
-});
-const binBody = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.4, 0.3, 0.82, 16, 1, true),
-  binBodyMaterial,
-);
-const binBase = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.045, 16), binBodyMaterial);
-binBase.position.y = -0.41;
-const binRim = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.045, 8, 24), binRimMaterial);
-binRim.rotation.x = Math.PI / 2;
-binRim.position.y = 0.41;
-discardBin.add(binBody, binBase, binRim);
-handScene.add(discardBin);
 const pivot = new THREE.Group();
 const assembly = new THREE.Group();
 pivot.rotation.order = "YXZ";
@@ -284,25 +258,21 @@ function updateCamera(now: number): void {
   if (progress === 1) cameraMove = null;
 }
 
-const firstDraw = drawCards(standardDeck, 1);
-const secondDraw = drawCards(firstDraw.deck, startingHandSize);
-let deck = secondDraw.deck;
-let hand = secondDraw.cards;
-let round = { ...initialRound };
-addToBoard(firstDraw.cards[0], { x: 0, y: 0, z: 0 });
-const handBlocks: RenderedBlock[] = hand.map((block, slot) => {
+const game = new GameSession(dealerRegistry, "base", standardDeck);
+for (const { block, cell } of game.state.field) addToBoard(block, cell);
+const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
   const rendered = createCube(block, cubeSize / 3, "hand");
   rendered.handSlot = slot;
   return rendered;
 });
-const discardPile: CardBlock[] = [];
-
 function updateHud(): void {
+  const { round, deck } = game.state;
   stat("score").textContent = String(round.score);
   stat("target").textContent = String(round.targetScore);
   stat("moves").textContent = String(round.movesLeft);
   stat("discards").textContent = String(round.discardsLeft);
   stat("deck").textContent = String(deck.length);
+  discardArea.classList.toggle("is-exhausted", !game.dealer.canDiscard(game.state));
 }
 updateHud();
 
@@ -386,19 +356,19 @@ function showSelection(): void {
     .map(({ block }) => cardName(block.traits.identity));
   host.setAttribute(
     "aria-label",
-    `${placed.size} blocks in play. Hand: ${hand.map((block) => cardName(block.traits.identity)).join(", ")}. ${deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,
+    `${game.state.field.length} blocks in play. Hand: ${game.state.hand.map((block) => cardName(block.traits.identity)).join(", ")}. ${game.state.deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,
   );
 }
 
 function layoutHand(): void {
+  const visibleSlots = Math.max(
+    game.dealer.handSize,
+    ...handBlocks.map(({ handSlot }) => (handSlot ?? -1) + 1),
+  );
   handBlocks.forEach((rendered) => {
     rendered.baseY = handBaseY;
     if (drag?.active && drag.source === rendered) return;
-    rendered.cube.position.set(
-      (rendered.handSlot! - (startingHandSize - 1) / 2) * 1.2,
-      handBaseY,
-      0,
-    );
+    rendered.cube.position.set((rendered.handSlot! - (visibleSlots - 1) / 2) * 1.2, handBaseY, 0);
   });
   showSelection();
 }
@@ -414,12 +384,14 @@ function pointRay(clientX: number, clientY: number, viewCamera: THREE.Camera = c
   raycaster.setFromCamera(pointer, viewCamera);
 }
 
-function overDiscardBin(clientX: number, clientY: number): boolean {
-  const bounds = renderer.domElement.getBoundingClientRect();
-  const projected = discardBin.position.clone().project(handCamera);
-  const x = bounds.left + ((projected.x + 1) / 2) * bounds.width;
-  const y = bounds.top + ((1 - projected.y) / 2) * bounds.height;
-  return Math.hypot(clientX - x, clientY - y) < Math.min(90, bounds.height * 0.11);
+function overDiscardArea(clientX: number, clientY: number): boolean {
+  const bounds = discardArea.getBoundingClientRect();
+  return (
+    clientX >= bounds.left &&
+    clientX <= bounds.right &&
+    clientY >= bounds.top &&
+    clientY <= bounds.bottom
+  );
 }
 
 function pickBlock(
@@ -451,12 +423,7 @@ function pickAttachment(clientX: number, clientY: number): Candidate | null {
     y: Math.round(normal.y),
     z: Math.round(normal.z),
   });
-  const cell = attachmentCell(
-    target.block.traits.attachable,
-    target.cell,
-    face,
-    new Set(placed.keys()),
-  );
+  const cell = game.dealer.placementFor(game.state, target.block.id, face);
   return cell ? { target, face, cell } : null;
 }
 
@@ -482,10 +449,13 @@ function showCandidate(candidate: Candidate | null): void {
 
 function updateCandidate(): void {
   if (!drag?.active) return;
-  drag.discardTarget = round.discardsLeft > 0 && overDiscardBin(drag.lastX, drag.lastY);
-  binRimMaterial.emissiveIntensity = drag.discardTarget ? 0.75 : 0;
+  drag.discardTarget =
+    game.dealer.canDiscard(game.state) && overDiscardArea(drag.lastX, drag.lastY);
+  discardArea.classList.toggle("is-target", drag.discardTarget);
   drag.candidate =
-    !drag.discardTarget && round.movesLeft > 0 ? pickAttachment(drag.lastX, drag.lastY) : null;
+    !drag.discardTarget && game.dealer.canPlay(game.state)
+      ? pickAttachment(drag.lastX, drag.lastY)
+      : null;
   showCandidate(drag.candidate);
 }
 
@@ -548,19 +518,20 @@ let pendingAction: PendingAction | null = null;
 
 function removeFromHand(source: RenderedBlock): number {
   handBlocks.splice(handBlocks.indexOf(source), 1);
-  hand = hand.filter((block) => block.id !== source.block.id);
   layoutHand();
   return source.handSlot!;
 }
 
 function refillSlot(slot: number): void {
-  const result = refillHand(deck, hand);
-  deck = result.deck;
-  hand = result.hand;
+  const drawn = game.refillHand();
   const replacements: RenderedBlock[] = [];
-  for (const block of result.drawn) {
+  const usedSlots = new Set(handBlocks.map(({ handSlot }) => handSlot));
+  for (const block of drawn) {
     const rendered = createCube(block, cubeSize / 3, "hand");
-    rendered.handSlot = slot;
+    let nextSlot = slot;
+    while (usedSlots.has(nextSlot)) nextSlot++;
+    rendered.handSlot = nextSlot;
+    usedSlots.add(nextSlot);
     handBlocks.push(rendered);
     replacements.push(rendered);
   }
@@ -575,10 +546,14 @@ function refillSlot(slot: number): void {
   }
 }
 
-function startPlacement(source: RenderedBlock, candidate: Candidate): void {
-  const nextRound = recordPlay(round);
-  if (!nextRound) return;
-  round = nextRound;
+function startPlacement(source: RenderedBlock, candidate: Candidate): boolean {
+  const next = game.play({
+    cardId: source.block.id,
+    targetId: candidate.target.block.id,
+    face: candidate.face,
+  });
+  if (!next) return false;
+  const cell = next.field[next.field.length - 1].cell;
   const slot = removeFromHand(source);
   // The cameras use different projections. Match the hand cube's screen position and
   // apparent size in the board view, then let the assembly carry it as it wobbles.
@@ -602,24 +577,20 @@ function startPlacement(source: RenderedBlock, candidate: Candidate): void {
     kind: "play",
     source,
     slot,
-    cell: candidate.cell,
+    cell,
     startedAt: performance.now(),
     fromPosition: source.cube.position.clone(),
     fromRotation: source.cube.quaternion.clone(),
     fromScale: source.cube.scale.x,
   };
   updateHud();
+  return true;
 }
 
-function startDiscard(source: RenderedBlock): void {
-  const nextRound = recordDiscard(round);
-  if (!nextRound) return;
-  round = nextRound;
+function startDiscard(source: RenderedBlock): boolean {
+  if (!game.discard(source.block.id)) return false;
   const slot = removeFromHand(source);
-  discardPile.push(source.block);
   selected = new Set([...selected].filter((id) => id !== source.block.id));
-  handScene.add(source.cube);
-  source.cube.position.copy(discardBin.position).add(new THREE.Vector3(0, 0.4, 0));
   const edges = source.cube.children;
   edges.forEach((edge) => (edge.visible = false));
   source.cube.updateWorldMatrix(true, true);
@@ -630,6 +601,7 @@ function startDiscard(source: RenderedBlock): void {
   });
   pendingAction = { kind: "discard", source, slot, startedAt: performance.now(), effect };
   updateHud();
+  return true;
 }
 
 const placementTarget = new THREE.Vector3();
@@ -683,10 +655,13 @@ function finishDrag(drop: boolean): void {
     const discard = drop && activeDrag.discardTarget;
     drag = null;
     showCandidate(null);
-    binRimMaterial.emissiveIntensity = 0;
-    if (discard) startDiscard(activeDrag.source);
-    else if (candidate) startPlacement(activeDrag.source, candidate);
-    else {
+    discardArea.classList.remove("is-target");
+    const accepted = discard
+      ? startDiscard(activeDrag.source)
+      : candidate
+        ? startPlacement(activeDrag.source, candidate)
+        : false;
+    if (!accepted) {
       handScene.add(activeDrag.source.cube);
       activeDrag.source.cube.position.z = 0;
       layoutHand();
@@ -854,7 +829,6 @@ const resize = () => {
   handCamera.bottom = -halfHeight;
   handCamera.updateProjectionMatrix();
   handBaseY = -halfHeight + 0.75;
-  discardBin.position.set(-halfWidth + 0.9, -halfHeight + (aspect < 1 ? 2.2 : 1.05), 0);
   handCamera.updateMatrixWorld();
   if (!cameraMove) {
     const desired = desiredCamera();

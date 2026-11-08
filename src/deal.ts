@@ -1,7 +1,5 @@
 import type { CardBlock } from "./cards";
 
-export const startingHandSize = 5;
-
 export type Draw = {
   deck: CardBlock[];
   cards: CardBlock[];
