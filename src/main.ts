@@ -11,7 +11,15 @@ import { magnitudeSfxFor } from "./score-presentation";
 import { GameSession, type Phase } from "./game-session";
 import { demoSessionConfig, unlimited, sandboxSessionConfig } from "./session-config";
 import { tweenValue } from "./easing";
-import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
+import {
+  boardPitchRock,
+  boardYawRock,
+  randomRock,
+  rockAngle,
+  stepRock,
+  type Rock,
+  type RockState,
+} from "./motion";
 import { createMaterialise } from "./visual/materialise";
 import { createCardRoom } from "./visual/card-room";
 import { createBlockAppearance, setGlassEnvironment } from "./visual/block-appearance";
@@ -170,6 +178,8 @@ type RenderedBlock = {
   baseY: number;
   rock: Rock | null;
   handSlot: number | null;
+  /** A hand block's rock as it runs, so selection can change its speed smoothly. */
+  rockState?: RockState;
   /** Where the hand layout wants this cube; it glides there each frame. */
   handX?: number;
 };
@@ -1590,10 +1600,18 @@ const animate = (time: number) => {
   updateScoring(time);
   glideHand(delta);
   cardRoom.frame(pivot.position, structureRadius(), delta);
-  handBlocks.forEach(({ cube, rock }) => {
-    if (!rock) return;
-    cube.rotation.z = rockAngle(rock, time / 1000);
-  });
+  // Hand blocks rock gently; a selected one eases into a quick, small vibration.
+  for (const rendered of handBlocks) {
+    if (!rendered.rock) continue;
+    const step = stepRock(
+      rendered.rock,
+      rendered.rockState ?? { angle: time / 1000, excitement: 0 },
+      selected.has(rendered.block.id),
+      Math.min(delta, 0.1),
+    );
+    rendered.rockState = step.state;
+    rendered.cube.rotation.z = step.angle;
+  }
   if (drag?.active) updateCandidate();
   updateEmptyFieldPrompt(time);
   render();

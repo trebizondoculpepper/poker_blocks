@@ -7,6 +7,7 @@ import {
   rockAngle,
   rockRateDeviation,
   rockRateMean,
+  stepRock,
 } from "./motion";
 
 const radiansPerRevolution = Math.PI * 2;
@@ -53,5 +54,34 @@ describe("structure wobble", () => {
     }
     expect(rockAngle(boardPitchRock, 1 / 0.065)).toBeCloseTo(rockAngle(boardPitchRock, 0));
     expect(rockAngle(boardYawRock, 1 / 0.08)).toBeCloseTo(rockAngle(boardYawRock, 0));
+  });
+});
+
+describe("selected vibration", () => {
+  const rock = { amplitude: 0.3, phase: 0, rate: 1 };
+  const run = (selected: boolean, seconds: number, from = { angle: 0, excitement: 0 }) => {
+    let state = from;
+    for (let t = 0; t < seconds; t += 0.01) state = stepRock(rock, state, selected, 0.01).state;
+    return state;
+  };
+
+  it("eases in to three times the speed and a third of the swing", () => {
+    const half = run(true, 0.05);
+    expect(half.excitement).toBeGreaterThan(0);
+    expect(half.excitement).toBeLessThan(0.9);
+    const full = run(true, 2);
+    expect(full.excitement).toBeCloseTo(1, 3);
+    const before = full.angle;
+    const after = stepRock(rock, full, true, 0.1).state.angle;
+    expect(after - before).toBeCloseTo(0.3, 2);
+    const shown = stepRock(rock, { angle: Math.PI / 2, excitement: 1 }, true, 0).angle;
+    expect(shown).toBeCloseTo(0.1, 3);
+  });
+
+  it("eases back out when deselected, without jumping", () => {
+    const excited = run(true, 2);
+    const a = stepRock(rock, excited, false, 0.01);
+    expect(Math.abs(a.state.excitement - excited.excitement)).toBeLessThan(0.1);
+    expect(run(false, 2, excited).excitement).toBeCloseTo(0, 3);
   });
 });
