@@ -1125,6 +1125,15 @@ createConsole({
     startRun(new GameSession(dealerRegistry, demoSessionConfig, cards));
     menus.closeAll();
   },
+  forceOutcome(outcome) {
+    if (pendingAction || !game.forceOutcome(outcome)) return false;
+    shownScore = game.state.round.score;
+    scoreSteps = [];
+    outcomeAt = null;
+    updateHud();
+    autosave();
+    return true;
+  },
   musicTracks: () => musicIds,
   musicNow: () => music.current,
   playMusic(id) {

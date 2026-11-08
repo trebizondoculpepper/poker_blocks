@@ -140,6 +140,23 @@ export class GameSession {
   }
 
   /**
+   * Developer shortcut (console `win` and `lose`): decide the current stage now, by
+   * meeting its target score or by spending its last play. False outside a stage.
+   */
+  forceOutcome(outcome: "won" | "lost"): boolean {
+    if (!this.inStage) return false;
+    const { round } = this.currentState;
+    this.currentState = {
+      ...this.currentState,
+      round:
+        outcome === "won"
+          ? { ...round, score: Math.max(round.score, round.targetScore) }
+          : { ...round, score: Math.min(round.score, round.targetScore - 1), movesLeft: 0 },
+    };
+    return true;
+  }
+
+  /**
    * Move on once the current stage is decided: a win goes to the next stage, or to the
    * shop after the boss stage; a loss ends the session. Returns false while still playing.
    */

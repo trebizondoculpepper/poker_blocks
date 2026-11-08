@@ -16,6 +16,7 @@ function fakeHost() {
     screen: () => "game",
     next: () => void calls.push("next"),
     newGame: () => void calls.push("new"),
+    forceOutcome: (outcome: "won" | "lost") => game.forceOutcome(outcome),
     musicTracks: () => ["style-noir", "solitaire-boss"],
     musicNow: () => now,
     playMusic: (id) => void (now = id),
@@ -64,6 +65,17 @@ describe("the commands", () => {
     const lines = text("status");
     expect(lines[0]).toMatch(/phase stage-1/);
     expect(lines[2]).toMatch(/^hand \d+/);
+  });
+
+  it("wins or loses the stage on demand", () => {
+    const { text, calls, game } = fakeHost();
+    expect(text("win")).toEqual(["stage won"]);
+    expect(game.state.round.score).toBeGreaterThanOrEqual(game.state.round.targetScore);
+    const lost = fakeHost();
+    lost.text("lose");
+    expect(lost.game.state.round.movesLeft).toBe(0);
+    expect(lost.calls).toContain("next");
+    expect(calls).not.toContain("next");
   });
 
   it("switches music and refuses unknown tracks", () => {
