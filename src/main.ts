@@ -10,6 +10,7 @@ import { createMaterialise } from "./visual/materialise";
 import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
+import { playSfx } from "./audio/sfx";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -449,6 +450,8 @@ function showCandidate(candidate: Candidate | null): void {
 
 function updateCandidate(): void {
   if (!drag?.active) return;
+  const wasDiscardTarget = drag.discardTarget;
+  const previousCell = drag.candidate ? cellKey(drag.candidate.cell) : null;
   drag.discardTarget =
     game.dealer.canDiscard(game.state) && overDiscardArea(drag.lastX, drag.lastY);
   discardArea.classList.toggle("is-target", drag.discardTarget);
@@ -457,6 +460,8 @@ function updateCandidate(): void {
       ? pickAttachment(drag.lastX, drag.lastY)
       : null;
   showCandidate(drag.candidate);
+  if (drag.discardTarget && !wasDiscardTarget) playSfx("discard.hover");
+  if (drag.candidate && cellKey(drag.candidate.cell) !== previousCell) playSfx("card.drag.snap");
 }
 
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -537,6 +542,7 @@ function refillSlot(slot: number): void {
   }
   layoutHand();
   updateHud();
+  if (replacements.length > 0) playSfx("card.deal");
   for (const rendered of replacements) {
     const edges = [...rendered.cube.children];
     edges.forEach((edge) => (edge.visible = false));
@@ -583,6 +589,7 @@ function startPlacement(source: RenderedBlock, candidate: Candidate): boolean {
     fromRotation: source.cube.quaternion.clone(),
     fromScale: source.cube.scale.x,
   };
+  playSfx("card.place.fly");
   updateHud();
   return true;
 }
@@ -600,6 +607,7 @@ function startDiscard(source: RenderedBlock): boolean {
     reduced: reducedMotion,
   });
   pendingAction = { kind: "discard", source, slot, startedAt: performance.now(), effect };
+  playSfx("card.discard");
   updateHud();
   return true;
 }
@@ -638,6 +646,7 @@ function updateAction(now: number, delta: number): void {
     action.source.rock = null;
     action.source.handSlot = null;
     placed.set(cellKey(action.cell), action.source);
+    playSfx("card.attach");
     updateRotationCenter(action.cell);
     scheduleCameraMove();
   } else {
@@ -662,6 +671,15 @@ function finishDrag(drop: boolean): void {
         ? startPlacement(activeDrag.source, candidate)
         : false;
     if (!accepted) {
+      // A drop the rules refuse (or any drop with no plays left) is denied; a drop on
+      // empty space just returns the block to the hand.
+      const refused =
+        drop &&
+        (discard ||
+          candidate ||
+          !game.dealer.canPlay(game.state) ||
+          overDiscardArea(activeDrag.lastX, activeDrag.lastY));
+      playSfx(refused ? "action.denied" : "card.drag.return");
       handScene.add(activeDrag.source.cube);
       activeDrag.source.cube.position.z = 0;
       layoutHand();
@@ -729,6 +747,7 @@ const onPointerMove = (event: PointerEvent) => {
       drag.active = true;
       renderer.domElement.setPointerCapture(event.pointerId);
       changeMotionRate(normalMotionRate / 10);
+      playSfx("card.pickup");
     }
     if (drag.active) {
       tooltip.hidden = true;
@@ -805,7 +824,10 @@ const onClick = (event: MouseEvent) => {
     pickBlock(event.clientX, event.clientY, handBlocks) ??
     pickBlock(event.clientX, event.clientY, [...placed.values()]);
   if (!target) return;
+  const wasSelected = selected.has(target.block.id);
   selected = toggleBlockSelection(selected, target.block);
+  const isSelected = selected.has(target.block.id);
+  if (isSelected !== wasSelected) playSfx(isSelected ? "card.select" : "card.deselect");
   showSelection();
 };
 renderer.domElement.addEventListener("pointerdown", onPointerDown);

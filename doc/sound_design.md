@@ -96,7 +96,7 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 ## Open questions
 
-1. **Playback in the game:** none of the generated sounds are played yet. A player module (`src/audio/sfx.ts`, using Web Audio) and hooks at each trigger are still to be built.
+1. **Scoring and round sounds:** `score.line`, `score.big`, `round.cleared` and `round.failed` are generated but not played yet, because the game has no scoring or round end. Wire them in when those rules are built. Every hand and placement action in the current game already plays its sound.
 2. **Volume and muting:** master volume, a mute toggle, and whether to respect the system's reduced-motion setting by playing fewer or quieter effects.
 3. **Music:** background music is outside this registry. Decide whether to have any, and how it would be generated.
 4. **Review:** listen to the generated takes and regenerate any that miss with a revised prompt (`npm run sfx -- <id> --force`).
