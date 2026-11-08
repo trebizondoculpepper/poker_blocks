@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
-import { randomRock, rockAmplitude, rockAngle, rockRateDeviation, rockRateMean } from "./motion";
+import {
+  boardPitchRock,
+  boardYawRock,
+  randomRock,
+  rockAmplitude,
+  rockAngle,
+  rockRateDeviation,
+  rockRateMean,
+} from "./motion";
 
 const radiansPerRevolution = Math.PI * 2;
 
@@ -28,5 +36,22 @@ describe("hand block rock", () => {
     expect(rockAngle(rock, 0)).toBeCloseTo(0);
     expect(rockAngle(rock, period / 4)).toBeCloseTo(1);
     expect(rockAngle(rock, period / 2)).toBeCloseTo(0);
+  });
+});
+
+describe("structure wobble", () => {
+  it("oscillates on two axes without accumulating rotation", () => {
+    expect(boardPitchRock.rate).not.toBe(boardYawRock.rate);
+    for (let step = 0; step <= 1000; step++) {
+      const time = step * 0.1;
+      expect(Math.abs(rockAngle(boardPitchRock, time))).toBeLessThanOrEqual(
+        boardPitchRock.amplitude + 1e-12,
+      );
+      expect(Math.abs(rockAngle(boardYawRock, time))).toBeLessThanOrEqual(
+        boardYawRock.amplitude + 1e-12,
+      );
+    }
+    expect(rockAngle(boardPitchRock, 1 / 0.065)).toBeCloseTo(rockAngle(boardPitchRock, 0));
+    expect(rockAngle(boardYawRock, 1 / 0.08)).toBeCloseTo(rockAngle(boardYawRock, 0));
   });
 });

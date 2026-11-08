@@ -5,6 +5,18 @@ export const rockAmplitude = 20 * radiansPerDegree;
 export const rockRateMean = 0.1 * radiansPerRevolution;
 export const rockRateDeviation = radiansPerRevolution / 60;
 
+export const boardPitchRock: Rock = {
+  amplitude: 8 * radiansPerDegree,
+  phase: 0,
+  rate: 0.065 * radiansPerRevolution,
+};
+
+export const boardYawRock: Rock = {
+  amplitude: 12 * radiansPerDegree,
+  phase: Math.PI / 2,
+  rate: 0.08 * radiansPerRevolution,
+};
+
 export type Rock = {
   readonly amplitude: number;
   readonly phase: number;

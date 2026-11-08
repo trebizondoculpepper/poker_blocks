@@ -5,7 +5,7 @@ import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
 import { refillHand } from "./dealer";
 import { drawCards, startingHandSize } from "./deal";
 import { tweenValue } from "./easing";
-import { randomRock, rockAngle, type Rock } from "./motion";
+import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
 import {
   attachmentCell,
   cellKey,
@@ -198,7 +198,7 @@ function desiredCamera(): { distance: number; target: THREE.Vector3 } {
   const limitingFov = Math.min(verticalFov, horizontalFov);
   return {
     distance: Math.max(initialCameraDistance, (radius / Math.sin(limitingFov / 2)) * 1.2),
-    target: pivot.position.clone().add(new THREE.Vector3(0, 0.5, 0)),
+    target: pivot.position.clone().add(new THREE.Vector3(0, -0.5, 0)),
   };
 }
 
@@ -396,20 +396,28 @@ function moveDraggedBlock(): void {
   }
 }
 
-const normalSpinSpeed = 0.05;
-let spinSpeed = normalSpinSpeed;
-let speedFrom = spinSpeed;
-let speedTo = spinSpeed;
+const normalMotionRate = 1;
+let motionRate = normalMotionRate;
+let rateFrom = motionRate;
+let rateTo = motionRate;
 let speedChangeAt = performance.now();
-function currentSpeed(now: number): number {
-  return tweenValue(speedFrom, speedTo, (now - speedChangeAt) / 1000, 0.5);
+let wobbleTime = 0;
+let manualYaw = 0;
+let manualPitch = 0;
+function currentMotionRate(now: number): number {
+  return tweenValue(rateFrom, rateTo, (now - speedChangeAt) / 1000, 0.5);
 }
-function changeSpeed(target: number): void {
+function changeMotionRate(target: number): void {
   const now = performance.now();
-  spinSpeed = currentSpeed(now);
-  speedFrom = spinSpeed;
-  speedTo = target;
+  motionRate = currentMotionRate(now);
+  rateFrom = motionRate;
+  rateTo = target;
   speedChangeAt = now;
+}
+
+function applyBoardWobble(): void {
+  pivot.rotation.x = manualPitch + rockAngle(boardPitchRock, wobbleTime);
+  pivot.rotation.y = manualYaw + rockAngle(boardYawRock, wobbleTime);
 }
 
 function commitAttachment(source: RenderedBlock, candidate: Candidate): void {
@@ -440,7 +448,7 @@ function finishDrag(drop: boolean): void {
       activeDrag.source.cube.position.z = 0;
       layoutHand();
     }
-    changeSpeed(normalSpinSpeed);
+    changeMotionRate(normalMotionRate);
     suppressClickUntil = performance.now() + 250;
     if (renderer.domElement.hasPointerCapture(activeDrag.pointerId)) {
       renderer.domElement.releasePointerCapture(activeDrag.pointerId);
@@ -455,7 +463,7 @@ function finishBoardDrag(): void {
   const finished = boardDrag;
   boardDrag = null;
   if (!finished.active) return;
-  changeSpeed(normalSpinSpeed);
+  changeMotionRate(normalMotionRate);
   suppressClickUntil = performance.now() + 250;
   if (renderer.domElement.hasPointerCapture(finished.pointerId)) {
     renderer.domElement.releasePointerCapture(finished.pointerId);
@@ -495,7 +503,7 @@ const onPointerMove = (event: PointerEvent) => {
       drag.active = true;
       renderer.domElement.setPointerCapture(event.pointerId);
       scene.add(drag.source.cube);
-      changeSpeed(normalSpinSpeed / 10);
+      changeMotionRate(normalMotionRate / 10);
     }
     if (drag.active) {
       moveDraggedBlock();
@@ -515,11 +523,12 @@ const onPointerMove = (event: PointerEvent) => {
     ) {
       boardDrag.active = true;
       renderer.domElement.setPointerCapture(event.pointerId);
-      changeSpeed(0);
+      changeMotionRate(0);
     }
     if (boardDrag.active) {
-      pivot.rotation.y += dx * 0.005;
-      pivot.rotation.x += dy * 0.005;
+      manualYaw += dx * 0.005;
+      manualPitch += dy * 0.005;
+      applyBoardWobble();
       renderer.domElement.style.cursor = "grabbing";
       return;
     }
@@ -571,7 +580,7 @@ const resize = () => {
   handCamera.top = halfHeight;
   handCamera.bottom = -halfHeight;
   handCamera.updateProjectionMatrix();
-  handBaseY = halfHeight - 0.75;
+  handBaseY = -halfHeight + 0.75;
   if (!cameraMove) {
     const desired = desiredCamera();
     cameraDistance = desired.distance;
@@ -591,8 +600,9 @@ let lastTime = 0;
 const animate = (time: number) => {
   const delta = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
   lastTime = time;
-  spinSpeed = currentSpeed(time);
-  pivot.rotation.y += spinSpeed * delta;
+  motionRate = currentMotionRate(time);
+  wobbleTime += motionRate * delta;
+  applyBoardWobble();
   updateCamera(time);
   handBlocks.forEach(({ cube, rock }) => {
     if (!rock) return;
