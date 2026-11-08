@@ -156,9 +156,11 @@ These prototypes have no material-specific rules yet. **Jelly** is excluded unti
 
 ## Passives (design)
 
+Passives are intended to be a major source of combinations throughout a run. Their effects may change line scores, how card values work, coin income, or other rules at defined moments in the game loop. Players should be able to combine these effects in unexpected ways.
+
 Passive blocks live in a registry of definitions. Each definition has a stable id, name, visual design or icon, configured traits, and optional visual effect ids for its triggers. The passive is still a block instance; reusable trait implementations contain its behavior code, so neither the block nor its registry entry needs one-off behavior attached directly to it.
 
-An installed passive reacts to defined gameplay events. For example, an `onPlace` trigger could award coins proportional to the placed card's rank. A passive's own configuration determines when its condition is met and whether it can trigger without limit, a fixed number of times, or only once. A one-use passive destroys itself after triggering. Triggered visual effects are presentation requests and do not determine the gameplay result.
+Installed passives live in an ordered rack at the top of the screen. Their passive trait declares which named game events it responds to; a passive need only subscribe to the moments relevant to its behavior. When an event arrives, its trait can test conditions and return gameplay effects, presentation requests, and, where appropriate, a request to emit another named game event. These follow the event queue and loop safeguards in [game-events.md](game-events.md), rather than calling arbitrary code on another block or controller. For example, an `onPlace` response could award coins proportional to the placed card's rank. A passive's own configuration determines whether it can trigger without limit, a fixed number of times, or only once. A one-use passive destroys itself after triggering. Triggered visual effects are presentation requests and do not determine the gameplay result.
 
 Those events can occur anywhere in the game loop: before the first play of a stage, when a block is played, while a line's score is being prepared, after a line is scored, after the whole field is scored, or at victory or loss. Each trigger has an explicit moment and event context so a trait can test its condition. Score-changing effects must resolve before their score is finalized; reactions to a finalized score happen afterward. The event and effect coordinator, rather than the pure `scoreLine` function, runs these responses.
 
@@ -167,6 +169,10 @@ Simple passive examples are **×2** and **×4** blocks, with matching icons, tha
 Players may also reorder blocks within the hand by dragging between hand slots. Reordering either area changes its stored order but does not play, discard, score, or consume an allowance. Dragging from the hand onto the field or discard area, or from the rack onto the sell target, remains a separate action.
 
 The rack is separate from the hand and field. Passives are not discardable. Dragging one to a dedicated sell target beside the discard area removes it from the rack and grants coins; selling is available outside the shop. Rack capacity, sale value, and the exact path from shop or deck into the rack are still to be designed.
+
+### First passive prototype
+
+The first implementation slice is the separate `?room=dev2` sandbox. It reuses the endless-play session configuration from `dev1` and shows a passive rack containing one **Do Nothing** block. The block has a stable registry id, an inspectable name, and a passive trait with no event subscriptions or effects. Its rack and current run survive a reload. This establishes the rack's location, block representation, and subscription contract before any score-changing passive is added. Shop acquisition, selling, rack capacity rules, and the full effect catalog remain future work. `dev0` and `dev1` keep their existing purposes.
 
 ## A run
 

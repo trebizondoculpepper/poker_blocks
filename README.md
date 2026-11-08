@@ -14,6 +14,8 @@ Open [`?room=dev0`](https://trebizondoculpepper.github.io/poker_blocks/?room=dev
 
 Open [`?room=dev1`](https://trebizondoculpepper.github.io/poker_blocks/?room=dev1), the materials room, to judge the substances side by side: it skips the title and opens on a small structure with one block of every material, each attached to a random free face of the others. Rotate it by dragging the table and hover a block to name its material. Every reload (or New game) builds a new structure; the hand works as in dev0, so more blocks can be attached. dev1 is a sandbox for endless play: no win or lose, and unlimited plays and discards (shown as ∞). Music starts wound down.
 
+Open [`?room=dev2`](https://trebizondoculpepper.github.io/poker_blocks/?room=dev2) to try the first passive prototype. Its top rack holds a Do Nothing block. This room also has endless plays and discards, and it resumes its separate saved run on reload. The passive has no event subscriptions or gameplay effect yet.
+
 ## Sound effects
 
 Sound effects are defined in `src/audio/sfx-registry.ts` and generated once, locally, with the ElevenLabs sound-effects API. The resulting files are committed in `src/assets/sfx/`, so builds never need an API key. Every action plays a sound by id. A new registry entry plays silently until its audio is generated (see [AGENTS.md](AGENTS.md)). To generate audio for new entries, run:

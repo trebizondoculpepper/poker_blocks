@@ -28,6 +28,8 @@ import { createMusicPlayer } from "./audio/music-player";
 import { browserStorage, loadRun, saveKey, saveRun } from "./save";
 import { boardBaseFov, fovForZoom, pinchZoom, wheelZoom } from "./view-zoom";
 import { bindScreenshotShortcut } from "./screenshot";
+import { createPassiveBlock } from "./passives";
+import { createPassiveRack } from "./passive-rack";
 import {
   loadSettings,
   prefersReducedMotion,
@@ -360,20 +362,24 @@ function updateCamera(now: number): void {
 const storage = browserStorage();
 /**
  * Dev rooms (?room=...): dev0 is the normal game with a random material on every card;
- * dev1 is the materials room, which starts on a structure holding one block of each
- * material. "dev" is the old name for dev0, kept so existing links work.
+ * dev1 samples materials; dev2 prototypes the passive rack. "dev" aliases dev0.
  */
 const roomName = new URLSearchParams(window.location.search).get("room");
 const materialsRoom = roomName === "dev1";
-const devRoom = roomName === "dev0" || roomName === "dev" || materialsRoom;
-/** dev1 is a sandbox for endless play: no win or lose, unlimited plays and discards. */
-const sessionConfig = materialsRoom ? sandboxSessionConfig(demoSessionConfig) : demoSessionConfig;
+const passivesRoom = roomName === "dev2";
+const materialDevRoom = roomName === "dev0" || roomName === "dev" || materialsRoom;
+/** dev1 and dev2 are sandboxes for endless play. */
+const sessionConfig =
+  materialsRoom || passivesRoom ? sandboxSessionConfig(demoSessionConfig) : demoSessionConfig;
 const devSeedKey = "poker-blocks.dev-material-seed";
-const runSaveKey = materialsRoom
-  ? "poker-blocks.dev1-run"
-  : devRoom
-    ? "poker-blocks.dev-run"
-    : saveKey;
+const runSaveKey = passivesRoom
+  ? "poker-blocks.dev2-run"
+  : materialsRoom
+    ? "poker-blocks.dev1-run"
+    : materialDevRoom
+      ? "poker-blocks.dev-run"
+      : saveKey;
+const passiveRackView = passivesRoom ? createPassiveRack(host) : null;
 function newMaterialSeed(): number {
   return Math.floor(Math.random() * 4294967296);
 }
@@ -403,7 +409,7 @@ function devSeed(fresh = false): number {
 }
 let cards: readonly CardBlock[] = materialsRoom
   ? makeDevDeck(newMaterialSeed())
-  : devRoom
+  : materialDevRoom
     ? makeDevDeck(devSeed())
     : standardDeck;
 // A fresh run sits behind the title screen until the player chooses Continue or New game.
@@ -1167,11 +1173,13 @@ function autosave(): void {
   saveRun(storage, game.snapshot(), runSaveKey);
 }
 
-/** A new run: in dev rooms with freshly shuffled materials, in dev1 on a sample structure. */
+/** A new run: material samples in dev0/1, one passive in dev2. */
 function newSession(): GameSession {
   if (materialsRoom) cards = makeDevDeck(newMaterialSeed());
-  else if (devRoom) cards = makeDevDeck(devSeed(true));
+  else if (materialDevRoom) cards = makeDevDeck(devSeed(true));
   const session = new GameSession(dealerRegistry, sessionConfig, cards);
+  if (passivesRoom)
+    session.installPassive(createPassiveBlock("do-nothing", "passive.do-nothing.1"));
   if (!materialsRoom) return session;
   const { state } = session;
   const sample = sampleMaterials(state.deck);
@@ -1184,6 +1192,7 @@ function newSession(): GameSession {
 /** Swap in a session (new or resumed) and rebuild the scene from its state. */
 function startRun(session: GameSession): void {
   game = session;
+  passiveRackView?.render(game.state.passiveRack);
   gameOverAt = null;
   pendingAction = null;
   scoreSteps = [];
@@ -1225,9 +1234,12 @@ const menus = createMenus(host, settings, {
     else music.resumeStage();
   },
 });
-// The materials room skips the title: it opens straight onto a fresh sample structure.
-if (materialsRoom) {
-  startRun(newSession());
+// Prototype rooms skip the title and start directly in their endless sandbox.
+if (materialsRoom || passivesRoom) {
+  const saved = passivesRoom ? loadRun(storage, cards, dealerRegistry, runSaveKey) : null;
+  startRun(
+    saved ? GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, saved) : newSession(),
+  );
   menus.closeAll();
   // No music while judging materials: the record player starts wound down.
   music.windDown();

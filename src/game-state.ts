@@ -1,5 +1,6 @@
 import type { CardBlock } from "./cards";
 import type { Round } from "./round";
+import type { PassiveBlock } from "./passives";
 import type { Cell, Face } from "./traits/attachable";
 
 export type PlacedBlock = {
@@ -13,6 +14,7 @@ export type GameState = {
   hand: readonly CardBlock[];
   deck: readonly CardBlock[];
   discardPile: readonly CardBlock[];
+  passiveRack: readonly PassiveBlock[];
   round: Readonly<Round>;
 };
 

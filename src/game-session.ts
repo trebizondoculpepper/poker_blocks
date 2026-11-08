@@ -5,6 +5,7 @@ import type { GameState, PlayAction } from "./game-state";
 import { fillSlots, insertAt, moveItem } from "./zones";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
 import { stageKinds, type SessionConfig, type StageKind } from "./session-config";
+import { PassiveEventQueue, type PassiveBlock } from "./passives";
 
 /** Where a session is: one of a round's three stages, the shop, or finished after a loss. */
 export type Phase = StageKind | "shop" | "over";
@@ -32,6 +33,7 @@ export class GameSession {
   private currentRound = 1;
   private currentPhase: Phase = "stage-1";
   private runStats: RunStats = emptyRunStats;
+  private readonly passiveEvents = new PassiveEventQueue();
 
   constructor(
     dealers: Registry<Dealer>,
@@ -46,6 +48,9 @@ export class GameSession {
     this.activeDealer = dealers.get(setup.dealer);
     const dealt = this.activeDealer.startGame(cards, random);
     this.currentState = this.activeDealer.startStage(dealt, setup, random);
+    this.passiveEvents.syncRack(this.currentState.passiveRack);
+    this.passiveEvents.emit({ type: "stage.started" });
+    this.passiveEvents.drain();
   }
 
   /** Resume a saved run exactly where it was. Validate the snapshot first (see save.ts). */
@@ -62,6 +67,7 @@ export class GameSession {
     session.currentRound = snapshot.round;
     session.currentPhase = snapshot.phase;
     session.runStats = snapshot.stats ?? emptyRunStats;
+    session.passiveEvents.syncRack(snapshot.state.passiveRack);
     return session;
   }
 
@@ -103,12 +109,27 @@ export class GameSession {
     this.activeDealer = this.dealers.get(name);
   }
 
+  /** Install a block in the ordered rack and update its event subscriptions. */
+  installPassive(block: PassiveBlock): boolean {
+    if (this.currentState.passiveRack.some(({ id }) => id === block.id)) return false;
+    this.currentState = {
+      ...this.currentState,
+      passiveRack: [...this.currentState.passiveRack, block],
+    };
+    this.passiveEvents.syncRack(this.currentState.passiveRack);
+    return true;
+  }
+
   play(action: PlayAction): GameState | null {
     if (!this.inStage) return null;
     const next = this.activeDealer.play(this.currentState, action);
     if (next) {
       this.runStats = recordPlay(this.runStats, next.round.score - this.currentState.round.score);
       this.currentState = next;
+      // The current dealer scores in play(); this is a post-play event until
+      // placement and scoring are separated by the gameplay coordinator.
+      this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId });
+      this.passiveEvents.drain();
     }
     return next;
   }
@@ -117,7 +138,11 @@ export class GameSession {
   discard(cardIds: string | readonly string[]): GameState | null {
     if (!this.inStage) return null;
     const next = this.activeDealer.discard(this.currentState, cardIds);
-    if (next) this.currentState = next;
+    if (next) {
+      this.currentState = next;
+      this.passiveEvents.emit({ type: "discard.completed" });
+      this.passiveEvents.drain();
+    }
     return next;
   }
 
@@ -217,6 +242,9 @@ export class GameSession {
       this.random,
     );
     this.currentPhase = kind;
+    this.passiveEvents.syncRack(this.currentState.passiveRack);
+    this.passiveEvents.emit({ type: "stage.started" });
+    this.passiveEvents.drain();
   }
 
   /** Return the field and, under the current hand policy, the hand to the deck. */

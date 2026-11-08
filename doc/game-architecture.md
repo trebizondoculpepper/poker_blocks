@@ -10,7 +10,7 @@ A basic block represents one of the 52 cards in a standard deck. An `identifiabl
 
 The deck is the collection of cards currently possessed. At the start of this game's demo, one card is drawn for the large center block and five other cards are drawn into the hand. The hand is a list of five cards. All six draws are distinct, leaving 46 cards in the deck. The five hand blocks are one-third the size of the center block and appear in a row at the bottom of the screen. Reloading deals a new set.
 
-This five-card starting hand is a rule for Poker Blocks. [Traditional Poker Squares](https://www.cs.gettysburg.edu/~tneller/games/pokersquares/index.html), often called poker solitaire, instead draws one card at a time into a 5×5 grid.
+The five-card starting hand is a rule for Poker Blocks.
 
 ## Agreed principles
 
@@ -121,7 +121,9 @@ After each play, scoring calculates all line scores first, filters out zero-poin
 
 The proposed event order, reaction contract, and effect boundaries are specified in [game-events.md](game-events.md). The current game has only a general event emitter; it does not implement that gameplay contract yet.
 
-Passive definitions live in a named registry with a stable id, display name, visual design or icon, configured trait references, and optional visual effect ids. The passive itself is a block instance in a passive-rack zone of future `GameState`. Behavior code belongs to reusable traits, not the block instance or an ad hoc function attached to one registry entry. A trait may listen for gameplay events such as block placement, apply a condition, produce a gameplay effect such as coins proportional to the placed card's rank, and request separate presentation effects.
+Passive definitions live in a named registry with a stable id, display name, visual design or icon, and a trait reference. The passive itself is a block instance in the ordered `GameState.passiveRack`. Behavior code belongs to reusable traits, not the block instance or an ad hoc function attached to one registry entry. A trait may listen for gameplay events such as block placement, apply a condition, produce a gameplay effect such as coins proportional to the placed card's rank, and request separate presentation effects. The first Do Nothing trait subscribes to nothing and has no effects.
+
+The passive trait declares its event subscriptions; it need not respond to every event. A reaction may also request a further named gameplay event. The session's passive event queue delivers that event after the current one and applies a loop guard, preserving deterministic ordering and preventing recursive callbacks. The first vertical slice is `?room=dev2`: an endless sandbox with a visible rack holding one registered **Do Nothing** passive whose subscription list is empty. This proves the rack and contract before adding score modifiers, sale rules, or shop acquisition.
 
 Passives may react throughout the stage or session, not only during scoring. The engine should expose named lifecycle events with explicit timing and context: for example, before the first play in a stage, before/after a block is placed, before/after one line is scored, after all lines are scored, and when a stage is won or lost. These are examples, not an exhaustive event list. A passive's trait checks its configured condition against the event and returns gameplay effects; an event may also lead to separate sound or visual requests. This gives designers callback-like trigger points without storing arbitrary callback code on individual blocks.
 

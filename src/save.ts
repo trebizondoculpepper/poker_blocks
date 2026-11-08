@@ -6,6 +6,7 @@ import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
 import { parseRunStats, type RunStats } from "./run-stats";
+import { createPassiveBlock } from "./passives";
 
 /**
  * Saved runs store card ids, not CardBlock objects: some traits hold functions, and the
@@ -25,6 +26,8 @@ export type SaveRecord = {
     hand: string[];
     deck: string[];
     discardPile: string[];
+    /** Optional to keep previously saved runs readable. */
+    passiveRack?: { id: string; definitionId: string }[];
     round: GameState["round"];
   };
   /** Added after version 1 shipped; optional so older saves still load. */
@@ -46,6 +49,7 @@ export function toSaveRecord(snapshot: SessionSnapshot): SaveRecord {
       hand: ids(state.hand),
       deck: ids(state.deck),
       discardPile: ids(state.discardPile),
+      passiveRack: state.passiveRack.map(({ id, definitionId }) => ({ id, definitionId })),
       round: { ...state.round },
     },
     ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
@@ -74,6 +78,14 @@ export function fromSaveRecord(
       return card;
     };
     const { state } = record;
+    const passiveIds = new Set<string>();
+    const passiveRack = (state.passiveRack ?? []).map(({ id, definitionId }) => {
+      if (typeof id !== "string" || passiveIds.has(id) || typeof definitionId !== "string") {
+        throw new Error("bad passive");
+      }
+      passiveIds.add(id);
+      return createPassiveBlock(definitionId, id);
+    });
     const field = state.field.map(({ cardId, cell }) => {
       if (![cell?.x, cell?.y, cell?.z].every(Number.isInteger)) throw new Error("bad cell");
       return {
@@ -86,6 +98,7 @@ export function fromSaveRecord(
       hand: state.hand.map(resolve),
       deck: state.deck.map(resolve),
       discardPile: state.discardPile.map(resolve),
+      passiveRack,
       round: {
         score: number(state.round.score),
         targetScore: number(state.round.targetScore),

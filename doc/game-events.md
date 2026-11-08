@@ -1,6 +1,6 @@
 # Gameplay events and effects
 
-Status: initial contract for the scoring and passive implementation. This defines when traits can act; it does not yet wire the current demo to these events.
+Status: initial contract for the scoring and passive implementation. The `dev2` prototype wires `stage.started`, `play.completed` (after the current dealer has scored), and `discard.completed` through a FIFO passive event queue. The earlier `play.placed` timing and the scoring and effect phases below remain design work.
 
 ## Boundaries
 

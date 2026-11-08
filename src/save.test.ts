@@ -12,6 +12,7 @@ import {
   type SaveStorage,
 } from "./save";
 import { demoSessionConfig } from "./session-config";
+import { createPassiveBlock } from "./passives";
 
 function memoryStorage(): SaveStorage & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -82,6 +83,23 @@ describe("save records", () => {
     reject({ ...good, state: { ...good.state, deck: [...good.state.deck, good.state.hand[0]] } });
     reject({ ...good, state: { ...good.state, deck: good.state.deck.slice(1) } });
     reject({ ...good, state: { ...good.state, round: { ...good.state.round, score: "lots" } } });
+    reject({
+      ...good,
+      state: { ...good.state, passiveRack: [{ id: "passive.1", definitionId: "unknown" }] },
+    });
+  });
+
+  it("restores an ordered passive rack and still reads older saves without one", () => {
+    const session = playedSession();
+    session.installPassive(createPassiveBlock("do-nothing", "passive.1"));
+    const record = JSON.parse(JSON.stringify(toSaveRecord(session.snapshot())));
+    const restored = fromSaveRecord(record, standardDeck, dealerRegistry)?.state.passiveRack;
+    expect(restored?.map(({ id, definitionId }) => ({ id, definitionId }))).toEqual([
+      { id: "passive.1", definitionId: "do-nothing" },
+    ]);
+    expect(restored?.[0].traits.inspectable.inspect()).toBe("Do Nothing");
+    delete record.state.passiveRack;
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)?.state.passiveRack).toEqual([]);
   });
 });
 
