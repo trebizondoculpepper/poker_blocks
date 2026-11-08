@@ -35,3 +35,7 @@ dist-ssr
 
 # agent-inbox: identity and possibly a device token. Never commit.
 agent-inbox.toml
+
+# Claude Code: per-machine settings and hooks (e.g. the agent-inbox wake hook). Never commit.
+.claude/settings.json
+.claude/settings.local.json
