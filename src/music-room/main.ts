@@ -1,46 +1,34 @@
+// Development page for auditioning theme loops and beat-matched crossfades. Served at
+// /music.html. It lists every `*-loop.ogg` under music/ (committed loops and, in a dev
+// checkout, the git-ignored auditions) with the tempo and beat count from its sidecar.
 import "./style.css";
-import { MusicMixer } from "../audio/music-mixer";
+import { createBeatClock } from "./beat-clock";
+import { logFadeCurve } from "./fade";
 
-const files = import.meta.glob<string>("../assets/music/*.ogg", {
+type LoopInfo = { tempo_bpm: number; beats: number; loop_seconds: number; source?: string };
+type Track = { id: string; group: string; name: string; url: string; info: LoopInfo };
+
+const audioUrls = import.meta.glob<string>("../../music/**/*-loop.ogg", {
   eager: true,
   query: "?url",
   import: "default",
 });
-const urls = Object.fromEntries(
-  Object.entries(files).map(([path, url]) => [path.split("/").at(-1)!.replace(".ogg", ""), url]),
-);
+const infos = import.meta.glob<LoopInfo>("../../music/**/*-loop.json", {
+  eager: true,
+  import: "default",
+});
 
-const tracks = [
-  { id: "jazz-funk", name: "Main theme · jazz funk", duration: 269.73 },
-  { id: "bluegrass", name: "Bluegrass", duration: 181.77 },
-  { id: "boss", name: "Frantic boss attack", duration: 126.74 },
-  { id: "chiptune", name: "Chip tune", duration: 70.22 },
-  { id: "musical", name: "1950s musical", duration: 192.96 },
-  { id: "electro-funk", name: "90s electro funk", duration: 140.63 },
-  { id: "big-band", name: "Old timey big band", duration: 181.73 },
-];
-
-async function durationOf(url: string): Promise<number> {
-  const audio = new Audio();
-  audio.preload = "metadata";
-  audio.src = url;
-  return new Promise((resolve, reject) => {
-    audio.addEventListener("loadedmetadata", () => resolve(audio.duration), { once: true });
-    audio.addEventListener("error", () => reject(new Error(`Could not inspect ${url}`)), {
-      once: true,
-    });
-    audio.load();
-  });
-}
-
-await Promise.all(
-  tracks.map(async (track) => {
-    track.duration = await durationOf(urls[track.id]);
-  }),
-);
-const shortest = Math.min(...tracks.map((track) => track.duration));
-const longest = Math.max(...tracks.map((track) => track.duration));
-const initialLoop = Math.floor(shortest * 10) / 10;
+const tracks: Track[] = Object.entries(audioUrls)
+  .map(([path, url]) => {
+    const info = infos[path.replace(/\.ogg$/, ".json")];
+    const parts = path.split("/");
+    const group = parts.at(-2) === "loops" ? "Chosen loops" : `Auditions: ${parts.at(-2)}`;
+    const name = parts.at(-1)!.replace(/-loop\.ogg$/, "");
+    return { id: path, group, name, url, info };
+  })
+  // Only loops measured with a whole number of beats can be beat-matched.
+  .filter((track) => track.info && Number.isInteger(track.info.beats))
+  .sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
 
 function element<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -48,148 +36,198 @@ function element<T extends HTMLElement>(id: string): T {
   return found as T;
 }
 
-const deckA = element<HTMLSelectElement>("deck-a");
-const deckB = element<HTMLSelectElement>("deck-b");
-const playButton = element<HTMLButtonElement>("play");
-const position = element<HTMLInputElement>("position");
-const time = element<HTMLOutputElement>("time");
-const blend = element<HTMLInputElement>("blend");
-const loopInput = element<HTMLInputElement>("loop-seconds");
-const fadeInput = element<HTMLInputElement>("fade-seconds");
+const volume = element<HTMLInputElement>("volume");
+const fade = element<HTMLInputElement>("fade");
+const fadeValue = element<HTMLOutputElement>("fade-value");
+const onBar = element<HTMLInputElement>("on-bar");
+const click = element<HTMLInputElement>("click");
 const status = element<HTMLParagraphElement>("status");
+const beatLights = [...element<HTMLDivElement>("beat").children] as HTMLElement[];
 
-for (const track of tracks) {
-  for (const select of [deckA, deckB]) {
-    const option = document.createElement("option");
-    option.value = track.id;
-    option.textContent = track.name;
-    select.add(option);
+let context: AudioContext | null = null;
+let master: GainNode | null = null;
+const buffers = new Map<string, Promise<AudioBuffer>>();
+
+function audio(): { context: AudioContext; master: GainNode } {
+  if (!context || !master) {
+    context = new AudioContext();
+    master = context.createGain();
+    master.gain.value = Number(volume.value);
+    master.connect(context.destination);
   }
-}
-deckA.value = "jazz-funk";
-deckB.value = "bluegrass";
-const mixer = new MusicMixer(urls, [deckA.value, deckB.value], initialLoop);
-loopInput.max = String(initialLoop);
-loopInput.value = String(initialLoop);
-position.max = String(initialLoop);
-element<HTMLOutputElement>("loop-display").textContent = initialLoop.toFixed(1);
-element<HTMLElement>("alignment").textContent =
-  longest - shortest > 0.15
-    ? `Length mismatch: ${formatTime(shortest)} to ${formatTime(longest)}. Replace these files with equal-length versions for full-tune blending. The current room uses a shorter preview loop.`
-    : `All arrangements are about ${formatTime(shortest)} long. The full tune is available as the shared loop.`;
-
-function formatTime(seconds: number): string {
-  const whole = Math.floor(seconds);
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+  return { context, master };
 }
 
-function updateLengths(): void {
-  for (const [select, id] of [
-    [deckA, "length-a"],
-    [deckB, "length-b"],
-  ] as const) {
-    const track = tracks.find((entry) => entry.id === select.value)!;
-    element<HTMLElement>(id).textContent = `Source length ${formatTime(track.duration)}`;
+function load(track: Track): Promise<AudioBuffer> {
+  let pending = buffers.get(track.id);
+  if (!pending) {
+    pending = fetch(track.url)
+      .then((response) => response.arrayBuffer())
+      .then((data) => audio().context.decodeAudioData(data));
+    buffers.set(track.id, pending);
   }
-}
-updateLengths();
-
-function updateTime(): void {
-  const current = mixer.position;
-  if (!position.matches(":active")) position.value = String(current);
-  time.textContent = `${formatTime(current)} / ${formatTime(Number(position.max))}`;
-  requestAnimationFrame(updateTime);
-}
-requestAnimationFrame(updateTime);
-
-async function run(task: () => Promise<void>): Promise<void> {
-  try {
-    status.textContent = "Loading audio…";
-    await task();
-    status.textContent = mixer.isPlaying ? "Playing synchronized arrangements." : "Paused.";
-  } catch (error) {
-    status.textContent = error instanceof Error ? error.message : "Audio could not be played.";
-  }
+  return pending;
 }
 
-playButton.addEventListener("click", () => {
-  if (mixer.isPlaying) {
-    mixer.pause();
-    playButton.textContent = "Play";
-    status.textContent = "Paused.";
+/** A track that is sounding: its source follows the shared tempo through its rate. */
+type Voice = { track: Track; source: AudioBufferSourceNode; gain: GainNode };
+let current: Voice | null = null;
+const fading = new Set<Voice>();
+let clock: ReturnType<typeof createBeatClock> | null = null;
+let switchToken = 0;
+
+/** Seconds into a loop for a shared beat position. */
+function offsetFor(track: Track, beat: number): number {
+  const { beats, loop_seconds } = track.info;
+  const within = ((beat % beats) + beats) % beats;
+  return (within / beats) * loop_seconds;
+}
+
+function startVoice(
+  track: Track,
+  buffer: AudioBuffer,
+  at: number,
+  beat: number,
+  tempo: number,
+): Voice {
+  const { context, master } = audio();
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  // Loop exactly the whole-beat span recorded for this track.
+  source.loopStart = 0;
+  source.loopEnd = track.info.loop_seconds;
+  source.playbackRate.setValueAtTime(tempo / track.info.tempo_bpm, at);
+  const gain = context.createGain();
+  gain.gain.setValueAtTime(0, at);
+  source.connect(gain).connect(master);
+  source.start(at, offsetFor(track, beat));
+  return { track, source, gain };
+}
+
+async function select(track: Track): Promise<void> {
+  const token = ++switchToken;
+  const buffer = await load(track);
+  if (token !== switchToken) return;
+  const { context } = audio();
+  if (context.state === "suspended") await context.resume();
+
+  if (!current || !clock) {
+    const at = context.currentTime + 0.05;
+    clock = createBeatClock(at, track.info.tempo_bpm);
+    current = startVoice(track, buffer, at, 0, track.info.tempo_bpm);
+    current.gain.gain.setValueAtTime(1, at);
+    render();
     return;
   }
-  playButton.disabled = true;
-  deckA.disabled = true;
-  deckB.disabled = true;
-  void run(() => mixer.play()).finally(() => {
-    playButton.disabled = false;
-    deckA.disabled = false;
-    deckB.disabled = false;
-    playButton.textContent = mixer.isPlaying ? "Pause" : "Play";
-  });
-});
+  if (current.track === track) return;
 
-element("restart").addEventListener("click", () => {
-  void run(() => mixer.seek(0)).then(
-    () => (playButton.textContent = mixer.isPlaying ? "Pause" : "Play"),
-  );
-});
+  const now = context.currentTime + 0.05;
+  // Switch on the next bar line (or now), with the incoming loop entering on the same beat.
+  const at = onBar.checked ? clock.timeOfBeat(Math.ceil(clock.beatAt(now) / 4) * 4) : now;
+  const seconds = Number(fade.value);
+  const from = clock.tempoAt(at);
+  const to = track.info.tempo_bpm;
+  const beat = clock.beatAt(at);
+  clock.ramp(at, seconds, to);
 
-for (const [slot, select] of [
-  [0, deckA],
-  [1, deckB],
-] as const) {
-  select.addEventListener("change", () => {
-    updateLengths();
-    void run(() => mixer.select(slot, select.value, Number(fadeInput.value)));
+  const outgoing = current;
+  const incoming = startVoice(track, buffer, at, beat, from);
+  // Both voices follow the shared tempo, so their beats stay locked while it glides.
+  for (const voice of [outgoing, incoming]) {
+    voice.source.playbackRate.cancelScheduledValues(at);
+    voice.source.playbackRate.setValueAtTime(from / voice.track.info.tempo_bpm, at);
+    voice.source.playbackRate.linearRampToValueAtTime(
+      to / voice.track.info.tempo_bpm,
+      at + seconds,
+    );
+  }
+  outgoing.gain.gain.cancelScheduledValues(at);
+  outgoing.gain.gain.setValueCurveAtTime(logFadeCurve(false), at, seconds);
+  incoming.gain.gain.setValueCurveAtTime(logFadeCurve(true), at, seconds);
+  outgoing.source.stop(at + seconds + 0.05);
+  fading.add(outgoing);
+  outgoing.source.addEventListener("ended", () => fading.delete(outgoing));
+  current = incoming;
+  render();
+}
+
+function stop(): void {
+  switchToken++;
+  for (const voice of [current, ...fading]) voice?.source.stop();
+  fading.clear();
+  current = null;
+  clock = null;
+  render();
+}
+
+let lastClickBeat = -1;
+function tick(): void {
+  if (context && clock && current) {
+    const now = context.currentTime;
+    const beat = clock.beatAt(now);
+    const whole = Math.floor(beat);
+    beatLights.forEach((light, index) =>
+      light.classList.toggle("on", ((whole % 4) + 4) % 4 === index),
+    );
+    status.textContent = `Playing ${current.track.name} · ${clock.tempoAt(now).toFixed(1)} BPM · bar ${
+      Math.floor(beat / 4) + 1
+    }, beat ${(((whole % 4) + 4) % 4) + 1}`;
+    if (click.checked && whole !== lastClickBeat && whole >= 0)
+      playClick(clock.timeOfBeat(whole + 1), (whole + 1) % 4 === 0);
+    lastClickBeat = whole;
+  } else {
+    beatLights.forEach((light) => light.classList.remove("on"));
+    status.textContent = "Stopped.";
+  }
+  requestAnimationFrame(tick);
+}
+
+/** A short click on the next beat, accented on the downbeat, to check alignment by ear. */
+function playClick(at: number, downbeat: boolean): void {
+  const { context, master } = audio();
+  const osc = context.createOscillator();
+  const gain = context.createGain();
+  osc.frequency.value = downbeat ? 1800 : 1200;
+  gain.gain.setValueAtTime(0.4, at);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
+  osc.connect(gain).connect(master);
+  osc.start(at);
+  osc.stop(at + 0.05);
+}
+
+function render(): void {
+  document.querySelectorAll<HTMLButtonElement>(".track").forEach((button) => {
+    button.classList.toggle("playing", button.dataset.id === current?.track.id);
   });
 }
 
-blend.addEventListener("input", () => {
-  cancelAnimationFrame(fadeFrame);
-  mixer.setBlend(Number(blend.value));
-});
-
-let fadeFrame = 0;
-function fadeTo(target: number): void {
-  cancelAnimationFrame(fadeFrame);
-  const from = Number(blend.value);
-  const duration = Math.max(0.1, Math.min(20, Number(fadeInput.value) || 2));
-  const started = performance.now();
-  mixer.setBlend(target, duration);
-  function tick(now: number): void {
-    const progress = Math.min(1, (now - started) / (duration * 1000));
-    blend.value = String(from + (target - from) * progress);
-    if (progress < 1) fadeFrame = requestAnimationFrame(tick);
+const groups = element<HTMLElement>("groups");
+for (const group of new Set(tracks.map((track) => track.group))) {
+  const section = document.createElement("section");
+  section.className = "group";
+  section.innerHTML = `<h2>${group}</h2>`;
+  const list = document.createElement("div");
+  list.className = "tracks";
+  for (const track of tracks.filter((item) => item.group === group)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "track";
+    button.dataset.id = track.id;
+    button.innerHTML = `<strong>${track.name}</strong><span>${track.info.tempo_bpm.toFixed(1)} BPM · ${
+      track.info.beats / 4
+    } bars · ${Math.floor(track.info.loop_seconds / 60)}:${String(Math.round(track.info.loop_seconds % 60)).padStart(2, "0")}</span>`;
+    button.addEventListener("click", () => void select(track));
+    list.append(button);
   }
-  fadeFrame = requestAnimationFrame(tick);
+  section.append(list);
+  groups.append(section);
 }
-element("fade-a").addEventListener("click", () => fadeTo(0));
-element("fade-b").addEventListener("click", () => fadeTo(1));
+if (tracks.length === 0) groups.textContent = "No measured loops found under music/.";
 
-element<HTMLInputElement>("volume").addEventListener("input", (event) => {
-  mixer.setVolume(Number((event.target as HTMLInputElement).value));
-});
-
-position.addEventListener("change", () => {
-  void run(() => mixer.seek(Number(position.value))).then(
-    () => (playButton.textContent = mixer.isPlaying ? "Pause" : "Play"),
-  );
-});
-
-loopInput.addEventListener("change", () => {
-  const seconds = Math.max(5, Math.min(initialLoop, Number(loopInput.value) || initialLoop));
-  loopInput.value = String(seconds);
-  position.max = String(seconds);
-  element<HTMLOutputElement>("loop-display").textContent = seconds.toFixed(1);
-  void run(() => mixer.setLoopSeconds(seconds));
-});
-
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && mixer.isPlaying) {
-    mixer.pause();
-    playButton.textContent = "Play";
-    status.textContent = "Paused.";
-  }
-});
+element<HTMLButtonElement>("stop").addEventListener("click", stop);
+volume.addEventListener("input", () =>
+  master?.gain.setTargetAtTime(Number(volume.value), audio().context.currentTime, 0.05),
+);
+fade.addEventListener("input", () => (fadeValue.textContent = `${fade.value} s`));
+requestAnimationFrame(tick);

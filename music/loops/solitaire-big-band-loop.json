@@ -1,0 +1,16 @@
+{
+  "source": "big-band.ogg",
+  "beats_per_bar": 4,
+  "loop_start_seconds": 73.312,
+  "loop_end_seconds": 171.136,
+  "loop_seconds": 97.824,
+  "bars": 56,
+  "match_score": 0.9885,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beat_tracker_bpm": 68.6,
+  "measured_tempo_bpm": 68.7,
+  "beats": 224,
+  "tempo_bpm": 137.3896,
+  "note": "Beat tracker read half-time; doubled to the felt tempo."
+}

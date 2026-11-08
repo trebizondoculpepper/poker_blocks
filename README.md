@@ -18,9 +18,7 @@ To hear them all, run the dev server and open `/sfx.html` (the listening room).
 
 ## Music room
 
-Open `/music.html` on the dev server to audition the seven Solitaire arrangements. Choose two decks, press Play, then drag the Blend slider or use Fade to A/B. The mixer starts both recordings at the same playhead and uses an equal-power crossfade. You can seek, adjust volume and fade time, and change an arrangement while playing.
-
-The current source recordings have different lengths. The room reports their lengths and uses the shortest shared opening as a temporary loop. Replace the files in `src/assets/music/` with equal-length versions using the same filenames; the room reads their durations again on reload and will then offer the full tune as its loop. This development page is not part of the production build.
+Open `/music.html` on the dev server to audition the music loops in `music/loops/` (and, in a dev checkout, the git-ignored auditions). Pick a track to start and another to crossfade: the switch waits for the next bar, enters the new loop on the same beat, glides the tempo between the two like a tape machine, and fades logarithmically (evenly in decibels). See [music/README.md](music/README.md). This development page is not part of the production build.
 
 ## Stack
 

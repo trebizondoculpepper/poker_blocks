@@ -7,10 +7,13 @@ Background music is generated with the [Treblo](https://treblo.com/developers/do
 - `tools/loop_with_tempo.py` runs `make_loop.py`, measures the loop's tempo by onset autocorrelation, snaps it to a whole number of bars, and records `beats`, `bars` and the exact `tempo_bpm` in the sidecar. Every version is measured the same way.
 - `tools/tempo.py` prints several tempo estimates for checking; `tools/match_variant.py` can time-stretch a version to a target tempo if that is ever needed.
 - `loops/` holds chosen loops: `take2-loop` (main theme, 131.4 BPM, 83 bars), `stripped-sleaze-loop` (129.2 BPM, 64 bars) and `blaxploitation-horns-loop` (141.6 BPM, 77 bars). `take2-loop-seam-test.ogg` plays the main loop's wrap point.
+- `loops/solitaire-*` are the seven earlier Solitaire arrangements (jazz-funk, electro-funk, boss, big-band, bluegrass, musical, chiptune), cut into seamless loops; their full recordings are kept in `sources/solitaire/`.
 - `auditions/` holds trial renders and is git-ignored until a take is chosen.
 
 ## Switching between versions
 
 Versions keep their own natural tempos. When the game switches, it glides the playback speed from one tempo to the other, like a tape machine, while crossfading. A shared beat clock drives both loops, so the incoming loop enters on the same beat of the bar and both stay locked through the glide. This needs each loop to hold a whole number of bars and start on a downbeat, which `loop_with_tempo.py` guarantees.
 
-Audition loops and switches at `/theme.html` on the dev server (`src/theme-room/`): pick a track to start, pick another to crossfade. Options: crossfade length, switching on the next bar, and a beat click for checking alignment by ear.
+Audition loops and switches at `/music.html` on the dev server (`src/music-room/`): pick a track to start, pick another to crossfade. Options: crossfade length, switching on the next bar, and a beat click for checking alignment by ear. The crossfade is logarithmic: each track's level moves evenly in decibels between silence (-60 dB) and full, which sounds steadier than a linear fade.
+
+If the beat tracker reads a track at half time (as with big-band, about 69 BPM), double its `beats` and `tempo_bpm` in the sidecar, so tape-style tempo glides stay small.

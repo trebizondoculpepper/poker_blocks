@@ -1,0 +1,15 @@
+{
+  "source": "musical.ogg",
+  "beats_per_bar": 4,
+  "loop_start_seconds": 45.7387,
+  "loop_end_seconds": 160.3947,
+  "loop_seconds": 114.656,
+  "bars": 64,
+  "match_score": 1.0006,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beat_tracker_bpm": 133.93,
+  "measured_tempo_bpm": 134.13,
+  "beats": 256,
+  "tempo_bpm": 133.966
+}
