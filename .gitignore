@@ -45,3 +45,6 @@ agent-inbox.toml
 
 # Music auditions: large trial renders, kept on disk only until a take is chosen.
 music/auditions/
+
+# Python bytecode from music tools
+__pycache__/

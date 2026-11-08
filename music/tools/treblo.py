@@ -3,7 +3,7 @@
 Usage: python treblo.py <out_dir> <jobs.json>
 jobs.json: [{"name": "...", "body": {...v3 request...}, "endpoint": "v3" (optional)}]
 """
-import json, os, pathlib, sys, time, urllib.request
+import json, os, pathlib, sys, time, urllib.error, urllib.request
 
 def _key() -> str:
     """TREBLO_API_KEY from the environment or the project's git-ignored .env."""
@@ -22,8 +22,11 @@ def call(method, path, body=None):
     req = urllib.request.Request(BASE + path, method=method,
         data=json.dumps(body).encode() if body is not None else None,
         headers={"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as error:
+        sys.exit(f"{method} {path} failed: HTTP {error.code} {error.read().decode()}")
 
 out = pathlib.Path(sys.argv[1]); out.mkdir(parents=True, exist_ok=True)
 jobs = json.loads(pathlib.Path(sys.argv[2]).read_text())

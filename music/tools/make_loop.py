@@ -53,7 +53,8 @@ def main() -> None:
 
     chroma = librosa.feature.chroma_cqt(y=mono, sr=rate, hop_length=hop)
     mfcc = librosa.feature.mfcc(y=mono, sr=rate, hop_length=hop, n_mfcc=20)
-    features = np.vstack([chroma, librosa.util.normalize(mfcc, axis=1)])
+    frames = min(chroma.shape[1], mfcc.shape[1])
+    features = np.vstack([chroma[:, :frames], librosa.util.normalize(mfcc[:, :frames], axis=1)])
     bar_frames = int(round(args.beats_per_bar * 60 / tempo * rate / hop))
 
     def window(sample: int) -> np.ndarray:
