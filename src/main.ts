@@ -330,6 +330,25 @@ const tintSeconds = 0.6;
 const tintColor = new THREE.Color(0xffd36b);
 let scoreSteps: ScoreStep[] = [];
 let outcomeAt: number | null = null;
+type PendingAction =
+  | {
+      kind: "play";
+      source: RenderedBlock;
+      slot: number;
+      cell: Cell;
+      startedAt: number;
+      fromPosition: THREE.Vector3;
+      fromRotation: THREE.Quaternion;
+      fromScale: number;
+    }
+  | {
+      kind: "discard";
+      source: RenderedBlock;
+      slot: number;
+      startedAt: number;
+      effect: ReturnType<typeof createMaterialise>;
+    };
+let pendingAction: PendingAction | null = null;
 const tints: { blocks: RenderedBlock[]; startedAt: number }[] = [];
 const phaseNames: Record<Phase, string> = {
   "stage-1": "STAGE 1",
@@ -350,7 +369,10 @@ function nextActionLabel(outcome: ReturnType<typeof roundOutcome>): string | nul
 
 function updateHud(): void {
   const { round, deck } = game.state;
-  const presenting = scoreSteps.length > 0 || outcomeAt !== null;
+  // The game state updates as soon as a placement is accepted, but the card still
+  // has to land before its scoring presentation begins. Keep outcomes hidden across
+  // both parts of that sequence.
+  const presenting = pendingAction?.kind === "play" || scoreSteps.length > 0 || outcomeAt !== null;
   const outcome = presenting || !game.inStage ? "playing" : roundOutcome(game.state);
   const result = outcome === "won" ? " · WON" : outcome === "lost" ? " · LOST" : "";
   stat("heading").textContent = `ROUND ${game.round} · ${phaseNames[game.phase]}${result}`;
@@ -692,25 +714,6 @@ applySettings(settings);
 systemMotionQuery.addEventListener("change", () => applySettings(settings));
 type MaterialiseEffect = ReturnType<typeof createMaterialise>;
 const appearing: { effect: MaterialiseEffect; edges: THREE.Object3D[] }[] = [];
-type PendingAction =
-  | {
-      kind: "play";
-      source: RenderedBlock;
-      slot: number;
-      cell: Cell;
-      startedAt: number;
-      fromPosition: THREE.Vector3;
-      fromRotation: THREE.Quaternion;
-      fromScale: number;
-    }
-  | {
-      kind: "discard";
-      source: RenderedBlock;
-      slot: number;
-      startedAt: number;
-      effect: MaterialiseEffect;
-    };
-let pendingAction: PendingAction | null = null;
 
 function removeFromHand(source: RenderedBlock): number {
   handBlocks.splice(handBlocks.indexOf(source), 1);
@@ -851,7 +854,8 @@ function updateAction(now: number, delta: number): void {
 function announceScore(now: number): void {
   const lines = presentationOrder(scoreField(game.state.field));
   scoreSteps = lines.map((line, index) => ({ at: now + index * lineStepMs, line }));
-  outcomeAt = now + lines.length * lineStepMs;
+  // Let the last line's tint finish before announcing a stage outcome.
+  outcomeAt = lines.length > 0 ? now + (lines.length - 1) * lineStepMs + tintSeconds * 1000 : now;
 }
 
 /** Reusable effect: briefly tint a row of placed blocks toward gold. */
@@ -1202,7 +1206,7 @@ const resize = () => {
   handCamera.top = halfHeight;
   handCamera.bottom = -halfHeight;
   handCamera.updateProjectionMatrix();
-  handBaseY = -halfHeight + 0.75;
+  handBaseY = -halfHeight + 0.48;
   handCamera.updateMatrixWorld();
   if (!cameraMove) {
     const desired = desiredCamera();
