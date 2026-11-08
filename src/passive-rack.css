@@ -47,7 +47,8 @@
   width: 72px;
   height: 76px;
   flex: none;
-  cursor: help;
+  cursor: grab;
+  touch-action: none;
 }
 
 .passive-item:focus-visible {
@@ -85,4 +86,22 @@
   .passive-rack {
     top: 218px;
   }
+}
+
+/* A passive being dragged to the Sell target. */
+.passive-floating {
+  position: fixed;
+  z-index: 1200;
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border: 3px solid;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px #0008;
+  font:
+    800 26px/1 system-ui,
+    sans-serif;
+  pointer-events: none;
+  transform: translate(-50%, -50%) rotate(-6deg);
 }

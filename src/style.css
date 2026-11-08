@@ -625,3 +625,43 @@ body,
     animation: none;
   }
 }
+
+/* ----- The shared drop target as Sell, while a passive is dragged (issue #16) ----- */
+.sell-icon {
+  display: none;
+  width: 58px;
+  height: 58px;
+  color: #f2c14e;
+  fill: currentColor;
+  image-rendering: pixelated;
+}
+
+.sell-icon-mark {
+  fill: #1c2739;
+}
+
+.discard-area.is-sell .discard-icon {
+  display: none;
+}
+
+.discard-area.is-sell .sell-icon {
+  display: block;
+}
+
+.discard-area.is-sell > .discard-label {
+  color: #f2c14e;
+}
+
+.discard-area.is-sell {
+  border-color: #f2c14e99;
+}
+
+.discard-area.is-sell.is-target {
+  border-color: #f2c14e;
+  box-shadow: 0 0 24px #f2c14e88;
+}
+
+/* Selling does not depend on discards: never dim the target while it reads Sell. */
+.discard-area.is-sell.is-exhausted {
+  opacity: 1;
+}

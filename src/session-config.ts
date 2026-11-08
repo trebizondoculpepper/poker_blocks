@@ -18,7 +18,18 @@ export type SessionConfig = {
   discardPileAfterShop: "keep-out" | "return-to-deck";
   /** Coins for completing a stage; the stage rewards' default (4) when left out. */
   stageReward?: number;
+  /** What passives cost and fetch, in coins; `defaultPassivePrices` when left out. */
+  passivePrices?: PassivePrices;
 };
+
+/**
+ * The passive price policy (issue #16). Owned by the session so another session can set a
+ * different spread; selling may later fetch less than buying.
+ */
+export type PassivePrices = { buy: number; sell: number };
+
+/** First version: a passive costs 1 coin and sells for 1 coin. */
+export const defaultPassivePrices: PassivePrices = { buy: 1, sell: 1 };
 
 const baseTargets: Record<StageKind, number> = { "stage-1": 100, "stage-2": 150, boss: 200 };
 

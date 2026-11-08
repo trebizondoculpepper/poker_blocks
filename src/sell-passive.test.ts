@@ -1,0 +1,68 @@
+import { describe, expect, it } from "vite-plus/test";
+import { standardDeck } from "./cards";
+import { dealerRegistry } from "./dealer";
+import { GameSession } from "./game-session";
+import { createPassiveBlock } from "./passives";
+import { fromSaveRecord, toSaveRecord } from "./save";
+import { demoSessionConfig } from "./session-config";
+
+function withRack(config = demoSessionConfig) {
+  const game = new GameSession(dealerRegistry, config, standardDeck, () => 0);
+  game.installPassive(createPassiveBlock("scrapper", "passive.1"));
+  game.installPassive(createPassiveBlock("double-line", "passive.2"));
+  return game;
+}
+
+describe("selling a passive (issue #16)", () => {
+  it("removes exactly that passive and adds its sell value; no discard, play or discard used", () => {
+    const game = withRack();
+    const before = game.state;
+    expect(game.sellPassive("passive.1")).toBe(1);
+    expect(game.state.passiveRack.map(({ id }) => id)).toEqual(["passive.2"]);
+    expect(game.state.coins).toBe(before.coins + 1);
+    expect(game.state.discardPile).toBe(before.discardPile);
+    expect(game.state.round).toEqual(before.round);
+    expect(game.state.hand).toBe(before.hand);
+  });
+
+  it("refuses an unknown passive, a second sale of the same one, and after the run is over", () => {
+    const game = withRack();
+    expect(game.sellPassive("passive.9")).toBeNull();
+    game.sellPassive("passive.1");
+    expect(game.sellPassive("passive.1")).toBeNull();
+    expect(game.state.passiveRack).toHaveLength(1);
+    game.forceOutcome("lost");
+    game.advance();
+    const coins = game.state.coins;
+    expect(game.sellPassive("passive.2")).toBeNull();
+    expect(game.state.coins).toBe(coins);
+  });
+
+  it("takes its price from the session's policy", () => {
+    const game = withRack({ ...demoSessionConfig, passivePrices: { buy: 5, sell: 2 } });
+    expect(game.passivePrices).toEqual({ buy: 5, sell: 2 });
+    expect(game.sellPassive("passive.2")).toBe(2);
+  });
+
+  it("stops a sold passive from reacting to events", () => {
+    // Control: while installed, Scrapper pays a coin for a discard.
+    const kept = withRack();
+    const start = kept.state.coins;
+    kept.discard(kept.state.hand[0].id);
+    expect(kept.state.coins).toBe(start + 1);
+    const game = withRack();
+    game.sellPassive("passive.1"); // Scrapper: a coin per block discarded
+    const coins = game.state.coins;
+    game.discard(game.state.hand[0].id);
+    expect(game.state.coins).toBe(coins);
+  });
+
+  it("is kept by a save and reload, without losing or duplicating blocks", () => {
+    const game = withRack();
+    game.sellPassive("passive.1");
+    const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
+    const snapshot = fromSaveRecord(record, standardDeck, dealerRegistry)!;
+    expect(snapshot.state.passiveRack.map(({ id }) => id)).toEqual(["passive.2"]);
+    expect(snapshot.state.coins).toBe(game.state.coins);
+  });
+});

@@ -171,7 +171,7 @@ Simple passive examples are **×2** and **×4** blocks, with matching icons, tha
 
 Players may also reorder blocks within the hand by dragging between hand slots. Reordering either area changes its stored order but does not play, discard, score, or consume an allowance. Dragging from the hand onto the field or discard area, or from the rack onto the sell target, remains a separate action.
 
-The rack is separate from the hand and field. Passives are not discardable. Dragging one to a dedicated sell target beside the discard area removes it from the rack and grants coins; selling is available outside the shop. Rack capacity, sale value, and the exact path from shop or deck into the rack are still to be designed.
+The rack is separate from the hand and field. Passives are not discardable. Dragging one to a dedicated sell target beside the discard area removes it from the rack and grants coins; selling is available outside the shop. **Built (issue #16):** an installed passive can be dragged from the rack onto the shared lower-screen target, which reads **Sell** (gold) while a passive is dragged and **Discard** otherwise. A sale removes that exact passive and adds its sell value to the coins; it is not a discard and uses no play or discard. The session owns the price policy (`SessionConfig.passivePrices`, first version: buy 1, sell 1). A drop elsewhere cancels; a sale after the run is over is refused with the red X. Rack capacity and the path from shop or deck into the rack are still to be designed.
 
 ### Dev2 passive sandbox
 
