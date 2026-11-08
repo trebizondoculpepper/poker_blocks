@@ -3,7 +3,7 @@ import { Registry } from "./core/registry";
 import { drawCards } from "./deal";
 import type { GameState, PlayAction, StageRules } from "./game-state";
 import { scoreField } from "./scoring";
-import { attachmentCell, cellKey, type Cell, type Face } from "./traits/attachable";
+import { attachmentCell, cellKey, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { withSelectable, withoutSelectable } from "./traits/selectable";
 
 export type RoundOutcome = "playing" | "won" | "lost";
@@ -32,6 +32,11 @@ export interface Dealer {
   refillHand(state: GameState, random?: () => number): HandRefill;
   canPlay(state: GameState): boolean;
   placementFor(state: GameState, targetId?: string, face?: Face): Cell | null;
+  /**
+   * The cells a line of `count` blocks would fill: from the placement cell, straight out
+   * along the face's direction (east on an empty field). Null if any cell is taken.
+   */
+  linePlacementFor(state: GameState, count: number, targetId?: string, face?: Face): Cell[] | null;
   play(state: GameState, action: PlayAction): GameState | null;
   canDiscard(state: GameState): boolean;
   /**
@@ -98,17 +103,39 @@ export const baseDealer: Dealer = {
     );
   },
 
+  linePlacementFor(state, count, targetId, face) {
+    const start = this.placementFor(state, targetId, face);
+    if (!start || count < 1) return null;
+    // On an empty field the direction does not matter; the line runs east.
+    const step = face ? faceNormal(face) : { x: 1, y: 0, z: 0 };
+    const taken = new Set(state.field.map(({ cell }) => cellKey(cell)));
+    const cells = Array.from({ length: count }, (_, index) => ({
+      x: start.x + step.x * index,
+      y: start.y + step.y * index,
+      z: start.z + step.z * index,
+    }));
+    // A line that would run into a block is refused whole.
+    return cells.some((cell) => taken.has(cellKey(cell))) ? null : cells;
+  },
+
   play(state, action) {
     if (!this.canPlay(state)) return null;
-    const block = state.hand.find(({ id }) => id === action.cardId);
-    const cell = this.placementFor(state, action.targetId, action.face);
-    if (!block || !cell) return null;
-    const field = [...state.field, { block: withoutSelectable(block), cell }];
+    const ids = action.cardIds?.length ? action.cardIds : [action.cardId];
+    if (new Set(ids).size !== ids.length) return null;
+    const blocks = ids.map((id) => state.hand.find((card) => card.id === id));
+    if (blocks.some((block) => !block)) return null;
+    const cells = this.linePlacementFor(state, ids.length, action.targetId, action.face);
+    if (!cells) return null;
+    const placedIds = new Set(ids);
+    const field = [
+      ...state.field,
+      ...blocks.map((block, index) => ({ block: withoutSelectable(block!), cell: cells[index] })),
+    ];
     const gained = scoreField(field).reduce((total, { points }) => total + points, 0);
     return {
       ...state,
       field,
-      hand: state.hand.filter(({ id }) => id !== block.id),
+      hand: state.hand.filter(({ id }) => !placedIds.has(id)),
       round: {
         ...state.round,
         score: state.round.score + gained,

@@ -23,12 +23,12 @@ export const emptyRunStats: RunStats = {
   blocksPlayed: 0,
 };
 
-/** A block landed and scored `points`. */
-export function recordPlay(stats: RunStats, points: number): RunStats {
+/** A play landed `blocks` blocks (one, or a line) and scored `points`. */
+export function recordPlay(stats: RunStats, points: number, blocks = 1): RunStats {
   const roundScore = stats.roundScore + points;
   return {
     ...stats,
-    blocksPlayed: stats.blocksPlayed + 1,
+    blocksPlayed: stats.blocksPlayed + blocks,
     totalScore: stats.totalScore + points,
     roundScore,
     bestRoundScore: Math.max(stats.bestRoundScore, roundScore),

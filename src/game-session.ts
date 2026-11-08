@@ -182,7 +182,7 @@ export class GameSession {
     if (next) {
       this.scoredLines = scoreFieldWithPassives(next.field, next.passiveRack);
       const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
-      this.runStats = recordPlay(this.runStats, gained);
+      this.runStats = recordPlay(this.runStats, gained, action.cardIds?.length || 1);
       this.currentState = {
         ...next,
         round: { ...next.round, score: this.currentState.round.score + gained },

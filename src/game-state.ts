@@ -23,6 +23,11 @@ export type GameState = {
 /** Play a hand card. On an empty field the first play needs no target: it becomes the centre. */
 export type PlayAction = {
   cardId: string;
+  /**
+   * Several hand cards placed as one play, in this order: a line running out from the
+   * target face (east from the centre on an empty field). Starts with `cardId`.
+   */
+  cardIds?: readonly string[];
   targetId?: string;
   face?: Face;
 };

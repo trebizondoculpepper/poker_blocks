@@ -445,19 +445,12 @@ let outcomeAt: number | null = null;
 type PendingAction =
   | {
       kind: "play";
-      source: RenderedBlock;
-      slot: number;
-      cell: Cell;
+      /** One flight per block played: a single block, or a line in selection order. */
+      flights: Flight[];
+      /** Hand slots the played blocks left, refilled in order. */
+      slots: number[];
       startedAt: number;
-      fromPosition: THREE.Vector3;
-      fromRotation: THREE.Quaternion;
-      fromScale: number;
-      /**
-       * The table's version of the block, waiting in its cell. As the flying block lands it
-       * dissolves away while this one dissolves in (the same noise as dealing).
-       */
-      target: RenderedBlock | null;
-      /** The two dissolves, started once the flight reaches its cell. */
+      /** Every running dissolve, for clean-up. */
       effects: ReturnType<typeof createMaterialise>[];
     }
   | {
@@ -469,6 +462,25 @@ type PendingAction =
       effects: ReturnType<typeof createMaterialise>[];
     };
 let pendingAction: PendingAction | null = null;
+
+/** One block flying from the hand to its cell. */
+type Flight = {
+  source: RenderedBlock;
+  cell: Cell;
+  /** Seconds after the play starts that this block sets off (a line goes one by one). */
+  delay: number;
+  fromPosition: THREE.Vector3;
+  fromRotation: THREE.Quaternion;
+  fromScale: number;
+  /**
+   * The table's version of the block, waiting in its cell. As the flying block lands it
+   * dissolves away while this one dissolves in (transparent blocks only).
+   */
+  target: RenderedBlock | null;
+  handedOver: boolean;
+};
+/** Seconds between the blocks of a line setting off. */
+const lineStagger = 0.12;
 const tints: { blocks: RenderedBlock[]; startedAt: number }[] = [];
 const phaseNames: Record<Phase, string> = {
   "stage-1": "STAGE 1",
@@ -483,7 +495,7 @@ function nextActionLabel(outcome: ReturnType<typeof roundOutcome>): string | nul
   if (game.phase === "shop") return "Next round";
   if (game.phase === "over") return "New game";
   if (outcome === "lost") return "End game";
-  if (outcome === "won") return game.phase === "boss" ? "Go to shop" : "Next stage";
+  // A won stage moves on from its Stage Won pop-up, not from here.
   return null;
 }
 
@@ -544,6 +556,20 @@ const ghostEdgeMaterial = new THREE.LineBasicMaterial({
   transparent: true,
 });
 ghost.add(new THREE.LineSegments(ghostEdgeGeometry, ghostEdgeMaterial));
+/** Extra outlines for the rest of a line being placed (the first cell uses `ghost`). */
+const lineGhosts: THREE.Mesh[] = [];
+function showLineGhosts(cells: readonly Cell[]): void {
+  while (lineGhosts.length < cells.length) {
+    const extra = ghost.clone();
+    assembly.add(extra);
+    lineGhosts.push(extra);
+  }
+  lineGhosts.forEach((extra, index) => {
+    const cell = cells[index];
+    extra.visible = Boolean(cell);
+    if (cell) extra.position.set(cell.x * cubeSize, cell.y * cubeSize - 0.45, cell.z * cubeSize);
+  });
+}
 let ghostIsDropPreview = false;
 
 const faceGeometry = new THREE.PlaneGeometry(cubeSize * 0.94, cubeSize * 0.94);
@@ -561,7 +587,8 @@ assembly.add(faceHighlight);
 
 let handBaseY = 0;
 /** Where a drop would play: a face of a placed block, or the centre of an empty field. */
-type Candidate = { target: RenderedBlock | null; face: Face | null; cell: Cell };
+/** Where a drop would play: a face (or the empty centre), and the cells it would fill. */
+type Candidate = { target: RenderedBlock | null; face: Face | null; cell: Cell; cells: Cell[] };
 type Drag = {
   source: RenderedBlock;
   grabOffset: THREE.Vector3;
@@ -721,13 +748,13 @@ function pickBlock(
   return candidates.find(({ cube }) => cube === hit?.object);
 }
 
-function pickAttachment(clientX: number, clientY: number): Candidate | null {
+function pickAttachment(clientX: number, clientY: number, count = 1): Candidate | null {
   if (placed.size === 0) {
     // The first play of a stage goes to the centre: drop anywhere above the hand.
     const bounds = host.getBoundingClientRect();
     const aboveHand = clientY < bounds.top + bounds.height * 0.72;
-    const cell = game.dealer.placementFor(game.state);
-    return aboveHand && cell ? { target: null, face: null, cell } : null;
+    const cells = game.dealer.linePlacementFor(game.state, count);
+    return aboveHand && cells ? { target: null, face: null, cell: cells[0], cells } : null;
   }
   const boardBlocks = [...placed.values()];
   pointRay(clientX, clientY);
@@ -740,14 +767,16 @@ function pickAttachment(clientX: number, clientY: number): Candidate | null {
   if (!target?.cell) return null;
   // The strongest axis, so a hit on a bevel or rounded edge still picks a face.
   const face = faceFromDirection(hit.face.normal);
-  const cell = game.dealer.placementFor(game.state, target.block.id, face);
-  return cell ? { target, face, cell } : null;
+  // A line runs out from the face; it is refused whole if it would reach a block.
+  const cells = game.dealer.linePlacementFor(game.state, count, target.block.id, face);
+  return cells ? { target, face, cell: cells[0], cells } : null;
 }
 
 function showCandidate(candidate: Candidate | null): void {
   ghostIsDropPreview = Boolean(candidate);
   ghost.visible = Boolean(candidate);
   faceHighlight.visible = Boolean(candidate?.target);
+  showLineGhosts(candidate?.cells.slice(1) ?? []);
   if (!candidate) return;
   ghost.position.set(
     candidate.cell.x * cubeSize,
@@ -811,11 +840,11 @@ function updateCandidate(): void {
   drag.refused = !canDiscard && overBin;
   discardArea.classList.toggle("is-target", drag.discardTarget);
   discardArea.classList.toggle("is-refused", drag.refused);
-  // A group is only ever discarded: it is not played or reordered as one.
+  // A group plays as a line (one play) or is discarded; it is not reordered as one.
   const single = drag.group.length === 0;
   drag.candidate =
-    single && !overBin && game.dealer.canPlay(game.state)
-      ? pickAttachment(drag.lastX, drag.lastY)
+    !overBin && game.dealer.canPlay(game.state)
+      ? pickAttachment(drag.lastX, drag.lastY, drag.group.length + 1)
       : null;
   showCandidate(drag.candidate);
   const previousSlot = drag.reorderSlot;
@@ -895,12 +924,33 @@ function applySettings(next: Settings): void {
 applySettings(settings);
 systemMotionQuery.addEventListener("change", () => applySettings(settings));
 type MaterialiseEffect = ReturnType<typeof createMaterialise>;
-const appearing: { effect: MaterialiseEffect; edges: THREE.Object3D[] }[] = [];
+/**
+ * Blocks dissolving into view. `wait` holds one back (still invisible) so refills draw in
+ * one after another; a sound plays as each starts.
+ */
+const appearing: {
+  effect: MaterialiseEffect;
+  edges: THREE.Object3D[];
+  cube?: THREE.Object3D;
+  wait?: number;
+  sound?: boolean;
+}[] = [];
+/** Seconds between cards drawn into the hand, one after another. */
+const drawStagger = 1 / 3;
 
-function removeFromHand(source: RenderedBlock): number {
-  handBlocks.splice(handBlocks.indexOf(source), 1);
-  layoutHand();
-  return source.handSlot!;
+/**
+ * Finish at once any draw-in still running on these blocks, before another dissolve (a
+ * discard or a landing) takes them over: two at once on one block would clash.
+ */
+function settleAppearing(blocks: readonly RenderedBlock[]): void {
+  const cubes = new Set<THREE.Object3D>(blocks.map(({ cube }) => cube));
+  for (let index = appearing.length - 1; index >= 0; index--) {
+    const entry = appearing[index];
+    if (!entry.cube || !cubes.has(entry.cube)) continue;
+    entry.effect.finish();
+    entry.edges.forEach((edge) => (edge.visible = true));
+    appearing.splice(index, 1);
+  }
 }
 
 function refillSlot(slot: number | readonly number[]): void {
@@ -914,14 +964,21 @@ function refillSlot(slot: number | readonly number[]): void {
   // Also closes the gap when the deck has run out and nothing was drawn.
   syncHandSlots();
   updateHud();
-  if (replacements.length > 0) playSfx("card.deal");
-  for (const rendered of replacements) {
+  // Drawn left to right, one after another.
+  replacements.sort((a, b) => a.handSlot! - b.handSlot!);
+  replacements.forEach((rendered, index) => {
     const edges = [...rendered.cube.children];
     edges.forEach((edge) => (edge.visible = false));
     rendered.cube.updateWorldMatrix(true, true);
     const effect = createMaterialise(rendered.cube, { seconds: 0.9, reduced: reducedMotion });
-    appearing.push({ effect, edges });
-  }
+    appearing.push({
+      effect,
+      edges,
+      cube: rendered.cube,
+      wait: index * drawStagger,
+      sound: true,
+    });
+  });
 }
 
 /** Seconds into a play when the flight has reached its cell and the handover starts. */
@@ -947,48 +1004,59 @@ function landing(block: CardBlock, cell: Cell): RenderedBlock {
   return target;
 }
 
-function startPlacement(source: RenderedBlock, candidate: Candidate): boolean {
+/**
+ * Play one block, or a line of several (in selection order) as one play: each flies from
+ * the hand to its cell, setting off one after another.
+ */
+function startPlacement(sources: readonly RenderedBlock[], candidate: Candidate): boolean {
+  const ids = sources.map(({ block }) => block.id);
   const next = game.play({
-    cardId: source.block.id,
+    cardId: ids[0],
+    cardIds: ids,
     targetId: candidate.target?.block.id,
     face: candidate.face ?? undefined,
   });
   if (!next) return false;
-  const placedBlock = next.field[next.field.length - 1];
-  const cell = placedBlock.cell;
-  selected = new Set([...selected].filter((id) => id !== placedBlock.block.id));
-  source.block = placedBlock.block;
-  const slot = removeFromHand(source);
-  // The cameras use different projections. Match the hand cube's screen position and
+  settleAppearing(sources);
+  const landed = next.field.slice(-sources.length);
+  const played = new Set(ids);
+  selected = new Set([...selected].filter((id) => !played.has(id)));
+  const slots = sources.map(({ handSlot }) => handSlot!).sort((a, b) => a - b);
+  for (const source of sources) handBlocks.splice(handBlocks.indexOf(source), 1);
+  layoutHand();
+  // The cameras use different projections. Match each hand cube's screen position and
   // apparent size in the board view, then let the assembly carry it as it wobbles.
   handCamera.updateWorldMatrix(true, false);
   camera.updateWorldMatrix(true, false);
-  source.cube.updateWorldMatrix(true, false);
-  const screenPosition = source.cube.getWorldPosition(new THREE.Vector3()).project(handCamera);
-  const boardRay = new THREE.Raycaster();
-  boardRay.setFromCamera(new THREE.Vector2(screenPosition.x, screenPosition.y), camera);
   const forward = camera.getWorldDirection(new THREE.Vector3());
   const depth =
     (handCamera.top - handCamera.bottom) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
-  const boardPosition = boardRay.ray.at(
-    depth / boardRay.ray.direction.dot(forward),
-    new THREE.Vector3(),
-  );
-  scene.add(source.cube);
-  source.cube.position.copy(boardPosition);
-  assembly.attach(source.cube);
-  pendingAction = {
-    kind: "play",
-    source,
-    slot,
-    cell,
-    startedAt: performance.now(),
-    fromPosition: source.cube.position.clone(),
-    fromRotation: source.cube.quaternion.clone(),
-    fromScale: source.cube.scale.x,
-    target: needsHandover(source) ? landing(placedBlock.block, cell) : null,
-    effects: [],
-  };
+  const boardRay = new THREE.Raycaster();
+  const flights = sources.map((source, index): Flight => {
+    const { block, cell } = landed[index];
+    source.block = block;
+    source.cube.updateWorldMatrix(true, false);
+    const screenPosition = source.cube.getWorldPosition(new THREE.Vector3()).project(handCamera);
+    boardRay.setFromCamera(new THREE.Vector2(screenPosition.x, screenPosition.y), camera);
+    const boardPosition = boardRay.ray.at(
+      depth / boardRay.ray.direction.dot(forward),
+      new THREE.Vector3(),
+    );
+    scene.add(source.cube);
+    source.cube.position.copy(boardPosition);
+    assembly.attach(source.cube);
+    return {
+      source,
+      cell,
+      delay: index * lineStagger,
+      fromPosition: source.cube.position.clone(),
+      fromRotation: source.cube.quaternion.clone(),
+      fromScale: source.cube.scale.x,
+      target: needsHandover(source) ? landing(block, cell) : null,
+      handedOver: false,
+    };
+  });
+  pendingAction = { kind: "play", flights, slots, startedAt: performance.now(), effects: [] };
   playSfx("card.place.fly");
   updateHud();
   return true;
@@ -999,6 +1067,7 @@ function startDiscard(sources: readonly RenderedBlock[]): boolean {
   const coinsBefore = game.state.coins;
   const passivesBefore = game.state.passiveRack.length;
   if (!sources.length || !game.discard(sources.map(({ block }) => block.id))) return false;
+  settleAppearing(sources);
   if (game.state.coins > coinsBefore) playSfx("passive.coins");
   if (game.state.passiveRack.length > passivesBefore) playSfx("passive.granted");
   passiveRackView?.render(game.state.passiveRack);
@@ -1028,7 +1097,17 @@ const placementTarget = new THREE.Vector3();
 const placementRotation = new THREE.Quaternion();
 function updateAction(now: number, delta: number): void {
   for (let index = appearing.length - 1; index >= 0; index--) {
-    const { effect, edges } = appearing[index];
+    const entry = appearing[index];
+    const { effect, edges } = entry;
+    // Not its turn yet: it stays invisible (the dissolve has not started).
+    if (entry.wait && entry.wait > 0) {
+      entry.wait -= delta;
+      continue;
+    }
+    if (entry.sound) {
+      entry.sound = false;
+      playSfx("card.deal");
+    }
     if (effect.update(delta)) continue;
     edges.forEach((edge) => (edge.visible = true));
     appearing.splice(index, 1);
@@ -1037,63 +1116,78 @@ function updateAction(now: number, delta: number): void {
   const action = pendingAction;
   const elapsed = (now - action.startedAt) / 1000;
   if (action.kind === "play") {
-    const progress = tweenValue(0, 1, elapsed, 1);
-    placementTarget.set(
-      action.cell.x * cubeSize,
-      action.cell.y * cubeSize - 0.45,
-      action.cell.z * cubeSize,
-    );
-    action.source.cube.position.lerpVectors(action.fromPosition, placementTarget, progress);
-    action.source.cube.quaternion.copy(action.fromRotation).slerp(placementRotation, progress);
-    action.source.cube.scale.setScalar(THREE.MathUtils.lerp(action.fromScale, 3, progress));
-    // Landed: the flying preview burns away as the table's version burns in, in place.
-    if (action.target && !action.effects.length && elapsed >= handoverAt) {
-      for (const cube of [action.source.cube, action.target.cube]) {
-        cube.children.forEach((edge) => (edge.visible = false));
-        cube.updateWorldMatrix(true, true);
-      }
-      action.target.cube.visible = true;
-      action.effects.push(
-        // The preview gives way exactly where the table's version arrives: the same noise,
-        // so every point shows one or the other, never neither.
-        createMaterialise(action.source.cube, {
-          seconds: handoverSeconds,
-          replaced: true,
-          reduced: reducedMotion,
-        }),
-        createMaterialise(action.target.cube, { seconds: handoverSeconds, reduced: reducedMotion }),
+    for (const flight of action.flights) {
+      const flying = elapsed - flight.delay;
+      const progress = tweenValue(0, 1, Math.max(0, flying), 1);
+      placementTarget.set(
+        flight.cell.x * cubeSize,
+        flight.cell.y * cubeSize - 0.45,
+        flight.cell.z * cubeSize,
       );
+      flight.source.cube.position.lerpVectors(flight.fromPosition, placementTarget, progress);
+      flight.source.cube.quaternion.copy(flight.fromRotation).slerp(placementRotation, progress);
+      flight.source.cube.scale.setScalar(THREE.MathUtils.lerp(flight.fromScale, 3, progress));
+      // Landed: the flying preview burns away as the table's version burns in, in place.
+      if (flight.target && !flight.handedOver && flying >= handoverAt) {
+        flight.handedOver = true;
+        for (const cube of [flight.source.cube, flight.target.cube]) {
+          cube.children.forEach((edge) => (edge.visible = false));
+          cube.updateWorldMatrix(true, true);
+        }
+        flight.target.cube.visible = true;
+        action.effects.push(
+          // The preview gives way exactly where the table's version arrives: the same
+          // noise, so every point shows one or the other, never neither.
+          createMaterialise(flight.source.cube, {
+            seconds: handoverSeconds,
+            replaced: true,
+            reduced: reducedMotion,
+          }),
+          createMaterialise(flight.target.cube, {
+            seconds: handoverSeconds,
+            reduced: reducedMotion,
+          }),
+        );
+      }
     }
-    action.effects.forEach((effect) => effect.update(delta));
-  } else {
-    action.effects.forEach((effect) => effect.update(delta));
   }
-  // A play lasts until its handover dissolve has finished, which ends after the flight.
-  const lasts = action.kind === "play" && action.target ? handoverAt + handoverSeconds + 0.05 : 1;
+  action.effects.forEach((effect) => effect.update(delta));
+  // A play lasts until its last block has landed (and handed over, if it does).
+  const lasts =
+    action.kind === "play"
+      ? Math.max(
+          ...action.flights.map(
+            ({ delay, target }) => delay + (target ? handoverAt + handoverSeconds + 0.05 : 1),
+          ),
+        )
+      : 1;
   if (elapsed < lasts) return;
   pendingAction = null;
-  if (action.kind === "play" && action.target) {
-    action.effects.forEach((effect) => effect.finish());
-    disposeCube(action.source);
-    action.target.cube.visible = true;
-    action.target.cube.children.forEach((edge) => (edge.visible = true));
-    placed.set(cellKey(action.cell), action.target);
-    showSelection();
-  } else if (action.kind === "play") {
-    // Same look in hand and on the table: the flying block simply stays.
-    action.source.location = "board";
-    action.source.cell = action.cell;
-    action.source.baseY = action.cell.y * cubeSize - 0.45;
-    action.source.rock = null;
-    action.source.handSlot = null;
-    placed.set(cellKey(action.cell), action.source);
-  }
   if (action.kind === "play") {
+    action.effects.forEach((effect) => effect.finish());
+    for (const flight of action.flights) {
+      if (flight.target) {
+        disposeCube(flight.source);
+        flight.target.cube.visible = true;
+        flight.target.cube.children.forEach((edge) => (edge.visible = true));
+        placed.set(cellKey(flight.cell), flight.target);
+      } else {
+        // Same look in hand and on the table: the flying block simply stays.
+        const { source, cell } = flight;
+        source.location = "board";
+        source.cell = cell;
+        source.baseY = cell.y * cubeSize - 0.45;
+        source.rock = null;
+        source.handSlot = null;
+        placed.set(cellKey(cell), source);
+      }
+      updateRotationCenter(flight.cell);
+    }
+    showSelection();
     playSfx("card.attach");
     announceScore(now);
-    updateRotationCenter(action.cell);
     scheduleCameraMove();
-    refillSlot(action.slot);
+    refillSlot(action.slots);
   } else {
     action.sources.forEach(disposeCube);
     refillSlot(action.slots);
@@ -1193,6 +1287,7 @@ function dealHand(): void {
     appearing.push({
       effect: createMaterialise(rendered.cube, { seconds: 0.9, reduced: reducedMotion }),
       edges,
+      cube: rendered.cube,
     });
   });
   layoutHand();
@@ -1306,7 +1401,8 @@ function startRun(session: GameSession): void {
   if (passivesRoom) game.fillPassiveRack(2);
   passiveRackView?.render(game.state.passiveRack);
   gameOverAt = null;
-  stageWonAt = null;
+  // A run resumed on a won stage moves on from its pop-up (paid once; see the session).
+  stageWonAt = game.inStage && roundOutcome(game.state) === "won" ? performance.now() + 400 : null;
   pendingAction = null;
   scoreSteps = [];
   outcomeAt = null;
@@ -1416,6 +1512,15 @@ createConsole({
   stopMusic: () => music.stop(),
 });
 
+/** The blocks a drag plays, in the order they were selected (the dragged one alone if none). */
+function playOrder(activeDrag: Drag): RenderedBlock[] {
+  if (!activeDrag.group.length) return [activeDrag.source];
+  const carried = [activeDrag.source, ...activeDrag.group];
+  return [...selected]
+    .map((id) => carried.find(({ block }) => block.id === id))
+    .filter((rendered): rendered is RenderedBlock => Boolean(rendered));
+}
+
 function finishDrag(drop: boolean): void {
   if (!drag) return;
   const activeDrag = drag;
@@ -1434,7 +1539,7 @@ function finishDrag(drop: boolean): void {
     const accepted = discard
       ? startDiscard([activeDrag.source, ...activeDrag.group])
       : candidate
-        ? startPlacement(activeDrag.source, candidate)
+        ? startPlacement(playOrder(activeDrag), candidate)
         : false;
     const from = game.state.hand.indexOf(activeDrag.source.block);
     if (!accepted && reorderSlot !== null && reorderSlot !== from) {
