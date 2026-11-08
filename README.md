@@ -1,6 +1,6 @@
 # Poker Blocks
 
-A new browser puzzle game project. The first demo renders one card as a cube, with the same rank and suit on every face. Reload the page to select another random card. Game rules and interaction are still to be designed.
+A new browser puzzle game project. The first demo shows only a slowly rotating cube, with one card's rank and suit on every face. Reload the page to select another random card. Game rules and interaction are still to be designed.
 
 The agreed game principles and open architecture questions are recorded in [doc/game-architecture.md](doc/game-architecture.md). Keep future project documents in `doc/`.
 

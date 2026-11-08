@@ -8,15 +8,7 @@ if (!app) throw new Error("Missing app element");
 const card = randomCard();
 const name = cardName(card);
 app.innerHTML = `
-  <main class="shell">
-    <div class="intro">
-      <p class="eyebrow">Poker Blocks · first demo</p>
-      <h1>One card. One block.</h1>
-      <p class="description">Every face shows the same card. Reload for another.</p>
-    </div>
-    <div class="scene" role="img" aria-label="A cube with the ${name} on every face"></div>
-    <p class="card-label">${card.rank}${card.suit.symbol} <span>${name}</span></p>
-  </main>
+  <main class="scene" role="img" aria-label="A slowly rotating cube with the ${name} on every face"></main>
 `;
 
 function makeFaceTexture(card: Card): THREE.CanvasTexture {
