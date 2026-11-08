@@ -51,6 +51,18 @@ The hand is rendered as a fixed overlay with its own camera. Only the structure 
 
 All standard cubes currently have equal mass. The structure keeps a running sum of block grid positions and divides by the block count to find its true center of gravity after each attachment. The rotation pivot moves to that center while preserving the existing block positions. The structure gently oscillates on two axes around the pivot instead of spinning continuously. Dragging any placed block rotates the structure on horizontal and vertical axes; the oscillation continues around the new orientation. A click without dragging still toggles selection.
 
+## Round overlay and discard demo
+
+The current round starts at score 0, a provisional target of 100, six moves, and four discards. A successful attachment consumes one move. Dropping a hand card into the three-dimensional bin adds it to a discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing. Scoring and round completion rules are still to be decided; the displayed score stays at zero until those rules exist.
+
+The deck count appears at the lower right. The counters and bin stay fixed on screen while the board camera moves.
+
+## Placement and card appearance
+
+After a hand cube is dropped on an attachable face, its screen position is mapped through the board camera into the play scene. The same cube becomes a child of the rotating assembly and moves, turns, and grows toward the target cell in assembly-local coordinates over one second using the shared easing helper. Because the cube and target share a parent, the destination follows the board's wobble throughout the flight. Its hand slot remains empty during that second. The dealer refills that slot when the placement finishes, and the new cube materializes with a Perlin noise shader adapted from `../shrew_farmer/src/hud/materialise.ts`.
+
+A discarded hand cube dissolves with the same shader over one second before its slot refills. The discard effect runs backwards from the appearance effect. Other hand cubes stay in their slots during either animation. Reduced-motion settings shorten the effect and use a fade.
+
 ## Architecture to discuss
 
 A possible shape is a data-only block definition, a registry of trait implementations, and a small event/effect engine. A trait receives an event and a limited view of game state, then returns effects such as `addScore` or `destroyBlock`. The engine applies those effects in a defined order and emits any resulting events. Rendering reads game state separately.

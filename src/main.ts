@@ -6,6 +6,8 @@ import { refillHand } from "./dealer";
 import { drawCards, startingHandSize } from "./deal";
 import { tweenValue } from "./easing";
 import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
+import { initialRound, recordDiscard, recordPlay } from "./round";
+import { createMaterialise } from "./visual/materialise";
 import {
   attachmentCell,
   cellKey,
@@ -22,6 +24,27 @@ if (!app) throw new Error("Missing app element");
 app.innerHTML = '<main class="scene" role="application" aria-label="Poker Blocks"></main>';
 
 const host = app.querySelector<HTMLDivElement>(".scene")!;
+const roundHud = document.createElement("aside");
+roundHud.className = "round-hud";
+roundHud.setAttribute("aria-label", "Round status");
+roundHud.innerHTML = `
+  <div class="hud-heading">ROUND</div>
+  <div class="hud-row"><span>Score</span><strong data-stat="score"></strong></div>
+  <div class="hud-row"><span>Target</span><strong data-stat="target"></strong></div>
+  <div class="hud-divider"></div>
+  <div class="hud-row"><span>Moves</span><strong data-stat="moves"></strong></div>
+  <div class="hud-row"><span>Discards</span><strong data-stat="discards"></strong></div>
+`;
+host.append(roundHud);
+const deckHud = document.createElement("aside");
+deckHud.className = "deck-hud";
+deckHud.innerHTML = '<span>DECK</span><strong data-stat="deck"></strong><small>cards left</small>';
+host.append(deckHud);
+const discardCaption = document.createElement("div");
+discardCaption.className = "discard-caption";
+discardCaption.textContent = "DISCARD";
+host.append(discardCaption);
+const stat = (name: string) => host.querySelector<HTMLElement>(`[data-stat="${name}"]`)!;
 const tooltip = document.createElement("div");
 tooltip.className = "inspect-tooltip";
 tooltip.setAttribute("role", "tooltip");
@@ -30,6 +53,31 @@ host.append(tooltip);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111726);
 const handScene = new THREE.Scene();
+const discardBin = new THREE.Group();
+const binBodyMaterial = new THREE.MeshStandardMaterial({
+  color: 0x436977,
+  metalness: 0.35,
+  roughness: 0.4,
+  side: THREE.DoubleSide,
+});
+const binRimMaterial = new THREE.MeshStandardMaterial({
+  color: 0x81d4c2,
+  metalness: 0.4,
+  roughness: 0.25,
+  emissive: 0x65f4dd,
+  emissiveIntensity: 0,
+});
+const binBody = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.4, 0.3, 0.82, 16, 1, true),
+  binBodyMaterial,
+);
+const binBase = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.045, 16), binBodyMaterial);
+binBase.position.y = -0.41;
+const binRim = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.045, 8, 24), binRimMaterial);
+binRim.rotation.x = Math.PI / 2;
+binRim.position.y = 0.41;
+discardBin.add(binBody, binBase, binRim);
+handScene.add(discardBin);
 const pivot = new THREE.Group();
 const assembly = new THREE.Group();
 pivot.rotation.order = "YXZ";
@@ -97,6 +145,7 @@ type RenderedBlock = {
   cell: Cell | null;
   baseY: number;
   rock: Rock | null;
+  handSlot: number | null;
 };
 
 const renderedBlocks: RenderedBlock[] = [];
@@ -142,6 +191,7 @@ function createCube(
     cell: null,
     baseY: 0,
     rock: location === "hand" ? randomRock() : null,
+    handSlot: null,
   } satisfies RenderedBlock;
   renderedBlocks.push(rendered);
   return rendered;
@@ -238,8 +288,23 @@ const firstDraw = drawCards(standardDeck, 1);
 const secondDraw = drawCards(firstDraw.deck, startingHandSize);
 let deck = secondDraw.deck;
 let hand = secondDraw.cards;
+let round = { ...initialRound };
 addToBoard(firstDraw.cards[0], { x: 0, y: 0, z: 0 });
-const handBlocks: RenderedBlock[] = hand.map((block) => createCube(block, cubeSize / 3, "hand"));
+const handBlocks: RenderedBlock[] = hand.map((block, slot) => {
+  const rendered = createCube(block, cubeSize / 3, "hand");
+  rendered.handSlot = slot;
+  return rendered;
+});
+const discardPile: CardBlock[] = [];
+
+function updateHud(): void {
+  stat("score").textContent = String(round.score);
+  stat("target").textContent = String(round.targetScore);
+  stat("moves").textContent = String(round.movesLeft);
+  stat("discards").textContent = String(round.discardsLeft);
+  stat("deck").textContent = String(deck.length);
+}
+updateHud();
 
 const ghostGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
 const ghostMaterial = new THREE.MeshBasicMaterial({
@@ -273,11 +338,13 @@ let handBaseY = 0;
 type Candidate = { target: RenderedBlock; face: Face; cell: Cell };
 type Drag = {
   source: RenderedBlock;
+  grabOffset: THREE.Vector3;
   pointerId: number;
   startX: number;
   startY: number;
   active: boolean;
   candidate: Candidate | null;
+  discardTarget: boolean;
   lastX: number;
   lastY: number;
 };
@@ -324,10 +391,14 @@ function showSelection(): void {
 }
 
 function layoutHand(): void {
-  handBlocks.forEach((rendered, index) => {
+  handBlocks.forEach((rendered) => {
     rendered.baseY = handBaseY;
     if (drag?.active && drag.source === rendered) return;
-    rendered.cube.position.set((index - (handBlocks.length - 1) / 2) * 1.2, handBaseY, 0);
+    rendered.cube.position.set(
+      (rendered.handSlot! - (startingHandSize - 1) / 2) * 1.2,
+      handBaseY,
+      0,
+    );
   });
   showSelection();
 }
@@ -341,6 +412,14 @@ function pointRay(clientX: number, clientY: number, viewCamera: THREE.Camera = c
     -((clientY - bounds.top) / bounds.height) * 2 + 1,
   );
   raycaster.setFromCamera(pointer, viewCamera);
+}
+
+function overDiscardBin(clientX: number, clientY: number): boolean {
+  const bounds = renderer.domElement.getBoundingClientRect();
+  const projected = discardBin.position.clone().project(handCamera);
+  const x = bounds.left + ((projected.x + 1) / 2) * bounds.width;
+  const y = bounds.top + ((1 - projected.y) / 2) * bounds.height;
+  return Math.hypot(clientX - x, clientY - y) < Math.min(90, bounds.height * 0.11);
 }
 
 function pickBlock(
@@ -403,17 +482,20 @@ function showCandidate(candidate: Candidate | null): void {
 
 function updateCandidate(): void {
   if (!drag?.active) return;
-  drag.candidate = pickAttachment(drag.lastX, drag.lastY);
+  drag.discardTarget = round.discardsLeft > 0 && overDiscardBin(drag.lastX, drag.lastY);
+  binRimMaterial.emissiveIntensity = drag.discardTarget ? 0.75 : 0;
+  drag.candidate =
+    !drag.discardTarget && round.movesLeft > 0 ? pickAttachment(drag.lastX, drag.lastY) : null;
   showCandidate(drag.candidate);
 }
 
-const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -2.5);
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 const dragPoint = new THREE.Vector3();
 function moveDraggedBlock(): void {
   if (!drag?.active) return;
-  pointRay(drag.lastX, drag.lastY);
+  pointRay(drag.lastX, drag.lastY, handCamera);
   if (raycaster.ray.intersectPlane(dragPlane, dragPoint)) {
-    drag.source.cube.position.copy(dragPoint);
+    drag.source.cube.position.copy(dragPoint).add(drag.grabOffset);
   }
 }
 
@@ -441,18 +523,155 @@ function applyBoardWobble(): void {
   pivot.rotation.y = manualYaw + rockAngle(boardYawRock, wobbleTime);
 }
 
-function commitAttachment(source: RenderedBlock, candidate: Candidate): void {
-  const index = handBlocks.indexOf(source);
-  handBlocks.splice(index, 1);
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+type MaterialiseEffect = ReturnType<typeof createMaterialise>;
+const appearing: { effect: MaterialiseEffect; edges: THREE.Object3D[] }[] = [];
+type PendingAction =
+  | {
+      kind: "play";
+      source: RenderedBlock;
+      slot: number;
+      cell: Cell;
+      startedAt: number;
+      fromPosition: THREE.Vector3;
+      fromRotation: THREE.Quaternion;
+      fromScale: number;
+    }
+  | {
+      kind: "discard";
+      source: RenderedBlock;
+      slot: number;
+      startedAt: number;
+      effect: MaterialiseEffect;
+    };
+let pendingAction: PendingAction | null = null;
+
+function removeFromHand(source: RenderedBlock): number {
+  handBlocks.splice(handBlocks.indexOf(source), 1);
   hand = hand.filter((block) => block.id !== source.block.id);
-  disposeCube(source);
-  addToBoard(source.block, candidate.cell);
+  layoutHand();
+  return source.handSlot!;
+}
+
+function refillSlot(slot: number): void {
   const result = refillHand(deck, hand);
   deck = result.deck;
   hand = result.hand;
-  result.drawn.forEach((block) => handBlocks.push(createCube(block, cubeSize / 3, "hand")));
-  scheduleCameraMove();
+  const replacements: RenderedBlock[] = [];
+  for (const block of result.drawn) {
+    const rendered = createCube(block, cubeSize / 3, "hand");
+    rendered.handSlot = slot;
+    handBlocks.push(rendered);
+    replacements.push(rendered);
+  }
   layoutHand();
+  updateHud();
+  for (const rendered of replacements) {
+    const edges = [...rendered.cube.children];
+    edges.forEach((edge) => (edge.visible = false));
+    rendered.cube.updateWorldMatrix(true, true);
+    const effect = createMaterialise(rendered.cube, { seconds: 0.9, reduced: reducedMotion });
+    appearing.push({ effect, edges });
+  }
+}
+
+function startPlacement(source: RenderedBlock, candidate: Candidate): void {
+  const nextRound = recordPlay(round);
+  if (!nextRound) return;
+  round = nextRound;
+  const slot = removeFromHand(source);
+  // The cameras use different projections. Match the hand cube's screen position and
+  // apparent size in the board view, then let the assembly carry it as it wobbles.
+  handCamera.updateWorldMatrix(true, false);
+  camera.updateWorldMatrix(true, false);
+  source.cube.updateWorldMatrix(true, false);
+  const screenPosition = source.cube.getWorldPosition(new THREE.Vector3()).project(handCamera);
+  const boardRay = new THREE.Raycaster();
+  boardRay.setFromCamera(new THREE.Vector2(screenPosition.x, screenPosition.y), camera);
+  const forward = camera.getWorldDirection(new THREE.Vector3());
+  const depth =
+    (handCamera.top - handCamera.bottom) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+  const boardPosition = boardRay.ray.at(
+    depth / boardRay.ray.direction.dot(forward),
+    new THREE.Vector3(),
+  );
+  scene.add(source.cube);
+  source.cube.position.copy(boardPosition);
+  assembly.attach(source.cube);
+  pendingAction = {
+    kind: "play",
+    source,
+    slot,
+    cell: candidate.cell,
+    startedAt: performance.now(),
+    fromPosition: source.cube.position.clone(),
+    fromRotation: source.cube.quaternion.clone(),
+    fromScale: source.cube.scale.x,
+  };
+  updateHud();
+}
+
+function startDiscard(source: RenderedBlock): void {
+  const nextRound = recordDiscard(round);
+  if (!nextRound) return;
+  round = nextRound;
+  const slot = removeFromHand(source);
+  discardPile.push(source.block);
+  selected = new Set([...selected].filter((id) => id !== source.block.id));
+  handScene.add(source.cube);
+  source.cube.position.copy(discardBin.position).add(new THREE.Vector3(0, 0.4, 0));
+  const edges = source.cube.children;
+  edges.forEach((edge) => (edge.visible = false));
+  source.cube.updateWorldMatrix(true, true);
+  const effect = createMaterialise(source.cube, {
+    seconds: 1,
+    out: true,
+    reduced: reducedMotion,
+  });
+  pendingAction = { kind: "discard", source, slot, startedAt: performance.now(), effect };
+  updateHud();
+}
+
+const placementTarget = new THREE.Vector3();
+const placementRotation = new THREE.Quaternion();
+function updateAction(now: number, delta: number): void {
+  for (let index = appearing.length - 1; index >= 0; index--) {
+    const { effect, edges } = appearing[index];
+    if (effect.update(delta)) continue;
+    edges.forEach((edge) => (edge.visible = true));
+    appearing.splice(index, 1);
+  }
+  if (!pendingAction) return;
+  const action = pendingAction;
+  const elapsed = (now - action.startedAt) / 1000;
+  if (action.kind === "play") {
+    const progress = tweenValue(0, 1, elapsed, 1);
+    placementTarget.set(
+      action.cell.x * cubeSize,
+      action.cell.y * cubeSize - 0.45,
+      action.cell.z * cubeSize,
+    );
+    action.source.cube.position.lerpVectors(action.fromPosition, placementTarget, progress);
+    action.source.cube.quaternion.copy(action.fromRotation).slerp(placementRotation, progress);
+    action.source.cube.scale.setScalar(THREE.MathUtils.lerp(action.fromScale, 3, progress));
+  } else {
+    action.effect.update(delta);
+  }
+  if (elapsed < 1) return;
+  pendingAction = null;
+  if (action.kind === "play") {
+    action.source.location = "board";
+    action.source.cell = action.cell;
+    action.source.baseY = action.cell.y * cubeSize - 0.45;
+    action.source.rock = null;
+    action.source.handSlot = null;
+    placed.set(cellKey(action.cell), action.source);
+    updateRotationCenter(action.cell);
+    scheduleCameraMove();
+  } else {
+    disposeCube(action.source);
+  }
+  refillSlot(action.slot);
 }
 
 function finishDrag(drop: boolean): void {
@@ -461,9 +680,12 @@ function finishDrag(drop: boolean): void {
   if (activeDrag.active) {
     if (drop) updateCandidate();
     const candidate = drop ? activeDrag.candidate : null;
+    const discard = drop && activeDrag.discardTarget;
     drag = null;
     showCandidate(null);
-    if (candidate) commitAttachment(activeDrag.source, candidate);
+    binRimMaterial.emissiveIntensity = 0;
+    if (discard) startDiscard(activeDrag.source);
+    else if (candidate) startPlacement(activeDrag.source, candidate);
     else {
       handScene.add(activeDrag.source.cube);
       activeDrag.source.cube.position.z = 0;
@@ -492,11 +714,17 @@ function finishBoardDrag(): void {
 }
 
 const onPointerDown = (event: PointerEvent) => {
+  if (pendingAction) return;
   tooltip.hidden = true;
   const source = pickBlock(event.clientX, event.clientY, handBlocks);
   if (source?.block.traits.attachable) {
+    pointRay(event.clientX, event.clientY, handCamera);
+    const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
+      ? source.cube.position.clone().sub(dragPoint)
+      : new THREE.Vector3();
     drag = {
       source,
+      grabOffset,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
@@ -504,6 +732,7 @@ const onPointerDown = (event: PointerEvent) => {
       lastY: event.clientY,
       active: false,
       candidate: null,
+      discardTarget: false,
     };
     return;
   }
@@ -524,7 +753,6 @@ const onPointerMove = (event: PointerEvent) => {
     if (!drag.active && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
       drag.active = true;
       renderer.domElement.setPointerCapture(event.pointerId);
-      scene.add(drag.source.cube);
       changeMotionRate(normalMotionRate / 10);
     }
     if (drag.active) {
@@ -576,6 +804,7 @@ const onPointerUp = (event: PointerEvent) => {
   if (drag?.pointerId === event.pointerId) {
     drag.lastX = event.clientX;
     drag.lastY = event.clientY;
+    moveDraggedBlock();
     finishDrag(true);
   }
   if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
@@ -625,6 +854,8 @@ const resize = () => {
   handCamera.bottom = -halfHeight;
   handCamera.updateProjectionMatrix();
   handBaseY = -halfHeight + 0.75;
+  discardBin.position.set(-halfWidth + 0.9, -halfHeight + (aspect < 1 ? 2.2 : 1.05), 0);
+  handCamera.updateMatrixWorld();
   if (!cameraMove) {
     const desired = desiredCamera();
     cameraDistance = desired.distance;
@@ -648,6 +879,7 @@ const animate = (time: number) => {
   wobbleTime += motionRate * delta;
   applyBoardWobble();
   updateCamera(time);
+  updateAction(time, delta);
   handBlocks.forEach(({ cube, rock }) => {
     if (!rock) return;
     cube.rotation.z = rockAngle(rock, time / 1000);
@@ -668,6 +900,8 @@ if (import.meta.hot) {
     renderer.domElement.removeEventListener("pointerup", onPointerUp);
     renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
     renderer.domElement.removeEventListener("click", onClick);
+    if (pendingAction?.kind === "discard") pendingAction.effect.finish();
+    appearing.forEach(({ effect }) => effect.finish());
     renderedBlocks.slice().forEach(disposeCube);
     ghostGeometry.dispose();
     ghostMaterial.dispose();
