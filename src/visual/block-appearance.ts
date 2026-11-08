@@ -353,12 +353,84 @@ function drawMeat(g: CanvasRenderingContext2D, random: () => number): void {
   border(g, "#722e3e", 6);
 }
 
+/** The rank and suit, in the colours that suit the material. */
+function drawPrint(
+  g: CanvasRenderingContext2D,
+  identity: IdentityTrait,
+  kind: BlockMaterial,
+): void {
+  // Brushed steel is now a light, bright grey, so it takes dark print like paper.
+  const dark = ["wood", "gold", "terracotta", "meat"].includes(kind);
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.shadowColor = dark ? "#28170caa" : "#ffffffbb";
+  g.shadowBlur = dark ? 5 : 3;
+  g.fillStyle =
+    kind === "fire"
+      ? identity.suit.color === "#bd3651"
+        ? "#6e1a1a"
+        : "#24282c"
+      : identity.suit.color === "#bd3651"
+        ? kind === "wood"
+          ? "#a32536"
+          : kind === "steel"
+            ? "#a3202f"
+            : "#bd3651"
+        : dark
+          ? kind === "steel" || kind === "meat"
+            ? "#f4e9db"
+            : "#422716"
+          : "#182d4a";
+  g.font = "bold 80px system-ui, sans-serif";
+  g.fillText(identity.rank, 128, 100);
+  g.font = "94px Georgia, serif";
+  g.fillText(identity.suit.symbol, 128, 180);
+}
+
+/**
+ * For see-through blocks (fire, ice, crystal): the rank and suit on a thin skin just
+ * outside the block, drawn on front faces only. Faces turned away from the camera, seen
+ * through the block, then show no lettering, so the faces you look at read clearly.
+ */
+function printSkin(
+  identity: IdentityTrait,
+  kind: BlockMaterial,
+  geometry: THREE.BufferGeometry,
+): { skin: THREE.Mesh; texture: THREE.CanvasTexture } {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = SIZE;
+  const g = canvas.getContext("2d");
+  if (!g) throw new Error("Canvas 2D is unavailable");
+  drawPrint(g, identity, kind);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  const skin = new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({
+      map: texture,
+      transparent: true,
+      alphaTest: 0.3,
+      depthWrite: false,
+      side: THREE.FrontSide,
+      roughness: 0.5,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    }),
+  );
+  skin.renderOrder = 20;
+  return { skin, texture };
+}
+
 function faceTexture(
   identity: IdentityTrait,
   kind: BlockMaterial,
   endGrain: boolean,
   /** Brush direction for steel, in radians. */
   brushAngle = 0,
+  /** False leaves the rank and suit off (see printSkin). */
+  print = true,
 ): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = SIZE;
@@ -394,32 +466,7 @@ function faceTexture(
       drawMeat(g, random);
       break;
   }
-  // Brushed steel is now a light, bright grey, so it takes dark print like paper.
-  const dark = ["wood", "gold", "terracotta", "meat"].includes(kind);
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.shadowColor = dark ? "#28170caa" : "#ffffffbb";
-  g.shadowBlur = dark ? 5 : 3;
-  g.fillStyle =
-    kind === "fire"
-      ? identity.suit.color === "#bd3651"
-        ? "#6e1a1a"
-        : "#24282c"
-      : identity.suit.color === "#bd3651"
-        ? kind === "wood"
-          ? "#a32536"
-          : kind === "steel"
-            ? "#a3202f"
-            : "#bd3651"
-        : dark
-          ? kind === "steel" || kind === "meat"
-            ? "#f4e9db"
-            : "#422716"
-          : "#182d4a";
-  g.font = "bold 80px system-ui, sans-serif";
-  g.fillText(identity.rank, 128, 100);
-  g.font = "94px Georgia, serif";
-  g.fillText(identity.suit.symbol, 128, 180);
+  if (print) drawPrint(g, identity, kind);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
@@ -818,26 +865,28 @@ export function createBlockAppearance(
           : 1;
 
   if (kind === "prismatic") {
-    // One clear stone: the same material on all six faces.
-    const texture = faceTexture(identity, kind, false);
+    // One clear stone: the same material on all six faces; the print rides on a skin.
+    const texture = faceTexture(identity, kind, false, 0, false);
+    const print = printSkin(identity, kind, geometry);
     const mask = clearMask(texture);
     const inHand = clearInHand(texture, kind, 0xffffff);
     const onTable = clearOnTable(texture, mask, kind, 0xffffff, size);
     return {
       geometry,
-      textures: [texture, mask],
+      textures: [texture, mask, print.texture],
       materials: Array.from({ length: 6 }, () => inHand),
       boardMaterials: Array.from({ length: 6 }, () => onTable),
       edgeColor,
       edgeOpacity,
-      extras: [createCrystalFire(geometry)],
+      extras: [createCrystalFire(geometry), print.skin],
     };
   }
 
   if (kind === "fire") {
     // An open iron frame with the fire burning inside: the openings are cut away
     // (alphaTest) and both sides drawn, so the far bars show through.
-    const texture = faceTexture(identity, kind, false);
+    const texture = faceTexture(identity, kind, false, 0, false);
+    const print = printSkin(identity, kind, geometry);
     const height = frameHeight();
     const iron = new THREE.MeshStandardMaterial({
       map: texture,
@@ -852,11 +901,25 @@ export function createBlockAppearance(
     });
     return {
       geometry,
-      textures: [texture, height],
+      textures: [texture, height, print.texture],
       materials: Array.from({ length: 6 }, () => iron),
       edgeColor,
       edgeOpacity,
-      extras: [createFireCore(size)],
+      extras: [createFireCore(size), print.skin],
+    };
+  }
+
+  if (kind === "ice") {
+    const texture = faceTexture(identity, kind, false, 0, false);
+    const print = printSkin(identity, kind, geometry);
+    const ice = surface(texture, kind);
+    return {
+      geometry,
+      textures: [texture, print.texture],
+      materials: Array.from({ length: 6 }, () => ice),
+      edgeColor,
+      edgeOpacity,
+      extras: [print.skin],
     };
   }
 
