@@ -71,7 +71,7 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | -------------------- | --------------------------------------------------- | ------- |
 | `coin.earn`          | Coins are earned, from a round win or a block       | planned |
 | `coin.spend`         | Coins are spent                                     | planned |
-| `shop.open`          | The shop opens after a boss round                   | planned |
+| `shop.open`          | The shop opens after a boss stage                   | planned |
 | `shop.buy`           | A block is bought                                   | planned |
 | `shop.cannot_afford` | The player tries to buy something they can't afford | planned |
 | `deck.add_block`     | A bought block joins the deck                       | planned |
@@ -81,9 +81,9 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 | Id                  | Plays when                                                    | Status  |
 | ------------------- | ------------------------------------------------------------- | ------- |
-| `boss.intro`        | A boss round begins and shows its rule                        | planned |
+| `boss.intro`        | A boss stage begins and shows its rule                        | planned |
 | `boss.rule.applied` | A boss restriction affects play                               | planned |
-| `run.won`           | The final boss round is beaten (bigger than `round.cleared`)  | planned |
+| `run.won`           | The final boss stage is beaten (bigger than `round.cleared`)  | planned |
 | `run.lost`          | A round is lost and the run ends (bigger than `round.failed`) | planned |
 
 ## Interface
