@@ -8,6 +8,8 @@ export type MenuCallbacks = {
   onContinue(): void;
   onNewGame(): void;
   onSettingsChange(settings: Settings): void;
+  /** Which screen is now in front, for music and similar screen-level effects. */
+  onScreen?(screen: "title" | "settings" | "game"): void;
 };
 
 export type Menus = {
@@ -117,6 +119,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   function closeAll(): void {
     title.root.hidden = settingsScreen.root.hidden = true;
     settingsButton.hidden = false;
+    callbacks.onScreen?.("game");
   }
 
   function showTitle(): void {
@@ -124,6 +127,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     confirm.hidden = true;
     newButton.hidden = false;
     open(title.root);
+    callbacks.onScreen?.("title");
   }
 
   function showSettings(): void {
@@ -132,6 +136,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     motionInputs.forEach((input) => (input.checked = input.value === settings.motion));
     shadowInputs.forEach((input) => (input.checked = input.value === settings.shadows));
     open(settingsScreen.root);
+    callbacks.onScreen?.("settings");
   }
 
   function change(next: Partial<Settings>): void {

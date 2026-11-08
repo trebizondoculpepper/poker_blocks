@@ -17,3 +17,14 @@ Versions keep their own natural tempos. When the game switches, it glides the pl
 Audition loops and switches at `/music.html` on the dev server (`src/music-room/`): pick a track to start, pick another to crossfade. Options: crossfade length, switching on the next bar, and a beat click for checking alignment by ear. The crossfade is logarithmic: each track's level moves evenly in decibels between silence (-60 dB) and full, which sounds steadier than a linear fade.
 
 If the beat tracker reads a track at half time (as with big-band, about 69 BPM), double its `beats` and `tempo_bpm` in the sidecar, so tape-style tempo glides stay small.
+
+## In the game
+
+`src/audio/music-player.ts` plays these loops in the game with the same switching as the room (on the bar, beat-matched, logarithmic crossfade, then an eased tempo change). `src/audio/music-plan.ts` decides what plays where:
+
+- **Title screen:** blaxploitation-horns or stripped-sleaze, at random.
+- **Settings:** style-ambient-lounge, reserved for this screen.
+- **Boss stages:** solitaire-boss, reserved for bosses.
+- **Other stages:** a random loop from everything else, avoiding an immediate repeat.
+
+Music starts on the player's first click or key press (browsers block audio before that) and follows the settings' volume and mute.

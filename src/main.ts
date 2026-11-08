@@ -19,6 +19,9 @@ import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createMenus } from "./menus";
+import { musicTracks } from "./audio/music-catalog";
+import { defaultMusicPlan, pickTrack, type MusicScene } from "./audio/music-plan";
+import { createMusicPlayer } from "./audio/music-player";
 import { browserStorage, loadRun, saveKey, saveRun } from "./save";
 import {
   loadSettings,
@@ -703,10 +706,15 @@ const systemMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
 let settings = loadSettings(storage);
 let reducedMotion = false;
+const music = createMusicPlayer(musicTracks);
+const musicIds = musicTracks.map(({ id }) => id);
 function applySettings(next: Settings): void {
   settings = next;
   setSfxVolume(next.volume);
   setSfxMuted(next.muted);
+  // Music sits a little under the sound effects at the same volume setting.
+  music.setVolume(next.volume * 0.75);
+  music.setMuted(next.muted);
   reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
   cardRoom.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
 }
@@ -933,6 +941,41 @@ function dealHand(): void {
   layoutHand();
 }
 
+// ----- Music: title, settings, and a vibe per stage (boss stages have their own) -----
+let screen: "title" | "settings" | "game" = "title";
+/** The loop chosen for the current stage; kept while visiting settings. */
+let stageTrack: string | null = null;
+
+function chooseStageTrack(): void {
+  const scene: MusicScene = game.phase === "boss" ? "boss" : "stage";
+  stageTrack = pickTrack(scene, musicIds, Math.random, stageTrack);
+}
+
+function playScreenMusic(): void {
+  if (screen === "settings") {
+    void music.play(pickTrack("settings", musicIds) ?? "");
+  } else if (screen === "title") {
+    // Keep a title track if one is already playing; otherwise pick horns or sleaze.
+    if (!defaultMusicPlan.title.includes(music.current ?? "")) {
+      void music.play(pickTrack("title", musicIds) ?? "");
+    }
+  } else {
+    if (!stageTrack) chooseStageTrack();
+    if (stageTrack) void music.play(stageTrack);
+  }
+}
+
+/** Browsers keep audio silent until the player interacts; start music on the first gesture. */
+let musicUnlocked = false;
+function unlockMusic(): void {
+  if (musicUnlocked) return;
+  musicUnlocked = true;
+  music.unlock();
+  playScreenMusic();
+}
+window.addEventListener("pointerdown", unlockMusic, { capture: true });
+window.addEventListener("keydown", unlockMusic, { capture: true });
+
 /** The HUD button: move to the next stage, the shop, the next round, or a new game. */
 function takeNextAction(): void {
   if (pendingAction || drag?.active) return;
@@ -945,6 +988,8 @@ function takeNextAction(): void {
   if (!moved) return;
   resetTable();
   if (game.inStage) {
+    chooseStageTrack();
+    if (musicUnlocked && screen === "game") playScreenMusic();
     dealHand();
     playSfx("round.start");
   } else if (game.phase === "shop") {
@@ -978,6 +1023,8 @@ function startRun(session: GameSession): void {
   showSelection();
   autosave();
   playSfx("round.start");
+  chooseStageTrack();
+  if (musicUnlocked && screen === "game") playScreenMusic();
 }
 
 const menus = createMenus(host, settings, {
@@ -995,6 +1042,10 @@ const menus = createMenus(host, settings, {
   onSettingsChange(next) {
     applySettings(next);
     saveSettings(storage, next);
+  },
+  onScreen(next) {
+    screen = next;
+    if (musicUnlocked) playScreenMusic();
   },
 });
 menus.showTitle();
