@@ -1,6 +1,6 @@
 # Passive blocks: first playable set
 
-The first playable `dev2` passive set uses the rules below. A fresh run deals two distinct passives; saved runs keep their rack and coins. The visual designs are first-pass palettes and face symbols, and point values can be tuned after playtesting.
+The first playable `dev2` passive set uses the rules below. A fresh run deals two distinct passives; saved runs keep their rack and coins. The rack displays real, slowly rotating 3D cubes with each block's icon on all six faces. Their palettes and icons are first-pass designs, and point values can be tuned after playtesting.
 
 ## Composition contract
 

@@ -1704,6 +1704,7 @@ const animate = (time: number) => {
   }
   if (drag?.active) updateCandidate();
   updateEmptyFieldPrompt(time);
+  passiveRackView?.frame(time, reducedMotion);
   render();
   frame = requestAnimationFrame(animate);
 };
@@ -1731,6 +1732,7 @@ if (import.meta.hot) {
     ghostEdgeMaterial.dispose();
     faceGeometry.dispose();
     faceMaterial.dispose();
+    passiveRackView?.dispose();
     renderer.dispose();
   });
 }
