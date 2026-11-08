@@ -171,7 +171,7 @@ Simple passive examples are **×2** and **×4** blocks, with matching icons, tha
 
 Players may also reorder blocks within the hand by dragging between hand slots. Reordering either area changes its stored order but does not play, discard, score, or consume an allowance. Dragging from the hand onto the field or discard area, or from the rack onto the sell target, remains a separate action.
 
-The rack is separate from the hand and field. Passives are not discardable. Dragging one to a dedicated sell target beside the discard area removes it from the rack and grants coins; selling is available outside the shop. **Built (issue #16):** an installed passive can be dragged from the rack onto the shared lower-screen target, which reads **Sell** (gold) while a passive is dragged and **Discard** otherwise. A sale removes that exact passive and adds its sell value to the coins; it is not a discard and uses no play or discard. The session owns the price policy (`SessionConfig.passivePrices`, first version: buy 1, sell 1). A drop elsewhere cancels; a sale after the run is over is refused with the red X. Rack capacity and the path from shop or deck into the rack are still to be designed.
+The rack is separate from the hand and field. Passives are not discardable. **Built in [issue #16](https://github.com/trebizondoculpepper/poker_blocks/issues/16):** an installed passive can be dragged from the rack onto the shared lower-screen target, which reads **Sell** (gold) while a passive is dragged and **Discard** otherwise. A sale removes that exact passive and adds its sell value to the coins; it is not a discard and uses no play or discard. The session owns the price policy (`SessionConfig.passivePrices`, first version: buy 1, sell 1). A drop elsewhere cancels; a sale after the run is over is refused with the red X. Rack capacity and the path from shop or deck into the rack are still to be designed.
 
 ### Dev2 passive sandbox
 
@@ -221,7 +221,15 @@ The demo uses these placeholders. They live in `src/session-config.ts` so they c
 
 ### Shop
 
-The shop sells **blocks**, which are added to the deck. These can be card blocks, special card blocks or modifier blocks. Prices and stock are _tune_.
+The planned default shop opens after the boss stage with five objects at rest on the table: **two passive blocks** and **three playable blocks**. For the first version, every item costs **one coin**; prices will be tuned later. Buying requires enough coins. The player drags a passive to the passive rack or a playable block to the hand. Bought playable blocks become part of the player's collection and carry into later stages. Future shop stock may include special cards and modifier blocks.
+
+The shop entrance is a separate presentation sequence: a deliberately theatrical **SHOP OPEN** sign descends, blocks appear to be thrown onto the table by an unseen hand, and the camera moves to frame them. The items are at rest before the player interacts with them; the animation does not change stock or purchase rules.
+
+Shop transactions and the entrance animation are tracked separately in [shop gameplay issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18) and [shop presentation issue #19](https://github.com/trebizondoculpepper/poker_blocks/issues/19).
+
+### Rack reorganization
+
+The hand and passive rack share a layout rule, separate from the shop. When an item leaves either rack through play, discard, sale or another effect, the remaining items pack to the left. New items enter from the right, one at a time with a short gap between arrivals. Buying into a rack reflows the existing items to make room. This movement is visual; stored rack order determines gameplay effects only where order matters, such as passive resolution. See [rack reorganization issue #17](https://github.com/trebizondoculpepper/poker_blocks/issues/17); manual drag reordering remains [issue #4](https://github.com/trebizondoculpepper/poker_blocks/issues/4).
 
 ## Design guidelines for blocks
 
