@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { IdentityTrait } from "../cards";
 import type { BlockMaterial } from "../materials";
+import { createCrystalFire } from "./crystal-fire";
 
 export type BlockAppearance = {
   geometry: THREE.BufferGeometry;
@@ -14,6 +15,8 @@ export type BlockAppearance = {
   boardMaterials?: THREE.MeshStandardMaterial[];
   edgeColor: number;
   edgeOpacity: number;
+  /** Extra meshes to add inside the block (the crystal's fire); dispose their materials. */
+  extras?: THREE.Mesh[];
 };
 
 const SIZE = 256;
@@ -93,7 +96,7 @@ function drawWood(g: CanvasRenderingContext2D, random: () => number, endGrain: b
  * the grain, the rim and the rivets.
  */
 function drawSteel(g: CanvasRenderingContext2D, random: () => number, angle: number): void {
-  g.fillStyle = "#a9b0b4";
+  g.fillStyle = "#959ca1";
   g.fillRect(0, 0, SIZE, SIZE);
   g.save();
   g.translate(SIZE / 2, SIZE / 2);
@@ -784,11 +787,13 @@ function brushedSteel(
     bumpMap: height,
     bumpScale: 3,
     metalness: 1,
-    roughness: 0.34,
-    anisotropy: 0.9,
+    // Rough enough, and the reflections dim enough, that a face turned straight at the
+    // studio's lights glows rather than blowing out to white.
+    roughness: 0.42,
+    anisotropy: 0.85,
     anisotropyRotation: angle,
     envMap: glassEnvironment,
-    envMapIntensity: 1.25,
+    envMapIntensity: 0.7,
     clearcoat: 0.15,
     clearcoatRoughness: 0.3,
   });
@@ -840,6 +845,7 @@ export function createBlockAppearance(
       boardMaterials: onTable,
       edgeColor,
       edgeOpacity,
+      ...(kind === "prismatic" ? { extras: [createCrystalFire(geometry)] } : {}),
     };
   }
 

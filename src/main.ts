@@ -159,6 +159,8 @@ type RenderedBlock = {
   handMaterials: THREE.MeshStandardMaterial[];
   /** Glass and crystal refract on the table, so they change material when they land. */
   boardMaterials: THREE.MeshStandardMaterial[];
+  /** Meshes inside the block, such as the crystal's fire. */
+  extras: THREE.Mesh[];
   edgeGeometry: THREE.EdgesGeometry;
   edgeMaterial: THREE.LineBasicMaterial;
   location: "board" | "hand";
@@ -209,6 +211,8 @@ function createCube(
     opacity: edgeOpacity,
   });
   cube.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
+  const extras = appearance.extras ?? [];
+  for (const extra of extras) cube.add(extra);
   (location === "board" ? assembly : handScene).add(cube);
   const rendered = {
     block,
@@ -218,6 +222,7 @@ function createCube(
     materials,
     handMaterials,
     boardMaterials,
+    extras,
     edgeGeometry,
     edgeMaterial,
     location,
@@ -246,6 +251,7 @@ function disposeCube(rendered: RenderedBlock): void {
   new Set([...rendered.handMaterials, ...rendered.boardMaterials]).forEach((material) =>
     material.dispose(),
   );
+  for (const extra of rendered.extras) (extra.material as THREE.Material).dispose();
   rendered.edgeGeometry.dispose();
   rendered.edgeMaterial.dispose();
 }
