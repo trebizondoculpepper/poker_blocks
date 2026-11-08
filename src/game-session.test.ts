@@ -48,6 +48,26 @@ function decide(session: GameSession, outcome: "won" | "lost"): void {
 }
 
 describe("GameSession progression", () => {
+  it("keeps coins across stages and the shop while stage score resets", () => {
+    const session = makeSession();
+    (session as unknown as { currentState: GameState }).currentState = {
+      ...session.state,
+      coins: 9,
+    };
+    decide(session, "won");
+    session.advance();
+    expect(session.state.coins).toBe(9);
+    expect(session.state.round.score).toBe(0);
+    decide(session, "won");
+    session.advance();
+    decide(session, "won");
+    session.advance();
+    expect(session.phase).toBe("shop");
+    expect(session.state.coins).toBe(9);
+    session.leaveShop();
+    expect(session.state.coins).toBe(9);
+  });
+
   it("runs stage 1 → stage 2 → boss → shop → next round with each stage's dealer and target", () => {
     const session = makeSession();
     const seen: [number, string, string, number][] = [];

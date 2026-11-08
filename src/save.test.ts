@@ -83,10 +83,31 @@ describe("save records", () => {
     reject({ ...good, state: { ...good.state, deck: [...good.state.deck, good.state.hand[0]] } });
     reject({ ...good, state: { ...good.state, deck: good.state.deck.slice(1) } });
     reject({ ...good, state: { ...good.state, round: { ...good.state.round, score: "lots" } } });
+    reject({ ...good, state: { ...good.state, coins: -1 } });
+    reject({ ...good, state: { ...good.state, coins: 1.5 } });
     reject({
       ...good,
       state: { ...good.state, passiveRack: [{ id: "passive.1", definitionId: "unknown" }] },
     });
+  });
+
+  it("restores coins and defaults older saves to zero", () => {
+    const session = playedSession();
+    const record = toSaveRecord(session.snapshot());
+    expect(
+      fromSaveRecord(
+        { ...record, state: { ...record.state, coins: 12 } },
+        standardDeck,
+        dealerRegistry,
+      )?.state.coins,
+    ).toBe(12);
+    expect(
+      fromSaveRecord(
+        { ...record, state: { ...record.state, coins: undefined } },
+        standardDeck,
+        dealerRegistry,
+      )?.state.coins,
+    ).toBe(0);
   });
 
   it("restores an ordered passive rack and still reads older saves without one", () => {
@@ -97,7 +118,9 @@ describe("save records", () => {
     expect(restored?.map(({ id, definitionId }) => ({ id, definitionId }))).toEqual([
       { id: "passive.1", definitionId: "do-nothing" },
     ]);
-    expect(restored?.[0].traits.inspectable.inspect()).toBe("Do Nothing");
+    expect(restored?.[0].traits.inspectable.inspect()).toBe(
+      "Do Nothing — Has no effect. Unlimited use.",
+    );
     delete record.state.passiveRack;
     expect(fromSaveRecord(record, standardDeck, dealerRegistry)?.state.passiveRack).toEqual([]);
   });

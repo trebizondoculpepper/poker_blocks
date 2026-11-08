@@ -94,12 +94,15 @@ export function scoreLine(blocks: readonly CardBlock[]): number {
  * subset with the highest points; on a tie the stronger hand type wins, then the first
  * subset in line order (a provisional rule to confirm, see doc/game.md).
  */
-export function evaluateLine(blocks: readonly CardBlock[]): LineEvaluation {
+export function evaluateLine(
+  blocks: readonly CardBlock[],
+  valueOf: (block: CardBlock) => number = scorableValue,
+): LineEvaluation {
   if (blocks.length < 2) return { hand: "high-card", contributingIds: [], points: 0 };
-  if (blocks.length <= 5) return evaluateHand(blocks);
+  if (blocks.length <= 5) return evaluateHand(blocks, valueOf);
   let best: LineEvaluation | null = null;
   for (const subset of combinations(blocks, 5)) {
-    const candidate = evaluateHand(subset);
+    const candidate = evaluateHand(subset, valueOf);
     if (!best || isBetter(candidate, best)) best = candidate;
   }
   return best!;
@@ -113,7 +116,10 @@ function isBetter(a: LineEvaluation, b: LineEvaluation): boolean {
 const handOrder = Object.keys(handMultipliers) as HandType[];
 
 /** Classify two to five cards and total the points of the cards that count. */
-export function evaluateHand(blocks: readonly CardBlock[]): LineEvaluation {
+export function evaluateHand(
+  blocks: readonly CardBlock[],
+  valueOf: (block: CardBlock) => number = scorableValue,
+): LineEvaluation {
   const groups = rankGroups(blocks);
   const sizes = groups.map((group) => group.length);
   const five = blocks.length === 5;
@@ -123,7 +129,7 @@ export function evaluateHand(blocks: readonly CardBlock[]): LineEvaluation {
   const result = (hand: HandType, counted: readonly CardBlock[]): LineEvaluation => ({
     hand,
     contributingIds: counted.map(({ id }) => id),
-    points: counted.reduce((sum, block) => sum + scorableValue(block), 0) * handMultipliers[hand],
+    points: counted.reduce((sum, block) => sum + valueOf(block), 0) * handMultipliers[hand],
   });
 
   if (straight && flush) return result("straight-flush", blocks);
@@ -134,7 +140,7 @@ export function evaluateHand(blocks: readonly CardBlock[]): LineEvaluation {
   if (sizes[0] === 3) return result("three-of-a-kind", groups[0]);
   if (sizes[0] === 2 && sizes[1] === 2) return result("two-pair", [...groups[0], ...groups[1]]);
   if (sizes[0] === 2) return result("pair", groups[0]);
-  return result("high-card", [highest(blocks)]);
+  return result("high-card", [highest(blocks, valueOf)]);
 }
 
 /** Cards grouped by rank, largest group first, then highest rank first. */
@@ -151,10 +157,8 @@ function rankGroups(blocks: readonly CardBlock[]): CardBlock[][] {
   );
 }
 
-function highest(blocks: readonly CardBlock[]): CardBlock {
-  return blocks.reduce((best, block) =>
-    scorableValue(block) > scorableValue(best) ? block : best,
-  );
+function highest(blocks: readonly CardBlock[], valueOf: (block: CardBlock) => number): CardBlock {
+  return blocks.reduce((best, block) => (valueOf(block) > valueOf(best) ? block : best));
 }
 
 /** Ace is high only (10-J-Q-K-A); whether A-2-3-4-5 counts is still an open question. */

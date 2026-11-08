@@ -15,6 +15,8 @@ export type GameState = {
   deck: readonly CardBlock[];
   discardPile: readonly CardBlock[];
   passiveRack: readonly PassiveBlock[];
+  /** Run currency; unlike stage score, this carries across stages and the shop. */
+  coins: number;
   round: Readonly<Round>;
 };
 

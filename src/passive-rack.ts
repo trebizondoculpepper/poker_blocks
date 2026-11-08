@@ -19,18 +19,28 @@ export function createPassiveRack(host: HTMLElement): {
       slots.replaceChildren();
       for (const block of rack) {
         const definition = passiveDefinitions.get(block.definitionId);
+        const appearance = block.traits.appearance ?? definition;
+        const item = document.createElement("div");
+        item.className = "passive-item";
         const cube = document.createElement("div");
         cube.className = "passive-cube";
         cube.setAttribute("role", "img");
         cube.setAttribute("aria-label", block.traits.inspectable.inspect());
-        cube.title = block.traits.inspectable.inspect();
+        cube.tabIndex = 0;
+        cube.style.setProperty("--passive-face", appearance.palette.face);
+        cube.style.setProperty("--passive-ink", appearance.palette.ink);
+        cube.style.setProperty("--passive-edge", appearance.palette.edge);
         for (const face of ["front", "top", "side"] as const) {
           const side = document.createElement("span");
           side.className = `passive-cube-${face}`;
-          side.textContent = definition.symbol;
+          side.textContent = appearance.symbol;
           cube.append(side);
         }
-        slots.append(cube);
+        const description = document.createElement("span");
+        description.className = "passive-description";
+        description.textContent = block.traits.inspectable.inspect();
+        item.append(cube, description);
+        slots.append(item);
       }
     },
   };

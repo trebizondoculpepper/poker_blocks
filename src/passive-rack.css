@@ -32,6 +32,38 @@
   gap: 16px;
 }
 
+.passive-item {
+  position: relative;
+  width: 64px;
+  height: 68px;
+}
+
+.passive-description {
+  position: absolute;
+  z-index: 5;
+  top: 74px;
+  left: 50%;
+  width: max-content;
+  max-width: min(260px, 80vw);
+  padding: 9px 12px;
+  transform: translateX(-50%);
+  border: 1px solid #eee8d8;
+  border-radius: 5px;
+  background: #1c2531;
+  color: #fff9ed;
+  font-size: 13px;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.passive-item:hover .passive-description,
+.passive-item:focus-within .passive-description {
+  opacity: 1;
+  visibility: visible;
+}
+
 .passive-cube {
   position: relative;
   width: 56px;
@@ -47,10 +79,10 @@
   width: 56px;
   height: 56px;
   place-items: center;
-  border: 3px solid #a6b3bd;
-  background: #f4f0e8;
-  color: #203247;
-  font-size: 28px;
+  border: 3px solid var(--passive-edge, #a6b3bd);
+  background: var(--passive-face, #f4f0e8);
+  color: var(--passive-ink, #203247);
+  font-size: 23px;
   font-weight: 800;
   backface-visibility: hidden;
 }
@@ -69,6 +101,6 @@
 
 @media (max-width: 700px) {
   .passive-rack {
-    top: max(106px, calc(env(safe-area-inset-top) + 94px));
+    top: 218px;
   }
 }

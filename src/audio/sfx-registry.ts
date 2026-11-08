@@ -263,6 +263,14 @@ const entries = [
     trigger: "A wheel zoom burst or two-finger pinch begins on the playing field",
   },
   {
+    id: "passive.coins",
+    trigger: "A passive awards coins after a discard",
+  },
+  {
+    id: "passive.granted",
+    trigger: "A passive grants and installs another passive block",
+  },
+  {
     id: "ui.screenshot",
     trigger: "The player starts a whole-window 4K screenshot with the keyboard shortcut",
   },

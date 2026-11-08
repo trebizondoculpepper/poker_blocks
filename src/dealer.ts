@@ -52,6 +52,7 @@ export const baseDealer: Dealer = {
       deck: [...cards],
       discardPile: [],
       passiveRack: [],
+      coins: 0,
       round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
     };
     return this.startStage(empty, defaultStageRules, random);

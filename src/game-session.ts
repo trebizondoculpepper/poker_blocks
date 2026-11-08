@@ -5,7 +5,14 @@ import type { GameState, PlayAction } from "./game-state";
 import { fillSlots, insertAt, moveItem } from "./zones";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
 import { stageKinds, type SessionConfig, type StageKind } from "./session-config";
-import { PassiveEventQueue, type PassiveBlock } from "./passives";
+import {
+  createPassiveBlock,
+  PassiveEventQueue,
+  randomPassiveDefinitions,
+  type PassiveBlock,
+} from "./passives";
+import { discardPassiveEffects, scoreFieldWithPassives } from "./passive-effects";
+import type { ScoredLine } from "./scoring";
 
 /** Where a session is: one of a round's three stages, the shop, or finished after a loss. */
 export type Phase = StageKind | "shop" | "over";
@@ -34,6 +41,7 @@ export class GameSession {
   private currentPhase: Phase = "stage-1";
   private runStats: RunStats = emptyRunStats;
   private readonly passiveEvents = new PassiveEventQueue();
+  private scoredLines: ScoredLine[] = [];
 
   constructor(
     dealers: Registry<Dealer>,
@@ -91,6 +99,11 @@ export class GameSession {
     return this.runStats;
   }
 
+  /** Final results from the last play, shared by the stage total and presentation. */
+  get lastScoredLines(): readonly ScoredLine[] {
+    return this.scoredLines;
+  }
+
   get inStage(): boolean {
     return (stageKinds as readonly string[]).includes(this.currentPhase);
   }
@@ -111,6 +124,7 @@ export class GameSession {
 
   /** Install a block in the ordered rack and update its event subscriptions. */
   installPassive(block: PassiveBlock): boolean {
+    if (block.traits.rackResident?.zone !== "passive-rack") return false;
     if (this.currentState.passiveRack.some(({ id }) => id === block.id)) return false;
     this.currentState = {
       ...this.currentState,
@@ -124,26 +138,54 @@ export class GameSession {
     if (!this.inStage) return null;
     const next = this.activeDealer.play(this.currentState, action);
     if (next) {
-      this.runStats = recordPlay(this.runStats, next.round.score - this.currentState.round.score);
-      this.currentState = next;
+      this.scoredLines = scoreFieldWithPassives(next.field, next.passiveRack);
+      const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
+      this.runStats = recordPlay(this.runStats, gained);
+      this.currentState = {
+        ...next,
+        round: { ...next.round, score: this.currentState.round.score + gained },
+      };
       // The current dealer scores in play(); this is a post-play event until
       // placement and scoring are separated by the gameplay coordinator.
       this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId });
       this.passiveEvents.drain();
     }
-    return next;
+    return next ? this.currentState : null;
   }
 
   /** Discard one card, or several as one discard. */
   discard(cardIds: string | readonly string[]): GameState | null {
     if (!this.inStage) return null;
+    const ids = new Set(typeof cardIds === "string" ? [cardIds] : cardIds);
+    const discarded = this.currentState.hand.filter(({ id }) => ids.has(id));
     const next = this.activeDealer.discard(this.currentState, cardIds);
     if (next) {
       this.currentState = next;
-      this.passiveEvents.emit({ type: "discard.completed" });
-      this.passiveEvents.drain();
+      this.passiveEvents.emit({
+        type: "discard.completed",
+        cardIds: discarded.map(({ id }) => id),
+      });
+      this.passiveEvents.drain(128, (block, event) => {
+        if (event.type !== "discard.completed") return [];
+        const { coins, grants } = discardPassiveEffects(block, discarded);
+        if (coins)
+          this.currentState = { ...this.currentState, coins: this.currentState.coins + coins };
+        const followups = [];
+        for (let index = 0; index < grants; index++) {
+          const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
+          const chosen = randomPassiveDefinitions(1, this.random, owned)[0];
+          if (!chosen) break;
+          let serial = this.currentState.passiveRack.length + 1;
+          while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`))
+            serial++;
+          const id = `passive.${serial}`;
+          this.installPassive(createPassiveBlock(chosen.id, id));
+          followups.push({ type: "passive.installed", blockId: id });
+        }
+        return followups;
+      });
     }
-    return next;
+    return next ? this.currentState : null;
   }
 
   /**

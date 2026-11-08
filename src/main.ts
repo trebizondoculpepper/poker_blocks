@@ -5,7 +5,7 @@ import { makeDevDeck, materialOf } from "./materials";
 import { sampleMaterials } from "./material-sampler";
 import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
 import { dealerRegistry, roundOutcome } from "./dealer";
-import { presentationOrder, scoreField, type ScoredLine } from "./scoring";
+import { presentationOrder, type ScoredLine } from "./scoring";
 import { magnitudeSfxFor } from "./score-presentation";
 
 import { GameSession, type Phase } from "./game-session";
@@ -36,7 +36,7 @@ import { createMusicPlayer } from "./audio/music-player";
 import { browserStorage, loadRun, saveKey, saveRun } from "./save";
 import { boardBaseFov, fovForZoom, pinchZoom, wheelZoom } from "./view-zoom";
 import { bindScreenshotShortcut } from "./screenshot";
-import { createPassiveBlock } from "./passives";
+import { createPassiveBlock, randomPassiveDefinitions } from "./passives";
 import { createPassiveRack } from "./passive-rack";
 import {
   loadSettings,
@@ -61,6 +61,8 @@ roundHud.innerHTML = `
   <div class="hud-divider"></div>
   <div class="hud-row"><span>Moves</span><strong data-stat="moves"></strong></div>
   <div class="hud-row"><span>Discards</span><strong data-stat="discards"></strong></div>
+  <div class="hud-divider"></div>
+  <div class="hud-row"><span>Coins</span><strong data-stat="coins"></strong></div>
   <button class="hud-action" type="button" data-stat="action" hidden></button>
 `;
 host.append(roundHud);
@@ -419,7 +421,7 @@ function devSeed(fresh = false): number {
 }
 let cards: readonly CardBlock[] = materialsRoom
   ? makeDevDeck(newMaterialSeed())
-  : materialDevRoom
+  : materialDevRoom || passivesRoom
     ? makeDevDeck(devSeed())
     : standardDeck;
 // A fresh run sits behind the title screen until the player chooses Continue or New game.
@@ -495,6 +497,7 @@ function updateHud(): void {
   stat("target").textContent = count(round.targetScore);
   stat("moves").textContent = count(round.movesLeft);
   stat("discards").textContent = count(round.discardsLeft);
+  stat("coins").textContent = String(game.state.coins);
   stat("deck").textContent = String(deck.length);
   discardArea.classList.toggle("is-exhausted", !game.dealer.canDiscard(game.state));
   updateDiscardCount();
@@ -964,7 +967,12 @@ function startPlacement(source: RenderedBlock, candidate: Candidate): boolean {
 
 /** Discard one or more hand blocks as a single discard. */
 function startDiscard(sources: readonly RenderedBlock[]): boolean {
+  const coinsBefore = game.state.coins;
+  const passivesBefore = game.state.passiveRack.length;
   if (!sources.length || !game.discard(sources.map(({ block }) => block.id))) return false;
+  if (game.state.coins > coinsBefore) playSfx("passive.coins");
+  if (game.state.passiveRack.length > passivesBefore) playSfx("passive.granted");
+  passiveRackView?.render(game.state.passiveRack);
   const slots = sources.map(({ handSlot }) => handSlot!).sort((a, b) => a - b);
   for (const source of sources) handBlocks.splice(handBlocks.indexOf(source), 1);
   layoutHand();
@@ -1036,7 +1044,7 @@ function updateAction(now: number, delta: number): void {
 
 /** Present the lines from the play that just landed, lowest score first. */
 function announceScore(now: number): void {
-  const lines = presentationOrder(scoreField(game.state.field));
+  const lines = presentationOrder(game.lastScoredLines);
   scoreSteps = lines.map((line, index) => ({ at: now + index * lineStepMs, line }));
   // Let the last line's tint finish before announcing a stage outcome.
   outcomeAt = lines.length > 0 ? now + (lines.length - 1) * lineStepMs + tintSeconds * 1000 : now;
@@ -1183,13 +1191,15 @@ function autosave(): void {
   saveRun(storage, game.snapshot(), runSaveKey);
 }
 
-/** A new run: material samples in dev0/1, one passive in dev2. */
+/** A new run: material samples in dev0/1, two random passives in dev2. */
 function newSession(): GameSession {
   if (materialsRoom) cards = makeDevDeck(newMaterialSeed());
-  else if (materialDevRoom) cards = makeDevDeck(devSeed(true));
+  else if (materialDevRoom || passivesRoom) cards = makeDevDeck(devSeed(true));
   const session = new GameSession(dealerRegistry, sessionConfig, cards);
   if (passivesRoom)
-    session.installPassive(createPassiveBlock("do-nothing", "passive.do-nothing.1"));
+    randomPassiveDefinitions(2, Math.random).forEach((definition, index) =>
+      session.installPassive(createPassiveBlock(definition.id, `passive.${index + 1}`)),
+    );
   if (!materialsRoom) return session;
   const { state } = session;
   const sample = sampleMaterials(state.deck);

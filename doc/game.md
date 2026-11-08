@@ -133,6 +133,7 @@ Later this formula will be extended in three ways:
 
 ## Coins
 
+- The current game starts a run with **0 coins**, keeps the balance in GameState and saved runs, and shows it beneath Moves and Discards. Stage transitions leave the balance intact. Reward and spending rules below are planned next.
 - Completing a stage grants 4 coins by default. Other reward rules may add more ledger rows and coins.
 - Some blocks have economic effects: certain plays earn coins.
 - The player must balance building points against earning coins.
@@ -170,9 +171,30 @@ Players may also reorder blocks within the hand by dragging between hand slots. 
 
 The rack is separate from the hand and field. Passives are not discardable. Dragging one to a dedicated sell target beside the discard area removes it from the rack and grants coins; selling is available outside the shop. Rack capacity, sale value, and the exact path from shop or deck into the rack are still to be designed.
 
-### First passive prototype
+### Dev2 passive sandbox
 
-The first implementation slice is the separate `?room=dev2` sandbox. It reuses the endless-play session configuration from `dev1` and shows a passive rack containing one **Do Nothing** block. The block has a stable registry id, an inspectable name, and a passive trait with no event subscriptions or effects. Its rack and current run survive a reload. This establishes the rack's location, block representation, and subscription contract before any score-changing passive is added. Shop acquisition, selling, rack capacity rules, and the full effect catalog remain future work. `dev0` and `dev1` keep their existing purposes.
+The separate `?room=dev2` sandbox reuses the endless-play session configuration from `dev1`. It deals two distinct passives from the roster below and gives standard cards a mix of gameplay materials. The rack and current run survive a reload. Each passive has configured rule, appearance, rack-residency, and inspection traits. Shop acquisition, selling, rack capacity rules, and one-use passives remain future work. `dev0` and `dev1` keep their existing purposes.
+
+### First dev2 passive set
+
+On a fresh `dev2` run, two **distinct** passive definitions are chosen at random from this set and installed in the rack. A saved run keeps its chosen passives on reload. The dev room mixes card materials so the material effects can be exercised.
+
+The reusable trait configurations, trigger timing, and visual design for each block are specified in [passives.md](passives.md). The names and initial values are for playtesting; the mechanics live in traits rather than block-specific code.
+
+| Passive                           | Trigger and effect                                                                                                                                                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Do Nothing**                    | Has no subscriptions or effect.                                                                                                                                                                                                                          |
+| **×2**                            | Double each line's working score before that line is finalized.                                                                                                                                                                                          |
+| **×4**                            | Multiply each line's working score by four using the same trait as ×2 with a different factor.                                                                                                                                                           |
+| **Carnivore**                     | Double each contributing meat block's base value before calculating its line score.                                                                                                                                                                      |
+| **Woodworker**                    | Add three to each contributing wood block's base value before calculating its line score.                                                                                                                                                                |
+| **Crossroads**                    | Add three points for each block in a scored line that also belongs to a perpendicular line of at least two blocks. Check line geometry, not the other line's score, so the result has no scoring cycle.                                                  |
+| **Long Haul** _(working name)_    | Penalize two-block lines and reward lines of three or more blocks. Provisional values: −5 or +5 to the line's working score.                                                                                                                             |
+| **Scrapper**                      | Gain one coin per block discarded in a discard action.                                                                                                                                                                                                   |
+| **Seeing Red**                    | Gain one coin per Heart or Diamond block discarded. This can combine with Scrapper.                                                                                                                                                                      |
+| **Ace Exchange** _(working name)_ | When one discard action includes at least two Aces, create one random passive definition the player does not currently own. Trigger once for that discard even if it includes three or four Aces. If every eligible definition is owned, create nothing. |
+
+The two-Ace effect is a first use case for an event leading to another event: the discard completes, the effect creates and installs the passive, then the queue reports that installation after the discard's current listeners finish.
 
 ## A run
 

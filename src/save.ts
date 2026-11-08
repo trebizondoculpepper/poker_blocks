@@ -28,6 +28,8 @@ export type SaveRecord = {
     discardPile: string[];
     /** Optional to keep previously saved runs readable. */
     passiveRack?: { id: string; definitionId: string }[];
+    /** Optional so runs saved before the economy was added begin with zero coins. */
+    coins?: number;
     round: GameState["round"];
   };
   /** Added after version 1 shipped; optional so older saves still load. */
@@ -50,6 +52,7 @@ export function toSaveRecord(snapshot: SessionSnapshot): SaveRecord {
       deck: ids(state.deck),
       discardPile: ids(state.discardPile),
       passiveRack: state.passiveRack.map(({ id, definitionId }) => ({ id, definitionId })),
+      coins: state.coins,
       round: { ...state.round },
     },
     ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
@@ -99,6 +102,7 @@ export function fromSaveRecord(
       deck: state.deck.map(resolve),
       discardPile: state.discardPile.map(resolve),
       passiveRack,
+      coins: nonnegativeInteger(state.coins ?? 0),
       round: {
         score: number(state.round.score),
         targetScore: number(state.round.targetScore),
@@ -122,6 +126,12 @@ export function fromSaveRecord(
 function number(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) throw new Error("bad number");
   return value;
+}
+
+function nonnegativeInteger(value: unknown): number {
+  const parsed = number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error("bad coin balance");
+  return parsed;
 }
 
 /** Storage that may be missing or throw (private mode, blocked site data). */
