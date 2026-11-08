@@ -8,7 +8,7 @@ The rules of the game being designed are in [doc/game.md](doc/game.md), with can
 
 Open [`?room=dev0`](https://trebizondoculpepper.github.io/poker_blocks/?room=dev0) (formerly `?room=dev`, which still works) to play the normal game with the deck randomized across paper, wood, steel, glass, prismatic glass, gold, terracotta, ice, and meat. Wood has different end-grain faces; jelly is deferred. Each new dev game reshuffles the material assignments, while Continue restores the same assignments. The dev room has its own save, so it does not replace a normal run. Materials are visual experiments for now and have no gameplay effects.
 
-Open [`?room=dev1`](https://trebizondoculpepper.github.io/poker_blocks/?room=dev1), the materials room, to judge the substances side by side: it skips the title and opens on a small structure with one block of every material, each attached to a random free face of the others. Rotate it by dragging the table and hover a block to name its material. Every reload (or New game) builds a new structure; the hand and the rest of the game work as in dev0, so more blocks can be attached.
+Open [`?room=dev1`](https://trebizondoculpepper.github.io/poker_blocks/?room=dev1), the materials room, to judge the substances side by side: it skips the title and opens on a small structure with one block of every material, each attached to a random free face of the others. Rotate it by dragging the table and hover a block to name its material. Every reload (or New game) builds a new structure; the hand works as in dev0, so more blocks can be attached. dev1 is a sandbox for endless play: no win or lose, and unlimited plays and discards (shown as ∞). Music starts wound down.
 
 ## Sound effects
 

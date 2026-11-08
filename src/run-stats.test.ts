@@ -47,3 +47,16 @@ describe("run stats", () => {
     expect(fromSaveRecord(record, standardDeck, dealerRegistry)!.stats).toEqual(game.stats);
   });
 });
+
+describe("the dev1 sandbox config", () => {
+  it("gives every stage unlimited plays and discards, and no way to win or lose", async () => {
+    const { unlimited, sandboxSessionConfig } = await import("./session-config");
+    const config = sandboxSessionConfig(demoSessionConfig);
+    const game = new GameSession(dealerRegistry, config, standardDeck, () => 0);
+    expect(game.state.round.movesLeft).toBe(unlimited);
+    expect(game.state.round.discardsLeft).toBe(unlimited);
+    expect(game.state.round.targetScore).toBe(unlimited);
+    game.play({ cardId: game.state.hand[0].id });
+    expect(game.advance()).toBe(false);
+  });
+});

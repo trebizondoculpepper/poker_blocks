@@ -9,7 +9,7 @@ import { presentationOrder, scoreField, type ScoredLine } from "./scoring";
 import { magnitudeSfxFor } from "./score-presentation";
 
 import { GameSession, type Phase } from "./game-session";
-import { demoSessionConfig } from "./session-config";
+import { demoSessionConfig, unlimited, sandboxSessionConfig } from "./session-config";
 import { tweenValue } from "./easing";
 import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
 import { createMaterialise } from "./visual/materialise";
@@ -349,6 +349,8 @@ const storage = browserStorage();
 const roomName = new URLSearchParams(window.location.search).get("room");
 const materialsRoom = roomName === "dev1";
 const devRoom = roomName === "dev0" || roomName === "dev" || materialsRoom;
+/** dev1 is a sandbox for endless play: no win or lose, unlimited plays and discards. */
+const sessionConfig = materialsRoom ? sandboxSessionConfig(demoSessionConfig) : demoSessionConfig;
 const devSeedKey = "poker-blocks.dev-material-seed";
 const runSaveKey = materialsRoom
   ? "poker-blocks.dev1-run"
@@ -388,7 +390,7 @@ let cards: readonly CardBlock[] = materialsRoom
     ? makeDevDeck(devSeed())
     : standardDeck;
 // A fresh run sits behind the title screen until the player chooses Continue or New game.
-let game = new GameSession(dealerRegistry, demoSessionConfig, cards);
+let game = new GameSession(dealerRegistry, sessionConfig, cards);
 for (const { block, cell } of game.state.field) addToBoard(block, cell);
 const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
   const rendered = createCube(block, cubeSize / 3, "hand");
@@ -456,9 +458,10 @@ function updateHud(): void {
   action.hidden = label === null;
   action.textContent = label ?? "";
   stat("score").textContent = String(shownScore);
-  stat("target").textContent = String(round.targetScore);
-  stat("moves").textContent = String(round.movesLeft);
-  stat("discards").textContent = String(round.discardsLeft);
+  const count = (n: number) => (n >= unlimited / 2 ? "∞" : String(n));
+  stat("target").textContent = count(round.targetScore);
+  stat("moves").textContent = count(round.movesLeft);
+  stat("discards").textContent = count(round.discardsLeft);
   stat("deck").textContent = String(deck.length);
   discardArea.classList.toggle("is-exhausted", !game.dealer.canDiscard(game.state));
   updateDiscardCount();
@@ -1137,11 +1140,11 @@ function autosave(): void {
 function newSession(): GameSession {
   if (materialsRoom) cards = makeDevDeck(newMaterialSeed());
   else if (devRoom) cards = makeDevDeck(devSeed(true));
-  const session = new GameSession(dealerRegistry, demoSessionConfig, cards);
+  const session = new GameSession(dealerRegistry, sessionConfig, cards);
   if (!materialsRoom) return session;
   const { state } = session;
   const sample = sampleMaterials(state.deck);
-  return GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, cards, {
+  return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
     ...session.snapshot(),
     state: { ...state, field: sample.field, deck: sample.deck },
   });
@@ -1173,7 +1176,7 @@ const menus = createMenus(host, settings, {
   onContinue() {
     const snapshot = loadRun(storage, cards, dealerRegistry, runSaveKey);
     if (snapshot) {
-      startRun(GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, cards, snapshot));
+      startRun(GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, snapshot));
     }
   },
   onNewGame() {

@@ -36,3 +36,23 @@ export const demoSessionConfig: SessionConfig = {
   handAtStageEnd: "return-to-deck",
   discardPileAfterShop: "return-to-deck",
 };
+
+/** A number that is never reached or used up (the dev1 sandbox); the HUD shows it as ∞. */
+export const unlimited = 1_000_000;
+
+/**
+ * The dev-room sandbox for endless play: the same dealers as `base`, but a stage can be
+ * neither won nor lost on its own. Plays and discards never run out, and the target score
+ * is out of reach. (The console's win and lose still decide a stage on demand.)
+ */
+export function sandboxSessionConfig(base: SessionConfig): SessionConfig {
+  return {
+    ...base,
+    stage: (round, kind) => ({
+      ...base.stage(round, kind),
+      targetScore: unlimited,
+      plays: unlimited,
+      discards: unlimited,
+    }),
+  };
+}
