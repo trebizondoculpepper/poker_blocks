@@ -7,23 +7,25 @@ export const suits = [
   { name: "clubs", symbol: "♣", color: "#1c2433" },
 ] as const;
 
-export type Card = {
+export type IdentityTrait = {
   rank: (typeof ranks)[number];
   suit: (typeof suits)[number];
 };
 
-export const deck: readonly Card[] = suits.flatMap((suit) => ranks.map((rank) => ({ rank, suit })));
+export type CardBlock = {
+  traits: { identity: IdentityTrait };
+};
 
-export function randomCard(): Card {
-  return deck[Math.floor(Math.random() * deck.length)];
-}
+export const standardDeck: readonly CardBlock[] = suits.flatMap((suit) =>
+  ranks.map((rank) => ({ traits: { identity: { rank, suit } } })),
+);
 
-export function cardName(card: Card): string {
-  const rankNames: Partial<Record<Card["rank"], string>> = {
+export function cardName(identity: IdentityTrait): string {
+  const rankNames: Partial<Record<IdentityTrait["rank"], string>> = {
     A: "ace",
     J: "jack",
     Q: "queen",
     K: "king",
   };
-  return `${rankNames[card.rank] ?? card.rank} of ${card.suit.name}`;
+  return `${rankNames[identity.rank] ?? identity.rank} of ${identity.suit.name}`;
 }

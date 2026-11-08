@@ -1,17 +1,20 @@
 import "./style.css";
 import * as THREE from "three";
-import { cardName, randomCard, type Card } from "./cards";
+import { cardName, standardDeck, type CardBlock, type IdentityTrait } from "./cards";
+import { drawCards, startingHandSize } from "./deal";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
 
-const card = randomCard();
-const name = cardName(card);
+const firstDraw = drawCards(standardDeck, 1);
+const featured = firstDraw.cards[0];
+const { deck, cards: hand } = drawCards(firstDraw.deck, startingHandSize);
+const names = hand.map((block) => cardName(block.traits.identity)).join(", ");
 app.innerHTML = `
-  <main class="scene" role="img" aria-label="A slowly rotating cube with the ${name} on every face"></main>
+  <main class="scene" role="img" aria-label="A large rotating ${cardName(featured.traits.identity)} block and a five-card hand at the top: ${names}. ${deck.length} cards remain in the deck."></main>
 `;
 
-function makeFaceTexture(card: Card): THREE.CanvasTexture {
+function makeFaceTexture(identity: IdentityTrait): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 512;
   const context = canvas.getContext("2d");
@@ -22,13 +25,13 @@ function makeFaceTexture(card: Card): THREE.CanvasTexture {
   context.strokeStyle = "#b8b0a2";
   context.lineWidth = 12;
   context.strokeRect(26, 26, 460, 460);
-  context.fillStyle = card.suit.color;
+  context.fillStyle = identity.suit.color;
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.font = "bold 164px system-ui, sans-serif";
-  context.fillText(card.rank, 256, 205);
+  context.fillText(identity.rank, 256, 205);
   context.font = "188px Georgia, serif";
-  context.fillText(card.suit.symbol, 256, 360);
+  context.fillText(identity.suit.symbol, 256, 360);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -41,7 +44,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111726);
 
 const camera = new THREE.OrthographicCamera(-4, 4, 4, -4, 0.1, 100);
-camera.position.set(4, 3, 5);
+camera.position.set(0, 3, 8);
 camera.lookAt(0, 0, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -54,15 +57,23 @@ const sun = new THREE.DirectionalLight(0xffffff, 2.4);
 sun.position.set(-3, 6, 7);
 scene.add(sun);
 
-const geometry = new THREE.BoxGeometry(2.4, 2.4, 2.4);
-const texture = makeFaceTexture(card);
-const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.65 });
-const cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
+const resources: { dispose(): void }[] = [];
+function createCube(block: CardBlock, size: number): THREE.Mesh {
+  const geometry = new THREE.BoxGeometry(size, size, size);
+  const texture = makeFaceTexture(block.traits.identity);
+  const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.65 });
+  const cube = new THREE.Mesh(geometry, material);
+  const edgeGeometry = new THREE.EdgesGeometry(geometry);
+  const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6b6c73 });
+  cube.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
+  scene.add(cube);
+  resources.push(geometry, texture, material, edgeGeometry, edgeMaterial);
+  return cube;
+}
 
-const edgeGeometry = new THREE.EdgesGeometry(geometry);
-const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6b6c73 });
-cube.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
+const featuredCube = createCube(featured, 2.4);
+featuredCube.position.y = -0.45;
+const handCubes = hand.map((block) => createCube(block, 0.8));
 
 const resize = () => {
   const { width, height } = host.getBoundingClientRect();
@@ -75,6 +86,9 @@ const resize = () => {
   camera.top = halfHeight;
   camera.bottom = -halfHeight;
   camera.updateProjectionMatrix();
+  handCubes.forEach((cube, index) => {
+    cube.position.set((index - 2) * 1.2, halfHeight - 0.75, 0);
+  });
   renderer.setSize(width, height);
   renderer.render(scene, camera);
 };
@@ -85,7 +99,10 @@ resize();
 
 let frame = 0;
 const animate = (time: number) => {
-  cube.rotation.y = time * 0.00025;
+  featuredCube.rotation.y = time * 0.00025;
+  handCubes.forEach((cube) => {
+    cube.rotation.y = time * 0.00025;
+  });
   renderer.render(scene, camera);
   frame = requestAnimationFrame(animate);
 };
@@ -95,11 +112,7 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     cancelAnimationFrame(frame);
     observer.disconnect();
-    edgeGeometry.dispose();
-    edgeMaterial.dispose();
-    geometry.dispose();
-    material.dispose();
-    texture.dispose();
+    resources.forEach((resource) => resource.dispose());
     renderer.dispose();
   });
 }

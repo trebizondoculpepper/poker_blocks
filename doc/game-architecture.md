@@ -6,9 +6,11 @@ Status: principles agreed in conversation; implementation design still open.
 
 Poker Blocks will be a puzzle game in the style of poker solitaire. Its main source of interest should be the unexpected ways players can combine reusable game features.
 
-A basic block represents one of the 52 cards in a standard deck. Its rank and suit identify the card. Every geometric face of its cube shows that same rank and suit; geometric faces are distinct from behavior traits.
+A basic block represents one of the 52 cards in a standard deck. An identity trait holds its rank and suit. Every geometric face of its cube shows that same identity; geometric faces are distinct from behavior traits. The identity model should later admit special cards unique to this game.
 
-The first demo shows only one slowly rotating cube with a randomly selected card on page load. Reloading selects another card. This is a rendering demonstration, not a decision about how cards will be dealt in the game.
+The deck is the collection of cards currently possessed. At the start of this game's demo, one card is drawn for the large center block and five other cards are drawn into the hand. The hand is a list of five cards. All six draws are distinct, leaving 46 cards in the deck. The five hand blocks are one-third the size of the center block and appear in a row at the top of the screen. Reloading deals a new set.
+
+This five-card starting hand is a rule for Poker Blocks. [Traditional Poker Squares](https://www.cs.gettysburg.edu/~tneller/games/pokersquares/index.html), often called poker solitaire, instead draws one card at a time into a 5×5 grid.
 
 ## Agreed principles
 
