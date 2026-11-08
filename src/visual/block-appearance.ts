@@ -851,6 +851,10 @@ export function createBlockAppearance(
           ? // Softly rounded edges, as a casting comes out of the mould.
             new RoundedBoxGeometry(size, size, size, 5, size * 0.12)
           : new THREE.BoxGeometry(size, size, size);
+  // See-through blocks are a hair smaller than a cell, so where they touch a neighbour the
+  // two faces are not in the same plane and do not flicker (z-fight) through each other.
+  if (["glass", "prismatic", "fire", "paper", "ice"].includes(kind))
+    geometry.scale(0.985, 0.985, 0.985);
   const edgeColor = edgeColors[kind];
   // Rounded castings (meat, gold) and the cut-cornered cards (paper) have no box edges to outline.
   const edgeOpacity =

@@ -68,12 +68,15 @@ export function createCrystalFire(geometry: THREE.BufferGeometry): THREE.Mesh {
       ior: { value: new THREE.Vector3(2.3, 2.42, 2.56) },
     },
     side: THREE.BackSide,
-    transparent: true,
+    // Listed with the solid objects (not "transparent"), so glass and crystal on the
+    // table, which refract only solid objects, show it bent through them. Additive and
+    // drawn last among them (renderOrder), so nothing behind paints over it.
+    transparent: false,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
   const fire = new THREE.Mesh(geometry, material);
   fire.scale.setScalar(0.97);
-  fire.renderOrder = 1;
+  fire.renderOrder = 10;
   return fire;
 }

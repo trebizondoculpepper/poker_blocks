@@ -22,6 +22,8 @@ const fragmentShader = /* glsl */ `
   uniform float halfSize;
   uniform vec3 cameraLocal;
   uniform float intensity;
+  // World "up" in the block's own space: flames always rise, however the block is turned.
+  uniform vec3 upLocal;
   varying vec3 vLocal;
 
   float hash(vec3 p) {
@@ -55,6 +57,12 @@ const fragmentShader = /* glsl */ `
 
   // Flame density at q (the block spans -1..1), and how hot it is there.
   vec2 flame(vec3 q) {
+    // Work in a frame whose y is world up, so the flame sits just below the centre (on the
+    // "down" side, wherever that is now) and always points upwards.
+    vec3 up = normalize(upLocal);
+    vec3 side = normalize(abs(up.x) < 0.9 ? cross(up, vec3(1, 0, 0)) : cross(up, vec3(0, 0, 1)));
+    vec3 front = cross(side, up);
+    q = vec3(dot(q, side), dot(q, up), dot(q, front));
     float base = -0.45; // just below the centre
     float height = q.y - base;
     if (height < -0.08) return vec2(0.0);
@@ -111,9 +119,13 @@ export function createFireCore(size: number): THREE.Mesh {
       halfSize: { value: halfSize },
       cameraLocal: { value: new THREE.Vector3() },
       intensity: { value: 3.2 },
+      upLocal: { value: new THREE.Vector3(0, 1, 0) },
     },
     side: THREE.BackSide,
-    transparent: true,
+    // Listed with the solid objects (not "transparent"), so glass and crystal on the
+    // table, which refract only solid objects, show it bent through them. Additive and
+    // drawn last among them (renderOrder), so nothing behind paints over it.
+    transparent: false,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
@@ -121,14 +133,17 @@ export function createFireCore(size: number): THREE.Mesh {
     new THREE.BoxGeometry(halfSize * 2, halfSize * 2, halfSize * 2),
     material,
   );
-  core.renderOrder = 1;
+  core.renderOrder = 10;
   // Each frame: advance the flames and give the shader the camera in the block's own space.
   const start = performance.now();
+  const turned = new THREE.Quaternion();
   core.onBeforeRender = (_renderer, _scene, camera) => {
     material.uniforms.time.value = (performance.now() - start) / 1000;
     core.updateMatrixWorld();
     material.uniforms.cameraLocal.value.setFromMatrixPosition(camera.matrixWorld);
     core.worldToLocal(material.uniforms.cameraLocal.value);
+    core.getWorldQuaternion(turned);
+    material.uniforms.upLocal.value.set(0, 1, 0).applyQuaternion(turned.invert());
   };
   return core;
 }
