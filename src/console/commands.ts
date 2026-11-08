@@ -17,6 +17,8 @@ export type ConsoleHost = {
   /** Press the HUD's next-action button (next stage, shop, new round). */
   next(): void;
   newGame(): void;
+  /** Go to the main menu (the title screen). */
+  home(): void;
   /** Decide the current stage now (a developer shortcut); false outside a stage. */
   forceOutcome(outcome: "won" | "lost"): boolean;
   musicTracks(): readonly string[];
@@ -149,6 +151,15 @@ export const COMMANDS: readonly ConsoleCommand[] = [
       if (!host.forceOutcome("lost")) return fail("lose: only during a stage");
       host.next();
       return `phase ${host.game().phase}`;
+    },
+  },
+  {
+    name: "home",
+    usage: "",
+    help: "go to the main menu",
+    run(host) {
+      host.home();
+      return "main menu";
     },
   },
   {

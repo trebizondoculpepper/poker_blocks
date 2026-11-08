@@ -16,6 +16,7 @@ function fakeHost() {
     screen: () => "game",
     next: () => void calls.push("next"),
     newGame: () => void calls.push("new"),
+    home: () => void calls.push("home"),
     forceOutcome: (outcome: "won" | "lost") => game.forceOutcome(outcome),
     musicTracks: () => ["style-noir", "solitaire-boss"],
     musicNow: () => now,
@@ -76,6 +77,12 @@ describe("the commands", () => {
     expect(lost.game.state.round.movesLeft).toBe(0);
     expect(lost.calls).toContain("next");
     expect(calls).not.toContain("next");
+  });
+
+  it("goes home to the main menu", () => {
+    const { text, calls } = fakeHost();
+    expect(text("home")).toEqual(["main menu"]);
+    expect(calls).toEqual(["home"]);
   });
 
   it("switches music and refuses unknown tracks", () => {

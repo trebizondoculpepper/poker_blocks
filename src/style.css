@@ -557,3 +557,35 @@ body,
   font: inherit;
   caret-color: #ffb000;
 }
+
+/* ----- Game over screen ----- */
+.game-over-title {
+  color: #f0584f;
+  text-align: center;
+}
+
+.run-stats {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0 20px;
+}
+
+.run-stats > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #ffffff0d;
+}
+
+.run-stats dt {
+  color: #c9d6dc;
+}
+
+.run-stats dd {
+  margin: 0;
+  color: #fff;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}

@@ -3,6 +3,7 @@ import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
 import type { GameState, PlayAction } from "./game-state";
 import { fillSlots, insertAt, moveItem } from "./zones";
+import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
 import { stageKinds, type SessionConfig, type StageKind } from "./session-config";
 
 /** Where a session is: one of a round's three stages, the shop, or finished after a loss. */
@@ -14,6 +15,8 @@ export type SessionSnapshot = {
   phase: Phase;
   dealer: string;
   state: GameState;
+  /** Run totals for the game over screen; older saves have none (zeros). */
+  stats?: RunStats;
 };
 
 /**
@@ -28,6 +31,7 @@ export class GameSession {
   private currentState: GameState;
   private currentRound = 1;
   private currentPhase: Phase = "stage-1";
+  private runStats: RunStats = emptyRunStats;
 
   constructor(
     dealers: Registry<Dealer>,
@@ -57,6 +61,7 @@ export class GameSession {
     session.currentState = snapshot.state;
     session.currentRound = snapshot.round;
     session.currentPhase = snapshot.phase;
+    session.runStats = snapshot.stats ?? emptyRunStats;
     return session;
   }
 
@@ -76,6 +81,10 @@ export class GameSession {
     return this.currentPhase;
   }
 
+  get stats(): RunStats {
+    return this.runStats;
+  }
+
   get inStage(): boolean {
     return (stageKinds as readonly string[]).includes(this.currentPhase);
   }
@@ -86,6 +95,7 @@ export class GameSession {
       phase: this.currentPhase,
       dealer: this.activeDealer.name,
       state: this.currentState,
+      stats: this.runStats,
     };
   }
 
@@ -96,7 +106,10 @@ export class GameSession {
   play(action: PlayAction): GameState | null {
     if (!this.inStage) return null;
     const next = this.activeDealer.play(this.currentState, action);
-    if (next) this.currentState = next;
+    if (next) {
+      this.runStats = recordPlay(this.runStats, next.round.score - this.currentState.round.score);
+      this.currentState = next;
+    }
     return next;
   }
 
@@ -174,6 +187,7 @@ export class GameSession {
     } else {
       this.currentState = this.clearTable(this.currentState);
       this.currentPhase = "shop";
+      this.runStats = recordRoundComplete(this.runStats);
     }
     return true;
   }

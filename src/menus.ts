@@ -1,6 +1,7 @@
-// Title and settings screens: plain DOM overlays above the scene. They only call back
+// Title, settings and game over screens: plain DOM overlays above the scene. They only call back
 // into the game; progression rules stay in the session controller.
 import { playSfx } from "./audio/sfx";
+import type { RunStats } from "./run-stats";
 import type { MotionSetting, Settings, ShadowSetting } from "./settings";
 
 export type MenuCallbacks = {
@@ -9,7 +10,7 @@ export type MenuCallbacks = {
   onNewGame(): void;
   onSettingsChange(settings: Settings): void;
   /** Which screen is now in front, for music and similar screen-level effects. */
-  onScreen?(screen: "title" | "settings" | "game"): void;
+  onScreen?(screen: "title" | "settings" | "game" | "over"): void;
 };
 
 export type Menus = {
@@ -17,6 +18,8 @@ export type Menus = {
   showSettings(): void;
   /** Close the title and settings screens, back to the game. */
   closeAll(): void;
+  /** The run is lost: show how it went, with New Run and Main menu. */
+  showGameOver(stats: RunStats): void;
   readonly isOpen: boolean;
 };
 
@@ -90,6 +93,22 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
      <div class="menu-buttons"><button type="button" data-menu="back">Back</button><button type="button" data-menu="quit">Quit to title screen</button></div>`,
   );
 
+  const gameOver = overlay("game-over-screen", "Game over");
+  gameOver.panel.insertAdjacentHTML(
+    "beforeend",
+    `<h2 class="menu-title game-over-title">GAME OVER</h2>
+     <dl class="run-stats">
+       <div><dt>Rounds completed</dt><dd data-run="roundsCompleted"></dd></div>
+       <div><dt>Total score</dt><dd data-run="totalScore"></dd></div>
+       <div><dt>Highest scoring round</dt><dd data-run="bestRoundScore"></dd></div>
+       <div><dt>Blocks played</dt><dd data-run="blocksPlayed"></dd></div>
+     </dl>
+     <div class="menu-buttons">
+       <button type="button" data-menu="new-run">New Run</button>
+       <button type="button" data-menu="main-menu">Main menu</button>
+     </div>`,
+  );
+
   const settingsButton = document.createElement("button");
   settingsButton.type = "button";
   settingsButton.className = "settings-button";
@@ -115,12 +134,13 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   function open(screen: HTMLElement): void {
     title.root.hidden = screen !== title.root;
     settingsScreen.root.hidden = screen !== settingsScreen.root;
+    gameOver.root.hidden = screen !== gameOver.root;
     settingsButton.hidden = true;
     screen.querySelector<HTMLElement>("button:not([hidden]), input")?.focus();
   }
 
   function closeAll(): void {
-    title.root.hidden = settingsScreen.root.hidden = true;
+    title.root.hidden = settingsScreen.root.hidden = gameOver.root.hidden = true;
     settingsButton.hidden = false;
     callbacks.onScreen?.("game");
   }
@@ -220,10 +240,28 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   for (const button of host.querySelectorAll<HTMLButtonElement>(".menu-panel button")) {
     button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
   }
+  find(gameOver.panel, "new-run").addEventListener("click", () => {
+    playSfx("ui.click");
+    closeAll();
+    callbacks.onNewGame();
+  });
+  find(gameOver.panel, "main-menu").addEventListener("click", () => {
+    playSfx("ui.back");
+    showTitle();
+  });
+
+  function showGameOver(stats: RunStats): void {
+    for (const cell of gameOver.panel.querySelectorAll<HTMLElement>("[data-run]")) {
+      cell.textContent = String(stats[cell.dataset.run as keyof RunStats]);
+    }
+    open(gameOver.root);
+    callbacks.onScreen?.("over");
+  }
+
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (!settingsScreen.root.hidden) back();
-    else if (title.root.hidden) {
+    else if (title.root.hidden && gameOver.root.hidden) {
       settingsFrom = "game";
       showSettings();
     }
@@ -246,12 +284,13 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   return {
     showTitle,
     closeAll,
+    showGameOver,
     showSettings() {
       settingsFrom = "game";
       showSettings();
     },
     get isOpen() {
-      return !title.root.hidden || !settingsScreen.root.hidden;
+      return !title.root.hidden || !settingsScreen.root.hidden || !gameOver.root.hidden;
     },
   };
 }

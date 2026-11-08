@@ -5,6 +5,7 @@ import type { Phase, SessionSnapshot } from "./game-session";
 import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
+import { parseRunStats, type RunStats } from "./run-stats";
 
 /**
  * Saved runs store card ids, not CardBlock objects: some traits hold functions, and the
@@ -26,6 +27,8 @@ export type SaveRecord = {
     discardPile: string[];
     round: GameState["round"];
   };
+  /** Added after version 1 shipped; optional so older saves still load. */
+  stats?: RunStats;
 };
 
 const phases: readonly Phase[] = ["stage-1", "stage-2", "boss", "shop", "over"];
@@ -45,6 +48,7 @@ export function toSaveRecord(snapshot: SessionSnapshot): SaveRecord {
       discardPile: ids(state.discardPile),
       round: { ...state.round },
     },
+    ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
   };
 }
 
@@ -90,7 +94,13 @@ export function fromSaveRecord(
       },
     };
     if (seen.size !== cards.length) return null;
-    return { round: record.round, phase: record.phase, dealer: record.dealer, state: restored };
+    return {
+      round: record.round,
+      phase: record.phase,
+      dealer: record.dealer,
+      state: restored,
+      stats: parseRunStats(record.stats),
+    };
   } catch {
     return null;
   }

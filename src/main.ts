@@ -950,8 +950,15 @@ function updateScoring(now: number): void {
     shownScore = game.state.round.score;
     const outcome = roundOutcome(game.state);
     if (outcome === "won") playSfx("round.cleared");
-    if (outcome === "lost") playSfx("round.failed");
+    if (outcome === "lost") {
+      playSfx("round.failed");
+      gameOverAt = now + gameOverDelayMs;
+    }
     updateHud();
+  }
+  if (gameOverAt !== null && gameOverAt <= now && !pendingAction) {
+    gameOverAt = null;
+    if (game.advance()) endRun();
   }
   for (let index = tints.length - 1; index >= 0; index--) {
     const tint = tints[index];
@@ -1006,7 +1013,7 @@ function dealHand(): void {
 }
 
 // ----- Music: title, settings, and a vibe per stage (boss stages have their own) -----
-let screen: "title" | "settings" | "game" = "title";
+let screen: "title" | "settings" | "game" | "over" = "title";
 /** The loop chosen for the current stage; kept while visiting settings. */
 let stageTrack: string | null = null;
 
@@ -1016,7 +1023,10 @@ function chooseStageTrack(): void {
 }
 
 function playScreenMusic(): void {
-  if (screen === "settings") {
+  if (screen === "over") {
+    // The run is over: let the music fade away under the game over screen.
+    music.stop(3);
+  } else if (screen === "settings") {
     void music.play(pickTrack("settings", musicIds) ?? "");
   } else if (screen === "title") {
     // Keep a title track if one is already playing; otherwise pick horns or sleaze.
@@ -1045,11 +1055,16 @@ function takeNextAction(): void {
   if (pendingAction || drag?.active) return;
   playSfx("ui.click");
   if (game.phase === "over") {
-    menus.showTitle();
+    menus.showGameOver(game.stats);
     return;
   }
   const moved = game.phase === "shop" ? game.leaveShop() : game.advance();
   if (!moved) return;
+  // advance() may have ended the run (TypeScript still has the pre-call narrowing).
+  if ((game.phase as Phase) === "over") {
+    endRun();
+    return;
+  }
   resetTable();
   if (game.inStage) {
     chooseStageTrack();
@@ -1058,12 +1073,23 @@ function takeNextAction(): void {
     playSfx("round.start");
   } else if (game.phase === "shop") {
     playSfx("shop.open");
-  } else {
-    playSfx("run.lost");
   }
   updateHud();
   autosave();
 }
+
+/** The run is lost: the table stays behind the game over screen, which shows the totals. */
+function endRun(): void {
+  gameOverAt = null;
+  playSfx("run.lost");
+  updateHud();
+  autosave();
+  menus.showGameOver(game.stats);
+}
+
+/** When a lost stage's outcome has been announced, the game over screen follows. */
+let gameOverAt: number | null = null;
+const gameOverDelayMs = 1400;
 
 /** Save at a safe point: never while a placement, discard or score presentation is running. */
 function autosave(): void {
@@ -1073,6 +1099,7 @@ function autosave(): void {
 /** Swap in a session (new or resumed) and rebuild the scene from its state. */
 function startRun(session: GameSession): void {
   game = session;
+  gameOverAt = null;
   pendingAction = null;
   scoreSteps = [];
   outcomeAt = null;
@@ -1125,6 +1152,7 @@ createConsole({
     startRun(new GameSession(dealerRegistry, demoSessionConfig, cards));
     menus.closeAll();
   },
+  home: () => menus.showTitle(),
   forceOutcome(outcome) {
     if (pendingAction || !game.forceOutcome(outcome)) return false;
     shownScore = game.state.round.score;
