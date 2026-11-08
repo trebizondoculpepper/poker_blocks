@@ -53,7 +53,7 @@ All standard cubes currently have equal mass. The structure keeps a running sum 
 
 ## Round overlay and discard demo
 
-The current round starts at score 0, a provisional target of 100, six moves, and four discards. A successful attachment consumes one move. Dropping a hand card into the three-dimensional bin adds it to a discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing. Scoring and round completion rules are still to be decided; the displayed score stays at zero until those rules exist.
+The current round starts at score 0, a provisional target of 100, six moves, and four discards. A successful attachment consumes one move. Dropping a hand card into the three-dimensional bin adds it to a discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing.
 
 The deck count appears at the lower right. The counters and bin stay fixed on screen while the board camera moves.
 
@@ -65,7 +65,7 @@ A discarded hand cube dissolves with the same shader over one second before its 
 
 ## Round overlay and discard demo
 
-The current round starts at score 0, a provisional target of 100, six moves, and four discards. A successful attachment consumes one move. Dropping a hand card into the fixed two-dimensional discard area, marked by a pixel art bin, adds it to a discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing. Scoring and round completion rules are still to be decided; the displayed score stays at zero until those rules exist.
+The current round starts at score 0, a provisional target of 100, six moves, and four discards. A successful attachment consumes one move. Dropping a hand card into the fixed two-dimensional discard area, marked by a pixel art bin, adds it to a discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing.
 
 The deck count appears at the lower right. The counters and discard area stay fixed on screen while the board camera moves.
 
@@ -80,6 +80,12 @@ A registered dealer reads `GameState` to decide whether a move is legal and retu
 After a hand cube is dropped on an attachable face, its screen position is mapped through the board camera into the play scene. The same cube becomes a child of the rotating assembly and moves, turns, and grows toward the target cell in assembly-local coordinates over one second using the shared easing helper. Because the cube and target share a parent, the destination follows the board's wobble throughout the flight. Its hand slot remains empty during that second. The dealer refills that slot when the placement finishes, and the new cube materializes with a Perlin noise shader adapted from `../shrew_farmer/src/hud/materialise.ts`.
 
 A discarded hand cube dissolves with the same shader over one second before its slot refills. The discard effect runs backwards from the appearance effect. Other hand cubes stay in their slots during either animation. Reduced-motion settings shorten the effect and use a fade.
+
+## Line scoring
+
+`src/scoring.ts` finds every unbroken run of two or more placed blocks along each axis and classifies it as a poker hand, using the best five cards for lines longer than five. After each successful play the base dealer scores every line on the field and adds the sum to the running total. `roundOutcome` reports the round as won once the total reaches the target and lost when moves run out short of it; the dealer then refuses further plays and discards. The HUD reveals the new score, and plays the `score.line`, `score.big`, `round.cleared` or `round.failed` sound, when the placed card lands.
+
+Two choices here are provisional answers to open questions in `doc/game.md`: each hand type scores a fixed base value from `handBaseScores` (the scoring formula is still undecided), and aces count high or low in a straight with no wrap-around.
 
 ## Architecture to discuss
 

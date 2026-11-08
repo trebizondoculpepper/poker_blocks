@@ -2,7 +2,9 @@ import "./style.css";
 import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock, type IdentityTrait } from "./cards";
 import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
-import { dealerRegistry } from "./dealer";
+import { dealerRegistry, roundOutcome } from "./dealer";
+import { handBaseScores, scoreField } from "./scoring";
+
 import { GameSession } from "./game-session";
 import { tweenValue } from "./easing";
 import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
@@ -11,6 +13,9 @@ import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./tra
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx } from "./audio/sfx";
+
+/** A line worth at least a straight plays the bigger scoring sound. */
+const bigLineScore = handBaseScores.straight;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -21,7 +26,7 @@ const roundHud = document.createElement("aside");
 roundHud.className = "round-hud";
 roundHud.setAttribute("aria-label", "Round status");
 roundHud.innerHTML = `
-  <div class="hud-heading">ROUND</div>
+  <div class="hud-heading" data-stat="heading">ROUND</div>
   <div class="hud-row"><span>Score</span><strong data-stat="score"></strong></div>
   <div class="hud-row"><span>Target</span><strong data-stat="target"></strong></div>
   <div class="hud-divider"></div>
@@ -266,9 +271,14 @@ const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
   rendered.handSlot = slot;
   return rendered;
 });
+// The score shown lags the state until the placed card lands.
+let shownScore = game.state.round.score;
 function updateHud(): void {
   const { round, deck } = game.state;
-  stat("score").textContent = String(round.score);
+  const outcome = roundOutcome(game.state);
+  stat("heading").textContent =
+    outcome === "won" ? "ROUND WON" : outcome === "lost" ? "ROUND LOST" : "ROUND";
+  stat("score").textContent = String(shownScore);
   stat("target").textContent = String(round.targetScore);
   stat("moves").textContent = String(round.movesLeft);
   stat("discards").textContent = String(round.discardsLeft);
@@ -647,12 +657,26 @@ function updateAction(now: number, delta: number): void {
     action.source.handSlot = null;
     placed.set(cellKey(action.cell), action.source);
     playSfx("card.attach");
+    announceScore();
     updateRotationCenter(action.cell);
     scheduleCameraMove();
   } else {
     disposeCube(action.source);
   }
   refillSlot(action.slot);
+}
+
+/** Reveal the score from the play that just landed, with its sounds. */
+function announceScore(): void {
+  const gained = game.state.round.score - shownScore;
+  shownScore = game.state.round.score;
+  const lines = scoreField(game.state.field);
+  if (lines.some(({ score }) => score >= bigLineScore)) playSfx("score.big");
+  else if (gained > 0) playSfx("score.line");
+  const outcome = roundOutcome(game.state);
+  if (outcome === "won") playSfx("round.cleared");
+  if (outcome === "lost") playSfx("round.failed");
+  updateHud();
 }
 
 function finishDrag(drop: boolean): void {

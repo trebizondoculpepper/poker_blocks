@@ -2,7 +2,18 @@ import type { CardBlock } from "./cards";
 import { Registry } from "./core/registry";
 import { drawCards } from "./deal";
 import type { GameState, PlayAction } from "./game-state";
+import { scoreField } from "./scoring";
 import { attachmentCell, cellKey, type Cell, type Face } from "./traits/attachable";
+
+export type RoundOutcome = "playing" | "won" | "lost";
+
+/** Won once the target is reached; lost when plays run out short of it. */
+export function roundOutcome(state: GameState): RoundOutcome {
+  const { score, targetScore, movesLeft } = state.round;
+  if (score >= targetScore) return "won";
+  if (movesLeft <= 0) return "lost";
+  return "playing";
+}
 
 export type HandRefill = { state: GameState; drawn: CardBlock[] };
 
@@ -44,7 +55,7 @@ export const baseDealer: Dealer = {
     };
   },
 
-  canPlay: (state) => state.round.movesLeft > 0,
+  canPlay: (state) => roundOutcome(state) === "playing",
 
   placementFor(state, targetId, face) {
     const target = state.field.find(({ block }) => block.id === targetId);
@@ -62,15 +73,21 @@ export const baseDealer: Dealer = {
     const block = state.hand.find(({ id }) => id === action.cardId);
     const cell = this.placementFor(state, action.targetId, action.face);
     if (!block || !cell) return null;
+    const field = [...state.field, { block, cell }];
+    const gained = scoreField(field).reduce((total, { score }) => total + score, 0);
     return {
       ...state,
-      field: [...state.field, { block, cell }],
+      field,
       hand: state.hand.filter(({ id }) => id !== block.id),
-      round: { ...state.round, movesLeft: state.round.movesLeft - 1 },
+      round: {
+        ...state.round,
+        score: state.round.score + gained,
+        movesLeft: state.round.movesLeft - 1,
+      },
     };
   },
 
-  canDiscard: (state) => state.round.discardsLeft > 0,
+  canDiscard: (state) => roundOutcome(state) === "playing" && state.round.discardsLeft > 0,
 
   discard(state, cardId) {
     if (!this.canDiscard(state)) return null;
