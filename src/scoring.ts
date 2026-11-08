@@ -1,6 +1,10 @@
-import { ranks, type CardBlock } from "./cards";
+import { rankValue, type CardBlock } from "./cards";
 import type { PlacedBlock } from "./game-state";
+import { scorableValue } from "./traits/scorable";
 import { cellKey, type Cell } from "./traits/attachable";
+
+// Pure scoring primitives (issue #3). Nothing here touches the UI, sound or GameState;
+// accumulating a stage total from these results is the dealer's job.
 
 export type Axis = "x" | "y" | "z";
 
@@ -13,69 +17,60 @@ export type HandType =
   | "flush"
   | "full-house"
   | "four-of-a-kind"
-  | "straight-flush"
-  | "five-of-a-kind";
+  | "straight-flush";
 
-/**
- * Provisional base score per hand type. The scoring formula is an open design
- * question (doc/game.md, "Hand value"); these numbers exist so a round can be
- * played and won, and are expected to be tuned or replaced.
- */
-export const handBaseScores: Readonly<Record<HandType, number>> = {
+/** Provisional multipliers from doc/game.md; the counted cards' points are multiplied by these. */
+export const handMultipliers: Readonly<Record<HandType, number>> = {
   "high-card": 1,
-  pair: 4,
-  "two-pair": 10,
-  "three-of-a-kind": 15,
-  straight: 25,
-  flush: 25,
-  "full-house": 35,
-  "four-of-a-kind": 50,
-  "straight-flush": 80,
-  "five-of-a-kind": 100,
+  pair: 2,
+  "two-pair": 2,
+  "three-of-a-kind": 3,
+  straight: 3,
+  flush: 4,
+  "full-house": 5,
+  "four-of-a-kind": 7,
+  "straight-flush": 9,
 };
 
-/** Hand types from weakest to strongest; used to pick the best hand. */
-export const handRanking: readonly HandType[] = [
-  "high-card",
-  "pair",
-  "two-pair",
-  "three-of-a-kind",
-  "straight",
-  "flush",
-  "full-house",
-  "four-of-a-kind",
-  "straight-flush",
-  "five-of-a-kind",
-];
-
+/** A maximal gap-free run of two or more placed blocks, in cell order along its axis. */
 export type Line = {
   axis: Axis;
+  cells: readonly Cell[];
   blocks: readonly CardBlock[];
 };
 
-export type LineScore = {
-  line: Line;
+export type LineEvaluation = {
   hand: HandType;
-  score: number;
+  /** Ids of the blocks whose points count; kickers are left out. */
+  contributingIds: readonly string[];
+  points: number;
+};
+
+export type ScoredLine = LineEvaluation & {
+  line: Line;
+  blockIds: readonly string[];
 };
 
 const axes: readonly Axis[] = ["x", "y", "z"];
 
-/** Every unbroken run of two or more placed blocks along each axis. */
-export function findLines(field: readonly PlacedBlock[]): Line[] {
+/** Every maximal line along X, then Y, then Z; each line once, starting from its lowest cell. */
+export function findScoringLines(field: readonly PlacedBlock[]): Line[] {
   const byCell = new Map(field.map((placed) => [cellKey(placed.cell), placed]));
   const lines: Line[] = [];
   for (const axis of axes) {
-    for (const placed of field) {
-      // Start a run only at its lowest cell, so each run is found once.
-      if (byCell.has(cellKey(step(placed.cell, axis, -1)))) continue;
+    const starts = field
+      .filter(({ cell }) => !byCell.has(cellKey(step(cell, axis, -1))))
+      .sort((a, b) => compareCells(a.cell, b.cell));
+    for (const start of starts) {
+      const cells: Cell[] = [];
       const blocks: CardBlock[] = [];
-      let cell: Cell = placed.cell;
+      let cell: Cell = start.cell;
       for (let next = byCell.get(cellKey(cell)); next; next = byCell.get(cellKey(cell))) {
+        cells.push(next.cell);
         blocks.push(next.block);
         cell = step(cell, axis, 1);
       }
-      if (blocks.length >= 2) lines.push({ axis, blocks });
+      if (blocks.length >= 2) lines.push({ axis, cells, blocks });
     }
   }
   return lines;
@@ -85,50 +80,87 @@ function step(cell: Cell, axis: Axis, delta: number): Cell {
   return { ...cell, [axis]: cell[axis] + delta };
 }
 
-/** The best hand a line makes; lines over five blocks use their best five cards. */
-export function evaluateLine(blocks: readonly CardBlock[]): HandType {
-  if (blocks.length <= 5) return evaluateHand(blocks);
-  let best: HandType = "high-card";
-  for (const hand of combinations(blocks, 5)) {
-    const type = evaluateHand(hand);
-    if (handRanking.indexOf(type) > handRanking.indexOf(best)) best = type;
-  }
-  return best;
+function compareCells(a: Cell, b: Cell): number {
+  return a.x - b.x || a.y - b.y || a.z - b.z;
 }
 
-/** Classify up to five cards. Straights and flushes need exactly five. */
-export function evaluateHand(blocks: readonly CardBlock[]): HandType {
-  const counts = new Map<string, number>();
-  for (const { traits } of blocks) {
-    counts.set(traits.identity.rank, (counts.get(traits.identity.rank) ?? 0) + 1);
-  }
-  const groups = [...counts.values()].sort((a, b) => b - a);
-  const five = blocks.length === 5;
-  const flush = five && new Set(blocks.map((b) => b.traits.identity.suit.name)).size === 1;
-  const straight = five && groups.length === 5 && isStraight(blocks);
-
-  if (groups[0] >= 5) return "five-of-a-kind";
-  if (straight && flush) return "straight-flush";
-  if (groups[0] === 4) return "four-of-a-kind";
-  if (groups[0] === 3 && groups[1] === 2) return "full-house";
-  if (flush) return "flush";
-  if (straight) return "straight";
-  if (groups[0] === 3) return "three-of-a-kind";
-  if (groups[0] === 2 && groups[1] === 2) return "two-pair";
-  if (groups[0] === 2) return "pair";
-  return "high-card";
+/** The numeric base score of one line. Deterministic; never changes any total. */
+export function scoreLine(blocks: readonly CardBlock[]): number {
+  return evaluateLine(blocks).points;
 }
 
 /**
- * Aces count high or low; straights do not wrap (K-A-2 is not a straight).
- * This is a provisional answer to open question 10 in doc/game.md.
+ * Best hand for a line. Lines of 0 or 1 block score 0. A line of 6+ takes the five-card
+ * subset with the highest points; on a tie the stronger hand type wins, then the first
+ * subset in line order (a provisional rule to confirm, see doc/game.md).
  */
+export function evaluateLine(blocks: readonly CardBlock[]): LineEvaluation {
+  if (blocks.length < 2) return { hand: "high-card", contributingIds: [], points: 0 };
+  if (blocks.length <= 5) return evaluateHand(blocks);
+  let best: LineEvaluation | null = null;
+  for (const subset of combinations(blocks, 5)) {
+    const candidate = evaluateHand(subset);
+    if (!best || isBetter(candidate, best)) best = candidate;
+  }
+  return best!;
+}
+
+function isBetter(a: LineEvaluation, b: LineEvaluation): boolean {
+  if (a.points !== b.points) return a.points > b.points;
+  return handOrder.indexOf(a.hand) > handOrder.indexOf(b.hand);
+}
+
+const handOrder = Object.keys(handMultipliers) as HandType[];
+
+/** Classify two to five cards and total the points of the cards that count. */
+export function evaluateHand(blocks: readonly CardBlock[]): LineEvaluation {
+  const groups = rankGroups(blocks);
+  const sizes = groups.map((group) => group.length);
+  const five = blocks.length === 5;
+  const flush = five && new Set(blocks.map((b) => b.traits.identity.suit.name)).size === 1;
+  const straight = five && sizes.length === 5 && isStraight(blocks);
+
+  const result = (hand: HandType, counted: readonly CardBlock[]): LineEvaluation => ({
+    hand,
+    contributingIds: counted.map(({ id }) => id),
+    points: counted.reduce((sum, block) => sum + scorableValue(block), 0) * handMultipliers[hand],
+  });
+
+  if (straight && flush) return result("straight-flush", blocks);
+  if (sizes[0] === 4) return result("four-of-a-kind", groups[0]);
+  if (sizes[0] === 3 && sizes[1] === 2) return result("full-house", blocks);
+  if (flush) return result("flush", blocks);
+  if (straight) return result("straight", blocks);
+  if (sizes[0] === 3) return result("three-of-a-kind", groups[0]);
+  if (sizes[0] === 2 && sizes[1] === 2) return result("two-pair", [...groups[0], ...groups[1]]);
+  if (sizes[0] === 2) return result("pair", groups[0]);
+  return result("high-card", [highest(blocks)]);
+}
+
+/** Cards grouped by rank, largest group first, then highest rank first. */
+function rankGroups(blocks: readonly CardBlock[]): CardBlock[][] {
+  const byRank = new Map<string, CardBlock[]>();
+  for (const block of blocks) {
+    const rank = block.traits.identity.rank;
+    byRank.set(rank, [...(byRank.get(rank) ?? []), block]);
+  }
+  return [...byRank.values()].sort(
+    (a, b) =>
+      b.length - a.length ||
+      rankValue(b[0].traits.identity.rank) - rankValue(a[0].traits.identity.rank),
+  );
+}
+
+function highest(blocks: readonly CardBlock[]): CardBlock {
+  return blocks.reduce((best, block) =>
+    scorableValue(block) > scorableValue(best) ? block : best,
+  );
+}
+
+/** Ace is high only (10-J-Q-K-A); whether A-2-3-4-5 counts is still an open question. */
 function isStraight(blocks: readonly CardBlock[]): boolean {
-  const values = blocks.map((b) => ranks.indexOf(b.traits.identity.rank)).sort((a, b) => a - b);
-  const consecutive = (list: number[]) => list.every((v, i) => i === 0 || v === list[i - 1] + 1);
-  if (consecutive(values)) return true;
-  // Ace-high: treat the ace (index 0) as 13.
-  return values[0] === 0 && consecutive([...values.slice(1), 13]);
+  const values = blocks.map((b) => rankValue(b.traits.identity.rank)).sort((a, b) => a - b);
+  return values.every((value, index) => index === 0 || value === values[index - 1] + 1);
 }
 
 function* combinations<T>(items: readonly T[], size: number, start = 0): Generator<T[]> {
@@ -141,10 +173,16 @@ function* combinations<T>(items: readonly T[], size: number, start = 0): Generat
   }
 }
 
-/** Score every line on the field, as happens after each play. */
-export function scoreField(field: readonly PlacedBlock[]): LineScore[] {
-  return findLines(field).map((line) => {
-    const hand = evaluateLine(line.blocks);
-    return { line, hand, score: handBaseScores[hand] };
-  });
+/** Score every line, as happens after each play, in discovery order. */
+export function scoreField(field: readonly PlacedBlock[]): ScoredLine[] {
+  return findScoringLines(field).map((line) => ({
+    line,
+    blockIds: line.blocks.map(({ id }) => id),
+    ...evaluateLine(line.blocks),
+  }));
+}
+
+/** Positive-scoring lines, lowest first so the strongest plays last; ties keep discovery order. */
+export function presentationOrder(lines: readonly ScoredLine[]): ScoredLine[] {
+  return lines.filter(({ points }) => points > 0).sort((a, b) => a.points - b.points);
 }

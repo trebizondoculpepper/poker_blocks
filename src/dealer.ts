@@ -74,7 +74,7 @@ export const baseDealer: Dealer = {
     const cell = this.placementFor(state, action.targetId, action.face);
     if (!block || !cell) return null;
     const field = [...state.field, { block, cell }];
-    const gained = scoreField(field).reduce((total, { score }) => total + score, 0);
+    const gained = scoreField(field).reduce((total, { points }) => total + points, 0);
     return {
       ...state,
       field,

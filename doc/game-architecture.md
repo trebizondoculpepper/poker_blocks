@@ -83,9 +83,11 @@ A discarded hand cube dissolves with the same shader over one second before its 
 
 ## Line scoring
 
-`src/scoring.ts` finds every unbroken run of two or more placed blocks along each axis and classifies it as a poker hand, using the best five cards for lines longer than five. After each successful play the base dealer scores every line on the field and adds the sum to the running total. `roundOutcome` reports the round as won once the total reaches the target and lost when moves run out short of it; the dealer then refuses further plays and discards. When the placed card lands, the scene presents each scoring line from lowest to highest: the reusable `tintRow` effect flashes its blocks gold, the `score.magnitude.*` sound for its points plays (`src/score-presentation.ts`), and its points are added to the displayed score. The round result and its sound follow the last line.
+`src/scoring.ts` holds pure scoring primitives with no UI, sound or state changes. `findScoringLines` returns every maximal gap-free run of two or more placed blocks along X, then Y, then Z, with its cells and blocks in cell order. `scoreLine` returns one line's numeric score, and `evaluateLine` adds the hand type and the ids of the cards that counted. Card points come from the configured `scorable` trait (`src/traits/scorable.ts`), never from the block type. `scoreField` scores every line, and `presentationOrder` drops zero-point lines and sorts the rest lowest first.
 
-Two choices here are provisional answers to open questions in `doc/game.md`: each hand type scores a fixed base value from `handBaseScores` (the scoring formula is still undecided), and aces count high or low in a straight with no wrap-around.
+After each successful play the base dealer adds the points of every line on the field to the running total. `roundOutcome` reports the round as won once the total reaches the target and lost when moves run out short of it; the dealer then refuses further plays and discards. The formula and its provisional edge rules are in `doc/game.md`.
+
+When the placed card lands, the scene presents each scoring line from lowest to highest: the reusable `tintRow` effect flashes its blocks gold, the `score.magnitude.*` sound for its points plays (`src/score-presentation.ts`), and its points are added to the displayed score. The round result and its sound follow the last line.
 
 ## Architecture to discuss
 

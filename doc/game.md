@@ -83,9 +83,31 @@ Because the deck can be modified, hands that cannot happen in real poker are all
 
 ### Hand value
 
-The scoring formula is still being designed. It will have three parts:
+A line scores **the sum of the points of the cards that make its hand, times the hand's multiplier**. Each card's points come from its configured `scorable` trait: 2–10 score their printed number, J=11, Q=12, K=13 and A=14. Kickers do not count, except that a straight, flush, full house or straight flush counts all five cards. A line of 0 or 1 block scores 0.
 
-1. **Base score:** each hand type has a base score, and this can be upgraded during a run.
+| Hand            | Counted cards  | Multiplier |
+| --------------- | -------------- | ---------: |
+| High card       | Highest one    |          1 |
+| Pair            | Matching two   |          2 |
+| Two pair        | Both pairs     |          2 |
+| Three of a kind | Matching three |          3 |
+| Straight        | All five       |          3 |
+| Flush           | All five       |          4 |
+| Full house      | All five       |          5 |
+| Four of a kind  | Matching four  |          7 |
+| Straight flush  | All five       |          9 |
+
+For example, a pair of sevens scores `(7+7)×2 = 28` and three sevens score `(7+7+7)×3 = 63`. Scores generally, but not strictly, follow the poker ranking: a high pair can outscore a low three of a kind. The multipliers are provisional for playtesting.
+
+Provisional rules to confirm in review:
+
+- **Long lines:** a line of 6 or more scores the five-card subset with the highest points. On a tie, the stronger hand type wins, then the first subset in line order.
+- **Aces in straights:** aces are high only (10-J-Q-K-A). Whether A-2-3-4-5 also counts is open question 10.
+- **Five of a kind** and other hands that need a modified deck are not scored yet.
+
+Later this formula will be extended in three ways:
+
+1. **Upgrades:** a hand type's multiplier or base can be upgraded during a run.
 2. **Materials:** each card in the scoring hand can have a material that changes the hand's score.
 3. **Modifier blocks:** held or placed modifiers can change scoring and play.
 
@@ -119,7 +141,7 @@ The shop sells **blocks**, which are added to the deck. These can be card blocks
 
 ## Open questions
 
-1. **Scoring formula:** how base score, materials and modifiers combine (for example, additive and multiplicative parts, and their order).
+1. **Scoring formula:** how materials, upgrades and modifiers combine with the base line score (for example, additive and multiplicative parts, and their order).
 2. **Applying upgrades and materials:** the shop sells only blocks, so how hand-type upgrades and card materials are gained or applied is still undecided.
 3. **Material list:** which materials exist and what each one does.
 4. **New hands:** the names, ranking and values of hands that need a modified deck.

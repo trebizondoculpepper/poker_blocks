@@ -1,5 +1,6 @@
 import { faces, type AttachableTrait } from "./traits/attachable";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
+import { scorable, type ScorableTrait } from "./traits/scorable";
 
 export const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"] as const;
 
@@ -22,6 +23,7 @@ export type CardBlock = {
     selectable?: Record<string, never>;
     attachable?: AttachableTrait;
     inspectable?: InspectableTrait;
+    scorable?: ScorableTrait;
   };
 };
 
@@ -33,6 +35,7 @@ export const standardDeck: readonly CardBlock[] = suits.flatMap((suit) =>
       selectable: {},
       attachable: { faces },
       inspectable: inspectable(cardName({ rank, suit })),
+      scorable: scorable(rankValue(rank)),
     },
   })),
 );
@@ -45,4 +48,10 @@ export function cardName(identity: IdentityTrait): string {
     K: "king",
   };
   return `${rankNames[identity.rank] ?? identity.rank} of ${identity.suit.name}`;
+}
+
+/** Standard base points: 2–10 as printed, J=11, Q=12, K=13, A=14. */
+export function rankValue(rank: IdentityTrait["rank"]): number {
+  const faces: Partial<Record<IdentityTrait["rank"], number>> = { J: 11, Q: 12, K: 13, A: 14 };
+  return faces[rank] ?? Number(rank);
 }

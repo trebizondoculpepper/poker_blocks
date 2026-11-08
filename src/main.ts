@@ -3,8 +3,8 @@ import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock, type IdentityTrait } from "./cards";
 import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
 import { dealerRegistry, roundOutcome } from "./dealer";
-import { scoreField, type LineScore } from "./scoring";
-import { magnitudeSfxFor, presentationOrder } from "./score-presentation";
+import { presentationOrder, scoreField, type ScoredLine } from "./scoring";
+import { magnitudeSfxFor } from "./score-presentation";
 
 import { GameSession } from "./game-session";
 import { tweenValue } from "./easing";
@@ -272,7 +272,7 @@ const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
 // The score shown lags the state until the placed card lands.
 let shownScore = game.state.round.score;
 /** One scoring line waiting to be shown: tint its row, play its sound, add its points. */
-type ScoreStep = { at: number; line: LineScore };
+type ScoreStep = { at: number; line: ScoredLine };
 const lineStepMs = 320;
 const tintSeconds = 0.6;
 const tintColor = new THREE.Color(0xffd36b);
@@ -690,9 +690,9 @@ function updateScoring(now: number): void {
   while (scoreSteps.length > 0 && scoreSteps[0].at <= now) {
     const { line } = scoreSteps.shift()!;
     tintRow(line.line.blocks, now);
-    const sound = magnitudeSfxFor(line.score);
+    const sound = magnitudeSfxFor(line.points);
     if (sound) playSfx(sound, { jitter: 0 });
-    shownScore += line.score;
+    shownScore += line.points;
     updateHud();
   }
   if (outcomeAt !== null && outcomeAt <= now) {

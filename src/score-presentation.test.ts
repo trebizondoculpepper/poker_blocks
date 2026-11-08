@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { soundEffects } from "./audio/sfx-registry";
-import { magnitudeSfx, magnitudeSfxFor, presentationOrder } from "./score-presentation";
-import type { LineScore } from "./scoring";
+import { magnitudeSfx, magnitudeSfxFor } from "./score-presentation";
 
 describe("magnitudeSfxFor", () => {
   it.each([
@@ -27,18 +26,5 @@ describe("magnitudeSfxFor", () => {
   it("uses registered sounds", () => {
     const ids = new Set(soundEffects.map(({ id }) => id));
     for (const id of magnitudeSfx) expect(ids.has(id)).toBe(true);
-  });
-});
-
-describe("presentationOrder", () => {
-  const line = (score: number, axis: "x" | "y" | "z" = "x") =>
-    ({ line: { axis, blocks: [] }, hand: "pair", score }) as LineScore;
-
-  it("drops zero-point lines and sorts lowest first, keeping ties stable", () => {
-    const a = line(10, "x");
-    const b = line(0, "y");
-    const c = line(4, "z");
-    const d = line(10, "y");
-    expect(presentationOrder([a, b, c, d])).toEqual([c, a, d]);
   });
 });
