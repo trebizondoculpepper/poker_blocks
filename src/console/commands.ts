@@ -171,7 +171,7 @@ export const COMMANDS: readonly ConsoleCommand[] = [
   {
     name: "reset",
     usage: "[room]",
-    help: "start the current room afresh, or open a dev room with a fresh run: reset dev2",
+    help: "restart the current room (rerolls dev2 passives), or open a fresh dev room: reset dev2",
     complete: (host, args) => (args.length ? [] : host.rooms()),
     run(host, [room]) {
       const target = room ? room.toLowerCase() : host.room();

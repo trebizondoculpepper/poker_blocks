@@ -13,19 +13,19 @@ import { inspectable } from "./traits/inspectable";
 
 const block = (id: string, traitId: string): PassiveBlock => ({
   id,
-  definitionId: "do-nothing",
+  definitionId: "double-line",
   traits: { passive: { traitId }, inspectable: inspectable(id) },
 });
 
 describe("passive rack and events", () => {
-  it("keeps the Do Nothing block in state without changing plays", () => {
+  it("keeps an installed passive in state across plays", () => {
     const game = new GameSession(
       dealerRegistry,
       sandboxSessionConfig(demoSessionConfig),
       standardDeck,
       () => 0,
     );
-    const passive = createPassiveBlock("do-nothing", "passive.1");
+    const passive = createPassiveBlock("double-line", "passive.1");
     expect(game.installPassive(passive)).toBe(true);
     expect(game.installPassive(passive)).toBe(false);
     expect(game.state.passiveRack).toEqual([passive]);

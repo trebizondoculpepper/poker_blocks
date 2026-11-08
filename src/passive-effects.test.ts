@@ -79,9 +79,11 @@ describe("configured passive effects", () => {
     const picked = randomPassiveDefinitions(2, () => 0);
     expect(picked).toHaveLength(2);
     expect(picked[0].id).not.toBe(picked[1].id);
+    expect(picked.every(({ id }) => id !== "do-nothing")).toBe(true);
+    expect(randomPassiveDefinitions(20, () => 0).map(({ id }) => id)).not.toContain("do-nothing");
   });
 
-  it("upgrades an older one-passive save without replacing its existing block", () => {
+  it("replaces a retired passive from an older save with two active blocks", () => {
     const game = new GameSession(
       dealerRegistry,
       sandboxSessionConfig(demoSessionConfig),
@@ -100,8 +102,11 @@ describe("configured passive effects", () => {
     restored.fillPassiveRack(2);
     restored.fillPassiveRack(2);
     expect(restored.state.passiveRack).toHaveLength(2);
-    expect(restored.state.passiveRack[0]).toEqual(original);
-    expect(restored.state.passiveRack[1].definitionId).not.toBe(original.definitionId);
+    expect(restored.state.passiveRack.map(({ definitionId }) => definitionId)).toEqual([
+      "double-line",
+      "quad-line",
+    ]);
+    expect(restored.state.hand).toEqual(game.state.hand);
   });
 
   it("uses the same modified lines for the stage total and presentation", () => {

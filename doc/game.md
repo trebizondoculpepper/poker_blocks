@@ -175,7 +175,7 @@ The rack is separate from the hand and field. Passives are not discardable. Drag
 
 The separate `?room=dev2` sandbox reuses the endless-play session configuration from `dev1`. It deals two distinct passives from the roster below and gives standard cards a mix of gameplay materials. The rack and current run survive a reload. Each passive has configured rule, appearance, rack-residency, and inspection traits. Shop acquisition, selling, rack capacity rules, and one-use passives remain future work. `dev0` and `dev1` keep their existing purposes.
 
-Add `&restart=true` to any dev-room URL to start a fresh run on that load. The parameter is then removed from the address so later reloads resume normally. An older `dev2` save with only one passive keeps that block and receives a second, different one when loaded.
+Enter `reset` in the developer console to restart the current dev room in place. In `dev2`, this draws two new, distinct passives. Add `&restart=true` to a dev-room URL for the same fresh start on load; the parameter is then removed so later reloads resume normally. An older `dev2` save with the retired Do Nothing block replaces it with active passives while retaining the card run.
 
 ### First dev2 passive set
 
@@ -185,7 +185,6 @@ The reusable trait configurations, trigger timing, and visual design for each bl
 
 | Passive                           | Trigger and effect                                                                                                                                                                                                                                       |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Do Nothing**                    | Has no subscriptions or effect.                                                                                                                                                                                                                          |
 | **×2**                            | Double each line's working score before that line is finalized.                                                                                                                                                                                          |
 | **×4**                            | Multiply each line's working score by four using the same trait as ×2 with a different factor.                                                                                                                                                           |
 | **Carnivore**                     | Double each contributing meat block's base value before calculating its line score.                                                                                                                                                                      |

@@ -8,6 +8,7 @@ import { stageKinds, type SessionConfig, type StageKind } from "./session-config
 import {
   createPassiveBlock,
   PassiveEventQueue,
+  passiveDefinitions,
   randomPassiveDefinitions,
   type PassiveBlock,
 } from "./passives";
@@ -134,8 +135,15 @@ export class GameSession {
     return true;
   }
 
-  /** Fill empty rack slots from unowned definitions, keeping existing blocks in order. */
+  /** Retire legacy definitions, then fill empty slots while keeping active blocks in order. */
   fillPassiveRack(targetSize: number): void {
+    const active = this.currentState.passiveRack.filter(
+      ({ definitionId }) => !passiveDefinitions.get(definitionId).retired,
+    );
+    if (active.length !== this.currentState.passiveRack.length) {
+      this.currentState = { ...this.currentState, passiveRack: active };
+      this.passiveEvents.syncRack(active);
+    }
     const missing = Math.max(0, targetSize - this.currentState.passiveRack.length);
     const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
     for (const definition of randomPassiveDefinitions(missing, this.random, owned)) {

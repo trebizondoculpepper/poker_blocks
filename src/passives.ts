@@ -46,6 +46,8 @@ export type PassiveDefinition = {
   traitId: string;
   palette: { face: string; ink: string; edge: string };
   rules: readonly PassiveRule[];
+  /** Kept only to restore old saves; excluded from new draws. */
+  retired?: boolean;
 };
 
 export const passiveTraits = new Registry<PassiveTraitDefinition>("passive trait");
@@ -66,6 +68,7 @@ const definitions: PassiveDefinition[] = [
     traitId: "passive.event-rules",
     palette: palette("#f4f0e8", "#28313a", "#4c5158"),
     rules: [],
+    retired: true,
   },
   {
     id: "double-line",
@@ -267,7 +270,7 @@ export function randomPassiveDefinitions(
 ): PassiveDefinition[] {
   const available = passiveDefinitions
     .names()
-    .filter((name) => !excluded.includes(name))
+    .filter((name) => !excluded.includes(name) && !passiveDefinitions.get(name).retired)
     .map((name) => passiveDefinitions.get(name));
   const picked: PassiveDefinition[] = [];
   while (picked.length < count && available.length) {

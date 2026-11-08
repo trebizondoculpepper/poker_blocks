@@ -1347,13 +1347,13 @@ createConsole({
   room: () => (roomName === "dev" ? "dev0" : devRooms.includes(roomName ?? "") ? roomName : null),
   rooms: () => devRooms,
   resetRoom(room) {
-    if (!room) {
+    const currentRoom = roomName === "dev" ? "dev0" : roomName;
+    if (!room || room === currentRoom) {
       startRun(newSession());
       menus.closeAll();
       return;
     }
-    // Dev rooms restart through their own URL (?room=...&restart=true), which skips the
-    // saved run and starts afresh.
+    // Switching to a different dev room uses its one-shot restart URL.
     const url = new URL(window.location.href);
     url.searchParams.set("room", room);
     url.searchParams.set("restart", "true");
