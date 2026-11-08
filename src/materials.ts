@@ -12,6 +12,7 @@ export const blockMaterials = [
   "terracotta",
   "ice",
   "meat",
+  "fire",
 ] as const;
 export type BlockMaterial = (typeof blockMaterials)[number];
 
@@ -20,11 +21,12 @@ export const materialNames: Record<BlockMaterial, string> = {
   wood: "Wood",
   steel: "Steel",
   glass: "Glass",
-  prismatic: "Prismatic Glass",
+  prismatic: "Prismatic Crystal",
   gold: "Gold",
   terracotta: "Terracotta",
   ice: "Ice",
   meat: "Meat",
+  fire: "Fire",
 };
 
 export function materialOf(block: CardBlock): BlockMaterial {

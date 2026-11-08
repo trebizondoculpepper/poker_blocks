@@ -146,7 +146,8 @@ The playable `?room=dev0` experiment (formerly `?room=dev`) assigns a random vis
 - **Wood:** branded rank and suit, with red suits inked red.
 - **Steel:** brushed steel plates, riveted at the corners; each face is brushed in its own direction and its anisotropic reflections catch the light differently as the block turns.
 - **Glass:** six thin stained-glass panes in a dark metal came; slightly refractive on the table.
-- **Prismatic glass:** a solid, chamfered square-cut crystal; strongly refractive with dispersion and an iridescent sheen.
+- **Prismatic crystal:** a solid, chamfered square-cut crystal; strongly refractive with dispersion and an iridescent sheen.
+- **Fire:** an open iron frame with a raymarched, volumetric flame burning just below the centre; the rank and suit are iron lettering in the frame.
 - **Gold:** warm reflective foil and engraved edges.
 - **Terracotta:** rough fired clay with impressed markings.
 - **Ice:** frosted glass-like blue with surface condensation.

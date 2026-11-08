@@ -3,6 +3,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import type { IdentityTrait } from "../cards";
 import type { BlockMaterial } from "../materials";
 import { createCrystalFire } from "./crystal-fire";
+import { createFireCore } from "./fire-core";
 
 export type BlockAppearance = {
   geometry: THREE.BufferGeometry;
@@ -176,6 +177,24 @@ function drawGlass(g: CanvasRenderingContext2D, random: () => number): void {
   g.strokeStyle = "#4a535b";
   g.lineWidth = 2;
   g.strokeRect(3, 3, SIZE - 6, SIZE - 6);
+}
+
+/**
+ * Fire: an open iron frame, nothing in the openings. Everything left transparent here is
+ * cut away by the material, so only the bars (and the iron rank and suit) remain.
+ */
+function drawFireFrame(g: CanvasRenderingContext2D): void {
+  g.clearRect(0, 0, SIZE, SIZE);
+  g.strokeStyle = "#2b2f33";
+  g.lineWidth = 34;
+  g.strokeRect(0, 0, SIZE, SIZE);
+  // A bright bevel on the inside edge and a dark one outside, so the bars read as metal.
+  g.strokeStyle = "#7d858b";
+  g.lineWidth = 3;
+  g.strokeRect(17, 17, SIZE - 34, SIZE - 34);
+  g.strokeStyle = "#16191c";
+  g.lineWidth = 3;
+  g.strokeRect(2, 2, SIZE - 4, SIZE - 4);
 }
 
 /** Prismatic crystal: nearly clear, with faint rainbow fire; the cut does the rest. */
@@ -399,6 +418,9 @@ function faceTexture(
     case "glass":
       drawGlass(g, random);
       break;
+    case "fire":
+      drawFireFrame(g);
+      break;
     case "prismatic":
       drawPrismatic(g, random);
       break;
@@ -422,17 +444,21 @@ function faceTexture(
   g.shadowColor = dark ? "#28170caa" : "#ffffffbb";
   g.shadowBlur = dark ? 5 : 3;
   g.fillStyle =
-    identity.suit.color === "#bd3651"
-      ? kind === "wood"
-        ? "#a32536"
-        : kind === "steel"
-          ? "#a3202f"
-          : "#bd3651"
-      : dark
-        ? kind === "steel" || kind === "meat"
-          ? "#f4e9db"
-          : "#422716"
-        : "#182d4a";
+    kind === "fire"
+      ? identity.suit.color === "#bd3651"
+        ? "#6e1a1a"
+        : "#24282c"
+      : identity.suit.color === "#bd3651"
+        ? kind === "wood"
+          ? "#a32536"
+          : kind === "steel"
+            ? "#a3202f"
+            : "#bd3651"
+        : dark
+          ? kind === "steel" || kind === "meat"
+            ? "#f4e9db"
+            : "#422716"
+          : "#182d4a";
   g.font = "bold 80px system-ui, sans-serif";
   g.fillText(identity.rank, 128, 100);
   g.font = "94px Georgia, serif";
@@ -705,6 +731,7 @@ const patternRelief: Record<BlockMaterial, number> = {
   terracotta: 3,
   ice: 1.5,
   meat: 2,
+  fire: 0,
 };
 
 function surface(
@@ -765,6 +792,7 @@ const edgeColors: Record<BlockMaterial, number> = {
   steel: 0x303a40,
   // The came between panes: dark metal.
   glass: 0x2a2f34,
+  fire: 0x2a2f34,
   // Facet lines of the cut stone.
   prismatic: 0xf2e8ff,
   gold: 0x9c661e,
@@ -854,6 +882,32 @@ export function createBlockAppearance(
       edgeColor,
       edgeOpacity,
       ...(kind === "prismatic" ? { extras: [createCrystalFire(geometry)] } : {}),
+    };
+  }
+
+  if (kind === "fire") {
+    // An open iron frame with the fire burning inside: the openings are cut away
+    // (alphaTest) and both sides drawn, so the far bars show through.
+    const texture = faceTexture(identity, kind, false);
+    const height = glassHeight();
+    const iron = new THREE.MeshStandardMaterial({
+      map: texture,
+      bumpMap: height,
+      bumpScale: 2.5,
+      metalness: 0.75,
+      roughness: 0.5,
+      envMap: glassEnvironment,
+      envMapIntensity: 0.8,
+      alphaTest: 0.5,
+      side: THREE.DoubleSide,
+    });
+    return {
+      geometry,
+      textures: [texture, height],
+      materials: Array.from({ length: 6 }, () => iron),
+      edgeColor,
+      edgeOpacity,
+      extras: [createFireCore(size)],
     };
   }
 
