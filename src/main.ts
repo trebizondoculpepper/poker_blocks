@@ -1,26 +1,62 @@
 import "./style.css";
 import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock, type IdentityTrait } from "./cards";
+import { refillHand } from "./dealer";
 import { drawCards, startingHandSize } from "./deal";
+import { tweenValue } from "./easing";
+import { randomRock, rockAngle, type Rock } from "./motion";
+import {
+  attachmentCell,
+  cellKey,
+  faceFromNormal,
+  faceNormal,
+  type Cell,
+  type Face,
+} from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
+app.innerHTML = '<main class="scene" role="application" aria-label="Poker Blocks"></main>';
 
-const firstDraw = drawCards(standardDeck, 1);
-const featured = firstDraw.cards[0];
-const { deck, cards: hand } = drawCards(firstDraw.deck, startingHandSize);
-const names = hand.map((block) => cardName(block.traits.identity)).join(", ");
-app.innerHTML = `
-  <main class="scene" role="img" aria-label="A large rotating ${cardName(featured.traits.identity)} block and a five-card hand at the top: ${names}. ${deck.length} cards remain in the deck."></main>
-`;
+const host = app.querySelector<HTMLDivElement>(".scene")!;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111726);
+const handScene = new THREE.Scene();
+const assembly = new THREE.Group();
+scene.add(assembly);
+
+const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 1000);
+camera.position.set(0, 3, 8);
+camera.lookAt(0, 0, 0);
+const handCamera = new THREE.OrthographicCamera(-4, 4, 4, -4, 0.1, 100);
+handCamera.position.set(0, 3, 8);
+handCamera.lookAt(0, 0, 0);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.autoClear = false;
+host.append(renderer.domElement);
+
+for (const targetScene of [scene, handScene]) {
+  targetScene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+  sun.position.set(-3, 6, 7);
+  targetScene.add(sun);
+}
+
+function render(): void {
+  renderer.clear();
+  renderer.render(scene, camera);
+  renderer.clearDepth();
+  renderer.render(handScene, handCamera);
+}
 
 function makeFaceTexture(identity: IdentityTrait): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 512;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas 2D is unavailable");
-
   context.fillStyle = "#f6f0e3";
   context.fillRect(0, 0, 512, 512);
   context.strokeStyle = "#b8b0a2";
@@ -33,42 +69,29 @@ function makeFaceTexture(identity: IdentityTrait): THREE.CanvasTexture {
   context.fillText(identity.rank, 256, 205);
   context.font = "188px Georgia, serif";
   context.fillText(identity.suit.symbol, 256, 360);
-
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
   return texture;
 }
 
-const host = app.querySelector<HTMLDivElement>(".scene")!;
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111726);
-
-const camera = new THREE.OrthographicCamera(-4, 4, 4, -4, 0.1, 100);
-camera.position.set(0, 3, 8);
-camera.lookAt(0, 0, 0);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-host.append(renderer.domElement);
-
-scene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
-const sun = new THREE.DirectionalLight(0xffffff, 2.4);
-sun.position.set(-3, 6, 7);
-scene.add(sun);
-
 type RenderedBlock = {
   block: CardBlock;
   cube: THREE.Mesh;
+  geometry: THREE.BoxGeometry;
+  texture: THREE.CanvasTexture;
   material: THREE.MeshStandardMaterial;
+  edgeGeometry: THREE.EdgesGeometry;
   edgeMaterial: THREE.LineBasicMaterial;
+  location: "board" | "hand";
+  cell: Cell | null;
   baseY: number;
-  location: "featured" | "hand";
+  rock: Rock | null;
 };
 
-const resources: { dispose(): void }[] = [];
 const renderedBlocks: RenderedBlock[] = [];
+const placed = new Map<string, RenderedBlock>();
+const cubeSize = 2.4;
 function createCube(
   block: CardBlock,
   size: number,
@@ -81,66 +104,390 @@ function createCube(
   const edgeGeometry = new THREE.EdgesGeometry(geometry);
   const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6b6c73 });
   cube.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
-  scene.add(cube);
-  resources.push(geometry, texture, material, edgeGeometry, edgeMaterial);
-  const rendered = { block, cube, material, edgeMaterial, baseY: 0, location };
+  (location === "board" ? assembly : handScene).add(cube);
+  const rendered = {
+    block,
+    cube,
+    geometry,
+    texture,
+    material,
+    edgeGeometry,
+    edgeMaterial,
+    location,
+    cell: null,
+    baseY: 0,
+    rock: location === "hand" ? randomRock() : null,
+  } satisfies RenderedBlock;
   renderedBlocks.push(rendered);
   return rendered;
 }
 
-const featuredBlock = createCube(featured, 2.4, "featured");
-featuredBlock.baseY = -0.45;
-const handBlocks = hand.map((block) => createCube(block, 0.8, "hand"));
+function disposeCube(rendered: RenderedBlock): void {
+  rendered.cube.removeFromParent();
+  renderedBlocks.splice(renderedBlocks.indexOf(rendered), 1);
+  rendered.geometry.dispose();
+  rendered.texture.dispose();
+  rendered.material.dispose();
+  rendered.edgeGeometry.dispose();
+  rendered.edgeMaterial.dispose();
+}
+
+function addToBoard(block: CardBlock, cell: Cell): RenderedBlock {
+  const rendered = createCube(block, cubeSize, "board");
+  rendered.cell = cell;
+  rendered.baseY = cell.y * cubeSize - 0.45;
+  rendered.cube.position.set(cell.x * cubeSize, rendered.baseY, cell.z * cubeSize);
+  placed.set(cellKey(cell), rendered);
+  return rendered;
+}
+
+const cameraDirection = new THREE.Vector3(0, 3, 8).normalize();
+const initialCameraDistance = Math.hypot(3, 8);
+let cameraDistance = initialCameraDistance;
+const cameraTarget = new THREE.Vector3();
+type CameraMove = {
+  startAt: number;
+  fromDistance: number;
+  toDistance: number;
+  fromTarget: THREE.Vector3;
+  toTarget: THREE.Vector3;
+};
+let cameraMove: CameraMove | null = null;
+
+function desiredCamera(): { distance: number; target: THREE.Vector3 } {
+  const cells = [...placed.values()].map(({ cell }) => cell!);
+  const min = {
+    x: Math.min(...cells.map(({ x }) => x)),
+    y: Math.min(...cells.map(({ y }) => y)),
+    z: Math.min(...cells.map(({ z }) => z)),
+  };
+  const max = {
+    x: Math.max(...cells.map(({ x }) => x)),
+    y: Math.max(...cells.map(({ y }) => y)),
+    z: Math.max(...cells.map(({ z }) => z)),
+  };
+  const horizontalRadius =
+    Math.hypot(
+      Math.max(Math.abs(min.x - 0.5), Math.abs(max.x + 0.5)),
+      Math.max(Math.abs(min.z - 0.5), Math.abs(max.z + 0.5)),
+    ) * cubeSize;
+  const middleY = ((min.y + max.y) / 2) * cubeSize - 0.45;
+  const verticalRadius = ((max.y - min.y + 1) * cubeSize) / 2;
+  const radius = Math.hypot(horizontalRadius, verticalRadius);
+  const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
+  const limitingFov = Math.min(verticalFov, horizontalFov);
+  return {
+    distance: Math.max(initialCameraDistance, (radius / Math.sin(limitingFov / 2)) * 1.2),
+    target: new THREE.Vector3(0, middleY + 0.5, 0),
+  };
+}
+
+function applyCamera(): void {
+  camera.position.copy(cameraTarget).addScaledVector(cameraDirection, cameraDistance);
+  camera.lookAt(cameraTarget);
+}
+
+function scheduleCameraMove(): void {
+  const desired = desiredCamera();
+  cameraMove = {
+    startAt: performance.now() + 1000,
+    fromDistance: cameraDistance,
+    toDistance: desired.distance,
+    fromTarget: cameraTarget.clone(),
+    toTarget: desired.target,
+  };
+}
+
+function updateCamera(now: number): void {
+  if (!cameraMove || now < cameraMove.startAt) return;
+  const elapsed = (now - cameraMove.startAt) / 1000;
+  cameraDistance = tweenValue(cameraMove.fromDistance, cameraMove.toDistance, elapsed, 2);
+  const progress = tweenValue(0, 1, elapsed, 2);
+  cameraTarget.lerpVectors(cameraMove.fromTarget, cameraMove.toTarget, progress);
+  applyCamera();
+  if (progress === 1) cameraMove = null;
+}
+
+const firstDraw = drawCards(standardDeck, 1);
+const secondDraw = drawCards(firstDraw.deck, startingHandSize);
+let deck = secondDraw.deck;
+let hand = secondDraw.cards;
+addToBoard(firstDraw.cards[0], { x: 0, y: 0, z: 0 });
+const handBlocks: RenderedBlock[] = hand.map((block) => createCube(block, cubeSize / 3, "hand"));
+
+const ghostGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+const ghostMaterial = new THREE.MeshBasicMaterial({
+  color: 0x65f4dd,
+  transparent: true,
+  opacity: 0.18,
+  depthWrite: false,
+});
+const ghost = new THREE.Mesh(ghostGeometry, ghostMaterial);
+ghost.visible = false;
+assembly.add(ghost);
+const ghostEdgeGeometry = new THREE.EdgesGeometry(ghostGeometry);
+const ghostEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x65f4dd });
+ghost.add(new THREE.LineSegments(ghostEdgeGeometry, ghostEdgeMaterial));
+
+const faceGeometry = new THREE.PlaneGeometry(cubeSize * 0.94, cubeSize * 0.94);
+const faceMaterial = new THREE.MeshBasicMaterial({
+  color: 0x65f4dd,
+  transparent: true,
+  opacity: 0.28,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+});
+const faceHighlight = new THREE.Mesh(faceGeometry, faceMaterial);
+faceHighlight.visible = false;
+faceHighlight.renderOrder = 10;
+assembly.add(faceHighlight);
 
 let selected: Selection = new Set();
-const showSelection = () => {
+let handBaseY = 0;
+type Candidate = { target: RenderedBlock; face: Face; cell: Cell };
+type Drag = {
+  source: RenderedBlock;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  active: boolean;
+  candidate: Candidate | null;
+  lastX: number;
+  lastY: number;
+};
+let drag: Drag | null = null;
+let suppressClickUntil = 0;
+
+function showSelection(): void {
   renderedBlocks.forEach(({ block, cube, material, edgeMaterial, baseY, location }) => {
     const active = selected.has(block.id);
     material.emissive.setHex(0xffffff);
     material.emissiveIntensity = active ? 0.16 : 0;
     edgeMaterial.color.setHex(active ? 0x65f4dd : 0x6b6c73);
-    cube.scale.setScalar(active ? (location === "hand" ? 1.08 : 1.03) : 1);
-    cube.position.y = baseY + (active ? (location === "hand" ? 0.12 : 0.06) : 0);
+    cube.scale.setScalar(active && location === "hand" ? 1.08 : 1);
+    if (!(drag?.active && drag.source.block.id === block.id)) {
+      cube.position.y = baseY + (active && location === "hand" ? 0.12 : 0);
+    }
   });
   const selectedNames = renderedBlocks
     .filter(({ block }) => selected.has(block.id))
     .map(({ block }) => cardName(block.traits.identity));
   host.setAttribute(
     "aria-label",
-    `A large rotating ${cardName(featured.traits.identity)} block and a five-card hand at the top: ${names}. ${deck.length} cards remain in the deck. Selected: ${selectedNames.join(", ") || "none"}.`,
+    `${placed.size} blocks in play. Hand: ${hand.map((block) => cardName(block.traits.identity)).join(", ")}. ${deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,
   );
-};
-showSelection();
+}
+
+function layoutHand(): void {
+  handBlocks.forEach((rendered, index) => {
+    rendered.baseY = handBaseY;
+    if (drag?.active && drag.source === rendered) return;
+    rendered.cube.position.set((index - (handBlocks.length - 1) / 2) * 1.2, handBaseY, 0);
+  });
+  showSelection();
+}
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
-const pickBlock = (event: MouseEvent | PointerEvent): RenderedBlock | undefined => {
+function pointRay(clientX: number, clientY: number, viewCamera: THREE.Camera = camera): void {
   const bounds = renderer.domElement.getBoundingClientRect();
   pointer.set(
-    ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
-    -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
+    ((clientX - bounds.left) / bounds.width) * 2 - 1,
+    -((clientY - bounds.top) / bounds.height) * 2 + 1,
   );
-  raycaster.setFromCamera(pointer, camera);
+  raycaster.setFromCamera(pointer, viewCamera);
+}
+
+function pickBlock(
+  clientX: number,
+  clientY: number,
+  candidates = renderedBlocks,
+): RenderedBlock | undefined {
+  pointRay(clientX, clientY, candidates === handBlocks ? handCamera : camera);
   const hit = raycaster.intersectObjects(
-    renderedBlocks.map(({ cube }) => cube),
+    candidates.map(({ cube }) => cube),
     false,
   )[0];
-  return renderedBlocks.find(({ cube }) => cube === hit?.object);
-};
+  return candidates.find(({ cube }) => cube === hit?.object);
+}
 
+function pickAttachment(clientX: number, clientY: number): Candidate | null {
+  const boardBlocks = [...placed.values()];
+  pointRay(clientX, clientY);
+  const hit = raycaster.intersectObjects(
+    boardBlocks.map(({ cube }) => cube),
+    false,
+  )[0];
+  if (!hit?.face) return null;
+  const target = boardBlocks.find(({ cube }) => cube === hit.object);
+  if (!target?.cell) return null;
+  const normal = hit.face.normal;
+  const face = faceFromNormal({
+    x: Math.round(normal.x),
+    y: Math.round(normal.y),
+    z: Math.round(normal.z),
+  });
+  const cell = attachmentCell(
+    target.block.traits.attachable,
+    target.cell,
+    face,
+    new Set(placed.keys()),
+  );
+  return cell ? { target, face, cell } : null;
+}
+
+function showCandidate(candidate: Candidate | null): void {
+  ghost.visible = faceHighlight.visible = Boolean(candidate);
+  if (!candidate?.target.cell) return;
+  ghost.position.set(
+    candidate.cell.x * cubeSize,
+    candidate.cell.y * cubeSize - 0.45,
+    candidate.cell.z * cubeSize,
+  );
+  const normal = faceNormal(candidate.face);
+  faceHighlight.position.set(
+    (candidate.target.cell.x + normal.x * 0.505) * cubeSize,
+    (candidate.target.cell.y + normal.y * 0.505) * cubeSize - 0.45,
+    (candidate.target.cell.z + normal.z * 0.505) * cubeSize,
+  );
+  faceHighlight.quaternion.setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1),
+    new THREE.Vector3(normal.x, normal.y, normal.z),
+  );
+}
+
+function updateCandidate(): void {
+  if (!drag?.active) return;
+  drag.candidate = pickAttachment(drag.lastX, drag.lastY);
+  showCandidate(drag.candidate);
+}
+
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -2.5);
+const dragPoint = new THREE.Vector3();
+function moveDraggedBlock(): void {
+  if (!drag?.active) return;
+  pointRay(drag.lastX, drag.lastY);
+  if (raycaster.ray.intersectPlane(dragPlane, dragPoint)) {
+    drag.source.cube.position.copy(dragPoint);
+  }
+}
+
+let spinSpeed = 0.25;
+let speedFrom = spinSpeed;
+let speedTo = spinSpeed;
+let speedChangeAt = performance.now();
+function currentSpeed(now: number): number {
+  return tweenValue(speedFrom, speedTo, (now - speedChangeAt) / 1000, 0.5);
+}
+function changeSpeed(target: number): void {
+  const now = performance.now();
+  spinSpeed = currentSpeed(now);
+  speedFrom = spinSpeed;
+  speedTo = target;
+  speedChangeAt = now;
+}
+
+function commitAttachment(source: RenderedBlock, candidate: Candidate): void {
+  const index = handBlocks.indexOf(source);
+  handBlocks.splice(index, 1);
+  hand = hand.filter((block) => block.id !== source.block.id);
+  disposeCube(source);
+  addToBoard(source.block, candidate.cell);
+  const result = refillHand(deck, hand);
+  deck = result.deck;
+  hand = result.hand;
+  result.drawn.forEach((block) => handBlocks.push(createCube(block, cubeSize / 3, "hand")));
+  scheduleCameraMove();
+  layoutHand();
+}
+
+function finishDrag(drop: boolean): void {
+  if (!drag) return;
+  const activeDrag = drag;
+  if (activeDrag.active) {
+    if (drop) updateCandidate();
+    const candidate = drop ? activeDrag.candidate : null;
+    drag = null;
+    showCandidate(null);
+    if (candidate) commitAttachment(activeDrag.source, candidate);
+    else {
+      handScene.add(activeDrag.source.cube);
+      activeDrag.source.cube.position.z = 0;
+      layoutHand();
+    }
+    changeSpeed(0.25);
+    suppressClickUntil = performance.now() + 250;
+    if (renderer.domElement.hasPointerCapture(activeDrag.pointerId)) {
+      renderer.domElement.releasePointerCapture(activeDrag.pointerId);
+    }
+  } else {
+    drag = null;
+  }
+}
+
+const onPointerDown = (event: PointerEvent) => {
+  const source = pickBlock(event.clientX, event.clientY, handBlocks);
+  if (!source?.block.traits.attachable) return;
+  drag = {
+    source,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY,
+    active: false,
+    candidate: null,
+  };
+};
+const onPointerMove = (event: PointerEvent) => {
+  if (drag?.pointerId === event.pointerId) {
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+    if (!drag.active && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
+      drag.active = true;
+      renderer.domElement.setPointerCapture(event.pointerId);
+      scene.add(drag.source.cube);
+      changeSpeed(0.025);
+    }
+    if (drag.active) {
+      moveDraggedBlock();
+      updateCandidate();
+      renderer.domElement.style.cursor = "grabbing";
+      return;
+    }
+  }
+  const hovered =
+    pickBlock(event.clientX, event.clientY, handBlocks) ??
+    pickBlock(event.clientX, event.clientY, [...placed.values()]);
+  renderer.domElement.style.cursor = hovered?.block.traits.selectable ? "pointer" : "default";
+};
+const onPointerUp = (event: PointerEvent) => {
+  if (drag?.pointerId === event.pointerId) {
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+    finishDrag(true);
+  }
+  renderer.domElement.style.cursor = "default";
+};
+const onPointerCancel = (event: PointerEvent) => {
+  if (drag?.pointerId === event.pointerId) finishDrag(false);
+  renderer.domElement.style.cursor = "default";
+};
 const onClick = (event: MouseEvent) => {
-  const target = pickBlock(event);
+  if (performance.now() < suppressClickUntil) return;
+  const target =
+    pickBlock(event.clientX, event.clientY, handBlocks) ??
+    pickBlock(event.clientX, event.clientY, [...placed.values()]);
   if (!target) return;
   selected = toggleBlockSelection(selected, target.block);
   showSelection();
 };
-const onPointerMove = (event: PointerEvent) => {
-  renderer.domElement.style.cursor = pickBlock(event)?.block.traits.selectable
-    ? "pointer"
-    : "default";
-};
-renderer.domElement.addEventListener("click", onClick);
+renderer.domElement.addEventListener("pointerdown", onPointerDown);
 renderer.domElement.addEventListener("pointermove", onPointerMove);
+renderer.domElement.addEventListener("pointerup", onPointerUp);
+renderer.domElement.addEventListener("pointercancel", onPointerCancel);
+renderer.domElement.addEventListener("click", onClick);
 
 const resize = () => {
   const { width, height } = host.getBoundingClientRect();
@@ -148,30 +495,42 @@ const resize = () => {
   const aspect = width / height;
   const halfWidth = 3.3 * Math.max(1, aspect);
   const halfHeight = 3.3 * Math.max(1, 1 / aspect);
-  camera.left = -halfWidth;
-  camera.right = halfWidth;
-  camera.top = halfHeight;
-  camera.bottom = -halfHeight;
+  camera.aspect = aspect;
   camera.updateProjectionMatrix();
-  handBlocks.forEach((rendered, index) => {
-    rendered.baseY = halfHeight - 0.75;
-    rendered.cube.position.x = (index - 2) * 1.2;
-  });
-  showSelection();
+  handCamera.left = -halfWidth;
+  handCamera.right = halfWidth;
+  handCamera.top = halfHeight;
+  handCamera.bottom = -halfHeight;
+  handCamera.updateProjectionMatrix();
+  handBaseY = halfHeight - 0.75;
+  if (!cameraMove) {
+    const desired = desiredCamera();
+    cameraDistance = desired.distance;
+    cameraTarget.copy(desired.target);
+    applyCamera();
+  }
+  layoutHand();
   renderer.setSize(width, height);
-  renderer.render(scene, camera);
+  render();
 };
-
 const observer = new ResizeObserver(resize);
 observer.observe(host);
 resize();
 
 let frame = 0;
+let lastTime = 0;
 const animate = (time: number) => {
-  renderedBlocks.forEach(({ cube }) => {
-    cube.rotation.y = time * 0.00025;
+  const delta = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
+  lastTime = time;
+  spinSpeed = currentSpeed(time);
+  assembly.rotation.y += spinSpeed * delta;
+  updateCamera(time);
+  handBlocks.forEach(({ cube, rock }) => {
+    if (!rock) return;
+    cube.rotation.z = rockAngle(rock, time / 1000);
   });
-  renderer.render(scene, camera);
+  if (drag?.active) updateCandidate();
+  render();
   frame = requestAnimationFrame(animate);
 };
 frame = requestAnimationFrame(animate);
@@ -180,9 +539,18 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     cancelAnimationFrame(frame);
     observer.disconnect();
-    renderer.domElement.removeEventListener("click", onClick);
+    renderer.domElement.removeEventListener("pointerdown", onPointerDown);
     renderer.domElement.removeEventListener("pointermove", onPointerMove);
-    resources.forEach((resource) => resource.dispose());
+    renderer.domElement.removeEventListener("pointerup", onPointerUp);
+    renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
+    renderer.domElement.removeEventListener("click", onClick);
+    renderedBlocks.slice().forEach(disposeCube);
+    ghostGeometry.dispose();
+    ghostMaterial.dispose();
+    ghostEdgeGeometry.dispose();
+    ghostEdgeMaterial.dispose();
+    faceGeometry.dispose();
+    faceMaterial.dispose();
     renderer.dispose();
   });
 }

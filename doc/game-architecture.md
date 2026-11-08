@@ -1,6 +1,6 @@
 # Game architecture notes
 
-Status: principles agreed in conversation; implementation design still open.
+Status: core principles agreed; the current drag-and-attach demo implements the initial spatial rules. The general trait event/effect design is still open.
 
 ## Game concept
 
@@ -34,6 +34,16 @@ A block with the `selectable` trait can respond to a player click or tap. The tr
 The initial visual cue is a bright edge, slight lift, modest face brightening, and a small increase in scale. The hand and center blocks can use different strengths for these cues. True bloom remains an option if a softer glow is wanted later.
 
 What an operation does to the selected cards is still to be decided.
+
+## Attachable trait and dealer
+
+The `attachable` trait lists the faces of a block that may accept another block: `north`, `south`, `east`, `west`, `up`, and `down`. Standard cards allow all six. A face can accept a dragged hand block only when its neighboring grid cell is empty. The block snaps face-to-face into that cell, leaves the hand, and becomes part of the rotating structure. Any exposed face of any placed block can be used; rotating the structure by hand is a later mission.
+
+The dealer is a rule system, rather than a block. After a successful attachment it draws from the remaining deck until the hand contains five cards, or the deck is empty. The six starting cards and all subsequent draws remain unique.
+
+When dragging starts, the structure's rotation speed eases to one-tenth of normal over half a second. On drop or cancel it eases back over half a second. Small numeric easing helpers live in `src/easing.ts` for later animations.
+
+The hand is rendered as a fixed overlay with its own camera. Only the structure uses the perspective board camera. After a block attaches, the board camera waits one second, then eases over two seconds to a distance calculated from the grid's bounding box, so the growing structure stays visible. The hand's size and position do not follow that camera move.
 
 ## Architecture to discuss
 
