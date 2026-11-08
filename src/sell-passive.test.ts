@@ -65,4 +65,23 @@ describe("selling a passive (issue #16)", () => {
     expect(snapshot.state.passiveRack.map(({ id }) => id)).toEqual(["passive.2"]);
     expect(snapshot.state.coins).toBe(game.state.coins);
   });
+
+  it("refuses a bad price policy without changing anything", () => {
+    for (const sell of [-1, 0.5, Number.NaN]) {
+      const game = withRack({ ...demoSessionConfig, passivePrices: { buy: 1, sell } });
+      const before = game.state;
+      expect(game.sellPassive("passive.1")).toBeNull();
+      expect(game.state).toBe(before);
+    }
+  });
+
+  it("waits for a won stage's rewards to be paid before selling", () => {
+    const game = withRack();
+    game.forceOutcome("won");
+    expect(game.stageRewardsPending).toBe(true);
+    expect(game.sellPassive("passive.1")).toBeNull();
+    game.claimStageRewards();
+    expect(game.stageRewardsPending).toBe(false);
+    expect(game.sellPassive("passive.1")).toBe(1);
+  });
 });

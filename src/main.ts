@@ -752,10 +752,11 @@ function showSellTarget(selling: boolean): void {
 }
 
 /** Whether a dropped passive could be sold now (not once the run is over). */
-const canSellPassives = () => game.phase !== "over" && !pendingAction;
+const canSellPassives = () => game.phase !== "over" && !pendingAction && !game.stageRewardsPending;
 
 function pickUpPassive(block: PassiveBlock, event: PointerEvent): void {
-  if (passiveDrag || drag) return;
+  // Only the primary pointer's main button picks a passive up.
+  if (passiveDrag || drag || !event.isPrimary || event.button !== 0) return;
   passiveDrag = {
     block,
     pointerId: event.pointerId,
@@ -1863,6 +1864,8 @@ const onClick = (event: MouseEvent) => {
 };
 /** Click or tap the bin: discard the selected hand blocks as one discard. */
 discardArea.addEventListener("click", () => {
+  // While it reads Sell (a passive is being dragged) the target never discards.
+  if (passiveDrag || discardArea.classList.contains("is-sell")) return;
   if (pendingAction || drag?.active || !game.inStage) return;
   const chosen = selectedHandBlocks();
   if (!chosen.length) return;

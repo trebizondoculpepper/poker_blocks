@@ -164,6 +164,12 @@ export class GameSession {
     return true;
   }
 
+  /** A stage is won but its rewards are not yet paid (see claimStageRewards). */
+  get stageRewardsPending(): boolean {
+    if (!this.inStage || roundOutcome(this.currentState) !== "won") return false;
+    return this.rewarded?.stage !== `${this.currentRound}:${this.currentPhase}`;
+  }
+
   /** What passives cost and sell for in this session. */
   get passivePrices(): PassivePrices {
     return this.config.passivePrices ?? defaultPassivePrices;
@@ -177,9 +183,14 @@ export class GameSession {
    */
   sellPassive(passiveId: string): number | null {
     if (this.currentPhase === "over") return null;
+    // A won stage's rewards are fixed first: selling a passive that pays on a stage win
+    // before the payout would quietly lose its row.
+    if (this.stageRewardsPending) return null;
     const rack = this.currentState.passiveRack;
     if (!rack.some(({ id }) => id === passiveId)) return null;
     const price = this.passivePrices.sell;
+    // A bad price policy must not corrupt the balance (a save would then not load).
+    if (!Number.isSafeInteger(price) || price < 0) return null;
     this.currentState = {
       ...this.currentState,
       passiveRack: rack.filter(({ id }) => id !== passiveId),
