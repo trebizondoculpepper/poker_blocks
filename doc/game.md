@@ -141,7 +141,7 @@ Later this formula will be extended in three ways:
 
 The default card material is **paper**. **Wood** is the next material under discussion: it should resemble a softwood block with grain running along one axis. Four side faces show lengthwise grain; the two opposite end faces have a distinct end-grain texture. Rank and suit remain readable on every face. Wood's gameplay effect is still to be decided; its position after paper does not yet imply a numerical bonus.
 
-The playable `?room=dev` experiment assigns a random visual material to each of the 52 cards at the start of a new game. Its own save preserves those assignments without affecting a normal run. The current visual prototypes are:
+The playable `?room=dev0` experiment (formerly `?room=dev`) assigns a random visual material to each of the 52 cards at the start of a new game. Its own save preserves those assignments without affecting a normal run. The `?room=dev1` materials room opens on a structure with one block of every material, attached at random, for judging the substances next to each other. The current visual prototypes are:
 
 - **Wood:** branded rank and suit, with red suits inked red.
 - **Steel:** bolted plates with light rust staining.

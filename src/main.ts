@@ -2,6 +2,7 @@ import "./style.css";
 import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock } from "./cards";
 import { makeDevDeck, materialOf } from "./materials";
+import { sampleMaterials } from "./material-sampler";
 import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
 import { dealerRegistry, roundOutcome } from "./dealer";
 import { presentationOrder, scoreField, type ScoredLine } from "./scoring";
@@ -319,9 +320,20 @@ function updateCamera(now: number): void {
 }
 
 const storage = browserStorage();
-const devRoom = new URLSearchParams(window.location.search).get("room") === "dev";
+/**
+ * Dev rooms (?room=...): dev0 is the normal game with a random material on every card;
+ * dev1 is the materials room, which starts on a structure holding one block of each
+ * material. "dev" is the old name for dev0, kept so existing links work.
+ */
+const roomName = new URLSearchParams(window.location.search).get("room");
+const materialsRoom = roomName === "dev1";
+const devRoom = roomName === "dev0" || roomName === "dev" || materialsRoom;
 const devSeedKey = "poker-blocks.dev-material-seed";
-const runSaveKey = devRoom ? "poker-blocks.dev-run" : saveKey;
+const runSaveKey = materialsRoom
+  ? "poker-blocks.dev1-run"
+  : devRoom
+    ? "poker-blocks.dev-run"
+    : saveKey;
 function newMaterialSeed(): number {
   return Math.floor(Math.random() * 4294967296);
 }
@@ -349,7 +361,11 @@ function devSeed(fresh = false): number {
   }
   return seed;
 }
-let cards: readonly CardBlock[] = devRoom ? makeDevDeck(devSeed()) : standardDeck;
+let cards: readonly CardBlock[] = materialsRoom
+  ? makeDevDeck(newMaterialSeed())
+  : devRoom
+    ? makeDevDeck(devSeed())
+    : standardDeck;
 // A fresh run sits behind the title screen until the player chooses Continue or New game.
 let game = new GameSession(dealerRegistry, demoSessionConfig, cards);
 for (const { block, cell } of game.state.field) addToBoard(block, cell);
@@ -1095,6 +1111,20 @@ function autosave(): void {
   saveRun(storage, game.snapshot(), runSaveKey);
 }
 
+/** A new run: in dev rooms with freshly shuffled materials, in dev1 on a sample structure. */
+function newSession(): GameSession {
+  if (materialsRoom) cards = makeDevDeck(newMaterialSeed());
+  else if (devRoom) cards = makeDevDeck(devSeed(true));
+  const session = new GameSession(dealerRegistry, demoSessionConfig, cards);
+  if (!materialsRoom) return session;
+  const { state } = session;
+  const sample = sampleMaterials(state.deck);
+  return GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, cards, {
+    ...session.snapshot(),
+    state: { ...state, field: sample.field, deck: sample.deck },
+  });
+}
+
 /** Swap in a session (new or resumed) and rebuild the scene from its state. */
 function startRun(session: GameSession): void {
   game = session;
@@ -1125,8 +1155,7 @@ const menus = createMenus(host, settings, {
     }
   },
   onNewGame() {
-    if (devRoom) cards = makeDevDeck(devSeed(true));
-    startRun(new GameSession(dealerRegistry, demoSessionConfig, cards));
+    startRun(newSession());
   },
   onSettingsChange(next) {
     applySettings(next);
@@ -1140,7 +1169,13 @@ const menus = createMenus(host, settings, {
     else music.resumeStage();
   },
 });
-menus.showTitle();
+// The materials room skips the title: it opens straight onto a fresh sample structure.
+if (materialsRoom) {
+  startRun(newSession());
+  menus.closeAll();
+} else {
+  menus.showTitle();
+}
 stat("action").addEventListener("click", takeNextAction);
 
 // ----- Developer console: ~ (or `) drops it down -----
@@ -1149,8 +1184,7 @@ createConsole({
   screen: () => screen,
   next: takeNextAction,
   newGame() {
-    if (devRoom) cards = makeDevDeck(devSeed(true));
-    startRun(new GameSession(dealerRegistry, demoSessionConfig, cards));
+    startRun(newSession());
     menus.closeAll();
   },
   home: () => menus.showTitle(),
