@@ -129,6 +129,8 @@ type RenderedBlock = {
   baseY: number;
   rock: Rock | null;
   handSlot: number | null;
+  /** Where the hand layout wants this cube; it glides there each frame. */
+  handX?: number;
 };
 
 const renderedBlocks: RenderedBlock[] = [];
@@ -365,6 +367,8 @@ type Drag = {
   active: boolean;
   candidate: Candidate | null;
   discardTarget: boolean;
+  /** Hand position the dragged card would move to if dropped inside the hand. */
+  reorderSlot: number | null;
   lastX: number;
   lastY: number;
 };
@@ -410,17 +414,49 @@ function showSelection(): void {
   );
 }
 
+function handSlotX(slot: number, visibleSlots: number): number {
+  return (slot - (visibleSlots - 1) / 2) * 1.2;
+}
+
+function visibleHandSlots(): number {
+  return Math.max(game.dealer.handSize, ...handBlocks.map(({ handSlot }) => (handSlot ?? -1) + 1));
+}
+
+/** Lay out the hand; while a reorder is previewed, neighbours make room for the dragged card. */
 function layoutHand(): void {
-  const visibleSlots = Math.max(
-    game.dealer.handSize,
-    ...handBlocks.map(({ handSlot }) => (handSlot ?? -1) + 1),
-  );
+  const visibleSlots = visibleHandSlots();
+  const preview = drag?.active && drag.reorderSlot !== null ? drag : null;
+  const order = [...handBlocks].sort((a, b) => a.handSlot! - b.handSlot!);
+  if (preview) {
+    order.splice(order.indexOf(preview.source), 1);
+    order.splice(preview.reorderSlot!, 0, preview.source);
+  }
   handBlocks.forEach((rendered) => {
     rendered.baseY = handBaseY;
+    const slot = preview ? order.indexOf(rendered) : rendered.handSlot!;
+    const firstLayout = rendered.handX === undefined;
+    rendered.handX = handSlotX(slot, visibleSlots);
     if (drag?.active && drag.source === rendered) return;
-    rendered.cube.position.set((rendered.handSlot! - (visibleSlots - 1) / 2) * 1.2, handBaseY, 0);
+    rendered.cube.position.y = handBaseY;
+    rendered.cube.position.z = 0;
+    if (firstLayout) rendered.cube.position.x = rendered.handX;
   });
   showSelection();
+}
+
+/** Ease hand cubes toward their layout positions so reordering animates. */
+function glideHand(delta: number): void {
+  const step = Math.min(1, delta * 14);
+  for (const rendered of handBlocks) {
+    if ((drag?.active && drag.source === rendered) || rendered.handX === undefined) continue;
+    rendered.cube.position.x += (rendered.handX - rendered.cube.position.x) * step;
+  }
+}
+
+/** Visual hand slots always follow the hand order held in GameState. */
+function syncHandSlots(): void {
+  handBlocks.forEach((rendered) => (rendered.handSlot = game.state.hand.indexOf(rendered.block)));
+  layoutHand();
 }
 
 const raycaster = new THREE.Raycaster();
@@ -506,6 +542,16 @@ function showCandidate(candidate: Candidate | null): void {
   );
 }
 
+/** The hand position under the pointer, or null when the pointer is not over the hand. */
+function handReorderSlot(clientX: number, clientY: number): number | null {
+  const bounds = host.getBoundingClientRect();
+  if (clientY < bounds.top + bounds.height * 0.72 || handBlocks.length < 2) return null;
+  pointRay(clientX, clientY, handCamera);
+  if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return null;
+  const slot = Math.round(dragPoint.x / 1.2 + (visibleHandSlots() - 1) / 2);
+  return Math.max(0, Math.min(handBlocks.length - 1, slot));
+}
+
 function updateCandidate(): void {
   if (!drag?.active) return;
   const wasDiscardTarget = drag.discardTarget;
@@ -518,6 +564,10 @@ function updateCandidate(): void {
       ? pickAttachment(drag.lastX, drag.lastY)
       : null;
   showCandidate(drag.candidate);
+  const previousSlot = drag.reorderSlot;
+  drag.reorderSlot =
+    !drag.discardTarget && !drag.candidate ? handReorderSlot(drag.lastX, drag.lastY) : null;
+  if (drag.reorderSlot !== previousSlot) layoutHand();
   if (drag.discardTarget && !wasDiscardTarget) playSfx("discard.hover");
   if (drag.candidate && cellKey(drag.candidate.cell) !== previousCell) playSfx("card.drag.snap");
 }
@@ -596,19 +646,15 @@ function removeFromHand(source: RenderedBlock): number {
 }
 
 function refillSlot(slot: number): void {
-  const drawn = game.refillHand();
+  const drawn = game.refillHand(slot);
   const replacements: RenderedBlock[] = [];
-  const usedSlots = new Set(handBlocks.map(({ handSlot }) => handSlot));
   for (const block of drawn) {
     const rendered = createCube(block, cubeSize / 3, "hand");
-    let nextSlot = slot;
-    while (usedSlots.has(nextSlot)) nextSlot++;
-    rendered.handSlot = nextSlot;
-    usedSlots.add(nextSlot);
     handBlocks.push(rendered);
     replacements.push(rendered);
   }
-  layoutHand();
+  // Also closes the gap when the deck has run out and nothing was drawn.
+  syncHandSlots();
   updateHud();
   if (replacements.length > 0) playSfx("card.deal");
   for (const rendered of replacements) {
@@ -876,6 +922,7 @@ function finishDrag(drop: boolean): void {
     if (drop) updateCandidate();
     const candidate = drop ? activeDrag.candidate : null;
     const discard = drop && activeDrag.discardTarget;
+    const reorderSlot = drop ? activeDrag.reorderSlot : null;
     drag = null;
     showCandidate(null);
     discardArea.classList.remove("is-target");
@@ -884,7 +931,16 @@ function finishDrag(drop: boolean): void {
       : candidate
         ? startPlacement(activeDrag.source, candidate)
         : false;
-    if (!accepted) {
+    const from = game.state.hand.indexOf(activeDrag.source.block);
+    if (!accepted && reorderSlot !== null && reorderSlot !== from) {
+      // A drop inside the hand reorders it: not a play or discard, and nothing refills.
+      game.reorderHand(from, reorderSlot);
+      handScene.add(activeDrag.source.cube);
+      activeDrag.source.cube.position.z = 0;
+      syncHandSlots();
+      playSfx("hand.reorder");
+      autosave();
+    } else if (!accepted) {
       // A drop the rules refuse (or any drop with no plays left) is denied; a drop on
       // empty space just returns the block to the hand.
       const refused =
@@ -940,6 +996,7 @@ const onPointerDown = (event: PointerEvent) => {
       active: false,
       candidate: null,
       discardTarget: false,
+      reorderSlot: null,
     };
     return;
   }
@@ -1091,6 +1148,7 @@ const animate = (time: number) => {
   updateCamera(time);
   updateAction(time, delta);
   updateScoring(time);
+  glideHand(delta);
   handBlocks.forEach(({ cube, rock }) => {
     if (!rock) return;
     cube.rotation.z = rockAngle(rock, time / 1000);

@@ -2,6 +2,7 @@ import type { CardBlock } from "./cards";
 import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
 import type { GameState, PlayAction } from "./game-state";
+import { insertAt, moveItem } from "./zones";
 import { stageKinds, type SessionConfig, type StageKind } from "./session-config";
 
 /** Where a session is: one of a round's three stages, the shop, or finished after a loss. */
@@ -106,11 +107,30 @@ export class GameSession {
     return next;
   }
 
-  refillHand(): CardBlock[] {
+  /**
+   * Refill the hand. Drawn cards go at `slot` (the gap left by the card just played or
+   * discarded) so the hand keeps its order; without a slot they go at the end.
+   */
+  refillHand(slot?: number): CardBlock[] {
     if (!this.inStage) return [];
+    const before = this.currentState.hand;
     const result = this.activeDealer.refillHand(this.currentState, this.random);
-    this.currentState = result.state;
+    this.currentState =
+      slot === undefined
+        ? result.state
+        : { ...result.state, hand: insertAt(before, slot, result.drawn) };
     return result.drawn;
+  }
+
+  /**
+   * Move a hand card to another position. Not a play or discard: no counters, score,
+   * deck or card identity change. Returns false for an invalid move.
+   */
+  reorderHand(from: number, to: number): boolean {
+    const hand = moveItem(this.currentState.hand, from, to);
+    if (!hand) return false;
+    this.currentState = { ...this.currentState, hand };
+    return true;
   }
 
   /**

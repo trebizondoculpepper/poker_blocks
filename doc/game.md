@@ -40,7 +40,9 @@ On each turn the player does one of the following:
 - **Play:** drag one block from the hand onto an exposed face of any block on the field (or, for the first play, into the empty field). The face's neighbouring cell must be empty. The block snaps into that cell and becomes part of the field. This uses one play, and then the field is [scored](#scoring).
 - **Discard:** select blocks in the hand and discard them. This uses one discard and does not score. _(How many blocks one discard can remove is to be decided.)_
 
-After either action, the hand is refilled to 5 blocks from the deck, or until the deck runs out.
+After either action, the hand is refilled to 5 blocks from the deck, or until the deck runs out. A drawn block takes the place of the one that was played or discarded.
+
+At any time the player can also drag a block within the hand to change its position. Reordering is free: it is not a play or discard, uses nothing and does not refill the hand. Hand order matters for effects that read it, and it is saved with the run.
 
 A modifier block that works while held stays active as long as it is in the hand. Playing it ends that held effect, though it may have another effect once placed. So keeping a modifier in hand means giving up a hand slot.
 

@@ -252,6 +252,12 @@ const entries = [
     prompt: "A soft gentle downward two-note click, closing",
     durationSeconds: 0.5,
   },
+  {
+    id: "hand.reorder",
+    trigger: "A hand card is dropped into a new position in the hand",
+    prompt: "A soft light card slide ending in a gentle tap, tidy",
+    durationSeconds: 0.5,
+  },
 ] as const satisfies readonly SoundEffect[];
 
 /** Every registered sound. Add new entries to the list above. */
