@@ -448,8 +448,8 @@ body,
   position: absolute;
   z-index: 2;
   top: max(18px, env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
+  right: max(22px, env(safe-area-inset-right));
+  left: auto;
   width: 44px;
   height: 44px;
   border: 1px solid #8191a777;
@@ -470,7 +470,6 @@ body,
     top: max(106px, calc(env(safe-area-inset-top) + 94px));
     right: max(12px, env(safe-area-inset-right));
     left: auto;
-    transform: none;
   }
 }
 
