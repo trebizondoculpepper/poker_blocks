@@ -87,31 +87,46 @@ function drawWood(g: CanvasRenderingContext2D, random: () => number, endGrain: b
   border(g, "#f4d49c88", 1.5);
 }
 
-function drawSteel(g: CanvasRenderingContext2D, random: () => number): void {
-  gradient(g, [
-    [0, "#87959a"],
-    [0.35, "#465259"],
-    [0.62, "#77858b"],
-    [1, "#29343a"],
-  ]);
-  for (let y = 0; y < SIZE; y += 3) {
-    g.fillStyle = y % 9 === 0 ? "#dce6e414" : "#111b2312";
-    g.fillRect(0, y, SIZE, 1);
+/**
+ * Brushed steel: fine parallel scratches at `angle` (radians), over an even mid-grey. The
+ * shading comes from the material's anisotropic reflections, so nothing is baked in but
+ * the grain, the rim and the rivets.
+ */
+function drawSteel(g: CanvasRenderingContext2D, random: () => number, angle: number): void {
+  g.fillStyle = "#a9b0b4";
+  g.fillRect(0, 0, SIZE, SIZE);
+  g.save();
+  g.translate(SIZE / 2, SIZE / 2);
+  g.rotate(angle);
+  // Long, slightly uneven strokes; the canvas is over-covered so rotation leaves no gaps.
+  for (let n = 0; n < 900; n++) {
+    const y = -SIZE + random() * SIZE * 2;
+    const x = -SIZE + random() * SIZE * 2;
+    const length = 40 + random() * 220;
+    const light = random() < 0.5;
+    g.strokeStyle = light
+      ? `rgba(240, 246, 250, ${0.08 + random() * 0.18})`
+      : `rgba(40, 50, 58, ${0.06 + random() * 0.16})`;
+    g.lineWidth = random() < 0.85 ? 1 : 2;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + length, y + (random() - 0.5) * 0.8);
+    g.stroke();
   }
-  flecks(g, random, 230, "#7a3e2780", 2);
-  border(g, "#202b32", 9);
-  border(g, "#c1cac59a", 2);
+  g.restore();
+  border(g, "#3a444b", 9);
+  border(g, "#dfe5e8aa", 2);
   for (const x of [29, SIZE - 29])
     for (const y of [29, SIZE - 29]) {
       g.beginPath();
-      g.fillStyle = "#263036";
+      g.fillStyle = "#3a434a";
       g.arc(x, y, 11, 0, Math.PI * 2);
       g.fill();
       g.beginPath();
-      g.fillStyle = "#c3c7bd";
+      g.fillStyle = "#d4d9db";
       g.arc(x - 1, y - 1, 7, 0, Math.PI * 2);
       g.fill();
-      g.strokeStyle = "#555d5e";
+      g.strokeStyle = "#5f686d";
       g.lineWidth = 2;
       g.beginPath();
       g.moveTo(x - 5, y + 2);
@@ -208,36 +223,6 @@ function drawGold(g: CanvasRenderingContext2D, random: () => number): void {
     }
 }
 
-function drawDelft(g: CanvasRenderingContext2D): void {
-  gradient(g, [
-    [0, "#faf8ed"],
-    [0.5, "#d7e8ed"],
-    [1, "#f9f6e9"],
-  ]);
-  border(g, "#315c8d", 7);
-  border(g, "#7bacc3", 2);
-  for (const x of [37, SIZE - 37])
-    for (const y of [37, SIZE - 37]) {
-      g.strokeStyle = "#426a9d";
-      g.lineWidth = 3;
-      g.beginPath();
-      g.arc(x, y, 14, 0.2, Math.PI * 1.8);
-      g.stroke();
-      g.fillStyle = "#bd4850";
-      g.beginPath();
-      g.arc(x, y, 3, 0, Math.PI * 2);
-      g.fill();
-    }
-  g.strokeStyle = "#7bacc3";
-  g.lineWidth = 2;
-  g.beginPath();
-  g.moveTo(76, 64);
-  g.quadraticCurveTo(128, 46, 180, 64);
-  g.moveTo(76, 192);
-  g.quadraticCurveTo(128, 210, 180, 192);
-  g.stroke();
-}
-
 function drawTerracotta(g: CanvasRenderingContext2D, random: () => number): void {
   gradient(g, [
     [0, "#e6a174"],
@@ -318,6 +303,8 @@ function faceTexture(
   identity: IdentityTrait,
   kind: BlockMaterial,
   endGrain: boolean,
+  /** Brush direction for steel, in radians. */
+  brushAngle = 0,
 ): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = SIZE;
@@ -334,7 +321,7 @@ function faceTexture(
       drawWood(g, random, endGrain);
       break;
     case "steel":
-      drawSteel(g, random);
+      drawSteel(g, random, brushAngle);
       break;
     case "glass":
       drawGlass(g, random);
@@ -344,9 +331,6 @@ function faceTexture(
       break;
     case "gold":
       drawGold(g, random);
-      break;
-    case "delft":
-      drawDelft(g);
       break;
     case "terracotta":
       drawTerracotta(g, random);
@@ -358,7 +342,8 @@ function faceTexture(
       drawMeat(g, random);
       break;
   }
-  const dark = ["wood", "steel", "gold", "terracotta", "meat"].includes(kind);
+  // Brushed steel is now a light, bright grey, so it takes dark print like paper.
+  const dark = ["wood", "gold", "terracotta", "meat"].includes(kind);
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.shadowColor = dark ? "#28170caa" : "#ffffffbb";
@@ -368,7 +353,7 @@ function faceTexture(
       ? kind === "wood"
         ? "#a32536"
         : kind === "steel"
-          ? "#ff8790"
+          ? "#a3202f"
           : "#bd3651"
       : dark
         ? kind === "steel" || kind === "meat"
@@ -385,7 +370,7 @@ function faceTexture(
   return texture;
 }
 
-/** Reflections for glass and crystal; set once by the game (see setGlassEnvironment). */
+/** Reflections for glass, crystal and steel; set once by the game (see setGlassEnvironment). */
 let glassEnvironment: THREE.Texture | null = null;
 
 /** Give glass and crystal something to reflect (a PMREM environment map). */
@@ -503,8 +488,8 @@ function surface(texture: THREE.CanvasTexture, kind: BlockMaterial): THREE.MeshS
   }
   return new THREE.MeshStandardMaterial({
     map: texture,
-    roughness: kind === "gold" ? 0.28 : kind === "steel" ? 0.5 : 0.75,
-    metalness: kind === "gold" ? 0.55 : kind === "steel" ? 0.42 : 0,
+    roughness: kind === "gold" ? 0.28 : 0.75,
+    metalness: kind === "gold" ? 0.55 : 0,
   });
 }
 
@@ -517,11 +502,36 @@ const edgeColors: Record<BlockMaterial, number> = {
   // Facet lines of the cut stone.
   prismatic: 0xf2e8ff,
   gold: 0x9c661e,
-  delft: 0x48709c,
   terracotta: 0x733d2b,
   ice: 0xd3f7ff,
   meat: 0x6b2538,
 };
+
+/** Directions a steel block's six faces are brushed in, varied per card. */
+function brushAngles(identity: IdentityTrait): number[] {
+  const random = randomFor(identity, "steel", true);
+  const choices = [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4, Math.PI / 6, -Math.PI / 3];
+  return choices.map(() => choices[Math.floor(random() * choices.length)] + (random() - 0.5) * 0.2);
+}
+
+/**
+ * Brushed steel: fully metallic, with anisotropic reflections stretched along the brush
+ * direction (anisotropyRotation matches the face's scratches), so each face catches the
+ * light differently as the block turns.
+ */
+function brushedSteel(texture: THREE.CanvasTexture, angle: number): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    map: texture,
+    metalness: 1,
+    roughness: 0.34,
+    anisotropy: 0.9,
+    anisotropyRotation: angle,
+    envMap: glassEnvironment,
+    envMapIntensity: 1.25,
+    clearcoat: 0.15,
+    clearcoatRoughness: 0.3,
+  });
+}
 
 export function createBlockAppearance(
   identity: IdentityTrait,
@@ -550,6 +560,18 @@ export function createBlockAppearance(
       textures: [texture, mask],
       materials: inHand,
       boardMaterials: onTable,
+      edgeColor,
+      edgeOpacity,
+    };
+  }
+
+  if (kind === "steel") {
+    const angles = brushAngles(identity);
+    const textures = angles.map((angle) => faceTexture(identity, kind, false, angle));
+    return {
+      geometry,
+      textures,
+      materials: textures.map((texture, face) => brushedSteel(texture, angles[face])),
       edgeColor,
       edgeOpacity,
     };

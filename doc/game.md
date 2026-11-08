@@ -144,11 +144,10 @@ The default card material is **paper**. **Wood** is the next material under disc
 The playable `?room=dev0` experiment (formerly `?room=dev`) assigns a random visual material to each of the 52 cards at the start of a new game. Its own save preserves those assignments without affecting a normal run. The `?room=dev1` materials room opens on a structure with one block of every material, attached at random, for judging the substances next to each other. The current visual prototypes are:
 
 - **Wood:** branded rank and suit, with red suits inked red.
-- **Steel:** bolted plates with light rust staining.
-- **Glass:** translucent-looking cyan with a restrained lens-like gleam.
-- **Prismatic glass:** brighter iridescent bands and sparkles.
+- **Steel:** brushed steel plates, riveted at the corners; each face is brushed in its own direction and its anisotropic reflections catch the light differently as the block turns.
+- **Glass:** six thin stained-glass panes in a dark metal came; slightly refractive on the table.
+- **Prismatic glass:** a solid, chamfered square-cut crystal; strongly refractive with dispersion and an iridescent sheen.
 - **Gold:** warm reflective foil and engraved edges.
-- **Delft ceramic:** pale porcelain with blue ornament and red accents.
 - **Terracotta:** rough fired clay with impressed markings.
 - **Ice:** frosted glass-like blue with surface condensation.
 - **Meat:** marbled flesh tones and gently rounded corners.
