@@ -994,7 +994,7 @@ export function createBlockAppearance(
           new RoundedBoxGeometry(size, size, size, 1, size * 0.14)
         : kind === "gold"
           ? // Softly rounded edges, as a casting comes out of the mould.
-            new RoundedBoxGeometry(size, size, size, 5, size * 0.12)
+            new RoundedBoxGeometry(size, size, size, 5, size * 0.06)
           : new THREE.BoxGeometry(size, size, size);
   // See-through blocks are a hair smaller than a cell, so where they touch a neighbour the
   // two faces are not in the same plane and do not flicker (z-fight) through each other.
