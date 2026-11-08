@@ -8,6 +8,7 @@ const canvasHeight = 76;
 const cubeSize = 1.45;
 
 type RenderedPassive = {
+  id: string;
   mesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
   edges: THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>;
   texture: THREE.CanvasTexture;
@@ -40,9 +41,17 @@ function faceTexture(
 }
 
 /** A fixed screen-space rack with one Three.js scene for all rotating passive blocks. */
-export function createPassiveRack(host: HTMLElement): {
+export function createPassiveRack(
+  host: HTMLElement,
+  options: {
+    /** A pointer went down on an installed passive (the start of a possible drag). */
+    onPickUp?(block: PassiveBlock, event: PointerEvent): void;
+  } = {},
+): {
   element: HTMLElement;
   render(rack: readonly PassiveBlock[]): void;
+  /** Hide one passive's cube while it is being dragged (null shows them all). */
+  lift(id: string | null): void;
   frame(time: number, reducedMotion: boolean): void;
   dispose(): void;
 } {
@@ -117,19 +126,25 @@ export function createPassiveRack(host: HTMLElement): {
         );
         mesh.add(edges);
         scene.add(mesh);
-        rendered.push({ mesh, edges, texture });
+        rendered.push({ id: block.id, mesh, edges, texture });
 
         const item = document.createElement("div");
         item.className = "passive-item";
         item.setAttribute("role", "img");
         item.setAttribute("aria-label", block.traits.inspectable.inspect());
         item.tabIndex = 0;
+        item.dataset.passiveId = block.id;
+        item.addEventListener("pointerdown", (event) => options.onPickUp?.(block, event));
         const description = document.createElement("span");
         description.className = "passive-description";
         description.textContent = block.traits.inspectable.inspect();
         item.append(description);
         slots.append(item);
       }
+      renderer.render(scene, camera);
+    },
+    lift(id) {
+      for (const passive of rendered) passive.mesh.visible = passive.id !== id;
       renderer.render(scene, camera);
     },
     frame(time, reducedMotion) {

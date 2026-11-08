@@ -5,7 +5,13 @@ import type { GameState, PlayAction } from "./game-state";
 import { fillSlots, insertAt, moveItem } from "./zones";
 import { ledgerTotal, stageRewardLedger, type StageReward } from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
-import { stageKinds, type SessionConfig, type StageKind } from "./session-config";
+import {
+  defaultPassivePrices,
+  stageKinds,
+  type PassivePrices,
+  type SessionConfig,
+  type StageKind,
+} from "./session-config";
 import {
   createPassiveBlock,
   PassiveEventQueue,
@@ -156,6 +162,42 @@ export class GameSession {
     };
     this.passiveEvents.syncRack(this.currentState.passiveRack);
     return true;
+  }
+
+  /** A stage is won but its rewards are not yet paid (see claimStageRewards). */
+  get stageRewardsPending(): boolean {
+    if (!this.inStage || roundOutcome(this.currentState) !== "won") return false;
+    return this.rewarded?.stage !== `${this.currentRound}:${this.currentPhase}`;
+  }
+
+  /** What passives cost and sell for in this session. */
+  get passivePrices(): PassivePrices {
+    return this.config.passivePrices ?? defaultPassivePrices;
+  }
+
+  /**
+   * Sell an installed passive (issue #16): remove that exact block from the rack and add its
+   * sell value to the coins. Not a discard: no discard pile, plays or discards are touched.
+   * Possible at any time in a run (not after it is over). Returns the coins gained, or null
+   * when nothing was sold (unknown block, or the run is over).
+   */
+  sellPassive(passiveId: string): number | null {
+    if (this.currentPhase === "over") return null;
+    // A won stage's rewards are fixed first: selling a passive that pays on a stage win
+    // before the payout would quietly lose its row.
+    if (this.stageRewardsPending) return null;
+    const rack = this.currentState.passiveRack;
+    if (!rack.some(({ id }) => id === passiveId)) return null;
+    const price = this.passivePrices.sell;
+    // A bad price policy must not corrupt the balance (a save would then not load).
+    if (!Number.isSafeInteger(price) || price < 0) return null;
+    this.currentState = {
+      ...this.currentState,
+      passiveRack: rack.filter(({ id }) => id !== passiveId),
+      coins: this.currentState.coins + price,
+    };
+    this.passiveEvents.syncRack(this.currentState.passiveRack);
+    return price;
   }
 
   /** Retire legacy definitions, then fill empty slots while keeping active blocks in order. */

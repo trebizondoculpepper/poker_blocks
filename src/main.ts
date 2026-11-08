@@ -38,6 +38,7 @@ import { browserStorage, loadRun, saveKey, saveRun } from "./save";
 import { boardBaseFov, fovForZoom, pinchZoom, wheelZoom } from "./view-zoom";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createPassiveRack } from "./passive-rack";
+import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
   prefersReducedMotion,
@@ -79,7 +80,11 @@ discardArea.innerHTML = `
     <path d="M6 1h4v2H6zM3 3h10v2H3zM4 6h8v7h-1v2H5v-2H4z" />
     <path class="discard-icon-cutout" d="M6 8h1v5H6zM9 8h1v5H9z" />
   </svg>
-  <span>DISCARD</span>
+  <svg class="sell-icon" viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges">
+    <path d="M5 2h6v1h2v2h1v6h-1v2h-2v1H5v-1H3v-2H2V5h1V3h2z" />
+    <path class="sell-icon-mark" d="M7 4h2v1h2v2H8v1h3v4H9v1H7v-1H5V9h3V8H5V5h2z" />
+  </svg>
+  <span class="discard-label">DISCARD</span>
   <b class="discard-count" hidden></b>
   <i class="refused-mark" aria-hidden="true"></i>
 `;
@@ -392,7 +397,9 @@ const runSaveKey = passivesRoom
     : materialDevRoom
       ? "poker-blocks.dev-run"
       : saveKey;
-const passiveRackView = passivesRoom ? createPassiveRack(host) : null;
+const passiveRackView = passivesRoom
+  ? createPassiveRack(host, { onPickUp: (block, event) => pickUpPassive(block, event) })
+  : null;
 function newMaterialSeed(): number {
   return Math.floor(Math.random() * 4294967296);
 }
@@ -724,6 +731,97 @@ function pointRay(clientX: number, clientY: number, viewCamera: THREE.Camera = c
   );
   raycaster.setFromCamera(pointer, viewCamera);
 }
+
+// ----- Selling a passive (issue #16): drag it from the rack to the shared drop target -----
+
+/** A passive picked up from the rack; it becomes a drag once the pointer moves a little. */
+let passiveDrag: {
+  block: PassiveBlock;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  floating: HTMLElement | null;
+} | null = null;
+
+/** The shared lower-screen target reads Sell while a passive is dragged, else Discard. */
+function showSellTarget(selling: boolean): void {
+  discardArea.classList.toggle("is-sell", selling);
+  discardArea.setAttribute("aria-label", selling ? "Sell area" : "Discard area");
+  discardArea.querySelector(".discard-label")!.textContent = selling ? "SELL" : "DISCARD";
+  if (!selling) discardArea.classList.remove("is-target", "is-refused");
+}
+
+/** Whether a dropped passive could be sold now (not once the run is over). */
+const canSellPassives = () => game.phase !== "over" && !pendingAction && !game.stageRewardsPending;
+
+function pickUpPassive(block: PassiveBlock, event: PointerEvent): void {
+  // Only the primary pointer's main button picks a passive up.
+  if (passiveDrag || drag || !event.isPrimary || event.button !== 0) return;
+  passiveDrag = {
+    block,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    floating: null,
+  };
+  (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+}
+
+function movePassive(event: PointerEvent): void {
+  if (!passiveDrag || event.pointerId !== passiveDrag.pointerId) return;
+  if (!passiveDrag.floating) {
+    if (Math.hypot(event.clientX - passiveDrag.startX, event.clientY - passiveDrag.startY) < 6)
+      return;
+    // A real drag: lift the cube out of the rack and show a token under the pointer.
+    const appearance =
+      passiveDrag.block.traits.appearance ?? passiveDefinitions.get(passiveDrag.block.definitionId);
+    const floating = document.createElement("div");
+    floating.className = "passive-floating";
+    floating.textContent = appearance.symbol;
+    floating.style.background = appearance.palette.face;
+    floating.style.color = appearance.palette.ink;
+    floating.style.borderColor = appearance.palette.edge;
+    document.body.append(floating);
+    passiveDrag.floating = floating;
+    passiveRackView?.lift(passiveDrag.block.id);
+    showSellTarget(true);
+    playSfx("card.pickup");
+  }
+  passiveDrag.floating.style.left = `${event.clientX}px`;
+  passiveDrag.floating.style.top = `${event.clientY}px`;
+  const over = overDiscardArea(event.clientX, event.clientY);
+  const wasTarget = discardArea.classList.contains("is-target");
+  discardArea.classList.toggle("is-target", over && canSellPassives());
+  discardArea.classList.toggle("is-refused", over && !canSellPassives());
+  if (over && canSellPassives() && !wasTarget) playSfx("discard.hover");
+}
+
+function dropPassive(event: PointerEvent, cancelled: boolean): void {
+  if (!passiveDrag || event.pointerId !== passiveDrag.pointerId) return;
+  const { block, floating } = passiveDrag;
+  passiveDrag = null;
+  if (!floating) return; // a click, not a drag: the rack's tooltip handles that
+  floating.remove();
+  showSellTarget(false);
+  passiveRackView?.lift(null);
+  if (cancelled || !overDiscardArea(event.clientX, event.clientY)) {
+    playSfx("card.drag.return");
+    return;
+  }
+  const sold = canSellPassives() ? game.sellPassive(block.id) : null;
+  if (sold === null) {
+    flashRefused(discardArea);
+    playSfx("action.denied");
+    return;
+  }
+  playSfx("reward.coin");
+  passiveRackView?.render(game.state.passiveRack);
+  updateHud();
+  autosave();
+}
+window.addEventListener("pointermove", movePassive);
+window.addEventListener("pointerup", (event) => dropPassive(event, false));
+window.addEventListener("pointercancel", (event) => dropPassive(event, true));
 
 function overDiscardArea(clientX: number, clientY: number): boolean {
   const bounds = discardArea.getBoundingClientRect();
@@ -1766,6 +1864,8 @@ const onClick = (event: MouseEvent) => {
 };
 /** Click or tap the bin: discard the selected hand blocks as one discard. */
 discardArea.addEventListener("click", () => {
+  // While it reads Sell (a passive is being dragged) the target never discards.
+  if (passiveDrag || discardArea.classList.contains("is-sell")) return;
   if (pendingAction || drag?.active || !game.inStage) return;
   const chosen = selectedHandBlocks();
   if (!chosen.length) return;
