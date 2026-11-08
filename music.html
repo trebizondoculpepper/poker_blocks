@@ -43,6 +43,26 @@
             Beat click
           </label>
         </div>
+        <details class="tap" id="tap-panel" open>
+          <summary>Tap tempo</summary>
+          <p class="room-intro">
+            While a loop plays, tap along on every beat with the button or the space bar, starting
+            on beat 1 of a bar. Half speed slows the loop (tape-style) to make tapping easier; the
+            estimate is always the loop's real tempo.
+          </p>
+          <div class="room-controls">
+            <button type="button" id="tap">Tap</button>
+            <label class="check"><input id="half" type="checkbox" /> Half speed</label>
+            <button type="button" id="tap-reset">Reset taps</button>
+            <button type="button" id="tap-apply" disabled>Use this tempo</button>
+          </div>
+          <p class="status" id="tap-readout">No taps yet.</p>
+          <label class="overrides">
+            Tapped tempos (paste these to Claude to save them into the project)
+            <textarea id="overrides" rows="4" readonly></textarea>
+          </label>
+          <button type="button" id="overrides-clear">Forget tapped tempos</button>
+        </details>
         <p class="status" id="status">Stopped.</p>
         <div class="beat" id="beat" aria-hidden="true">
           <span></span><span></span><span></span><span></span>

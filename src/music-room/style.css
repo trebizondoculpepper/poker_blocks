@@ -97,3 +97,36 @@ button {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
+.tap {
+  margin: 18px 0 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.tap summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.tap #tap {
+  min-width: 120px;
+  border-color: var(--accent);
+}
+.overrides {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.overrides textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    12px/1.4 ui-monospace,
+    monospace;
+}

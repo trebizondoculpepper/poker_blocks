@@ -52,4 +52,12 @@ describe("beat clock", () => {
     expect(easedArea(1)).toBeCloseTo(sum, 6);
     expect(easedArea(0.5)).toBeCloseTo(0.0625);
   });
+
+  it("re-anchors to a new beat and tempo", () => {
+    const clock = createBeatClock(0, 120);
+    clock.rebase(10, 3.5, 90);
+    expect(clock.beatAt(10)).toBeCloseTo(3.5);
+    expect(clock.beatAt(12)).toBeCloseTo(6.5);
+    expect(clock.tempoAt(11)).toBe(90);
+  });
 });

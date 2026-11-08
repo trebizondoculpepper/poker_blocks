@@ -15,6 +15,8 @@ export type BeatClock = {
   tempoAt(time: number): number;
   /** Ease from the tempo at `at` to `to` BPM over `seconds` (0 = jump, then hold). */
   ramp(at: number, seconds: number, to: number): void;
+  /** From `at`, count from `beat` at a steady `tempo` (re-anchors the clock). */
+  rebase(at: number, beat: number, tempo: number): void;
 };
 
 type Segment = { start: number; beat: number; from: number; to: number; seconds: number };
@@ -78,6 +80,10 @@ export function createBeatClock(start: number, tempo: number): BeatClock {
         else hi = mid;
       }
       return segment.start + hi;
+    },
+    rebase(at, beat, tempo) {
+      while (segments.length > 1 && segments[segments.length - 1].start >= at) segments.pop();
+      segments.push({ start: at, beat, from: tempo, to: tempo, seconds: 0 });
     },
     ramp(at, seconds, to) {
       const from = tempoAt(at);

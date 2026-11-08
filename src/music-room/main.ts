@@ -4,6 +4,7 @@
 import "./style.css";
 import { createBeatClock } from "./beat-clock";
 import { fadeCurve, fadeKinds, type FadeKind } from "./fade";
+import { fitTaps, snapToLoop, type LoopTempo } from "./tap-tempo";
 
 type LoopInfo = {
   tempo_bpm: number;
@@ -13,7 +14,14 @@ type LoopInfo = {
   first_beat_seconds?: number;
   source?: string;
 };
-type Track = { id: string; group: string; name: string; url: string; info: LoopInfo };
+type Track = {
+  id: string;
+  file: string;
+  group: string;
+  name: string;
+  url: string;
+  info: LoopInfo;
+};
 
 const audioUrls = import.meta.glob<string>("../../music/loops/*-loop.ogg", {
   eager: true,
@@ -25,6 +33,17 @@ const infos = import.meta.glob<LoopInfo>("../../music/loops/*-loop.json", {
   import: "default",
 });
 
+/** Tempos tapped in this room, kept in the browser until saved into the project. */
+const overridesKey = "music-room.tapped-tempos";
+function loadOverrides(): Record<string, LoopTempo> {
+  try {
+    return JSON.parse(localStorage.getItem(overridesKey) ?? "{}") as Record<string, LoopTempo>;
+  } catch {
+    return {};
+  }
+}
+const overrides = loadOverrides();
+
 const tracks: Track[] = Object.entries(audioUrls)
   .map(([path, url]) => {
     const info = infos[path.replace(/\.ogg$/, ".json")];
@@ -34,7 +53,8 @@ const tracks: Track[] = Object.entries(audioUrls)
     const prefix = file.split("-")[0];
     const group = prefix === "style" ? "Styles" : prefix === "solitaire" ? "Solitaire" : "Theme";
     const name = group === "Theme" ? file : file.slice(prefix.length + 1);
-    return { id: path, group, name, url, info };
+    const tapped = overrides[file];
+    return { id: path, file, group, name, url, info: tapped ? { ...info, ...tapped } : info };
   })
   // Only loops measured with a whole number of beats can be beat-matched.
   .filter((track) => track.info && Number.isInteger(track.info.beats))
@@ -142,6 +162,11 @@ async function select(track: Track): Promise<void> {
   if (token !== switchToken) return;
   const { context } = audio();
   if (context.state === "suspended") await context.resume();
+  // Switching always happens at full speed.
+  if (half.checked) {
+    setHalfSpeed(false);
+    half.checked = false;
+  }
 
   if (!current || !clock) {
     const at = context.currentTime + 0.05;
@@ -194,6 +219,7 @@ async function select(track: Track): Promise<void> {
 
 function stop(): void {
   switchToken++;
+  half.checked = false;
   for (const voice of [current, ...fading]) voice?.source.stop();
   fading.clear();
   current = null;
@@ -242,6 +268,12 @@ function render(): void {
   });
 }
 
+function trackSummary(track: Track): string {
+  const { tempo_bpm, beats, loop_seconds } = track.info;
+  const length = `${Math.floor(loop_seconds / 60)}:${String(Math.round(loop_seconds % 60)).padStart(2, "0")}`;
+  return `${tempo_bpm.toFixed(1)} BPM · ${beats / 4} bars · ${length}${overrides[track.file] ? " · tapped" : ""}`;
+}
+
 const groups = element<HTMLElement>("groups");
 for (const group of new Set(tracks.map((track) => track.group))) {
   const section = document.createElement("section");
@@ -254,9 +286,7 @@ for (const group of new Set(tracks.map((track) => track.group))) {
     button.type = "button";
     button.className = "track";
     button.dataset.id = track.id;
-    button.innerHTML = `<strong>${track.name}</strong><span>${track.info.tempo_bpm.toFixed(1)} BPM · ${
-      track.info.beats / 4
-    } bars · ${Math.floor(track.info.loop_seconds / 60)}:${String(Math.round(track.info.loop_seconds % 60)).padStart(2, "0")}</span>`;
+    button.innerHTML = `<strong>${track.name}</strong><span>${trackSummary(track)}</span>`;
     button.addEventListener("click", () => void select(track));
     list.append(button);
   }
@@ -264,6 +294,121 @@ for (const group of new Set(tracks.map((track) => track.group))) {
   groups.append(section);
 }
 if (tracks.length === 0) groups.textContent = "No measured loops found under music/.";
+
+// ----- Tap tempo -----
+const tapButton = element<HTMLButtonElement>("tap");
+const half = element<HTMLInputElement>("half");
+const tapReadout = element<HTMLParagraphElement>("tap-readout");
+const tapApply = element<HTMLButtonElement>("tap-apply");
+const overridesOut = element<HTMLTextAreaElement>("overrides");
+let taps: number[] = [];
+let tapTrack: Track | null = null;
+let estimate: LoopTempo | null = null;
+
+/** Unwrapped position in the loop's own audio at a time, from the shared beat clock. */
+function audioPosition(track: Track, time: number): number {
+  const { beats, loop_seconds, first_beat_seconds = 0 } = track.info;
+  return first_beat_seconds + (clock!.beatAt(time) * loop_seconds) / beats;
+}
+
+function resetTaps(): void {
+  taps = [];
+  estimate = null;
+  tapApply.disabled = true;
+  tapReadout.textContent = current
+    ? `Tap along to ${current.track.name}.`
+    : "Start a loop, then tap.";
+}
+
+function tap(): void {
+  if (!context || !clock || !current) return;
+  if (tapTrack !== current.track) {
+    tapTrack = current.track;
+    resetTaps();
+  }
+  // The sound heard now left the speakers' buffer outputLatency ago.
+  const heard = context.currentTime - (context.outputLatency || 0);
+  taps.push(audioPosition(current.track, heard));
+  const fit = fitTaps(taps);
+  if (!fit) {
+    tapReadout.textContent = `${taps.length} taps… keep going.`;
+    return;
+  }
+  estimate = snapToLoop(fit.bpm, current.track.info.loop_seconds, taps[0]);
+  tapApply.disabled = taps.length < 8;
+  tapReadout.textContent =
+    `${taps.length} taps: ${fit.bpm.toFixed(1)} BPM (±${Math.round(fit.jitter * 1000)} ms), ` +
+    `snapped to ${estimate.tempo_bpm.toFixed(2)} BPM, ${estimate.beats / 4} bars; ` +
+    `currently ${current.track.info.tempo_bpm.toFixed(2)} BPM.` +
+    (taps.length < 8 ? " Tap at least 8 times to use it." : "");
+}
+
+function showOverrides(): void {
+  overridesOut.value = Object.keys(overrides).length ? JSON.stringify(overrides, null, 2) : "";
+}
+
+/** Apply the tapped tempo to the playing loop without interrupting its audio. */
+function applyEstimate(): void {
+  if (!context || !clock || !current || !estimate) return;
+  const track = current.track;
+  const now = context.currentTime;
+  const position = audioPosition(track, now);
+  const speed = half.checked ? 0.5 : 1;
+  track.info = { ...track.info, ...estimate };
+  overrides[track.file] = estimate;
+  try {
+    localStorage.setItem(overridesKey, JSON.stringify(overrides));
+  } catch {
+    // The override still applies for this visit.
+  }
+  // Re-anchor the clock so the audio keeps its place under the new beat grid.
+  const { beats, loop_seconds, first_beat_seconds = 0, tempo_bpm } = track.info;
+  clock.rebase(now, ((position - first_beat_seconds) * beats) / loop_seconds, tempo_bpm * speed);
+  current.source.playbackRate.cancelScheduledValues(now);
+  current.source.playbackRate.setValueAtTime(speed, now);
+  relabel(track);
+  showOverrides();
+  resetTaps();
+  tapReadout.textContent = `Now using ${tempo_bpm.toFixed(2)} BPM for ${track.name}.`;
+}
+
+/** Half speed: halve the shared clock's tempo, so taps and beats stay consistent. */
+function setHalfSpeed(on: boolean): void {
+  if (!context || !clock || !current) return;
+  const now = context.currentTime;
+  const tempo = clock.tempoAt(now) * (on ? 0.5 : 2);
+  clock.rebase(now, clock.beatAt(now), tempo);
+  current.source.playbackRate.cancelScheduledValues(now);
+  current.source.playbackRate.setValueAtTime(tempo / current.track.info.tempo_bpm, now);
+}
+
+function relabel(track: Track): void {
+  const label = document.querySelector<HTMLElement>(
+    `.track[data-id="${CSS.escape(track.id)}"] span`,
+  );
+  if (label) label.textContent = trackSummary(track);
+}
+
+tapButton.addEventListener("click", tap);
+window.addEventListener("keydown", (event) => {
+  if (event.code !== "Space" || event.repeat) return;
+  event.preventDefault();
+  tap();
+});
+element<HTMLButtonElement>("tap-reset").addEventListener("click", resetTaps);
+tapApply.addEventListener("click", applyEstimate);
+half.addEventListener("change", () => setHalfSpeed(half.checked));
+element<HTMLButtonElement>("overrides-clear").addEventListener("click", () => {
+  for (const key of Object.keys(overrides)) delete overrides[key];
+  try {
+    localStorage.removeItem(overridesKey);
+  } catch {
+    // Nothing stored.
+  }
+  showOverrides();
+  tapReadout.textContent = "Tapped tempos forgotten; reload to use the project's values.";
+});
+showOverrides();
 
 element<HTMLButtonElement>("stop").addEventListener("click", stop);
 volume.addEventListener("input", () =>
