@@ -41,6 +41,8 @@ export type MusicPlayer = {
   readonly current: string | null;
   play(id: string, options?: Partial<SwitchOptions>): Promise<void>;
   stop(fadeSeconds?: number): void;
+  /** Cut the power, as on a record player: everything slows to a stop over `seconds`. */
+  powerDown(seconds?: number): void;
   setVolume(volume: number): void;
   setMuted(muted: boolean): void;
   /** Call from a user gesture: browsers keep audio suspended until one happens. */
@@ -52,6 +54,42 @@ export function loopOffset(info: LoopInfo, beat: number): number {
   const { beats, loop_seconds, first_beat_seconds = 0 } = info;
   const within = ((beat % beats) + beats) % beats;
   return (first_beat_seconds + (within / beats) * loop_seconds) % loop_seconds;
+}
+
+/**
+ * Freeze a parameter at its current value, dropping later automation, so new automation
+ * can start now even if a curve is mid-flight (overlapping a curve would throw).
+ */
+function holdAt(param: AudioParam, now: number): number {
+  const value = param.value;
+  if (typeof param.cancelAndHoldAtTime === "function") {
+    param.cancelAndHoldAtTime(now);
+  } else {
+    param.cancelScheduledValues(0);
+  }
+  param.setValueAtTime(value, now);
+  return value;
+}
+
+/** Turntable spin-down: speed falls away fast at first, then coasts to a stop. */
+function spinDownCurve(from: number, steps = 128): Float32Array {
+  const curve = new Float32Array(steps);
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    // Never quite 0: some engines reject a zero playback rate.
+    curve[i] = Math.max(0.0001, from * (1 - t) ** 1.6);
+  }
+  return curve;
+}
+
+/** Level during a spin-down: full until the last 40%, then gone as the platter stops. */
+function spinDownGain(from: number, steps = 128): Float32Array {
+  const curve = new Float32Array(steps);
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    curve[i] = from * Math.min(1, (1 - t) / 0.4);
+  }
+  return curve;
 }
 
 export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
@@ -186,10 +224,27 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
       token++;
       if (!context || !current) return;
       const now = context.currentTime;
-      current.gain.gain.cancelScheduledValues(now);
-      current.gain.gain.setValueAtTime(current.gain.gain.value, now);
+      holdAt(current.gain.gain, now);
       current.gain.gain.linearRampToValueAtTime(0, now + fadeSeconds);
       retire(current, now + fadeSeconds);
+      current = null;
+      clock = null;
+    },
+
+    powerDown(seconds = 3) {
+      token++;
+      if (!context) return;
+      const now = context.currentTime;
+      const start = now + 0.01;
+      for (const voice of [...(current ? [current] : []), ...fading]) {
+        const rate = holdAt(voice.source.playbackRate, now);
+        const level = holdAt(voice.gain.gain, now);
+        voice.source.playbackRate.setValueCurveAtTime(spinDownCurve(rate), start, seconds);
+        voice.gain.gain.setValueCurveAtTime(spinDownGain(level), start, seconds);
+        voice.source.stop(start + seconds);
+        fading.add(voice);
+        voice.source.addEventListener("ended", () => fading.delete(voice));
+      }
       current = null;
       clock = null;
     },

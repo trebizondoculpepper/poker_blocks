@@ -21,7 +21,7 @@ import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createMenus } from "./menus";
 import { createConsole } from "./console/console-view";
 import { musicTracks } from "./audio/music-catalog";
-import { defaultMusicPlan, pickTrack, type MusicScene } from "./audio/music-plan";
+import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
 import { browserStorage, loadRun, saveKey, saveRun } from "./save";
 import {
@@ -762,15 +762,18 @@ const systemMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
 let settings = loadSettings(storage);
 let reducedMotion = false;
-const music = createMusicPlayer(musicTracks);
-const musicIds = musicTracks.map(({ id }) => id);
+const musicPlayer = createMusicPlayer(musicTracks);
+const music = createMusicController(
+  musicPlayer,
+  musicTracks.map(({ id }) => id),
+);
 function applySettings(next: Settings): void {
   settings = next;
   setSfxVolume(next.volume);
   setSfxMuted(next.muted);
   // Music sits a little under the sound effects at the same volume setting.
-  music.setVolume(next.volume * 0.75);
-  music.setMuted(next.muted);
+  musicPlayer.setVolume(next.volume * 0.75);
+  musicPlayer.setMuted(next.muted);
   reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
   cardRoom.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
 }
@@ -1012,41 +1015,17 @@ function dealHand(): void {
   layoutHand();
 }
 
-// ----- Music: title, settings, and a vibe per stage (boss stages have their own) -----
+// ----- Music: the controller decides transitions; the game just says what is happening -----
 let screen: "title" | "settings" | "game" | "over" = "title";
-/** The loop chosen for the current stage; kept while visiting settings. */
-let stageTrack: string | null = null;
 
-function chooseStageTrack(): void {
-  const scene: MusicScene = game.phase === "boss" ? "boss" : "stage";
-  stageTrack = pickTrack(scene, musicIds, Math.random, stageTrack);
-}
-
-function playScreenMusic(): void {
-  if (screen === "over") {
-    // The run is over: let the music fade away under the game over screen.
-    music.stop(3);
-  } else if (screen === "settings") {
-    void music.play(pickTrack("settings", musicIds) ?? "");
-  } else if (screen === "title") {
-    // Keep a title track if one is already playing; otherwise pick horns or sleaze.
-    if (!defaultMusicPlan.title.includes(music.current ?? "")) {
-      void music.play(pickTrack("title", musicIds) ?? "");
-    }
-  } else {
-    if (!stageTrack) chooseStageTrack();
-    if (stageTrack) void music.play(stageTrack);
-  }
+/** A stage has just started: boss stages get the boss loop, others a random vibe. */
+function musicForNewStage(): void {
+  if (game.phase === "boss") music.switchToBossTrack();
+  else music.switchToRandomStageTrack();
 }
 
 /** Browsers keep audio silent until the player interacts; start music on the first gesture. */
-let musicUnlocked = false;
-function unlockMusic(): void {
-  if (musicUnlocked) return;
-  musicUnlocked = true;
-  music.unlock();
-  playScreenMusic();
-}
+const unlockMusic = () => music.unlock();
 window.addEventListener("pointerdown", unlockMusic, { capture: true });
 window.addEventListener("keydown", unlockMusic, { capture: true });
 
@@ -1067,8 +1046,7 @@ function takeNextAction(): void {
   }
   resetTable();
   if (game.inStage) {
-    chooseStageTrack();
-    if (musicUnlocked && screen === "game") playScreenMusic();
+    musicForNewStage();
     dealHand();
     playSfx("round.start");
   } else if (game.phase === "shop") {
@@ -1114,8 +1092,7 @@ function startRun(session: GameSession): void {
   showSelection();
   autosave();
   playSfx("round.start");
-  chooseStageTrack();
-  if (musicUnlocked && screen === "game") playScreenMusic();
+  if (game.inStage) musicForNewStage();
 }
 
 const menus = createMenus(host, settings, {
@@ -1136,7 +1113,10 @@ const menus = createMenus(host, settings, {
   },
   onScreen(next) {
     screen = next;
-    if (musicUnlocked) playScreenMusic();
+    if (next === "title") music.playTitle();
+    else if (next === "settings") music.playSettings();
+    else if (next === "over") music.gameOver();
+    else music.resumeStage();
   },
 });
 menus.showTitle();
@@ -1162,11 +1142,11 @@ createConsole({
     autosave();
     return true;
   },
-  musicTracks: () => musicIds,
+  musicTracks: () => music.tracks,
   musicNow: () => music.current,
   playMusic(id) {
     music.unlock();
-    void music.play(id);
+    music.play(id);
   },
   stopMusic: () => music.stop(),
 });
