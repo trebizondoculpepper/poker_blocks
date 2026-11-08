@@ -42,7 +42,9 @@ export type MusicPlayer = {
   play(id: string, options?: Partial<SwitchOptions>): Promise<void>;
   stop(fadeSeconds?: number): void;
   /** Cut the power, as on a record player: everything slows to a stop over `seconds`. */
-  powerDown(seconds?: number): void;
+  windDown(seconds?: number): void;
+  /** Start a loop from a standstill, speeding up to its tempo over `seconds` like a platter. */
+  windUp(id: string, seconds?: number): Promise<void>;
   setVolume(volume: number): void;
   setMuted(muted: boolean): void;
   /** Call from a user gesture: browsers keep audio suspended until one happens. */
@@ -82,15 +84,21 @@ function spinDownCurve(from: number, steps = 128): Float32Array {
   return curve;
 }
 
-/** Level during a spin-down: full until the last 40%, then gone as the platter stops. */
+/**
+ * Level during a spin-down: full almost to the end, so the falling pitch is what you hear,
+ * then gone in the last 15% as the platter stops.
+ */
 function spinDownGain(from: number, steps = 128): Float32Array {
   const curve = new Float32Array(steps);
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1);
-    curve[i] = from * Math.min(1, (1 - t) / 0.4);
+    curve[i] = from * Math.min(1, (1 - t) / 0.15);
   }
   return curve;
 }
+
+/** Tempo a wound-down loop starts from: nearly stopped (a beat clock needs a tempo above 0). */
+const standstill = 0.02;
 
 export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
   const byId = new Map(tracks.map((track) => [track.id, track]));
@@ -231,7 +239,32 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
       clock = null;
     },
 
-    powerDown(seconds = 3) {
+    async windUp(id, seconds = 2) {
+      const track = byId.get(id);
+      if (!track) return;
+      // Anything still sounding stops now; the new loop starts from rest.
+      this.stop(0.05);
+      const mine = ++token;
+      const buffer = await load(track);
+      if (mine !== token) return;
+      const { context } = audio();
+      const at = context.currentTime + 0.05;
+      const tempo = track.info.tempo_bpm;
+      // The beat clock eases up with the audio, so later switches stay on the beat.
+      clock = createBeatClock(at, tempo * standstill);
+      clock.ramp(at, seconds, tempo);
+      current = startVoice(track, buffer, at, 0, tempo * standstill);
+      current.source.playbackRate.setValueCurveAtTime(
+        rateCurve(at, seconds, tempo),
+        at + 0.001,
+        seconds,
+      );
+      current.source.playbackRate.setValueAtTime(1, at + seconds + 0.01);
+      // Sound comes in quickly as the platter starts to turn.
+      current.gain.gain.setValueCurveAtTime(fadeCurve("s-curve", true), at, Math.min(0.6, seconds));
+    },
+
+    windDown(seconds = 3) {
       token++;
       if (!context) return;
       const now = context.currentTime;

@@ -1115,7 +1115,7 @@ const menus = createMenus(host, settings, {
     screen = next;
     if (next === "title") music.playTitle();
     else if (next === "settings") music.playSettings();
-    else if (next === "over") music.gameOver();
+    else if (next === "over") music.windDown();
     else music.resumeStage();
   },
 });

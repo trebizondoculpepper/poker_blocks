@@ -1,8 +1,11 @@
 /**
- * The one place that decides music transitions. The game says what is happening ("play the
- * title music", "a new stage started", "game over") and the controller picks tracks from the
+ * The one place that decides music transitions. The game says what to play ("title
+ * music", "a random stage track", "wind down") and the controller picks tracks from the
  * music plan and tells the player how to get there. Requests made before the browser allows
  * audio are remembered and played on the first gesture.
+ *
+ * It remembers the record player's state: once wound down, the next music winds back up
+ * from a standstill instead of fading in.
  */
 import { defaultMusicPlan, pickTrack, type MusicPlan } from "./music-plan";
 import type { MusicPlayer } from "./music-player";
@@ -18,8 +21,12 @@ export type MusicController = {
   switchToBossTrack(): void;
   /** Back to the table (closing settings): the current stage's track. */
   resumeStage(): void;
-  /** The run is lost: the music winds down like a record player losing power. */
-  gameOver(): void;
+  /** Wind the music down to silence, like a record player losing power. */
+  windDown(): void;
+  /** Wind back up whatever was playing before the wind-down. */
+  windUp(): void;
+  /** Whether the record player is wound down (the next music winds up). */
+  readonly woundDown: boolean;
   /** A specific loop, for the console. */
   play(id: string): void;
   stop(): void;
@@ -30,7 +37,7 @@ export type MusicController = {
 };
 
 export function createMusicController(
-  player: Pick<MusicPlayer, "play" | "stop" | "powerDown" | "unlock" | "current">,
+  player: Pick<MusicPlayer, "play" | "stop" | "windDown" | "windUp" | "unlock" | "current">,
   tracks: readonly string[],
   plan: MusicPlan = defaultMusicPlan,
   random: () => number = Math.random,
@@ -40,13 +47,22 @@ export function createMusicController(
   let stageTrack: string | null = null;
   /** The last request, replayed on unlock. */
   let wanted: () => void = () => {};
+  let woundDown = false;
+  /** What was playing when the music wound down, for windUp(). */
+  let beforeWindDown: string | null = null;
 
   const request = (action: () => void) => {
     wanted = action;
     if (unlocked) action();
   };
   const start = (id: string | null) => {
-    if (id) void player.play(id);
+    if (!id) return;
+    if (woundDown) {
+      woundDown = false;
+      void player.windUp(id);
+    } else {
+      void player.play(id);
+    }
   };
   const playStage = () => {
     stageTrack ??= pickTrack("stage", tracks, random);
@@ -56,7 +72,8 @@ export function createMusicController(
   return {
     playTitle: () =>
       request(() => {
-        if (!plan.title.includes(player.current ?? "")) start(pickTrack("title", tracks, random));
+        if (woundDown || !plan.title.includes(player.current ?? ""))
+          start(pickTrack("title", tracks, random));
       }),
     playSettings: () => request(() => start(pickTrack("settings", tracks, random))),
     switchToRandomStageTrack() {
@@ -68,7 +85,17 @@ export function createMusicController(
       request(playStage);
     },
     resumeStage: () => request(playStage),
-    gameOver: () => request(() => player.powerDown(3)),
+    windDown: () =>
+      request(() => {
+        if (woundDown) return;
+        beforeWindDown = player.current;
+        woundDown = true;
+        player.windDown(3);
+      }),
+    windUp: () => request(() => start(beforeWindDown)),
+    get woundDown() {
+      return woundDown;
+    },
     play: (id) => request(() => start(id)),
     stop: () => request(() => player.stop()),
     unlock() {

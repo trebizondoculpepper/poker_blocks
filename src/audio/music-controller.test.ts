@@ -26,9 +26,13 @@ function setup() {
       current = null;
       log.push("stop");
     },
-    powerDown: (seconds?: number) => {
+    windDown: (seconds?: number) => {
       current = null;
-      log.push(`powerDown ${seconds}`);
+      log.push(`windDown ${seconds}`);
+    },
+    windUp: async (id: string) => {
+      current = id;
+      log.push(`windUp ${id}`);
     },
     unlock: () => log.push("unlock"),
   };
@@ -78,12 +82,35 @@ describe("music controller", () => {
     expect(log.at(-1)).toBe(stage);
   });
 
-  it("winds the music down like a record player on game over", () => {
+  it("winds the music down like a record player", () => {
     const { music, log } = setup();
     music.unlock();
     music.switchToRandomStageTrack();
-    music.gameOver();
-    expect(log.at(-1)).toBe("powerDown 3");
+    music.windDown();
+    expect(log.at(-1)).toBe("windDown 3");
     expect(music.current).toBeNull();
+    expect(music.woundDown).toBe(true);
+  });
+
+  it("remembers it is wound down: the next music winds up, then plays normally", () => {
+    const { music, log } = setup();
+    music.unlock();
+    music.switchToRandomStageTrack();
+    music.windDown();
+    music.playTitle();
+    expect(log.at(-1)).toBe("windUp blaxploitation-horns");
+    expect(music.woundDown).toBe(false);
+    music.playSettings();
+    expect(log.at(-1)).toBe("play style-ambient-lounge");
+  });
+
+  it("winds back up what was playing before", () => {
+    const { music, log } = setup();
+    music.unlock();
+    music.switchToRandomStageTrack();
+    const stage = log.at(-1)!.slice(5);
+    music.windDown();
+    music.windUp();
+    expect(log.at(-1)).toBe(`windUp ${stage}`);
   });
 });
