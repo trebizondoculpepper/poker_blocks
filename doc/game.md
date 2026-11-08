@@ -68,7 +68,7 @@ After every play, **every line on the field** is scored, and the sum is added to
 
 After each play, calculate the scores of all lines along the X, Y and Z axes before starting feedback. Each scored result identifies its axis, cells, ordered blocks, contributing cards, hand type and points. Keep lines that score at least one point, then sort them from lowest to highest score. Present them in that order, with the highest-scoring line last. For each line, tint its blocks gold and play a sound from the `score.magnitude.*` family. The score calculation is independent of the visual and sound playback.
 
-**Tint row** only changes how a line's blocks look temporarily. Here, “row” includes a line along any axis. The effect does not change card identities, materials, or scores, and should remain distinguishable when a block is also selected.
+**Tint row** only changes how a line's blocks look temporarily. Here, “row” includes a line along any axis. The effect does not change card identities, materials, or scores.
 
 The exact timing and appearance remain open to tuning.
 
@@ -136,6 +136,24 @@ Later this formula will be extended in three ways:
 - Completing a stage grants 4 coins by default. Other reward rules may add more ledger rows and coins.
 - Some blocks have economic effects: certain plays earn coins.
 - The player must balance building points against earning coins.
+
+## Materials (design)
+
+The default card material is **paper**. **Wood** is the next material under discussion: it should resemble a softwood block with grain running along one axis. Four side faces show lengthwise grain; the two opposite end faces have a distinct end-grain texture. Rank and suit remain readable on every face. Wood's gameplay effect is still to be decided; its position after paper does not yet imply a numerical bonus.
+
+The playable `?room=dev` experiment assigns a random visual material to each of the 52 cards at the start of a new game. Its own save preserves those assignments without affecting a normal run. The current visual prototypes are:
+
+- **Wood:** branded rank and suit, with red suits inked red.
+- **Steel:** bolted plates with light rust staining.
+- **Glass:** translucent-looking cyan with a restrained lens-like gleam.
+- **Prismatic glass:** brighter iridescent bands and sparkles.
+- **Gold:** warm reflective foil and engraved edges.
+- **Delft ceramic:** pale porcelain with blue ornament and red accents.
+- **Terracotta:** rough fired clay with impressed markings.
+- **Ice:** frosted glass-like blue with surface condensation.
+- **Meat:** marbled flesh tones and gently rounded corners.
+
+These prototypes have no material-specific rules yet. **Jelly** is excluded until its motion and attachment behavior are designed.
 
 ## Passives (design)
 

@@ -1,6 +1,7 @@
 import "./style.css";
 import * as THREE from "three";
-import { cardName, standardDeck, type CardBlock, type IdentityTrait } from "./cards";
+import { cardName, standardDeck, type CardBlock } from "./cards";
+import { makeDevDeck, materialOf } from "./materials";
 import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
 import { dealerRegistry, roundOutcome } from "./dealer";
 import { presentationOrder, scoreField, type ScoredLine } from "./scoring";
@@ -12,12 +13,13 @@ import { tweenValue } from "./easing";
 import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
 import { createMaterialise } from "./visual/materialise";
 import { createCardRoom } from "./visual/card-room";
+import { createBlockAppearance } from "./visual/block-appearance";
 import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createMenus } from "./menus";
-import { browserStorage, loadRun, saveRun } from "./save";
+import { browserStorage, loadRun, saveKey, saveRun } from "./save";
 import {
   loadSettings,
   prefersReducedMotion,
@@ -104,35 +106,12 @@ function render(): void {
   renderer.render(handScene, handCamera);
 }
 
-function makeFaceTexture(identity: IdentityTrait): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 512;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Canvas 2D is unavailable");
-  context.fillStyle = "#f6f0e3";
-  context.fillRect(0, 0, 512, 512);
-  context.strokeStyle = "#b8b0a2";
-  context.lineWidth = 12;
-  context.strokeRect(26, 26, 460, 460);
-  context.fillStyle = identity.suit.color;
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.font = "bold 164px system-ui, sans-serif";
-  context.fillText(identity.rank, 256, 205);
-  context.font = "188px Georgia, serif";
-  context.fillText(identity.suit.symbol, 256, 360);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
-  return texture;
-}
-
 type RenderedBlock = {
   block: CardBlock;
   cube: THREE.Mesh;
-  geometry: THREE.BoxGeometry;
-  texture: THREE.CanvasTexture;
-  material: THREE.MeshStandardMaterial;
+  geometry: THREE.BufferGeometry;
+  textures: THREE.CanvasTexture[];
+  materials: THREE.MeshStandardMaterial[];
   edgeGeometry: THREE.EdgesGeometry;
   edgeMaterial: THREE.LineBasicMaterial;
   location: "board" | "hand";
@@ -167,21 +146,27 @@ function createCube(
   size: number,
   location: RenderedBlock["location"],
 ): RenderedBlock {
-  const geometry = new THREE.BoxGeometry(size, size, size);
-  const texture = makeFaceTexture(block.traits.identity);
-  const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.65 });
-  const cube = new THREE.Mesh(geometry, material);
+  const { geometry, textures, materials, edgeColor, edgeOpacity } = createBlockAppearance(
+    block.traits.identity,
+    materialOf(block),
+    size,
+  );
+  const cube = new THREE.Mesh(geometry, materials);
   cube.castShadow = cube.receiveShadow = true;
   const edgeGeometry = new THREE.EdgesGeometry(geometry);
-  const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6b6c73 });
+  const edgeMaterial = new THREE.LineBasicMaterial({
+    color: edgeColor,
+    transparent: edgeOpacity < 1,
+    opacity: edgeOpacity,
+  });
   cube.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
   (location === "board" ? assembly : handScene).add(cube);
   const rendered = {
     block,
     cube,
     geometry,
-    texture,
-    material,
+    textures,
+    materials,
     edgeGeometry,
     edgeMaterial,
     location,
@@ -198,8 +183,8 @@ function disposeCube(rendered: RenderedBlock): void {
   rendered.cube.removeFromParent();
   renderedBlocks.splice(renderedBlocks.indexOf(rendered), 1);
   rendered.geometry.dispose();
-  rendered.texture.dispose();
-  rendered.material.dispose();
+  rendered.textures.forEach((texture) => texture.dispose());
+  new Set(rendered.materials).forEach((material) => material.dispose());
   rendered.edgeGeometry.dispose();
   rendered.edgeMaterial.dispose();
 }
@@ -297,8 +282,39 @@ function updateCamera(now: number): void {
 }
 
 const storage = browserStorage();
+const devRoom = new URLSearchParams(window.location.search).get("room") === "dev";
+const devSeedKey = "poker-blocks.dev-material-seed";
+const runSaveKey = devRoom ? "poker-blocks.dev-run" : saveKey;
+function newMaterialSeed(): number {
+  return Math.floor(Math.random() * 4294967296);
+}
+function devSeed(fresh = false): number {
+  try {
+    const raw = storage?.getItem(devSeedKey);
+    const stored = Number(raw);
+    if (
+      !fresh &&
+      raw !== null &&
+      raw !== undefined &&
+      Number.isInteger(stored) &&
+      stored >= 0 &&
+      stored < 4294967296
+    )
+      return stored;
+  } catch {
+    // A dev run still works when browser storage is unavailable.
+  }
+  const seed = newMaterialSeed();
+  try {
+    storage?.setItem(devSeedKey, String(seed));
+  } catch {
+    /* Storage is optional. */
+  }
+  return seed;
+}
+let cards: readonly CardBlock[] = devRoom ? makeDevDeck(devSeed()) : standardDeck;
 // A fresh run sits behind the title screen until the player chooses Continue or New game.
-let game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck);
+let game = new GameSession(dealerRegistry, demoSessionConfig, cards);
 for (const { block, cell } of game.state.field) addToBoard(block, cell);
 const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
   const rendered = createCube(block, cubeSize / 3, "hand");
@@ -362,8 +378,12 @@ const ghost = new THREE.Mesh(ghostGeometry, ghostMaterial);
 ghost.visible = false;
 assembly.add(ghost);
 const ghostEdgeGeometry = new THREE.EdgesGeometry(ghostGeometry);
-const ghostEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x65f4dd });
+const ghostEdgeMaterial = new THREE.LineBasicMaterial({
+  color: 0x65f4dd,
+  transparent: true,
+});
 ghost.add(new THREE.LineSegments(ghostEdgeGeometry, ghostEdgeMaterial));
+let ghostIsDropPreview = false;
 
 const faceGeometry = new THREE.PlaneGeometry(cubeSize * 0.94, cubeSize * 0.94);
 const faceMaterial = new THREE.MeshBasicMaterial({
@@ -424,13 +444,15 @@ function showInspection(block: CardBlock | undefined, clientX: number, clientY: 
 }
 
 function showSelection(): void {
-  renderedBlocks.forEach(({ block, material }) => {
-    const active = selected.has(block.id);
-    material.emissive.setHex(0xffffff);
-    material.emissiveIntensity = active ? 0.28 : 0;
+  renderedBlocks.forEach(({ block, materials }) => {
+    const active = Boolean(block.traits.selectable) && selected.has(block.id);
+    new Set(materials).forEach((material) => {
+      material.emissive.setHex(0xffffff);
+      material.emissiveIntensity = active ? 0.28 : 0;
+    });
   });
   const selectedNames = renderedBlocks
-    .filter(({ block }) => selected.has(block.id))
+    .filter(({ block }) => block.traits.selectable && selected.has(block.id))
     .map(({ block }) => cardName(block.traits.identity));
   host.setAttribute(
     "aria-label",
@@ -545,6 +567,7 @@ function pickAttachment(clientX: number, clientY: number): Candidate | null {
 }
 
 function showCandidate(candidate: Candidate | null): void {
+  ghostIsDropPreview = Boolean(candidate);
   ghost.visible = Boolean(candidate);
   faceHighlight.visible = Boolean(candidate?.target);
   if (!candidate) return;
@@ -564,6 +587,30 @@ function showCandidate(candidate: Candidate | null): void {
     new THREE.Vector3(0, 0, 1),
     new THREE.Vector3(normal.x, normal.y, normal.z),
   );
+}
+
+/** Invite the first play using the same outline as a valid attachment preview. */
+function updateEmptyFieldPrompt(time: number): void {
+  const cell =
+    game.inStage &&
+    game.state.field.length === 0 &&
+    game.state.hand.length > 0 &&
+    game.dealer.canPlay(game.state) &&
+    roundOutcome(game.state) === "playing"
+      ? game.dealer.placementFor(game.state)
+      : null;
+  const idle = Boolean(cell) && !drag?.active && !pendingAction;
+  ghost.visible = ghostIsDropPreview || idle;
+  if (!ghost.visible) return;
+  if (ghostIsDropPreview) {
+    ghostMaterial.opacity = 0.18;
+    ghostEdgeMaterial.opacity = 1;
+    return;
+  }
+  ghost.position.set(cell!.x * cubeSize, cell!.y * cubeSize - 0.45, cell!.z * cubeSize);
+  const pulse = reducedMotion ? 0.8 : (1 + Math.cos((time * Math.PI * 2) / 1800)) / 2;
+  ghostMaterial.opacity = 0.18 * pulse;
+  ghostEdgeMaterial.opacity = pulse;
 }
 
 /** The hand position under the pointer, or null when the pointer is not over the hand. */
@@ -699,7 +746,10 @@ function startPlacement(source: RenderedBlock, candidate: Candidate): boolean {
     face: candidate.face ?? undefined,
   });
   if (!next) return false;
-  const cell = next.field[next.field.length - 1].cell;
+  const placedBlock = next.field[next.field.length - 1];
+  const cell = placedBlock.cell;
+  selected = new Set([...selected].filter((id) => id !== placedBlock.block.id));
+  source.block = placedBlock.block;
   const slot = removeFromHand(source);
   // The cameras use different projections. Match the hand cube's screen position and
   // apparent size in the board view, then let the assembly carry it as it wobbles.
@@ -831,7 +881,11 @@ function updateScoring(now: number): void {
     const tint = tints[index];
     const progress = Math.min(1, (now - tint.startedAt) / 1000 / tintSeconds);
     const strength = Math.sin(progress * Math.PI) * 0.7;
-    tint.blocks.forEach(({ material }) => material.color.setRGB(1, 1, 1).lerp(tintColor, strength));
+    tint.blocks.forEach(({ materials }) => {
+      new Set(materials).forEach((material) =>
+        material.color.setRGB(1, 1, 1).lerp(tintColor, strength),
+      );
+    });
     if (progress === 1) tints.splice(index, 1);
   }
 }
@@ -900,7 +954,7 @@ function takeNextAction(): void {
 
 /** Save at a safe point: never while a placement, discard or score presentation is running. */
 function autosave(): void {
-  saveRun(storage, game.snapshot());
+  saveRun(storage, game.snapshot(), runSaveKey);
 }
 
 /** Swap in a session (new or resumed) and rebuild the scene from its state. */
@@ -923,15 +977,16 @@ function startRun(session: GameSession): void {
 }
 
 const menus = createMenus(host, settings, {
-  hasSave: () => loadRun(storage, standardDeck, dealerRegistry) !== null,
+  hasSave: () => loadRun(storage, cards, dealerRegistry, runSaveKey) !== null,
   onContinue() {
-    const snapshot = loadRun(storage, standardDeck, dealerRegistry);
+    const snapshot = loadRun(storage, cards, dealerRegistry, runSaveKey);
     if (snapshot) {
-      startRun(GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, standardDeck, snapshot));
+      startRun(GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, cards, snapshot));
     }
   },
   onNewGame() {
-    startRun(new GameSession(dealerRegistry, demoSessionConfig, standardDeck));
+    if (devRoom) cards = makeDevDeck(devSeed(true));
+    startRun(new GameSession(dealerRegistry, demoSessionConfig, cards));
   },
   onSettingsChange(next) {
     applySettings(next);
@@ -1181,6 +1236,7 @@ const animate = (time: number) => {
     cube.rotation.z = rockAngle(rock, time / 1000);
   });
   if (drag?.active) updateCandidate();
+  updateEmptyFieldPrompt(time);
   render();
   frame = requestAnimationFrame(animate);
 };

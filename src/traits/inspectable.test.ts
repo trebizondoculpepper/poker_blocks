@@ -4,9 +4,9 @@ import { inspectBlock } from "./inspectable";
 
 describe("inspectable trait", () => {
   it("describes standard cards on hover", () => {
-    expect(standardDeck[0].traits.inspectable?.inspect()).toBe("ace of spades");
-    expect(inspectBlock(standardDeck[0])).toBe("ace of spades");
-    expect(inspectBlock(standardDeck[14])).toBe("2 of hearts");
+    expect(standardDeck[0].traits.inspectable?.inspect()).toBe("Ace of Spades");
+    expect(inspectBlock(standardDeck[0])).toBe("Ace of Spades");
+    expect(inspectBlock(standardDeck[14])).toBe("2 of Hearts");
   });
 
   it("does not inspect a block without the trait", () => {
