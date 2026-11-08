@@ -9,7 +9,7 @@
     "preview": "vp preview",
     "check": "vp check",
     "test": "vp test run --passWithNoTests",
-    "sfx": "node scripts/generate-sfx.ts"
+    "sfx": "node --env-file-if-exists=.env scripts/generate-sfx.ts"
   },
   "dependencies": {
     "three": "^0.187.0"
