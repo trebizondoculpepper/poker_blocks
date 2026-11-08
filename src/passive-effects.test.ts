@@ -81,6 +81,29 @@ describe("configured passive effects", () => {
     expect(picked[0].id).not.toBe(picked[1].id);
   });
 
+  it("upgrades an older one-passive save without replacing its existing block", () => {
+    const game = new GameSession(
+      dealerRegistry,
+      sandboxSessionConfig(demoSessionConfig),
+      standardDeck,
+      () => 0,
+    );
+    const original = passive("do-nothing", 1);
+    game.installPassive(original);
+    const restored = GameSession.fromSnapshot(
+      dealerRegistry,
+      sandboxSessionConfig(demoSessionConfig),
+      standardDeck,
+      game.snapshot(),
+      () => 0,
+    );
+    restored.fillPassiveRack(2);
+    restored.fillPassiveRack(2);
+    expect(restored.state.passiveRack).toHaveLength(2);
+    expect(restored.state.passiveRack[0]).toEqual(original);
+    expect(restored.state.passiveRack[1].definitionId).not.toBe(original.definitionId);
+  });
+
   it("uses the same modified lines for the stage total and presentation", () => {
     const game = new GameSession(
       dealerRegistry,

@@ -175,6 +175,8 @@ The rack is separate from the hand and field. Passives are not discardable. Drag
 
 The separate `?room=dev2` sandbox reuses the endless-play session configuration from `dev1`. It deals two distinct passives from the roster below and gives standard cards a mix of gameplay materials. The rack and current run survive a reload. Each passive has configured rule, appearance, rack-residency, and inspection traits. Shop acquisition, selling, rack capacity rules, and one-use passives remain future work. `dev0` and `dev1` keep their existing purposes.
 
+Add `&restart=true` to any dev-room URL to start a fresh run on that load. The parameter is then removed from the address so later reloads resume normally. An older `dev2` save with only one passive keeps that block and receives a second, different one when loaded.
+
 ### First dev2 passive set
 
 On a fresh `dev2` run, two **distinct** passive definitions are chosen at random from this set and installed in the rack. A saved run keeps its chosen passives on reload. The dev room mixes card materials so the material effects can be exercised.

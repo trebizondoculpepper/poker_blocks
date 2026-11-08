@@ -134,6 +134,17 @@ export class GameSession {
     return true;
   }
 
+  /** Fill empty rack slots from unowned definitions, keeping existing blocks in order. */
+  fillPassiveRack(targetSize: number): void {
+    const missing = Math.max(0, targetSize - this.currentState.passiveRack.length);
+    const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
+    for (const definition of randomPassiveDefinitions(missing, this.random, owned)) {
+      let serial = this.currentState.passiveRack.length + 1;
+      while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;
+      this.installPassive(createPassiveBlock(definition.id, `passive.${serial}`));
+    }
+  }
+
   play(action: PlayAction): GameState | null {
     if (!this.inStage) return null;
     const next = this.activeDealer.play(this.currentState, action);

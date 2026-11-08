@@ -36,7 +36,6 @@ import { createMusicPlayer } from "./audio/music-player";
 import { browserStorage, loadRun, saveKey, saveRun } from "./save";
 import { boardBaseFov, fovForZoom, pinchZoom, wheelZoom } from "./view-zoom";
 import { bindScreenshotShortcut } from "./screenshot";
-import { createPassiveBlock, randomPassiveDefinitions } from "./passives";
 import { createPassiveRack } from "./passive-rack";
 import {
   loadSettings,
@@ -376,10 +375,12 @@ const storage = browserStorage();
  * Dev rooms (?room=...): dev0 is the normal game with a random material on every card;
  * dev1 samples materials; dev2 prototypes the passive rack. "dev" aliases dev0.
  */
-const roomName = new URLSearchParams(window.location.search).get("room");
+const roomParams = new URLSearchParams(window.location.search);
+const roomName = roomParams.get("room");
 const materialsRoom = roomName === "dev1";
 const passivesRoom = roomName === "dev2";
 const materialDevRoom = roomName === "dev0" || roomName === "dev" || materialsRoom;
+const restartDevRoom = (materialDevRoom || passivesRoom) && roomParams.get("restart") === "true";
 /** dev1 and dev2 are sandboxes for endless play. */
 const sessionConfig =
   materialsRoom || passivesRoom ? sandboxSessionConfig(demoSessionConfig) : demoSessionConfig;
@@ -1191,15 +1192,11 @@ function autosave(): void {
   saveRun(storage, game.snapshot(), runSaveKey);
 }
 
-/** A new run: material samples in dev0/1, two random passives in dev2. */
+/** A new run: material samples in dev0/1; dev2 rack is filled in startRun. */
 function newSession(): GameSession {
   if (materialsRoom) cards = makeDevDeck(newMaterialSeed());
   else if (materialDevRoom || passivesRoom) cards = makeDevDeck(devSeed(true));
   const session = new GameSession(dealerRegistry, sessionConfig, cards);
-  if (passivesRoom)
-    randomPassiveDefinitions(2, Math.random).forEach((definition, index) =>
-      session.installPassive(createPassiveBlock(definition.id, `passive.${index + 1}`)),
-    );
   if (!materialsRoom) return session;
   const { state } = session;
   const sample = sampleMaterials(state.deck);
@@ -1212,6 +1209,7 @@ function newSession(): GameSession {
 /** Swap in a session (new or resumed) and rebuild the scene from its state. */
 function startRun(session: GameSession): void {
   game = session;
+  if (passivesRoom) game.fillPassiveRack(2);
   passiveRackView?.render(game.state.passiveRack);
   gameOverAt = null;
   pendingAction = null;
@@ -1256,7 +1254,8 @@ const menus = createMenus(host, settings, {
 });
 // Prototype rooms skip the title and start directly in their endless sandbox.
 if (materialsRoom || passivesRoom) {
-  const saved = passivesRoom ? loadRun(storage, cards, dealerRegistry, runSaveKey) : null;
+  const saved =
+    passivesRoom && !restartDevRoom ? loadRun(storage, cards, dealerRegistry, runSaveKey) : null;
   startRun(
     saved ? GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, saved) : newSession(),
   );
@@ -1264,7 +1263,15 @@ if (materialsRoom || passivesRoom) {
   // No music while judging materials: the record player starts wound down.
   music.windDown();
 } else {
-  menus.showTitle();
+  if (restartDevRoom) {
+    startRun(newSession());
+    menus.closeAll();
+  } else menus.showTitle();
+}
+if (restartDevRoom) {
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete("restart");
+  window.history.replaceState(window.history.state, "", cleanUrl);
 }
 const unbindScreenshot = bindScreenshotShortcut(host, renderer, render);
 stat("action").addEventListener("click", takeNextAction);
