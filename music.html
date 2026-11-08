@@ -43,6 +43,38 @@
             Beat click
           </label>
         </div>
+        <details class="tap" id="wind-panel" open>
+          <summary>Record player wind-down and wind-up</summary>
+          <p class="room-intro">
+            Wind down cuts the power: the loop slows to a stop, pitch falling, and goes silent at
+            the end. While wound down, clicking a loop (or Wind up) starts it from a standstill and
+            speeds it up to tempo. The game uses the defaults shown here.
+          </p>
+          <div class="room-controls">
+            <button type="button" id="wind-down">Wind down</button>
+            <button type="button" id="wind-up" disabled>Wind up</button>
+            <label>
+              Wind-down time <output id="down-value">3 s</output>
+              <input id="down-seconds" type="range" min="0.5" max="10" step="0.25" value="3" />
+            </label>
+            <label>
+              Slowdown curve <output id="slowdown-value">1.6</output>
+              <input id="slowdown" type="range" min="0.5" max="4" step="0.1" value="1.6" />
+            </label>
+            <label>
+              Silent tail <output id="tail-value">15%</output>
+              <input id="tail" type="range" min="0" max="0.8" step="0.05" value="0.15" />
+            </label>
+            <label>
+              Wind-up time <output id="up-value">2 s</output>
+              <input id="up-seconds" type="range" min="0.25" max="10" step="0.25" value="2" />
+            </label>
+          </div>
+          <p class="room-intro">
+            Slowdown curve: 1 slows at a steady rate; higher drops fast at first, then coasts.
+            Silent tail: the last part of the wind-down over which the sound fades out.
+          </p>
+        </details>
         <details class="tap" id="tap-panel" open>
           <summary>Tap tempo</summary>
           <p class="room-intro">

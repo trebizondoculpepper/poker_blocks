@@ -4,6 +4,7 @@
 import "./style.css";
 import { createBeatClock } from "../audio/beat-clock";
 import { fadeCurve, fadeKinds, type FadeKind } from "../audio/music-fade";
+import { defaultWind, scheduleWindDown, standstill, type WindShape } from "../audio/music-wind";
 import { fitTaps, snapToLoop, type LoopTempo } from "./tap-tempo";
 
 type LoopInfo = {
@@ -159,7 +160,104 @@ function rateCurve(
   return curve;
 }
 
+// ----- Record player: wind down to a stop, wind up from a standstill -----
+const windDownButton = element<HTMLButtonElement>("wind-down");
+const windUpButton = element<HTMLButtonElement>("wind-up");
+const windInputs = {
+  downSeconds: element<HTMLInputElement>("down-seconds"),
+  slowdown: element<HTMLInputElement>("slowdown"),
+  silentTail: element<HTMLInputElement>("tail"),
+  upSeconds: element<HTMLInputElement>("up-seconds"),
+};
+const windOutputs: Record<keyof WindShape, [HTMLOutputElement, (v: number) => string]> = {
+  downSeconds: [element("down-value"), (v) => `${v} s`],
+  slowdown: [element("slowdown-value"), (v) => v.toFixed(1)],
+  silentTail: [element("tail-value"), (v) => `${Math.round(v * 100)}%`],
+  upSeconds: [element("up-value"), (v) => `${v} s`],
+};
+for (const key of Object.keys(windInputs) as (keyof WindShape)[]) {
+  windInputs[key].value = String(defaultWind[key]);
+  const show = () => {
+    const [output, format] = windOutputs[key];
+    output.textContent = format(Number(windInputs[key].value));
+  };
+  show();
+  windInputs[key].addEventListener("input", show);
+}
+const windShape = (): WindShape => ({
+  downSeconds: Number(windInputs.downSeconds.value),
+  slowdown: Number(windInputs.slowdown.value),
+  silentTail: Number(windInputs.silentTail.value),
+  upSeconds: Number(windInputs.upSeconds.value),
+});
+
+/** Wound down: the next loop winds up from a standstill. */
+let woundDown = false;
+/** What was playing when it wound down, for the Wind up button. */
+let beforeWindDown: Track | null = null;
+
+function windDown(): void {
+  if (!context || !current) return;
+  switchToken++;
+  if (half.checked) {
+    setHalfSpeed(false);
+    half.checked = false;
+  }
+  beforeWindDown = current.track;
+  const now = context.currentTime;
+  for (const voice of [current, ...fading]) {
+    scheduleWindDown(voice.source, voice.gain, now, windShape());
+    fading.add(voice);
+    voice.source.addEventListener("ended", () => fading.delete(voice));
+  }
+  current = null;
+  clock = null;
+  woundDown = true;
+  updateWindButtons();
+  status.textContent = `Wound down from ${beforeWindDown.name}.`;
+  render();
+}
+
+async function windUp(track: Track): Promise<void> {
+  const token = ++switchToken;
+  const buffer = await load(track);
+  if (token !== switchToken) return;
+  const { context } = audio();
+  if (context.state === "suspended") await context.resume();
+  for (const voice of fading) voice.source.stop();
+  fading.clear();
+  const at = context.currentTime + 0.05;
+  const tempo = track.info.tempo_bpm;
+  const { upSeconds } = windShape();
+  // The beat clock eases up with the audio, so later switches stay on the beat.
+  clock = createBeatClock(at, tempo * standstill);
+  clock.ramp(at, upSeconds, tempo);
+  current = startVoice(track, buffer, at, 0, tempo * standstill);
+  current.source.playbackRate.setValueCurveAtTime(
+    rateCurve(clock, at, upSeconds, tempo),
+    at + 0.001,
+    upSeconds,
+  );
+  current.source.playbackRate.setValueAtTime(1, at + upSeconds + 0.01);
+  current.gain.gain.setValueCurveAtTime(fadeCurve("s-curve", true), at, Math.min(0.6, upSeconds));
+  woundDown = false;
+  updateWindButtons();
+  render();
+}
+
+function updateWindButtons(): void {
+  windUpButton.disabled = !woundDown || !beforeWindDown;
+  windDownButton.disabled = woundDown;
+}
+
+windDownButton.addEventListener("click", windDown);
+windUpButton.addEventListener("click", () => {
+  if (beforeWindDown) void windUp(beforeWindDown);
+});
+
 async function select(track: Track): Promise<void> {
+  // While wound down, a loop starts from a standstill instead of fading in.
+  if (woundDown) return windUp(track);
   const token = ++switchToken;
   const buffer = await load(track);
   if (token !== switchToken) return;
@@ -227,6 +325,8 @@ async function select(track: Track): Promise<void> {
 
 function stop(): void {
   switchToken++;
+  woundDown = false;
+  updateWindButtons();
   half.checked = false;
   for (const voice of [current, ...fading]) voice?.source.stop();
   fading.clear();
