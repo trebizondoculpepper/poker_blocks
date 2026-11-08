@@ -9,7 +9,12 @@ import { presentationOrder, type ScoredLine } from "./scoring";
 import { magnitudeSfxFor } from "./score-presentation";
 
 import { GameSession, type Phase } from "./game-session";
-import { demoSessionConfig, unlimited, sandboxSessionConfig } from "./session-config";
+import {
+  demoSessionConfig,
+  sandboxSessionConfig,
+  unlimited,
+  type SessionConfig,
+} from "./session-config";
 import { tweenValue } from "./easing";
 import {
   boardPitchRock,
@@ -34,10 +39,11 @@ import { createConsole } from "./console/console-view";
 import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
-import { browserStorage, loadRun, saveKey, saveRun } from "./save";
+import { browserStorage, loadRun, saveRun } from "./save";
 import { boardBaseFov, fovForZoom, pinchZoom, wheelZoom } from "./view-zoom";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createPassiveRack } from "./passive-rack";
+import { devRooms, roomFor } from "./rooms";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
@@ -375,30 +381,26 @@ function updateCamera(now: number): void {
 
 const storage = browserStorage();
 /**
- * Dev rooms (?room=...): dev0 is the normal game with a random material on every card;
- * dev1 samples materials; dev2 prototypes the passive rack. "dev" aliases dev0.
+ * Rooms (?room=...) are composed from room traits; see src/rooms.ts. dev0 is the normal game
+ * with a material on every card, dev1 samples materials, dev2 has the passive rack.
  */
 const roomParams = new URLSearchParams(window.location.search);
-const roomName = roomParams.get("room");
-/** The dev rooms, for the console's reset command. */
-const devRooms = ["dev0", "dev1", "dev2"];
-const materialsRoom = roomName === "dev1";
-const passivesRoom = roomName === "dev2";
-const materialDevRoom = roomName === "dev0" || roomName === "dev" || materialsRoom;
-const restartDevRoom = (materialDevRoom || passivesRoom) && roomParams.get("restart") === "true";
-/** dev1 and dev2 are sandboxes for endless play. */
-const sessionConfig =
-  materialsRoom || passivesRoom ? sandboxSessionConfig(demoSessionConfig) : demoSessionConfig;
+/** This page's room: the normal game, or a dev room. Its traits say how it behaves. */
+const thisRoom = roomFor(roomParams.get("room"));
+const { traits: roomTraits } = thisRoom;
+const restartRoom = thisRoom.dev && roomParams.get("restart") === "true";
+/** The room's session rules: endless sandboxes, and the passive rack's capacity. */
+const sessionConfig: SessionConfig = {
+  ...(roomTraits.sandbox ? sandboxSessionConfig(demoSessionConfig) : demoSessionConfig),
+  ...(roomTraits.passiveRack ? { rackCapacity: roomTraits.passiveRack.capacity } : {}),
+};
 const devSeedKey = "poker-blocks.dev-material-seed";
-const runSaveKey = passivesRoom
-  ? "poker-blocks.dev2-run"
-  : materialsRoom
-    ? "poker-blocks.dev1-run"
-    : materialDevRoom
-      ? "poker-blocks.dev-run"
-      : saveKey;
-const passiveRackView = passivesRoom
-  ? createPassiveRack(host, { onPickUp: (block, event) => pickUpPassive(block, event) })
+const runSaveKey = roomTraits.save.key;
+const passiveRackView = roomTraits.passiveRack
+  ? createPassiveRack(host, {
+      capacity: roomTraits.passiveRack.capacity,
+      onPickUp: (block, event) => pickUpPassive(block, event),
+    })
   : null;
 function newMaterialSeed(): number {
   return Math.floor(Math.random() * 4294967296);
@@ -427,11 +429,13 @@ function devSeed(fresh = false): number {
   }
   return seed;
 }
-let cards: readonly CardBlock[] = materialsRoom
-  ? makeDevDeck(newMaterialSeed())
-  : materialDevRoom || passivesRoom
-    ? makeDevDeck(devSeed())
-    : standardDeck;
+/** A deck for a run in this room: plain, or with materials (fresh, or kept by seed). */
+function roomDeck(newGame: boolean): readonly CardBlock[] {
+  const materials = roomTraits.materialDeck;
+  if (!materials) return standardDeck;
+  return makeDevDeck(materials.reshuffle === "each-run" ? newMaterialSeed() : devSeed(newGame));
+}
+let cards: readonly CardBlock[] = roomDeck(false);
 // A fresh run sits behind the title screen until the player chooses Continue or New game.
 let game = new GameSession(dealerRegistry, sessionConfig, cards);
 for (const { block, cell } of game.state.field) addToBoard(block, cell);
@@ -1481,10 +1485,9 @@ function autosave(): void {
 
 /** A new run: material samples in dev0/1; dev2 rack is filled in startRun. */
 function newSession(): GameSession {
-  if (materialsRoom) cards = makeDevDeck(newMaterialSeed());
-  else if (materialDevRoom || passivesRoom) cards = makeDevDeck(devSeed(true));
+  cards = roomDeck(true);
   const session = new GameSession(dealerRegistry, sessionConfig, cards);
-  if (!materialsRoom) return session;
+  if (!roomTraits.materialSample) return session;
   const { state } = session;
   const sample = sampleMaterials(state.deck);
   return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
@@ -1496,7 +1499,8 @@ function newSession(): GameSession {
 /** Swap in a session (new or resumed) and rebuild the scene from its state. */
 function startRun(session: GameSession): void {
   game = session;
-  if (passivesRoom) game.fillPassiveRack(2);
+  const rack = roomTraits.passiveRack;
+  if (rack?.startWith) game.fillPassiveRack(Math.min(rack.startWith, rack.capacity));
   passiveRackView?.render(game.state.passiveRack);
   gameOverAt = null;
   // A run resumed on a won stage moves on from its pop-up (paid once; see the session).
@@ -1544,23 +1548,22 @@ const menus = createMenus(host, settings, {
     else music.resumeStage();
   },
 });
-// Prototype rooms skip the title and start directly in their endless sandbox.
-if (materialsRoom || passivesRoom) {
+// Rooms that skip the title start straight in play (resuming their run if they keep one).
+const skipTitle = roomTraits.skipTitle;
+if (skipTitle) {
   const saved =
-    passivesRoom && !restartDevRoom ? loadRun(storage, cards, dealerRegistry, runSaveKey) : null;
+    skipTitle.resume && !restartRoom ? loadRun(storage, cards, dealerRegistry, runSaveKey) : null;
   startRun(
     saved ? GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, saved) : newSession(),
   );
   menus.closeAll();
-  // No music while judging materials: the record player starts wound down.
-  music.windDown();
-} else {
-  if (restartDevRoom) {
-    startRun(newSession());
-    menus.closeAll();
-  } else menus.showTitle();
-}
-if (restartDevRoom) {
+} else if (restartRoom) {
+  startRun(newSession());
+  menus.closeAll();
+} else menus.showTitle();
+// Quiet rooms: the record player starts wound down.
+if (roomTraits.quiet) music.windDown();
+if (restartRoom) {
   const cleanUrl = new URL(window.location.href);
   cleanUrl.searchParams.delete("restart");
   window.history.replaceState(window.history.state, "", cleanUrl);
@@ -1578,10 +1581,10 @@ createConsole({
     menus.closeAll();
   },
   home: () => menus.showTitle(),
-  room: () => (roomName === "dev" ? "dev0" : devRooms.includes(roomName ?? "") ? roomName : null),
-  rooms: () => devRooms,
+  room: () => (thisRoom.dev ? thisRoom.id : null),
+  rooms: () => devRooms(),
   resetRoom(room) {
-    const currentRoom = roomName === "dev" ? "dev0" : roomName;
+    const currentRoom = thisRoom.dev ? thisRoom.id : null;
     if (!room || room === currentRoom) {
       startRun(newSession());
       menus.closeAll();

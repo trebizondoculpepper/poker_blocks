@@ -44,6 +44,8 @@ function faceTexture(
 export function createPassiveRack(
   host: HTMLElement,
   options: {
+    /** How many slots the rack shows; empty ones are drawn as outlines. */
+    capacity?: number;
     /** A pointer went down on an installed passive (the start of a possible drag). */
     onPickUp?(block: PassiveBlock, event: PointerEvent): void;
   } = {},
@@ -99,10 +101,9 @@ export function createPassiveRack(
     element,
     render(rack) {
       clear();
-      const width = Math.max(
-        slotWidth,
-        rack.length * slotWidth + Math.max(0, rack.length - 1) * slotGap,
-      );
+      // Room for every slot the rack has, filled or not.
+      const slotCount = Math.max(rack.length, options.capacity ?? rack.length, 1);
+      const width = slotCount * slotWidth + (slotCount - 1) * slotGap;
       renderer.setSize(width, canvasHeight, false);
       camera.left = (-width / canvasHeight) * 1.15;
       camera.right = (width / canvasHeight) * 1.15;
@@ -119,7 +120,7 @@ export function createPassiveRack(
         });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.x =
-          (index - (rack.length - 1) / 2) * ((2.3 * (slotWidth + slotGap)) / canvasHeight);
+          (index - (slotCount - 1) / 2) * ((2.3 * (slotWidth + slotGap)) / canvasHeight);
         const edges = new THREE.LineSegments(
           edgeGeometry,
           new THREE.LineBasicMaterial({ color: appearance.palette.edge }),
@@ -140,6 +141,12 @@ export function createPassiveRack(
         description.textContent = block.traits.inspectable.inspect();
         item.append(description);
         slots.append(item);
+      }
+      for (let empty = rack.length; empty < slotCount; empty++) {
+        const slot = document.createElement("div");
+        slot.className = "passive-item passive-empty";
+        slot.setAttribute("aria-label", "Empty passive slot");
+        slots.append(slot);
       }
       renderer.render(scene, camera);
     },

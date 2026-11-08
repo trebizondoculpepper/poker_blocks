@@ -155,6 +155,8 @@ export class GameSession {
   /** Install a block in the ordered rack and update its event subscriptions. */
   installPassive(block: PassiveBlock): boolean {
     if (block.traits.rackResident?.zone !== "passive-rack") return false;
+    // A full rack takes no more (its capacity comes from the room's passive rack trait).
+    if (this.currentState.passiveRack.length >= this.rackCapacity) return false;
     if (this.currentState.passiveRack.some(({ id }) => id === block.id)) return false;
     this.currentState = {
       ...this.currentState,
@@ -162,6 +164,11 @@ export class GameSession {
     };
     this.passiveEvents.syncRack(this.currentState.passiveRack);
     return true;
+  }
+
+  /** How many passives the rack can hold (Infinity when the session sets no limit). */
+  get rackCapacity(): number {
+    return this.config.rackCapacity ?? Infinity;
   }
 
   /** A stage is won but its rewards are not yet paid (see claimStageRewards). */
@@ -209,7 +216,10 @@ export class GameSession {
       this.currentState = { ...this.currentState, passiveRack: active };
       this.passiveEvents.syncRack(active);
     }
-    const missing = Math.max(0, targetSize - this.currentState.passiveRack.length);
+    const missing = Math.max(
+      0,
+      Math.min(targetSize, this.rackCapacity) - this.currentState.passiveRack.length,
+    );
     const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
     for (const definition of randomPassiveDefinitions(missing, this.random, owned)) {
       let serial = this.currentState.passiveRack.length + 1;

@@ -18,6 +18,8 @@ export type SessionConfig = {
   discardPileAfterShop: "keep-out" | "return-to-deck";
   /** Coins for completing a stage; the stage rewards' default (4) when left out. */
   stageReward?: number;
+  /** How many passives the rack can hold; unlimited when left out. */
+  rackCapacity?: number;
   /** What passives cost and fetch, in coins; `defaultPassivePrices` when left out. */
   passivePrices?: PassivePrices;
 };

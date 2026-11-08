@@ -105,3 +105,11 @@
   pointer-events: none;
   transform: translate(-50%, -50%) rotate(-6deg);
 }
+
+/* An empty slot in the rack: a faint outline where a passive could go. */
+.passive-empty {
+  cursor: default;
+  border: 2px dashed #f4f0e855;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
