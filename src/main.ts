@@ -25,13 +25,7 @@ import { isTransparent } from "./traits/transparent";
 import { createCardRoom } from "./visual/card-room";
 import { createBlockAppearance, setReflectionEnvironment } from "./visual/block-appearance";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import {
-  cellKey,
-  faceFromDirection,
-  faceNormal,
-  type Cell,
-  type Face,
-} from "./traits/attachable";
+import { cellKey, faceFromDirection, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
