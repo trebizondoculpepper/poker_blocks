@@ -4,7 +4,7 @@ Usage: uv run --with librosa --with soundfile python fit_beats.py LOOP.ogg [LOOP
        [--write] [--prefer 125] [--near BPM]
 
 A seamless loop holds a whole number of bars, so its tempo must be one of
-N * 60 / loop_seconds for N a multiple of 4. For every such N between 60 and 200 BPM,
+N * 60 / loop_seconds for N a multiple of 4. For every such N between 60 and 240 BPM,
 slide a beat grid across the loop's onset envelope (a measure of note attacks over time)
 and score how well the grid lands on attacks, with a gentle preference for tempos near
 `--prefer`. The best grid gives the tempo and the time of the first beat.
@@ -57,7 +57,7 @@ def fit(path: pathlib.Path, prefer: float, near: float | None = None) -> dict:
     candidates = []
     for beats in range(4, 400, 4):
         bpm = beats * 60 / length
-        if not 60 <= bpm <= 200:
+        if not 60 <= bpm <= 240:
             continue
         period = length / beats
         phases = np.arange(0, period, 1 / fps)

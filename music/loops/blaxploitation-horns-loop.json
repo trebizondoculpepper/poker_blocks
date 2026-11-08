@@ -4,13 +4,13 @@
   "loop_start_seconds": 13.536,
   "loop_end_seconds": 144.032,
   "loop_seconds": 130.496,
-  "bars": 73,
+  "bars": 99,
   "match_score": 1.0039,
   "crossfade_seconds": 0.05,
   "sample_rate": 48000,
   "beat_tracker_bpm": 130.81,
-  "tempo_bpm": 134.257,
+  "tempo_bpm": 182.0745,
   "measured_tempo_bpm": 141.86,
-  "beats": 292,
-  "first_beat_seconds": 0.3773
+  "beats": 396,
+  "first_beat_seconds": 1.2266
 }
