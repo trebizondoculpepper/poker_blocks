@@ -55,7 +55,7 @@ def fit(path: pathlib.Path, prefer: float, near: float | None = None) -> dict:
     low = (low - low.mean()) / (low.std() + 1e-9)
 
     candidates = []
-    for beats in range(4, 400, 4):
+    for beats in range(4, 1200, 4):
         bpm = beats * 60 / length
         if not 60 <= bpm <= 240:
             continue
