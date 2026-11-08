@@ -6,7 +6,7 @@ How the rules are implemented (traits, events, engine) is covered in [game-archi
 
 ## Concept
 
-Poker Blocks is poker solitaire played in three dimensions, with modifiers. Card blocks are attached face to face to build a structure in an unbounded voxel space. Every straight line of blocks along the X, Y or Z axis scores as a poker hand. The game is a run of rounds: each round's score target must be met before the plays run out.
+Poker Blocks is poker solitaire played in three dimensions, with modifiers. Card blocks are attached face to face to build a structure in an unbounded voxel space. Every straight line of blocks along the X, Y or Z axis scores as a poker hand. The game is a run of rounds, each made of three stages: each stage's score target must be met before the plays run out.
 
 The game is meant to be about blocks that combine in unexpected ways. Modifiers should work together through shared properties, not through set strategies that the design prescribes.
 
@@ -18,41 +18,44 @@ Poker Blocks is an original IP. It draws on public-domain ideas only: standard p
 - **Modifier block:** a special block that changes play. Some modifier blocks work while held in the hand, and some once placed on the field.
 - **Deck:** the player's collection of blocks. It starts as a standard 52-card deck and changes over a run. Since the deck can be modified, it may contain duplicate cards and cards a standard deck doesn't have.
 - **Hand:** up to 5 blocks drawn from the deck.
-- **Field:** the structure of blocks placed this round. It is built in an unbounded 3D grid of cells around a centre block.
+- **Field:** the structure of blocks placed this stage. It is built in an unbounded 3D grid of cells around a centre block.
 - **Coins:** the currency, spent at the shop.
 
-## A round
+## A stage
+
+Terms are defined in [terms.md](terms.md).
 
 ### Setup
 
-1. The deck is shuffled and holds every block the player owns.
-2. One block is drawn and placed as the **centre block**, which starts the field.
-3. Five blocks are drawn into the hand.
-4. The round shows its **target score**, its **play** count and its **discard** count (all _tune_).
+1. The field starts **empty**. Blocks left on it from the previous stage have returned to the deck.
+2. Five blocks are drawn into the hand.
+3. The stage shows its **target score**, its **play** count and its **discard** count (all _tune_).
+
+The player's **first play** drags a block from the hand into the empty field, where it becomes the **centre block**. It uses one play like any other. Discarding before the first play is allowed and uses a discard, not a play.
 
 ### Turns
 
 On each turn the player does one of the following:
 
-- **Play:** drag one block from the hand onto an exposed face of any block on the field. The face's neighbouring cell must be empty. The block snaps into that cell and becomes part of the field. This uses one play, and then the field is [scored](#scoring).
+- **Play:** drag one block from the hand onto an exposed face of any block on the field (or, for the first play, into the empty field). The face's neighbouring cell must be empty. The block snaps into that cell and becomes part of the field. This uses one play, and then the field is [scored](#scoring).
 - **Discard:** select blocks in the hand and discard them. This uses one discard and does not score. _(How many blocks one discard can remove is to be decided.)_
 
 After either action, the hand is refilled to 5 blocks from the deck, or until the deck runs out.
 
 A modifier block that works while held stays active as long as it is in the hand. Playing it ends that held effect, though it may have another effect once placed. So keeping a modifier in hand means giving up a hand slot.
 
-### Winning and losing a round
+### Winning and losing a stage
 
-- The round is **won** as soon as the running total reaches the target score, provided plays have not run out. The player then earns the round's coin reward.
-- The round is **lost** if the last play is used and the running total is still short of the target. A lost round ends the run.
+- The stage is **won** as soon as the running total reaches the target score, provided plays have not run out. The player then earns the stage's coin reward.
+- The stage is **lost** if the last play is used and the running total is still short of the target. A lost stage ends the run.
 
-The field is cleared at the end of every round. Placed blocks return to the deck, and the next round starts from a new centre block.
+The field is cleared at the end of every stage. Placed blocks return to the deck, and the next stage starts with an empty field. The deck and the discard pile carry over between the stages of a round, so a block discarded in stage 1 cannot be drawn in stage 2 or the boss stage.
 
 ## Scoring
 
 ### Running total
 
-After every play, **every line on the field** is scored, and the sum is added to the round's running total. A line that already existed scores again on every later play. Lines built early therefore keep paying, which makes the order of placements a key decision.
+After every play, **every line on the field** is scored, and the sum is added to the stage's running total. A line that already existed scores again on every later play. Lines built early therefore keep paying, which makes the order of placements a key decision.
 
 ### Lines
 
@@ -113,17 +116,27 @@ Later this formula will be extended in three ways:
 
 ## Coins
 
-- Winning a round earns a fixed number of coins (_tune_).
+- Winning a stage earns a fixed number of coins (_tune_).
 - Some blocks have economic effects: certain plays earn coins.
 - The player must balance building points against earning coins.
 
 ## A run
 
-- Rounds come in **sets of three**. The **third round of each set is a boss round**, which adds extra rules or restrictions for more challenge.
-- After each boss round there is a **shop**.
+- A **round** is three stages: **stage 1**, **stage 2** and the **boss stage**. Stage 1 has a lower target than stage 2. The boss stage can use a different dealer, which adds extra rules or restrictions for more challenge.
+- After each boss stage there is a **shop**, and leaving it starts the next round.
 - Target scores rise as the run goes on (_tune_).
-- A run is **won** by beating a fixed number of sets (_tune_). Losing any round ends the run.
-- The deck, including blocks bought at the shop, carries over from round to round for the whole run.
+- A run is **won** by beating a fixed number of rounds (_tune_). Losing any stage ends the run.
+- The deck, including blocks bought at the shop, carries over for the whole run.
+
+### Placeholder progression rules
+
+The demo uses these placeholders. They live in `src/session-config.ts` so they can be replaced without changing the controller:
+
+- **Targets:** stage 1 = 100, stage 2 = 150, boss stage = 200, each growing by half its base every round (round 2: 150, 225, 300). Every stage has 6 plays and 4 discards.
+- **Boss dealer:** the boss stage uses the base dealer until boss rules exist.
+- **Hand at a stage boundary:** cards left in the hand return to the deck before the next stage is dealt.
+- **Discard pile after the shop:** returns to the deck when the player leaves the shop, so the deck does not run out over a long run.
+- **Shop:** an empty placeholder screen with a button to start the next round.
 
 ### Shop
 
@@ -145,10 +158,10 @@ The shop sells **blocks**, which are added to the deck. These can be card blocks
 2. **Applying upgrades and materials:** the shop sells only blocks, so how hand-type upgrades and card materials are gained or applied is still undecided.
 3. **Material list:** which materials exist and what each one does.
 4. **New hands:** the names, ranking and values of hands that need a modified deck.
-5. **Discards:** how many blocks one discard can remove.
+5. **Discards:** how many blocks one discard can remove, whether cards left in the hand at a stage boundary return to the deck, and whether the discard pile is recycled after the shop.
 6. **Removal:** whether blocks can be destroyed or removed from the field, what happens to parts of the structure that end up disconnected, and whether a destroyed block also leaves the deck.
 7. **Effect order on the field:** the fixed order in which line scores and block effects resolve (for example, placement order).
 8. **Boss rules:** the list of boss restrictions and extra rules.
-9. **Numbers to tune:** plays and discards per round, target scores, coin rewards, shop prices, and run length.
+9. **Numbers to tune:** plays and discards per stage, target scores, coin rewards, shop prices, and run length.
 10. **Straights:** whether aces count both high and low, and whether a straight can wrap around (K-A-2).
 11. **Naming:** the game's own name for modifier blocks.

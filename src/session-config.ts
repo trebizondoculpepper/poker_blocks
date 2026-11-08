@@ -1,0 +1,38 @@
+import type { StageRules } from "./game-state";
+
+export const stageKinds = ["stage-1", "stage-2", "boss"] as const;
+export type StageKind = (typeof stageKinds)[number];
+
+/** A stage's dealer and the numbers it starts with. */
+export type StageSetup = StageRules & { dealer: string };
+
+/**
+ * Everything about progression that is still a design decision lives here, so a
+ * placeholder can be swapped without touching the controller. See doc/game.md.
+ */
+export type SessionConfig = {
+  stage(round: number, kind: StageKind): StageSetup;
+  /** Cards still in hand when a stage ends. Open rule; only one option exists so far. */
+  handAtStageEnd: "return-to-deck";
+  /** Whether the discard pile goes back into the deck when the player leaves the shop. */
+  discardPileAfterShop: "keep-out" | "return-to-deck";
+};
+
+const baseTargets: Record<StageKind, number> = { "stage-1": 100, "stage-2": 150, boss: 200 };
+
+/**
+ * Placeholder demo progression: targets grow by half the base each round, every stage
+ * has six plays and four discards, and the boss uses the base dealer until boss rules exist.
+ */
+export const demoSessionConfig: SessionConfig = {
+  stage(round, kind) {
+    return {
+      dealer: "base",
+      targetScore: Math.round(baseTargets[kind] * (1 + (round - 1) / 2)),
+      plays: 6,
+      discards: 4,
+    };
+  },
+  handAtStageEnd: "return-to-deck",
+  discardPileAfterShop: "return-to-deck",
+};

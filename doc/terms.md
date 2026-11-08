@@ -1,0 +1,23 @@
+# Terms
+
+Canonical names used in the rules, the code and the docs. Use these words and no others for the same idea.
+
+| Term              | Meaning                                                                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Run**           | One whole game attempt, from the first stage until a stage is lost or the run is won. In code: a `GameSession`.                                      |
+| **Round**         | Three stages in order: stage 1, stage 2 and the boss stage, followed by the shop. Rounds are numbered from 1.                                        |
+| **Stage**         | One attempt at a score target, with its own plays and discards and an empty field at the start. In code: `StageKind` (`stage-1`, `stage-2`, `boss`). |
+| **Boss stage**    | The third stage of a round. It can use a different registered dealer with extra rules.                                                               |
+| **Phase**         | Where the session is now: one of the three stages, `shop`, or `over` after a loss.                                                                   |
+| **Shop**          | The screen between the boss stage and the next round, where blocks will be bought. A placeholder for now.                                            |
+| **Dealer**        | A registered rule set that reads and changes `GameState`: it deals, judges plays and discards, and scores. Each stage names its dealer.              |
+| **Field**         | The blocks placed this stage, each in a grid cell.                                                                                                   |
+| **Centre block**  | The first block played in a stage, placed at the centre of the empty field.                                                                          |
+| **Hand**          | Up to five blocks the player can play or discard.                                                                                                    |
+| **Deck**          | The blocks the player owns that are not on the field, in the hand or in the discard pile.                                                            |
+| **Discard pile**  | Discarded blocks. It persists across the stages of a round.                                                                                          |
+| **Play**          | Moving one block from the hand onto the field. Each stage allows a fixed number.                                                                     |
+| **Discard**       | Moving one block from the hand to the discard pile. Each stage allows a fixed number.                                                                |
+| **Line**          | A maximal gap-free run of two or more placed blocks along one axis. Every line scores after every play.                                              |
+| **Running total** | The score of the current stage.                                                                                                                      |
+| **Challenge**     | Reserved for a future feature; not a synonym for stage or round.                                                                                     |

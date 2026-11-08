@@ -53,7 +53,7 @@ All standard cubes currently have equal mass. The structure keeps a running sum 
 
 ## Round overlay and discard demo
 
-The current round starts at score 0, a provisional target of 100, six moves, and four discards. A successful attachment consumes one move. Dropping a hand card into the three-dimensional bin adds it to a discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing.
+Each stage starts at score 0 with the target, plays and discards from the session configuration. A successful attachment consumes one move. Dropping a hand card into the three-dimensional bin adds it to a discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing.
 
 The deck count appears at the lower right. The counters and bin stay fixed on screen while the board camera moves.
 
@@ -65,7 +65,7 @@ A discarded hand cube dissolves with the same shader over one second before its 
 
 ## Round overlay and discard demo
 
-The current round starts at score 0, a provisional target of 100, six moves, and four discards. A successful attachment consumes one move. Dropping a hand card into the fixed two-dimensional discard area, marked by a pixel art bin, adds it to a discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing.
+Each stage starts at score 0 with the target, plays and discards from the session configuration. A successful attachment consumes one move. Dropping a hand card into the fixed two-dimensional discard area, marked by a pixel art bin, adds it to a discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing.
 
 The deck count appears at the lower right. The counters and discard area stay fixed on screen while the board camera moves.
 
@@ -88,6 +88,14 @@ A discarded hand cube dissolves with the same shader over one second before its 
 After each successful play the base dealer adds the points of every line on the field to the running total. `roundOutcome` reports the round as won once the total reaches the target and lost when moves run out short of it; the dealer then refuses further plays and discards. The formula and its provisional edge rules are in `doc/game.md`.
 
 When the placed card lands, the scene presents each scoring line from lowest to highest: the reusable `tintRow` effect flashes its blocks gold, the `score.magnitude.*` sound for its points plays (`src/score-presentation.ts`), and its points are added to the displayed score. The round result and its sound follow the last line.
+
+## Session controller
+
+`GameSession` (`src/game-session.ts`) controls one run: stage 1 → stage 2 → boss stage → shop → next round. It holds the round number, the phase (a stage, `shop` or `over`), the active dealer and the current `GameState`. `advance()` moves on once the current stage is decided: a win starts the next stage, or opens the shop after the boss stage, and a loss sets the phase to `over`. `leaveShop()` starts stage 1 of the next round. `snapshot()` returns the round, phase, dealer name and state for a future save/Continue flow.
+
+Each stage's dealer, target, plays and discards come from a `SessionConfig` (`src/session-config.ts`), not from the scene. The config also names the open rules as explicit options: what happens to the hand at a stage boundary, and whether the discard pile returns to the deck after the shop. `demoSessionConfig` holds the documented placeholders.
+
+A dealer's `startStage` returns the field to the deck, sets the stage's counters and fills the hand. The field starts empty, and the first play needs no target: `placementFor` returns the centre cell when the field is empty. In the scene, dropping a hand block anywhere above the hand on an empty field plays it at the centre. When a stage is decided, a button in the round panel offers the next step (next stage, shop, next round or a new game), and taking it clears the table and deals the new hand.
 
 ## Architecture to discuss
 

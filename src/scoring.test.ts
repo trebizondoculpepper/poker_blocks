@@ -171,8 +171,10 @@ describe("presentationOrder", () => {
 
 describe("round scoring", () => {
   it("adds line points on each play and ends the round at the target", () => {
-    let state = baseDealer.startGame(standardDeck, () => 0);
-    state = { ...state, round: { ...state.round, targetScore: 1 } };
+    const opening = baseDealer.startGame(standardDeck, () => 0);
+    const first = baseDealer.play(opening, { cardId: opening.hand[0].id })!;
+    expect(first.round.score).toBe(0);
+    const state = { ...first, round: { ...first.round, targetScore: 1 } };
     const played = baseDealer.play(state, {
       cardId: state.hand[0].id,
       targetId: state.field[0].block.id,

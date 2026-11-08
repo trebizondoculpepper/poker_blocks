@@ -48,7 +48,7 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | `score.total.tick`                                  | The running total counts up                                                                                                            | planned   |
 | `score.target.near`                                 | The running total gets close to the target                                                                                             | planned   |
 | `plays.last`                                        | The last play of the round begins                                                                                                      | planned   |
-| `round.start`                                       | The deck is shuffled and the centre block appears                                                                                      | planned   |
+| `round.start`                                       | The deck is shuffled and the centre block appears                                                                                      | generated |
 | `round.cleared`                                     | The running total reaches the target score                                                                                             | generated |
 | `round.failed`                                      | Plays run out before the target is reached                                                                                             | generated |
 
@@ -68,32 +68,32 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 ## Coins and shop
 
-| Id                   | Plays when                                          | Status  |
-| -------------------- | --------------------------------------------------- | ------- |
-| `coin.earn`          | Coins are earned, from a round win or a block       | planned |
-| `coin.spend`         | Coins are spent                                     | planned |
-| `shop.open`          | The shop opens after a boss round                   | planned |
-| `shop.buy`           | A block is bought                                   | planned |
-| `shop.cannot_afford` | The player tries to buy something they can't afford | planned |
-| `deck.add_block`     | A bought block joins the deck                       | planned |
-| `shop.leave`         | The player leaves the shop for the next round       | planned |
+| Id                   | Plays when                                          | Status    |
+| -------------------- | --------------------------------------------------- | --------- |
+| `coin.earn`          | Coins are earned, from a round win or a block       | planned   |
+| `coin.spend`         | Coins are spent                                     | planned   |
+| `shop.open`          | The shop opens after a boss round                   | generated |
+| `shop.buy`           | A block is bought                                   | planned   |
+| `shop.cannot_afford` | The player tries to buy something they can't afford | planned   |
+| `deck.add_block`     | A bought block joins the deck                       | planned   |
+| `shop.leave`         | The player leaves the shop for the next round       | planned   |
 
 ## Bosses and the run
 
-| Id                  | Plays when                                                    | Status  |
-| ------------------- | ------------------------------------------------------------- | ------- |
-| `boss.intro`        | A boss round begins and shows its rule                        | planned |
-| `boss.rule.applied` | A boss restriction affects play                               | planned |
-| `run.won`           | The final boss round is beaten (bigger than `round.cleared`)  | planned |
-| `run.lost`          | A round is lost and the run ends (bigger than `round.failed`) | planned |
+| Id                  | Plays when                                                    | Status    |
+| ------------------- | ------------------------------------------------------------- | --------- |
+| `boss.intro`        | A boss round begins and shows its rule                        | planned   |
+| `boss.rule.applied` | A boss restriction affects play                               | planned   |
+| `run.won`           | The final boss round is beaten (bigger than `round.cleared`)  | planned   |
+| `run.lost`          | A round is lost and the run ends (bigger than `round.failed`) | generated |
 
 ## Interface
 
-| Id         | Plays when                      | Status  |
-| ---------- | ------------------------------- | ------- |
-| `ui.hover` | The pointer moves over a button | planned |
-| `ui.click` | A button is pressed             | planned |
-| `ui.back`  | A menu or panel is closed       | planned |
+| Id         | Plays when                      | Status    |
+| ---------- | ------------------------------- | --------- |
+| `ui.hover` | The pointer moves over a button | planned   |
+| `ui.click` | A button is pressed             | generated |
+| `ui.back`  | A menu or panel is closed       | planned   |
 
 ## Open questions
 

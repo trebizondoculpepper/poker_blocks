@@ -216,6 +216,30 @@ const entries = [
     promptInfluence: 0.5,
     variants: 1,
   },
+  {
+    id: "round.start",
+    trigger: "A new stage begins: the field is cleared and a fresh hand is dealt",
+    prompt: "A soft card-shuffle riffle followed by a gentle bright chime, a fresh start",
+    durationSeconds: 1.2,
+  },
+  {
+    id: "shop.open",
+    trigger: "The shop opens after the boss stage is won",
+    prompt: "A cheerful shop-door bell jingle with a soft wooden creak, welcoming",
+    durationSeconds: 1.0,
+  },
+  {
+    id: "run.lost",
+    trigger: "A stage is lost and the game ends (bigger than round.failed)",
+    prompt: "A slow descending set of soft muted bell tones fading to silence, final but gentle",
+    durationSeconds: 2.5,
+  },
+  {
+    id: "ui.click",
+    trigger: "A HUD button is pressed",
+    prompt: "A crisp tiny soft button click, subtle",
+    durationSeconds: 0.5,
+  },
 ] as const satisfies readonly SoundEffect[];
 
 /** Every registered sound. Add new entries to the list above. */

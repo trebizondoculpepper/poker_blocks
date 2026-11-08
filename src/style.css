@@ -186,3 +186,27 @@ body,
     height: 42px;
   }
 }
+
+.hud-action {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid #9ce6d7;
+  border-radius: 6px;
+  background: #9ce6d7;
+  color: #10202b;
+  font:
+    700 13px system-ui,
+    sans-serif;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.hud-action:hover {
+  background: #c3f2e8;
+}
+
+.hud-action[hidden] {
+  display: none;
+}
