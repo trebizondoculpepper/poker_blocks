@@ -297,18 +297,19 @@ function drawTerracotta(g: CanvasRenderingContext2D, random: () => number, crack
   strokeCracks(g, cracks, "#3a1a0fcc", 1.4);
 }
 
+/** Ice: pale, frosted blue with fine crystals; no rim, it is one lump of ice. */
 function drawIce(g: CanvasRenderingContext2D, random: () => number): void {
   gradient(g, [
-    [0, "#f4ffff"],
-    [0.36, "#91c7d5"],
-    [0.72, "#cdebf0"],
-    [1, "#6ea4bc"],
+    [0, "#e9f8fbcc"],
+    [0.4, "#b7dce8bb"],
+    [0.75, "#d6eef4cc"],
+    [1, "#9fcbdcbb"],
   ]);
-  flecks(g, random, 420, "#ffffff80", 2);
+  flecks(g, random, 520, "#ffffff70", 2);
   for (let n = 0; n < 24; n++) {
     const x = random() * SIZE,
       y = random() * SIZE;
-    g.strokeStyle = "#ecffff88";
+    g.strokeStyle = "#f4ffff77";
     g.lineWidth = 1;
     g.beginPath();
     g.moveTo(x - 14, y + 8);
@@ -316,22 +317,167 @@ function drawIce(g: CanvasRenderingContext2D, random: () => number): void {
     g.lineTo(x + 8, y - 14);
     g.stroke();
   }
-  for (let n = 0; n < 35; n++) {
-    g.beginPath();
-    g.fillStyle = "#ffffff88";
-    g.ellipse(
-      random() * SIZE,
-      random() * SIZE,
-      1 + random() * 3,
-      2 + random() * 5,
-      0.3,
-      0,
-      Math.PI * 2,
-    );
-    g.fill();
+}
+
+/** Ice's rough relief: a field of soft lumps and pits, like a frozen, frosted face. */
+function iceRoughHeight(identity: IdentityTrait): THREE.CanvasTexture {
+  const { canvas, g } = heightCanvas();
+  const random = randomFor(identity, "ice", true);
+  for (let n = 0; n < 420; n++) {
+    const x = random() * SIZE;
+    const y = random() * SIZE;
+    const radius = 2 + random() * 9;
+    const raised = random() < 0.5;
+    const lump = g.createRadialGradient(x, y, 0, x, y, radius);
+    lump.addColorStop(0, raised ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)");
+    lump.addColorStop(1, "rgba(128,128,128,0)");
+    g.fillStyle = lump;
+    g.fillRect(x - radius, y - radius, radius * 2, radius * 2);
   }
-  border(g, "#efffff", 8);
-  border(g, "#5d9eb4", 2);
+  return new THREE.CanvasTexture(canvas);
+}
+
+/**
+ * Meltwater: beads of water with short wet trails above them, on a transparent canvas
+ * that tiles top to bottom. Used as both colour (faint glints) and bump (raised beads), and
+ * scrolled downwards over time so the drops appear to run down the face.
+ */
+function meltwater(identity: IdentityTrait): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = SIZE;
+  const g = canvas.getContext("2d")!;
+  const random = randomFor(identity, "meat", true);
+  for (let n = 0; n < 11; n++) {
+    const x = 18 + random() * (SIZE - 36);
+    const y = random() * SIZE;
+    const radius = 3 + random() * 4;
+    const trail = 20 + random() * 50;
+    // Draw each drop three times, a canvas apart, so it wraps seamlessly top to bottom.
+    for (const shift of [-SIZE, 0, SIZE]) {
+      const wet = g.createLinearGradient(x, y + shift - trail, x, y + shift);
+      wet.addColorStop(0, "rgba(255,255,255,0)");
+      wet.addColorStop(1, "rgba(255,255,255,0.35)");
+      g.fillStyle = wet;
+      g.fillRect(x - radius * 0.45, y + shift - trail, radius * 0.9, trail);
+      const bead = g.createRadialGradient(
+        x - radius * 0.3,
+        y + shift - radius * 0.3,
+        0,
+        x,
+        y + shift,
+        radius,
+      );
+      bead.addColorStop(0, "rgba(255,255,255,0.95)");
+      bead.addColorStop(1, "rgba(255,255,255,0.15)");
+      g.fillStyle = bead;
+      g.beginPath();
+      g.arc(x, y + shift, radius, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+/**
+ * Each BoxGeometry face's texture axes in the block's own space (u, then v), in face order
+ * +X, -X, +Y, -Y, +Z, -Z. Used to turn world "down" into a direction across each face.
+ */
+const faceAxes: [THREE.Vector3, THREE.Vector3][] = [
+  [new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0)],
+  [new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0)],
+  [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, -1)],
+  [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 1)],
+  [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)],
+  [new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0)],
+];
+
+/**
+ * A glossy skin of meltwater over the ice. The drops obey world gravity, not the block:
+ * every frame each face's copy of the drop texture is turned so the drops point along
+ * world "down" across that face, and scrolled that way at a speed set by how steep the
+ * face is (one transform change per face, no redraw). On a level face they barely move.
+ */
+function meltwaterSkin(
+  identity: IdentityTrait,
+  geometry: THREE.BufferGeometry,
+): { skin: THREE.Mesh; texture: THREE.CanvasTexture } {
+  const texture = meltwater(identity);
+  // Seconds for a drop to slide the height of an upright face, varied a little per block.
+  const secondsPerFace = 14 + randomFor(identity, "ice", false)() * 10;
+  const turned = new THREE.Quaternion();
+  const down = new THREE.Vector3();
+  const materials = faceAxes.map(([u, v]) => {
+    const faceTexture = texture.clone();
+    faceTexture.wrapS = faceTexture.wrapT = THREE.RepeatWrapping;
+    faceTexture.center.set(0.5, 0.5);
+    faceTexture.needsUpdate = true;
+    const material = new THREE.MeshPhysicalMaterial({
+      map: faceTexture,
+      bumpMap: faceTexture,
+      bumpScale: 4,
+      transparent: true,
+      depthWrite: false,
+      roughness: 0.05,
+      clearcoat: 1,
+      clearcoatRoughness: 0.02,
+      envMap: reflectionEnvironment,
+      envMapIntensity: 1.4,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    let last = performance.now();
+    let travelled = randomFor(identity, "ice", true)();
+    material.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
+      const now = performance.now();
+      const seconds = Math.min((now - last) / 1000, 0.1);
+      last = now;
+      // World down, in the block's own space, then across this face.
+      object.getWorldQuaternion(turned);
+      down.set(0, -1, 0).applyQuaternion(turned.invert());
+      const across = down.dot(u);
+      const along = down.dot(v);
+      const steepness = Math.hypot(across, along);
+      // Turn the texture so its "down" lies along world down on this face...
+      if (steepness > 0.05) faceTexture.rotation = Math.atan2(across, -along);
+      // ...and slide the drops that way, faster on steeper faces.
+      travelled = (travelled + (seconds * steepness) / secondsPerFace) % 1;
+      faceTexture.offset.set(0, travelled);
+    };
+    return material;
+  });
+  const skin = new THREE.Mesh(geometry, materials);
+  skin.renderOrder = 15;
+  return { skin, texture };
+}
+
+/**
+ * Ice on the table: a cheap frosted refraction. Transmission lets the scene through, but
+ * high roughness blurs it, and a short absorption distance clouds it, so little light gets
+ * through and what does is soft and pale blue.
+ */
+function cloudyIce(
+  texture: THREE.CanvasTexture,
+  height: THREE.CanvasTexture,
+  size: number,
+): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    map: texture,
+    bumpMap: height,
+    bumpScale: 3,
+    transmission: 0.7,
+    roughness: 0.6,
+    ior: 1.31,
+    thickness: size * 0.8,
+    attenuationColor: new THREE.Color(0xcfe9f2),
+    attenuationDistance: size * 0.35,
+    clearcoat: 0.4,
+    clearcoatRoughness: 0.5,
+    envMap: reflectionEnvironment,
+    envMapIntensity: 0.8,
+  });
 }
 
 function drawMeat(g: CanvasRenderingContext2D, random: () => number): void {
@@ -729,7 +875,7 @@ const patternRelief: Record<BlockMaterial, number> = {
   prismatic: 0,
   gold: 1.5,
   terracotta: 3,
-  ice: 1.5,
+  ice: 3,
   meat: 2,
   fire: 0,
 };
@@ -854,15 +1000,14 @@ export function createBlockAppearance(
   // two faces are not in the same plane and do not flicker (z-fight) through each other.
   if (["prismatic", "fire", "paper", "ice"].includes(kind)) geometry.scale(0.985, 0.985, 0.985);
   const edgeColor = edgeColors[kind];
-  // Rounded castings (meat, gold) and the cut-cornered cards (paper) have no box edges to outline.
+  // Rounded castings (meat, gold), the cut-cornered cards (paper) and the lump of ice have
+  // no box edges to outline.
   const edgeOpacity =
-    kind === "meat" || kind === "gold" || kind === "paper"
+    kind === "meat" || kind === "gold" || kind === "paper" || kind === "ice"
       ? 0
-      : kind === "ice"
-        ? 0.65
-        : kind === "prismatic"
-          ? 0.55
-          : 1;
+      : kind === "prismatic"
+        ? 0.55
+        : 1;
 
   if (kind === "prismatic") {
     // One clear stone: the same material on all six faces; the print rides on a skin.
@@ -911,15 +1056,20 @@ export function createBlockAppearance(
 
   if (kind === "ice") {
     const texture = faceTexture(identity, kind, false, 0, false);
+    const height = iceRoughHeight(identity);
     const print = printSkin(identity, kind, geometry);
-    const ice = surface(texture, kind);
+    const melt = meltwaterSkin(identity, geometry);
+    // In the hand: frosted and translucent. On the table: cloudy refraction.
+    const inHand = surface(texture, kind, height);
+    const onTable = cloudyIce(texture, height, size);
     return {
       geometry,
-      textures: [texture, print.texture],
-      materials: Array.from({ length: 6 }, () => ice),
+      textures: [texture, height, print.texture, melt.texture],
+      materials: Array.from({ length: 6 }, () => inHand),
+      boardMaterials: Array.from({ length: 6 }, () => onTable),
       edgeColor,
       edgeOpacity,
-      extras: [print.skin],
+      extras: [melt.skin, print.skin],
     };
   }
 

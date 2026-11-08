@@ -264,7 +264,12 @@ function disposeCube(rendered: RenderedBlock): void {
   new Set([...rendered.handMaterials, ...rendered.boardMaterials]).forEach((material) =>
     material.dispose(),
   );
-  for (const extra of rendered.extras) (extra.material as THREE.Material).dispose();
+  for (const extra of rendered.extras)
+    for (const material of ([] as THREE.Material[]).concat(extra.material)) {
+      // Extras may own per-face texture copies (the ice's meltwater): free those too.
+      (material as THREE.MeshStandardMaterial).map?.dispose();
+      material.dispose();
+    }
   rendered.edgeGeometry.dispose();
   rendered.edgeMaterial.dispose();
 }
