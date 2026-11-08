@@ -87,7 +87,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
          )
          .join("")}
      </fieldset>
-     <div class="menu-buttons"><button type="button" data-menu="back">Back</button></div>`,
+     <div class="menu-buttons"><button type="button" data-menu="back">Back</button><button type="button" data-menu="quit">Quit to title screen</button></div>`,
   );
 
   const settingsButton = document.createElement("button");
@@ -102,6 +102,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const continueButton = find<HTMLButtonElement>(title.panel, "continue");
   const newButton = find<HTMLButtonElement>(title.panel, "new");
   const confirm = find<HTMLDivElement>(title.panel, "confirm");
+  const quit = find<HTMLButtonElement>(settingsScreen.panel, "quit");
   const volume = find<HTMLInputElement>(settingsScreen.panel, "volume");
   const muted = find<HTMLInputElement>(settingsScreen.panel, "muted");
   const motionInputs = [
@@ -137,6 +138,8 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     muted.checked = settings.muted;
     motionInputs.forEach((input) => (input.checked = input.value === settings.motion));
     shadowInputs.forEach((input) => (input.checked = input.value === settings.shadows));
+    // Only offered mid-game: from the title screen, Back already goes there.
+    quit.hidden = settingsFrom !== "game";
     open(settingsScreen.root);
     callbacks.onScreen?.("settings");
   }
@@ -190,6 +193,11 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     showSettings();
   });
   find(settingsScreen.panel, "back").addEventListener("click", back);
+  // The run is autosaved at every safe point, so the title screen offers Continue.
+  quit.addEventListener("click", () => {
+    playSfx("ui.back");
+    showTitle();
+  });
   // Preview the new volume once the slider is released, so dragging is not noisy.
   volume.addEventListener("input", () => change({ volume: Number(volume.value) / 100 }));
   volume.addEventListener("change", () => playSfx("ui.click"));
