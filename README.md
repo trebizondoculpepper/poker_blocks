@@ -2,6 +2,8 @@
 
 A new browser puzzle game project. The current Hello World screen includes a Three.js scene to confirm the rendering pipeline; game rules and interaction are still to be designed.
 
+The agreed game principles and open architecture questions are recorded in [docs/game-architecture.md](docs/game-architecture.md).
+
 ## Stack
 
 - Vite+ 1.5, including Vite, Vitest, Oxlint, and Oxfmt
