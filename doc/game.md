@@ -49,8 +49,12 @@ A modifier block that works while held stays active as long as it is in the hand
 
 ### Winning and losing a stage
 
-- The stage is **won** as soon as the running total reaches the target score, provided plays have not run out. The player then earns the stage's coin reward.
+- The stage is **won** as soon as the running total reaches the target score, provided plays have not run out. Play the stage-win sound and show **Stage complete** before advancing.
 - The stage is **lost** if the last play is used and the running total is still short of the target. A lost stage ends the run.
+
+On a win, show a reward ledger with one row for each rule that grants coins. The default rule grants **4 coins for completing the stage**; future traits or passives may add other rows. The ledger shows each row's coins and the total added to the player's finances. Stage score is not a currency and resets to zero when the next stage begins. The player chooses when to continue: after stage 1 or 2, a button starts the next stage; after the boss stage, it opens the shop.
+
+The session controller owns the reward and transition sequence. Coins persist from one stage to the next, including the boss stage and shop, until the player spends them. Stage lifecycle events carry the round number and stage kind so passive traits can react to a specific moment, such as the first stage or a boss stage. A passive may add an itemized reward, such as interest on the coins already held, before the ledger and new balance are finalized.
 
 The field is cleared at the end of every stage. Placed blocks return to the deck, and the next stage starts with an empty field. The deck and the discard pile carry over between the stages of a round, so a block discarded in stage 1 cannot be drawn in stage 2 or the boss stage.
 
@@ -129,7 +133,7 @@ Later this formula will be extended in three ways:
 
 ## Coins
 
-- Winning a stage earns a fixed number of coins (_tune_).
+- Completing a stage grants 4 coins by default. Other reward rules may add more ledger rows and coins.
 - Some blocks have economic effects: certain plays earn coins.
 - The player must balance building points against earning coins.
 

@@ -23,6 +23,8 @@ An invalid play emits an action-denied presentation event only. It consumes noth
 
 `stage.started` fires after the dealer has prepared an empty field, allowances, and hand. It provides a separate hook for effects that should occur before any play or discard. Discarding has its own `discard.before` and `discard.completed` points and does not enter the scoring sequence.
 
+Stage lifecycle events include round number and stage kind (`stage-1`, `stage-2`, or `boss`), so a trait can match a particular stage without a separate hard-coded event name for every round. After a final `stage.won`, the session controller gathers reward entries: the default four-coin completion entry, followed by eligible trait effects in their defined order. It applies their sum to the persistent coin balance exactly once, emits a finalized reward result for the ledger, and waits for the player's next-stage or shop action. A passive that awards interest reads the coin balance at its documented point in this sequence. The stage score resets when the next stage starts; coins do not.
+
 ## Context and ordering
 
 Each event has a stable type, event ID, relevant stage and action IDs when applicable, and the specific IDs and values needed by its moment. For example, a line event includes its axis, ordered cell and block IDs, hand type, contributing block IDs, and current score components. Context is an immutable snapshot for the reaction. Traits must not mutate it or `GameState` directly.
