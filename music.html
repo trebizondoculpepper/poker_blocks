@@ -11,9 +11,9 @@
       <header class="room-header">
         <h1>Music room</h1>
         <p class="room-intro">
-          Theme loops from <code>music/</code>. Pick a track to start; pick another to crossfade.
-          The switch waits for the next bar, enters the new loop at the same beat, and glides the
-          tempo like a tape machine so both stay in step through the fade.
+          Loops from <code>music/loops/</code>. Click a loop: on the next bar it fades in
+          (logarithmically) on the same beat, at the current tempo; the old loop stops once the fade
+          completes, then the tempo eases to the new loop's own speed like a tape machine.
         </p>
         <div class="room-controls">
           <button type="button" id="stop">Stop</button>
@@ -25,9 +25,9 @@
             Crossfade <output id="fade-value">4 s</output>
             <input id="fade" type="range" min="0.5" max="12" step="0.5" value="4" />
           </label>
-          <label class="check">
-            <input id="on-bar" type="checkbox" checked />
-            Switch on the next bar
+          <label>
+            Tempo ease <output id="ease-value">5 s</output>
+            <input id="ease" type="range" min="0" max="15" step="0.5" value="5" />
           </label>
           <label class="check">
             <input id="click" type="checkbox" />

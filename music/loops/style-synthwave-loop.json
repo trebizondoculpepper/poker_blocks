@@ -1,0 +1,15 @@
+{
+  "source": "synthwave.ogg",
+  "beats_per_bar": 4,
+  "loop_start_seconds": 47.2747,
+  "loop_end_seconds": 149.8027,
+  "loop_seconds": 102.528,
+  "bars": 44,
+  "match_score": 0.9427,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beat_tracker_bpm": 102.27,
+  "measured_tempo_bpm": 103.0,
+  "beats": 176,
+  "tempo_bpm": 102.9963
+}

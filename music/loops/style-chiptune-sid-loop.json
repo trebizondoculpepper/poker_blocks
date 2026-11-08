@@ -1,0 +1,15 @@
+{
+  "source": "chiptune-sid.ogg",
+  "beats_per_bar": 4,
+  "loop_start_seconds": 30.5173,
+  "loop_end_seconds": 143.04,
+  "loop_seconds": 112.5227,
+  "bars": 48,
+  "match_score": 0.9874,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beat_tracker_bpm": 102.27,
+  "measured_tempo_bpm": 102.4,
+  "beats": 192,
+  "tempo_bpm": 102.3793
+}

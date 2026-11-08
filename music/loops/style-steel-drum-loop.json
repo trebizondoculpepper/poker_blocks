@@ -1,0 +1,15 @@
+{
+  "source": "steel-drum.ogg",
+  "beats_per_bar": 4,
+  "loop_start_seconds": 32.8427,
+  "loop_end_seconds": 150.2827,
+  "loop_seconds": 117.44,
+  "bars": 48,
+  "match_score": 0.9275,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beat_tracker_bpm": 98.68,
+  "measured_tempo_bpm": 98.18,
+  "beats": 192,
+  "tempo_bpm": 98.0926
+}

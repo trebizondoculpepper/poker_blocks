@@ -1,0 +1,15 @@
+{
+  "source": "psychedelic-freakout.ogg",
+  "beats_per_bar": 4,
+  "loop_start_seconds": 19.0293,
+  "loop_end_seconds": 117.4613,
+  "loop_seconds": 98.432,
+  "bars": 61,
+  "match_score": 0.9805,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beat_tracker_bpm": 112.5,
+  "measured_tempo_bpm": 149.09,
+  "beats": 244,
+  "tempo_bpm": 148.7321
+}

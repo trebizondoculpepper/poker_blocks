@@ -1,0 +1,15 @@
+{
+  "source": "circus-band.ogg",
+  "beats_per_bar": 4,
+  "loop_start_seconds": 52.2453,
+  "loop_end_seconds": 145.0347,
+  "loop_seconds": 92.7893,
+  "bars": 51,
+  "match_score": 0.9645,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beat_tracker_bpm": 200.89,
+  "measured_tempo_bpm": 130.82,
+  "beats": 204,
+  "tempo_bpm": 131.9118
+}

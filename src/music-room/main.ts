@@ -1,6 +1,6 @@
 // Development page for auditioning theme loops and beat-matched crossfades. Served at
-// /music.html. It lists every `*-loop.ogg` under music/ (committed loops and, in a dev
-// checkout, the git-ignored auditions) with the tempo and beat count from its sidecar.
+// /music.html. It lists every `*-loop.ogg` in music/loops/ with the tempo and beat count
+// from its sidecar. Clicking a loop fades it in on the next bar.
 import "./style.css";
 import { createBeatClock } from "./beat-clock";
 import { logFadeCurve } from "./fade";
@@ -15,12 +15,12 @@ type LoopInfo = {
 };
 type Track = { id: string; group: string; name: string; url: string; info: LoopInfo };
 
-const audioUrls = import.meta.glob<string>("../../music/**/*-loop.ogg", {
+const audioUrls = import.meta.glob<string>("../../music/loops/*-loop.ogg", {
   eager: true,
   query: "?url",
   import: "default",
 });
-const infos = import.meta.glob<LoopInfo>("../../music/**/*-loop.json", {
+const infos = import.meta.glob<LoopInfo>("../../music/loops/*-loop.json", {
   eager: true,
   import: "default",
 });
@@ -29,8 +29,11 @@ const tracks: Track[] = Object.entries(audioUrls)
   .map(([path, url]) => {
     const info = infos[path.replace(/\.ogg$/, ".json")];
     const parts = path.split("/");
-    const group = parts.at(-2) === "loops" ? "Chosen loops" : `Auditions: ${parts.at(-2)}`;
-    const name = parts.at(-1)!.replace(/-loop\.ogg$/, "");
+    const file = parts.at(-1)!.replace(/-loop\.ogg$/, "");
+    // Group by prefix: "style-noir" -> Styles, "solitaire-boss" -> Solitaire, else Theme.
+    const prefix = file.split("-")[0];
+    const group = prefix === "style" ? "Styles" : prefix === "solitaire" ? "Solitaire" : "Theme";
+    const name = group === "Theme" ? file : file.slice(prefix.length + 1);
     return { id: path, group, name, url, info };
   })
   // Only loops measured with a whole number of beats can be beat-matched.
@@ -46,7 +49,8 @@ function element<T extends HTMLElement>(id: string): T {
 const volume = element<HTMLInputElement>("volume");
 const fade = element<HTMLInputElement>("fade");
 const fadeValue = element<HTMLOutputElement>("fade-value");
-const onBar = element<HTMLInputElement>("on-bar");
+const ease = element<HTMLInputElement>("ease");
+const easeValue = element<HTMLOutputElement>("ease-value");
 const click = element<HTMLInputElement>("click");
 const status = element<HTMLParagraphElement>("status");
 const beatLights = [...element<HTMLDivElement>("beat").children] as HTMLElement[];
@@ -112,6 +116,21 @@ function startVoice(
   return { track, source, gain };
 }
 
+/** Playback rate over an eased tempo change, sampled from the beat clock. */
+function rateCurve(
+  beatClock: ReturnType<typeof createBeatClock>,
+  start: number,
+  seconds: number,
+  tempo: number,
+): Float32Array {
+  const steps = 128;
+  const curve = new Float32Array(steps);
+  for (let i = 0; i < steps; i++) {
+    curve[i] = beatClock.tempoAt(start + (seconds * i) / (steps - 1)) / tempo;
+  }
+  return curve;
+}
+
 async function select(track: Track): Promise<void> {
   const token = ++switchToken;
   const buffer = await load(track);
@@ -123,36 +142,45 @@ async function select(track: Track): Promise<void> {
     const at = context.currentTime + 0.05;
     clock = createBeatClock(at, track.info.tempo_bpm);
     current = startVoice(track, buffer, at, 0, track.info.tempo_bpm);
-    current.gain.gain.setValueAtTime(1, at);
+    // The first loop fades in too, over the same logarithmic curve.
+    current.gain.gain.setValueCurveAtTime(logFadeCurve(true), at, Number(fade.value));
     render();
     return;
   }
   if (current.track === track) return;
 
   const now = context.currentTime + 0.05;
-  // Switch on the next bar line (or now), with the incoming loop entering on the same beat.
-  const at = onBar.checked ? clock.timeOfBeat(Math.ceil(clock.beatAt(now) / 4) * 4) : now;
+  // Fades always start on the next bar line, with the incoming loop entering on the same beat.
+  const at = clock.timeOfBeat(Math.ceil(clock.beatAt(now) / 4) * 4);
   const seconds = Number(fade.value);
+  const easeSeconds = Number(ease.value);
   const from = clock.tempoAt(at);
   const to = track.info.tempo_bpm;
   const beat = clock.beatAt(at);
-  clock.ramp(at, seconds, to);
+  // 1. Hold A's tempo through the crossfade; B plays at A's speed, beats matched.
+  clock.ramp(at, 0, from);
+  // 2. After the fade, ease B to its natural tempo.
+  const easeAt = at + seconds;
+  clock.ramp(easeAt, easeSeconds, to);
 
   const outgoing = current;
   const incoming = startVoice(track, buffer, at, beat, from);
-  // Both voices follow the shared tempo, so their beats stay locked while it glides.
-  for (const voice of [outgoing, incoming]) {
-    voice.source.playbackRate.cancelScheduledValues(at);
-    voice.source.playbackRate.setValueAtTime(from / voice.track.info.tempo_bpm, at);
-    voice.source.playbackRate.linearRampToValueAtTime(
-      to / voice.track.info.tempo_bpm,
-      at + seconds,
+  outgoing.source.playbackRate.cancelScheduledValues(at);
+  outgoing.source.playbackRate.setValueAtTime(from / outgoing.track.info.tempo_bpm, at);
+  incoming.source.playbackRate.setValueAtTime(from / to, easeAt);
+  if (easeSeconds > 0) {
+    incoming.source.playbackRate.setValueCurveAtTime(
+      rateCurve(clock, easeAt, easeSeconds, to),
+      easeAt,
+      easeSeconds,
     );
   }
+  incoming.source.playbackRate.setValueAtTime(1, easeAt + easeSeconds);
   outgoing.gain.gain.cancelScheduledValues(at);
   outgoing.gain.gain.setValueCurveAtTime(logFadeCurve(false), at, seconds);
   incoming.gain.gain.setValueCurveAtTime(logFadeCurve(true), at, seconds);
-  outgoing.source.stop(at + seconds + 0.05);
+  // A stops as soon as B is fully faded up.
+  outgoing.source.stop(at + seconds);
   fading.add(outgoing);
   outgoing.source.addEventListener("ended", () => fading.delete(outgoing));
   current = incoming;
@@ -237,4 +265,5 @@ volume.addEventListener("input", () =>
   master?.gain.setTargetAtTime(Number(volume.value), audio().context.currentTime, 0.05),
 );
 fade.addEventListener("input", () => (fadeValue.textContent = `${fade.value} s`));
+ease.addEventListener("input", () => (easeValue.textContent = `${ease.value} s`));
 requestAnimationFrame(tick);
