@@ -43,6 +43,22 @@ export class GameSession {
     this.currentState = this.activeDealer.startStage(dealt, setup, random);
   }
 
+  /** Resume a saved run exactly where it was. Validate the snapshot first (see save.ts). */
+  static fromSnapshot(
+    dealers: Registry<Dealer>,
+    config: SessionConfig,
+    cards: readonly CardBlock[],
+    snapshot: SessionSnapshot,
+    random: () => number = Math.random,
+  ): GameSession {
+    const session = new GameSession(dealers, config, cards, random);
+    session.activeDealer = dealers.get(snapshot.dealer);
+    session.currentState = snapshot.state;
+    session.currentRound = snapshot.round;
+    session.currentPhase = snapshot.phase;
+    return session;
+  }
+
   get dealer(): Dealer {
     return this.activeDealer;
   }

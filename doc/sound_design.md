@@ -89,11 +89,11 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 ## Interface
 
-| Id         | Plays when                      | Status    |
-| ---------- | ------------------------------- | --------- |
-| `ui.hover` | The pointer moves over a button | planned   |
-| `ui.click` | A button is pressed             | generated |
-| `ui.back`  | A menu or panel is closed       | planned   |
+| Id         | Plays when                                          | Status    |
+| ---------- | --------------------------------------------------- | --------- |
+| `ui.hover` | The pointer moves over a menu button                | generated |
+| `ui.click` | A button is pressed                                 | generated |
+| `ui.back`  | A menu or panel is closed, or a choice is cancelled | generated |
 
 ## Open questions
 

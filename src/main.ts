@@ -14,7 +14,10 @@ import { createMaterialise } from "./visual/materialise";
 import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
-import { playSfx } from "./audio/sfx";
+import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
+import { createMenus } from "./menus";
+import { browserStorage, loadRun, saveRun } from "./save";
+import { loadSettings, prefersReducedMotion, saveSettings, type Settings } from "./settings";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -267,7 +270,9 @@ function updateCamera(now: number): void {
   if (progress === 1) cameraMove = null;
 }
 
-const game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck);
+const storage = browserStorage();
+// A fresh run sits behind the title screen until the player chooses Continue or New game.
+let game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck);
 for (const { block, cell } of game.state.field) addToBoard(block, cell);
 const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
   const rendered = createCube(block, cubeSize / 3, "hand");
@@ -551,7 +556,17 @@ function applyBoardWobble(): void {
   pivot.rotation.y = manualYaw + rockAngle(boardYawRock, wobbleTime);
 }
 
-const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const systemMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+let settings = loadSettings(storage);
+let reducedMotion = false;
+function applySettings(next: Settings): void {
+  settings = next;
+  setSfxVolume(next.volume);
+  setSfxMuted(next.muted);
+  reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
+}
+applySettings(settings);
+systemMotionQuery.addEventListener("change", () => applySettings(settings));
 type MaterialiseEffect = ReturnType<typeof createMaterialise>;
 const appearing: { effect: MaterialiseEffect; edges: THREE.Object3D[] }[] = [];
 type PendingAction =
@@ -707,6 +722,7 @@ function updateAction(now: number, delta: number): void {
     disposeCube(action.source);
   }
   refillSlot(action.slot);
+  autosave();
 }
 
 /** Present the lines from the play that just landed, lowest score first. */
@@ -792,7 +808,7 @@ function takeNextAction(): void {
   if (pendingAction || drag?.active) return;
   playSfx("ui.click");
   if (game.phase === "over") {
-    window.location.reload();
+    menus.showTitle();
     return;
   }
   const moved = game.phase === "shop" ? game.leaveShop() : game.advance();
@@ -807,7 +823,50 @@ function takeNextAction(): void {
     playSfx("run.lost");
   }
   updateHud();
+  autosave();
 }
+
+/** Save at a safe point: never while a placement, discard or score presentation is running. */
+function autosave(): void {
+  saveRun(storage, game.snapshot());
+}
+
+/** Swap in a session (new or resumed) and rebuild the scene from its state. */
+function startRun(session: GameSession): void {
+  game = session;
+  pendingAction = null;
+  scoreSteps = [];
+  outcomeAt = null;
+  resetTable();
+  for (const { block, cell } of game.state.field) addToBoard(block, cell);
+  const desired = desiredCamera();
+  cameraDistance = desired.distance;
+  cameraTarget.copy(desired.target);
+  applyCamera();
+  if (game.inStage) dealHand();
+  updateHud();
+  showSelection();
+  autosave();
+  playSfx("round.start");
+}
+
+const menus = createMenus(host, settings, {
+  hasSave: () => loadRun(storage, standardDeck, dealerRegistry) !== null,
+  onContinue() {
+    const snapshot = loadRun(storage, standardDeck, dealerRegistry);
+    if (snapshot) {
+      startRun(GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, standardDeck, snapshot));
+    }
+  },
+  onNewGame() {
+    startRun(new GameSession(dealerRegistry, demoSessionConfig, standardDeck));
+  },
+  onSettingsChange(next) {
+    applySettings(next);
+    saveSettings(storage, next);
+  },
+});
+menus.showTitle();
 stat("action").addEventListener("click", takeNextAction);
 
 function finishDrag(drop: boolean): void {
