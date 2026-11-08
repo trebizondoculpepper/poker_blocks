@@ -27,6 +27,14 @@ This five-card starting hand is a rule for Poker Blocks. [Traditional Poker Squa
 
 These names and payloads are examples, not a frozen API.
 
+## Selectable trait
+
+A block with the `selectable` trait can respond to a player click and enter a selected state. Selection is separate from the block's identity: the card remains the same rank and suit. The behavior belongs to the trait, not to a particular card or block type.
+
+Possible visual cues for selection are a small upward lift, a bright edge or halo, a modest increase in face brightness, and a slightly larger scale. A combination of lift and bright edge may be clearer than bloom alone, particularly for the small hand blocks. True bloom remains an option if a softer glow is wanted later.
+
+The selection scope (one selected block or several), whether clicking again clears selection, and the final visual treatment are still to be decided.
+
 ## Architecture to discuss
 
 A possible shape is a data-only block definition, a registry of trait implementations, and a small event/effect engine. A trait receives an event and a limited view of game state, then returns effects such as `addScore` or `destroyBlock`. The engine applies those effects in a defined order and emits any resulting events. Rendering reads game state separately.
