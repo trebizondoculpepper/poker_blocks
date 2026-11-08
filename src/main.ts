@@ -11,13 +11,20 @@ import { demoSessionConfig } from "./session-config";
 import { tweenValue } from "./easing";
 import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
 import { createMaterialise } from "./visual/materialise";
+import { createCardRoom } from "./visual/card-room";
 import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createMenus } from "./menus";
 import { browserStorage, loadRun, saveRun } from "./save";
-import { loadSettings, prefersReducedMotion, saveSettings, type Settings } from "./settings";
+import {
+  loadSettings,
+  prefersReducedMotion,
+  resolveShadowQuality,
+  saveSettings,
+  type Settings,
+} from "./settings";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -59,7 +66,6 @@ tooltip.setAttribute("role", "tooltip");
 tooltip.hidden = true;
 host.append(tooltip);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111726);
 const handScene = new THREE.Scene();
 const pivot = new THREE.Group();
 const assembly = new THREE.Group();
@@ -79,12 +85,17 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.autoClear = false;
 host.append(renderer.domElement);
 
-for (const targetScene of [scene, handScene]) {
-  targetScene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
-  const sun = new THREE.DirectionalLight(0xffffff, 2.4);
-  sun.position.set(-3, 6, 7);
-  targetScene.add(sun);
-}
+// The hand keeps its neutral studio light; the board sits in the warmer card room,
+// whose overhead lamp (see createCardRoom) adds the shadows.
+handScene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
+const handSun = new THREE.DirectionalLight(0xffffff, 2.4);
+handSun.position.set(-3, 6, 7);
+handScene.add(handSun);
+scene.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3226, 2));
+const boardFill = new THREE.DirectionalLight(0xffffff, 1.3);
+boardFill.position.set(-3, 6, 7);
+scene.add(boardFill);
+const cardRoom = createCardRoom(scene, renderer);
 
 function render(): void {
   renderer.clear();
@@ -160,6 +171,7 @@ function createCube(
   const texture = makeFaceTexture(block.traits.identity);
   const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.65 });
   const cube = new THREE.Mesh(geometry, material);
+  cube.castShadow = cube.receiveShadow = true;
   const edgeGeometry = new THREE.EdgesGeometry(geometry);
   const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6b6c73 });
   cube.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
@@ -214,6 +226,18 @@ type CameraMove = {
   toTarget: THREE.Vector3;
 };
 let cameraMove: CameraMove | null = null;
+
+/** World-space radius of a sphere around the placed structure, centred on the pivot. */
+function structureRadius(): number {
+  if (placed.size === 0) return 0.87 * cubeSize;
+  const center = centerOfGravity(massCenter);
+  let radius = 0;
+  for (const { cell } of placed.values()) {
+    const d = Math.hypot(cell!.x - center.x, cell!.y - center.y, cell!.z - center.z);
+    radius = Math.max(radius, d);
+  }
+  return (radius + 0.87) * cubeSize;
+}
 
 function desiredCamera(): { distance: number; target: THREE.Vector3 } {
   const cells = [...placed.values()].map(({ cell }) => cell!);
@@ -607,6 +631,7 @@ function applyBoardWobble(): void {
 }
 
 const systemMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
 let settings = loadSettings(storage);
 let reducedMotion = false;
 function applySettings(next: Settings): void {
@@ -614,6 +639,7 @@ function applySettings(next: Settings): void {
   setSfxVolume(next.volume);
   setSfxMuted(next.muted);
   reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
+  cardRoom.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
 }
 applySettings(settings);
 systemMotionQuery.addEventListener("change", () => applySettings(settings));
@@ -1149,6 +1175,7 @@ const animate = (time: number) => {
   updateAction(time, delta);
   updateScoring(time);
   glideHand(delta);
+  cardRoom.frame(pivot.position, structureRadius(), delta);
   handBlocks.forEach(({ cube, rock }) => {
     if (!rock) return;
     cube.rotation.z = rockAngle(rock, time / 1000);

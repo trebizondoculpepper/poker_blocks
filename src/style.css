@@ -364,3 +364,13 @@ body,
 .settings-button[hidden] {
   display: none;
 }
+
+@media (max-width: 600px) {
+  /* Below the deck panel, clear of the round panel. */
+  .settings-button {
+    top: max(106px, calc(env(safe-area-inset-top) + 94px));
+    right: max(12px, env(safe-area-inset-right));
+    left: auto;
+    transform: none;
+  }
+}

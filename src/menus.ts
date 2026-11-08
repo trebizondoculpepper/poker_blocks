@@ -1,7 +1,7 @@
 // Title and settings screens: plain DOM overlays above the scene. They only call back
 // into the game; progression rules stay in the session controller.
 import { playSfx } from "./audio/sfx";
-import type { MotionSetting, Settings } from "./settings";
+import type { MotionSetting, Settings, ShadowSetting } from "./settings";
 
 export type MenuCallbacks = {
   hasSave(): boolean;
@@ -14,6 +14,13 @@ export type Menus = {
   showTitle(): void;
   showSettings(): void;
   readonly isOpen: boolean;
+};
+
+const shadowLabels: Record<ShadowSetting, string> = {
+  auto: "Automatic",
+  high: "High",
+  low: "Low",
+  off: "Off",
 };
 
 const motionLabels: Record<MotionSetting, string> = {
@@ -67,6 +74,15 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
          )
          .join("")}
      </fieldset>
+     <fieldset class="menu-field">
+       <legend>Shadows</legend>
+       ${(Object.keys(shadowLabels) as ShadowSetting[])
+         .map(
+           (value) =>
+             `<label class="menu-check"><input type="radio" name="shadows" value="${value}" /> <span>${shadowLabels[value]}</span></label>`,
+         )
+         .join("")}
+     </fieldset>
      <div class="menu-buttons"><button type="button" data-menu="back">Back</button></div>`,
   );
 
@@ -86,6 +102,9 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const muted = find<HTMLInputElement>(settingsScreen.panel, "muted");
   const motionInputs = [
     ...settingsScreen.panel.querySelectorAll<HTMLInputElement>('input[name="motion"]'),
+  ];
+  const shadowInputs = [
+    ...settingsScreen.panel.querySelectorAll<HTMLInputElement>('input[name="shadows"]'),
   ];
 
   function open(screen: HTMLElement): void {
@@ -111,6 +130,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     volume.value = String(Math.round(settings.volume * 100));
     muted.checked = settings.muted;
     motionInputs.forEach((input) => (input.checked = input.value === settings.motion));
+    shadowInputs.forEach((input) => (input.checked = input.value === settings.shadows));
     open(settingsScreen.root);
   }
 
@@ -173,6 +193,12 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   motionInputs.forEach((input) =>
     input.addEventListener("change", () => {
       change({ motion: input.value as MotionSetting });
+      playSfx("ui.click");
+    }),
+  );
+  shadowInputs.forEach((input) =>
+    input.addEventListener("change", () => {
+      change({ shadows: input.value as ShadowSetting });
       playSfx("ui.click");
     }),
   );
