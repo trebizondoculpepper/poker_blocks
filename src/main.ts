@@ -1173,6 +1173,8 @@ const menus = createMenus(host, settings, {
 if (materialsRoom) {
   startRun(newSession());
   menus.closeAll();
+  // No music while judging materials: the record player starts wound down.
+  music.windDown();
 } else {
   menus.showTitle();
 }

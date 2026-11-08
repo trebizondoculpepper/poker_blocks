@@ -120,16 +120,18 @@ function drawGlass(g: CanvasRenderingContext2D, random: () => number, prismatic:
     g,
     prismatic
       ? [
-          [0, "#7958ba"],
-          [0.26, "#60c5e6"],
-          [0.53, "#f6a1c8"],
-          [0.78, "#e5ca6d"],
-          [1, "#628bdb"],
+          // Alpha in the body colour is what makes the block see-through; the printed
+          // rank, suit and rims stay solid.
+          [0, "#7958ba66"],
+          [0.26, "#60c5e655"],
+          [0.53, "#f6a1c855"],
+          [0.78, "#e5ca6d55"],
+          [1, "#628bdb66"],
         ]
       : [
-          [0, "#b9e6ef"],
-          [0.45, "#6aafc0"],
-          [1, "#e2f9fa"],
+          [0, "#b9e6ef40"],
+          [0.45, "#6aafc033"],
+          [1, "#e2f9fa40"],
         ],
   );
   for (let n = -5; n < 12; n++) {
@@ -358,15 +360,41 @@ function faceTexture(
 }
 
 function surface(texture: THREE.CanvasTexture, kind: BlockMaterial): THREE.MeshStandardMaterial {
-  if (kind === "glass" || kind === "prismatic" || kind === "ice") {
+  if (kind === "glass" || kind === "prismatic") {
+    // See-through from the texture's alpha (not `transmission`: the hand is drawn in its
+    // own pass, where a transmissive block would have nothing behind it to refract).
+    // Clearcoat keeps the hard, bright reflections glass has even where it is clear;
+    // prismatic glass adds a thin-film iridescence that shifts hue with the view angle.
     return new THREE.MeshPhysicalMaterial({
       map: texture,
-      roughness: kind === "ice" ? 0.48 : 0.13,
+      roughness: 0.08,
+      metalness: 0,
+      ior: 1.5,
+      clearcoat: 1,
+      clearcoatRoughness: 0.04,
+      specularIntensity: 1,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+      ...(kind === "prismatic"
+        ? {
+            iridescence: 1,
+            iridescenceIOR: 1.8,
+            iridescenceThicknessMinimum: 150,
+            iridescenceThicknessMaximum: 900,
+          }
+        : {}),
+    });
+  }
+  if (kind === "ice") {
+    return new THREE.MeshPhysicalMaterial({
+      map: texture,
+      roughness: 0.48,
       metalness: 0.05,
       clearcoat: 1,
-      clearcoatRoughness: kind === "ice" ? 0.38 : 0.06,
+      clearcoatRoughness: 0.38,
       transparent: true,
-      opacity: kind === "glass" ? 0.86 : 0.94,
+      opacity: 0.94,
     });
   }
   return new THREE.MeshStandardMaterial({
