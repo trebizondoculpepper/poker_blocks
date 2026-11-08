@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101723" />
+    <title>Music Room · Poker Blocks</title>
+  </head>
+  <body>
+    <main class="music-room">
+      <header>
+        <p class="eyebrow">Poker Blocks · development room</p>
+        <h1>Solitaire music mixer</h1>
+        <p>Choose two arrangements, play them on one timeline, and fade between them.</p>
+      </header>
+
+      <section class="panel" aria-label="Music mixer">
+        <div class="decks">
+          <label class="deck"
+            >Deck A
+            <select id="deck-a"></select
+            ><small id="length-a"></small
+          ></label>
+          <label class="deck"
+            >Deck B
+            <select id="deck-b"></select
+            ><small id="length-b"></small
+          ></label>
+        </div>
+
+        <div class="transport">
+          <button id="play" type="button">Play</button>
+          <button id="restart" type="button">Restart</button>
+          <label
+            >Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8"
+          /></label>
+        </div>
+
+        <div class="timeline">
+          <label for="position">Shared playhead</label>
+          <input id="position" type="range" min="0" max="70" step="0.01" value="0" />
+          <output id="time">0:00 / 1:10</output>
+        </div>
+
+        <div class="crossfade">
+          <div class="crossfade-labels">
+            <span>100% A</span><strong>Blend</strong><span>100% B</span>
+          </div>
+          <input
+            id="blend"
+            type="range"
+            min="0"
+            max="1"
+            step="0.001"
+            value="0"
+            aria-label="Blend from deck A to deck B"
+          />
+          <div class="fade-buttons">
+            <button id="fade-a" type="button">Fade to A</button>
+            <label
+              >Fade time
+              <input id="fade-seconds" type="number" min="0.1" max="20" step="0.1" value="2" />
+              seconds</label
+            >
+            <button id="fade-b" type="button">Fade to B</button>
+          </div>
+        </div>
+        <p id="status" class="status" role="status">
+          Press Play to load the two selected arrangements.
+        </p>
+      </section>
+
+      <section class="panel notes">
+        <h2>Alignment check</h2>
+        <p id="alignment">Checking recording lengths…</p>
+        <p>
+          The room loops a shared first <output id="loop-display">—</output> seconds, so both decks
+          restart together. A blend sounds seamless only where the recordings share the same beat
+          and phrase.
+        </p>
+        <label
+          >Shared loop length
+          <input id="loop-seconds" type="number" min="5" step="0.1" value="70" /> seconds</label
+        >
+        <p>
+          Changing an arrangement fades its old version out while the new one starts at the current
+          playhead. The Blend slider uses equal-power gains; the Fade buttons automate it.
+        </p>
+      </section>
+      <a class="back" href="/sfx.html">Sound effects room</a>
+    </main>
+    <script type="module" src="/src/music-room/main.ts"></script>
+  </body>
+</html>

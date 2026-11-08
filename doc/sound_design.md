@@ -100,5 +100,5 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 1. **Scoring and round sounds:** after a play, each line that scores is presented from lowest to highest score, about a third of a second apart. Its row is tinted gold and its `score.magnitude.*` sound plays, chosen by that line's points. `round.cleared` or `round.failed` follows the last line. `score.line` and `score.big` are generated but no longer played; remove them if the magnitude family covers every need.
 2. **Volume and muting:** master volume, a mute toggle, and whether to respect the system's reduced-motion setting by playing fewer or quieter effects.
-3. **Music:** background music is outside this registry. Decide whether to have any, and how it would be generated.
+3. **Music:** the seven Solitaire arrangements are auditioned in the development-only `/music.html` room. They are separate from this SFX registry. Decide how the mixer enters the game after equal-length recordings are supplied.
 4. **Review:** listen to the generated takes and regenerate any that miss with a revised prompt (`npm run sfx -- <id> --force`).
