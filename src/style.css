@@ -56,9 +56,17 @@ h1 {
 .scene canvas {
   display: block;
 }
-.caption {
+.card-label {
   margin: 0;
-  color: #8390aa;
+  color: #f6f0e3;
   text-align: center;
-  font-size: 0.8rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.card-label span {
+  display: block;
+  margin-top: 0.25rem;
+  color: #aebbd0;
+  font-size: 0.9rem;
+  font-weight: 400;
 }

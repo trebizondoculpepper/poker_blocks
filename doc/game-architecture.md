@@ -6,6 +6,10 @@ Status: principles agreed in conversation; implementation design still open.
 
 Poker Blocks will be a puzzle game in the style of poker solitaire. Its main source of interest should be the unexpected ways players can combine reusable game features.
 
+A basic block represents one of the 52 cards in a standard deck. Its rank and suit identify the card. Every geometric face of its cube shows that same rank and suit; geometric faces are distinct from behavior traits.
+
+The first demo shows one cube with a randomly selected card on page load. Reloading selects another card. This is a rendering demonstration, not a decision about how cards will be dealt in the game.
+
 ## Agreed principles
 
 - Composability takes priority when designing game mechanics.
