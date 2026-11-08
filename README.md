@@ -35,7 +35,25 @@ npm install
 ./dev-server.sh
 ```
 
-The script installs dependencies if needed, then starts the dev server on all network interfaces. Extra arguments go to Vite+ (for example, `./dev-server.sh --port 5174`). Open the URL printed by Vite+. Other commands:
+The script installs dependencies if needed, then starts the dev server on all network interfaces and prints two addresses: one for this computer and one for a phone on the same Wi-Fi or LAN. Extra arguments go to Vite+ (for example, `./dev-server.sh --port 5174`); the printed phone address follows a custom port. The script uses a fixed port, so if that port is taken it stops with "Port … is already in use" instead of silently moving to another port.
+
+### Playing on a phone
+
+1. Connect the phone to the same Wi-Fi network as the computer.
+2. Run `./dev-server.sh` and open the printed `Phone (same Wi-Fi/LAN)` address in the phone's browser.
+3. Editing a source file reloads the page on the phone, as it does on the computer.
+
+If the phone cannot connect:
+
+- **macOS firewall:** allow incoming connections for `node` when macOS asks, or in System Settings → Network → Firewall → Options.
+- **Wrong address:** if the computer is on several networks (for example Ethernet and Wi-Fi), the Vite+ `Network:` lines list every address; try the one on the phone's network.
+- **Guest or public Wi-Fi:** many guest networks isolate devices from each other. Use a home network or the phone's own hotspot.
+- **VPN:** a VPN on the computer or phone can route local traffic away. Pause it, or allow local network access.
+- **"Port … is already in use":** stop the other server or choose another port with `--port`.
+
+The server is only reachable on the local network; do not forward its port to the internet. Reaching it from a different network (for example with a secure tunnel) is a separate setup.
+
+Other commands:
 
 ```sh
 npm run check   # format, lint, and type-check
