@@ -36,20 +36,21 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 ## Scoring and rounds
 
-| Id                   | Plays when                                                                    | Status    |
-| -------------------- | ----------------------------------------------------------------------------- | --------- |
-| `score.line`         | One line scores; replayed at rising pitch for each line in a chain            | generated |
-| `score.big`          | A play scores a large amount or a strong hand                                 | generated |
-| `score.hand.pair`    | A line scores a pair or two pair                                              | planned   |
-| `score.hand.set`     | A line scores three or four of a kind                                         | planned   |
-| `score.hand.five`    | A line scores a five-card hand: straight, flush, full house or straight flush | planned   |
-| `score.hand.special` | A line scores a hand that needs a modified deck, such as five of a kind       | planned   |
-| `score.total.tick`   | The running total counts up                                                   | planned   |
-| `score.target.near`  | The running total gets close to the target                                    | planned   |
-| `plays.last`         | The last play of the round begins                                             | planned   |
-| `round.start`        | The deck is shuffled and the centre block appears                             | planned   |
-| `round.cleared`      | The running total reaches the target score                                    | generated |
-| `round.failed`       | Plays run out before the target is reached                                    | generated |
+| Id                                                  | Plays when                                                                                                                             | Status    |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `score.line`                                        | One line scores; replayed at rising pitch for each line in a chain                                                                     | generated |
+| `score.big`                                         | A play scores a large amount or a strong hand                                                                                          | generated |
+| `score.magnitude.ones` … `score.magnitude.millions` | One scoring line is presented; seven tiers by its points (1–9, 10–99, … 1,000,000+), each grander through texture rather than loudness | generated |
+| `score.hand.pair`                                   | A line scores a pair or two pair                                                                                                       | planned   |
+| `score.hand.set`                                    | A line scores three or four of a kind                                                                                                  | planned   |
+| `score.hand.five`                                   | A line scores a five-card hand: straight, flush, full house or straight flush                                                          | planned   |
+| `score.hand.special`                                | A line scores a hand that needs a modified deck, such as five of a kind                                                                | planned   |
+| `score.total.tick`                                  | The running total counts up                                                                                                            | planned   |
+| `score.target.near`                                 | The running total gets close to the target                                                                                             | planned   |
+| `plays.last`                                        | The last play of the round begins                                                                                                      | planned   |
+| `round.start`                                       | The deck is shuffled and the centre block appears                                                                                      | planned   |
+| `round.cleared`                                     | The running total reaches the target score                                                                                             | generated |
+| `round.failed`                                      | Plays run out before the target is reached                                                                                             | generated |
 
 ## Modifiers and materials
 
@@ -96,7 +97,7 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 ## Open questions
 
-1. **Scoring and round sounds:** `score.line`, `score.big`, `round.cleared` and `round.failed` play when a placed card lands and when the round ends. Issue #1 replaces the line sounds with score-magnitude tiers.
+1. **Scoring and round sounds:** after a play, each line that scores is presented from lowest to highest score, about a third of a second apart. Its row is tinted gold and its `score.magnitude.*` sound plays, chosen by that line's points. `round.cleared` or `round.failed` follows the last line. `score.line` and `score.big` are generated but no longer played; remove them if the magnitude family covers every need.
 2. **Volume and muting:** master volume, a mute toggle, and whether to respect the system's reduced-motion setting by playing fewer or quieter effects.
 3. **Music:** background music is outside this registry. Decide whether to have any, and how it would be generated.
 4. **Review:** listen to the generated takes and regenerate any that miss with a revised prompt (`npm run sfx -- <id> --force`).

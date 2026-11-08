@@ -83,7 +83,7 @@ A discarded hand cube dissolves with the same shader over one second before its 
 
 ## Line scoring
 
-`src/scoring.ts` finds every unbroken run of two or more placed blocks along each axis and classifies it as a poker hand, using the best five cards for lines longer than five. After each successful play the base dealer scores every line on the field and adds the sum to the running total. `roundOutcome` reports the round as won once the total reaches the target and lost when moves run out short of it; the dealer then refuses further plays and discards. The HUD reveals the new score, and plays the `score.line`, `score.big`, `round.cleared` or `round.failed` sound, when the placed card lands.
+`src/scoring.ts` finds every unbroken run of two or more placed blocks along each axis and classifies it as a poker hand, using the best five cards for lines longer than five. After each successful play the base dealer scores every line on the field and adds the sum to the running total. `roundOutcome` reports the round as won once the total reaches the target and lost when moves run out short of it; the dealer then refuses further plays and discards. When the placed card lands, the scene presents each scoring line from lowest to highest: the reusable `tintRow` effect flashes its blocks gold, the `score.magnitude.*` sound for its points plays (`src/score-presentation.ts`), and its points are added to the displayed score. The round result and its sound follow the last line.
 
 Two choices here are provisional answers to open questions in `doc/game.md`: each hand type scores a fixed base value from `handBaseScores` (the scoring formula is still undecided), and aces count high or low in a straight with no wrap-around.
 

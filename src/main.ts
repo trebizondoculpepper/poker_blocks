@@ -3,7 +3,8 @@ import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock, type IdentityTrait } from "./cards";
 import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
 import { dealerRegistry, roundOutcome } from "./dealer";
-import { handBaseScores, scoreField } from "./scoring";
+import { scoreField, type LineScore } from "./scoring";
+import { magnitudeSfxFor, presentationOrder } from "./score-presentation";
 
 import { GameSession } from "./game-session";
 import { tweenValue } from "./easing";
@@ -13,9 +14,6 @@ import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./tra
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx } from "./audio/sfx";
-
-/** A line worth at least a straight plays the bigger scoring sound. */
-const bigLineScore = handBaseScores.straight;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -273,9 +271,18 @@ const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
 });
 // The score shown lags the state until the placed card lands.
 let shownScore = game.state.round.score;
+/** One scoring line waiting to be shown: tint its row, play its sound, add its points. */
+type ScoreStep = { at: number; line: LineScore };
+const lineStepMs = 320;
+const tintSeconds = 0.6;
+const tintColor = new THREE.Color(0xffd36b);
+let scoreSteps: ScoreStep[] = [];
+let outcomeAt: number | null = null;
+const tints: { blocks: RenderedBlock[]; startedAt: number }[] = [];
 function updateHud(): void {
   const { round, deck } = game.state;
-  const outcome = roundOutcome(game.state);
+  const presenting = scoreSteps.length > 0 || outcomeAt !== null;
+  const outcome = presenting ? "playing" : roundOutcome(game.state);
   stat("heading").textContent =
     outcome === "won" ? "ROUND WON" : outcome === "lost" ? "ROUND LOST" : "ROUND";
   stat("score").textContent = String(shownScore);
@@ -657,7 +664,7 @@ function updateAction(now: number, delta: number): void {
     action.source.handSlot = null;
     placed.set(cellKey(action.cell), action.source);
     playSfx("card.attach");
-    announceScore();
+    announceScore(now);
     updateRotationCenter(action.cell);
     scheduleCameraMove();
   } else {
@@ -666,17 +673,43 @@ function updateAction(now: number, delta: number): void {
   refillSlot(action.slot);
 }
 
-/** Reveal the score from the play that just landed, with its sounds. */
-function announceScore(): void {
-  const gained = game.state.round.score - shownScore;
-  shownScore = game.state.round.score;
-  const lines = scoreField(game.state.field);
-  if (lines.some(({ score }) => score >= bigLineScore)) playSfx("score.big");
-  else if (gained > 0) playSfx("score.line");
-  const outcome = roundOutcome(game.state);
-  if (outcome === "won") playSfx("round.cleared");
-  if (outcome === "lost") playSfx("round.failed");
-  updateHud();
+/** Present the lines from the play that just landed, lowest score first. */
+function announceScore(now: number): void {
+  const lines = presentationOrder(scoreField(game.state.field));
+  scoreSteps = lines.map((line, index) => ({ at: now + index * lineStepMs, line }));
+  outcomeAt = now + lines.length * lineStepMs;
+}
+
+/** Reusable effect: briefly tint a row of placed blocks toward gold. */
+function tintRow(blocks: readonly CardBlock[], now: number): void {
+  const ids = new Set(blocks.map(({ id }) => id));
+  tints.push({ blocks: renderedBlocks.filter(({ block }) => ids.has(block.id)), startedAt: now });
+}
+
+function updateScoring(now: number): void {
+  while (scoreSteps.length > 0 && scoreSteps[0].at <= now) {
+    const { line } = scoreSteps.shift()!;
+    tintRow(line.line.blocks, now);
+    const sound = magnitudeSfxFor(line.score);
+    if (sound) playSfx(sound, { jitter: 0 });
+    shownScore += line.score;
+    updateHud();
+  }
+  if (outcomeAt !== null && outcomeAt <= now) {
+    outcomeAt = null;
+    shownScore = game.state.round.score;
+    const outcome = roundOutcome(game.state);
+    if (outcome === "won") playSfx("round.cleared");
+    if (outcome === "lost") playSfx("round.failed");
+    updateHud();
+  }
+  for (let index = tints.length - 1; index >= 0; index--) {
+    const tint = tints[index];
+    const progress = Math.min(1, (now - tint.startedAt) / 1000 / tintSeconds);
+    const strength = Math.sin(progress * Math.PI) * 0.7;
+    tint.blocks.forEach(({ material }) => material.color.setRGB(1, 1, 1).lerp(tintColor, strength));
+    if (progress === 1) tints.splice(index, 1);
+  }
 }
 
 function finishDrag(drop: boolean): void {
@@ -900,6 +933,7 @@ const animate = (time: number) => {
   applyBoardWobble();
   updateCamera(time);
   updateAction(time, delta);
+  updateScoring(time);
   handBlocks.forEach(({ cube, rock }) => {
     if (!rock) return;
     cube.rotation.z = rockAngle(rock, time / 1000);

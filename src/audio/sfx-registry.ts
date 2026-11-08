@@ -4,9 +4,9 @@
  * ADDING A SOUND (for people and coding agents)
  * Every player action and notable game event plays a sound by id: `playSfx("card.attach")`.
  * When you add an action, add a registry entry with an `id` and `trigger`, and call
- * `playSfx` with that id. That is all. Do NOT generate audio: entries without a file
- * play silently until someone runs `npm run sfx` locally. A `prompt` is welcome if one
- * comes to mind; otherwise leave it out and it will be written when audio is generated.
+ * `playSfx` with that id. Audio is always pre-generated and committed, never made at
+ * runtime: entries without a file play silently until someone runs `npm run sfx` locally.
+ * A `prompt` is welcome if one comes to mind; otherwise it is written when audio is made.
  * Reuse an existing id when the action should sound the same (e.g. `action.denied`).
  *
  * Audio lives in `src/assets/sfx/<id>.<take>.mp3` and is committed. See doc/sound_design.md.
@@ -135,6 +135,69 @@ const entries = [
     prompt: "Rich rising cascade of chimes and shimmer ending in a warm ring, rewarding",
     durationSeconds: 1.5,
     promptInfluence: 0.5,
+    variants: 1,
+  },
+  {
+    id: "score.magnitude.ones",
+    trigger: "One scoring line worth 1 to 9 points is presented, lowest line first",
+    prompt:
+      "A single small bright glass chime tap, light and quick. Part of a rising family of score sounds; grander through texture, not loudness",
+    durationSeconds: 0.5,
+    promptInfluence: 0.6,
+    variants: 1,
+  },
+  {
+    id: "score.magnitude.tens",
+    trigger: "One scoring line worth 10 to 99 points is presented, lowest line first",
+    prompt:
+      "Two quick bright glass chimes with a soft coin-like ring, light and pleasant. Part of a rising family of score sounds; grander through texture, not loudness",
+    durationSeconds: 0.6,
+    promptInfluence: 0.6,
+    variants: 1,
+  },
+  {
+    id: "score.magnitude.hundreds",
+    trigger: "One scoring line worth 100 to 999 points is presented, lowest line first",
+    prompt:
+      "A quick sparkling run of three glass chimes with a warm ringing tail. Part of a rising family of score sounds; grander through texture, not loudness",
+    durationSeconds: 0.8,
+    promptInfluence: 0.6,
+    variants: 1,
+  },
+  {
+    id: "score.magnitude.thousands",
+    trigger: "One scoring line worth 1,000 to 9,999 points is presented, lowest line first",
+    prompt:
+      "A rich cluster of glass chimes and small bells with a shimmering sparkle, satisfying. Part of a rising family of score sounds; grander through texture, not loudness",
+    durationSeconds: 1.0,
+    promptInfluence: 0.6,
+    variants: 1,
+  },
+  {
+    id: "score.magnitude.ten_thousands",
+    trigger: "One scoring line worth 10,000 to 99,999 points is presented, lowest line first",
+    prompt:
+      "A layered cascade of glass chimes, bells and a soft low resonant hum underneath, glittering and grand. Part of a rising family of score sounds; grander through texture, not loudness",
+    durationSeconds: 1.2,
+    promptInfluence: 0.6,
+    variants: 1,
+  },
+  {
+    id: "score.magnitude.hundred_thousands",
+    trigger: "One scoring line worth 100,000 to 999,999 points is presented, lowest line first",
+    prompt:
+      "A wide shimmering cascade of many glass chimes and bells over a deep warm resonant bloom, sparkling and majestic. Part of a rising family of score sounds; grander through texture, not loudness",
+    durationSeconds: 1.5,
+    promptInfluence: 0.6,
+    variants: 1,
+  },
+  {
+    id: "score.magnitude.millions",
+    trigger: "One scoring line worth 1,000,000 points or more is presented, lowest line first",
+    prompt:
+      "A vast radiant swell of countless glass chimes, bells and crystal shimmer over a deep resonant bloom, magnificent and celebratory. Part of a rising family of score sounds; grander through texture, not loudness",
+    durationSeconds: 2.0,
+    promptInfluence: 0.6,
     variants: 1,
   },
   {
