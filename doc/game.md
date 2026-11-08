@@ -50,7 +50,7 @@ A modifier block that works while held stays active as long as it is in the hand
 - The stage is **won** as soon as the running total reaches the target score, provided plays have not run out. The player then earns the stage's coin reward.
 - The stage is **lost** if the last play is used and the running total is still short of the target. A lost stage ends the run.
 
-The field is cleared at the end of every stage. Placed blocks return to the deck, while the discard pile remains separate and carries forward through the rest of the round. The next stage starts with an empty field and dealer-set play and discard allowances. What happens to cards still in the hand, and whether discarded blocks return to the deck after the shop, are still to be decided.
+The field is cleared at the end of every stage. Placed blocks return to the deck, and the next stage starts with an empty field. The deck and the discard pile carry over between the stages of a round, so a block discarded in stage 1 cannot be drawn in stage 2 or the boss stage.
 
 ## Scoring
 
@@ -58,13 +58,13 @@ The field is cleared at the end of every stage. Placed blocks return to the deck
 
 After every play, **every line on the field** is scored, and the sum is added to the stage's running total. A line that already existed scores again on every later play. Lines built early therefore keep paying, which makes the order of placements a key decision.
 
-### Scoring presentation (proposal)
+### Scoring presentation
 
-After each play, calculate the scores of all lines along the X, Y and Z axes before starting feedback. Each scored result identifies its axis, cells, ordered blocks, contributing cards, hand type and points. Keep lines that score at least one point, then sort them from lowest to highest score. Present them in that order, with the highest-scoring line last. For each line, request the **tint row** field visual effect on its blocks and play a sound chosen through the SFX registry. Low-scoring lines should sound modest; higher-scoring lines should use progressively more grand sounds. The score calculation is independent of the visual and sound playback.
+After each play, calculate the scores of all lines along the X, Y and Z axes before starting feedback. Each scored result identifies its axis, cells, ordered blocks, contributing cards, hand type and points. Keep lines that score at least one point, then sort them from lowest to highest score. Present them in that order, with the highest-scoring line last. For each line, tint its blocks gold and play a sound from the `score.magnitude.*` family. The score calculation is independent of the visual and sound playback.
 
-**Tint row** only changes how a line's blocks look temporarily. It accepts the target block IDs, a duration, and optionally a color or other shader parameters. Blue is the initial color. Here, “row” includes a line along any axis. The effect does not change card identities, materials, or scores, and should remain distinguishable when a block is also selected.
+**Tint row** only changes how a line's blocks look temporarily. Here, “row” includes a line along any axis. The effect does not change card identities, materials, or scores, and should remain distinguishable when a block is also selected.
 
-The duration, exact timing between lines, how to show each hand name and points, the score-to-sound mapping, and a tie-break order for equally scoring lines are still to be designed.
+The exact timing and appearance remain open to tuning.
 
 ### Lines
 
@@ -97,23 +97,33 @@ Because the deck can be modified, hands that cannot happen in real poker are all
 
 ### Hand value
 
-The initial, unmodified line score is **the sum of the contributing blocks' scorable base values multiplied by the hand multiplier**. A card block's configured `scorable` trait supplies that base value: number cards use their printed number, J = 11, Q = 12, K = 13 and A = 14. The scorer reads this trait rather than deriving points from a block type. The `identifiable` trait supplies rank and suit for poker-hand recognition and reusable conditions such as face card, number card, or suit membership. Only blocks contributing to the chosen hand enter the sum. A line with fewer than two blocks scores zero.
+A line scores **the sum of the points of the cards that make its hand, times the hand's multiplier**. Each card's points come from its configured `scorable` trait: 2–10 score their printed number, J=11, Q=12, K=13 and A=14. Kickers do not count, except that a straight, flush, full house or straight flush counts all five cards. A line of 0 or 1 block scores 0.
 
-| Hand            | Contributing cards | Multiplier |
-| --------------- | ------------------ | ---------: |
-| High card       | Highest card       |         ×1 |
-| Pair            | Matching two       |         ×2 |
-| Two pair        | Both pairs         |         ×2 |
-| Three of a kind | Matching three     |         ×3 |
-| Straight        | All five           |         ×3 |
-| Flush           | All five           |         ×4 |
-| Full house      | All five           |         ×5 |
-| Four of a kind  | Matching four      |         ×7 |
-| Straight flush  | All five           |         ×9 |
+| Hand            | Counted cards  | Multiplier |
+| --------------- | -------------- | ---------: |
+| High card       | Highest one    |          1 |
+| Pair            | Matching two   |          2 |
+| Two pair        | Both pairs     |          2 |
+| Three of a kind | Matching three |          3 |
+| Straight        | All five       |          3 |
+| Flush           | All five       |          4 |
+| Full house      | All five       |          5 |
+| Four of a kind  | Matching four  |          7 |
+| Straight flush  | All five       |          9 |
 
-For example, a pair of sevens scores `(7 + 7) × 2 = 28`, while three sevens score `(7 + 7 + 7) × 3 = 63`. Distinct J, Q, K and A values preserve rank order within a hand type. This generally rewards stronger poker hands but does not enforce a strict hierarchy between hand types: a high pair may outscore a low three of a kind. These multipliers are starting values for playtesting. Materials, passive cards and other modifiers may later alter the score; their formulas and order are still open.
+For example, a pair of sevens scores `(7+7)×2 = 28` and three sevens score `(7+7+7)×3 = 63`. Scores generally, but not strictly, follow the poker ranking: a high pair can outscore a low three of a kind. The multipliers are provisional for playtesting.
 
-The basic scorer should be a pure function, **`scoreLine(blocks)`**, that accepts the blocks of one already identified contiguous line and returns its unmodified numeric score. It must not find lines, change `GameState`, add to the stage running total, play sounds or run visual effects. A separate scoring pass calls it for every line after each play and adds the sum to the running total, including scores from lines that already existed on earlier plays. A companion hand evaluation may return the hand type and contributing block IDs for presentation.
+Provisional rules to confirm in review:
+
+- **Long lines:** a line of 6 or more scores the five-card subset with the highest points. On a tie, the stronger hand type wins, then the first subset in line order.
+- **Aces in straights:** aces are high only (10-J-Q-K-A). Whether A-2-3-4-5 also counts is open question 10.
+- **Five of a kind** and other hands that need a modified deck are not scored yet.
+
+Later this formula will be extended in three ways:
+
+1. **Upgrades:** a hand type's multiplier or base can be upgraded during a run.
+2. **Materials:** each card in the scoring hand can have a material that changes the hand's score.
+3. **Modifier blocks:** held or placed modifiers can change scoring and play.
 
 ## Coins
 
@@ -137,11 +147,21 @@ The rack is separate from the hand and field. Passives are not discardable. Drag
 
 ## A run
 
-- A **round** contains three stages. Stage one has a lower score target than stage two. The **third is a boss stage**, which may add rules or restrictions.
-- After each boss stage there is a **shop**.
+- A **round** is three stages: **stage 1**, **stage 2** and the **boss stage**. Stage 1 has a lower target than stage 2. The boss stage can use a different dealer, which adds extra rules or restrictions for more challenge.
+- After each boss stage there is a **shop**, and leaving it starts the next round.
 - Target scores rise as the run goes on (_tune_).
 - A run is **won** by beating a fixed number of rounds (_tune_). Losing any stage ends the run.
-- The deck, including blocks bought at the shop, carries over from round to round for the whole run.
+- The deck, including blocks bought at the shop, carries over for the whole run.
+
+### Placeholder progression rules
+
+The demo uses these placeholders. They live in `src/session-config.ts` so they can be replaced without changing the controller:
+
+- **Targets:** stage 1 = 100, stage 2 = 150, boss stage = 200, each growing by half its base every round (round 2: 150, 225, 300). Every stage has 6 plays and 4 discards.
+- **Boss dealer:** the boss stage uses the base dealer until boss rules exist.
+- **Hand at a stage boundary:** cards left in the hand return to the deck before the next stage is dealt.
+- **Discard pile after the shop:** returns to the deck when the player leaves the shop, so the deck does not run out over a long run.
+- **Shop:** an empty placeholder screen with a button to start the next round.
 
 ### Shop
 
@@ -163,13 +183,13 @@ The shop sells **blocks**, which are added to the deck. These can be card blocks
 2. **Applying upgrades and materials:** the shop sells only blocks, so how hand-type upgrades and card materials are gained or applied is still undecided.
 3. **Material list:** which materials exist and what each one does.
 4. **New hands:** the names, ranking and values of hands that need a modified deck.
-5. **Discards:** how many blocks one discard can remove.
+5. **Discards:** how many blocks one discard can remove. The current stage boundary returns cards left in hand to the deck, and the discard pile is recycled after the shop.
 6. **Removal:** whether blocks can be destroyed or removed from the field, what happens to parts of the structure that end up disconnected, and whether a destroyed block also leaves the deck.
 7. **Effect order on the field:** the fixed order in which line scores and block effects resolve (for example, placement order).
 8. **Boss rules:** the list of boss restrictions and extra rules.
 9. **Numbers to tune:** plays and discards per stage, target scores, coin rewards, shop prices, and run length.
 10. **Straights:** whether aces count both high and low, and whether a straight can wrap around (K-A-2).
 11. **Naming:** the game's own name for modifier blocks.
-12. **Scoring feedback:** the blue line-highlight duration, line order, and where to show each hand name and score; how the highlight combines with selection and other temporary effects.
-13. **Stage boundary:** what happens to cards still in the hand, how the empty field signals its opening drop target, and whether the discard pile returns to the deck after the shop.
+12. **Scoring feedback:** the gold line-highlight duration and where to show each hand name and score; how the highlight combines with selection and other temporary effects.
+13. **Stage boundary:** how the empty field signals its opening drop target.
 14. **Passives:** rack capacity, sale value, shop/deck installation flow, and how a one-use passive is removed from the player's collection after it triggers.

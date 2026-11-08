@@ -16,8 +16,16 @@ export type GameState = {
   round: Readonly<Round>;
 };
 
+/** Play a hand card. On an empty field the first play needs no target: it becomes the centre. */
 export type PlayAction = {
   cardId: string;
-  targetId: string;
-  face: Face;
+  targetId?: string;
+  face?: Face;
+};
+
+/** The numbers a dealer sets at the start of each stage. */
+export type StageRules = {
+  targetScore: number;
+  plays: number;
+  discards: number;
 };

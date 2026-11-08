@@ -85,9 +85,9 @@ The hand is rendered as a fixed overlay with its own camera. Only the structure 
 
 All standard cubes currently have equal mass. The structure keeps a running sum of block grid positions and divides by the block count to find its true center of gravity after each attachment. The rotation pivot moves to that center while preserving the existing block positions. The structure gently oscillates on two axes around the pivot instead of spinning continuously. Dragging any placed block rotates the structure on horizontal and vertical axes; the oscillation continues around the new orientation. A click without dragging still toggles selection.
 
-## Round overlay and discard demo
+## Stage overlay and discard area
 
-The current round starts at score 0, a provisional target of 100, six moves, and four discards. A successful attachment consumes one move. Dropping a hand card into the fixed two-dimensional discard area, marked by a pixel art bin, adds it to a discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing. Scoring and round completion rules are still to be decided; the displayed score stays at zero until those rules exist.
+Each stage starts at score 0 with the target, plays and discards from the session configuration. A successful attachment consumes one play and scores the field. Dropping a hand card into the fixed two-dimensional discard area, marked by a pixel art bin, adds it to the discard pile and consumes one discard. The dealer refills the hand after either action. Invalid drops consume nothing.
 
 The deck count appears at the lower right. The counters and discard area stay fixed on screen while the board camera moves.
 
@@ -95,11 +95,11 @@ The deck count appears at the lower right. The counters and discard area stay fi
 
 `GameState` is the single source of truth for the field, hand, deck, discard pile, and round counters. Each zone holds the actual card blocks, not a count of them. The field pairs each block with its grid cell. The UI's Three.js objects, animations, and selection highlights remain presentation state outside `GameState`.
 
-The canonical domain terms are in [terms.md](terms.md): a **stage** is one score-target game and a **round** contains three stages ending in a boss stage and shop. The current demo's `Round` type and “Round status” label still refer to one stage; they predate this terminology and will be updated with the stage loop. Within a round, the deck and discard pile persist across stages, while the dealer resets the field and sets fresh play and discard allowances for each stage. Cards discarded in an earlier stage stay unavailable in later stages of that round.
+The canonical domain terms are in [terms.md](terms.md): a **stage** is one score-target game and a **round** contains three stages ending in a boss stage and shop. Within a round, the deck and discard pile persist across stages, while the dealer resets the field and sets fresh play and discard allowances for each stage. Cards discarded in an earlier stage stay unavailable in later stages of that round.
 
-The intended stage opening has an empty field and a dealer-filled hand. The player may discard before placing anything. The first play is a drag from the hand into the empty field, creating the centre block and consuming one play. The current demo still auto-places the centre block; that behavior will change when the stage loop is implemented.
+The stage opens with an empty field and a dealer-filled hand. The player may discard before placing anything. The first play is a drag from the hand into the empty field, creating the centre block and consuming one play.
 
-The planned **session controller** owns progression through stage one, stage two, boss stage, shop, and the next round. It selects the active dealer and target score for each stage, asks that dealer to set the stage's field and allowances, and carries the deck and discard pile across the three stages. The current `GameSession` only holds `GameState` and the active dealer; it does not yet sequence stages or shops. Session progress and save data will need to include the current round, stage or shop position.
+`GameSession` owns progression through stage one, stage two, boss stage, shop, and the next round. It selects the active dealer and target score for each stage, asks that dealer to set the stage's field and allowances, and carries the deck and discard pile across the three stages. Its snapshot includes the current round and phase for a future save/Continue flow.
 
 A registered dealer reads `GameState` to decide whether a move is legal and returns the next state after a play or discard. The base dealer owns the current five-card hand, six plays, four discards, provisional target score of 100, opening deal, face attachment rules, and hand refill. `GameSession` holds the active dealer and current state; switching to another registered dealer preserves the exact state value. A future boss dealer can change rule methods without moving cards between zones or adding boss checks to the scene.
 
@@ -111,15 +111,15 @@ A discarded hand cube dissolves with the same shader over one second before its 
 
 ## Field visual effects (proposal)
 
-Field visual effects are presentation behaviors, separate from gameplay effects such as adding score or destroying blocks. A caller requests an effect by name with target block IDs and visual parameters such as color, intensity, duration, and easing. A field effect registry resolves that name to a renderer; an effect runner tracks its lifetime and removes it when finished. The first effect is **tint row**: it temporarily displays the targeted line differently, with a configurable duration and optional color or shader parameters. Its initial use is a blue tint during scoring, but it knows nothing about poker hands. The same system can later draw glows, bursts, or explosions for unrelated game events.
+Field visual effects are presentation behaviors, separate from gameplay effects such as adding score or destroying blocks. The current `tintRow` effect temporarily colors a scoring line gold. A future field effect registry could resolve named requests with target block IDs and visual parameters such as color, intensity, duration, and easing. The same mechanism could later draw glows, bursts, or explosions for unrelated game events.
 
 Gameplay resolves first. A presentation coordinator may turn the resulting events into field visual effect requests, but the visuals never determine score or mutate `GameState`. An explosive trait, for example, would use gameplay effects to remove blocks and a separate field effect request to show an explosion. Multiple temporary effects and persistent selection illumination need a defined visual composition policy so one highlight does not erase another; that policy is still open.
 
-After each play, scoring calculates all line scores first, filters out zero-point lines, and orders the remainder from lowest to highest. Presentation then steps through that ordered result, requesting `tint row` and a score-appropriate sound from the SFX registry for each line. The score-to-sound mapping and timing are design questions; the scorer does not call shaders or audio directly.
+After each play, scoring calculates all line scores first, filters out zero-point lines, and orders the remainder from lowest to highest. Presentation then steps through that ordered result, tinting each row gold and playing a `score.magnitude.*` sound chosen for its points. The scorer does not call shaders or audio directly.
 
 ## Passive registry and triggers (design)
 
-The proposed event order, reaction contract, and effect boundaries are specified in [game-events.md](game-events.md). The current demo has only a general event emitter; it does not implement that gameplay contract yet.
+The proposed event order, reaction contract, and effect boundaries are specified in [game-events.md](game-events.md). The current game has only a general event emitter; it does not implement that gameplay contract yet.
 
 Passive definitions live in a named registry with a stable id, display name, visual design or icon, configured trait references, and optional visual effect ids. The passive itself is a block instance in a passive-rack zone of future `GameState`. Behavior code belongs to reusable traits, not the block instance or an ad hoc function attached to one registry entry. A trait may listen for gameplay events such as block placement, apply a condition, produce a gameplay effect such as coins proportional to the placed card's rank, and request separate presentation effects.
 
@@ -129,7 +129,23 @@ Timing matters: a trait that changes a block's base value or a line's points mus
 
 Trigger usage is configurable per passive: unlimited, a fixed count, or one-shot. Remaining uses are instance state; exhausting them can destroy the passive. Passives are not discardable. A separate sell interaction can remove an installed passive at any time and award coins without using a stage discard. The rack size, sale values, and installation flow remain open.
 
-The hand and passive rack are ordered zones in `GameState`. A generic reorder action changes item order when a block is dragged between slots in its own zone; it does not consume a play or discard. For passives responding to the same trigger, the default resolver uses a snapshot of rack order and applies their gameplay effects left to right. An explicitly defined timing rule can override that default. The renderer reflects the new order but does not decide effect order itself.
+The proposed hand and passive rack are ordered zones in `GameState`. A generic reorder action would change item order when a block is dragged between slots in its own zone; it would not consume a play or discard. For passives responding to the same trigger, the default resolver would use a snapshot of rack order and apply their gameplay effects left to right. An explicitly defined timing rule could override that default. The renderer would reflect the new order but would not decide effect order itself.
+
+## Line scoring
+
+`src/scoring.ts` holds pure scoring primitives with no UI, sound or state changes. `findScoringLines` returns every maximal gap-free run of two or more placed blocks along X, then Y, then Z, with its cells and blocks in cell order. `scoreLine` returns one line's numeric score, and `evaluateLine` adds the hand type and the ids of the cards that counted. Card points come from the configured `scorable` trait (`src/traits/scorable.ts`), never from the block type. `scoreField` scores every line, and `presentationOrder` drops zero-point lines and sorts the rest lowest first.
+
+After each successful play the base dealer adds the points of every line on the field to the running total. `roundOutcome` reports the stage as won once the total reaches the target and lost when plays run out short of it; the dealer then refuses further plays and discards. The formula and its provisional edge rules are in `doc/game.md`.
+
+When the placed card lands, the scene presents each scoring line from lowest to highest: the reusable `tintRow` effect flashes its blocks gold, the `score.magnitude.*` sound for its points plays (`src/score-presentation.ts`), and its points are added to the displayed score. The stage result and its sound follow the last line.
+
+## Session controller
+
+`GameSession` (`src/game-session.ts`) controls one run: stage 1 → stage 2 → boss stage → shop → next round. It holds the round number, the phase (a stage, `shop` or `over`), the active dealer and the current `GameState`. `advance()` moves on once the current stage is decided: a win starts the next stage, or opens the shop after the boss stage, and a loss sets the phase to `over`. `leaveShop()` starts stage 1 of the next round. `snapshot()` returns the round, phase, dealer name and state for a future save/Continue flow.
+
+Each stage's dealer, target, plays and discards come from a `SessionConfig` (`src/session-config.ts`), not from the scene. The config also names the open rules as explicit options: what happens to the hand at a stage boundary, and whether the discard pile returns to the deck after the shop. `demoSessionConfig` holds the documented placeholders.
+
+A dealer's `startStage` returns the field to the deck, sets the stage's counters and fills the hand. The field starts empty, and the first play needs no target: `placementFor` returns the centre cell when the field is empty. In the scene, dropping a hand block anywhere above the hand on an empty field plays it at the centre. When a stage is decided, a button in the round panel offers the next step (next stage, shop, next round or a new game), and taking it clears the table and deals the new hand.
 
 ## Architecture to discuss
 

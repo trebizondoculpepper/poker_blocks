@@ -2,8 +2,12 @@ import "./style.css";
 import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock, type IdentityTrait } from "./cards";
 import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
-import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
+import { dealerRegistry, roundOutcome } from "./dealer";
+import { presentationOrder, scoreField, type ScoredLine } from "./scoring";
+import { magnitudeSfxFor } from "./score-presentation";
+
+import { GameSession, type Phase } from "./game-session";
+import { demoSessionConfig } from "./session-config";
 import { tweenValue } from "./easing";
 import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
 import { createMaterialise } from "./visual/materialise";
@@ -21,12 +25,13 @@ const roundHud = document.createElement("aside");
 roundHud.className = "round-hud";
 roundHud.setAttribute("aria-label", "Round status");
 roundHud.innerHTML = `
-  <div class="hud-heading">ROUND</div>
+  <div class="hud-heading" data-stat="heading">ROUND</div>
   <div class="hud-row"><span>Score</span><strong data-stat="score"></strong></div>
   <div class="hud-row"><span>Target</span><strong data-stat="target"></strong></div>
   <div class="hud-divider"></div>
   <div class="hud-row"><span>Moves</span><strong data-stat="moves"></strong></div>
   <div class="hud-row"><span>Discards</span><strong data-stat="discards"></strong></div>
+  <button class="hud-action" type="button" data-stat="action" hidden></button>
 `;
 host.append(roundHud);
 const deckHud = document.createElement("aside");
@@ -207,6 +212,9 @@ let cameraMove: CameraMove | null = null;
 
 function desiredCamera(): { distance: number; target: THREE.Vector3 } {
   const cells = [...placed.values()].map(({ cell }) => cell!);
+  if (cells.length === 0) {
+    return { distance: initialCameraDistance, target: new THREE.Vector3(0, -0.5, 0) };
+  }
   const min = {
     x: Math.min(...cells.map(({ x }) => x)),
     y: Math.min(...cells.map(({ y }) => y)),
@@ -259,16 +267,51 @@ function updateCamera(now: number): void {
   if (progress === 1) cameraMove = null;
 }
 
-const game = new GameSession(dealerRegistry, "base", standardDeck);
+const game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck);
 for (const { block, cell } of game.state.field) addToBoard(block, cell);
 const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
   const rendered = createCube(block, cubeSize / 3, "hand");
   rendered.handSlot = slot;
   return rendered;
 });
+// The score shown lags the state until the placed card lands.
+let shownScore = game.state.round.score;
+/** One scoring line waiting to be shown: tint its row, play its sound, add its points. */
+type ScoreStep = { at: number; line: ScoredLine };
+const lineStepMs = 320;
+const tintSeconds = 0.6;
+const tintColor = new THREE.Color(0xffd36b);
+let scoreSteps: ScoreStep[] = [];
+let outcomeAt: number | null = null;
+const tints: { blocks: RenderedBlock[]; startedAt: number }[] = [];
+const phaseNames: Record<Phase, string> = {
+  "stage-1": "STAGE 1",
+  "stage-2": "STAGE 2",
+  boss: "BOSS STAGE",
+  shop: "SHOP",
+  over: "GAME OVER",
+};
+
+/** The HUD button's label for the current moment, or null when there is nothing to do. */
+function nextActionLabel(outcome: ReturnType<typeof roundOutcome>): string | null {
+  if (game.phase === "shop") return "Next round";
+  if (game.phase === "over") return "New game";
+  if (outcome === "lost") return "End game";
+  if (outcome === "won") return game.phase === "boss" ? "Go to shop" : "Next stage";
+  return null;
+}
+
 function updateHud(): void {
   const { round, deck } = game.state;
-  stat("score").textContent = String(round.score);
+  const presenting = scoreSteps.length > 0 || outcomeAt !== null;
+  const outcome = presenting || !game.inStage ? "playing" : roundOutcome(game.state);
+  const result = outcome === "won" ? " · WON" : outcome === "lost" ? " · LOST" : "";
+  stat("heading").textContent = `ROUND ${game.round} · ${phaseNames[game.phase]}${result}`;
+  const label = presenting ? null : nextActionLabel(outcome);
+  const action = stat("action") as HTMLButtonElement;
+  action.hidden = label === null;
+  action.textContent = label ?? "";
+  stat("score").textContent = String(shownScore);
   stat("target").textContent = String(round.targetScore);
   stat("moves").textContent = String(round.movesLeft);
   stat("discards").textContent = String(round.discardsLeft);
@@ -306,7 +349,8 @@ assembly.add(faceHighlight);
 
 let selected: Selection = new Set();
 let handBaseY = 0;
-type Candidate = { target: RenderedBlock; face: Face; cell: Cell };
+/** Where a drop would play: a face of a placed block, or the centre of an empty field. */
+type Candidate = { target: RenderedBlock | null; face: Face | null; cell: Cell };
 type Drag = {
   source: RenderedBlock;
   grabOffset: THREE.Vector3;
@@ -409,6 +453,13 @@ function pickBlock(
 }
 
 function pickAttachment(clientX: number, clientY: number): Candidate | null {
+  if (placed.size === 0) {
+    // The first play of a stage goes to the centre: drop anywhere above the hand.
+    const bounds = host.getBoundingClientRect();
+    const aboveHand = clientY < bounds.top + bounds.height * 0.72;
+    const cell = game.dealer.placementFor(game.state);
+    return aboveHand && cell ? { target: null, face: null, cell } : null;
+  }
   const boardBlocks = [...placed.values()];
   pointRay(clientX, clientY);
   const hit = raycaster.intersectObjects(
@@ -429,13 +480,15 @@ function pickAttachment(clientX: number, clientY: number): Candidate | null {
 }
 
 function showCandidate(candidate: Candidate | null): void {
-  ghost.visible = faceHighlight.visible = Boolean(candidate);
-  if (!candidate?.target.cell) return;
+  ghost.visible = Boolean(candidate);
+  faceHighlight.visible = Boolean(candidate?.target);
+  if (!candidate) return;
   ghost.position.set(
     candidate.cell.x * cubeSize,
     candidate.cell.y * cubeSize - 0.45,
     candidate.cell.z * cubeSize,
   );
+  if (!candidate.target?.cell || !candidate.face) return;
   const normal = faceNormal(candidate.face);
   faceHighlight.position.set(
     (candidate.target.cell.x + normal.x * 0.505) * cubeSize,
@@ -555,8 +608,8 @@ function refillSlot(slot: number): void {
 function startPlacement(source: RenderedBlock, candidate: Candidate): boolean {
   const next = game.play({
     cardId: source.block.id,
-    targetId: candidate.target.block.id,
-    face: candidate.face,
+    targetId: candidate.target?.block.id,
+    face: candidate.face ?? undefined,
   });
   if (!next) return false;
   const cell = next.field[next.field.length - 1].cell;
@@ -647,6 +700,7 @@ function updateAction(now: number, delta: number): void {
     action.source.handSlot = null;
     placed.set(cellKey(action.cell), action.source);
     playSfx("card.attach");
+    announceScore(now);
     updateRotationCenter(action.cell);
     scheduleCameraMove();
   } else {
@@ -654,6 +708,107 @@ function updateAction(now: number, delta: number): void {
   }
   refillSlot(action.slot);
 }
+
+/** Present the lines from the play that just landed, lowest score first. */
+function announceScore(now: number): void {
+  const lines = presentationOrder(scoreField(game.state.field));
+  scoreSteps = lines.map((line, index) => ({ at: now + index * lineStepMs, line }));
+  outcomeAt = now + lines.length * lineStepMs;
+}
+
+/** Reusable effect: briefly tint a row of placed blocks toward gold. */
+function tintRow(blocks: readonly CardBlock[], now: number): void {
+  const ids = new Set(blocks.map(({ id }) => id));
+  tints.push({ blocks: renderedBlocks.filter(({ block }) => ids.has(block.id)), startedAt: now });
+}
+
+function updateScoring(now: number): void {
+  while (scoreSteps.length > 0 && scoreSteps[0].at <= now) {
+    const { line } = scoreSteps.shift()!;
+    tintRow(line.line.blocks, now);
+    const sound = magnitudeSfxFor(line.points);
+    if (sound) playSfx(sound, { jitter: 0 });
+    shownScore += line.points;
+    updateHud();
+  }
+  if (outcomeAt !== null && outcomeAt <= now) {
+    outcomeAt = null;
+    shownScore = game.state.round.score;
+    const outcome = roundOutcome(game.state);
+    if (outcome === "won") playSfx("round.cleared");
+    if (outcome === "lost") playSfx("round.failed");
+    updateHud();
+  }
+  for (let index = tints.length - 1; index >= 0; index--) {
+    const tint = tints[index];
+    const progress = Math.min(1, (now - tint.startedAt) / 1000 / tintSeconds);
+    const strength = Math.sin(progress * Math.PI) * 0.7;
+    tint.blocks.forEach(({ material }) => material.color.setRGB(1, 1, 1).lerp(tintColor, strength));
+    if (progress === 1) tints.splice(index, 1);
+  }
+}
+
+/** Remove every block from the scene and put the board and camera back at the start. */
+function resetTable(): void {
+  // disposeCube removes from renderedBlocks, so iterate over a copy.
+  for (const rendered of renderedBlocks.slice()) disposeCube(rendered);
+  placed.clear();
+  handBlocks.length = 0;
+  appearing.length = 0;
+  tints.length = 0;
+  selected = new Set();
+  massCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
+  pivotCell.set(0, 0, 0);
+  pivot.position.set(0, 0, 0);
+  assembly.position.set(0, 0, 0);
+  manualYaw = manualPitch = 0;
+  cameraMove = null;
+  const desired = desiredCamera();
+  cameraDistance = desired.distance;
+  cameraTarget.copy(desired.target);
+  applyCamera();
+  shownScore = game.state.round.score;
+}
+
+/** Deal the hand of a new stage into the hand area with the materialise effect. */
+function dealHand(): void {
+  game.state.hand.forEach((block, slot) => {
+    const rendered = createCube(block, cubeSize / 3, "hand");
+    rendered.handSlot = slot;
+    handBlocks.push(rendered);
+    const edges = [...rendered.cube.children];
+    edges.forEach((edge) => (edge.visible = false));
+    rendered.cube.updateWorldMatrix(true, true);
+    appearing.push({
+      effect: createMaterialise(rendered.cube, { seconds: 0.9, reduced: reducedMotion }),
+      edges,
+    });
+  });
+  layoutHand();
+}
+
+/** The HUD button: move to the next stage, the shop, the next round, or a new game. */
+function takeNextAction(): void {
+  if (pendingAction || drag?.active) return;
+  playSfx("ui.click");
+  if (game.phase === "over") {
+    window.location.reload();
+    return;
+  }
+  const moved = game.phase === "shop" ? game.leaveShop() : game.advance();
+  if (!moved) return;
+  resetTable();
+  if (game.inStage) {
+    dealHand();
+    playSfx("round.start");
+  } else if (game.phase === "shop") {
+    playSfx("shop.open");
+  } else {
+    playSfx("run.lost");
+  }
+  updateHud();
+}
+stat("action").addEventListener("click", takeNextAction);
 
 function finishDrag(drop: boolean): void {
   if (!drag) return;
@@ -876,6 +1031,7 @@ const animate = (time: number) => {
   applyBoardWobble();
   updateCamera(time);
   updateAction(time, delta);
+  updateScoring(time);
   handBlocks.forEach(({ cube, rock }) => {
     if (!rock) return;
     cube.rotation.z = rockAngle(rock, time / 1000);

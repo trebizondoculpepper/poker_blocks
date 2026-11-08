@@ -1,14 +1,25 @@
-# Game terms
+# Terms
 
-This is the single source for the names of the game's time scales and related play areas. The rules that use them are in [game.md](game.md).
+Canonical names used in the rules, the code and the docs. Use these words and no others for the same idea.
 
-- **Session (run):** one complete attempt, including its progress through rounds, stages and shops, its evolving collection of blocks, and any saved progress. Losing a stage ends the session. The number of rounds needed to win is still to be set.
-- **Session controller:** the planned coordinator that advances a session through stage one, stage two, boss stage, shop, then the next round. It selects the dealer and score target for each stage and preserves the appropriate game state between them.
-- **Round:** three stages played in order, followed by a shop after the third stage. The deck and discard pile carry across all three stages.
-- **Stage:** one score-target game. The field starts empty, the dealer sets fresh play and discard allowances, and the player can play or discard from the hand. The first play places the centre block. Stage one has a lower score target than stage two.
-- **Boss stage:** stage three of a round. Its dealer may change the rules or restrict play; its exact score target is still to be designed.
-- **Challenge:** a separate, later feature that adds a special objective or restriction, such as winning without playing Hearts or with all fives debuffed. It is not another name for a stage.
-- **Field:** the blocks placed in the current stage. It resets between stages.
-- **Discard pile:** blocks discarded during the current round. They remain unavailable in later stages of that round. Whether they return to the deck after the shop remains open.
-- **Passive block:** a block with configured traits that can be installed in the passive rack and respond to gameplay events. It may have a limited number of triggers. It is sold through a separate sell target rather than discarded.
-- **Passive rack:** the ordered installed passive blocks at the top of the screen, separate from the hand and field. By default, passives triggered together resolve from left to right.
+| Term              | Meaning                                                                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Run**           | One whole game attempt, from the first stage until a stage is lost or the run is won. In code: a `GameSession`.                                      |
+| **Round**         | Three stages in order: stage 1, stage 2 and the boss stage, followed by the shop. Rounds are numbered from 1.                                        |
+| **Stage**         | One attempt at a score target, with its own plays and discards and an empty field at the start. In code: `StageKind` (`stage-1`, `stage-2`, `boss`). |
+| **Boss stage**    | The third stage of a round. It can use a different registered dealer with extra rules.                                                               |
+| **Phase**         | Where the session is now: one of the three stages, `shop`, or `over` after a loss.                                                                   |
+| **Shop**          | The screen between the boss stage and the next round, where blocks will be bought. A placeholder for now.                                            |
+| **Dealer**        | A registered rule set that reads and changes `GameState`: it deals, judges plays and discards, and scores. Each stage names its dealer.              |
+| **Field**         | The blocks placed this stage, each in a grid cell.                                                                                                   |
+| **Centre block**  | The first block played in a stage, placed at the centre of the empty field.                                                                          |
+| **Hand**          | Up to five blocks the player can play or discard.                                                                                                    |
+| **Deck**          | The blocks the player owns that are not on the field, in the hand or in the discard pile.                                                            |
+| **Discard pile**  | Discarded blocks. It persists across the stages of a round.                                                                                          |
+| **Play**          | Moving one block from the hand onto the field. Each stage allows a fixed number.                                                                     |
+| **Discard**       | Moving one block from the hand to the discard pile. Each stage allows a fixed number.                                                                |
+| **Line**          | A maximal gap-free run of two or more placed blocks along one axis. Every line scores after every play.                                              |
+| **Running total** | The score of the current stage.                                                                                                                      |
+| **Challenge**     | Reserved for a future feature; not a synonym for stage or round.                                                                                     |
+| **Passive block** | A block with configured traits that can be installed in the passive rack and respond to gameplay events.                                             |
+| **Passive rack**  | The ordered zone for installed passive blocks, separate from the hand and field. By default, passives resolve from left to right.                    |

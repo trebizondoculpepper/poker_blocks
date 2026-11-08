@@ -5,7 +5,7 @@ Every sound the game needs, the moment it plays, and whether it exists yet. The 
 ## Approach
 
 - **One registry.** [`src/audio/sfx-registry.ts`](../src/audio/sfx-registry.ts) lists each sound: its id, trigger, generation prompt, duration and number of variants. Game code refers to sounds only by id.
-- **Generated once, locally.** `npm run sfx` (which runs `scripts/generate-sfx.ts`) calls the ElevenLabs sound-effects API for any registry entry that has no file yet. The key comes from `ELEVENLABS_API_KEY` in your environment. The results are committed under `src/assets/sfx/<id>.<variant>.mp3`, so builds and CI never need the key. Pass ids to generate only those sounds, and `--force` to regenerate files that already exist.
+- **Generated once, locally.** `npm run sfx` (which runs `scripts/generate-sfx.ts`) calls the ElevenLabs sound-effects API for any registry entry that has no file yet. The key comes from `ELEVENLABS_API_KEY`, either in your environment or in a git-ignored `.env` file at the project root. The results are committed under `src/assets/sfx/<id>.<variant>.mp3`, so builds and CI never need the key. Pass ids to generate only those sounds, and `--force` to regenerate files that already exist.
 - **Every action has a sound.** Game code calls `playSfx(id)` from [`src/audio/sfx.ts`](../src/audio/sfx.ts) for each player action and notable event. The id is type-checked against the registry.
 - **Register first, generate later.** A registry entry needs only an `id` and a `trigger`. The prompt and generation settings are optional, and a sound with no audio file plays silently. This lets anyone, including coding agents, add the sound for a new action without writing a prompt or generating audio. Audio is generated in batches: `npm run sfx -- --list` shows which entries still need a prompt and which are ready to generate. The rules for agents are in [AGENTS.md](../AGENTS.md).
 - **Checked by a test.** [`sfx-registry.test.ts`](../src/audio/sfx-registry.test.ts) checks that ids are unique and well formed, that each entry has a trigger, and that every audio file belongs to a registry entry. Missing audio is allowed.
@@ -36,20 +36,21 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 ## Scoring and rounds
 
-| Id                   | Plays when                                                                    | Status    |
-| -------------------- | ----------------------------------------------------------------------------- | --------- |
-| `score.line`         | One line scores; replayed at rising pitch for each line in a chain            | generated |
-| `score.big`          | A play scores a large amount or a strong hand                                 | generated |
-| `score.hand.pair`    | A line scores a pair or two pair                                              | planned   |
-| `score.hand.set`     | A line scores three or four of a kind                                         | planned   |
-| `score.hand.five`    | A line scores a five-card hand: straight, flush, full house or straight flush | planned   |
-| `score.hand.special` | A line scores a hand that needs a modified deck, such as five of a kind       | planned   |
-| `score.total.tick`   | The running total counts up                                                   | planned   |
-| `score.target.near`  | The running total gets close to the target                                    | planned   |
-| `plays.last`         | The last play of the round begins                                             | planned   |
-| `round.start`        | The deck is shuffled and the centre block appears                             | planned   |
-| `round.cleared`      | The running total reaches the target score                                    | generated |
-| `round.failed`       | Plays run out before the target is reached                                    | generated |
+| Id                                                  | Plays when                                                                                                                             | Status    |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `score.line`                                        | One line scores; replayed at rising pitch for each line in a chain                                                                     | generated |
+| `score.big`                                         | A play scores a large amount or a strong hand                                                                                          | generated |
+| `score.magnitude.ones` … `score.magnitude.millions` | One scoring line is presented; seven tiers by its points (1–9, 10–99, … 1,000,000+), each grander through texture rather than loudness | generated |
+| `score.hand.pair`                                   | A line scores a pair or two pair                                                                                                       | planned   |
+| `score.hand.set`                                    | A line scores three or four of a kind                                                                                                  | planned   |
+| `score.hand.five`                                   | A line scores a five-card hand: straight, flush, full house or straight flush                                                          | planned   |
+| `score.hand.special`                                | A line scores a hand that needs a modified deck, such as five of a kind                                                                | planned   |
+| `score.total.tick`                                  | The running total counts up                                                                                                            | planned   |
+| `score.target.near`                                 | The running total gets close to the target                                                                                             | planned   |
+| `plays.last`                                        | The last play of the stage begins                                                                                                      | planned   |
+| `round.start`                                       | The deck is shuffled and the centre block appears                                                                                      | generated |
+| `round.cleared`                                     | The running total reaches the target score                                                                                             | generated |
+| `round.failed`                                      | Plays run out before the target is reached                                                                                             | generated |
 
 ## Modifiers and materials
 
@@ -67,36 +68,36 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 ## Coins and shop
 
-| Id                   | Plays when                                          | Status  |
-| -------------------- | --------------------------------------------------- | ------- |
-| `coin.earn`          | Coins are earned, from a round win or a block       | planned |
-| `coin.spend`         | Coins are spent                                     | planned |
-| `shop.open`          | The shop opens after a boss stage                   | planned |
-| `shop.buy`           | A block is bought                                   | planned |
-| `shop.cannot_afford` | The player tries to buy something they can't afford | planned |
-| `deck.add_block`     | A bought block joins the deck                       | planned |
-| `shop.leave`         | The player leaves the shop for the next round       | planned |
+| Id                   | Plays when                                          | Status    |
+| -------------------- | --------------------------------------------------- | --------- |
+| `coin.earn`          | Coins are earned, from a stage win or a block       | planned   |
+| `coin.spend`         | Coins are spent                                     | planned   |
+| `shop.open`          | The shop opens after a boss stage                   | generated |
+| `shop.buy`           | A block is bought                                   | planned   |
+| `shop.cannot_afford` | The player tries to buy something they can't afford | planned   |
+| `deck.add_block`     | A bought block joins the deck                       | planned   |
+| `shop.leave`         | The player leaves the shop for the next round       | planned   |
 
 ## Bosses and the run
 
-| Id                  | Plays when                                                    | Status  |
-| ------------------- | ------------------------------------------------------------- | ------- |
-| `boss.intro`        | A boss stage begins and shows its rule                        | planned |
-| `boss.rule.applied` | A boss restriction affects play                               | planned |
-| `run.won`           | The final boss stage is beaten (bigger than `round.cleared`)  | planned |
-| `run.lost`          | A round is lost and the run ends (bigger than `round.failed`) | planned |
+| Id                  | Plays when                                                    | Status    |
+| ------------------- | ------------------------------------------------------------- | --------- |
+| `boss.intro`        | A boss stage begins and shows its rule                        | planned   |
+| `boss.rule.applied` | A boss restriction affects play                               | planned   |
+| `run.won`           | The final boss stage is beaten (bigger than `round.cleared`)  | planned   |
+| `run.lost`          | A stage is lost and the run ends (bigger than `round.failed`) | generated |
 
 ## Interface
 
-| Id         | Plays when                      | Status  |
-| ---------- | ------------------------------- | ------- |
-| `ui.hover` | The pointer moves over a button | planned |
-| `ui.click` | A button is pressed             | planned |
-| `ui.back`  | A menu or panel is closed       | planned |
+| Id         | Plays when                      | Status    |
+| ---------- | ------------------------------- | --------- |
+| `ui.hover` | The pointer moves over a button | planned   |
+| `ui.click` | A button is pressed             | generated |
+| `ui.back`  | A menu or panel is closed       | planned   |
 
 ## Open questions
 
-1. **Scoring and round sounds:** `score.line`, `score.big`, `round.cleared` and `round.failed` are generated but not played yet, because the game has no scoring or round end. Wire them in when those rules are built. Every hand and placement action in the current game already plays its sound.
+1. **Scoring and round sounds:** after a play, each line that scores is presented from lowest to highest score, about a third of a second apart. Its row is tinted gold and its `score.magnitude.*` sound plays, chosen by that line's points. `round.cleared` or `round.failed` follows the last line. `score.line` and `score.big` are generated but no longer played; remove them if the magnitude family covers every need.
 2. **Volume and muting:** master volume, a mute toggle, and whether to respect the system's reduced-motion setting by playing fewer or quieter effects.
 3. **Music:** background music is outside this registry. Decide whether to have any, and how it would be generated.
 4. **Review:** listen to the generated takes and regenerate any that miss with a revised prompt (`npm run sfx -- <id> --force`).
