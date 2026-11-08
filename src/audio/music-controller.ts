@@ -21,6 +21,13 @@ export type MusicController = {
   switchToBossTrack(): void;
   /** Back to the table (closing settings): the current stage's track. */
   resumeStage(): void;
+  /**
+   * Muffle whatever is playing (a low-pass filter easing in over about 2 s), as when the
+   * menu is open over the game. The track does not change.
+   */
+  muffle(): void;
+  /** Ease the muffle back off (about 2 s). */
+  unmuffle(): void;
   /** Wind the music down to silence, like a record player losing power. */
   windDown(): void;
   /** Wind back up whatever was playing before the wind-down. */
@@ -36,8 +43,16 @@ export type MusicController = {
   readonly tracks: readonly string[];
 };
 
+/** The muffled cut-off, in hertz: the music as if through a wall. */
+const muffledCutoff = 550;
+/** Seconds the muffle takes to come on or go off. */
+const muffleSeconds = 2;
+
 export function createMusicController(
-  player: Pick<MusicPlayer, "play" | "stop" | "windDown" | "windUp" | "unlock" | "current">,
+  player: Pick<
+    MusicPlayer,
+    "play" | "stop" | "windDown" | "windUp" | "unlock" | "current" | "setLowPass" | "clearLowPass"
+  >,
   tracks: readonly string[],
   plan: MusicPlan = defaultMusicPlan,
   random: () => number = Math.random,
@@ -85,6 +100,9 @@ export function createMusicController(
       request(playStage);
     },
     resumeStage: () => request(playStage),
+    // Not a request: the filter applies to whatever plays, so it never replaces one.
+    muffle: () => player.setLowPass(muffledCutoff, muffleSeconds),
+    unmuffle: () => player.clearLowPass(muffleSeconds),
     windDown: () =>
       request(() => {
         if (woundDown) return;

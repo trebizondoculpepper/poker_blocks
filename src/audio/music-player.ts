@@ -47,10 +47,19 @@ export type MusicPlayer = {
   /** Start a loop from a standstill, speeding up to its tempo over `seconds` like a platter. */
   windUp(id: string, seconds?: number): Promise<void>;
   setVolume(volume: number): void;
+  /**
+   * Muffle the music through a low-pass filter, easing its cut-off down to `hz` over
+   * `seconds` (as if heard from another room). clearLowPass eases it back open.
+   */
+  setLowPass(hz: number, seconds?: number): void;
+  clearLowPass(seconds?: number): void;
   setMuted(muted: boolean): void;
   /** Call from a user gesture: browsers keep audio suspended until one happens. */
   unlock(): void;
 };
+
+/** A low-pass cut-off high enough to leave the music untouched. */
+const openCutoff = 20000;
 
 /** Seconds into a loop for a shared beat position (beat 0 is the first downbeat). */
 export function loopOffset(info: LoopInfo, beat: number): number {
@@ -63,6 +72,10 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
   const byId = new Map(tracks.map((track) => [track.id, track]));
   let context: AudioContext | null = null;
   let master: GainNode | null = null;
+  /** Low-pass on the output: wide open (inaudible) unless the music is muffled. */
+  let filter: BiquadFilterNode | null = null;
+  /** The cut-off asked for, kept so a filter made later (on unlock) starts there. */
+  let cutoff = openCutoff;
   let volume = 0.6;
   let muted = false;
   const buffers = new Map<string, Promise<AudioBuffer>>();
@@ -76,7 +89,11 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
       context = new AudioContext();
       master = context.createGain();
       master.gain.value = muted ? 0 : volume;
-      master.connect(context.destination);
+      filter = context.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.Q.value = 0.7;
+      filter.frequency.value = cutoff;
+      master.connect(filter).connect(context.destination);
     }
     return { context, master };
   }
@@ -234,6 +251,21 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
       }
       current = null;
       clock = null;
+    },
+
+    setLowPass(hz, seconds = 2) {
+      cutoff = Math.max(40, Math.min(openCutoff, hz));
+      if (!context || !filter) return;
+      const now = context.currentTime;
+      const frequency = filter.frequency;
+      frequency.cancelScheduledValues(now);
+      frequency.setValueAtTime(frequency.value, now);
+      // Exponential: even steps to the ear, as a filter sweep should be.
+      frequency.exponentialRampToValueAtTime(cutoff, now + Math.max(0.01, seconds));
+    },
+
+    clearLowPass(seconds = 2) {
+      this.setLowPass(openCutoff, seconds);
     },
 
     setVolume(next) {

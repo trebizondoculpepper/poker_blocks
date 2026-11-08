@@ -1437,8 +1437,11 @@ const menus = createMenus(host, settings, {
   },
   onScreen(next) {
     screen = next;
+    // Leaving the menu takes the muffle off again.
+    if (next !== "settings") music.unmuffle();
     if (next === "title") music.playTitle();
-    else if (next === "settings") music.playSettings();
+    // The menu muffles whatever is playing instead of changing the song.
+    else if (next === "settings") music.muffle();
     else if (next === "over") music.windDown();
     else music.resumeStage();
   },

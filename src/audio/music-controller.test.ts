@@ -35,6 +35,8 @@ function setup() {
       log.push(`windUp ${id}`);
     },
     unlock: () => log.push("unlock"),
+    setLowPass: (hz: number, seconds?: number) => log.push(`lowpass ${hz} ${seconds}`),
+    clearLowPass: (seconds?: number) => log.push(`lowpass open ${seconds}`),
   };
   const music = createMusicController(player, tracks, defaultMusicPlan, () => 0);
   return { music, log };
@@ -112,5 +114,17 @@ describe("music controller", () => {
     music.windDown();
     music.windUp();
     expect(log.at(-1)).toBe(`windUp ${stage}`);
+  });
+
+  it("muffles and unmuffles without changing the track", () => {
+    const { music, log } = setup();
+    music.unlock();
+    music.switchToRandomStageTrack();
+    const track = music.current;
+    music.muffle();
+    expect(log.at(-1)).toBe("lowpass 550 2");
+    expect(music.current).toBe(track);
+    music.unmuffle();
+    expect(log.at(-1)).toBe("lowpass open 2");
   });
 });
