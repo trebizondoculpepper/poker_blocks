@@ -1128,12 +1128,19 @@ function updateScoring(now: number): void {
     outcomeAt = null;
     shownScore = game.state.round.score;
     const outcome = roundOutcome(game.state);
-    if (outcome === "won") playSfx("round.cleared");
+    if (outcome === "won") {
+      playSfx("round.cleared");
+      stageWonAt = now + stageWonDelayMs;
+    }
     if (outcome === "lost") {
       playSfx("round.failed");
       gameOverAt = now + gameOverDelayMs;
     }
     updateHud();
+  }
+  if (stageWonAt !== null && stageWonAt <= now && !pendingAction) {
+    stageWonAt = null;
+    showStageWon();
   }
   if (gameOverAt !== null && gameOverAt <= now && !pendingAction) {
     gameOverAt = null;
@@ -1205,6 +1212,24 @@ const unlockMusic = () => music.unlock();
 window.addEventListener("pointerdown", unlockMusic, { capture: true });
 window.addEventListener("keydown", unlockMusic, { capture: true });
 
+/** When a won stage's outcome has been announced, the stage-won pop-up follows. */
+let stageWonAt: number | null = null;
+const stageWonDelayMs = 900;
+
+/**
+ * The stage-won pop-up: pays the stage's rewards (once; showing it again pays nothing)
+ * and counts the ledger in, then its button moves on to the next stage or the shop.
+ */
+function showStageWon(): void {
+  const reward = game.claimStageRewards();
+  if (!reward) return;
+  updateHud();
+  autosave();
+  menus.showStageWon(reward, game.phase === "boss" ? "Visit shop" : "Start next stage", () =>
+    advanceFromStage(),
+  );
+}
+
 /** The HUD button: move to the next stage, the shop, the next round, or a new game. */
 function takeNextAction(): void {
   if (pendingAction || drag?.active) return;
@@ -1213,6 +1238,17 @@ function takeNextAction(): void {
     menus.showGameOver(game.stats);
     return;
   }
+  // A won stage moves on through its pop-up, which shows what it paid.
+  if (game.inStage && roundOutcome(game.state) === "won") {
+    showStageWon();
+    return;
+  }
+  advanceFromStage();
+}
+
+/** Leave the current stage or the shop: the next stage, the shop, or game over. */
+function advanceFromStage(): void {
+  if (pendingAction || drag?.active) return;
   const moved = game.phase === "shop" ? game.leaveShop() : game.advance();
   if (!moved) return;
   // advance() may have ended the run (TypeScript still has the pre-call narrowing).
@@ -1270,6 +1306,7 @@ function startRun(session: GameSession): void {
   if (passivesRoom) game.fillPassiveRack(2);
   passiveRackView?.render(game.state.passiveRack);
   gameOverAt = null;
+  stageWonAt = null;
   pendingAction = null;
   scoreSteps = [];
   outcomeAt = null;
@@ -1366,6 +1403,8 @@ createConsole({
     outcomeAt = null;
     updateHud();
     autosave();
+    // A won stage shows its pop-up, as if the win had been scored.
+    if (outcome === "won") stageWonAt = performance.now();
     return true;
   },
   musicTracks: () => music.tracks,

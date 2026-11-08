@@ -1,11 +1,12 @@
 import { Registry } from "./core/registry";
+import type { BlockMaterial } from "./materials";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
 
 /** Serializable block data. Behavior lives in the referenced trait definition. */
 export type PassiveRule = {
-  on: "score.beforeBlockValue" | "score.beforeLineFinalized" | "discard.completed";
+  on: "score.beforeBlockValue" | "score.beforeLineFinalized" | "discard.completed" | "stage.won";
   condition?:
-    | { kind: "material"; value: "meat" | "wood" }
+    | { kind: "material"; value: BlockMaterial }
     | { kind: "suit"; values: readonly ("hearts" | "diamonds")[] }
     | { kind: "line-length"; minimum?: number; maximum?: number }
     | { kind: "intersection" }
@@ -87,6 +88,21 @@ const definitions: PassiveDefinition[] = [
     traitId: "passive.event-rules",
     palette: palette("#34205c", "#f4d87f", "#b892e6"),
     rules: [{ on: "score.beforeLineFinalized", effect: { kind: "multiply-line", factor: 4 } }],
+  },
+  {
+    id: "gold-standard",
+    name: "Gold Standard",
+    symbol: "$",
+    description: "When you win a stage, +1 coin for each gold block still in your hand.",
+    traitId: "passive.event-rules",
+    palette: palette("#6b4a10", "#ffe9a3", "#d9ad3c"),
+    rules: [
+      {
+        on: "stage.won",
+        condition: { kind: "material", value: "gold" },
+        effect: { kind: "add-coins", amount: 1, perMatch: true },
+      },
+    ],
   },
   {
     id: "carnivore",

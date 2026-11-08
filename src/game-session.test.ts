@@ -54,18 +54,19 @@ describe("GameSession progression", () => {
       ...session.state,
       coins: 9,
     };
+    // Each won stage pays its completion bonus (4) once; score resets, coins carry on.
     decide(session, "won");
     session.advance();
-    expect(session.state.coins).toBe(9);
+    expect(session.state.coins).toBe(13);
     expect(session.state.round.score).toBe(0);
     decide(session, "won");
     session.advance();
     decide(session, "won");
     session.advance();
     expect(session.phase).toBe("shop");
-    expect(session.state.coins).toBe(9);
+    expect(session.state.coins).toBe(21);
     session.leaveShop();
-    expect(session.state.coins).toBe(9);
+    expect(session.state.coins).toBe(21);
   });
 
   it("runs stage 1 → stage 2 → boss → shop → next round with each stage's dealer and target", () => {

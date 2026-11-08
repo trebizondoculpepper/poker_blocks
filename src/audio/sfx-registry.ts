@@ -263,6 +263,15 @@ const entries = [
     trigger: "A wheel zoom burst or two-finger pinch begins on the playing field",
   },
   {
+    id: "reward.coin",
+    trigger: "A coin reward row counts in on the stage-won screen",
+    prompt:
+      "Single bright cash register coin clink, a coin dropping onto a pile of coins, short and satisfying",
+    durationSeconds: 0.5,
+    promptInfluence: 0.6,
+    variants: 2,
+  },
+  {
     id: "passive.coins",
     trigger: "A passive awards coins after a discard",
   },

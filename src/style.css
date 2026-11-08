@@ -588,3 +588,40 @@ body,
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+
+/* ----- Stage won screen ----- */
+.stage-won-title {
+  color: #f2c14e;
+  text-align: center;
+}
+
+.reward-row {
+  animation: reward-in 220ms ease-out;
+}
+
+.reward-row dd {
+  color: #f2c14e;
+}
+
+.reward-totals {
+  margin-top: 0;
+  border-top: 1px solid #ffffff22;
+  padding-top: 10px;
+}
+
+.reward-totals[hidden] {
+  display: none;
+}
+
+@keyframes reward-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reward-row {
+    animation: none;
+  }
+}

@@ -34,6 +34,8 @@ export type SaveRecord = {
   };
   /** Added after version 1 shipped; optional so older saves still load. */
   stats?: RunStats;
+  /** The last stage paid out and its ledger, so a reload never pays it twice. */
+  rewarded?: SessionSnapshot["rewarded"];
 };
 
 const phases: readonly Phase[] = ["stage-1", "stage-2", "boss", "shop", "over"];
@@ -56,6 +58,7 @@ export function toSaveRecord(snapshot: SessionSnapshot): SaveRecord {
       round: { ...state.round },
     },
     ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
+    ...(snapshot.rewarded ? { rewarded: snapshot.rewarded } : {}),
   };
 }
 
@@ -117,10 +120,33 @@ export function fromSaveRecord(
       dealer: record.dealer,
       state: restored,
       stats: parseRunStats(record.stats),
+      ...parseRewarded(record.rewarded),
     };
   } catch {
     return null;
   }
+}
+
+/** A saved "already paid" marker, or nothing if it is missing or malformed. */
+function parseRewarded(
+  value: unknown,
+): { rewarded: NonNullable<SessionSnapshot["rewarded"]> } | null {
+  const saved = value as SessionSnapshot["rewarded"];
+  if (!saved || typeof saved.stage !== "string" || !Array.isArray(saved.reward?.entries))
+    return null;
+  const entries = saved.reward.entries
+    .filter((entry) => typeof entry?.label === "string" && Number.isFinite(entry?.coins))
+    .map(({ source, label, coins }) => ({ source: String(source), label, coins }));
+  return {
+    rewarded: {
+      stage: saved.stage,
+      reward: {
+        entries,
+        balanceBefore: Number(saved.reward.balanceBefore) || 0,
+        balance: Number(saved.reward.balance) || 0,
+      },
+    },
+  };
 }
 
 function number(value: unknown): number {

@@ -16,6 +16,8 @@ export type SessionConfig = {
   handAtStageEnd: "return-to-deck";
   /** Whether the discard pile goes back into the deck when the player leaves the shop. */
   discardPileAfterShop: "keep-out" | "return-to-deck";
+  /** Coins for completing a stage; the stage rewards' default (4) when left out. */
+  stageReward?: number;
 };
 
 const baseTargets: Record<StageKind, number> = { "stage-1": 100, "stage-2": 150, boss: 200 };

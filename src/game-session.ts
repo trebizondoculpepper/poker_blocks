@@ -3,6 +3,7 @@ import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
 import type { GameState, PlayAction } from "./game-state";
 import { fillSlots, insertAt, moveItem } from "./zones";
+import { ledgerTotal, stageRewardLedger, type StageReward } from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
 import { stageKinds, type SessionConfig, type StageKind } from "./session-config";
 import {
@@ -26,6 +27,8 @@ export type SessionSnapshot = {
   state: GameState;
   /** Run totals for the game over screen; older saves have none (zeros). */
   stats?: RunStats;
+  /** The last stage paid out (round:phase) and what it paid, so it never pays twice. */
+  rewarded?: { stage: string; reward: StageReward };
 };
 
 /**
@@ -43,6 +46,7 @@ export class GameSession {
   private runStats: RunStats = emptyRunStats;
   private readonly passiveEvents = new PassiveEventQueue();
   private scoredLines: ScoredLine[] = [];
+  private rewarded: { stage: string; reward: StageReward } | null = null;
 
   constructor(
     dealers: Registry<Dealer>,
@@ -76,6 +80,7 @@ export class GameSession {
     session.currentRound = snapshot.round;
     session.currentPhase = snapshot.phase;
     session.runStats = snapshot.stats ?? emptyRunStats;
+    session.rewarded = snapshot.rewarded ?? null;
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
     return session;
   }
@@ -116,7 +121,25 @@ export class GameSession {
       dealer: this.activeDealer.name,
       state: this.currentState,
       stats: this.runStats,
+      ...(this.rewarded ? { rewarded: this.rewarded } : {}),
     };
+  }
+
+  /**
+   * Pay a won stage's rewards (issue #12): the completion bonus, then passives in rack
+   * order. Pays once per stage: asking again, after a reload or a second Continue, returns
+   * the same reward without adding coins. Null unless the current stage is won.
+   */
+  claimStageRewards(): StageReward | null {
+    if (!this.inStage || roundOutcome(this.currentState) !== "won") return null;
+    const stage = `${this.currentRound}:${this.currentPhase}`;
+    if (this.rewarded?.stage === stage) return this.rewarded.reward;
+    const entries = stageRewardLedger(this.currentState, this.config.stageReward);
+    const balanceBefore = this.currentState.coins;
+    const balance = balanceBefore + ledgerTotal(entries);
+    this.currentState = { ...this.currentState, coins: balance };
+    this.rewarded = { stage, reward: { entries, balanceBefore, balance } };
+    return this.rewarded.reward;
   }
 
   useDealer(name: string): void {
@@ -267,6 +290,8 @@ export class GameSession {
       this.currentPhase = "over";
       return true;
     }
+    // A won stage always pays before it is left (once; see claimStageRewards).
+    this.claimStageRewards();
     const next = stageKinds[stageKinds.indexOf(this.currentPhase as StageKind) + 1];
     if (next) {
       this.startStage(next);

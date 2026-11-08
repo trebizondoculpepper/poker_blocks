@@ -45,6 +45,10 @@ For Crossroads, inspect the completed field's geometry before line scores are pr
 
 For Ace Exchange, “owned” includes installed passives and any future passive collection, not just the rack. In the current `dev2` model, the rack is the only ownership zone. Choose uniformly from eligible registry definitions using the session's injected random source; if none remain, do nothing. `dev2` has no rack cap for this experiment. Installing the new block updates subscriptions, saves the new instance, and queues `passive.installed` after all listeners of the current discard have finished. The grant does not spend another discard or play.
 
+## Stage-won rewards
+
+A rule with `on: "stage.won"` pays coins when a stage is won, judged on the blocks still in the hand, and appears as its own row in the stage-won ledger (rack order). **Gold Standard** (`gold-standard`) is the first: `{ on: "stage.won", condition: { kind: "material", value: "gold" }, effect: { kind: "add-coins", amount: 1, perMatch: true } }`, one coin per gold block left in the hand.
+
 ## Dev room and verification
 
 On a **fresh** `dev2` run, choose two different definitions from this roster and install one instance of each, in chosen rack order. Reloading a saved run preserves its rack and coin balance rather than drawing again. Give card blocks randomized gameplay materials so Carnivore and Woodworker can actually be tried. A new-game action redraws the pair.

@@ -92,6 +92,24 @@ export function scoreFieldWithPassives(
   });
 }
 
+/**
+ * Coins one passive pays when a stage is won, judged on the blocks still in the hand: per
+ * matching block (perMatch), or once if any block (or, with no condition, always).
+ */
+export function stageWonPassiveCoins(passive: PassiveBlock, hand: readonly CardBlock[]): number {
+  let coins = 0;
+  for (const rule of passive.traits.passive.rules ?? []) {
+    if (rule.on !== "stage.won" || rule.effect.kind !== "add-coins") continue;
+    if (!rule.condition) {
+      coins += rule.effect.amount;
+      continue;
+    }
+    const matching = hand.filter((block) => matches(rule, { block })).length;
+    coins += rule.effect.amount * (rule.effect.perMatch ? matching : Number(matching > 0));
+  }
+  return coins;
+}
+
 /** One listener's outcome for a single discard action, in rack order. */
 export function discardPassiveEffects(
   passive: PassiveBlock,

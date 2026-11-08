@@ -2,6 +2,7 @@
 // into the game; progression rules stay in the session controller.
 import { playSfx } from "./audio/sfx";
 import type { RunStats } from "./run-stats";
+import type { StageReward } from "./stage-rewards";
 import type { MotionSetting, Settings, ShadowSetting } from "./settings";
 
 export type MenuCallbacks = {
@@ -20,6 +21,12 @@ export type Menus = {
   closeAll(): void;
   /** The run is lost: show how it went, with New Run and Main menu. */
   showGameOver(stats: RunStats): void;
+  /**
+   * A stage is won: show "Stage Won" and count the reward rows in one by one, then offer
+   * `action` (Start next stage, or Visit shop), which calls `onContinue`. The music is
+   * left alone.
+   */
+  showStageWon(reward: StageReward, action: string, onContinue: () => void): void;
   readonly isOpen: boolean;
 };
 
@@ -109,6 +116,18 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
      </div>`,
   );
 
+  const stageWon = overlay("stage-won-screen", "Stage won");
+  stageWon.panel.insertAdjacentHTML(
+    "beforeend",
+    `<h2 class="menu-title stage-won-title">STAGE WON</h2>
+     <dl class="run-stats reward-ledger" data-menu="ledger"></dl>
+     <dl class="run-stats reward-totals" data-menu="totals" hidden>
+       <div><dt>Total earned</dt><dd data-menu="total"></dd></div>
+       <div><dt>Coins</dt><dd data-menu="balance"></dd></div>
+     </dl>
+     <div class="menu-buttons"><button type="button" data-menu="stage-next" hidden></button></div>`,
+  );
+
   const settingsButton = document.createElement("button");
   settingsButton.type = "button";
   settingsButton.className = "settings-button";
@@ -135,12 +154,17 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     title.root.hidden = screen !== title.root;
     settingsScreen.root.hidden = screen !== settingsScreen.root;
     gameOver.root.hidden = screen !== gameOver.root;
+    stageWon.root.hidden = screen !== stageWon.root;
     settingsButton.hidden = true;
     screen.querySelector<HTMLElement>("button:not([hidden]), input")?.focus();
   }
 
   function closeAll(): void {
-    title.root.hidden = settingsScreen.root.hidden = gameOver.root.hidden = true;
+    title.root.hidden =
+      settingsScreen.root.hidden =
+      gameOver.root.hidden =
+      stageWon.root.hidden =
+        true;
     settingsButton.hidden = false;
     callbacks.onScreen?.("game");
   }
@@ -258,10 +282,67 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     callbacks.onScreen?.("over");
   }
 
+  /** Seconds between reward rows as they count in. */
+  const rowSeconds = 0.25;
+  let rowTimers: number[] = [];
+  let stageNextAction: (() => void) | null = null;
+  const ledger = find<HTMLElement>(stageWon.panel, "ledger");
+  const totals = find<HTMLElement>(stageWon.panel, "totals");
+  const stageNext = find<HTMLButtonElement>(stageWon.panel, "stage-next");
+  stageNext.addEventListener("click", () => {
+    const next = stageNextAction;
+    stageNextAction = null;
+    rowTimers.forEach((timer) => window.clearTimeout(timer));
+    rowTimers = [];
+    stageWon.root.hidden = true;
+    settingsButton.hidden = false;
+    next?.();
+  });
+
+  function showStageWon(reward: StageReward, action: string, onContinue: () => void): void {
+    rowTimers.forEach((timer) => window.clearTimeout(timer));
+    ledger.replaceChildren();
+    totals.hidden = true;
+    stageNext.hidden = true;
+    stageNext.textContent = action;
+    stageNextAction = onContinue;
+    // Not open(): the game screen (and its music) stays as it is behind the pop-up.
+    title.root.hidden = settingsScreen.root.hidden = gameOver.root.hidden = true;
+    stageWon.root.hidden = false;
+    settingsButton.hidden = true;
+    const reveal = (index: number) => {
+      const entry = reward.entries[index];
+      const row = document.createElement("div");
+      row.className = "reward-row";
+      const label = document.createElement("dt");
+      label.textContent = entry.label;
+      const coins = document.createElement("dd");
+      coins.textContent = `+${entry.coins} coin${entry.coins === 1 ? "" : "s"}`;
+      row.append(label, coins);
+      ledger.append(row);
+      playSfx("reward.coin");
+    };
+    rowTimers = reward.entries.map((_, index) =>
+      window.setTimeout(() => reveal(index), (index + 1) * rowSeconds * 1000),
+    );
+    rowTimers.push(
+      window.setTimeout(
+        () => {
+          find(totals, "total").textContent = `+${reward.balance - reward.balanceBefore}`;
+          find(totals, "balance").textContent = String(reward.balance);
+          totals.hidden = false;
+          stageNext.hidden = false;
+          stageNext.focus();
+        },
+        (reward.entries.length + 1) * rowSeconds * 1000,
+      ),
+    );
+  }
+
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (!settingsScreen.root.hidden) back();
-    else if (title.root.hidden && gameOver.root.hidden) {
+    else if (title.root.hidden && gameOver.root.hidden && stageWon.root.hidden) {
       settingsFrom = "game";
       showSettings();
     }
@@ -285,12 +366,18 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     showTitle,
     closeAll,
     showGameOver,
+    showStageWon,
     showSettings() {
       settingsFrom = "game";
       showSettings();
     },
     get isOpen() {
-      return !title.root.hidden || !settingsScreen.root.hidden || !gameOver.root.hidden;
+      return (
+        !title.root.hidden ||
+        !settingsScreen.root.hidden ||
+        !gameOver.root.hidden ||
+        !stageWon.root.hidden
+      );
     },
   };
 }

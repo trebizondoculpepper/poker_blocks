@@ -133,7 +133,8 @@ Later this formula will be extended in three ways:
 
 ## Coins
 
-- The current game starts a run with **0 coins**, keeps the balance in GameState and saved runs, and shows it beneath Moves and Discards. Stage transitions leave the balance intact. Reward and spending rules below are planned next.
+- The current game starts a run with **0 coins**, keeps the balance in GameState and saved runs, and shows it beneath Moves and Discards. Stage transitions leave the balance intact.
+- **Stage won screen (built):** when a stage is won, a "Stage Won" pop-up counts in the reward ledger one row every quarter second, each with a cash sound (`reward.coin`): first the **Stage complete bonus (4 coins)**, then each passive that pays on a stage win, in rack order. It then shows the total earned and the new balance, and a **Start next stage** (or, after the boss, **Visit shop**) button. The music keeps playing. Rewards are paid once per stage (`GameSession.claimStageRewards`, saved with the run), so reopening the pop-up, a reload or a second Continue never pays twice; a lost stage pays nothing.
 - Completing a stage grants 4 coins by default. Other reward rules may add more ledger rows and coins.
 - Some blocks have economic effects: certain plays earn coins.
 - The player must balance building points against earning coins.
