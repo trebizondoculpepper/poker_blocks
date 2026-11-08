@@ -240,6 +240,24 @@ const entries = [
     prompt: "A crisp tiny soft button click, subtle",
     durationSeconds: 0.5,
   },
+  {
+    id: "ui.hover",
+    trigger: "The pointer moves over a menu button",
+    prompt: "A very soft faint airy tick, barely there",
+    durationSeconds: 0.5,
+  },
+  {
+    id: "ui.back",
+    trigger: "A menu or panel is closed, or a choice is cancelled",
+    prompt: "A soft gentle downward two-note click, closing",
+    durationSeconds: 0.5,
+  },
+  {
+    id: "hand.reorder",
+    trigger: "A hand card is dropped into a new position in the hand",
+    prompt: "A soft light card slide ending in a gentle tap, tidy",
+    durationSeconds: 0.5,
+  },
 ] as const satisfies readonly SoundEffect[];
 
 /** Every registered sound. Add new entries to the list above. */

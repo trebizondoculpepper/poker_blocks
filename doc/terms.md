@@ -23,3 +23,8 @@ Canonical names used in the rules, the code and the docs. Use these words and no
 | **Challenge**     | Reserved for a future feature; not a synonym for stage or round.                                                                                     |
 | **Passive block** | A block with configured traits that can be installed in the passive rack and respond to gameplay events.                                             |
 | **Passive rack**  | The ordered zone for installed passive blocks, separate from the hand and field. By default, passives resolve from left to right.                    |
+| **Title screen**  | The screen shown when the page opens, with Continue, New game and Settings.                                                                          |
+| **Save**          | The one stored run, written automatically at safe points. A lost run has no save.                                                                    |
+| **Continue**      | Resume the saved run exactly where it was.                                                                                                           |
+| **Settings**      | Player preferences (sound volume, mute, motion), stored separately from the save.                                                                    |
+| **Reorder**       | Moving a block to another position within an ordered zone (the hand, later the passive rack). Not a play or discard.                                 |

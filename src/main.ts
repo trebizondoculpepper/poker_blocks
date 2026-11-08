@@ -11,10 +11,20 @@ import { demoSessionConfig } from "./session-config";
 import { tweenValue } from "./easing";
 import { boardPitchRock, boardYawRock, randomRock, rockAngle, type Rock } from "./motion";
 import { createMaterialise } from "./visual/materialise";
+import { createCardRoom } from "./visual/card-room";
 import { cellKey, faceFromNormal, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
-import { playSfx } from "./audio/sfx";
+import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
+import { createMenus } from "./menus";
+import { browserStorage, loadRun, saveRun } from "./save";
+import {
+  loadSettings,
+  prefersReducedMotion,
+  resolveShadowQuality,
+  saveSettings,
+  type Settings,
+} from "./settings";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -56,7 +66,6 @@ tooltip.setAttribute("role", "tooltip");
 tooltip.hidden = true;
 host.append(tooltip);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111726);
 const handScene = new THREE.Scene();
 const pivot = new THREE.Group();
 const assembly = new THREE.Group();
@@ -76,12 +85,17 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.autoClear = false;
 host.append(renderer.domElement);
 
-for (const targetScene of [scene, handScene]) {
-  targetScene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
-  const sun = new THREE.DirectionalLight(0xffffff, 2.4);
-  sun.position.set(-3, 6, 7);
-  targetScene.add(sun);
-}
+// The hand keeps its neutral studio light; the board sits in the warmer card room,
+// whose overhead lamp (see createCardRoom) adds the shadows.
+handScene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
+const handSun = new THREE.DirectionalLight(0xffffff, 2.4);
+handSun.position.set(-3, 6, 7);
+handScene.add(handSun);
+scene.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3226, 2));
+const boardFill = new THREE.DirectionalLight(0xffffff, 1.3);
+boardFill.position.set(-3, 6, 7);
+scene.add(boardFill);
+const cardRoom = createCardRoom(scene, renderer);
 
 function render(): void {
   renderer.clear();
@@ -126,6 +140,8 @@ type RenderedBlock = {
   baseY: number;
   rock: Rock | null;
   handSlot: number | null;
+  /** Where the hand layout wants this cube; it glides there each frame. */
+  handX?: number;
 };
 
 const renderedBlocks: RenderedBlock[] = [];
@@ -155,6 +171,7 @@ function createCube(
   const texture = makeFaceTexture(block.traits.identity);
   const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.65 });
   const cube = new THREE.Mesh(geometry, material);
+  cube.castShadow = cube.receiveShadow = true;
   const edgeGeometry = new THREE.EdgesGeometry(geometry);
   const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6b6c73 });
   cube.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
@@ -209,6 +226,18 @@ type CameraMove = {
   toTarget: THREE.Vector3;
 };
 let cameraMove: CameraMove | null = null;
+
+/** World-space radius of a sphere around the placed structure, centred on the pivot. */
+function structureRadius(): number {
+  if (placed.size === 0) return 0.87 * cubeSize;
+  const center = centerOfGravity(massCenter);
+  let radius = 0;
+  for (const { cell } of placed.values()) {
+    const d = Math.hypot(cell!.x - center.x, cell!.y - center.y, cell!.z - center.z);
+    radius = Math.max(radius, d);
+  }
+  return (radius + 0.87) * cubeSize;
+}
 
 function desiredCamera(): { distance: number; target: THREE.Vector3 } {
   const cells = [...placed.values()].map(({ cell }) => cell!);
@@ -267,7 +296,9 @@ function updateCamera(now: number): void {
   if (progress === 1) cameraMove = null;
 }
 
-const game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck);
+const storage = browserStorage();
+// A fresh run sits behind the title screen until the player chooses Continue or New game.
+let game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck);
 for (const { block, cell } of game.state.field) addToBoard(block, cell);
 const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
   const rendered = createCube(block, cubeSize / 3, "hand");
@@ -360,6 +391,8 @@ type Drag = {
   active: boolean;
   candidate: Candidate | null;
   discardTarget: boolean;
+  /** Hand position the dragged card would move to if dropped inside the hand. */
+  reorderSlot: number | null;
   lastX: number;
   lastY: number;
 };
@@ -405,17 +438,49 @@ function showSelection(): void {
   );
 }
 
+function handSlotX(slot: number, visibleSlots: number): number {
+  return (slot - (visibleSlots - 1) / 2) * 1.2;
+}
+
+function visibleHandSlots(): number {
+  return Math.max(game.dealer.handSize, ...handBlocks.map(({ handSlot }) => (handSlot ?? -1) + 1));
+}
+
+/** Lay out the hand; while a reorder is previewed, neighbours make room for the dragged card. */
 function layoutHand(): void {
-  const visibleSlots = Math.max(
-    game.dealer.handSize,
-    ...handBlocks.map(({ handSlot }) => (handSlot ?? -1) + 1),
-  );
+  const visibleSlots = visibleHandSlots();
+  const preview = drag?.active && drag.reorderSlot !== null ? drag : null;
+  const order = [...handBlocks].sort((a, b) => a.handSlot! - b.handSlot!);
+  if (preview) {
+    order.splice(order.indexOf(preview.source), 1);
+    order.splice(preview.reorderSlot!, 0, preview.source);
+  }
   handBlocks.forEach((rendered) => {
     rendered.baseY = handBaseY;
+    const slot = preview ? order.indexOf(rendered) : rendered.handSlot!;
+    const firstLayout = rendered.handX === undefined;
+    rendered.handX = handSlotX(slot, visibleSlots);
     if (drag?.active && drag.source === rendered) return;
-    rendered.cube.position.set((rendered.handSlot! - (visibleSlots - 1) / 2) * 1.2, handBaseY, 0);
+    rendered.cube.position.y = handBaseY;
+    rendered.cube.position.z = 0;
+    if (firstLayout) rendered.cube.position.x = rendered.handX;
   });
   showSelection();
+}
+
+/** Ease hand cubes toward their layout positions so reordering animates. */
+function glideHand(delta: number): void {
+  const step = Math.min(1, delta * 14);
+  for (const rendered of handBlocks) {
+    if ((drag?.active && drag.source === rendered) || rendered.handX === undefined) continue;
+    rendered.cube.position.x += (rendered.handX - rendered.cube.position.x) * step;
+  }
+}
+
+/** Visual hand slots always follow the hand order held in GameState. */
+function syncHandSlots(): void {
+  handBlocks.forEach((rendered) => (rendered.handSlot = game.state.hand.indexOf(rendered.block)));
+  layoutHand();
 }
 
 const raycaster = new THREE.Raycaster();
@@ -501,6 +566,16 @@ function showCandidate(candidate: Candidate | null): void {
   );
 }
 
+/** The hand position under the pointer, or null when the pointer is not over the hand. */
+function handReorderSlot(clientX: number, clientY: number): number | null {
+  const bounds = host.getBoundingClientRect();
+  if (clientY < bounds.top + bounds.height * 0.72 || handBlocks.length < 2) return null;
+  pointRay(clientX, clientY, handCamera);
+  if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return null;
+  const slot = Math.round(dragPoint.x / 1.2 + (visibleHandSlots() - 1) / 2);
+  return Math.max(0, Math.min(handBlocks.length - 1, slot));
+}
+
 function updateCandidate(): void {
   if (!drag?.active) return;
   const wasDiscardTarget = drag.discardTarget;
@@ -513,6 +588,10 @@ function updateCandidate(): void {
       ? pickAttachment(drag.lastX, drag.lastY)
       : null;
   showCandidate(drag.candidate);
+  const previousSlot = drag.reorderSlot;
+  drag.reorderSlot =
+    !drag.discardTarget && !drag.candidate ? handReorderSlot(drag.lastX, drag.lastY) : null;
+  if (drag.reorderSlot !== previousSlot) layoutHand();
   if (drag.discardTarget && !wasDiscardTarget) playSfx("discard.hover");
   if (drag.candidate && cellKey(drag.candidate.cell) !== previousCell) playSfx("card.drag.snap");
 }
@@ -551,7 +630,19 @@ function applyBoardWobble(): void {
   pivot.rotation.y = manualYaw + rockAngle(boardYawRock, wobbleTime);
 }
 
-const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const systemMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+let settings = loadSettings(storage);
+let reducedMotion = false;
+function applySettings(next: Settings): void {
+  settings = next;
+  setSfxVolume(next.volume);
+  setSfxMuted(next.muted);
+  reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
+  cardRoom.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
+}
+applySettings(settings);
+systemMotionQuery.addEventListener("change", () => applySettings(settings));
 type MaterialiseEffect = ReturnType<typeof createMaterialise>;
 const appearing: { effect: MaterialiseEffect; edges: THREE.Object3D[] }[] = [];
 type PendingAction =
@@ -581,19 +672,15 @@ function removeFromHand(source: RenderedBlock): number {
 }
 
 function refillSlot(slot: number): void {
-  const drawn = game.refillHand();
+  const drawn = game.refillHand(slot);
   const replacements: RenderedBlock[] = [];
-  const usedSlots = new Set(handBlocks.map(({ handSlot }) => handSlot));
   for (const block of drawn) {
     const rendered = createCube(block, cubeSize / 3, "hand");
-    let nextSlot = slot;
-    while (usedSlots.has(nextSlot)) nextSlot++;
-    rendered.handSlot = nextSlot;
-    usedSlots.add(nextSlot);
     handBlocks.push(rendered);
     replacements.push(rendered);
   }
-  layoutHand();
+  // Also closes the gap when the deck has run out and nothing was drawn.
+  syncHandSlots();
   updateHud();
   if (replacements.length > 0) playSfx("card.deal");
   for (const rendered of replacements) {
@@ -707,6 +794,7 @@ function updateAction(now: number, delta: number): void {
     disposeCube(action.source);
   }
   refillSlot(action.slot);
+  autosave();
 }
 
 /** Present the lines from the play that just landed, lowest score first. */
@@ -792,7 +880,7 @@ function takeNextAction(): void {
   if (pendingAction || drag?.active) return;
   playSfx("ui.click");
   if (game.phase === "over") {
-    window.location.reload();
+    menus.showTitle();
     return;
   }
   const moved = game.phase === "shop" ? game.leaveShop() : game.advance();
@@ -807,7 +895,50 @@ function takeNextAction(): void {
     playSfx("run.lost");
   }
   updateHud();
+  autosave();
 }
+
+/** Save at a safe point: never while a placement, discard or score presentation is running. */
+function autosave(): void {
+  saveRun(storage, game.snapshot());
+}
+
+/** Swap in a session (new or resumed) and rebuild the scene from its state. */
+function startRun(session: GameSession): void {
+  game = session;
+  pendingAction = null;
+  scoreSteps = [];
+  outcomeAt = null;
+  resetTable();
+  for (const { block, cell } of game.state.field) addToBoard(block, cell);
+  const desired = desiredCamera();
+  cameraDistance = desired.distance;
+  cameraTarget.copy(desired.target);
+  applyCamera();
+  if (game.inStage) dealHand();
+  updateHud();
+  showSelection();
+  autosave();
+  playSfx("round.start");
+}
+
+const menus = createMenus(host, settings, {
+  hasSave: () => loadRun(storage, standardDeck, dealerRegistry) !== null,
+  onContinue() {
+    const snapshot = loadRun(storage, standardDeck, dealerRegistry);
+    if (snapshot) {
+      startRun(GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, standardDeck, snapshot));
+    }
+  },
+  onNewGame() {
+    startRun(new GameSession(dealerRegistry, demoSessionConfig, standardDeck));
+  },
+  onSettingsChange(next) {
+    applySettings(next);
+    saveSettings(storage, next);
+  },
+});
+menus.showTitle();
 stat("action").addEventListener("click", takeNextAction);
 
 function finishDrag(drop: boolean): void {
@@ -817,6 +948,7 @@ function finishDrag(drop: boolean): void {
     if (drop) updateCandidate();
     const candidate = drop ? activeDrag.candidate : null;
     const discard = drop && activeDrag.discardTarget;
+    const reorderSlot = drop ? activeDrag.reorderSlot : null;
     drag = null;
     showCandidate(null);
     discardArea.classList.remove("is-target");
@@ -825,7 +957,16 @@ function finishDrag(drop: boolean): void {
       : candidate
         ? startPlacement(activeDrag.source, candidate)
         : false;
-    if (!accepted) {
+    const from = game.state.hand.indexOf(activeDrag.source.block);
+    if (!accepted && reorderSlot !== null && reorderSlot !== from) {
+      // A drop inside the hand reorders it: not a play or discard, and nothing refills.
+      game.reorderHand(from, reorderSlot);
+      handScene.add(activeDrag.source.cube);
+      activeDrag.source.cube.position.z = 0;
+      syncHandSlots();
+      playSfx("hand.reorder");
+      autosave();
+    } else if (!accepted) {
       // A drop the rules refuse (or any drop with no plays left) is denied; a drop on
       // empty space just returns the block to the hand.
       const refused =
@@ -881,6 +1022,7 @@ const onPointerDown = (event: PointerEvent) => {
       active: false,
       candidate: null,
       discardTarget: false,
+      reorderSlot: null,
     };
     return;
   }
@@ -1032,6 +1174,8 @@ const animate = (time: number) => {
   updateCamera(time);
   updateAction(time, delta);
   updateScoring(time);
+  glideHand(delta);
+  cardRoom.frame(pivot.position, structureRadius(), delta);
   handBlocks.forEach(({ cube, rock }) => {
     if (!rock) return;
     cube.rotation.z = rockAngle(rock, time / 1000);
