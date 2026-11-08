@@ -2,7 +2,7 @@
 
 A new browser puzzle game project. The current Hello World screen includes a Three.js scene to confirm the rendering pipeline; game rules and interaction are still to be designed.
 
-The agreed game principles and open architecture questions are recorded in [docs/game-architecture.md](docs/game-architecture.md).
+The agreed game principles and open architecture questions are recorded in [doc/game-architecture.md](doc/game-architecture.md). Keep future project documents in `doc/`.
 
 ## Stack
 
