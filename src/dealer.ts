@@ -34,7 +34,11 @@ export interface Dealer {
   placementFor(state: GameState, targetId?: string, face?: Face): Cell | null;
   play(state: GameState, action: PlayAction): GameState | null;
   canDiscard(state: GameState): boolean;
-  discard(state: GameState, cardId: string): GameState | null;
+  /**
+   * Discard one or more hand cards as a single discard: one allowance however many go.
+   * Null when discarding is not allowed, or any id is not in the hand.
+   */
+  discard(state: GameState, cardIds: string | readonly string[]): GameState | null;
 }
 
 export const baseDealer: Dealer = {
@@ -113,14 +117,17 @@ export const baseDealer: Dealer = {
 
   canDiscard: (state) => roundOutcome(state) === "playing" && state.round.discardsLeft > 0,
 
-  discard(state, cardId) {
+  discard(state, cardIds) {
     if (!this.canDiscard(state)) return null;
-    const block = state.hand.find(({ id }) => id === cardId);
-    if (!block) return null;
+    const ids = new Set(typeof cardIds === "string" ? [cardIds] : cardIds);
+    if (ids.size === 0) return null;
+    // In hand order, so the discard pile reads left to right.
+    const blocks = state.hand.filter(({ id }) => ids.has(id));
+    if (blocks.length !== ids.size) return null;
     return {
       ...state,
-      hand: state.hand.filter(({ id }) => id !== cardId),
-      discardPile: [...state.discardPile, block],
+      hand: state.hand.filter(({ id }) => !ids.has(id)),
+      discardPile: [...state.discardPile, ...blocks],
       round: { ...state.round, discardsLeft: state.round.discardsLeft - 1 },
     };
   },

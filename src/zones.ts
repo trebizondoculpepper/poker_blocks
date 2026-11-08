@@ -17,3 +17,26 @@ export function insertAt<T>(items: readonly T[], index: number, added: readonly 
   const at = Math.max(0, Math.min(index, items.length));
   return [...items.slice(0, at), ...added, ...items.slice(at)];
 }
+
+/**
+ * Put `drawn` items into the gaps left at `slots` (indices in the list before the gaps were
+ * removed), in slot order, so the rest keep their places. Drawn items beyond the gaps go at
+ * the end; gaps with nothing to fill close up.
+ */
+export function fillSlots<T>(
+  remaining: readonly T[],
+  slots: readonly number[],
+  drawn: readonly T[],
+): T[] {
+  const gaps = new Set(slots);
+  const total = remaining.length + gaps.size;
+  const out: T[] = [];
+  let r = 0;
+  let d = 0;
+  for (let i = 0; i < total; i++) {
+    if (gaps.has(i)) {
+      if (d < drawn.length) out.push(drawn[d++]);
+    } else if (r < remaining.length) out.push(remaining[r++]);
+  }
+  return [...out, ...remaining.slice(r), ...drawn.slice(d)];
+}

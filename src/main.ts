@@ -57,14 +57,31 @@ host.append(deckHud);
 const discardArea = document.createElement("div");
 discardArea.className = "discard-area";
 discardArea.setAttribute("aria-label", "Discard area");
+discardArea.setAttribute("role", "button");
 discardArea.innerHTML = `
   <svg class="discard-icon" viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges">
     <path d="M6 1h4v2H6zM3 3h10v2H3zM4 6h8v7h-1v2H5v-2H4z" />
     <path class="discard-icon-cutout" d="M6 8h1v5H6zM9 8h1v5H9z" />
   </svg>
   <span>DISCARD</span>
+  <b class="discard-count" hidden></b>
+  <i class="refused-mark" aria-hidden="true"></i>
 `;
 host.append(discardArea);
+const discardCount = discardArea.querySelector<HTMLElement>(".discard-count")!;
+
+/**
+ * Reusable "refused target" feedback: a red X over a drop target (its `.refused-mark`),
+ * shown while hovering with `is-refused` and flashed (with a shake, unless motion is
+ * reduced) when a drop or click there is refused.
+ */
+function flashRefused(target: HTMLElement): void {
+  target.classList.remove("refused-flash", "refused-shake");
+  void target.offsetWidth; // restart the animation
+  target.classList.add("refused-flash");
+  if (!reducedMotion) target.classList.add("refused-shake");
+  window.setTimeout(() => target.classList.remove("refused-flash", "refused-shake"), 700);
+}
 const stat = (name: string) => host.querySelector<HTMLElement>(`[data-stat="${name}"]`)!;
 const tooltip = document.createElement("div");
 tooltip.className = "inspect-tooltip";
@@ -129,6 +146,8 @@ type RenderedBlock = {
 
 const renderedBlocks: RenderedBlock[] = [];
 const placed = new Map<string, RenderedBlock>();
+/** Selected block ids (hand and field). Declared early: the first HUD update reads it. */
+let selected: Selection = new Set();
 const cubeSize = 2.4;
 let massCenter: MassCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
 const pivotCell = new THREE.Vector3();
@@ -347,10 +366,11 @@ type PendingAction =
     }
   | {
       kind: "discard";
-      source: RenderedBlock;
-      slot: number;
+      sources: RenderedBlock[];
+      /** Hand slots the discarded blocks left, refilled in order. */
+      slots: number[];
       startedAt: number;
-      effect: ReturnType<typeof createMaterialise>;
+      effects: ReturnType<typeof createMaterialise>[];
     };
 let pendingAction: PendingAction | null = null;
 const tints: { blocks: RenderedBlock[]; startedAt: number }[] = [];
@@ -390,6 +410,23 @@ function updateHud(): void {
   stat("discards").textContent = String(round.discardsLeft);
   stat("deck").textContent = String(deck.length);
   discardArea.classList.toggle("is-exhausted", !game.dealer.canDiscard(game.state));
+  updateDiscardCount();
+}
+
+/** Hand blocks currently selected, in hand order. */
+function selectedHandBlocks(): RenderedBlock[] {
+  return handBlocks
+    .filter(({ block }) => selected.has(block.id))
+    .sort((a, b) => a.handSlot! - b.handSlot!);
+}
+
+/** The bin's badge: how many selected hand blocks a click would discard. */
+function updateDiscardCount(): void {
+  const count =
+    game.inStage && game.dealer.canDiscard(game.state) ? selectedHandBlocks().length : 0;
+  discardCount.hidden = count === 0;
+  discardCount.textContent = String(count);
+  discardArea.classList.toggle("is-armed", count > 0);
 }
 updateHud();
 
@@ -424,7 +461,6 @@ faceHighlight.visible = false;
 faceHighlight.renderOrder = 10;
 assembly.add(faceHighlight);
 
-let selected: Selection = new Set();
 let handBaseY = 0;
 /** Where a drop would play: a face of a placed block, or the centre of an empty field. */
 type Candidate = { target: RenderedBlock | null; face: Face | null; cell: Cell };
@@ -437,6 +473,10 @@ type Drag = {
   active: boolean;
   candidate: Candidate | null;
   discardTarget: boolean;
+  /** Over the bin while discarding is not allowed: the red X shows. */
+  refused: boolean;
+  /** Other selected hand blocks carried with the dragged one (a group discard). */
+  group: RenderedBlock[];
   /** Hand position the dragged card would move to if dropped inside the hand. */
   reorderSlot: number | null;
   lastX: number;
@@ -508,7 +548,7 @@ function layoutHand(): void {
     const slot = preview ? order.indexOf(rendered) : rendered.handSlot!;
     const firstLayout = rendered.handX === undefined;
     rendered.handX = handSlotX(slot, visibleSlots);
-    if (drag?.active && drag.source === rendered) return;
+    if (isDragged(rendered)) return;
     rendered.cube.position.y = handBaseY;
     rendered.cube.position.z = 0;
     if (firstLayout) rendered.cube.position.x = rendered.handX;
@@ -516,11 +556,15 @@ function layoutHand(): void {
   showSelection();
 }
 
+function isDragged(rendered: RenderedBlock): boolean {
+  return Boolean(drag?.active && (drag.source === rendered || drag.group.includes(rendered)));
+}
+
 /** Ease hand cubes toward their layout positions so reordering animates. */
 function glideHand(delta: number): void {
   const step = Math.min(1, delta * 14);
   for (const rendered of handBlocks) {
-    if ((drag?.active && drag.source === rendered) || rendered.handX === undefined) continue;
+    if (isDragged(rendered) || rendered.handX === undefined) continue;
     rendered.cube.position.x += (rendered.handX - rendered.cube.position.x) * step;
   }
 }
@@ -653,17 +697,22 @@ function updateCandidate(): void {
   if (!drag?.active) return;
   const wasDiscardTarget = drag.discardTarget;
   const previousCell = drag.candidate ? cellKey(drag.candidate.cell) : null;
-  drag.discardTarget =
-    game.dealer.canDiscard(game.state) && overDiscardArea(drag.lastX, drag.lastY);
+  const overBin = overDiscardArea(drag.lastX, drag.lastY);
+  const canDiscard = game.dealer.canDiscard(game.state);
+  drag.discardTarget = canDiscard && overBin;
+  drag.refused = !canDiscard && overBin;
   discardArea.classList.toggle("is-target", drag.discardTarget);
+  discardArea.classList.toggle("is-refused", drag.refused);
+  // A group is only ever discarded: it is not played or reordered as one.
+  const single = drag.group.length === 0;
   drag.candidate =
-    !drag.discardTarget && game.dealer.canPlay(game.state)
+    single && !overBin && game.dealer.canPlay(game.state)
       ? pickAttachment(drag.lastX, drag.lastY)
       : null;
   showCandidate(drag.candidate);
   const previousSlot = drag.reorderSlot;
   drag.reorderSlot =
-    !drag.discardTarget && !drag.candidate ? handReorderSlot(drag.lastX, drag.lastY) : null;
+    single && !overBin && !drag.candidate ? handReorderSlot(drag.lastX, drag.lastY) : null;
   if (drag.reorderSlot !== previousSlot) layoutHand();
   if (drag.discardTarget && !wasDiscardTarget) playSfx("discard.hover");
   if (drag.candidate && cellKey(drag.candidate.cell) !== previousCell) playSfx("card.drag.snap");
@@ -676,6 +725,12 @@ function moveDraggedBlock(): void {
   pointRay(drag.lastX, drag.lastY, handCamera);
   if (raycaster.ray.intersectPlane(dragPlane, dragPoint)) {
     drag.source.cube.position.copy(dragPoint).add(drag.grabOffset);
+    // Carried blocks trail the dragged one in a small fanned stack behind it.
+    drag.group.forEach((rendered, index) => {
+      rendered.cube.position
+        .copy(drag!.source.cube.position)
+        .add(new THREE.Vector3(0.28 * (index + 1), 0.22 * (index + 1), -0.4 * (index + 1)));
+    });
   }
 }
 
@@ -730,7 +785,7 @@ function removeFromHand(source: RenderedBlock): number {
   return source.handSlot!;
 }
 
-function refillSlot(slot: number): void {
+function refillSlot(slot: number | readonly number[]): void {
   const drawn = game.refillHand(slot);
   const replacements: RenderedBlock[] = [];
   for (const block of drawn) {
@@ -796,19 +851,26 @@ function startPlacement(source: RenderedBlock, candidate: Candidate): boolean {
   return true;
 }
 
-function startDiscard(source: RenderedBlock): boolean {
-  if (!game.discard(source.block.id)) return false;
-  const slot = removeFromHand(source);
-  selected = new Set([...selected].filter((id) => id !== source.block.id));
-  const edges = source.cube.children;
-  edges.forEach((edge) => (edge.visible = false));
-  source.cube.updateWorldMatrix(true, true);
-  const effect = createMaterialise(source.cube, {
-    seconds: 1,
-    out: true,
-    reduced: reducedMotion,
+/** Discard one or more hand blocks as a single discard. */
+function startDiscard(sources: readonly RenderedBlock[]): boolean {
+  if (!sources.length || !game.discard(sources.map(({ block }) => block.id))) return false;
+  const slots = sources.map(({ handSlot }) => handSlot!).sort((a, b) => a - b);
+  for (const source of sources) handBlocks.splice(handBlocks.indexOf(source), 1);
+  layoutHand();
+  const gone = new Set(sources.map(({ block }) => block.id));
+  selected = new Set([...selected].filter((id) => !gone.has(id)));
+  const effects = sources.map((source) => {
+    source.cube.children.forEach((edge) => (edge.visible = false));
+    source.cube.updateWorldMatrix(true, true);
+    return createMaterialise(source.cube, { seconds: 1, out: true, reduced: reducedMotion });
   });
-  pendingAction = { kind: "discard", source, slot, startedAt: performance.now(), effect };
+  pendingAction = {
+    kind: "discard",
+    sources: [...sources],
+    slots,
+    startedAt: performance.now(),
+    effects,
+  };
   playSfx("card.discard");
   updateHud();
   return true;
@@ -837,7 +899,7 @@ function updateAction(now: number, delta: number): void {
     action.source.cube.quaternion.copy(action.fromRotation).slerp(placementRotation, progress);
     action.source.cube.scale.setScalar(THREE.MathUtils.lerp(action.fromScale, 3, progress));
   } else {
-    action.effect.update(delta);
+    action.effects.forEach((effect) => effect.update(delta));
   }
   if (elapsed < 1) return;
   pendingAction = null;
@@ -852,10 +914,11 @@ function updateAction(now: number, delta: number): void {
     announceScore(now);
     updateRotationCenter(action.cell);
     scheduleCameraMove();
+    refillSlot(action.slot);
   } else {
-    disposeCube(action.source);
+    action.sources.forEach(disposeCube);
+    refillSlot(action.slots);
   }
-  refillSlot(action.slot);
   autosave();
 }
 
@@ -1078,12 +1141,14 @@ function finishDrag(drop: boolean): void {
     if (drop) updateCandidate();
     const candidate = drop ? activeDrag.candidate : null;
     const discard = drop && activeDrag.discardTarget;
+    const refusedAtBin = drop && activeDrag.refused;
     const reorderSlot = drop ? activeDrag.reorderSlot : null;
     drag = null;
     showCandidate(null);
-    discardArea.classList.remove("is-target");
+    discardArea.classList.remove("is-target", "is-refused");
+    if (refusedAtBin) flashRefused(discardArea);
     const accepted = discard
-      ? startDiscard(activeDrag.source)
+      ? startDiscard([activeDrag.source, ...activeDrag.group])
       : candidate
         ? startPlacement(activeDrag.source, candidate)
         : false;
@@ -1106,8 +1171,10 @@ function finishDrag(drop: boolean): void {
           !game.dealer.canPlay(game.state) ||
           overDiscardArea(activeDrag.lastX, activeDrag.lastY));
       playSfx(refused ? "action.denied" : "card.drag.return");
-      handScene.add(activeDrag.source.cube);
-      activeDrag.source.cube.position.z = 0;
+      for (const rendered of [activeDrag.source, ...activeDrag.group]) {
+        handScene.add(rendered.cube);
+        rendered.cube.position.z = 0;
+      }
       layoutHand();
     }
     changeMotionRate(normalMotionRate);
@@ -1152,6 +1219,8 @@ const onPointerDown = (event: PointerEvent) => {
       active: false,
       candidate: null,
       discardTarget: false,
+      refused: false,
+      group: [],
       reorderSlot: null,
     };
     return;
@@ -1172,6 +1241,11 @@ const onPointerMove = (event: PointerEvent) => {
     drag.lastY = event.clientY;
     if (!drag.active && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
       drag.active = true;
+      // Dragging a selected block carries the rest of the hand selection with it.
+      if (selected.has(drag.source.block.id)) {
+        const source = drag.source;
+        drag.group = selectedHandBlocks().filter((rendered) => rendered !== source);
+      }
       renderer.domElement.setPointerCapture(event.pointerId);
       changeMotionRate(normalMotionRate / 10);
       playSfx("card.pickup");
@@ -1256,7 +1330,19 @@ const onClick = (event: MouseEvent) => {
   const isSelected = selected.has(target.block.id);
   if (isSelected !== wasSelected) playSfx(isSelected ? "card.select" : "card.deselect");
   showSelection();
+  updateDiscardCount();
 };
+
+/** Click or tap the bin: discard the selected hand blocks as one discard. */
+discardArea.addEventListener("click", () => {
+  if (pendingAction || drag?.active || !game.inStage) return;
+  const chosen = selectedHandBlocks();
+  if (!chosen.length) return;
+  if (!game.dealer.canDiscard(game.state) || !startDiscard(chosen)) {
+    flashRefused(discardArea);
+    playSfx("action.denied");
+  }
+});
 renderer.domElement.addEventListener("pointerdown", onPointerDown);
 renderer.domElement.addEventListener("pointermove", onPointerMove);
 renderer.domElement.addEventListener("pointerleave", onPointerLeave);
@@ -1327,7 +1413,7 @@ if (import.meta.hot) {
     renderer.domElement.removeEventListener("pointerup", onPointerUp);
     renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
     renderer.domElement.removeEventListener("click", onClick);
-    if (pendingAction?.kind === "discard") pendingAction.effect.finish();
+    if (pendingAction?.kind === "discard") pendingAction.effects.forEach((e) => e.finish());
     appearing.forEach(({ effect }) => effect.finish());
     renderedBlocks.slice().forEach(disposeCube);
     ghostGeometry.dispose();

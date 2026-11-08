@@ -39,9 +39,9 @@ A **round** contains three stages. Stage one has a lower score target, stage two
 On each turn the player does one of the following:
 
 - **Play:** if the field is empty, drag one block from the hand into it to place the centre block. Otherwise, drag one block from the hand onto an exposed face of any block on the field; the face's neighbouring cell must be empty. The block snaps into its cell and becomes part of the field. This uses one play, and then the field is [scored](#scoring).
-- **Discard:** select blocks in the hand and discard them, including before the first play. This uses one discard and does not score. _(How many blocks one discard can remove is to be decided.)_
+- **Discard:** remove one or more hand blocks, including before the first play. Select blocks and click the bin, select blocks and drag any one of them to the bin (the selection goes with it), or drag a single unselected block to the bin. Each discard uses one discard allowance however many blocks it removes, and does not score. When no discards are left, the bin refuses the drop with a red X. _(A cap on blocks per discard may come later from dealers or passives; for now the whole hand may go.)_
 
-After either action, the hand is refilled to 5 blocks from the deck, or until the deck runs out. A drawn block takes the place of the one that was played or discarded.
+After either action, the hand is refilled from the deck up to the stage dealer's hand size (5 for the base dealer), or until the deck runs out. Drawn blocks take the places of the ones that were played or discarded.
 
 At any time the player can also drag a block within the hand to change its position. Reordering is free: it is not a play or discard, uses nothing and does not refill the hand. Hand order matters for effects that read it, and it is saved with the run.
 

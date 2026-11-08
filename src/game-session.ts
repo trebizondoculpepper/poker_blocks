@@ -2,7 +2,7 @@ import type { CardBlock } from "./cards";
 import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
 import type { GameState, PlayAction } from "./game-state";
-import { insertAt, moveItem } from "./zones";
+import { fillSlots, insertAt, moveItem } from "./zones";
 import { stageKinds, type SessionConfig, type StageKind } from "./session-config";
 
 /** Where a session is: one of a round's three stages, the shop, or finished after a loss. */
@@ -100,25 +100,31 @@ export class GameSession {
     return next;
   }
 
-  discard(cardId: string): GameState | null {
+  /** Discard one card, or several as one discard. */
+  discard(cardIds: string | readonly string[]): GameState | null {
     if (!this.inStage) return null;
-    const next = this.activeDealer.discard(this.currentState, cardId);
+    const next = this.activeDealer.discard(this.currentState, cardIds);
     if (next) this.currentState = next;
     return next;
   }
 
   /**
-   * Refill the hand. Drawn cards go at `slot` (the gap left by the card just played or
-   * discarded) so the hand keeps its order; without a slot they go at the end.
+   * Refill the hand up to the dealer's hand size. Drawn cards go at `slot` (the gap left by
+   * the card just played or discarded), or into each of several gaps in turn, so the hand
+   * keeps its order; without a slot they go at the end.
    */
-  refillHand(slot?: number): CardBlock[] {
+  refillHand(slot?: number | readonly number[]): CardBlock[] {
     if (!this.inStage) return [];
     const before = this.currentState.hand;
+    // The dealer decides how many to draw (its hand size); the session decides where.
     const result = this.activeDealer.refillHand(this.currentState, this.random);
-    this.currentState =
+    const hand =
       slot === undefined
-        ? result.state
-        : { ...result.state, hand: insertAt(before, slot, result.drawn) };
+        ? result.state.hand
+        : typeof slot === "number"
+          ? insertAt(before, slot, result.drawn)
+          : fillSlots(before, slot, result.drawn);
+    this.currentState = { ...result.state, hand };
     return result.drawn;
   }
 
