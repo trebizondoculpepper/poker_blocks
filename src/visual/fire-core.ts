@@ -8,6 +8,7 @@
  * a grate. It is a fake (no lighting, no shadows) but reads as a fire seen through glass.
  */
 import * as THREE from "three";
+import { additiveLight } from "./additive-light";
 
 const vertexShader = /* glsl */ `
   varying vec3 vLocal;
@@ -129,7 +130,8 @@ export function createFireCore(size: number): THREE.Mesh {
     // table, which refract only solid objects, show it bent through them. Additive and
     // drawn last among them (renderOrder), so nothing behind paints over it.
     transparent: false,
-    blending: THREE.AdditiveBlending,
+    // Premultiplied light blended over what is behind (src/visual/additive-light.ts, #190).
+    ...additiveLight,
     depthWrite: false,
   });
   const core = new THREE.Mesh(
