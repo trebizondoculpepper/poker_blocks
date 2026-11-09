@@ -60,6 +60,28 @@ reviews:
           PASS otherwise. When failing, explain which principle is broken, cite the doc
           section, and propose the architecturally correct shape (which trait, service,
           registry or scene should own it).
+      - name: "Consistent with documented decisions"
+        mode: error
+        instructions: |
+          Pass/fail criteria. The project records its earlier decisions in two documents,
+          and every change must be checked against both:
+          - doc/game-architecture.md decides HOW things are implemented (composition,
+            traits, scenes, modes, registries, events, saving, layering).
+          - doc/game.md decides WHAT the game is: its rules (scoring, hands, lines, stages,
+            rounds, shop, passives, coins, materials, win and loss conditions).
+          Read the relevant sections of both before judging. FAIL if the change:
+          1. Implements something in a way that contradicts a decision in
+             doc/game-architecture.md (cite the section and quote the decision).
+          2. Changes game behaviour so it no longer matches doc/game.md: different
+             scoring, limits, prices, rewards, ordering, or a rule the document does not
+             describe (cite the section and quote the rule).
+          3. Changes either decision deliberately but does not update the document in the
+             same PR. Changing a decision is allowed; doing it silently is not.
+          4. Adds a new mechanic or architectural concept that neither document mentions,
+             without adding it to the right document.
+          PASS when the code and both documents agree after the PR. When failing, list each
+          conflict as: the decision (file, section, quote), what the change does instead,
+          and whether the code or the document should change.
       - name: "Baseline only shrinks"
         mode: error
         instructions: |
@@ -74,9 +96,10 @@ reviews:
         that it move into a trait, a scene's traits, or a service.
     - path: "src/**/*.ts"
       instructions: |
-        Review for architectural correctness first, correctness second: say whether the
-        change puts behaviour in the right place according to doc/game-architecture.md,
-        and if not, what the right shape is.
+        Review against the project's recorded decisions first, correctness second:
+        doc/game-architecture.md (how we implement) and doc/game.md (the game's rules).
+        Flag any conflict with an earlier decision, citing the section, and say whether
+        the code or the document should change.
         Enforce AGENTS.md "No special cases": behaviour comes from composed traits, never
         from branching on what kind of thing something is. Prefer registries keyed by id
         (lookup tables of handlers) over if/else or switch chains on kinds. Flag trait
@@ -96,3 +119,7 @@ knowledge_base:
     filePatterns:
       - "AGENTS.md"
       - "doc/game-architecture.md"
+      - "doc/game.md"
+      - "doc/game-events.md"
+      - "doc/passives.md"
+      - "doc/terms.md"

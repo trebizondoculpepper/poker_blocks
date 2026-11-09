@@ -2,6 +2,10 @@
 
 Instructions for coding agents working in this repository. Project documents live in `doc/`; the game rules are in [doc/game.md](doc/game.md).
 
+## Recorded decisions
+
+Two documents hold the project's decisions. [doc/game-architecture.md](doc/game-architecture.md) says **how** we implement things; [doc/game.md](doc/game.md) says **what** the game is (its rules). Before changing code, read the sections that apply. If your change conflicts with either, either make the code match or change the document in the same PR and say so; never diverge silently. Code review (CodeRabbit) checks every PR against both.
+
 ## No special cases (read this first)
 
 This is the project's most important rule, and the one most often broken. The game is built by **composition**: blocks, scenes and modes are plain data with traits attached, and every behaviour lives in a trait. See [doc/game-architecture.md](doc/game-architecture.md), "Modes, scenes and traits".
