@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { tweenValue } from "./easing";
 import "./passive-rack.css";
-import { passiveDefinitions, type PassiveBlock, type PassiveDefinition } from "./passives";
+import { passiveAppearance, type PassiveBlock, type PassivePalette } from "./passives";
 
 const slotWidth = 72;
 const slotGap = 8;
@@ -19,9 +19,10 @@ type RenderedPassive = {
 };
 
 /** Each face gets the block's own symbol; this texture is mapped onto all six cube faces. */
-export function passiveFaceTexture(
-  appearance: NonNullable<PassiveBlock["traits"]["appearance"]> | PassiveDefinition,
-): THREE.CanvasTexture {
+export function passiveFaceTexture(appearance: {
+  symbol: string;
+  palette: PassivePalette;
+}): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 256;
   const context = canvas.getContext("2d")!;
@@ -147,8 +148,7 @@ export function createPassiveRack(
       for (const [index, block] of rack.entries()) {
         let entry = rendered.get(block.id);
         if (!entry) {
-          const definition = passiveDefinitions.get(block.definitionId);
-          const appearance = block.traits.appearance ?? definition;
+          const appearance = passiveAppearance(block);
           const texture = passiveFaceTexture(appearance);
           const material = new THREE.MeshStandardMaterial({
             map: texture,

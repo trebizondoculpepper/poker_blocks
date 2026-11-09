@@ -25,6 +25,18 @@ At stage start, register the installed blocks' subscriptions; update registratio
 
 Only the relevant phase may change a working value. `score.beforeBlockValue` can adjust one contributing block's value; `score.beforeLineFinalized` can adjust the line's working score; `discard.completed` can award coins or install a passive. Clamp a line's final score to zero after all its line effects have resolved, so a penalty never subtracts points from the stage total. One-block runs remain unscored. The line length used by conditions is the number of blocks in the **maximal, gap-free line**, even when a long line scores using a five-block subset.
 
+## Categories
+
+Each category is a **trait** (`scoringCategory`, `economyCategory`, `utilityCategory`), and together they form the **category facet** in `src/passive-categories.ts`. Every passive composes **exactly one** trait from the facet, naming its primary purpose (issue #81); `src/passive-categories.test.ts` enforces this for every definition. A category trait brings presentation defaults and nothing else. No rule, condition or effect reads it, and the same test checks that gameplay code never names one. A passive's own `palette` overrides its category's default colours without changing its category. The finish (porcelain, brass, obsidian) is appearance only and is unrelated to a card's gameplay material.
+
+| Category trait | Default colour | Finish         | Passives                                             |
+| -------------- | -------------- | -------------- | ---------------------------------------------------- |
+| Scoring        | White          | Porcelain      | ×2, ×4, Carnivore, Woodworker, Crossroads, Long Haul |
+| Economy        | Green          | Brass          | Gold Standard, Scrapper, Seeing Red                  |
+| Utility        | Black          | Matte obsidian | Ace Exchange                                         |
+
+Every current passive still overrides the default colours with its own palette, so the change is not yet visible. Activation effects, activation sounds and the Card manipulation and Trigger / repeat categories are open questions on #81.
+
 ## Definitions
 
 Every row below also carries rack residency, an inspectable name and effect description, and appearance data. The listed `EventRule` data is the meaningful behavior configuration. The values are for the first playtest.

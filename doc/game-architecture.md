@@ -139,6 +139,10 @@ Trigger usage is configurable per passive: unlimited, a fixed count, or one-shot
 
 The proposed hand and passive rack are ordered zones in `GameState`. A generic reorder action would change item order when a block is dragged between slots in its own zone; it would not consume a play or discard. For passives responding to the same trigger, the default resolver would use a snapshot of rack order and apply their gameplay effects left to right. An explicitly defined timing rule could override that default. The renderer would reflect the new order but would not decide effect order itself.
 
+## Passive categories
+
+Each passive category is a trait, and the **category facet** (`src/passive-categories.ts`) is the set of them. A **facet** is a group of traits of which a block composes exactly one. Every passive composes exactly one category trait, and a test enforces it. A category trait brings presentation defaults (block colours and an appearance finish) and no behaviour: gameplay rule evaluation never reads it, and a test enforces that too. A definition's own `palette` overrides the default.
+
 ## Line scoring
 
 **Materials (design, #8):** a card's material is a block trait. Its scoring effect is a `scoringModifier` trait (`additive`, `multiplicative`, `exponential`) whose values come from the balance config. It contributes event rules to the same queue as passives (#63): additive on `score.beforeBlockValue`, multiplicative and exponential on `score.beforeLineFinalized`, for contributing cards only. The line scorer supplies contributor ids and never names a material; see `doc/game.md`, "Material scoring", for the order of operations.
