@@ -24,7 +24,7 @@ import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createAudioService, type AudioService } from "./audio-service";
 import { createHudPanels, type HudPanels } from "./hud-panels";
 import { createConsoleHost } from "./console-host";
-import { createMenus } from "./menus";
+import { createOverlays, type Overlays } from "./overlays";
 import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
@@ -48,7 +48,6 @@ import {
   type Room,
 } from "./rooms";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
-import type { Screen } from "./menus";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
@@ -84,23 +83,6 @@ discardArea.innerHTML = `
 host.append(discardArea);
 const discardCount = discardArea.querySelector<HTMLElement>(".discard-count")!;
 
-/**
- * Reusable "refused target" feedback: a red X over a drop target (its `.refused-mark`),
- * shown while hovering with `is-refused` and flashed (with a shake, unless motion is
- * reduced) when a drop or click there is refused.
- */
-function flashRefused(target: HTMLElement): void {
-  target.classList.remove("refused-flash", "refused-shake");
-  void target.offsetWidth; // restart the animation
-  target.classList.add("refused-flash");
-  if (!reducedMotion) target.classList.add("refused-shake");
-  window.setTimeout(() => target.classList.remove("refused-flash", "refused-shake"), 700);
-}
-const tooltip = document.createElement("div");
-tooltip.className = "inspect-tooltip";
-tooltip.setAttribute("role", "tooltip");
-tooltip.hidden = true;
-host.append(tooltip);
 const scene = new THREE.Scene();
 const handScene = new THREE.Scene();
 let cameraView: CameraViewService;
@@ -337,9 +319,25 @@ const audio: AudioService = createAudioService({
 });
 type TraitContext = {
   host: HTMLElement;
-  services: { cameraView: CameraViewService; audio: AudioService; hud: HudPanels };
+  services: {
+    cameraView: CameraViewService;
+    audio: AudioService;
+    hud: HudPanels;
+    overlays: Overlays;
+  };
 };
-const traitContext: TraitContext = { host, services: { cameraView, audio, hud } };
+const traitContext: TraitContext = {
+  host,
+  services: {
+    cameraView,
+    audio,
+    hud,
+    // Built later, once the settings and run callbacks it needs exist.
+    get overlays() {
+      return overlays;
+    },
+  },
+};
 const sceneBehaviours = new SceneTraitRegistry<RoomSceneTraits, TraitContext>();
 sceneBehaviours.register("screen", {
   enter(context, { kind }) {
@@ -582,18 +580,7 @@ function touchSpread(): number {
 }
 
 function showInspection(block: CardBlock | undefined, clientX: number, clientY: number): void {
-  const label = block && inspectBlock(block);
-  if (!label) {
-    tooltip.hidden = true;
-    return;
-  }
-  tooltip.textContent = label;
-  tooltip.hidden = false;
-  const bounds = host.getBoundingClientRect();
-  const left = clientX - bounds.left + 14;
-  const top = clientY - bounds.top + 14;
-  tooltip.style.left = `${Math.max(8, Math.min(left, bounds.width - tooltip.offsetWidth - 8))}px`;
-  tooltip.style.top = `${Math.max(8, Math.min(top, bounds.height - tooltip.offsetHeight - 8))}px`;
+  overlays.inspect((block && inspectBlock(block)) || null, clientX, clientY);
 }
 
 function showSelection(): void {
@@ -777,7 +764,7 @@ function dropPassive(event: PointerEvent, cancelled: boolean): void {
   }
   const sold = canSellPassives() ? game.sellPassive(block.id) : null;
   if (sold === null) {
-    flashRefused(discardArea);
+    overlays.flashRefused(discardArea);
     playSfx("action.denied");
     return;
   }
@@ -1334,8 +1321,6 @@ function dealHand(): void {
   layoutHand();
 }
 
-let screen: "title" | "settings" | "game" | "over" = "title";
-
 /** Browsers keep audio silent until the player interacts; start music on the first gesture. */
 audio.start();
 
@@ -1352,8 +1337,7 @@ function showStageWon(): void {
   if (!reward) return;
   updateHud();
   autosave();
-  pushScene("stage-won");
-  menus.showStageWon(reward, "Visit shop", () => void advanceFromStage());
+  overlays.showStageWon(reward, "Visit shop", () => void advanceFromStage());
 }
 
 /** The HUD button: move to the next stage, the shop, the next round, or a new game. */
@@ -1361,7 +1345,7 @@ function takeNextAction(): void {
   if (pendingAction || drag?.active) return;
   playSfx("ui.click");
   if (game.phase === "over") {
-    menus.showGameOver(game.stats);
+    overlays.showGameOver(game.stats);
     return;
   }
   // A won stage moves on through its pop-up, which shows what it paid.
@@ -1420,7 +1404,7 @@ function endRun(): void {
   playSfx("run.lost");
   updateHud();
   autosave();
-  menus.showGameOver(game.stats);
+  overlays.showGameOver(game.stats);
 }
 
 /** When a lost stage's outcome has been announced, the game over screen follows. */
@@ -1499,47 +1483,33 @@ function startRun(session: GameSession, fresh = false): void {
   audio.runStarted();
 }
 
-const screenSceneTransitions: Record<
-  Screen,
-  { scene?: RoomSceneName; operation: "push" | "replace" | "resume" }
-> = {
-  title: { scene: "title", operation: "replace" },
-  settings: { scene: "settings", operation: "push" },
-  game: { operation: "resume" },
-  over: { scene: "game-over", operation: "replace" },
-};
-const screenSceneActions: Record<"push" | "replace" | "resume", (scene?: RoomSceneName) => void> = {
-  push(scene) {
-    pushScene(scene!);
+const overlays: Overlays = createOverlays(host, {
+  settings,
+  audio,
+  reducedMotion: () => reducedMotion,
+  scenes: {
+    push: pushScene,
+    replace: switchScene,
+    resumeGame() {
+      sceneManager.pop();
+      syncSceneToGame();
+    },
   },
-  replace(scene) {
-    switchScene(scene!);
-  },
-  resume() {
-    sceneManager.pop();
-    syncSceneToGame();
-  },
-};
-const menus = createMenus(host, settings, {
-  hasSave: () => loadRun(storage, cards, dealerRegistry, runSaveKey) !== null,
-  onContinue() {
-    const snapshot = loadRun(storage, cards, dealerRegistry, runSaveKey);
-    if (snapshot) {
-      startRun(GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, snapshot));
-    }
-  },
-  onNewGame() {
-    startRun(newSession(), true);
-  },
-  onSettingsChange(next) {
-    applySettings(next);
-    saveSettings(storage, next);
-  },
-  onScreen(next) {
-    screen = next;
-    const transition = screenSceneTransitions[next];
-    screenSceneActions[transition.operation](transition.scene);
-    audio.showScreen(next);
+  menus: {
+    hasSave: () => loadRun(storage, cards, dealerRegistry, runSaveKey) !== null,
+    onContinue() {
+      const snapshot = loadRun(storage, cards, dealerRegistry, runSaveKey);
+      if (snapshot) {
+        startRun(GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, snapshot));
+      }
+    },
+    onNewGame() {
+      startRun(newSession(), true);
+    },
+    onSettingsChange(next) {
+      applySettings(next);
+      saveSettings(storage, next);
+    },
   },
 });
 // Rooms that skip the title start straight in play (resuming their run if they keep one).
@@ -1551,11 +1521,11 @@ if (skipTitle) {
     saved ? GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, saved) : newSession(),
     !saved,
   );
-  menus.closeAll();
+  overlays.closeAll();
 } else if (restartRoom) {
   startRun(newSession(), true);
-  menus.closeAll();
-} else menus.showTitle();
+  overlays.closeAll();
+} else overlays.showTitle();
 if (restartRoom) {
   window.history.replaceState(window.history.state, "", roomLink(thisRoom, window.location.href));
 }
@@ -1566,20 +1536,20 @@ hud.onAction(takeNextAction);
 const devConsole = createConsoleHost(
   {
     game: () => game,
-    screen: () => screen,
+    screen: () => overlays.screen,
     next: takeNextAction,
     newRun() {
       startRun(newSession());
-      menus.closeAll();
+      overlays.closeAll();
     },
-    home: () => menus.showTitle(),
+    home: () => overlays.showTitle(),
     room: () => thisRoom,
     openRoom(room) {
       enterRoom(room);
       // startScene is declarative until the scene graph drives session progression (#37).
       switchScene(room.startScene);
       startRun(newSession(), true);
-      menus.closeAll();
+      overlays.closeAll();
     },
     forceOutcome(outcome) {
       if (pendingAction || !game.forceOutcome(outcome)) return false;
@@ -1625,7 +1595,7 @@ function finishDrag(drop: boolean): void {
       setDragLayer(rendered.cube, false);
     showCandidate(null);
     discardArea.classList.remove("is-target", "is-refused");
-    if (refusedAtBin) flashRefused(discardArea);
+    if (refusedAtBin) overlays.flashRefused(discardArea);
     const accepted = discard
       ? startDiscard([activeDrag.source, ...activeDrag.group])
       : candidate
@@ -1694,7 +1664,7 @@ const onPointerDown = (event: PointerEvent) => {
     }
     if (pinch) return;
   }
-  tooltip.hidden = true;
+  overlays.hideTooltip();
   const source = pickBlock(event.clientX, event.clientY, handBlocks);
   if (fieldPlacementActive(roomTraits, game.phase) && source?.block.traits.attachable) {
     pointRay(event.clientX, event.clientY, cameraView.handCamera);
@@ -1754,7 +1724,7 @@ const onPointerMove = (event: PointerEvent) => {
       playSfx("card.pickup");
     }
     if (drag.active) {
-      tooltip.hidden = true;
+      overlays.hideTooltip();
       moveDraggedBlock();
       updateCandidate();
       renderer.domElement.style.cursor = "grabbing";
@@ -1775,7 +1745,7 @@ const onPointerMove = (event: PointerEvent) => {
       cameraView.changeMotionRate(0);
     }
     if (boardDrag.active) {
-      tooltip.hidden = true;
+      overlays.hideTooltip();
       cameraView.rotateBy(dx, dy);
       renderer.domElement.style.cursor = "grabbing";
       return;
@@ -1792,7 +1762,7 @@ const onPointerMove = (event: PointerEvent) => {
   );
 };
 const onPointerLeave = () => {
-  tooltip.hidden = true;
+  overlays.hideTooltip();
   renderer.domElement.style.cursor = "default";
 };
 const onPointerUp = (event: PointerEvent) => {
@@ -1833,7 +1803,7 @@ const onPointerCancel = (event: PointerEvent) => {
   }
   if (drag?.pointerId === event.pointerId) finishDrag(false);
   if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
-  tooltip.hidden = true;
+  overlays.hideTooltip();
   renderer.domElement.style.cursor = "default";
 };
 const onClick = (event: MouseEvent) => {
@@ -1857,12 +1827,12 @@ discardArea.addEventListener("click", () => {
   const chosen = selectedHandBlocks();
   if (!chosen.length) return;
   if (!game.dealer.canDiscard(game.state) || !startDiscard(chosen)) {
-    flashRefused(discardArea);
+    overlays.flashRefused(discardArea);
     playSfx("action.denied");
   }
 });
 const onWheel = (event: WheelEvent) => {
-  if (menus.isOpen) return;
+  if (overlays.isOpen) return;
   event.preventDefault();
   cameraView.zoomWithWheel(event.deltaY, event.deltaMode);
   audio.zoomed();
@@ -1950,6 +1920,7 @@ if (import.meta.hot) {
     audio.dispose();
     hud.dispose();
     devConsole.dispose();
+    overlays.dispose();
     pendingAction?.effects.forEach((e) => e.finish());
     appearing.forEach(({ effect }) => effect.finish());
     renderedBlocks.slice().forEach(disposeCube);
