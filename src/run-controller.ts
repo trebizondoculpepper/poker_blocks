@@ -398,6 +398,10 @@ export function createRunController<Context>(options: {
    * deck, and `start` the opening snapshot. Continue never comes through here; see `resume`.
    */
   function newRun(): GameRun {
+    // A new run gets a new sequence, before anything draws from it. Otherwise a New game after
+    // a run continues the old sequence: the same seed is shown but the position differs, so the
+    // displayed seed could not reproduce the run (#134).
+    randomizer = new Randomizer(newSeed());
     const steps: readonly RunSetupStep[] = currentMode.runSetup;
     const services = setupServices();
     runRules = runSetup.policy(steps, baseRunRules(currentMode), services);

@@ -67,7 +67,7 @@ export type RunSnapshot = {
 export class GameRun {
   private readonly dealers: Registry<Dealer>;
   private readonly config: RunRules;
-  private readonly random: () => number;
+  private random: () => number;
   private activeDealer: Dealer;
   private currentState: GameState;
   private currentRound = 1;
@@ -107,7 +107,11 @@ export class GameRun {
     snapshot: RunSnapshot,
     random: () => number = Math.random,
   ): GameRun {
-    const session = new GameRun(dealers, config, cards, random);
+    // Hydrating replaces the dealt state wholesale, so the constructor's deal must not touch
+    // the restored stream: five draws for a hand thrown away would move the resume five steps
+    // on and make Continue differ from uninterrupted play (#134). `random` is attached after.
+    const session = new GameRun(dealers, config, cards, () => 0);
+    session.random = random;
     session.activeDealer = dealers.get(snapshot.dealer);
     session.currentState = snapshot.state;
     session.currentRound = snapshot.round;

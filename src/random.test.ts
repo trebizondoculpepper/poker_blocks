@@ -107,3 +107,26 @@ describe("the session randomizer (#134)", () => {
     }
   });
 });
+
+describe("a restored run does not consume the sequence (#134)", () => {
+  it("hydrates a snapshot without drawing, so Continue resumes where it stopped", async () => {
+    const { GameRun } = await import("./game-run");
+    const { dealerRegistry } = await import("./dealer");
+    const { standardDeck } = await import("./cards");
+    const { demoRunRules } = await import("./run-rules");
+
+    // Play a run and record what the next value after its snapshot is.
+    const randomizer = new Randomizer(2024);
+    const run = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => randomizer.next());
+    const saved = run.snapshot();
+    const positionWhenSaved = randomizer.cursor;
+    const nextValue = randomizer.next();
+
+    // Resume from that cursor: hydrating the snapshot must not step the stream on.
+    const resumed = new Randomizer(2024, positionWhenSaved);
+    GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, saved, () => resumed.next());
+
+    expect(resumed.cursor).toBe(positionWhenSaved);
+    expect(resumed.next()).toBe(nextValue);
+  });
+});
