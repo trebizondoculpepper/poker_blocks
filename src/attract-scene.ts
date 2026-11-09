@@ -14,8 +14,8 @@
 import { createSceneLayer } from "./scene-layer";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { standardDeck, type CardBlock, type IdentityTrait } from "./cards";
-import { getMaterialDefinition, materialOf } from "./materials";
+import { standardDeck, type IdentityTrait } from "./cards";
+import { blockMaterials, getMaterialDefinition, type BlockMaterial } from "./materials";
 import { createAttractTuningPanel } from "./attract-tuning-panel";
 import { createBlockAppearance } from "./visual/block-appearance";
 
@@ -80,13 +80,46 @@ export type AttractTuning = {
   spin: MeanSpread;
   /** Seconds between a card passing the camera and its replacement appearing. */
   spawnInterval: MeanSpread;
+  /**
+   * The card materials the field draws from, each with a weight relative to the others. Equal
+   * by default; a weight of 0 leaves that material out.
+   */
+  materialWeights: readonly MaterialWeight[];
 };
+
+/** One material the attract field can show, and how often relative to the others. */
+export type MaterialWeight = { material: BlockMaterial; weight: number };
+
+/** Every card material, equally likely. */
+export const equalMaterialWeights: readonly MaterialWeight[] = blockMaterials.map((material) => ({
+  material,
+  weight: 1,
+}));
+
+/**
+ * A material chosen by weight, using the attract sequence's cosmetic randomness. With no
+ * positive weight at all it falls back to paper, the default card stock.
+ */
+export function pickMaterial(
+  weights: readonly MaterialWeight[],
+  random: () => number,
+): BlockMaterial {
+  const choices = weights.filter(({ weight }) => weight > 0);
+  const total = choices.reduce((sum, { weight }) => sum + weight, 0);
+  let roll = random() * total;
+  for (const { material, weight } of choices) {
+    roll -= weight;
+    if (roll < 0) return material;
+  }
+  return choices.at(-1)?.material ?? "paper";
+}
 
 /** The attract sequence as the title shows it (#147). A dev mode overrides parts of this. */
 export const defaultAttractTuning: AttractTuning = {
   velocity: { mean: 4.2, deviation: 0.7 },
   spin: { mean: 0.45, deviation: 0.18 },
   spawnInterval: { mean: 0, deviation: 0 },
+  materialWeights: equalMaterialWeights,
 };
 
 type AttractCard = {
@@ -170,13 +203,16 @@ function sample({ mean, deviation }: MeanSpread, random: () => number): number {
 }
 
 /** A card-shaped identity and material for the attract field, chosen cosmetically. */
-function randomCard(random: () => number): { identity: IdentityTrait; material: CardBlock } {
+function randomCard(
+  random: () => number,
+  weights: AttractTuning["materialWeights"],
+): { identity: IdentityTrait; material: BlockMaterial } {
   return {
     identity: {
       rank: standardDeck[Math.floor(random() * standardDeck.length)].traits.identity.rank,
       suit: standardDeck[Math.floor(random() * standardDeck.length)].traits.identity.suit,
     },
-    material: standardDeck[Math.floor(random() * standardDeck.length)],
+    material: pickMaterial(weights, random),
   };
 }
 
@@ -209,12 +245,8 @@ export function createAttractScene(
 
   /** One card cube, built once per replacement so materials are disposed with it. */
   function makeCard(): AttractCard {
-    const { identity, material } = randomCard(random);
-    const appearance = createBlockAppearance(
-      identity,
-      getMaterialDefinition(materialOf(material)),
-      cubeSize,
-    );
+    const { identity, material } = randomCard(random, tuning.materialWeights);
+    const appearance = createBlockAppearance(identity, getMaterialDefinition(material), cubeSize);
     const cube = new THREE.Mesh(
       // A card's own appearance: the same geometry and face textures the table uses, so the
       // field reads as this game's cards rather than as generic blocks.

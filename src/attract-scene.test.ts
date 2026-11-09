@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
-import { depthOpacity, fadedInZ, lensClearance, pathPoint, spawnZ } from "./attract-scene";
+import {
+  defaultAttractTuning,
+  depthOpacity,
+  equalMaterialWeights,
+  fadedInZ,
+  lensClearance,
+  pathPoint,
+  pickMaterial,
+  spawnZ,
+  type MaterialWeight,
+} from "./attract-scene";
+import { blockMaterials } from "./materials";
 
 describe("the attract sequence's paths (#147)", () => {
   it("never sends a card through the camera's axis", () => {
@@ -38,5 +49,42 @@ describe("attract cards fade in with depth", () => {
     // Eased: slow at both ends, so a quarter of the way in is well under a quarter opaque.
     expect(depthOpacity(-38.75)).toBeLessThan(0.25);
     expect(depthOpacity(-36.25)).toBeGreaterThan(0.75);
+  });
+});
+
+describe("attract cards come in every material, by weight", () => {
+  /** A deterministic sequence spread evenly over [0, 1). */
+  const evenly = (count: number) => {
+    let index = 0;
+    return () => (index++ % count) / count + 0.5 / count;
+  };
+
+  it("uses every material, equally, by default", () => {
+    expect(defaultAttractTuning.materialWeights).toEqual(equalMaterialWeights);
+    const random = evenly(blockMaterials.length * 10);
+    const counts = new Map<string, number>();
+    for (let draw = 0; draw < blockMaterials.length * 10; draw++) {
+      const material = pickMaterial(equalMaterialWeights, random);
+      counts.set(material, (counts.get(material) ?? 0) + 1);
+    }
+    expect([...counts.keys()].sort()).toEqual([...blockMaterials].sort());
+    expect(new Set(counts.values())).toEqual(new Set([10]));
+  });
+
+  it("follows the weights, and leaves out a material weighted 0", () => {
+    const weights: MaterialWeight[] = [
+      { material: "steel", weight: 3 },
+      { material: "wood", weight: 1 },
+      { material: "paper", weight: 0 },
+    ];
+    const random = evenly(400);
+    const drawn = Array.from({ length: 400 }, () => pickMaterial(weights, random));
+    expect(new Set(drawn)).toEqual(new Set(["steel", "wood"]));
+    expect(drawn.filter((material) => material === "steel")).toHaveLength(300);
+  });
+
+  it("falls back to paper when no material has any weight", () => {
+    const none = equalMaterialWeights.map(({ material }) => ({ material, weight: 0 }));
+    expect(pickMaterial(none, () => 0.5)).toBe("paper");
   });
 });
