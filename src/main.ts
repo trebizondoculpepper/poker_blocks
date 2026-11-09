@@ -16,15 +16,7 @@ import {
   type SessionConfig,
 } from "./session-config";
 import { tweenValue } from "./easing";
-import {
-  boardPitchRock,
-  boardYawRock,
-  randomRock,
-  rockAngle,
-  stepRock,
-  type Rock,
-  type RockState,
-} from "./motion";
+import { randomRock, stepRock, type Rock, type RockState } from "./motion";
 import { createMaterialise } from "./visual/materialise";
 import { isTransparent } from "./traits/transparent";
 import { createCardRoom } from "./visual/card-room";
@@ -40,7 +32,7 @@ import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
 import { browserStorage, loadRun, saveRun } from "./save";
-import { boardBaseFov, fovForZoom, pinchZoom, wheelZoom } from "./view-zoom";
+import { createCameraViewService, type CameraViewService } from "./camera-view";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createPassiveRack } from "./passive-rack";
 import { shopPreviewState } from "./shop-stock";
@@ -148,18 +140,7 @@ tooltip.hidden = true;
 host.append(tooltip);
 const scene = new THREE.Scene();
 const handScene = new THREE.Scene();
-const pivot = new THREE.Group();
-const assembly = new THREE.Group();
-pivot.rotation.order = "YXZ";
-pivot.add(assembly);
-scene.add(pivot);
-
-const camera = new THREE.PerspectiveCamera(boardBaseFov, 1, 0.1, 1000);
-camera.position.set(0, 3, 8);
-camera.lookAt(0, 0, 0);
-const handCamera = new THREE.OrthographicCamera(-4, 4, 4, -4, 0.1, 100);
-handCamera.position.set(0, 3, 8);
-handCamera.lookAt(0, 0, 0);
+let cameraView: CameraViewService;
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -192,15 +173,15 @@ function setDragLayer(cube: THREE.Object3D, dragging: boolean): void {
 
 function render(): void {
   renderer.clear();
-  renderer.render(scene, camera);
+  renderer.render(scene, cameraView.camera);
   renderer.clearDepth();
-  handCamera.layers.set(0);
-  renderer.render(handScene, handCamera);
+  cameraView.handCamera.layers.set(0);
+  renderer.render(handScene, cameraView.handCamera);
   // Dragged blocks last, on a fresh depth buffer, so nothing can clip into them.
   renderer.clearDepth();
-  handCamera.layers.set(dragLayer);
-  renderer.render(handScene, handCamera);
-  handCamera.layers.set(0);
+  cameraView.handCamera.layers.set(dragLayer);
+  renderer.render(handScene, cameraView.handCamera);
+  cameraView.handCamera.layers.set(0);
 }
 
 type RenderedBlock = {
@@ -234,19 +215,21 @@ const placed = new Map<string, RenderedBlock>();
 let selected: Selection = new Set();
 const cubeSize = 2.4;
 let massCenter: MassCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
-const pivotCell = new THREE.Vector3();
+cameraView = createCameraViewService({
+  host,
+  renderer,
+  scene,
+  cubeSize,
+  getCells: () => [...placed.values()].map(({ cell }) => cell!),
+  getMassCenter: () => massCenter,
+  layoutHand,
+  render,
+});
+const { assembly } = cameraView;
 
 function updateRotationCenter(cell: Cell): void {
   massCenter = addCell(massCenter, cell);
-  const center = centerOfGravity(massCenter);
-  const next = new THREE.Vector3(
-    center.x * cubeSize,
-    center.y * cubeSize - 0.45,
-    center.z * cubeSize,
-  );
-  pivot.position.add(next.clone().sub(pivotCell).applyQuaternion(pivot.quaternion));
-  pivotCell.copy(next);
-  assembly.position.copy(pivotCell).multiplyScalar(-1);
+  cameraView.updateRotationCenter(centerOfGravity(massCenter));
 }
 function createCube(
   block: CardBlock,
@@ -319,126 +302,6 @@ function addToBoard(block: CardBlock, cell: Cell): RenderedBlock {
   return rendered;
 }
 
-const cameraDirection = new THREE.Vector3(0, 3, 8).normalize();
-const initialCameraDistance = Math.hypot(3, 8);
-let cameraDistance = initialCameraDistance;
-let boardZoom = 1;
-const cameraTarget = new THREE.Vector3();
-type CameraMove = {
-  startAt: number;
-  fromDistance: number;
-  toDistance: number;
-  fromTarget: THREE.Vector3;
-  toTarget: THREE.Vector3;
-};
-let cameraMove: CameraMove | null = null;
-
-/** World-space radius of a sphere around the placed structure, centred on the pivot. */
-function structureRadius(): number {
-  if (placed.size === 0) return 0.87 * cubeSize;
-  const center = centerOfGravity(massCenter);
-  let radius = 0;
-  for (const { cell } of placed.values()) {
-    const d = Math.hypot(cell!.x - center.x, cell!.y - center.y, cell!.z - center.z);
-    radius = Math.max(radius, d);
-  }
-  return (radius + 0.87) * cubeSize;
-}
-
-function desiredCamera(): { distance: number; target: THREE.Vector3 } {
-  const cells = [...placed.values()].map(({ cell }) => cell!);
-  if (cells.length === 0) {
-    return { distance: minimumCameraDistance(), target: new THREE.Vector3(0, -0.5, 0) };
-  }
-  const min = {
-    x: Math.min(...cells.map(({ x }) => x)),
-    y: Math.min(...cells.map(({ y }) => y)),
-    z: Math.min(...cells.map(({ z }) => z)),
-  };
-  const max = {
-    x: Math.max(...cells.map(({ x }) => x)),
-    y: Math.max(...cells.map(({ y }) => y)),
-    z: Math.max(...cells.map(({ z }) => z)),
-  };
-  const center = centerOfGravity(massCenter);
-  const extents = {
-    x: Math.max(Math.abs(min.x - 0.5 - center.x), Math.abs(max.x + 0.5 - center.x)),
-    y: Math.max(Math.abs(min.y - 0.5 - center.y), Math.abs(max.y + 0.5 - center.y)),
-    z: Math.max(Math.abs(min.z - 0.5 - center.z), Math.abs(max.z + 0.5 - center.z)),
-  };
-  const radius = Math.hypot(extents.x, extents.y, extents.z) * cubeSize;
-  // Framing uses the neutral lens. The player's zoom stays in effect after a
-  // placement or resize instead of being cancelled by an automatic camera move.
-  const verticalFov = THREE.MathUtils.degToRad(boardBaseFov);
-  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
-  const limitingFov = Math.min(verticalFov, horizontalFov);
-  return {
-    distance: Math.max(minimumCameraDistance(), (radius / Math.sin(limitingFov / 2)) * 1.2),
-    target: pivot.position.clone().add(new THREE.Vector3(0, -0.5, 0)),
-  };
-}
-
-/** The closest the camera frames the table: farther back on a tall, narrow (portrait) screen. */
-function minimumCameraDistance(): number {
-  return initialCameraDistance * Math.max(1, 0.9 / camera.aspect);
-}
-
-function applyCamera(): void {
-  camera.position.copy(cameraTarget).addScaledVector(cameraDirection, cameraDistance);
-  camera.lookAt(cameraTarget);
-}
-
-function applyBoardZoom(zoom: number): void {
-  boardZoom = zoom;
-  camera.fov = fovForZoom(zoom);
-  camera.updateProjectionMatrix();
-}
-
-function scheduleCameraMove(): void {
-  const desired = desiredCamera();
-  cameraMove = {
-    startAt: performance.now() + 1000,
-    fromDistance: cameraDistance,
-    toDistance: desired.distance,
-    fromTarget: cameraTarget.clone(),
-    toTarget: desired.target,
-  };
-}
-
-function updateCamera(now: number): void {
-  if (!cameraMove || now < cameraMove.startAt) return;
-  const elapsed = (now - cameraMove.startAt) / 1000;
-  cameraDistance = tweenValue(cameraMove.fromDistance, cameraMove.toDistance, elapsed, 2);
-  const progress = tweenValue(0, 1, elapsed, 2);
-  cameraTarget.lerpVectors(cameraMove.fromTarget, cameraMove.toTarget, progress);
-  applyCamera();
-  if (progress === 1) cameraMove = null;
-}
-
-/** Pan the table under the fixed overlays while shop cubes land. */
-function beginShopCameraEntrance(): void {
-  const desired = desiredCamera();
-  cameraTarget.copy(desired.target).add(new THREE.Vector3(0, 2.3, 0));
-  cameraDistance = desired.distance * 1.22;
-  applyCamera();
-  cameraMove = {
-    startAt: performance.now() - 300,
-    fromDistance: cameraDistance,
-    toDistance: desired.distance,
-    fromTarget: cameraTarget.clone(),
-    toTarget: desired.target,
-  };
-}
-
-function finishShopCameraEntrance(): void {
-  if (!cameraMove) return;
-  const desired = desiredCamera();
-  cameraMove = null;
-  cameraDistance = desired.distance;
-  cameraTarget.copy(desired.target);
-  applyCamera();
-}
-
 const storage = browserStorage();
 /**
  * Rooms (?room=...) are composed from room traits; see src/rooms.ts. dev0 is the normal game
@@ -499,21 +362,26 @@ function roomDeck(newGame: boolean): readonly CardBlock[] {
   return makeDevDeck(materials.reshuffle === "each-run" ? newMaterialSeed() : devSeed(newGame));
 }
 let cards: readonly CardBlock[] = roomDeck(false);
-const sceneBehaviours = new SceneTraitRegistry<RoomSceneTraits, HTMLElement>();
+type TraitContext = {
+  host: HTMLElement;
+  services: { cameraView: CameraViewService };
+};
+const traitContext: TraitContext = { host, services: { cameraView } };
+const sceneBehaviours = new SceneTraitRegistry<RoomSceneTraits, TraitContext>();
 sceneBehaviours.register("screen", {
-  enter(element, { kind }) {
-    element.dataset.scene = kind;
+  enter(context, { kind }) {
+    context.host.dataset.scene = kind;
   },
-  exit(element, { kind }) {
-    if (element.dataset.scene === kind) delete element.dataset.scene;
+  exit(context, { kind }) {
+    if (context.host.dataset.scene === kind) delete context.host.dataset.scene;
   },
 });
 sceneBehaviours.register("pausesBelow", {
-  blocksBelow(_element, config, operation) {
+  blocksBelow(_context, config, operation) {
     return config[operation];
   },
 });
-const sceneManager = new SceneManager(sceneBehaviours, host);
+const sceneManager = new SceneManager(sceneBehaviours, traitContext);
 for (const roomId of roomRegistry.names()) {
   for (const scene of roomRegistry.get(roomId).scenes) sceneManager.register(scene);
 }
@@ -567,7 +435,7 @@ const shopView = createShopView(
     playSfx("shop.buy");
     return true;
   },
-  finishShopCameraEntrance,
+  () => cameraView.finishShopEntrance(),
 );
 shopView.render([], false);
 // The score shown lags the state until the placed card lands.
@@ -725,7 +593,6 @@ faceHighlight.visible = false;
 faceHighlight.renderOrder = 10;
 assembly.add(faceHighlight);
 
-let handBaseY = 0;
 /** Where a drop would play: a face of a placed block, or the centre of an empty field. */
 /** Where a drop would play: a face (or the empty centre), and the cells it would fill. */
 type Candidate = { target: RenderedBlock | null; face: Face | null; cell: Cell; cells: Cell[] };
@@ -823,12 +690,12 @@ function layoutHand(): void {
     order.splice(preview.reorderSlot!, 0, preview.source);
   }
   handBlocks.forEach((rendered) => {
-    rendered.baseY = handBaseY;
+    rendered.baseY = cameraView.handBaseY;
     const slot = preview ? order.indexOf(rendered) : rendered.handSlot!;
     const firstLayout = rendered.handX === undefined;
     rendered.handX = handSlotX(slot, visibleSlots);
     if (isDragged(rendered)) return;
-    rendered.cube.position.y = handBaseY;
+    rendered.cube.position.y = cameraView.handBaseY;
     rendered.cube.position.z = 0;
     if (firstLayout) rendered.cube.position.x = rendered.handX;
   });
@@ -856,7 +723,11 @@ function syncHandSlots(): void {
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
-function pointRay(clientX: number, clientY: number, viewCamera: THREE.Camera = camera): void {
+function pointRay(
+  clientX: number,
+  clientY: number,
+  viewCamera: THREE.Camera = cameraView.camera,
+): void {
   const bounds = renderer.domElement.getBoundingClientRect();
   pointer.set(
     ((clientX - bounds.left) / bounds.width) * 2 - 1,
@@ -993,7 +864,7 @@ function pickBlock(
   clientY: number,
   candidates = renderedBlocks,
 ): RenderedBlock | undefined {
-  pointRay(clientX, clientY, candidates === handBlocks ? handCamera : camera);
+  pointRay(clientX, clientY, candidates === handBlocks ? cameraView.handCamera : cameraView.camera);
   const hit = raycaster.intersectObjects(
     candidates.map(({ cube }) => cube),
     false,
@@ -1078,7 +949,7 @@ function updateEmptyFieldPrompt(time: number): void {
 function handReorderSlot(clientX: number, clientY: number): number | null {
   const bounds = host.getBoundingClientRect();
   if (clientY < bounds.top + bounds.height * 0.72 || handBlocks.length < 2) return null;
-  pointRay(clientX, clientY, handCamera);
+  pointRay(clientX, clientY, cameraView.handCamera);
   if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return null;
   const slot = Math.round(dragPoint.x / 1.2 + (visibleHandSlots() - 1) / 2);
   return Math.max(0, Math.min(handBlocks.length - 1, slot));
@@ -1115,13 +986,13 @@ const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 const dragPoint = new THREE.Vector3();
 function moveDraggedBlock(): void {
   if (!drag?.active) return;
-  pointRay(drag.lastX, drag.lastY, handCamera);
+  pointRay(drag.lastX, drag.lastY, cameraView.handCamera);
   if (raycaster.ray.intersectPlane(dragPlane, dragPoint)) {
     drag.source.cube.position.copy(dragPoint).add(drag.grabOffset);
     // Carried blocks trail the dragged one in a small fanned stack behind it.
     // Each is pushed a whole block further from the camera (straight back along its view,
     // so the fan on screen is unchanged) and never intersects the one in front.
-    handCamera.getWorldDirection(awayFromCamera);
+    cameraView.handCamera.getWorldDirection(awayFromCamera);
     drag.group.forEach((rendered, index) => {
       const step = index + 1;
       rendered.cube.position
@@ -1133,29 +1004,6 @@ function moveDraggedBlock(): void {
 }
 
 const normalMotionRate = 1;
-let motionRate = normalMotionRate;
-let rateFrom = motionRate;
-let rateTo = motionRate;
-let speedChangeAt = performance.now();
-let wobbleTime = 0;
-let manualYaw = 0;
-let manualPitch = 0;
-function currentMotionRate(now: number): number {
-  return tweenValue(rateFrom, rateTo, (now - speedChangeAt) / 1000, 0.5);
-}
-function changeMotionRate(target: number): void {
-  const now = performance.now();
-  motionRate = currentMotionRate(now);
-  rateFrom = motionRate;
-  rateTo = target;
-  speedChangeAt = now;
-}
-
-function applyBoardWobble(): void {
-  pivot.rotation.x = manualPitch + rockAngle(boardPitchRock, wobbleTime);
-  pivot.rotation.y = manualYaw + rockAngle(boardYawRock, wobbleTime);
-}
-
 const systemMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
 let settings = loadSettings(storage);
@@ -1297,18 +1145,24 @@ function startPlacement(sources: readonly RenderedBlock[], candidate: Candidate)
   syncHandSlots();
   // The cameras use different projections. Match each hand cube's screen position and
   // apparent size in the board view, then let the assembly carry it as it wobbles.
-  handCamera.updateWorldMatrix(true, false);
-  camera.updateWorldMatrix(true, false);
-  const forward = camera.getWorldDirection(new THREE.Vector3());
+  cameraView.handCamera.updateWorldMatrix(true, false);
+  cameraView.camera.updateWorldMatrix(true, false);
+  const forward = cameraView.camera.getWorldDirection(new THREE.Vector3());
   const depth =
-    (handCamera.top - handCamera.bottom) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+    (cameraView.handCamera.top - cameraView.handCamera.bottom) /
+    (2 * Math.tan(THREE.MathUtils.degToRad(cameraView.camera.fov) / 2));
   const boardRay = new THREE.Raycaster();
   const flights = sources.map((source, index): Flight => {
     const { block, cell } = landed[index];
     source.block = block;
     source.cube.updateWorldMatrix(true, false);
-    const screenPosition = source.cube.getWorldPosition(new THREE.Vector3()).project(handCamera);
-    boardRay.setFromCamera(new THREE.Vector2(screenPosition.x, screenPosition.y), camera);
+    const screenPosition = source.cube
+      .getWorldPosition(new THREE.Vector3())
+      .project(cameraView.handCamera);
+    boardRay.setFromCamera(
+      new THREE.Vector2(screenPosition.x, screenPosition.y),
+      cameraView.camera,
+    );
     const boardPosition = boardRay.ray.at(
       depth / boardRay.ray.direction.dot(forward),
       new THREE.Vector3(),
@@ -1455,7 +1309,7 @@ function updateAction(now: number, delta: number): void {
     showSelection();
     playSfx("card.attach");
     announceScore(now);
-    scheduleCameraMove();
+    cameraView.scheduleCameraMove();
     refillHand();
   } else {
     action.sources.forEach(disposeCube);
@@ -1532,15 +1386,7 @@ function resetTable(): void {
   tints.length = 0;
   selected = new Set();
   massCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
-  pivotCell.set(0, 0, 0);
-  pivot.position.set(0, 0, 0);
-  assembly.position.set(0, 0, 0);
-  manualYaw = manualPitch = 0;
-  cameraMove = null;
-  const desired = desiredCamera();
-  cameraDistance = desired.distance;
-  cameraTarget.copy(desired.target);
-  applyCamera();
+  cameraView.reset();
   shownScore = game.state.round.score;
 }
 
@@ -1642,7 +1488,7 @@ async function advanceFromStage(): Promise<void> {
     }
     const enterShop = game.phase === "shop" && !reducedMotion;
     shopView.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
-    if (enterShop) beginShopCameraEntrance();
+    if (enterShop) cameraView.beginShopEntrance();
     showSelection();
     updateHud();
     autosave();
@@ -1722,15 +1568,12 @@ function startRun(session: GameSession, fresh = false): void {
   outcomeAt = null;
   resetTable();
   for (const { block, cell } of game.state.field) addToBoard(block, cell);
-  const desired = desiredCamera();
-  cameraDistance = desired.distance;
-  cameraTarget.copy(desired.target);
-  applyCamera();
+  cameraView.frameToStructure();
   if (game.inStage) dealHand();
   const enterShop = game.phase === "shop" && fresh && !reducedMotion;
   shopView.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
   syncSceneToGame();
-  if (enterShop) beginShopCameraEntrance();
+  if (enterShop) cameraView.beginShopEntrance();
   updateHud();
   showSelection();
   autosave();
@@ -1927,7 +1770,7 @@ function finishDrag(drop: boolean): void {
       }
       layoutHand();
     }
-    changeMotionRate(normalMotionRate);
+    cameraView.changeMotionRate(normalMotionRate);
     suppressClickUntil = performance.now() + 250;
     if (renderer.domElement.hasPointerCapture(activeDrag.pointerId)) {
       renderer.domElement.releasePointerCapture(activeDrag.pointerId);
@@ -1942,7 +1785,7 @@ function finishBoardDrag(): void {
   const finished = boardDrag;
   boardDrag = null;
   if (!finished.active) return;
-  changeMotionRate(normalMotionRate);
+  cameraView.changeMotionRate(normalMotionRate);
   suppressClickUntil = performance.now() + 250;
   if (renderer.domElement.hasPointerCapture(finished.pointerId)) {
     renderer.domElement.releasePointerCapture(finished.pointerId);
@@ -1957,7 +1800,7 @@ const onPointerDown = (event: PointerEvent) => {
       // A second finger changes the gesture, never places or discards a card.
       if (drag) finishDrag(false);
       if (boardDrag) finishBoardDrag();
-      pinch = { zoom: boardZoom, distance: touchSpread() };
+      pinch = { zoom: cameraView.zoom, distance: touchSpread() };
       for (const id of touches.keys()) renderer.domElement.setPointerCapture(id);
       suppressClickUntil = performance.now() + 400;
       soundZoom();
@@ -1968,7 +1811,7 @@ const onPointerDown = (event: PointerEvent) => {
   tooltip.hidden = true;
   const source = pickBlock(event.clientX, event.clientY, handBlocks);
   if (fieldPlacementActive(roomTraits, game.phase) && source?.block.traits.attachable) {
-    pointRay(event.clientX, event.clientY, handCamera);
+    pointRay(event.clientX, event.clientY, cameraView.handCamera);
     const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
       ? source.cube.position.clone().sub(dragPoint)
       : new THREE.Vector3();
@@ -2005,7 +1848,7 @@ const onPointerMove = (event: PointerEvent) => {
     finger.x = event.clientX;
     finger.y = event.clientY;
     if (pinch) {
-      if (touches.size >= 2) applyBoardZoom(pinchZoom(pinch.zoom, pinch.distance, touchSpread()));
+      if (touches.size >= 2) cameraView.zoomWithPinch(pinch.zoom, pinch.distance, touchSpread());
       return;
     }
   }
@@ -2021,7 +1864,7 @@ const onPointerMove = (event: PointerEvent) => {
       }
       for (const rendered of [drag.source, ...drag.group]) setDragLayer(rendered.cube, true);
       renderer.domElement.setPointerCapture(event.pointerId);
-      changeMotionRate(normalMotionRate / 10);
+      cameraView.changeMotionRate(normalMotionRate / 10);
       playSfx("card.pickup");
     }
     if (drag.active) {
@@ -2043,13 +1886,11 @@ const onPointerMove = (event: PointerEvent) => {
     ) {
       boardDrag.active = true;
       renderer.domElement.setPointerCapture(event.pointerId);
-      changeMotionRate(0);
+      cameraView.changeMotionRate(0);
     }
     if (boardDrag.active) {
       tooltip.hidden = true;
-      manualYaw += dx * 0.005;
-      manualPitch += dy * 0.005;
-      applyBoardWobble();
+      cameraView.rotateBy(dx, dy);
       renderer.domElement.style.cursor = "grabbing";
       return;
     }
@@ -2137,7 +1978,7 @@ discardArea.addEventListener("click", () => {
 const onWheel = (event: WheelEvent) => {
   if (menus.isOpen) return;
   event.preventDefault();
-  applyBoardZoom(wheelZoom(boardZoom, event.deltaY, event.deltaMode));
+  cameraView.zoomWithWheel(event.deltaY, event.deltaMode);
   soundZoom();
 };
 const onBlur = () => {
@@ -2172,53 +2013,19 @@ renderer.domElement.addEventListener("click", onClick);
 renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
 window.addEventListener("blur", onBlur);
 
-const resize = () => {
-  const { width, height } = host.getBoundingClientRect();
-  if (!width || !height) return;
-  const aspect = width / height;
-  const halfWidth = 3.3 * Math.max(1, aspect);
-  const halfHeight = 3.3 * Math.max(1, 1 / aspect);
-  camera.aspect = aspect;
-  camera.updateProjectionMatrix();
-  handCamera.left = -halfWidth;
-  handCamera.right = halfWidth;
-  handCamera.top = halfHeight;
-  handCamera.bottom = -halfHeight;
-  handCamera.updateProjectionMatrix();
-  handBaseY = -halfHeight + 0.48;
-  handCamera.updateMatrixWorld();
-  if (!cameraMove) {
-    const desired = desiredCamera();
-    cameraDistance = desired.distance;
-    cameraTarget.copy(desired.target);
-    applyCamera();
-  }
-  layoutHand();
-  renderer.setSize(width, height);
-  render();
-};
-const observer = new ResizeObserver(resize);
-observer.observe(host);
-// Some mobile browsers rotate without resizing the observed element in time.
-window.addEventListener("resize", resize);
-window.addEventListener("orientationchange", () => setTimeout(resize, 150));
-window.visualViewport?.addEventListener("resize", resize);
-resize();
+cameraView.start();
 
 let frame = 0;
 let lastTime = 0;
 const animate = (time: number) => {
   const delta = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
   lastTime = time;
-  motionRate = currentMotionRate(time);
-  wobbleTime += motionRate * delta;
-  applyBoardWobble();
-  updateCamera(time);
+  cameraView.update(time, delta);
   updateAction(time, delta);
   updateScoring(time);
   sceneManager.update(delta);
   glideHand(delta);
-  cardRoom.frame(pivot.position, structureRadius(), delta);
+  cardRoom.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
   // Hand blocks rock gently; a selected one eases into a quick, small vibration.
   for (const rendered of handBlocks) {
     if (!rendered.rock) continue;
@@ -2244,7 +2051,7 @@ if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     unbindScreenshot();
     cancelAnimationFrame(frame);
-    observer.disconnect();
+    cameraView.dispose();
     renderer.domElement.removeEventListener("pointerdown", onPointerDown);
     renderer.domElement.removeEventListener("pointermove", onPointerMove);
     renderer.domElement.removeEventListener("pointerleave", onPointerLeave);
