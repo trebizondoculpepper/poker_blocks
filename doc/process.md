@@ -47,7 +47,7 @@ Every open ticket that isn't claimed has exactly one readiness label: `status:re
 ## Branches and pull requests
 
 - **`main` is protected.** All changes go through a pull request with a linked issue. Name branches after the issue, for example `issue-76-saved-seed`.
-- **Checks:** before pushing, run `npx vp check` and `npx vp test run`. CI runs `verify`, and CodeRabbit reviews against `doc/game.md` and `doc/game-architecture.md`.
+- **Checks:** before pushing, run `npx vp check` and `npx vp test run`. CI runs `verify`, the only required check. CodeRabbit and Codex also review against `doc/game.md` and `doc/game-architecture.md`. **CodeRabbit is advisory:** its review never blocks a merge, but read it and fix what's right.
 - **Merging:** merge any PR that passes review (CI green and no unresolved review findings), including another agent's. Fix review findings before merging; if one is wrong, reply on the thread to explain why.
 - **After merging:** remove the `agent:` label from a finished issue, close it, and tell anyone waiting on it.
 - **Recorded decisions:** a PR that changes a rule or design updates `doc/game.md` or `doc/game-architecture.md` in the same change.
