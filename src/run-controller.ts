@@ -36,7 +36,7 @@ import {
   type SceneName,
   type SceneTraits,
 } from "./game-modes";
-import { loadRun, saveRun, type SaveStorage } from "./save";
+import { clearRun, loadRun, saveRun, type SaveStorage } from "./save";
 import type { SceneManager } from "./scenes";
 import { demoRunRules, type RunRules } from "./run-rules";
 import { createRunSetupRegistry } from "./run-setup-behaviours";
@@ -575,6 +575,16 @@ export function createRunController<Context>(options: {
       services.overlays.closeAll();
     },
     home: () => showScene("title"),
+    hardReset() {
+      // The active mode's own save slot, never a named mode.
+      clearRun(storage, runSaveKey);
+      // The run on screen is gone too, so the table returns to its empty start.
+      game = new GameRun(dealerRegistry, runRules, cards);
+      stageWonAt = gameOverAt = null;
+      services.presenter.reset();
+      resetTable();
+      showScene("title");
+    },
     mode: () => currentMode,
     openMode(mode) {
       enterMode(mode);

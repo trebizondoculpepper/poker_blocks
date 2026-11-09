@@ -15,6 +15,7 @@ function setup(start: string | null, href = "http://localhost/?restart=true") {
     next: () => calls.push("next"),
     newRun: () => calls.push("newRun"),
     home: () => calls.push("home"),
+    hardReset: () => calls.push("hardReset"),
     mode: () => mode,
     openMode(next) {
       mode = next;
