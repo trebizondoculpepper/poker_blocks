@@ -82,6 +82,21 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
   for (const light of handScene.children) light.layers.enable(dragLayer);
   // The board's lights light both passes.
   for (const light of scene.children) light.layers.enable(backgroundLayer);
+  // The room's surfaces are also in the front pass, but only for what glass and crystal
+  // refract: three.js draws them into its off-screen transmission target there, while on the
+  // front canvas itself they write nothing, so the HUD below stays visible.
+  scene.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.layers.isEnabled(backgroundLayer)) return;
+    mesh.onBeforeRender = (drawing, _scene, _camera, _geometry, material) => {
+      const intoRefraction = drawing === front && drawing.getRenderTarget() !== null;
+      const visible = drawing !== front || intoRefraction;
+      for (const item of [material].flat()) {
+        item.colorWrite = visible;
+        item.depthWrite = visible;
+      }
+    };
+  });
 
   /** The back pass: the room and table, with every shadow-casting block standing in. */
   function renderBack(camera: THREE.Camera): void {
@@ -113,16 +128,16 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
       cube.traverse((object) => (dragging ? object.layers.set(dragLayer) : object.layers.set(0)));
     },
     render(boardCamera, handCamera) {
+      cardRoom.followCamera(boardCamera as THREE.PerspectiveCamera);
       renderBack(boardCamera);
       // The front canvas: the board's blocks (the default layer only), then the hand over
       // them, then dragged blocks on a fresh depth buffer, so nothing can clip into them.
       front.clear();
       const layers = boardCamera.layers.mask;
       boardCamera.layers.set(0);
-      const background = scene.background;
-      scene.background = null;
+      // The room's layer is in the list too, for refraction only (see onBeforeRender above).
+      boardCamera.layers.enable(backgroundLayer);
       front.render(scene, boardCamera);
-      scene.background = background;
       boardCamera.layers.mask = layers;
       front.clearDepth();
       handCamera.layers.set(0);

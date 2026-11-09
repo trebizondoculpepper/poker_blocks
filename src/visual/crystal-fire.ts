@@ -9,6 +9,7 @@
  * gem. A sharp reflected glint adds the sparkle. Nothing here is physically exact.
  */
 import * as THREE from "three";
+import { additiveLight } from "./additive-light";
 
 const vertexShader = /* glsl */ `
   varying vec3 vWorldPosition;
@@ -72,7 +73,10 @@ export function createCrystalFire(geometry: THREE.BufferGeometry): THREE.Mesh {
     // table, which refract only solid objects, show it bent through them. Additive and
     // drawn last among them (renderOrder), so nothing behind paints over it.
     transparent: false,
-    blending: THREE.AdditiveBlending,
+    // Additive light, which leaves the canvas's alpha alone: the board is drawn on a transparent
+    // canvas over the HUD (#116), and the composited (premultiplied) canvas then adds the glow
+    // onto whatever is behind it, rather than painting the empty frame opaque black.
+    ...additiveLight,
     depthWrite: false,
   });
   const fire = new THREE.Mesh(geometry, material);

@@ -8,6 +8,12 @@ export type ShadowQuality = "high" | "low" | "off";
 export type CardRoom = {
   /** Keep the table under the structure and the shadow camera around it. */
   frame(center: THREE.Vector3, radius: number, delta: number): void;
+  /**
+   * Fit the room's backdrop to the camera's view, as a screen-filling quad just inside its
+   * far plane. A mesh rather than `scene.background`, so it is on the room's layer and glass
+   * and crystal can refract it (#116).
+   */
+  followCamera(camera: THREE.PerspectiveCamera): void;
   setShadowQuality(quality: ShadowQuality): void;
 };
 
@@ -22,7 +28,20 @@ export function createCardRoom(
   renderers: readonly THREE.WebGLRenderer[],
   layer: number,
 ): CardRoom {
-  scene.background = roomBackdrop();
+  // The backdrop: a quad that fills the view behind everything else (see followCamera).
+  const backdrop = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({
+      map: roomBackdrop(),
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  backdrop.renderOrder = -1;
+  backdrop.frustumCulled = false;
+  backdrop.layers.set(layer);
+  scene.add(backdrop);
   for (const renderer of renderers) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const table = new THREE.Group();
@@ -56,6 +75,14 @@ export function createCardRoom(
   let tableRadius: number | null = null;
 
   return {
+    followCamera(camera) {
+      const distance = camera.far * 0.95;
+      const height = 2 * distance * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+      camera.getWorldPosition(backdrop.position);
+      camera.getWorldQuaternion(backdrop.quaternion);
+      backdrop.translateZ(-distance);
+      backdrop.scale.set(height * camera.aspect, height, 1);
+    },
     frame(center, radius, delta) {
       const wantY = center.y - radius - 0.5;
       const wantRadius = Math.max(9, radius * 3);
