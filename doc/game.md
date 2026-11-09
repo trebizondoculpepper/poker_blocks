@@ -307,6 +307,64 @@ The shop entrance is a separate presentation sequence: a deliberately theatrical
 
 Shop transactions and the entrance animation are tracked separately in [shop gameplay issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18) and [shop presentation issue #19](https://github.com/trebizondoculpepper/poker_blocks/issues/19).
 
+### Shop rules (design, [issue #7](https://github.com/trebizondoculpepper/poker_blocks/issues/7))
+
+This section is the target design. It replaces the first-version placeholders above (two passives, three cards, one coin each) once implemented. It records only agreed rules; questions still open are listed at the end and asked on the issue.
+
+#### Agreed rules
+
+- A shop follows every completed stage. Each visit generates fresh stock; unbought stock disappears on leaving. There are no rerolls in the first version.
+- Stock holds **5 to 9 offers**: at least one passive and at least one playable card; the rest are drawn from the eligible pool.
+- Only passives can be sold. Cards cannot be sold.
+- The discard pile returns to the deck after the boss stage.
+- Prices are in coins and are **fixed** base prices from the balance config. Price-changing passives are future work and will be modifiers applied on top of the base price, never edits to it.
+- When two comparable passives differ only in strength, the stronger costs more (×4 > ×2, Scrapper > Seeing Red).
+- Each round of the initial progression introduces at least one new item or material.
+
+#### Passive catalogue
+
+| Passive                                                                        | Base price | Earliest round |
+| ------------------------------------------------------------------------------ | ---------: | -------------: |
+| ×2                                                                             |          4 |              1 |
+| ×4                                                                             |          9 |              2 |
+| Gold Standard                                                                  |          5 |       4 (gold) |
+| Carnivore                                                                      |          3 |       3 (meat) |
+| Woodworker                                                                     |          4 |       1 (wood) |
+| Crossroads                                                                     |          2 |              1 |
+| Long Haul                                                                      |          4 |              1 |
+| Seeing Red                                                                     |          6 |              1 |
+| Scrapper                                                                       |          8 |              2 |
+| Ace Exchange                                                                   |          5 |              2 |
+| Le Chef ([#22](https://github.com/trebizondoculpepper/poker_blocks/issues/22)) |        TBD |       3 (meat) |
+
+A passive whose effect names a material is never eligible before that material unlocks.
+
+#### Unlocks and stock weights
+
+Material unlocks by round: 1 wood; 2 steel; 3 meat, flame and ice; 4 gold; 5 prismatic crystal.
+
+Every offer type in the balance config has a **minimum unlock round**, a **default weight** and optional **weight keyframes** by round. A type is eligible from its unlock round. Its weight is interpolated linearly between keyframes and holds the last keyframe's value afterwards. Drawing normalizes the eligible weights; weights are relative, not probabilities.
+
+| Material card     | Weight keyframes                |
+| ----------------- | ------------------------------- |
+| Wood              | 1 from round 1                  |
+| Steel             | 0.5 at round 2, 1 at round 4    |
+| Prismatic crystal | 0.25 at round 5, 0.5 at round 6 |
+
+#### Stage targets
+
+Round 1 stage 1 targets **300**. Each next target is the previous one ×1.75 (stage 1 → stage 2), ×1.5 (stage 2 → boss) and ×1.25 (boss → next round's stage 1), rounded to the nearest integer at each step: 300, 525, 788, 985, 1724, 2586, … The rates are balance config.
+
+#### Balance config guardrails
+
+- **One source of truth:** prices, unlock rounds, weights and keyframes, material effects, hand values and stage target rates live in a single balance config module; consumers read it and never hold their own numbers.
+- **Validation at load (and in a test):** every price is a positive integer; unlock rounds are positive integers; weights are non-negative; keyframe rounds are strictly increasing and not before the unlock round; every passive that names a material unlocks no earlier than that material.
+- **Base prices are data; modifiers are separate:** a future price-changing passive is an event rule that adjusts a working price, never an edit to the config.
+
+#### Open questions
+
+Asked on [issue #7](https://github.com/trebizondoculpepper/poker_blocks/issues/7): how stock is drawn to meet the minimums; where a bought card goes; when a bought passive installs and what a full rack does; passive resale value and where selling is allowed; Le Chef's price; shop controls and refusal feedback; whether a save keeps the shop's stock.
+
 ### Rack reorganization
 
 The hand and passive rack share a layout rule, separate from the shop. When an item leaves either rack through play, discard, sale or another effect, the remaining items pack to the left. New items enter from the right, one at a time with a short gap between arrivals. Buying into a rack reflows the existing items to make room. This movement is visual; stored rack order determines gameplay effects only where order matters, such as passive resolution. See [rack reorganization issue #17](https://github.com/trebizondoculpepper/poker_blocks/issues/17); manual drag reordering remains [issue #4](https://github.com/trebizondoculpepper/poker_blocks/issues/4).
