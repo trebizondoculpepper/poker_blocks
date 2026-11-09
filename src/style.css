@@ -494,6 +494,24 @@ body,
   margin-top: 8px;
 }
 
+/* The session seed on the win and lose screens, with a copy button (#134). */
+.menu-seed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: #8b93a3;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-seed button {
+  padding: 2px 8px;
+  min-height: 0;
+  font-size: 11px;
+}
+
 /* The panel's footer: the build version and links out, aligned to the bottom-right (#129). */
 .menu-footer {
   display: flex;

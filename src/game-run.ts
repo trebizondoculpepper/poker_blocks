@@ -19,6 +19,7 @@ import {
   type StageContext,
 } from "./passives";
 import { discardPassiveEffects, scoreFieldWithPassives } from "./passive-effects";
+import type { RandomCursor } from "./random";
 import type { ScoredLine } from "./scoring";
 import { offerKind, type OfferDestination, type OfferRun, type ShopOffer } from "./offer-kinds";
 
@@ -46,6 +47,11 @@ export type RunSnapshot = {
   rewarded?: { stage: string; reward: StageReward };
   /** The seed a run setup step dealt this run's deck from, so Continue rebuilds the same deck. */
   seed?: number;
+  /**
+   * The session's random seed and how far its sequence had reached, so Continue resumes the
+   * same sequence rather than replaying it (#134).
+   */
+  random?: RandomCursor;
 };
 
 /**
@@ -55,7 +61,7 @@ export type RunSnapshot = {
 export class GameRun {
   private readonly dealers: Registry<Dealer>;
   private readonly config: RunRules;
-  private readonly random: () => number;
+  private random: () => number;
   private activeDealer: Dealer;
   private currentState: GameState;
   private currentRound = 1;
@@ -65,6 +71,7 @@ export class GameRun {
   private readonly passiveEvents = new PassiveEventQueue();
   private scoredLines: ScoredLine[] = [];
   private rewarded: { stage: string; reward: StageReward } | null = null;
+  private randomCursor: RandomCursor | undefined;
   private runSeed: number | undefined;
   /** The stage (round:phase) whose final stage.won or stage.lost has been emitted. */
   private decidedStage: string | null = null;
@@ -94,7 +101,11 @@ export class GameRun {
     snapshot: RunSnapshot,
     random: () => number = Math.random,
   ): GameRun {
-    const session = new GameRun(dealers, config, cards, random);
+    // Hydrating replaces the dealt state wholesale, so the constructor's deal must not touch
+    // the restored stream: five draws for a hand thrown away would move the resume five steps
+    // on and make Continue differ from uninterrupted play (#134). `random` is attached after.
+    const session = new GameRun(dealers, config, cards, () => 0);
+    session.random = random;
     session.activeDealer = dealers.get(snapshot.dealer);
     session.currentState = snapshot.state;
     session.currentRound = snapshot.round;
@@ -105,6 +116,7 @@ export class GameRun {
     session.runStats = snapshot.stats ?? emptyRunStats;
     session.rewarded = snapshot.rewarded ?? null;
     session.runSeed = snapshot.seed;
+    session.randomCursor = snapshot.random;
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
     // A stage saved after it was decided already announced its outcome.
     session.decidedStage =
@@ -209,6 +221,11 @@ export class GameRun {
     this.lifecycle(outcome === "won" ? "stage.won" : "stage.lost");
   }
 
+  /** Where the session's random sequence has reached, recorded with the run (#134). */
+  setRandomCursor(cursor: RandomCursor): void {
+    this.randomCursor = cursor;
+  }
+
   snapshot(): RunSnapshot {
     return {
       round: this.currentRound,
@@ -219,6 +236,7 @@ export class GameRun {
       stats: this.runStats,
       ...(this.rewarded ? { rewarded: this.rewarded } : {}),
       ...(this.runSeed === undefined ? {} : { seed: this.runSeed }),
+      ...(this.randomCursor === undefined ? {} : { random: this.randomCursor }),
     };
   }
 

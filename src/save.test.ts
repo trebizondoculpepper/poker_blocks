@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { fixedRandom } from "./random";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
 import { GameRun } from "./game-run";
@@ -52,7 +53,13 @@ describe("save records", () => {
     const snapshot = fromSaveRecord(json, standardDeck, dealerRegistry)!;
     expect(snapshot).toEqual(session.snapshot());
     expect(snapshot.state.field[0].block.traits.selectable).toBeUndefined();
-    const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, snapshot);
+    const resumed = GameRun.fromSnapshot(
+      dealerRegistry,
+      demoRunRules,
+      standardDeck,
+      snapshot,
+      fixedRandom(),
+    );
     expect(resumed.snapshot()).toEqual(session.snapshot());
     const all = [
       ...resumed.state.field.map(({ block }) => block.id),

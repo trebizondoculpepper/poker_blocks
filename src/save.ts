@@ -2,6 +2,7 @@ import type { CardBlock } from "./cards";
 import type { Registry } from "./core/registry";
 import type { Dealer } from "./dealer";
 import type { RunPhase, RunSnapshot } from "./game-run";
+import type { RandomCursor } from "./random";
 import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
@@ -60,6 +61,8 @@ export type SaveRecord = {
    * setup existed, and in runs whose deck does not depend on one.
    */
   seed?: number;
+  /** The session's random seed and its sequence position, so Continue resumes it (#134). */
+  random?: { seed: number; position: number };
 };
 
 /**
@@ -131,6 +134,7 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
     ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
     ...(snapshot.rewarded ? { rewarded: snapshot.rewarded } : {}),
     ...(snapshot.seed === undefined ? {} : { seed: snapshot.seed }),
+    ...(snapshot.random === undefined ? {} : { random: snapshot.random }),
   };
 }
 
@@ -217,10 +221,26 @@ export function fromSaveRecord(
       stats: parseRunStats(record.stats),
       ...parseRewarded(record.rewarded),
       ...parseSeed(record.seed),
+      ...parseRandom(record.random),
     };
   } catch {
     return null;
   }
+}
+
+/** A saved random cursor; nothing when the run has none, so older saves still load. */
+function parseRandom(value: unknown): { random: RandomCursor } | Record<string, never> {
+  const cursor = value as RandomCursor | undefined;
+  const seed = cursor?.seed;
+  const position = cursor?.position;
+  if (
+    typeof seed !== "number" ||
+    typeof position !== "number" ||
+    !Number.isInteger(position) ||
+    position < 0
+  )
+    return {};
+  return { random: { seed, position } };
 }
 
 /** A saved deck seed; nothing when the run was dealt no seeded deck. */

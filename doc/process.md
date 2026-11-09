@@ -23,6 +23,16 @@ How an agent works through tickets. Several agents work at once, so each takes *
 7. **After merging:** remove your `agent:` label and check that the issue closed. Then look at the tickets that waited on it: move each one now free to `status:ready`, with a comment saying what unblocked it.
 8. **Repeat** until no ready tickets are left. Then review the blocked and needs-design tickets: check each says why it's blocked and what unblocks it, and look for any labelled wrongly (marked blocked but actually free, or ready but waiting on something).
 
+### Keep going: feedback comes through tickets
+
+When the user asks you to work on tickets, keep working through the loop above. Don't stop to report progress or to wait for an answer in chat.
+
+- **Never ask the user in chat.** Not even "shall I take #N next?". If you need a decision or feedback, ask on the ticket (and on its PR, if one is open), label it as in "Open questions", release it, and move on to the next ticket.
+- **Don't end your turn after claiming or finishing a ticket.** Start the next ready ticket straight away.
+- **Stop only when there's nothing left to do.** That means no ready tickets are left and the blocked and needs-design tickets have been reviewed (step 8). Then report what you did and what is waiting on the user.
+- **The answers arrive on the tickets.** The user replies during their Q&A rounds, and the ticket returns to `status:ready` for whoever picks it up next.
+- **A direct question from the user in chat is different.** Answer it, then carry on with the loop.
+
 ## Picking up a ticket
 
 Before writing any code:

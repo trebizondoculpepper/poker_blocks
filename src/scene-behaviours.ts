@@ -36,7 +36,7 @@ export type SceneHost = {
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
     run: Pick<
       RunController,
-      "shopStock" | "dispatch" | "hasSave" | "runStats" | "reducedMotion" | "stageReward"
+      "shopStock" | "dispatch" | "hasSave" | "runStats" | "seed" | "reducedMotion" | "stageReward"
     >;
     cameraView: Pick<CameraViewService, "beginShopEntrance">;
     overlays: Pick<
@@ -150,14 +150,14 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   behaviours.register("gameOverScreen", {
     enter({ services }, { items }) {
-      services.overlays.showGameOver(services.run.runStats(), items);
+      services.overlays.showGameOver(services.run.runStats(), items, services.run.seed());
     },
     exit: ({ services }) => services.overlays.hideGameOver(),
   });
   behaviours.register("stageWonScreen", {
     enter({ services }, { next }) {
       const reward = services.run.stageReward();
-      if (reward) services.overlays.showStageWon(reward, next);
+      if (reward) services.overlays.showStageWon(reward, next, services.run.seed());
     },
     exit: ({ services }) => services.overlays.hideStageWon(),
   });

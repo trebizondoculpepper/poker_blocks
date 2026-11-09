@@ -51,7 +51,7 @@ export const baseDealer: Dealer = {
   name: "base",
   handSize: 5,
 
-  startGame(cards, random = Math.random) {
+  startGame(cards, random: () => number = Math.random) {
     const empty: GameState = {
       field: [],
       hand: [],
@@ -64,7 +64,7 @@ export const baseDealer: Dealer = {
     return this.startStage(empty, defaultStageRules, random);
   },
 
-  startStage(state, rules, random = Math.random) {
+  startStage(state, rules, random: () => number = Math.random) {
     const cleared: GameState = {
       ...state,
       field: [],
@@ -79,7 +79,7 @@ export const baseDealer: Dealer = {
     return this.refillHand(cleared, random).state;
   },
 
-  refillHand(state, random = Math.random) {
+  refillHand(state, random: () => number = Math.random) {
     const missing = Math.max(0, this.handSize - state.hand.length);
     const draw = drawCards(state.deck, Math.min(missing, state.deck.length), random);
     const drawn = draw.cards.map(withSelectable);

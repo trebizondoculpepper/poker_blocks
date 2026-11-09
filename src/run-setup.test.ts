@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { fixedRandom } from "./random";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
 import { GameRun } from "./game-run";
@@ -38,11 +39,11 @@ function freshRun(modeId: string): GameRun {
   const registry = createRunSetupRegistry(() => mode.traits.shop);
   const rules = registry.policy(mode.runSetup, demoRunRules, services);
   const dealt = registry.deck(mode.runSetup, { deck: standardDeck }, services);
-  const opening = new GameRun(dealerRegistry, rules, dealt.deck).snapshot();
+  const opening = new GameRun(dealerRegistry, rules, dealt.deck, fixedRandom()).snapshot();
   // As the run controller does: the new run records the seed of the deck it was dealt.
   const snapshot = { ...opening, ...(dealt.seed === undefined ? {} : { seed: dealt.seed }) };
   const started = registry.start(mode.runSetup, { rules, deck: dealt, snapshot }, services);
-  return GameRun.fromSnapshot(dealerRegistry, rules, dealt.deck, started.snapshot);
+  return GameRun.fromSnapshot(dealerRegistry, rules, dealt.deck, started.snapshot, fixedRandom());
 }
 
 describe("run setup registry", () => {
@@ -79,7 +80,7 @@ describe("run setup registry", () => {
     const steps: readonly RunSetupStep[] = [{ step: "sandbox" }, { step: "materialSample" }];
     const rules = registry.policy(steps, demoRunRules, services);
     const dealt = registry.deck(steps, { deck: standardDeck }, services);
-    const opening = new GameRun(dealerRegistry, rules, dealt.deck).snapshot();
+    const opening = new GameRun(dealerRegistry, rules, dealt.deck, fixedRandom()).snapshot();
     registry.start(steps, { rules, deck: dealt, snapshot: opening }, services);
 
     expect(calls).toEqual([
@@ -152,7 +153,7 @@ describe("run setup steps", () => {
     const steps: readonly RunSetupStep[] = [{ step: "startingPassives", count: 9 }];
     const rules = { ...demoRunRules, rackCapacity: 3 };
     const dealt = registry.deck(steps, { deck: standardDeck }, services);
-    const opening = new GameRun(dealerRegistry, rules, dealt.deck).snapshot();
+    const opening = new GameRun(dealerRegistry, rules, dealt.deck, fixedRandom()).snapshot();
     const started = registry.start(steps, { rules, deck: dealt, snapshot: opening }, services);
     expect(started.snapshot.state.passiveRack).toHaveLength(3);
   });
@@ -201,7 +202,13 @@ describe("Continue never re-applies run setup", () => {
     const saved = run.snapshot();
     const record = JSON.parse(JSON.stringify(toSaveRecord(saved)));
     const restored = fromSaveRecord(record, makeDevDeck(saved.seed!), dealerRegistry)!;
-    const resumed = GameRun.fromSnapshot(dealerRegistry, rules, makeDevDeck(saved.seed!), restored);
+    const resumed = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      makeDevDeck(saved.seed!),
+      restored,
+      fixedRandom(),
+    );
     expect(resumed.state.round.movesLeft).toBe(saved.state.round.movesLeft);
   });
 
@@ -217,7 +224,13 @@ describe("Continue never re-applies run setup", () => {
     expect(restored.state.hand.map(materialOf)).toEqual(saved.state.hand.map(materialOf));
     expect(restored.state.deck.map(materialOf)).toEqual(saved.state.deck.map(materialOf));
     expect(restored.seed).toBe(4201);
-    const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, makeDevDeck(4201), restored);
+    const resumed = GameRun.fromSnapshot(
+      dealerRegistry,
+      demoRunRules,
+      makeDevDeck(4201),
+      restored,
+      fixedRandom(),
+    );
     // The cards are rebuilt from the seed, so compare what is persisted, not object identity.
     expect(toSaveRecord(resumed.snapshot())).toEqual(toSaveRecord(saved));
   });
