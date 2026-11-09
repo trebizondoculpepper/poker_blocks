@@ -222,6 +222,16 @@ export function createRunController<Context>(options: {
     switchScene(sceneForPhase[game.phase]);
   }
 
+  /**
+   * A new run began in the scene already in front, so no scene transition happens. Ask that
+   * scene to re-read the run, which is how its traits show the new stock or counters.
+   */
+  function refreshScene(): void {
+    if (scenes.current?.id === modeSceneId(currentMode.id, sceneForPhase[game.phase])) {
+      scenes.refresh();
+    }
+  }
+
   function enterMode(mode: GameMode, createDeck = true): void {
     currentMode = mode;
     modeTraits = mode.traits;
@@ -407,7 +417,7 @@ export function createRunController<Context>(options: {
 
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
   function startRun(session: GameRun, fresh = false): void {
-    const { rack, shop, cameraView, audio } = services;
+    const { rack, cameraView, audio } = services;
     game = stockShopIfNeeded(session);
     const rackTrait = modeTraits.passiveRack;
     rack.element.hidden = !rackTrait;
@@ -420,13 +430,12 @@ export function createRunController<Context>(options: {
     for (const { block, cell } of game.state.field) services.field.add(block, cell);
     cameraView.frameToStructure();
     if (game.inStage) services.hand.deal(game.state.hand);
-    // The shop scene's own `shopStock` trait shows or hides the stock as the scene changes.
+    // The shop scene's own `shopStock` trait shows the stock. A new run begun in the shop
+    // already in front causes no scene transition, so refresh that scene: its traits re-read
+    // the run and show the new offers instead of the previous run's.
     syncSceneToGame();
-    // A new run in the shop already in front re-enters no scene, so the stock is pushed to
-    // the view here too; otherwise the previous run's offers would stay on screen.
-    const inShop = game.phase === "shop";
-    const enterShop = inShop && fresh && !reducedMotion;
-    if (inShop) shop.render(game.state.shopStock ?? [], true, enterShop);
+    refreshScene();
+    const enterShop = game.phase === "shop" && fresh && !reducedMotion;
     if (enterShop) cameraView.beginShopEntrance();
     updateHud();
     showSelection();

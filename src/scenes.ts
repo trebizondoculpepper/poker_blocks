@@ -87,6 +87,17 @@ export class SceneManager<Traits extends SceneTraitConfigs, Context> {
     this.enter(next);
   }
 
+  /**
+   * Re-run the top scene's trait hooks without changing the stack. For state a scene shows
+   * that changed underneath it, so its traits re-read it rather than learning it twice.
+   */
+  refresh(): void {
+    const current = this.current;
+    if (!current) return;
+    this.exit(current);
+    this.enter(current);
+  }
+
   /** Enter a scene over the current one without exiting or re-entering the lower scene. */
   push(id: string): void {
     const next = this.requireScene(id);
