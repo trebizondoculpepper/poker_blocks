@@ -58,6 +58,10 @@ export function createPassiveRack(
   render(rack: readonly PassiveBlock[]): void;
   /** Hide one passive's cube while it is being dragged (null shows them all). */
   lift(id: string | null): void;
+  /** The rack slot under a screen point (clamped to the filled slots), or null off the rack. */
+  slotAt(clientX: number, clientY: number): number | null;
+  /** Glide the cubes into this order while a reorder is previewed; null restores the rack. */
+  preview(order: readonly string[] | null): void;
   frame(time: number, reducedMotion: boolean): void;
   dispose(): void;
 } {
@@ -91,6 +95,16 @@ export function createPassiveRack(
   const edgeGeometry = new THREE.EdgesGeometry(geometry);
   const rendered = new Map<string, RenderedPassive>();
   let liftedId: string | null = null;
+  let order: string[] = [];
+  let slotCount = 1;
+  const slotX = (index: number) =>
+    (index - (slotCount - 1) / 2) * ((2.3 * (slotWidth + slotGap)) / canvasHeight);
+  const place = (ids: readonly string[]) => {
+    for (const [index, id] of ids.entries()) {
+      const entry = rendered.get(id);
+      if (entry) entry.targetX = slotX(index);
+    }
+  };
 
   const clear = () => {
     for (const { mesh, edges, texture } of rendered.values()) {
@@ -115,7 +129,8 @@ export function createPassiveRack(
         rendered.delete(id);
       }
       // Room for every slot the rack has, filled or not.
-      const slotCount = Math.max(rack.length, options.capacity ?? rack.length, 1);
+      slotCount = Math.max(rack.length, options.capacity ?? rack.length, 1);
+      order = rack.map(({ id }) => id);
       const width = slotCount * slotWidth + (slotCount - 1) * slotGap;
       renderer.setSize(width, canvasHeight, false);
       camera.left = (-width / canvasHeight) * 1.15;
@@ -164,8 +179,7 @@ export function createPassiveRack(
           rendered.set(block.id, entry);
           mesh.scale.setScalar(0.001);
         }
-        entry.targetX =
-          (index - (slotCount - 1) / 2) * ((2.3 * (slotWidth + slotGap)) / canvasHeight);
+        entry.targetX = slotX(index);
         if (entry.mesh.scale.x === 0.001) entry.mesh.position.x = entry.targetX + 0.65;
         slots.append(entry.item);
       }
@@ -181,6 +195,23 @@ export function createPassiveRack(
       liftedId = id;
       for (const passive of rendered.values()) passive.mesh.visible = passive.id !== id;
       renderer.render(scene, camera);
+    },
+    slotAt(clientX, clientY) {
+      const bounds = element.getBoundingClientRect();
+      if (
+        order.length === 0 ||
+        clientX < bounds.left ||
+        clientX > bounds.right ||
+        clientY < bounds.top ||
+        clientY > bounds.bottom
+      )
+        return null;
+      const canvas = renderer.domElement.getBoundingClientRect();
+      const slot = Math.floor(((clientX - canvas.left) / canvas.width) * slotCount);
+      return Math.max(0, Math.min(order.length - 1, slot));
+    },
+    preview(next) {
+      place(next ?? order);
     },
     frame(time, reducedMotion) {
       for (const [index, entry] of [...rendered.values()].entries()) {

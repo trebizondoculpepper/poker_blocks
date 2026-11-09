@@ -270,7 +270,7 @@ const entries = [
   },
   {
     id: "hand.reorder",
-    trigger: "A hand card is dropped into a new position in the hand",
+    trigger: "A hand card or installed passive is dropped into a new position in its rack",
     prompt: "A soft light card slide ending in a gentle tap, tidy",
     durationSeconds: 0.5,
   },

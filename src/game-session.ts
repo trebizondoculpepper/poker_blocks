@@ -355,6 +355,21 @@ export class GameSession {
   }
 
   /**
+   * Move an installed passive to another rack slot (issue #4). Like a hand reorder this is not
+   * a play, discard, sale or score: only the rack's order changes, and with it the order in
+   * which passives resolve (scoring, rewards and events all read the rack left to right).
+   * Refused once the run is over, like selling.
+   */
+  reorderPassive(from: number, to: number): boolean {
+    if (this.currentPhase === "over") return false;
+    const passiveRack = moveItem(this.currentState.passiveRack, from, to);
+    if (!passiveRack) return false;
+    this.currentState = { ...this.currentState, passiveRack };
+    this.passiveEvents.syncRack(passiveRack);
+    return true;
+  }
+
+  /**
    * Developer shortcut (console `win` and `lose`): decide the current stage now, by
    * meeting its target score or by spending its last play. False outside a stage.
    */

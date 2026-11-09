@@ -45,6 +45,7 @@ import { bindScreenshotShortcut } from "./screenshot";
 import { createPassiveRack } from "./passive-rack";
 import { shopPreviewState } from "./shop-stock";
 import { createShopView } from "./shop-view";
+import { moveItem } from "./zones";
 import { devRooms, fieldPlacementActive, overlaysForPhase, roomFor } from "./rooms";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
@@ -811,6 +812,8 @@ let passiveDrag: {
   startX: number;
   startY: number;
   floating: HTMLElement | null;
+  /** The rack slot a drop would move it to, while the pointer is over the rack. */
+  slot: number | null;
 } | null = null;
 
 /** The shared lower-screen target reads Sell while a passive is dragged, else Discard. */
@@ -833,6 +836,7 @@ function pickUpPassive(block: PassiveBlock, event: PointerEvent): void {
     startX: event.clientX,
     startY: event.clientY,
     floating: null,
+    slot: null,
   };
   (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
 }
@@ -859,6 +863,14 @@ function movePassive(event: PointerEvent): void {
   }
   passiveDrag.floating.style.left = `${event.clientX}px`;
   passiveDrag.floating.style.top = `${event.clientY}px`;
+  // Over the rack, preview the reorder: neighbours glide aside to open the drop slot.
+  const slot = passiveRackView?.slotAt(event.clientX, event.clientY) ?? null;
+  if (slot !== passiveDrag.slot) {
+    passiveDrag.slot = slot;
+    const ids = game.state.passiveRack.map(({ id }) => id);
+    const from = ids.indexOf(passiveDrag.block.id);
+    passiveRackView?.preview(slot === null || from < 0 ? null : moveItem(ids, from, slot));
+  }
   const over = overDiscardArea(event.clientX, event.clientY);
   const wasTarget = discardArea.classList.contains("is-target");
   discardArea.classList.toggle("is-target", over && canSellPassives());
@@ -868,12 +880,23 @@ function movePassive(event: PointerEvent): void {
 
 function dropPassive(event: PointerEvent, cancelled: boolean): void {
   if (!passiveDrag || event.pointerId !== passiveDrag.pointerId) return;
-  const { block, floating } = passiveDrag;
+  const { block, floating, slot } = passiveDrag;
   passiveDrag = null;
   if (!floating) return; // a click, not a drag: the rack's tooltip handles that
   floating.remove();
   showSellTarget(false);
   passiveRackView?.lift(null);
+  passiveRackView?.preview(null);
+  // A drop inside the rack reorders it: not a sale, and nothing else changes.
+  const from = game.state.passiveRack.findIndex(({ id }) => id === block.id);
+  if (!cancelled && slot !== null && from >= 0) {
+    if (slot !== from && game.reorderPassive(from, slot)) {
+      playSfx("hand.reorder");
+      passiveRackView?.render(game.state.passiveRack);
+      autosave();
+    } else playSfx("card.drag.return");
+    return;
+  }
   if (cancelled || !overDiscardArea(event.clientX, event.clientY)) {
     playSfx("card.drag.return");
     return;
