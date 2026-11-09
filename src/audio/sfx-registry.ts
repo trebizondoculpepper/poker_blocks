@@ -302,6 +302,26 @@ const entries = [
     trigger: "A passive grants and installs another passive block",
   },
   {
+    id: "passive.activate.scoring",
+    trigger: "A scoring-category passive activates and changes a score",
+    prompt: "A light, clean porcelain chime, single soft ding, short and bright",
+  },
+  {
+    id: "passive.activate.economy",
+    trigger: "An economy-category passive activates and pays or changes coins",
+    prompt: "A small bright brass coin glint, one quick metallic ting",
+  },
+  {
+    id: "passive.activate.effect",
+    trigger: "An effect-category passive activates and changes a rule or the cards",
+    prompt: "A soft low click with a faint dark undertone, very short",
+  },
+  {
+    id: "passive.activate.retrigger",
+    trigger: "A retrigger-category passive activates and repeats an effect",
+    prompt: "A short double tick, two quick light clicks in a row",
+  },
+  {
     id: "ui.screenshot",
     trigger: "The player starts a whole-window 4K screenshot with the keyboard shortcut",
   },

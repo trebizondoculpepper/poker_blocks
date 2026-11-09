@@ -27,15 +27,24 @@ Only the relevant phase may change a working value. `score.beforeBlockValue` can
 
 ## Categories
 
-Each category is a **trait** (`scoringCategory`, `economyCategory`, `utilityCategory`), and together they form the **category facet** in `src/passive-categories.ts`. Every passive composes **exactly one** trait from the facet, naming its primary purpose (issue #81); `src/passive-categories.test.ts` enforces this for every definition. A category trait brings presentation defaults and nothing else. No rule, condition or effect reads it, and the same test checks that gameplay code never names one. A passive's own `palette` overrides its category's default colours without changing its category. The finish (porcelain, brass, obsidian) is appearance only and is unrelated to a card's gameplay material.
+The categories follow the Balatro community wiki's seven Joker effect types (Chips, Additive Mult, Multiplicative Mult, Chips + Additive Mult, Effect, Retrigger, Economy). We fold the four scoring types into one **Scoring** category and show the scoring operation with an accent tint instead.
 
-| Category trait | Default colour | Finish         | Passives                                             |
-| -------------- | -------------- | -------------- | ---------------------------------------------------- |
-| Scoring        | White          | Porcelain      | ×2, ×4, Carnivore, Woodworker, Crossroads, Long Haul |
-| Economy        | Green          | Brass          | Gold Standard, Scrapper, Seeing Red                  |
-| Utility        | Black          | Matte obsidian | Ace Exchange                                         |
+Each category is a **trait** (`scoringCategory`, `economyCategory`, `effectCategory`, `retriggerCategory`), and together they form the **category facet** in `src/passive-categories.ts`. Every passive composes **exactly one** trait from the facet, naming its primary purpose (issue #81); `src/passive-categories.test.ts` enforces this for every definition. A category trait brings presentation defaults and nothing else: colours, an appearance finish, and an activation visual and sound. No rule, condition or effect reads it, and the same test checks that gameplay code never names a category trait or the scoring tints. The finish is appearance only and is unrelated to a card's gameplay material.
 
-Every current passive still overrides the default colours with its own palette, so the change is not yet visible. Activation effects, activation sounds and the Card manipulation and Trigger / repeat categories are open questions on #81.
+| Category trait      | Base colour | Finish         | Activation visual       | Activation sound             | Passives                                             |
+| ------------------- | ----------- | -------------- | ----------------------- | ---------------------------- | ---------------------------------------------------- |
+| `scoringCategory`   | White       | Porcelain      | Brief white score pulse | `passive.activate.scoring`   | ×2, ×4, Carnivore, Woodworker, Crossroads, Long Haul |
+| `economyCategory`   | Green       | Brass          | Green coin glint        | `passive.activate.economy`   | Gold Standard, Scrapper, Seeing Red                  |
+| `effectCategory`    | Black       | Matte obsidian | Brief dark ripple       | `passive.activate.effect`    | Ace Exchange                                         |
+| `retriggerCategory` | Orange      | Copper         | Quick orange echo ring  | `passive.activate.retrigger` | None yet                                             |
+
+Card manipulation is part of Effect until a passive needs its own category.
+
+**Scoring tint.** A scoring passive stays white porcelain; its edge and symbol take an accent from `scoringCategory { operations }`: **icy blue** for additive, **indigo** for multiplicative, **violet** for exponential. A passive with several operations blends their tints evenly. ×2, ×4 and Carnivore are multiplicative; Woodworker, Crossroads and Long Haul are additive. The tints are in `scoringTints`, in the same file.
+
+Passives show their category's look by default. A definition may set its own `palette` only where an explicit design calls for it; none does today.
+
+**Not yet wired:** the activation visuals and sounds are configured and their sound ids registered, but nothing plays them yet. Playing them needs passive activations reported by the event-rule work in #63.
 
 ## Definitions
 

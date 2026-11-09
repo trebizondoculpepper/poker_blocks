@@ -5,6 +5,9 @@ import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
 import type { MotionSetting, Settings, ShadowSetting } from "./settings";
 
+/** Why Continue is greyed out on the title screen. */
+export const noGameInProgress = "There is no game in progress.";
+
 export type Screen = "title" | "game" | "over";
 
 /** One menu item as a menu shows it: choosing it dispatches `id` as a named action. */
@@ -199,7 +202,10 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   }
 
   function showTitle(): void {
-    continueButton.hidden = !callbacks.hasSave();
+    // With no save, Continue stays visible but greyed out, and says why on hover (#10).
+    const canContinue = callbacks.hasSave();
+    continueButton.setAttribute("aria-disabled", String(!canContinue));
+    continueButton.title = canContinue ? "" : noGameInProgress;
     confirm.hidden = true;
     newButton.hidden = false;
     open(title.root);
@@ -257,6 +263,10 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   }
 
   continueButton.addEventListener("click", () => {
+    if (continueButton.getAttribute("aria-disabled") === "true") {
+      playSfx("action.denied");
+      return;
+    }
     playSfx("ui.click");
     closeAll();
     callbacks.onContinue();
