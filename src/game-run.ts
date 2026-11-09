@@ -18,10 +18,14 @@ import {
   type PassiveBlock,
   type StageContext,
 } from "./passives";
-import { passiveActivations, scoreFieldWithPassives } from "./passive-effects";
+import {
+  passiveActivations,
+  scoreFieldWithPassives,
+  type PassiveScoredLine,
+  type RuleActivation,
+} from "./passive-effects";
 import { commitCommands, type CommandTarget } from "./rule-commands";
 import type { RandomCursor } from "./random";
-import type { ScoredLine } from "./scoring";
 import { offerKind, type OfferDestination, type OfferRun, type ShopOffer } from "./offer-kinds";
 
 /** Where a run is: one of a round's three stages, the shop, or finished after a loss. */
@@ -70,7 +74,9 @@ export class GameRun {
   private shopAfter: StageKind | null = null;
   private runStats: RunStats = emptyRunStats;
   private readonly passiveEvents = new PassiveEventQueue();
-  private scoredLines: ScoredLine[] = [];
+  private scoredLines: PassiveScoredLine[] = [];
+  /** The rules that fired during the last discard, in the order they resolved (#81). */
+  private discardActivations: RuleActivation[] = [];
   private rewarded: { stage: string; reward: StageReward } | null = null;
   private randomCursor: RandomCursor | undefined;
   private runSeed: number | undefined;
@@ -180,8 +186,13 @@ export class GameRun {
   }
 
   /** Final results from the last play, shared by the stage total and presentation. */
-  get lastScoredLines(): readonly ScoredLine[] {
+  get lastScoredLines(): readonly PassiveScoredLine[] {
     return this.scoredLines;
+  }
+
+  /** The rules that fired during the last discard, for presentation (#81). */
+  get lastDiscardActivations(): readonly RuleActivation[] {
+    return this.discardActivations;
   }
 
   get inStage(): boolean {
@@ -442,12 +453,15 @@ export class GameRun {
         blocks: discarded,
       });
       // Each listener's fired rules are committed as they resolve, left to right (#170).
-      this.passiveEvents.drain(128, (block, event) =>
-        commitCommands(
-          passiveActivations(block, event).flatMap(({ commands }) => commands),
+      this.discardActivations = [];
+      this.passiveEvents.drain(128, (block, event) => {
+        const fired = passiveActivations(block, event);
+        this.discardActivations.push(...fired);
+        return commitCommands(
+          fired.flatMap(({ commands }) => commands),
           this.commandTarget,
-        ),
-      );
+        );
+      });
       this.announceOutcome();
     }
     return next ? this.currentState : null;

@@ -18,7 +18,8 @@ import type { GameRun } from "./game-run";
 import type { HandView } from "./hand-view";
 import type { BlockViews, RenderedBlock } from "./rendered-blocks";
 import { magnitudeSfxFor } from "./score-presentation";
-import { presentationOrder, type ScoredLine } from "./scoring";
+import { presentationOrder } from "./scoring";
+import type { PassiveScoredLine } from "./passive-effects";
 import type { Cell } from "./traits/attachable";
 import { needsLandingHandover } from "./block-trait-behaviours";
 import { createMaterialise } from "./visual/materialise";
@@ -59,7 +60,7 @@ type Discarding = {
 };
 
 /** One scoring line waiting to be shown: tint its row, play its sound, add its points. */
-type ScoreStep = { at: number; line: ScoredLine };
+type ScoreStep = { at: number; line: PassiveScoredLine };
 
 export type PlayPresenter = {
   /** A play or discard is still animating. */
@@ -115,6 +116,8 @@ export function createPlayPresenter(options: {
   moved(): void;
   /** The passive rack may have changed (a discard can grant passives). */
   rackChanged(): void;
+  /** These rule sources' rules just fired, as their outcome is shown (#81). */
+  activated(sourceIds: readonly string[]): void;
   /** The hand has room again: draw replacements. */
   refill(): void;
   /** A safe point to save the run. */
@@ -285,6 +288,9 @@ export function createPlayPresenter(options: {
       if (session.state.coins > coinsBefore) playSfx("passive.coins");
       if (session.state.passiveRack.length > passivesBefore) playSfx("passive.granted");
       options.rackChanged();
+      options.activated([
+        ...new Set(session.lastDiscardActivations.map(({ sourceId }) => sourceId)),
+      ]);
       hand.remove(sources);
       hand.sync(session.state.hand);
       options.deselect(sources.map(({ block }) => block.id));
@@ -311,6 +317,7 @@ export function createPlayPresenter(options: {
       while (scoreSteps.length > 0 && scoreSteps[0].at <= now) {
         const { line } = scoreSteps.shift()!;
         field.tint(line.line.blocks, now);
+        options.activated([...new Set(line.activations.map(({ sourceId }) => sourceId))]);
         const sound = magnitudeSfxFor(line.points);
         if (sound) playSfx(sound, { jitter: 0 });
         shownScore += line.points;

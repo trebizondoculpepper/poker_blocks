@@ -3,6 +3,9 @@ import { tweenValue } from "./easing";
 import "./passive-rack.css";
 import { passiveAppearance, type PassiveBlock } from "./passives";
 import { createPassiveVisual, type PassiveVisual } from "./passive-visual";
+import { categoryDefaults } from "./passive-categories";
+import { applyGlow, tokenEffects } from "./passive-activation-effects";
+import { playSfx } from "./audio/sfx";
 
 const slotWidth = 72;
 const slotGap = 8;
@@ -17,7 +20,23 @@ type RenderedPassive = {
   targetX: number;
   arrivalAt: number | null;
   item: HTMLElement;
+  block: PassiveBlock;
+  /** When its activation effect started, while one is playing. */
+  activatedAt: number | null;
 };
+
+/** One frame of a token's activation effect, from its category's config; then back to rest. */
+function activationFrame(entry: RenderedPassive, time: number, reducedMotion: boolean): void {
+  if (entry.activatedAt === null) return;
+  const { effect } = categoryDefaults(entry.block.traits).activation;
+  const handler = tokenEffects.get(effect.id);
+  const progress = (time - entry.activatedAt) / handler.milliseconds;
+  const done = progress >= 1;
+  const { scale, glow } = done ? { scale: 1, glow: 0 } : handler.frame(progress, reducedMotion);
+  entry.mesh.scale.multiplyScalar(scale);
+  applyGlow(entry.visual.materials, effect.colour, glow);
+  if (done) entry.activatedAt = null;
+}
 
 /** A fixed screen-space rack with one Three.js scene for all rotating passive blocks. */
 export function createPassiveRack(
@@ -40,6 +59,11 @@ export function createPassiveRack(
   /** Glide the cubes into this order while a reorder is previewed; null restores the rack. */
   preview(order: readonly string[] | null): void;
   frame(time: number, reducedMotion: boolean): void;
+  /**
+   * A rule from this source fired: if it is an installed passive, play its category's
+   * activation effect and sound. Other sources (a card's own rules) are not in the rack.
+   */
+  activate(sourceId: string): void;
   dispose(): void;
 } {
   const element = document.createElement("aside");
@@ -145,6 +169,8 @@ export function createPassiveRack(
             targetX: 0,
             arrivalAt: performance.now() + arrivals++ * 180,
             item,
+            block,
+            activatedAt: null,
           };
           rendered.set(block.id, entry);
           mesh.scale.setScalar(0.001);
@@ -196,6 +222,7 @@ export function createPassiveRack(
           );
           if (arrivalAt !== null && (reducedMotion || time - arrivalAt >= 360))
             entry.arrivalAt = null;
+          activationFrame(entry, time, reducedMotion);
         }
         const angle = reducedMotion ? 0 : time * 0.00028;
         mesh.rotation.set(
@@ -205,6 +232,12 @@ export function createPassiveRack(
         );
       }
       if (rendered.size) renderer.render(scene, camera);
+    },
+    activate(sourceId) {
+      const entry = rendered.get(sourceId);
+      if (!entry) return;
+      entry.activatedAt = performance.now();
+      playSfx(categoryDefaults(entry.block.traits).activation.sfx);
     },
     dispose() {
       clear();
