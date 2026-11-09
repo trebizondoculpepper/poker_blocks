@@ -72,7 +72,9 @@ describe("save records", () => {
     reject("nonsense");
     reject({ ...good, version: 2 });
     reject({ ...good, dealer: "nobody" });
-    reject({ ...good, phase: "lobby" });
+    reject({ ...good, scene: "lobby" });
+    reject({ ...good, scene: "game-over" });
+    reject({ ...good, scene: undefined, phase: "lobby" });
     reject({ ...good, round: 0 });
     reject({ ...good, state: { ...good.state, hand: [...good.state.hand, "Z-stars"] } });
     reject({ ...good, state: { ...good.state, deck: [...good.state.deck, good.state.hand[0]] } });
@@ -171,5 +173,69 @@ describe("run storage", () => {
     expect(loadRun(brokenStorage, standardDeck, dealerRegistry)).toBeNull();
     expect(saveRun(null, snapshot)).toBe(false);
     expect(() => clearRun(brokenStorage)).not.toThrow();
+  });
+});
+
+describe("saves record the scene name (#86)", () => {
+  /** A legacy record: written before scenes, with `phase` and no `scene`. */
+  function legacy(phase: string, extra: object = {}) {
+    const { scene: _scene, ...record } = toSaveRecord(playedSession().snapshot());
+    return { ...record, phase, ...extra };
+  }
+  const load = (value: unknown) => fromSaveRecord(value, standardDeck, dealerRegistry);
+
+  it("writes the scene name and no phase", () => {
+    const record = toSaveRecord(playedSession().snapshot());
+    expect(record.scene).toBe("stage-1");
+    expect(record).not.toHaveProperty("phase");
+  });
+
+  it("reads the scene through the mode's flow, so a renamed scene still resumes", () => {
+    const flow = {
+      "run.position.stage-1": { operation: "replace", scene: "boss" },
+      "run.position.stage-2": { operation: "replace", scene: "stage-2" },
+      "run.position.boss": { operation: "replace", scene: "stage-1" },
+      "run.position.shop": { operation: "replace", scene: "shop" },
+      "run.position.over": { operation: "replace", scene: "game-over" },
+    } as const;
+    const snapshot = playedSession().snapshot();
+    const record = toSaveRecord(snapshot, flow);
+    expect(record.scene).toBe("boss");
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry, flow)?.phase).toBe("stage-1");
+  });
+
+  it.each(["stage-1", "stage-2", "boss"] as const)("migrates a legacy %s save", (phase) => {
+    expect(load(legacy(phase))?.phase).toBe(phase);
+  });
+
+  it("migrates a legacy shop save, keeping its stage and defaulting to after the boss", () => {
+    expect(load(legacy("shop", { shopAfter: "stage-2" }))).toMatchObject({
+      phase: "shop",
+      shopAfter: "stage-2",
+    });
+    const oldShop = load(legacy("shop"))!;
+    expect(oldShop.phase).toBe("shop");
+    expect(
+      GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, oldShop).shopAfterStage,
+    ).toBe("boss");
+  });
+
+  it("never resumes a legacy lost run, and clears its save", () => {
+    const storage = memoryStorage();
+    storage.setItem(saveKey, JSON.stringify(legacy("over")));
+    expect(loadRun(storage, standardDeck, dealerRegistry)).toBeNull();
+    expect(storage.data.has(saveKey)).toBe(false);
+  });
+
+  it("invalidates a legacy save with an unknown phase", () => {
+    expect(load(legacy("lobby"))).toBeNull();
+  });
+
+  it("resumes a migrated save without paying a stage reward twice", () => {
+    const session = playedSession();
+    const record = { ...toSaveRecord(session.snapshot()), scene: undefined, phase: "stage-1" };
+    const restored = load(JSON.parse(JSON.stringify(record)))!;
+    expect(restored.rewarded).toEqual(session.snapshot().rewarded);
+    expect(restored.state.coins).toBe(session.state.coins);
   });
 });

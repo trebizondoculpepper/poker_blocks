@@ -9,6 +9,9 @@ import type { RunSetupStep } from "./run-setup";
 import { saveKey } from "./save";
 import type { Scene } from "./scenes";
 import type { DestroyCause } from "./traits/destructible";
+import { standardGameFlow } from "./standard-game-flow";
+
+export { standardGameFlow };
 
 export type SceneTraits = {
   screen: { kind: string };
@@ -154,15 +157,6 @@ export type GameMode = {
 };
 
 export const gameModeRegistry = new Registry<GameMode>("game mode");
-
-/** Shared default flow. Modes can supply a different graph without changing the runner. */
-export const standardGameFlow: GameFlow<RunPositionOutcome, SceneName> = {
-  "run.position.stage-1": { operation: "replace", scene: "stage-1" },
-  "run.position.stage-2": { operation: "replace", scene: "stage-2" },
-  "run.position.boss": { operation: "replace", scene: "boss" },
-  "run.position.shop": { operation: "replace", scene: "shop" },
-  "run.position.over": { operation: "replace", scene: "game-over" },
-};
 
 const gameModes: GameMode[] = [
   {
