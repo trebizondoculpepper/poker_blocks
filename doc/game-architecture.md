@@ -187,6 +187,37 @@ The run is saved automatically (`src/save.ts`) at safe points only: when a place
 
 Loading rebuilds the blocks from the standard deck and `GameSession.fromSnapshot` restores the session. A record with another version, an unknown phase or dealer, unknown or duplicate card ids, a missing card or malformed numbers is ignored, which hides Continue. A lost run (phase `over`) clears the save. All storage access is wrapped so the game still works, without Continue or remembered settings, when storage is unavailable.
 
+## Modes, scenes and traits
+
+This section names the composition concepts above the block level and how they relate. The target design is tracked in epic #30 (tickets #31–#38); what exists today is marked as such.
+
+### Concepts
+
+- **Trait**: a reusable behaviour plus its plain-data configuration. The same pattern applies at every level: a block trait (`explosive`, `transparent`), a scene trait (`passiveRack`, `music`, `menu`) or a run-config trait (`sandbox`, `materialDeck`). A trait's presence installs its behaviour through lifecycle hooks (`enter`, `exit`, `update`, `handles`); no caller asks `if (traits.x)`.
+- **Scene**: a plain object, `{ id, traits }`, with no behaviour of its own. Title, stage, boss stage, shop, stage won, game over, settings and the Esc menu are all scenes. What a scene shows and allows (field placement, HUD panels, the passive rack, menu items, music) comes entirely from its traits.
+- **Scene manager**: enters and exits scenes, calling each composed trait's hooks. It can switch scenes, or push one scene over another and pop it again; the Esc menu and stage-won pop-up are pushed scenes, and a `pausesBelow` trait stops the scene underneath taking input.
+- **Mode (today: room)**: a playable configuration of the game. It is a scene graph (which scenes exist, the start scene, and transitions keyed by outcomes such as `won`, `lost`, `continue`) plus run-config traits applied when a run starts. The main game and dev0–dev3 are modes. A dev room is just a mode with different traits and a different start scene; dev3, for example, starts in the shop scene.
+- **Run-config trait**: shapes a run when it starts (save key, sandbox limits, material mix, a shop preview with coins). These are composable transformers over the session config, deck and starting snapshot, applied in order.
+- **GameSession**: the pure rules engine for one run: deck, hand, field, scoring, coins, passives and saving. It knows nothing about scenes, rendering or input. The scene graph decides what comes next; the session reports outcomes.
+- **Services**: camera, input, hand, field, HUD panels, audio, overlays and console, each behind a narrow interface. Traits reach them through the context passed to their hooks.
+- **main.ts**: wiring only. It builds the services, the scene manager and the selected mode, enters the start scene, and holds no game logic, phase checks or trait if-chains.
+
+### How they fit together
+
+```
+main.ts ── builds ──> services + SceneManager + Mode
+Mode = run-config traits + scene graph (scenes, start, transitions)
+Scene = { id, traits }  ──>  trait behaviours (enter/exit/update/handles) use services
+GameSession = rules for one run; emits outcomes that drive scene transitions
+Block = { id, traits }  ──>  block trait behaviours inside the field and hand
+```
+
+Composition is the same at both levels: a block is to its traits what a scene is to its traits. Adding a feature means writing a trait and composing it where it applies, never adding a branch to `main.ts`.
+
+### Where the code is today
+
+`src/rooms.ts` holds rooms as trait-composed data, and dev rooms already differ only in their trait lists. But a room is chosen once per page load (`?room=`) and switching rooms reloads the page. Stage, boss, shop and game over are phases of a state machine inside `GameSession`. Title, settings, Esc, stage won and game over are hard-wired DOM overlays in `src/menus.ts`. `src/main.ts` still branches on `phase` and `roomTraits.*`. The migration order is set out in the epic: the scene manager first, then the trait lifecycle, the services split, the run-config/scene trait split, scenes (the Esc menu as pilot), removing the phase branches, moving sequencing out of `GameSession`, and finally replacing `Room.dev` with traits.
+
 ## Architecture to discuss
 
 Settled: the data-only block definition, the trait container, the named registry, and the event channel described above. The demo's existing traits are still plain fields on a `CardBlock` struct and have not been ported onto the container yet; that port is what makes new traits like `additiveScore` and `explosive` a file each with no engine change.
