@@ -35,8 +35,9 @@ describe("the shared HUD frame (#116)", () => {
     expect(frameSource).not.toMatch(/\bphase\b|GameRun|gameMode|SceneName/);
   });
 
-  it("layers back canvas < frame and HUD < front canvas < passive rack", () => {
-    const back = zIndex(styles, ".scene .table-canvas-back");
+  it("layers backgrounds < frame and HUD < front canvas < passive rack", () => {
+    // The back canvas sits inside the background layers (#189), so their order is what counts.
+    const back = zIndex(styles, ".scene .background-layers");
     const frame = zIndex(styles, ".hud-frame");
     const front = zIndex(styles, ".scene .table-canvas-front");
     const rack = zIndex(rackStyles, ".passive-rack");

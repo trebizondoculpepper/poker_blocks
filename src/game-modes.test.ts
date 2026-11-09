@@ -113,6 +113,7 @@ describe("game modes composed from traits", () => {
       tableBackground: {},
       handView: {},
       discardBin: {},
+      passiveRackView: {},
       coinsPanel: {},
       shopExit: { label: "Continue / Skip shop" },
       shopStock: {},
@@ -175,6 +176,17 @@ describe("game modes composed from traits", () => {
       expect(traitsOf("title"), mode).not.toHaveProperty("discardBin");
       for (const scene of ["stage-1", "stage-2", "boss", "shop"] as const)
         expect(traitsOf(scene), `${mode} ${scene}`).toMatchObject({ handView: {}, discardBin: {} });
+    }
+  });
+
+  it("shows the rack in play and in the shop of modes with one, never on the title (#187)", () => {
+    for (const mode of gameModeRegistry.names()) {
+      const traitsOf = (scene: SceneName) =>
+        gameModeFor(mode).scenes.find(({ id }) => id === modeSceneId(mode, scene))!.traits;
+      expect(traitsOf("title"), mode).not.toHaveProperty("passiveRackView");
+      const hasRack = Boolean(gameModeFor(mode).traits.passiveRack);
+      for (const scene of ["stage-1", "stage-2", "boss", "shop"] as const)
+        expect("passiveRackView" in traitsOf(scene), `${mode} ${scene}`).toBe(hasRack);
     }
   });
 

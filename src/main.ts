@@ -13,6 +13,7 @@ import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createAttractBackground } from "./attract-scene";
+import { createBackgroundLayers } from "./scene-layer";
 import { createCameraViewService, type CameraViewService } from "./camera-view";
 import { createConsoleHost } from "./console-host";
 import type { SoundEffectId } from "./audio/sfx-registry";
@@ -44,9 +45,11 @@ const cubeSize = 2.4;
 
 // ----- Services, in the order their elements stack on the page -----
 
+// Background traits mount their canvases here while their scenes are on the stack (#189).
+const backgrounds = createBackgroundLayers(host);
 const hud: HudPanels = createHudPanels(host);
 const discardArea = createDiscardTarget(host);
-const view: TableRenderer = createTableRenderer(host);
+const view: TableRenderer = createTableRenderer(host, backgrounds);
 const render = () => view.render(cameraView.camera, cameraView.handCamera);
 const cameraView: CameraViewService = createCameraViewService({
   host,
@@ -97,11 +100,12 @@ type TraitContext = {
     board: BlockDestroyerBoard;
     attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
     shop: ShopView;
+    rack: { viewEntered(entered: boolean, capacity: number): void };
     version: string;
     sound: (id: SoundEffectId) => void;
   };
 };
-const attract = createAttractBackground();
+const attract = createAttractBackground(backgrounds);
 const traitContext: TraitContext = {
   host,
   services: {
@@ -133,6 +137,9 @@ const traitContext: TraitContext = {
     attract,
     get shop() {
       return shopView;
+    },
+    get rack() {
+      return passiveRackView;
     },
     sound: (id) => playSfx(id),
     version: appVersion,
@@ -179,10 +186,8 @@ const run: RunController = createRunController({
   },
 });
 const passiveRackView = createPassiveRack(host, {
-  capacity: run.mode.traits.passiveRack?.capacity,
   onPickUp: (block, event) => input.pickUpPassive(block, event),
 });
-passiveRackView.element.hidden = !run.mode.traits.passiveRack;
 const hand: HandView = createHandView({
   views: blockViews,
   scene: view.handScene,
@@ -281,8 +286,7 @@ const animate = (time: number) => {
   run.followOutcomes(time);
   field.update(time);
   sceneManager.update(delta);
-  const background = attract.frame(delta);
-  view.attract(background?.scene ?? null, background?.camera ?? null, delta);
+  attract.frame(delta);
   hand.animate(time, delta, input.selection);
   view.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
   input.frame();

@@ -41,10 +41,19 @@ export type SceneHost = {
       "setFieldActive" | "cancelGestures" | "discardBinEntered" | "handEntered"
     >;
     shop: ShopView;
+    /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
+    rack: { viewEntered(entered: boolean, capacity: number): void };
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
     run: Pick<
       RunController,
-      "shopStock" | "dispatch" | "hasSave" | "runStats" | "seed" | "reducedMotion" | "stageReward"
+      | "rackCapacity"
+      | "shopStock"
+      | "dispatch"
+      | "hasSave"
+      | "runStats"
+      | "seed"
+      | "reducedMotion"
+      | "stageReward"
     >;
     cameraView: Pick<CameraViewService, "beginShopEntrance">;
     overlays: Pick<
@@ -167,6 +176,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       services.renderer.handEntered(false);
       services.input.handEntered(false);
     },
+  });
+  behaviours.register("passiveRackView", {
+    enter: ({ services }) => services.rack.viewEntered(true, services.run.rackCapacity()),
+    exit: ({ services }) => services.rack.viewEntered(false, services.run.rackCapacity()),
   });
   behaviours.register("discardBin", {
     enter: ({ services }) => services.input.discardBinEntered(true),
