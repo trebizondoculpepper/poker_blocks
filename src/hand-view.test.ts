@@ -70,6 +70,16 @@ describe("hand view", () => {
     expect(layouts()).toBe(1);
   });
 
+  it("centres a six-block hand without overlapping slots", () => {
+    const { hand } = setup(6);
+    const sixCards = standardDeck.slice(0, 6);
+    for (const card of sixCards) hand.add(card);
+    hand.sync(sixCards);
+    const bySlot = [...hand.blocks].sort((a, b) => a.handSlot! - b.handSlot!);
+    for (const [index, x] of [-3, -1.8, -0.6, 0.6, 1.8, 3].entries())
+      expect(xOf(bySlot[index])).toBeCloseTo(x);
+  });
+
   it("opens a gap where a dragged card would drop, without moving the dragged card", () => {
     const { hand, setDrag } = setup();
     for (const card of cards) hand.add(card);
