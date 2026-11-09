@@ -202,8 +202,8 @@ question one layer down.
 **Owning design:** #35 makes every screen a scene whose traits install its behaviour, including
 music; a stage's music then comes from the scene in front rather than a phase-keyed table.
 
-**Tickets:** [#35](https://github.com/trebizondoculpepper/poker_blocks/issues/35). **New:**
-[#70](https://github.com/trebizondoculpepper/poker_blocks/issues/70) for `music-fade.ts`.
+**Ticket:** [#35](https://github.com/trebizondoculpepper/poker_blocks/issues/35) for the audio
+lines here. `src/audio/music-fade.ts` is a separate question, exempted in finding 13.
 
 ### 8. `src/hud-panels.ts` — 2 scan lines
 
@@ -266,15 +266,24 @@ data a mode supplies, and a stage kind's numbers are exactly that data.
 
 **Ticket:** [#37](https://github.com/trebizondoculpepper/poker_blocks/issues/37).
 
-### 13. `src/audio/music-fade.ts` — 1 scan line, **no owner**
+### 13. `src/audio/music-fade.ts` — 1 scan line, **exempt by owner decision**
 
-`switch (kind)` over a fade curve. **Why it is a special case:** a fade kind is a kind like any
-other, and the curve is its behaviour. Each new curve edits the mixer.
+`switch (kind)` over a fade curve: a fade kind is a kind, and the curve is its behaviour.
 
-**Owning design:** a fade registry keyed by the curve's name — `fadeCurves.get(kind)` is a
-registry resolving a handle, but the _curve_ should be registered against its own definition, so
-the mixer never switches. **New ticket:**
-[#70](https://github.com/trebizondoculpepper/poker_blocks/issues/70).
+**Exemption, and why.** The owner ruled on 2026-11-09 that **fade curves are a tiny game detail
+and do not need to be registered** ([#70](https://github.com/trebizondoculpepper/poker_blocks/issues/70),
+closed as not planned). The reason it is a defensible exemption rather than a hole:
+
+- a fade curve is a **self-contained pure function** — gain for a progress value, no game state,
+  no scene, no run, no mode;
+- the composition rule exists so that _unexpected behaviour emerges from composing traits_. There
+  is nothing to compose: a curve cannot interact with a block, a passive, a scene or a mode;
+- registering it would add indirection to five lines of arithmetic without removing a branch
+  anybody could extend into a gameplay feature.
+
+The line stays in `src/guardrails-baseline.json` as recorded legacy. It is **not** a precedent
+for gameplay kinds: a new _fade curve_ may edit the switch; a new _material, scene, offer kind,
+passive rule or block trait_ may not.
 
 ### 14. `src/table-input.ts` — 1 scan line, plus 1 the scan misses
 
@@ -368,16 +377,16 @@ input, not a game kind. The platform tells us the pointer type; there is no trai
 The line-pattern baseline can only ever say "no _new_ offenders of the shapes we thought of".
 These tests would say the game _is_ composed. Each is mapped to the ticket that adds it.
 
-| #   | Test                                                                                                                                                                                                                     | What it proves                                  | Ticket                                                                                                                                                                                                                                                                                                                                                       |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | **A renamed copy of every mode behaves identically.** Register `dev3_copy` with a different save key and console name; assert the same scenes, run setup and behaviour.                                                  | No generic code knows a specific mode.          | [#35](https://github.com/trebizondoculpepper/poker_blocks/issues/35), [#36](https://github.com/trebizondoculpepper/poker_blocks/issues/36)                                                                                                                                                                                                                   |
-| 2   | **An id only ever flows into a handle use** — registry lookup, scene id, save key, URL, display — asserted by a type-level test over the id-bearing registries.                                                          | Identity is never a switch.                     | [#36](https://github.com/trebizondoculpepper/poker_blocks/issues/36), [#37](https://github.com/trebizondoculpepper/poker_blocks/issues/37)                                                                                                                                                                                                                   |
-| 3   | **A test-only handler registered without editing any consumer, per registry:** scene traits, run setup steps, passive conditions, passive effects, passive selectors, block traits, materials, offer kinds, fade curves. | Every registry is genuinely open for extension. | [#63](https://github.com/trebizondoculpepper/poker_blocks/issues/63), [#65](https://github.com/trebizondoculpepper/poker_blocks/issues/65), [#66](https://github.com/trebizondoculpepper/poker_blocks/issues/66), [#67](https://github.com/trebizondoculpepper/poker_blocks/issues/67), [#70](https://github.com/trebizondoculpepper/poker_blocks/issues/70) |
-| 4   | **The game flow is data:** a renamed scene works without editing code — register a scene under a new name and reach it through the flow alone.                                                                           | Sequencing is not hard-coded.                   | [#37](https://github.com/trebizondoculpepper/poker_blocks/issues/37)                                                                                                                                                                                                                                                                                         |
-| 5   | **A new material needs no renderer edit:** add a material definition and render it, with no change to `block-appearance.ts`.                                                                                             | Appearance is data.                             | [#66](https://github.com/trebizondoculpepper/poker_blocks/issues/66)                                                                                                                                                                                                                                                                                         |
-| 6   | **A new offer kind needs no edit to pricing, buying, saving or display.**                                                                                                                                                | Offer kinds dispatch.                           | [#67](https://github.com/trebizondoculpepper/poker_blocks/issues/67)                                                                                                                                                                                                                                                                                         |
-| 7   | **A new passive rule needs no edit to scoring:** register a condition and an effect in the test and score with them.                                                                                                     | Passives own their behaviour.                   | [#63](https://github.com/trebizondoculpepper/poker_blocks/issues/63)                                                                                                                                                                                                                                                                                         |
-| 8   | **A block trait brings its behaviour:** remove the `isTransparent`/`canDestroy`-style helpers and assert the trait supplies the answer.                                                                                  | No marker with behaviour elsewhere.             | [#65](https://github.com/trebizondoculpepper/poker_blocks/issues/65)                                                                                                                                                                                                                                                                                         |
+| #   | Test                                                                                                                                                                                                        | What it proves                                  | Ticket                                                                                                                                                                                                                                                                                 |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **A renamed copy of every mode behaves identically.** Register `dev3_copy` with a different save key and console name; assert the same scenes, run setup and behaviour.                                     | No generic code knows a specific mode.          | [#35](https://github.com/trebizondoculpepper/poker_blocks/issues/35), [#36](https://github.com/trebizondoculpepper/poker_blocks/issues/36)                                                                                                                                             |
+| 2   | **An id only ever flows into a handle use** — registry lookup, scene id, save key, URL, display — asserted by a type-level test over the id-bearing registries.                                             | Identity is never a switch.                     | [#36](https://github.com/trebizondoculpepper/poker_blocks/issues/36), [#37](https://github.com/trebizondoculpepper/poker_blocks/issues/37)                                                                                                                                             |
+| 3   | **A test-only handler registered without editing any consumer, per registry:** scene traits, run setup steps, passive conditions, passive effects, passive selectors, block traits, materials, offer kinds. | Every registry is genuinely open for extension. | [#63](https://github.com/trebizondoculpepper/poker_blocks/issues/63), [#65](https://github.com/trebizondoculpepper/poker_blocks/issues/65), [#66](https://github.com/trebizondoculpepper/poker_blocks/issues/66), [#67](https://github.com/trebizondoculpepper/poker_blocks/issues/67) |
+| 4   | **The game flow is data:** a renamed scene works without editing code — register a scene under a new name and reach it through the flow alone.                                                              | Sequencing is not hard-coded.                   | [#37](https://github.com/trebizondoculpepper/poker_blocks/issues/37)                                                                                                                                                                                                                   |
+| 5   | **A new material needs no renderer edit:** add a material definition and render it, with no change to `block-appearance.ts`.                                                                                | Appearance is data.                             | [#66](https://github.com/trebizondoculpepper/poker_blocks/issues/66)                                                                                                                                                                                                                   |
+| 6   | **A new offer kind needs no edit to pricing, buying, saving or display.**                                                                                                                                   | Offer kinds dispatch.                           | [#67](https://github.com/trebizondoculpepper/poker_blocks/issues/67)                                                                                                                                                                                                                   |
+| 7   | **A new passive rule needs no edit to scoring:** register a condition and an effect in the test and score with them.                                                                                        | Passives own their behaviour.                   | [#63](https://github.com/trebizondoculpepper/poker_blocks/issues/63)                                                                                                                                                                                                                   |
+| 8   | **A block trait brings its behaviour:** remove the `isTransparent`/`canDestroy`-style helpers and assert the trait supplies the answer.                                                                     | No marker with behaviour elsewhere.             | [#65](https://github.com/trebizondoculpepper/poker_blocks/issues/65)                                                                                                                                                                                                                   |
 
 **Retiring the baseline.** The line-pattern baseline should be retired once tests 1–8 pass for
 every registry, in this order:
@@ -394,20 +403,20 @@ every registry, in this order:
 Architecture before game design, and the highest fan-out first. Rows in the same group can run in
 parallel; each group depends on the one above it.
 
-| Group                                | Tickets       | Why here                                                                                                                                                                                                                  |
-| ------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A — flow and identity**            | #37, then #36 | Every other ticket needs the flow to be data and the phase branches gone; #36 depends on #37's `shopAfter` and phase ownership. Nothing else can start cleanly until the run controller stops asking what phase it is in. |
-| **B — extension points** (parallel)  | #63, #65, #67 | Independent of each other and of the flow once A lands: passives, block traits and offer kinds each need a registry and nothing from the other two.                                                                       |
-| **C — presentation data** (parallel) | #66, #70      | #66 (materials as data) is independent of A and B and is already in progress. #70 (fade curves) is tiny and fully independent.                                                                                            |
-| **D — screens**                      | #35           | Last: it rewrites the menu and music layers onto scenes, and benefits from A's flow-as-data. It closes `menus.ts`, the audio entries and `game-modes.ts:66` together.                                                     |
-| **E — decisions**                    | #71, #72      | Records the `listening-room` exemption and the `sceneTraits[kind]` owner so neither stays an open question. Can be done at any time; #72 should be settled before #35 or #37 starts.                                      |
+| Group                               | Tickets       | Why here                                                                                                                                                                                                                  |
+| ----------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A — flow and identity**           | #37, then #36 | Every other ticket needs the flow to be data and the phase branches gone; #36 depends on #37's `shopAfter` and phase ownership. Nothing else can start cleanly until the run controller stops asking what phase it is in. |
+| **B — extension points** (parallel) | #63, #65, #67 | Independent of each other and of the flow once A lands: passives, block traits and offer kinds each need a registry and nothing from the other two.                                                                       |
+| **C — presentation data**           | #66           | #66 (materials as data) is independent of A and B and is already in progress.                                                                                                                                             |
+| **D — screens**                     | #35           | Last: it rewrites the menu and music layers onto scenes, and benefits from A's flow-as-data. It closes `menus.ts`, the audio entries and `game-modes.ts:66` together.                                                     |
+| **E — decisions**                   | #71, #72      | Records the `listening-room` exemption and the `sceneTraits[kind]` owner so neither stays an open question. Can be done at any time; #72 should be settled before #35 or #37 starts.                                      |
 
 **Dependencies, explicitly:**
 
 - #36 → #37 (needs flow-as-data and `shopAfter` off the phase).
 - #35 → #36 (menus need the scene stack to be the flow).
 - #67 → #36 for the run controller's two offer branches, and #37 for `game-run.ts`'s.
-- Nothing blocks #63, #65, #66 or #70.
+- Nothing blocks #63, #65 or #66.
 
 **Parallelism:** groups B and C are five tickets that can run at once across five agents without
 touching the same files, which is the fastest route to an empty baseline. A is a single lane and
@@ -421,7 +430,7 @@ listed with the reason they are clean.
 **Has findings:** `block-appearance.ts` (1), `run-controller.ts` (2), `passive-effects.ts` (3),
 `game-run.ts` (4), `save.ts` (5), `selectable.ts` (6), `audio-service.ts` (7),
 `music-plan.ts` (7), `hud-panels.ts` (8), `materials.ts` (9), `shop-view.ts` (10),
-`game-modes.ts` (11), `run-rules.ts` (12), `music-fade.ts` (13), `table-input.ts` (14),
+`game-modes.ts` (11), `run-rules.ts` (12), `music-fade.ts` (13, exempt), `table-input.ts` (14),
 `menus.ts` (16), `material-sampler.ts` (17), `transparent.ts`/`destructible.ts`/
 `rendered-blocks.ts` (6).
 
@@ -446,82 +455,83 @@ All 75 lines recorded in `src/guardrails-baseline.json`, mapped to exactly one
 ticket. Generated by locating each recorded line in its file, so the `line` column is the
 line as it stands at `87440b5`.
 
-| File                             | line            | Recorded line                                                                                    | Ticket         |
-| -------------------------------- | --------------- | ------------------------------------------------------------------------------------------------ | -------------- |
-| `src/audio-service.ts`           | 121             | `screenMusic[screen]();`                                                                         | #35            |
-| `src/audio-service.ts`           | 115             | `stageMusic[phase](music);`                                                                      | #35            |
-| `src/audio/music-fade.ts`        | 21              | `switch (kind) {`                                                                                | #70            |
-| `src/audio/music-plan.ts`        | 45              | `switch (scene) {`                                                                               | #35            |
-| `src/game-modes.ts`              | 66              | `...sceneTraits[kind],`                                                                          | #35            |
-| `src/game-run.ts`                | 99              | `session.shopAfter = snapshot.phase === "shop" ? (snapshot.shopAfter ?? "boss") : null;`         | #37            |
-| `src/game-run.ts`                | 308             | `offer.kind === "passive" ? this.passivePrices.buy : (this.config.cardPurchasePrice ?? 1);`      | #67            |
-| `src/game-run.ts`                | 310             | `if (offer.kind === "passive") {`                                                                | #67            |
-| `src/game-run.ts`                | 353             | `while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;`   | #37            |
-| `src/game-run.ts`                | 391             | `if (event.type !== "discard.completed") return [];`                                             | #37            |
-| `src/game-run.ts`                | 353, 401        | `while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`))`             | #37            |
-| `src/game-run.ts`                | 499             | `.filter((offer): offer is Extract<ShopOffer, { kind: "card" }> => offer.kind === "card")`       | #67            |
-| `src/hud-panels.ts`              | 90              | `const action = view.presenting ? null : nextActionLabels[view.phase](outcome);`                 | #36            |
-| `src/hud-panels.ts`              | 100             | `heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,`         | #36            |
-| `src/listening-room/main.ts`     | 130             | `const entry = entries.find((_, index) => soundEffects[index].id === "score.line");`             | #71 (decision) |
-| `src/materials.ts`               | 66              | `...(transparentMaterials.has(kind) ? { transparent: {} } : {}),`                                | #66            |
-| `src/materials.ts`               | 67              | `inspectable: inspectable(`${cardName(card.traits.identity)} · ${materialNames[kind]}`),`        | #66            |
-| `src/passive-effects.ts`         | 29              | `switch (condition.kind) {`                                                                      | #63            |
-| `src/passive-effects.ts`         | 66              | `if (rule.effect.kind === "multiply-value") value *= rule.effect.factor;`                        | #63            |
-| `src/passive-effects.ts`         | 67              | `if (rule.effect.kind === "add-value") value += rule.effect.amount;`                             | #63            |
-| `src/passive-effects.ts`         | 86              | `if (rule.effect.kind === "multiply-line") points *= rule.effect.factor;`                        | #63            |
-| `src/passive-effects.ts`         | 87              | `if (rule.effect.kind === "add-line")`                                                           | #63            |
-| `src/passive-effects.ts`         | 110             | `if (rule.on !== "stage.won" \|\| rule.effect.kind !== "add-coins") continue;`                   | #63            |
-| `src/passive-effects.ts`         | 112             | `if (rule.condition?.kind === "stage") {`                                                        | #63            |
-| `src/passive-effects.ts`         | 135             | `if (rule.effect.kind === "grant-unowned-passive") {`                                            | #63            |
-| `src/passive-effects.ts`         | 139             | `if (rule.effect.kind !== "add-coins") continue;`                                                | #63            |
-| `src/run-controller.ts`          | 211             | `switchScene(sceneForPhase[game.phase]);`                                                        | #36            |
-| `src/run-controller.ts`          | 268             | `.filter(({ block }) => block.traits.selectable && selected.has(block.id))`                      | #65            |
-| `src/run-controller.ts`          | 312             | `if (game.phase === "over") {`                                                                   | #36            |
-| `src/run-controller.ts`          | 328             | `const leavingShop = game.phase === "shop";`                                                     | #36            |
-| `src/run-controller.ts`          | 392             | `if (!modeTraits.shop \|\| session.phase !== "shop" \|\| session.state.shopStock !== undefined)` | #36            |
-| `src/run-controller.ts`          | 421             | `const enterShop = game.phase === "shop" && fresh && !reducedMotion;`                            | #36            |
-| `src/run-controller.ts`          | 426             | `playSfx(game.phase === "shop" ? "shop.open" : "round.start");`                                  | #36            |
-| `src/run-controller.ts`          | 479             | `game.phase !== "over" && !services.presenter.busy && !game.stageRewardsPending,`                | #36            |
-| `src/run-controller.ts`          | 621             | `offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),`         | #67            |
-| `src/run-controller.ts`          | 629             | `if (bought.kind === "card") {`                                                                  | #67            |
-| `src/run-rules.ts`               | 48              | `targetScore: Math.round(baseTargets[kind] * (1 + (round - 1) / 2)),`                            | #37            |
-| `src/save.ts`                    | 73, 128         | `offer.kind === "card"`                                                                          | #67            |
-| `src/save.ts`                    | 102             | `if (!phases.includes(record.phase) \|\| record.phase === "over") return null;`                  | #37            |
-| `src/save.ts`                    | 104             | `if (!dealers.has(record.dealer)) return null;`                                                  | #37            |
-| `src/save.ts`                    | 128             | `if (offer.kind === "card") return { kind: "card" as const, block: resolve(offer.cardId) };`     | #67            |
-| `src/save.ts`                    | 129             | `if (offer.kind !== "passive" \|\| typeof offer.id !== "string" \|\| passiveIds.has(offer.id))`  | #37            |
-| `src/save.ts`                    | 163             | `...(record.phase === "shop" && record.shopAfter ? { shopAfter: record.shopAfter } : {}),`       | #37            |
-| `src/save.ts`                    | 232             | `if (snapshot.phase === "over") storage.removeItem(key);`                                        | #37            |
-| `src/shop-view.ts`               | 120             | `if (offer.kind === "passive") {`                                                                | #67            |
-| `src/shop-view.ts`               | 194             | `const passive = offer.kind === "passive";`                                                      | #67            |
-| `src/table-input.ts`             | 481             | `canvas.style.cursor = hovered?.block.traits.selectable ? "pointer" : "default";`                | #65            |
-| `src/traits/selectable.ts`       | 7               | `if (!block.traits.selectable) return block;`                                                    | #65            |
-| `src/traits/selectable.ts`       | 15              | `if (block.traits.selectable) return block;`                                                     | #65            |
-| `src/traits/selectable.ts`       | 20              | `if (!block.traits.selectable) return current;`                                                  | #65            |
-| `src/visual/block-appearance.ts` | 524             | `const ink = printInk[kind];`                                                                    | #66            |
-| `src/visual/block-appearance.ts` | 586             | `switch (kind) {`                                                                                | #66            |
-| `src/visual/block-appearance.ts` | 666             | `ior: kind === "prismatic" ? 2.33 : 1.5,`                                                        | #66            |
-| `src/visual/block-appearance.ts` | 670             | `envMapIntensity: kind === "prismatic" ? 1.6 : 1.1,`                                             | #66            |
-| `src/visual/block-appearance.ts` | 673             | `...(kind === "prismatic" ? prismaticFire : {}),`                                                | #66            |
-| `src/visual/block-appearance.ts` | 701             | `const prismatic = kind === "prismatic";`                                                        | #66            |
-| `src/visual/block-appearance.ts` | 889             | `const relief = { bumpMap: height ?? texture, bumpScale: patternRelief[kind] };`                 | #66            |
-| `src/visual/block-appearance.ts` | 890, 1066       | `if (kind === "ice") {`                                                                          | #66            |
-| `src/visual/block-appearance.ts` | 902             | `if (kind === "gold") {`                                                                         | #66            |
-| `src/visual/block-appearance.ts` | 915             | `if (kind === "paper") {`                                                                        | #66            |
-| `src/visual/block-appearance.ts` | 1005            | `kind === "meat"`                                                                                | #66            |
-| `src/visual/block-appearance.ts` | 666, 670, 1007  | `: kind === "prismatic"`                                                                         | #66            |
-| `src/visual/block-appearance.ts` | 1011            | `: kind === "gold"`                                                                              | #66            |
-| `src/visual/block-appearance.ts` | 1017            | `if (["prismatic", "fire", "paper", "ice"].includes(kind)) geometry.scale(0.985, 0.985, 0.985);` | #66            |
-| `src/visual/block-appearance.ts` | 1018            | `const edgeColor = edgeColors[kind];`                                                            | #66            |
-| `src/visual/block-appearance.ts` | 1019            | `const edgeOpacity = edgeOpacities[kind];`                                                       | #66            |
-| `src/visual/block-appearance.ts` | 1021            | `if (kind === "prismatic") {`                                                                    | #66            |
-| `src/visual/block-appearance.ts` | 1039            | `if (kind === "fire") {`                                                                         | #66            |
-| `src/visual/block-appearance.ts` | 1085            | `if (kind === "steel") {`                                                                        | #66            |
-| `src/visual/block-appearance.ts` | 902, 1011, 1101 | `kind === "gold"`                                                                                | #66            |
-| `src/visual/block-appearance.ts` | 1103            | `: kind === "paper"`                                                                             | #66            |
-| `src/visual/block-appearance.ts` | 1105            | `: kind === "wood"`                                                                              | #66            |
-| `src/visual/block-appearance.ts` | 1107            | `: kind === "terracotta"`                                                                        | #66            |
-| `src/visual/block-appearance.ts` | 1114            | `const endTexture = kind === "wood" ? faceTexture(identity, kind, true) : null;`                 | #66            |
+| File                             | line            | Recorded line                                                                                    | Ticket              |
+| -------------------------------- | --------------- | ------------------------------------------------------------------------------------------------ | ------------------- |
+| `src/audio-service.ts`           | 121             | `screenMusic[screen]();`                                                                         | #35                 |
+| `src/audio-service.ts`           | 115             | `stageMusic[phase](music);`                                                                      | #35                 |
+| `src/audio/music-fade.ts`        | 21              | `switch (kind) {`                                                                                | exempt (#70 closed) |
+| `src/audio/music-plan.ts`        | 45              | `switch (scene) {`                                                                               | #35                 |
+| `src/game-modes.ts`              | 66              | `...sceneTraits[kind],`                                                                          | #35                 |
+| `src/game-run.ts`                | 99              | `session.shopAfter = snapshot.phase === "shop" ? (snapshot.shopAfter ?? "boss") : null;`         | #37                 |
+| `src/game-run.ts`                | 308             | `offer.kind === "passive" ? this.passivePrices.buy : (this.config.cardPurchasePrice ?? 1);`      | #67                 |
+| `src/game-run.ts`                | 310             | `if (offer.kind === "passive") {`                                                                | #67                 |
+| `src/game-run.ts`                | 353             | `while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;`   | #37                 |
+| `src/game-run.ts`                | 391             | `if (event.type !== "discard.completed") return [];`                                             | #37                 |
+| `src/game-run.ts`                | 353, 401        | `while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`))`             | #37                 |
+| `src/game-run.ts`                | 499             | `.filter((offer): offer is Extract<ShopOffer, { kind: "card" }> => offer.kind === "card")`       | #67                 |
+| `src/hud-panels.ts`              | 90              | `const action = view.presenting ? null : nextActionLabels[view.phase](outcome);`                 | #36                 |
+| `src/hud-panels.ts`              | 100             | `heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,`         | #36                 |
+| `src/listening-room/main.ts`     | 130             | `const entry = entries.find((_, index) => soundEffects[index].id === "score.line");`             | #71 (decision)      |
+| `src/materials.ts`               | 66              | `...(transparentMaterials.has(kind) ? { transparent: {} } : {}),`                                | #66                 |
+| `src/materials.ts`               | 67              | `inspectable: inspectable(`${cardName(card.traits.identity)} · ${materialNames[kind]}`),`        | #66                 |
+| `src/passive-effects.ts`         | 29              | `switch (condition.kind) {`                                                                      | #63                 |
+| `src/passive-effects.ts`         | 66              | `if (rule.effect.kind === "multiply-value") value *= rule.effect.factor;`                        | #63                 |
+| `src/passive-effects.ts`         | 67              | `if (rule.effect.kind === "add-value") value += rule.effect.amount;`                             | #63                 |
+| `src/passive-effects.ts`         | 86              | `if (rule.effect.kind === "multiply-line") points *= rule.effect.factor;`                        | #63                 |
+| `src/passive-effects.ts`         | 87              | `if (rule.effect.kind === "add-line")`                                                           | #63                 |
+| `src/passive-effects.ts`         | 110             | `if (rule.on !== "stage.won" \|\| rule.effect.kind !== "add-coins") continue;`                   | #63                 |
+| `src/passive-effects.ts`         | 112             | `if (rule.condition?.kind === "stage") {`                                                        | #63                 |
+| `src/passive-effects.ts`         | 135             | `if (rule.effect.kind === "grant-unowned-passive") {`                                            | #63                 |
+| `src/passive-effects.ts`         | 139             | `if (rule.effect.kind !== "add-coins") continue;`                                                | #63                 |
+| `src/run-controller.ts`          | 211             | `switchScene(sceneForPhase[game.phase]);`                                                        | #36                 |
+| `src/run-controller.ts`          | 268             | `.filter(({ block }) => block.traits.selectable && selected.has(block.id))`                      | #65                 |
+| `src/run-controller.ts`          | 312             | `if (game.phase === "over") {`                                                                   | #36                 |
+| `src/run-controller.ts`          | 328             | `const leavingShop = game.phase === "shop";`                                                     | #36                 |
+| `src/run-controller.ts`          | 392             | `if (!modeTraits.shop \|\| session.phase !== "shop" \|\| session.state.shopStock !== undefined)` | #36                 |
+| `src/run-controller.ts`          | 421             | `const enterShop = game.phase === "shop" && fresh && !reducedMotion;`                            | #36                 |
+| `src/run-controller.ts`          | 426             | `playSfx(game.phase === "shop" ? "shop.open" : "round.start");`                                  | #36                 |
+| `src/run-controller.ts`          | 479             | `game.phase !== "over" && !services.presenter.busy && !game.stageRewardsPending,`                | #36                 |
+| `src/run-controller.ts`          | 621             | `offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),`         | #67                 |
+| `src/run-controller.ts`          | 629             | `if (bought.kind === "card") {`                                                                  | #67                 |
+| `src/run-rules.ts`               | 48              | `targetScore: Math.round(baseTargets[kind] * (1 + (round - 1) / 2)),`                            | #37                 |
+| `src/save.ts`                    | 73, 128         | `offer.kind === "card"`                                                                          | #67                 |
+| `src/save.ts`                    | 102             | `if (!phases.includes(record.phase) \|\| record.phase === "over") return null;`                  | #37                 |
+| `src/save.ts`                    | 104             | `if (!dealers.has(record.dealer)) return null;`                                                  | #37                 |
+| `src/save.ts`                    | 128             | `if (offer.kind === "card") return { kind: "card" as const, block: resolve(offer.cardId) };`     | #67                 |
+| `src/save.ts`                    | 129             | `if (offer.kind !== "passive" \|\| typeof offer.id !== "string" \|\| passiveIds.has(offer.id))`  | #37                 |
+| `src/save.ts`                    | 163             | `...(record.phase === "shop" && record.shopAfter ? { shopAfter: record.shopAfter } : {}),`       | #37                 |
+| `src/save.ts`                    | 232             | `if (snapshot.phase === "over") storage.removeItem(key);`                                        | #37                 |
+| `src/shop-view.ts`               | 120             | `if (offer.kind === "passive") {`                                                                | #67                 |
+| `src/shop-view.ts`               | 194             | `const passive = offer.kind === "passive";`                                                      | #67                 |
+| `src/table-input.ts`             | 481             | `canvas.style.cursor = hovered?.block.traits.selectable ? "pointer" : "default";`                | #65                 |
+| `src/traits/selectable.ts`       | 7               | `if (!block.traits.selectable) return block;`                                                    | #65                 |
+| `src/traits/selectable.ts`       | 15              | `if (block.traits.selectable) return block;`                                                     | #65                 |
+| `src/traits/selectable.ts`       | 20              | `if (!block.traits.selectable) return current;`                                                  | #65                 |
+| `src/visual/block-appearance.ts` | 524             | `const ink = printInk[kind];`                                                                    | #66                 |
+| `src/visual/block-appearance.ts` | 586             | `switch (kind) {`                                                                                | #66                 |
+| `src/visual/block-appearance.ts` | 666             | `ior: kind === "prismatic" ? 2.33 : 1.5,`                                                        | #66                 |
+| `src/visual/block-appearance.ts` | 670             | `envMapIntensity: kind === "prismatic" ? 1.6 : 1.1,`                                             | #66                 |
+| `src/visual/block-appearance.ts` | 673             | `...(kind === "prismatic" ? prismaticFire : {}),`                                                | #66                 |
+| `src/visual/block-appearance.ts` | 701             | `const prismatic = kind === "prismatic";`                                                        | #66                 |
+| `src/visual/block-appearance.ts` | 889             | `const relief = { bumpMap: height ?? texture, bumpScale: patternRelief[kind] };`                 | #66                 |
+| `src/visual/block-appearance.ts` | 890, 1066       | `if (kind === "ice") {`                                                                          | #66                 |
+| `src/visual/block-appearance.ts` | 902             | `if (kind === "gold") {`                                                                         | #66                 |
+| `src/visual/block-appearance.ts` | 915             | `if (kind === "paper") {`                                                                        | #66                 |
+| `src/visual/block-appearance.ts` | 1005            | `kind === "meat"`                                                                                | #66                 |
+| `src/visual/block-appearance.ts` | 666, 670, 1007  | `: kind === "prismatic"`                                                                         | #66                 |
+| `src/visual/block-appearance.ts` | 1011            | `: kind === "gold"`                                                                              | #66                 |
+| `src/visual/block-appearance.ts` | 1017            | `if (["prismatic", "fire", "paper", "ice"].includes(kind)) geometry.scale(0.985, 0.985, 0.985);` | #66                 |
+| `src/visual/block-appearance.ts` | 1018            | `const edgeColor = edgeColors[kind];`                                                            | #66                 |
+| `src/visual/block-appearance.ts` | 1019            | `const edgeOpacity = edgeOpacities[kind];`                                                       | #66                 |
+| `src/visual/block-appearance.ts` | 1021            | `if (kind === "prismatic") {`                                                                    | #66                 |
+| `src/visual/block-appearance.ts` | 1039            | `if (kind === "fire") {`                                                                         | #66                 |
+| `src/visual/block-appearance.ts` | 1085            | `if (kind === "steel") {`                                                                        | #66                 |
+| `src/visual/block-appearance.ts` | 1101            | `: kind === "gold"`                                                                              | #66                 |
+| `src/visual/block-appearance.ts` | 902, 1011, 1101 | `kind === "gold"` (three occurrences)                                                            | #66                 |
+| `src/visual/block-appearance.ts` | 1103            | `: kind === "paper"`                                                                             | #66                 |
+| `src/visual/block-appearance.ts` | 1105            | `: kind === "wood"`                                                                              | #66                 |
+| `src/visual/block-appearance.ts` | 1107            | `: kind === "terracotta"`                                                                        | #66                 |
+| `src/visual/block-appearance.ts` | 1114            | `const endTexture = kind === "wood" ? faceTexture(identity, kind, true) : null;`                 | #66                 |
 
 **Ownership totals:**
 
@@ -532,5 +542,5 @@ line as it stands at `87440b5`.
 - #65: 5 lines
 - #66: 27 lines
 - #67: 9 lines
-- #70: 1 lines
-- #71 (decision): 1 lines
+- exempt by owner decision: 1 line (`music-fade.ts`)
+- #71 (decision): 1 line
