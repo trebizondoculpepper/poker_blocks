@@ -1,6 +1,6 @@
-// Development page for auditioning theme loops and beat-matched crossfades. Served at
-// /music.html. It lists every `*-loop.ogg` in music/loops/ with the tempo and beat count
-// from its sidecar. Clicking a loop fades it in on the next bar.
+// Development page for auditioning theme loops, pause/settings filters, and beat-matched
+// crossfades. Served at /music.html. It lists every `*-loop.ogg` in music/loops/ with the
+// tempo and beat count from its sidecar. Clicking a loop fades it in on the next bar.
 import "./style.css";
 import { createBeatClock } from "../../audio/beat-clock";
 import { fadeCurve, fadeKinds, type FadeKind } from "../../audio/music-fade";
@@ -89,40 +89,60 @@ let context: AudioContext | null = null;
 let master: GainNode | null = null;
 const buffers = new Map<string, Promise<AudioBuffer>>();
 
-/** Low-pass on the output, as the game uses when its menu is open (wide open by default). */
-let lowPass: BiquadFilterNode | null = null;
+/** Switchable pause/settings filter on the output (wide open by default). */
+let filter: BiquadFilterNode | null = null;
+type FilterMode = "open" | "lowpass" | "highpass";
+let filterMode: FilterMode = "open";
 const openCutoff = 20000;
+const openHighPassCutoff = 10;
 
 function audio(): { context: AudioContext; master: GainNode } {
   if (!context || !master) {
     context = new AudioContext();
     master = context.createGain();
     master.gain.value = Number(volume.value);
-    lowPass = context.createBiquadFilter();
-    lowPass.type = "lowpass";
-    lowPass.Q.value = 0.7;
-    lowPass.frequency.value = openCutoff;
-    master.connect(lowPass).connect(context.destination);
+    filter = context.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.Q.value = 0.7;
+    filter.frequency.value = openCutoff;
+    master.connect(filter).connect(context.destination);
   }
   return { context, master };
 }
 
 const muffleButton = element<HTMLButtonElement>("muffle");
+const highPassButton = element<HTMLButtonElement>("high-pass");
 const unmuffleButton = element<HTMLButtonElement>("unmuffle");
 
-/** Sweep the low-pass to `hz` over the game's muffle time, exactly as the game does. */
-function sweepLowPass(hz: number): void {
+/** Sweep the selected pause/settings filter over the same two seconds used in game. */
+function sweepFilter(mode: FilterMode): void {
   const { context } = audio();
-  const frequency = lowPass!.frequency;
+  const frequency = filter!.frequency;
   const now = context.currentTime;
   frequency.cancelScheduledValues(now);
   frequency.setValueAtTime(frequency.value, now);
-  frequency.exponentialRampToValueAtTime(hz, now + muffleSeconds);
-  muffleButton.disabled = hz !== openCutoff;
-  unmuffleButton.disabled = hz === openCutoff;
+  if (mode === "open") {
+    const clearTo = filterMode === "highpass" ? openHighPassCutoff : openCutoff;
+    frequency.exponentialRampToValueAtTime(clearTo, now + muffleSeconds);
+    if (filterMode === "highpass") {
+      window.setTimeout(() => {
+        if (filterMode !== "open") return;
+        filter!.type = "lowpass";
+        filter!.frequency.setValueAtTime(openCutoff, context.currentTime);
+      }, muffleSeconds * 1000);
+    }
+  } else {
+    filter!.type = mode;
+    frequency.exponentialRampToValueAtTime(muffledCutoff, now + muffleSeconds);
+  }
+  filterMode = mode;
+  muffleButton.disabled = mode === "lowpass";
+  highPassButton.disabled = mode === "highpass";
+  unmuffleButton.disabled = mode === "open";
 }
-muffleButton.addEventListener("click", () => sweepLowPass(muffledCutoff));
-unmuffleButton.addEventListener("click", () => sweepLowPass(openCutoff));
+muffleButton.addEventListener("click", () => sweepFilter("lowpass"));
+highPassButton.addEventListener("click", () => sweepFilter("highpass"));
+unmuffleButton.addEventListener("click", () => sweepFilter("open"));
 
 function load(track: Track): Promise<AudioBuffer> {
   let pending = buffers.get(track.id);

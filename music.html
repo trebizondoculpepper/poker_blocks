@@ -18,8 +18,9 @@
         </p>
         <div class="room-controls">
           <button type="button" id="stop">Stop</button>
-          <button type="button" id="muffle">Muffle (low-pass on)</button>
-          <button type="button" id="unmuffle" disabled>Unmuffle (low-pass off)</button>
+          <button type="button" id="muffle">Pause sound (low-pass)</button>
+          <button type="button" id="high-pass">Settings sound (high-pass)</button>
+          <button type="button" id="unmuffle" disabled>Clear filter</button>
           <label>
             Volume
             <input id="volume" type="range" min="0" max="1" step="0.05" value="0.8" />
@@ -45,6 +46,10 @@
             Beat click
           </label>
         </div>
+        <p class="room-intro">
+          Pause sound auditions the game's 550 Hz low-pass; Settings sound auditions the 550 Hz
+          high-pass. Both ease in or clear over two seconds, matching the planned screen effects.
+        </p>
         <details class="tap" id="wind-panel" open>
           <summary>Record player wind-down and wind-up</summary>
           <p class="room-intro">
