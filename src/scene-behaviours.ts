@@ -70,9 +70,18 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     inRun: () => runScenes > 0,
     hasSave: (context) => context.services.run.hasSave(),
   };
-  /** The items a menu shows: those whose condition, if any, holds right now. */
-  const itemsToShow = (context: Context, items: readonly MenuItem[]) =>
-    items.filter(({ when }) => !when || menuConditions[when](context));
+  /**
+   * The items a menu shows: those whose `when` holds right now. An item whose `enabledWhen`
+   * fails stays, disabled, carrying its hint.
+   */
+  const itemsToShow = (context: Context, items: readonly MenuItem[]): MenuItem[] =>
+    items
+      .filter(({ when }) => !when || menuConditions[when](context))
+      .map((item) =>
+        !item.enabledWhen || menuConditions[item.enabledWhen](context)
+          ? { ...item, disabledHint: undefined }
+          : item,
+      );
   behaviours.register("runInPlay", {
     enter() {
       runScenes++;

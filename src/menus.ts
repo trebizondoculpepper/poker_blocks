@@ -8,13 +8,11 @@ import type { StageReward } from "./stage-rewards";
 import type { Settings } from "./settings";
 import { createSettingsPanel } from "./settings-panel";
 
-/** Why Continue is greyed out on the title screen. */
-export const noGameInProgress = "There is no game in progress.";
-
 export type Screen = "title" | "game";
 
 /** One menu item as a menu shows it: choosing it dispatches `id` as a named action. */
-export type MenuChoice = { id: string; label: string; sfx?: SoundEffectId };
+/** A menu button: its action id, label and sound; a `disabledHint` shows it greyed out. */
+export type MenuChoice = { id: string; label: string; sfx?: SoundEffectId; disabledHint?: string };
 
 export type MenuCallbacks = {
   hasSave(): boolean;
@@ -161,7 +159,10 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
       button.type = "button";
       button.textContent = item.label;
       button.dataset.menu = item.id;
-      button.addEventListener("click", () => chooseTitleItem(item.id));
+      disableWithHint(button, item.disabledHint);
+      button.addEventListener("click", () =>
+        item.disabledHint ? playSfx("action.denied") : chooseTitleItem(item.id),
+      );
       titleItems.append(button);
     }
   }
@@ -228,17 +229,28 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   }
 
   /** A menu button: choosing it plays its sound and dispatches its id as an action. */
-  function choiceButton({ id, label, sfx }: MenuChoice): HTMLButtonElement {
+  function choiceButton({ id, label, sfx, disabledHint }: MenuChoice): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.menu = id;
     button.textContent = label;
+    disableWithHint(button, disabledHint);
     button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
     button.addEventListener("click", () => {
+      if (disabledHint) return playSfx("action.denied");
       playSfx(sfx ?? "ui.click");
       callbacks.onAction(id);
     });
     return button;
+  }
+
+  /**
+   * A disabled item stays visible and focusable, greyed out, with its hint on hover and for
+   * screen readers (`aria-disabled`, not `disabled`, so the hint still shows).
+   */
+  function disableWithHint(button: HTMLButtonElement, hint: string | undefined): void {
+    button.setAttribute("aria-disabled", String(Boolean(hint)));
+    button.title = hint ?? "";
   }
 
   /** The pause menu: one button per choice, each dispatching its id as an action. */

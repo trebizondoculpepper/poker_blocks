@@ -890,8 +890,9 @@ body,
   }
 }
 
-/* Continue with no saved run: shown, greyed out, and explained on hover (#10). */
-[data-menu="continue"][aria-disabled="true"] {
+/* A menu item that can't be chosen yet (Continue with no saved run): shown, greyed out, and
+   explained on hover (#10, #148). */
+.menu-panel button[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
 }

@@ -61,7 +61,18 @@ export type SceneTraits = {
  * One menu item: its action id, its label, an optional condition it needs, and the sound
  * choosing it plays (`ui.click` when left out).
  */
-export type MenuItem = { id: string; label: string; when?: MenuCondition; sfx?: SoundEffectId };
+export type MenuItem = {
+  id: string;
+  label: string;
+  when?: MenuCondition;
+  sfx?: SoundEffectId;
+  /**
+   * Shown but disabled unless this condition holds, with `disabledHint` explaining why (on hover
+   * and to screen readers); choosing it while disabled plays the denied sound (#10, #148).
+   */
+  enabledWhen?: MenuCondition;
+  disabledHint?: string;
+};
 /** A condition a menu item can require; its test lives in the menu traits' registry. */
 export type MenuCondition = "inRun" | "hasSave";
 export type ModeScene = Scene<SceneTraits>;
@@ -111,7 +122,12 @@ export const sceneDefinitions = [
     traits: {
       titleScreen: {
         items: [
-          { id: "continue", label: "Continue", when: "hasSave" },
+          {
+            id: "continue",
+            label: "Continue",
+            enabledWhen: "hasSave",
+            disabledHint: "There is no game in progress.",
+          },
           { id: "new", label: "New game" },
           { id: "openSettings", label: "Settings" },
         ],
