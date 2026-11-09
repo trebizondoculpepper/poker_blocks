@@ -39,6 +39,9 @@ function recordingHost() {
         discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
         handEntered: (entered) => void calls.push(`handInput:${entered}`),
       },
+      rack: {
+        viewEntered: (entered, capacity) => void calls.push(`rack:${entered}:${capacity}`),
+      },
       shop: {
         render: (offers: readonly ShopOffer[], visible: boolean) =>
           calls.push(`shop:${visible}:${offers.length}`),
@@ -48,6 +51,7 @@ function recordingHost() {
       },
       run: {
         hasSave: () => false,
+        rackCapacity: () => 5,
         seed: () => 4242,
         shopStock: () => [{ kind: "card", block: {} as never }],
         dispatch: (action) => void calls.push(`action:${action}`),
@@ -101,6 +105,22 @@ function recordingHost() {
 const scene = (id: string, traits: Partial<SceneTraits>) => ({ id, traits });
 
 describe("scene traits own their behaviour", () => {
+  it("shows the rack, sized from the run, while its scene is on the stack (#187)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("stage", { passiveRackView: {} }));
+    scenes.register(scene("menu", { pausesBelow: { input: true, update: true } }));
+    scenes.register(scene("title", {}));
+    scenes.switchTo("stage");
+    scenes.push("menu");
+    scenes.pop();
+    scenes.switchTo("title");
+    expect(calls.filter((call) => call.startsWith("rack:"))).toEqual([
+      "rack:true:5",
+      "rack:false:5",
+    ]);
+  });
+
   it("keeps the hand and the discard bin while a menu is pushed over their scene (#183)", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);

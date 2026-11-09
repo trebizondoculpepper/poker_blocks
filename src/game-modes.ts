@@ -33,6 +33,8 @@ export type SceneTraits = {
   handView: Record<never, never>;
   /** The discard bin (also the passives' sell target) is shown while this scene is on the stack. */
   discardBin: Record<never, never>;
+  /** The passive rack is shown while this scene is on the stack (#187). */
+  passiveRackView: Record<never, never>;
   /** Blocks may be played onto the field while this scene is in front. */
   fieldPlacement: Record<never, never>;
   /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
@@ -300,6 +302,12 @@ export type SceneAdditions = {
   readonly traits: Partial<SceneTraits>;
 };
 
+/** A mode with a passive rack shows it in play and in the shop, never on the title (#187). */
+const rackScenes: SceneAdditions = {
+  scenes: [...playScenes, "shop"],
+  traits: { passiveRackView: {} },
+};
+
 /**
  * A mode's scenes: every shared definition, under the mode's own scene ids, with each scene's
  * `screen` trait first and then its definition's traits, plus any traits the mode adds to it.
@@ -399,7 +407,7 @@ export const gameModeRegistry = new Registry<GameMode>("game mode");
 const gameModes: GameMode[] = [
   {
     id: "game",
-    scenes: composeScenes("game"),
+    scenes: composeScenes("game", [rackScenes]),
     startScene: "title",
     flow: standardGameFlow,
     navigation: standardNavigation,
@@ -446,7 +454,7 @@ const gameModes: GameMode[] = [
   },
   {
     id: "dev2",
-    scenes: composeScenes("dev2"),
+    scenes: composeScenes("dev2", [rackScenes]),
     startScene: "stage-1",
     flow: standardGameFlow,
     navigation: standardNavigation,
@@ -466,7 +474,7 @@ const gameModes: GameMode[] = [
   },
   {
     id: "dev3",
-    scenes: composeScenes("dev3"),
+    scenes: composeScenes("dev3", [rackScenes]),
     startScene: "shop",
     flow: standardGameFlow,
     navigation: standardNavigation,
