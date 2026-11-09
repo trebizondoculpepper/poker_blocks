@@ -9,6 +9,15 @@ The user and several coding agents work on this project at once. This page descr
 - **Taking over another agent's ticket.** Do it only when the user asks or the owner agrees. Message the owner through Agent Inbox, then move the label and say so in a comment.
 - **Keep as much work in play as possible.** Don't let one ticket stall progress.
 
+## Picking up a ticket
+
+Before writing any code:
+
+1. **Read the ticket** and its comments, and check its labels and linked PRs.
+2. **Check its status.** Is it already claimed, or partly implemented on `main` or on a branch? Build on existing work rather than redoing it.
+3. **Check that the brief fits the plan.** Compare it with [game-architecture.md](game-architecture.md) (technical) and [game.md](game.md) (creative). A ticket that departs from either may be a **misbrief**: for example one that would add a special case, contradict a recorded rule, or duplicate another ticket.
+4. **If it looks like a misbrief, don't implement it.** Explain the conflict and ask your questions as a numbered comment on the issue. Add the `status:possible-misbrief` and `question` labels (and `help wanted` if it needs someone else's input), then move on.
+
 ## Open questions
 
 Design decisions belong to the user. An agent never settles an open question by writing its own answer into the docs or the code.
