@@ -124,7 +124,10 @@ export function offences(line: string, file = "", registries: readonly string[] 
   // Asking a registry whether it holds an id is looking the thing up (AGENTS.md), not a
   // membership test on a kind (#181), so `<registry>.has(...)` is read as a lookup.
   const read = registries.length
-    ? line.replace(new RegExp(`\\b(?:${registries.join("|")})\\s*\\.has\\(`, "g"), "lookup(")
+    ? line.replace(
+        new RegExp(`(?<![\\w$.])(?:${registries.join("|")})\\s*\\.has\\(`, "g"),
+        "lookup(",
+      )
     : line;
   return forbidden
     .filter(({ pattern, except }) => !except?.includes(file) && pattern.test(read))
@@ -148,8 +151,9 @@ type Hit = { line: number; rules: string[]; text: string };
 /** Offending lines per file, exempt lines excluded. */
 export function scan(): Map<string, Hit[]> {
   const found = new Map<string, Hit[]>();
-  const registries = registryNames(sources.map(([, text]) => text));
   for (const [file, text] of sources) {
+    // Only registries declared in this file, so a same-named Set elsewhere is still checked.
+    const registries = registryNames([text]);
     const hits = text.split("\n").flatMap((line, i) => {
       const rules = offences(line, file, registries);
       return rules.length ? [{ line: i + 1, rules, text: line.trim() }] : [];
@@ -238,6 +242,7 @@ describe("the guardrail's patterns", () => {
     expect(registries).toEqual(["dealers"]);
     expect(offences("if (!dealers.has(record.dealer)) return null;", "", registries)).toEqual([]);
     expect(offences("if (!seen.has(record.dealer)) return null;", "", registries)).not.toEqual([]);
+    expect(offences("if (cache.dealers.has(record.dealer)) go();", "", registries)).not.toEqual([]);
     expect(registryNames(['export const modes = new Registry<Mode>("mode");'])).toEqual(["modes"]);
   });
 
