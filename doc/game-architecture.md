@@ -109,6 +109,14 @@ A registered dealer reads `GameState` to decide whether a move is legal and retu
 
 ## Placement and card appearance
 
+**The drop contract (#167).** A hand card, with any selected cards it carries, can be picked up at any time, including while the last play or discard is still animating. When it's dropped, each carried card ends up exactly once: played at the candidate, discarded, moved within the hand, or put back.
+
+- **A drop during an animation waits.** The cards are held where they were dropped and commit as soon as the animation ends. Committing straight away would start a second animation over the first.
+- **The rules check it again then.** A drop the new state refuses (the stage was just won, say) goes back to the hand with the `action.denied` sound.
+- **One at a time.** While a drop is waiting, no new drag starts.
+
+Before #167, a pointer down during an animation was silently ignored. A quick drag after a play did nothing, while the empty field's first-play prompt looked like a drop preview.
+
 After a hand cube is dropped on an attachable face, its screen position is mapped through the board camera into the play scene. The same cube becomes a child of the rotating assembly and moves, turns, and grows toward the target cell in assembly-local coordinates over one second using the shared easing helper. Because the cube and target share a parent, the destination follows the board's wobble throughout the flight. Its hand slot remains empty during that second. The dealer refills that slot when the placement finishes, and the new cube materializes with a Perlin noise shader adapted from `../shrew_farmer/src/hud/materialise.ts`.
 
 A discarded hand cube dissolves with the same shader over one second before its slot refills. The discard effect runs backwards from the appearance effect. Other hand cubes stay in their slots during either animation. Reduced-motion settings shorten the effect and use a fade.

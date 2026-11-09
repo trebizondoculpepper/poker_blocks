@@ -337,6 +337,10 @@ export function createTableInput(options: {
       .filter((rendered): rendered is RenderedBlock => Boolean(rendered));
   }
 
+  /** A drop made while the last play or discard was still animating, waiting to commit (#167). */
+  type PendingDrop = { drag: Drag; candidate: Candidate | null; discard: boolean };
+  let pendingDrop: PendingDrop | null = null;
+
   function finishDrag(drop: boolean): void {
     if (!drag) return;
     const activeDrag = drag;
@@ -345,45 +349,65 @@ export function createTableInput(options: {
       const candidate = drop ? activeDrag.candidate : null;
       const discard = drop && activeDrag.discardTarget;
       const refusedAtBin = drop && activeDrag.refused;
-      const reorderSlot = drop ? activeDrag.reorderSlot : null;
       drag = null;
-      for (const rendered of [activeDrag.source, ...activeDrag.group])
-        options.setDragLayer(rendered.cube, false);
       field.showCandidate(null);
       discardArea.classList.remove("is-target", "is-refused");
       if (refusedAtBin) options.overlays().flashRefused(discardArea);
-      const accepted = discard
-        ? rules.discard([activeDrag.source, ...activeDrag.group])
-        : candidate
-          ? rules.play(playOrder(activeDrag), candidate)
-          : false;
-      const from = rules.hand().indexOf(activeDrag.source.block);
-      if (!accepted && reorderSlot !== null && reorderSlot !== from) {
-        // A drop inside the hand reorders it: not a play or discard, and nothing refills.
-        rules.reorderHand(from, reorderSlot);
-        hand.putBack([activeDrag.source]);
-        hand.sync(rules.hand());
-        playSfx("hand.reorder");
-      } else if (!accepted) {
-        // A drop the rules refuse (or any drop with no plays left) is denied; a drop on
-        // empty space just returns the block to the hand.
-        const refused =
-          drop &&
-          (discard ||
-            candidate ||
-            !rules.canPlay() ||
-            overDiscardArea(activeDrag.lastX, activeDrag.lastY));
-        playSfx(refused ? "action.denied" : "card.drag.return");
-        hand.putBack([activeDrag.source, ...activeDrag.group]);
-        hand.layout();
-      }
       cameraView.changeMotionRate(normalMotionRate);
       suppressClickUntil = performance.now() + 250;
       if (canvas.hasPointerCapture(activeDrag.pointerId)) {
         canvas.releasePointerCapture(activeDrag.pointerId);
       }
+      // A drop made while the last play or discard is still landing waits, held where it was
+      // dropped, and commits as soon as that animation ends (see `frame`). Committing over it
+      // would start a second animation over the first.
+      if ((candidate || discard) && rules.busy()) {
+        pendingDrop = { drag: activeDrag, candidate, discard };
+        return;
+      }
+      commitDrop(activeDrag, candidate, discard, drop);
     } else {
       drag = null;
+    }
+  }
+
+  /**
+   * Carry out a finished drag: play it at its candidate, discard it, reorder the hand, or put it
+   * back. Every carried block ends up exactly once: played, discarded or back in the hand.
+   */
+  function commitDrop(
+    activeDrag: Drag,
+    candidate: Candidate | null,
+    discard: boolean,
+    drop: boolean,
+  ): void {
+    const reorderSlot = drop ? activeDrag.reorderSlot : null;
+    for (const rendered of [activeDrag.source, ...activeDrag.group])
+      options.setDragLayer(rendered.cube, false);
+    const accepted = discard
+      ? rules.discard([activeDrag.source, ...activeDrag.group])
+      : candidate
+        ? rules.play(playOrder(activeDrag), candidate)
+        : false;
+    const from = rules.hand().indexOf(activeDrag.source.block);
+    if (!accepted && reorderSlot !== null && reorderSlot !== from) {
+      // A drop inside the hand reorders it: not a play or discard, and nothing refills.
+      rules.reorderHand(from, reorderSlot);
+      hand.putBack([activeDrag.source]);
+      hand.sync(rules.hand());
+      playSfx("hand.reorder");
+    } else if (!accepted) {
+      // A drop the rules refuse (or any drop with no plays left) is denied; a drop on
+      // empty space just returns the block to the hand.
+      const refused =
+        drop &&
+        (discard ||
+          candidate ||
+          !rules.canPlay() ||
+          overDiscardArea(activeDrag.lastX, activeDrag.lastY));
+      playSfx(refused ? "action.denied" : "card.drag.return");
+      hand.putBack([activeDrag.source, ...activeDrag.group]);
+      hand.layout();
     }
   }
 
@@ -402,7 +426,9 @@ export function createTableInput(options: {
   // ----- Hand cards and the board -----
 
   const onPointerDown = (event: PointerEvent) => {
-    if (rules.busy()) return;
+    // A card can be picked up while the last play is still landing (#167); only a drop still
+    // waiting to commit holds new gestures back.
+    if (pendingDrop) return;
     if (event.pointerType === "touch") {
       touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (touches.size >= 2) {
@@ -802,7 +828,9 @@ export function createTableInput(options: {
     clearSelection() {
       selected = new Set();
     },
-    handDrag: () => (drag?.active ? drag : null),
+    // A drop waiting to commit keeps its blocks held where they were dropped (#167).
+    handDrag: () =>
+      drag?.active ? drag : pendingDrop && { ...pendingDrop.drag, reorderSlot: null },
     get dragging() {
       return Boolean(drag?.active);
     },
@@ -830,6 +858,13 @@ export function createTableInput(options: {
     refreshDiscardTarget,
     frame() {
       if (drag?.active) updateCandidate();
+      // A drop that waited for the last play's animation commits once it has finished; the
+      // rules check it again then, so a play the new state refuses is put back, denied.
+      if (pendingDrop && !rules.busy()) {
+        const waiting = pendingDrop;
+        pendingDrop = null;
+        commitDrop(waiting.drag, waiting.candidate, waiting.discard, true);
+      }
     },
     dispose() {
       window.removeEventListener("pointermove", movePassive);
