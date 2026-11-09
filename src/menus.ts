@@ -391,6 +391,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     rowTimers.forEach((timer) => window.clearTimeout(timer));
     rowTimers = [];
     stageWon.root.hidden = true;
+    uncover(stageWon.root);
     settingsButton.hidden = false;
     next?.();
   });
@@ -404,6 +405,8 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     stageNextAction = onContinue;
     // Not open(): the game screen (and its music) stays as it is behind the pop-up.
     title.root.hidden = settingsScreen.root.hidden = gameOver.root.hidden = true;
+    // A pause menu left open under it can't be reached until the dialog closes.
+    if (stageWon.root.hidden) cover(stageWon.root);
     stageWon.root.hidden = false;
     settingsButton.hidden = true;
     const reveal = (index: number) => {
