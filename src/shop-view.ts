@@ -364,8 +364,10 @@ export function createShopView(
         "--shop-sign-offset",
         `${lerp(-110, 0, easeInOutCubic(clamp01(elapsed / 850)))}vh`,
       );
-      sign.style.opacity = String(clamp01((2100 - elapsed) / 350));
-      if (elapsed >= 470 + (displayed.length - 1) * 155 + 830) finishEntrance();
+      // The sign fades out as the last offer lands, so it never vanishes mid-fade.
+      const landedAt = 470 + (displayed.length - 1) * 155 + 830;
+      sign.style.opacity = String(clamp01((landedAt - elapsed) / 350));
+      if (elapsed >= landedAt) finishEntrance();
     }
     renderer.render(scene, camera);
   }
