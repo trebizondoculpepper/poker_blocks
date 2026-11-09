@@ -115,6 +115,8 @@ A registered dealer reads `GameState` to decide whether a move is legal and retu
 - **The rules check it again then.** A drop the new state refuses (the stage was just won, say) goes back to the hand with the `action.denied` sound.
 - **One at a time.** While a drop is waiting, no new drag starts.
 
+- **Hit-testing follows the game state, not the animation.** When a play is accepted, the field records each played block as an invisible stand-in at its final cell (`FieldView.expect`), which the real block replaces when it lands. A drop made while that block is still flying can attach to it, or finds the face it now covers taken. The empty-field check uses `occupiedCells()` for the same reason. `cells()` still means landed blocks, which is what the camera frames.
+
 Before #167, a pointer down during an animation was silently ignored. A quick drag after a play did nothing, while the empty field's first-play prompt looked like a drop preview.
 
 After a hand cube is dropped on an attachable face, its screen position is mapped through the board camera into the play scene. The same cube becomes a child of the rotating assembly and moves, turns, and grows toward the target cell in assembly-local coordinates over one second using the shared easing helper. Because the cube and target share a parent, the destination follows the board's wobble throughout the flight. Its hand slot remains empty during that second. The dealer refills that slot when the placement finishes, and the new cube materializes with a Perlin noise shader adapted from `../shrew_farmer/src/hud/materialise.ts`.
