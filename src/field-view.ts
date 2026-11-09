@@ -9,7 +9,7 @@
  */
 import * as THREE from "three";
 import type { CardBlock } from "./cards";
-import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
+import { addCell, centerOfGravity, removeCell, type MassCenter } from "./center-of-gravity";
 import type { BlockViews, RenderedBlock } from "./rendered-blocks";
 import { cellKey, faceFromDirection, faceNormal, type Cell, type Face } from "./traits/attachable";
 
@@ -45,6 +45,11 @@ export type FieldView = {
   tint(blocks: readonly CardBlock[], now: number): void;
   /** Advance the tints by one frame. */
   update(now: number): void;
+  /**
+   * Take a destroyed block off the table: dispose its cube and move the centre of mass.
+   * The gap stays; nothing settles into it.
+   */
+  remove(blockId: string): void;
   /** Forget every placed block (the cubes themselves are disposed elsewhere). */
   clear(): void;
   dispose(): void;
@@ -133,6 +138,14 @@ export function createFieldView(options: {
     cells: () => [...placed.values()].map(({ cell }) => cell!),
     get massCenter() {
       return massCenter;
+    },
+    remove(blockId) {
+      for (const [key, rendered] of [...placed].filter(([, { block }]) => block.id === blockId)) {
+        placed.delete(key);
+        massCenter = removeCell(massCenter, rendered.cell!);
+        views.dispose(rendered);
+      }
+      if (massCenter.count > 0) options.onCenter(centerOfGravity(massCenter));
     },
     add(block, cell) {
       const rendered = inCell(views.create(block, cubeSize, "board"), cell);

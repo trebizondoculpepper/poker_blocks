@@ -8,6 +8,7 @@
 import { Registry } from "./core/registry";
 import { saveKey } from "./save";
 import type { Scene } from "./scenes";
+import type { DestroyCause, DevDestructibleMix } from "./traits/destructible";
 
 export const roomSceneNames = [
   "title",
@@ -23,17 +24,26 @@ export type RoomSceneName = (typeof roomSceneNames)[number];
 export type RoomSceneTraits = {
   screen: { kind: RoomSceneName };
   pausesBelow: { input: boolean; update: boolean };
+  /** Testing only: double-click a block to destroy it with this cause. */
+  devManualBlockDestroyer: { cause: DestroyCause };
 };
 export type RoomScene = Scene<RoomSceneTraits>;
 export type RoomMusicMode = "quiet" | "ordinary";
 
-function scenesForRoom(roomId: string): readonly RoomScene[] {
+/**
+ * A mode's scenes. `stageTraits` are composed into every play scene (both stages and the
+ * boss), for traits that act on the table while a stage is played.
+ */
+function scenesForRoom(
+  roomId: string,
+  stageTraits: Partial<RoomSceneTraits> = {},
+): readonly RoomScene[] {
   const sceneTraits: Record<RoomSceneName, Partial<RoomSceneTraits>> = {
     title: {},
     settings: { pausesBelow: { input: true, update: true } },
-    "stage-1": {},
-    "stage-2": {},
-    boss: {},
+    "stage-1": stageTraits,
+    "stage-2": stageTraits,
+    boss: stageTraits,
     shop: {},
     "stage-won": { pausesBelow: { input: true, update: true } },
     "game-over": {},
@@ -105,6 +115,8 @@ export type RoomTraits = {
   console?: { name: string };
   /** A fresh run is started on load when this URL parameter is "true"; it is then removed. */
   restartable?: { param: string };
+  /** Testing only: about `share` of the deck is destructible by the given causes. */
+  devDestructibleMix?: DevDestructibleMix;
   /** Start a fresh run in the shop with this many coins, for shop development. */
   shopPreview?: { coins: number };
 };
@@ -207,6 +219,25 @@ const rooms: Room[] = [
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
       shopPreview: { coins: 5 },
+      skipTitle: { resume: true },
+    },
+  },
+  {
+    // Destruction sandbox: a mixed-material structure in which about half the blocks are
+    // destructible; double-click one to destroy it. Destroyed blocks leave gaps.
+    id: "dev4",
+    musicMode: "quiet",
+    scenes: scenesForRoom("dev4", { devManualBlockDestroyer: { cause: "manual" } }),
+    startScene: "stage-1",
+    traits: {
+      save: { key: "poker-blocks.dev4-run" },
+      console: { name: "dev4" },
+      restartable: { param: "restart" },
+      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
+      sandbox: {},
+      materialDeck: { reshuffle: "new-game" },
+      materialSample: {},
+      devDestructibleMix: { share: 0.5, by: ["manual"] },
       skipTitle: { resume: true },
     },
   },

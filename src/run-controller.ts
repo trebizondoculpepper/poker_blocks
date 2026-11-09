@@ -7,6 +7,7 @@
  *
  * It decides what happens; the other services show it.
  */
+import { withDevDestructibleMix, type DestroyCause } from "./traits/destructible";
 import type { AudioService } from "./audio-service";
 import { playSfx } from "./audio/sfx";
 import type { CameraViewService } from "./camera-view";
@@ -84,6 +85,11 @@ export type RunController = {
   readonly screenScenes: ScreenScenes;
   /** What the developer console may do. */
   readonly consoleApp: ConsoleApp;
+  /**
+   * Destroy a table block if its destructible trait allows `cause`; the gap stays. A
+   * refusal plays the denied sound. Returns whether it was destroyed.
+   */
+  destroyBlock(blockId: string, cause: DestroyCause): boolean;
   /** Put the run the page opened with on the table (before the services draw anything). */
   seedTable(): void;
   /** Configure the services for the current mode and settings, and start listening. */
@@ -200,6 +206,10 @@ export function createRunController<Context>(options: {
 
   /** A deck for a run in this room: plain, or with materials (fresh, or kept by seed). */
   function roomDeck(newGame: boolean): readonly CardBlock[] {
+    return withDevDestructibleMix(materialDeck(newGame), roomTraits.devDestructibleMix);
+  }
+
+  function materialDeck(newGame: boolean): readonly CardBlock[] {
     const materials = roomTraits.materialDeck;
     if (!materials) return standardDeck;
     return makeDevDeck(materials.reshuffle === "each-run" ? newMaterialSeed() : devSeed(newGame));
@@ -548,6 +558,17 @@ export function createRunController<Context>(options: {
     menus,
     screenScenes,
     consoleApp,
+    destroyBlock(blockId, cause) {
+      if (!game.destroyBlock(blockId, cause)) {
+        playSfx("action.denied");
+        return false;
+      }
+      services.field.remove(blockId);
+      updateHud();
+      autosave();
+      playSfx("block.destroyed");
+      return true;
+    },
     seedTable() {
       for (const { block, cell } of game.state.field) services.field.add(block, cell);
       game.state.hand.forEach((block, slot) => (services.hand.add(block).handSlot = slot));

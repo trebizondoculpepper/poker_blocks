@@ -9,7 +9,7 @@ describe("rooms composed from traits", () => {
     expect(roomFor("dev2").id).toBe("dev2");
     expect(roomFor("dev").id).toBe("dev0");
     expect(roomFor("nonsense").id).toBe("game");
-    expect(devRooms()).toEqual(["dev0", "dev1", "dev2", "dev3"]);
+    expect(devRooms()).toEqual(["dev0", "dev1", "dev2", "dev3", "dev4"]);
   });
 
   it("lists, links and restarts rooms through their console and restartable traits", async () => {
