@@ -1,0 +1,42 @@
+import { describe, expect, it, vi } from "vite-plus/test";
+import { standardDeck } from "../cards";
+import type { MaterialDefinition } from "../materials";
+import { createBlockAppearance } from "./block-appearance";
+
+describe("composed material appearance", () => {
+  it("builds a new material from existing visual parts without a material-specific branch", () => {
+    const context = { fillRect: vi.fn(), fillText: vi.fn() };
+    vi.stubGlobal("document", {
+      createElement: () => ({ width: 0, height: 0, getContext: () => context }),
+    });
+    const definition: MaterialDefinition = {
+      id: "test-amber",
+      name: "Test Amber",
+      traits: {},
+      appearance: {
+        pattern: "goldFoil",
+        assembly: "sixFaces",
+        surface: "matte",
+        height: "none",
+        ink: { red: "#b00000", black: "#101010", onDark: false },
+        edge: { color: 0x123456, opacity: 0.4 },
+        geometry: { shape: "box", segments: 0, radius: 0, scale: 1 },
+        reliefScale: 0,
+        endGrainFaces: [],
+      },
+    };
+    try {
+      const appearance = createBlockAppearance(standardDeck[0].traits.identity, definition, 2.4);
+      expect(appearance.materials).toHaveLength(6);
+      expect(appearance.textures).toHaveLength(1);
+      expect(appearance.edgeColor).toBe(0x123456);
+      expect(appearance.edgeOpacity).toBe(0.4);
+      expect(context.fillText).toHaveBeenCalledTimes(2);
+      appearance.geometry.dispose();
+      appearance.textures.forEach((texture) => texture.dispose());
+      appearance.materials[0].dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { clamp01, easeInOutCubic, lerp } from "./easing";
 import { playSfx } from "./audio/sfx";
 import { cardName } from "./cards";
-import { materialOf } from "./materials";
+import { getMaterialDefinition, materialOf } from "./materials";
 import { passiveFaceTexture } from "./passive-rack";
 import { passiveDefinitions } from "./passives";
 import type { ShopOffer } from "./shop-stock";
@@ -144,7 +144,7 @@ export function createShopView(
     }
     const appearance = createBlockAppearance(
       offer.block.traits.identity,
-      materialOf(offer.block),
+      getMaterialDefinition(materialOf(offer.block)),
       1.35,
     );
     const mesh = new THREE.Mesh(appearance.geometry, appearance.materials);
