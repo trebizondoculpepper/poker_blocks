@@ -63,6 +63,7 @@ function recordingHost() {
       },
       audio: {
         setMusicFilter: (kind) => void calls.push(`filter:${kind}`),
+        playStageMusic: (pool) => void calls.push(`stageMusic:${pool}`),
         playCue: (cue) => void calls.push(`cue:${cue}`),
       },
       sound: (id) => void calls.push(`sound:${id}`),
@@ -332,5 +333,33 @@ describe("the title screen's scene trait (#88)", () => {
     scenes.pop();
     // Coming back in front re-reads the conditions, so Continue is enabled once a save exists.
     expect(calls).toContain("title:continue(disabled),new,openSettings");
+  });
+});
+
+describe("play scenes start their own music (#92)", () => {
+  const scenesOf = (name: string) =>
+    gameModeFor("game").scenes.find(({ id }) => id === `game/${name}`)!;
+
+  it("a stage starts a random vibe and the boss its loop, as each comes in front", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    for (const name of ["stage-1", "stage-2", "boss", "pause"]) scenes.register(scenesOf(name));
+    scenes.switchTo(scenesOf("stage-1").id);
+    scenes.switchTo(scenesOf("boss").id);
+    expect(calls.filter((call) => call.startsWith("stageMusic:"))).toEqual([
+      "stageMusic:stage",
+      "stageMusic:boss",
+    ]);
+  });
+
+  it("doesn't restart the music when the pause menu closes over a stage", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    for (const name of ["stage-1", "pause"]) scenes.register(scenesOf(name));
+    scenes.switchTo(scenesOf("stage-1").id);
+    calls.length = 0;
+    scenes.push(scenesOf("pause").id);
+    scenes.pop();
+    expect(calls.filter((call) => call.startsWith("stageMusic:"))).toEqual([]);
   });
 });

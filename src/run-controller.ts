@@ -361,7 +361,6 @@ export function createRunController<Context>(options: {
       followRunPosition();
       resetTable();
       if (game.inStage) {
-        services.audio.stageStarted(game.phase);
         services.hand.deal(game.state.hand);
         playSfx("round.start");
       } else if (game.inShop) {
@@ -439,7 +438,6 @@ export function createRunController<Context>(options: {
     showSelection();
     autosave();
     playSfx(game.phase === "shop" ? "shop.open" : "round.start");
-    if (game.inStage) audio.stageStarted(game.phase);
     audio.runStarted();
   }
 
