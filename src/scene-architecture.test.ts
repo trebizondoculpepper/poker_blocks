@@ -42,4 +42,14 @@ describe("scene architecture guardrails", () => {
     expect(main).not.toMatch(/data-stat=|round-hud|deck-hud|coin-hud|shop-exit/);
     expect(main).not.toMatch(/Continue \/ Skip shop|"End game"|"BOSS STAGE"/);
   });
+
+  it("keeps the console's room switching and music commands in the console host service", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+    const host = readFileSync(new URL("./console-host.ts", import.meta.url), "utf8");
+
+    expect(main).toContain("createConsoleHost(");
+    expect(main).not.toMatch(/\bcreateConsole\(|roomLink\(nextRoom|audio\.music\./);
+    expect(host).toContain("window.history.replaceState");
+    expect(host).not.toMatch(/window\.location\.(assign|reload)\s*\(/);
+  });
 });
