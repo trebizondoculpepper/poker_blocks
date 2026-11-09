@@ -36,7 +36,7 @@ export const forbidden: readonly { name: string; pattern: RegExp }[] = [
   {
     name: "switches over a kind/phase/scene/room/id",
     pattern: new RegExp(
-      `(?<![.\\w$]\\s*)switch\\s*\\(\\s*(?:${ident}+\\??\\.)*(?:${kindWords})(?!${ident})`,
+      `(?<!\\.\\s*)(?<![\\w$])switch\\s*\\(\\s*(?:${ident}+\\??\\.)*(?:${kindWords})(?!${ident})`,
     ),
   },
   {
@@ -47,7 +47,7 @@ export const forbidden: readonly { name: string; pattern: RegExp }[] = [
   {
     name: 'chains literal comparisons on one value (x === "a" || x === "b" / else if)',
     pattern: new RegExp(
-      `((?:${ident}+\\??\\.)*${ident}+)\\s*={2,3}\\s*${word}\\s*\\)?\\s*\\|\\|\\s*\\(?\\s*\\1\\s*={2,3}\\s*${word}|\\belse\\s+if\\s*\\(\\s*(?:${ident}+\\??\\.)*${ident}+\\s*={2,3}\\s*${word}`,
+      `(?<!\\.\\s*)(?<!${ident})((?:${ident}+\\??\\.)*${ident}+)\\s*={2,3}\\s*${word}\\s*\\)?\\s*\\|\\|\\s*\\(?\\s*\\1\\s*={2,3}\\s*${word}|\\belse\\s+if\\s*\\(\\s*(?:${ident}+\\??\\.)*${ident}+\\s*={2,3}\\s*${word}`,
     ),
   },
   {
@@ -91,6 +91,7 @@ describe("the guardrail's patterns", () => {
     'if (a.b.next === "aa" || a.b.next === "bb") go();',
     'if ($next === "aa" || $next === "bb") go();',
     "if (room.dev) list();",
+    "else switch (kind) {",
   ])("flags %s", (line) => expect(offences(line)).not.toEqual([]));
 
   it.each([
@@ -101,6 +102,9 @@ describe("the guardrail's patterns", () => {
     '// if (game.phase === "shop") is how we used to do it',
     ' * game.phase === "shop" in a doc comment',
     'if (a === "aa" || b === "bb") go();',
+    'if (obj.value === "alpha" || value === "beta") go();',
+    "my$switch(kind);",
+    "sceneManager. switch(kind);",
     'if (game.phase === "shop") go(); // branch-ok: #12',
   ])("does not flag %s", (line) => expect(offences(line)).toEqual([]));
 
