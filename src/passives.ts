@@ -1,5 +1,5 @@
 import { Registry } from "./core/registry";
-import { passiveCategories, type PassiveCategory } from "./passive-categories";
+import { categoryDefaults, type PassiveCategoryTraits } from "./passive-categories";
 import type { EventRule } from "./event-rules";
 import type { BlockMaterial } from "./materials";
 import type { StageKind } from "./run-rules";
@@ -28,7 +28,7 @@ export type PassiveRule = {
 export type PassiveBlock = {
   id: string;
   definitionId: string;
-  traits: {
+  traits: Partial<PassiveCategoryTraits> & {
     rackResident?: { zone: "passive-rack" };
     appearance?: { symbol: string; palette: PassivePalette };
     passive: { traitId: string; rules?: readonly PassiveRule[]; eventRules?: readonly EventRule[] };
@@ -63,8 +63,11 @@ export type PassiveDefinition = {
   symbol: string;
   description: string;
   traitId: string;
-  /** Its primary purpose (#81): presentation defaults only, never read by gameplay rules. */
-  category: PassiveCategory;
+  /**
+   * Exactly one trait from the category facet (#81), naming its primary purpose. It brings
+   * presentation defaults only and is never read by gameplay rules.
+   */
+  categoryTrait: Partial<PassiveCategoryTraits>;
   /** Overrides the category's default colours for this passive. */
   palette?: PassivePalette;
   rules: readonly PassiveRule[];
@@ -84,7 +87,7 @@ const palette = (face: string, ink: string, edge: string) => ({ face, ink, edge 
 const definitions: PassiveDefinition[] = [
   {
     id: "do-nothing",
-    category: "utility",
+    categoryTrait: { utilityCategory: {} },
     name: "Do Nothing",
     symbol: "∅",
     description: "Has no effect. Unlimited use.",
@@ -95,7 +98,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "double-line",
-    category: "scoring",
+    categoryTrait: { scoringCategory: {} },
     name: "×2",
     symbol: "×2",
     description: "Doubles every scored line. Unlimited use.",
@@ -105,7 +108,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "quad-line",
-    category: "scoring",
+    categoryTrait: { scoringCategory: {} },
     name: "×4",
     symbol: "×4",
     description: "Quadruples every scored line. Unlimited use.",
@@ -115,7 +118,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "gold-standard",
-    category: "economy",
+    categoryTrait: { economyCategory: {} },
     name: "Gold Standard",
     symbol: "$",
     description: "When you win a stage, +1 coin for each gold block still in your hand.",
@@ -131,7 +134,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "carnivore",
-    category: "scoring",
+    categoryTrait: { scoringCategory: {} },
     name: "Carnivore",
     symbol: "◈",
     description: "Doubles the base value of each meat block in a scored line. Unlimited use.",
@@ -147,7 +150,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "woodworker",
-    category: "scoring",
+    categoryTrait: { scoringCategory: {} },
     name: "Woodworker",
     symbol: "✥",
     description: "Adds 3 to the base value of each wood block in a scored line. Unlimited use.",
@@ -163,7 +166,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "crossroads",
-    category: "scoring",
+    categoryTrait: { scoringCategory: {} },
     name: "Crossroads",
     symbol: "✳",
     description:
@@ -180,7 +183,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "long-haul",
-    category: "scoring",
+    categoryTrait: { scoringCategory: {} },
     name: "Long Haul",
     symbol: "↗",
     description:
@@ -202,7 +205,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "scrapper",
-    category: "economy",
+    categoryTrait: { economyCategory: {} },
     name: "Scrapper",
     symbol: "⚙",
     description: "Earns 1 coin for each block discarded. Unlimited use.",
@@ -212,7 +215,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "seeing-red",
-    category: "economy",
+    categoryTrait: { economyCategory: {} },
     name: "Seeing Red",
     symbol: "♥♦",
     description: "Earns 1 coin for each Heart or Diamond discarded. Unlimited use.",
@@ -228,7 +231,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "ace-exchange",
-    category: "utility",
+    categoryTrait: { utilityCategory: {} },
     name: "Ace Exchange",
     symbol: "AA",
     description:
@@ -248,7 +251,7 @@ for (const definition of definitions) passiveDefinitions.register(definition.id,
 
 /** A passive's colours: its own override, or its category's default. */
 export function passivePalette(definition: PassiveDefinition): PassivePalette {
-  return definition.palette ?? passiveCategories[definition.category].palette;
+  return definition.palette ?? categoryDefaults(definition.categoryTrait).palette;
 }
 
 /** The look a passive block is drawn with: its own appearance trait, or its definition's. */
@@ -272,6 +275,7 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
     id,
     definitionId,
     traits: {
+      ...definition.categoryTrait,
       rackResident: { zone: "passive-rack" },
       appearance: { symbol: definition.symbol, palette: passivePalette(definition) },
       passive: { traitId: definition.traitId, rules: definition.rules },

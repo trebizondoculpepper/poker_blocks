@@ -141,7 +141,7 @@ The proposed hand and passive rack are ordered zones in `GameState`. A generic r
 
 ## Passive categories
 
-A passive definition names one primary `category` (`src/passive-categories.ts`), which supplies presentation defaults: block colours and an appearance finish. It is metadata, not a trait: gameplay rule evaluation never reads it, and a test enforces that. A definition's own `palette` overrides the default.
+Each passive category is a trait, and the **category facet** (`src/passive-categories.ts`) is the set of them. A **facet** is a group of traits of which a block composes exactly one. Every passive composes exactly one category trait, and a test enforces it. A category trait brings presentation defaults (block colours and an appearance finish) and no behaviour: gameplay rule evaluation never reads it, and a test enforces that too. A definition's own `palette` overrides the default.
 
 ## Line scoring
 
