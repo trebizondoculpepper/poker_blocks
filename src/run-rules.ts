@@ -21,8 +21,6 @@ export type RunRules = {
   stageReward?: number;
   /** How many passives the rack can hold; unlimited when left out. */
   rackCapacity?: number;
-  /** What passives cost, in coins; `defaultPassivePrices` when left out. */
-  passivePrices?: PassivePrices;
   /**
    * Changes to a passive's sale payout, applied in order after the default resale policy
    * (src/resale.ts). None by default; future sale-modifying passives plug in here.
@@ -31,15 +29,6 @@ export type RunRules = {
   /** First playable-card shop price; one coin unless a run changes it. */
   cardPurchasePrice?: number;
 };
-
-/**
- * The passive purchase price (issue #16). Selling is the resale policy in src/resale.ts, from
- * each passive's base price in the balance config (#103).
- */
-export type PassivePrices = { buy: number };
-
-/** First version: a passive costs 1 coin to buy, until the shop uses base prices (#18). */
-export const defaultPassivePrices: PassivePrices = { buy: 1 };
 
 /** A stage in the round, in order, with the data that is its own. */
 export type StageDefinition = {

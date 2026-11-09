@@ -52,6 +52,9 @@ export function registerOfferView<Block extends OfferBlock>(
   offerViews.register(name, view as unknown as OfferView<OfferBlock>);
 }
 
+/** A price in words: "1 coin", "4 coins". */
+const coins = (amount: number) => `${amount} coin${amount === 1 ? "" : "s"}`;
+
 /** What each destination is called in an offer's description. */
 const destinationLabels: Record<OfferDestination, string> = {
   hand: "hand",
@@ -241,13 +244,13 @@ export function createShopView(
       item.className = `shop-offer ${view.className}`;
       item.setAttribute(
         "aria-label",
-        `${description}, ${price(offer)} coin, drag to ${destination}`,
+        `${description}, ${coins(price(offer))}, drag to ${destination}`,
       );
       const slot = document.createElement("span");
       slot.className = "shop-cube-slot";
       const label = document.createElement("span");
       label.className = "shop-offer-label";
-      label.textContent = `${name} · ${price(offer)} coin`;
+      label.textContent = `${name} · ${coins(price(offer))}`;
       const tooltip = document.createElement("span");
       tooltip.className = "shop-offer-description";
       tooltip.textContent = description;
