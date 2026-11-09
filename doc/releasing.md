@@ -15,7 +15,15 @@ How the game is versioned and released (#127, #128). It follows The Pool's model
 2. It runs the checks and the build, then opens a **`Release vX.Y.Z` PR** that changes only `package.json` and the lockfile.
 3. **Merge that PR.** `.github/workflows/release.yml` sees that the new version has no release yet. It builds the game at exactly that version and publishes the GitHub release `vX.Y.Z` with `poker-blocks-vX.Y.Z-web.zip` attached (the web build, `index.html` at its root) and generated notes.
 
-If publishing fails, fix the cause and run `gh workflow run release.yml` to publish it again. Publishing to itch.io is a separate mission (#130).
+If publishing fails, fix the cause and run `gh workflow run release.yml` to publish it again.
+
+## itch.io (#130)
+
+The same release also goes to itch.io: `release.yml` pushes the web build with butler to `trebizondoculpepper/poker-blocks:html5` (the project at <https://itch.io/game/edit/5330084>), versioned as the release.
+
+- **The secret:** butler logs in with the **`BUTLER_API_KEY`** GitHub Actions secret, which the owner adds in the repository's settings (Settings → Secrets and variables → Actions) from itch.io's Account → API keys. Until it exists, the itch.io step is skipped with a warning and the GitHub release still publishes. Never commit the key; a test fails if a file in the repository assigns one.
+- **Only releases publish:** the step runs only when a new release is being published, never on ordinary pushes.
+- **Page settings stay manual:** an upload doesn't change the page. The owner sets the HTML5 project to launch in fullscreen, and makes the page public when ready, on itch.io.
 
 ## Guardrail
 

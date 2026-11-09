@@ -70,3 +70,22 @@ jobs:
             --target "${GITHUB_SHA}" \
             --title "Poker Blocks v${VERSION}" \
             --generate-notes
+      # itch.io (#130): the same web build goes to the HTML5 channel of the itch.io project, on
+      # every intentional release. butler logs in with the BUTLER_API_KEY repository secret; until
+      # the owner adds it, this step is skipped with a warning so GitHub releases still publish.
+      # An upload never changes the page's visibility or settings (fullscreen launch, public or
+      # not); the owner sets those on itch.io.
+      - name: Push the release to itch.io
+        if: steps.version.outputs.publish == 'true'
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ -z "$BUTLER_API_KEY" ]; then
+            echo "::warning::BUTLER_API_KEY is not set, so v${VERSION} was not pushed to itch.io (see doc/releasing.md)."
+            exit 0
+          fi
+          curl -fsSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler
+          chmod +x butler/butler
+          ./butler/butler push dist trebizondoculpepper/poker-blocks:html5 --userversion "${VERSION}"
