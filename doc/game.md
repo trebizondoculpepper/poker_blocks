@@ -260,6 +260,85 @@ The shop entrance is a separate presentation sequence: a deliberately theatrical
 
 Shop transactions and the entrance animation are tracked separately in [shop gameplay issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18) and [shop presentation issue #19](https://github.com/trebizondoculpepper/poker_blocks/issues/19).
 
+### Shop rules (design, [issue #7](https://github.com/trebizondoculpepper/poker_blocks/issues/7))
+
+This section is the target design. It replaces the first-version placeholders above (two passives, three cards, one coin each) once implemented. Rules marked **Agreed** are confirmed; rules marked **Proposed** are this design's answer to an open question and need agreement before implementation.
+
+#### Agreed rules
+
+- A shop follows every completed stage. Each visit generates fresh stock; unbought stock disappears on leaving. There are no rerolls in the first version.
+- Stock holds **5 to 9 offers**: at least one passive and at least one playable card; the rest are drawn from the eligible pool.
+- Only passives can be sold. Cards cannot be sold.
+- The discard pile returns to the deck after the boss stage.
+- Prices are in coins and are **fixed** base prices from the balance config. Price-changing passives are future work and will be modifiers applied on top of the base price, never edits to it.
+- When two comparable passives differ only in strength, the stronger costs more (×4 > ×2, Scrapper > Seeing Red).
+- Each round of the initial progression introduces at least one new item or material.
+
+#### Passive catalogue
+
+| Passive                                                                        |      Base price | Earliest round |
+| ------------------------------------------------------------------------------ | --------------: | -------------: |
+| ×2                                                                             |               4 |              1 |
+| ×4                                                                             |               9 |              2 |
+| Gold Standard                                                                  |               5 |       4 (gold) |
+| Carnivore                                                                      |               3 |       3 (meat) |
+| Woodworker                                                                     |               4 |       1 (wood) |
+| Crossroads                                                                     |               2 |              1 |
+| Long Haul                                                                      |               4 |              1 |
+| Seeing Red                                                                     |               6 |              1 |
+| Scrapper                                                                       |               8 |              2 |
+| Ace Exchange                                                                   |               5 |              2 |
+| Le Chef ([#22](https://github.com/trebizondoculpepper/poker_blocks/issues/22)) | **Proposed:** 6 |       3 (meat) |
+
+A passive whose effect names a material is never eligible before that material unlocks.
+
+#### Unlocks and stock weights
+
+Material unlocks by round: 1 wood; 2 steel; 3 meat, flame and ice; 4 gold; 5 prismatic crystal.
+
+Every offer type in the balance config has a **minimum unlock round**, a **default weight** and optional **weight keyframes** by round. A type is eligible from its unlock round. Its weight is interpolated linearly between keyframes and holds the last keyframe's value afterwards. Drawing normalizes the eligible weights; weights are relative, not probabilities.
+
+| Material card     | Weight keyframes                |
+| ----------------- | ------------------------------- |
+| Wood              | 1 from round 1                  |
+| Steel             | 0.5 at round 2, 1 at round 4    |
+| Prismatic crystal | 0.25 at round 5, 0.5 at round 6 |
+
+**Stock generation (Proposed):** draw the stock size uniformly from 5 to 9. Draw one offer from the eligible passives and one from the eligible cards, then fill the remaining slots from the combined eligible pool by weight. A passive the player already owns, or one already in this stock, is not eligible.
+
+#### Stage targets
+
+Round 1 stage 1 targets **300**. Each next target is the previous one ×1.75 (stage 1 → stage 2), ×1.5 (stage 2 → boss) and ×1.25 (boss → next round's stage 1), rounded to the nearest integer at each step: 300, 525, 788, 985, 1724, 2586, … The rates are balance config.
+
+#### Buying, selling and leaving (Proposed)
+
+- **A bought card** goes to the **deck**, shuffled in, not to the hand: the hand is full of the next stage's planning, and the deck is what carries over. It belongs to the player for the rest of the run.
+- **A bought passive** installs immediately at the **right end of the rack** and subscribes to events from the next event onward.
+- **A full rack** refuses a passive purchase with `action.denied` and the red X; the player must sell one first. Coins are not spent.
+- **Insufficient coins** refuses the purchase the same way; the offer stays.
+- **Selling** is available in the shop and during play, through the existing Sell target. A passive sells for **half its base price, rounded down, minimum 1**.
+- **Leaving** is the shop-exit control. It discards unbought stock and continues the game flow (the next stage, or the next round after the boss shop).
+
+| Example            | Before                        | Action              | After                                             |
+| ------------------ | ----------------------------- | ------------------- | ------------------------------------------------- |
+| Buy                | 6 coins, ×2 offered at 4      | Drag ×2 to the rack | 2 coins, ×2 rightmost in the rack, offer gone     |
+| Insufficient coins | 3 coins, ×2 offered at 4      | Drag ×2 to the rack | Refused, red X, nothing changes                   |
+| Full rack          | Rack 5/5, 9 coins, ×2 offered | Drag ×2 to the rack | Refused, red X, nothing changes                   |
+| Sell               | Scrapper (base 8) in rack     | Drag it to Sell     | +4 coins, Scrapper removed, subscriptions updated |
+| Exit               | Two offers unbought           | Press the exit      | Offers gone, next stage dealt                     |
+
+#### State, ownership and saves (Proposed)
+
+- `GameRun` owns the stock (`shopStock`), coins, deck and rack; the shop scene only presents them. Buy, sell and leave are `GameRun` operations that either apply completely or are refused with no change.
+- **Ownership invariant:** every card the player owns is in exactly one of deck, hand, field or discard pile; every passive in exactly one of stock or rack. A purchase moves an offer from stock to its destination in one step.
+- **Saves** record the stock with its offers and prices, so Continue reopens the same shop rather than rolling a new one, and a purchase is saved before its result is shown. A reload never rerolls stock or refunds a purchase.
+
+#### Balance config guardrails
+
+- **One source of truth:** prices, unlock rounds, weights and keyframes, material effects, hand values and stage target rates live in a single balance config module; consumers read it and never hold their own numbers.
+- **Validation at load (and in a test):** every price is a positive integer; unlock rounds are positive integers; weights are non-negative; keyframe rounds are strictly increasing and not before the unlock round; every passive that names a material unlocks no earlier than that material.
+- **Base prices are data; modifiers are separate:** a future price-changing passive is an event rule that adjusts a working price, never an edit to the config.
+
 ### Rack reorganization
 
 The hand and passive rack share a layout rule, separate from the shop. When an item leaves either rack through play, discard, sale or another effect, the remaining items pack to the left. New items enter from the right, one at a time with a short gap between arrivals. Buying into a rack reflows the existing items to make room. This movement is visual; stored rack order determines gameplay effects only where order matters, such as passive resolution. See [rack reorganization issue #17](https://github.com/trebizondoculpepper/poker_blocks/issues/17); manual drag reordering remains [issue #4](https://github.com/trebizondoculpepper/poker_blocks/issues/4).
