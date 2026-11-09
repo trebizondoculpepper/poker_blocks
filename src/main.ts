@@ -51,6 +51,7 @@ import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
   prefersReducedMotion,
+  silencedAudio,
   resolveShadowQuality,
   saveSettings,
   type Settings,
@@ -1106,10 +1107,11 @@ const music = createMusicController(
 function applySettings(next: Settings): void {
   settings = next;
   setSfxVolume(next.volume);
-  setSfxMuted(next.muted);
+  const silenced = silencedAudio(next);
+  setSfxMuted(silenced.sfx);
   // Music sits a little under the sound effects at the same volume setting.
   musicPlayer.setVolume(next.volume * 0.75);
-  musicPlayer.setMuted(next.muted);
+  musicPlayer.setMuted(silenced.music);
   reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
   cardRoom.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
 }

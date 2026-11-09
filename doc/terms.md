@@ -26,5 +26,5 @@ Canonical names used in the rules, the code and the docs. Use these words and no
 | **Title screen**  | The screen shown when the page opens, with Continue, New game and Settings.                                                                          |
 | **Save**          | The one stored run, written automatically at safe points. A lost run has no save.                                                                    |
 | **Continue**      | Resume the saved run exactly where it was.                                                                                                           |
-| **Settings**      | Player preferences (sound volume, mute, motion), stored separately from the save.                                                                    |
+| **Settings**      | Player preferences (sound volume, mute, effects and music on/off, motion), stored separately from the save.                                          |
 | **Reorder**       | Moving a block to another position within an ordered zone (the hand, later the passive rack). Not a play or discard.                                 |

@@ -7,7 +7,12 @@ export type ShadowSetting = "auto" | "high" | "low" | "off";
 export type Settings = {
   /** 0 to 1. */
   volume: number;
+  /** Master mute: silences sound effects and music together. */
   muted: boolean;
+  /** Sound effects on or off, under the master mute. */
+  sfx: boolean;
+  /** Music on or off, under the master mute. */
+  music: boolean;
   motion: MotionSetting;
   /** Shadow quality; "auto" picks low on touch devices, high elsewhere. */
   shadows: ShadowSetting;
@@ -16,6 +21,8 @@ export type Settings = {
 export const defaultSettings: Settings = {
   volume: 0.7,
   muted: false,
+  sfx: true,
+  music: true,
   motion: "system",
   shadows: "auto",
 };
@@ -35,6 +42,8 @@ export function loadSettings(storage: SaveStorage | null): Settings {
       ? stored.volume
       : defaultSettings.volume;
   const muted = typeof stored.muted === "boolean" ? stored.muted : defaultSettings.muted;
+  const sfx = typeof stored.sfx === "boolean" ? stored.sfx : defaultSettings.sfx;
+  const music = typeof stored.music === "boolean" ? stored.music : defaultSettings.music;
   const motion = (["system", "reduced", "full"] as const).includes(stored.motion as MotionSetting)
     ? (stored.motion as MotionSetting)
     : defaultSettings.motion;
@@ -43,7 +52,7 @@ export function loadSettings(storage: SaveStorage | null): Settings {
   )
     ? (stored.shadows as ShadowSetting)
     : defaultSettings.shadows;
-  return { volume, muted, motion, shadows };
+  return { volume, muted, sfx, music, motion, shadows };
 }
 
 export function saveSettings(storage: SaveStorage | null, settings: Settings): void {
@@ -52,6 +61,14 @@ export function saveSettings(storage: SaveStorage | null, settings: Settings): v
   } catch {
     // Settings still apply for this visit; they just will not be remembered.
   }
+}
+
+/** Which audio channels are silent: the master mute silences both. */
+export function silencedAudio(settings: Pick<Settings, "muted" | "sfx" | "music">): {
+  sfx: boolean;
+  music: boolean;
+} {
+  return { sfx: settings.muted || !settings.sfx, music: settings.muted || !settings.music };
 }
 
 /** Whether to reduce motion, given the setting and the system preference. */

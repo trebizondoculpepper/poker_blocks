@@ -385,7 +385,8 @@ body,
 }
 
 .menu-panel {
-  width: min(360px, 100%);
+  /* 360px of content plus padding and border, as before border-box sizing. */
+  width: min(410px, 100%);
   padding: 28px 24px;
   border: 1px solid #8191a777;
   border-radius: 14px;
@@ -393,6 +394,10 @@ body,
   color: #f6f0e3;
   box-shadow: 0 18px 48px #0007;
   text-align: center;
+  /* A tall panel (settings) scrolls on short screens instead of pushing Back off-screen. */
+  box-sizing: border-box;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
 }
 
 .menu-title {

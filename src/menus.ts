@@ -79,6 +79,14 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
        <input type="checkbox" data-menu="muted" />
        <span>Mute sound</span>
      </label>
+     <label class="menu-field menu-check">
+       <input type="checkbox" data-menu="sfx" />
+       <span>Sound effects</span>
+     </label>
+     <label class="menu-field menu-check">
+       <input type="checkbox" data-menu="music" />
+       <span>Music</span>
+     </label>
      <fieldset class="menu-field">
        <legend>Motion</legend>
        ${(Object.keys(motionLabels) as MotionSetting[])
@@ -143,6 +151,8 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const quit = find<HTMLButtonElement>(settingsScreen.panel, "quit");
   const volume = find<HTMLInputElement>(settingsScreen.panel, "volume");
   const muted = find<HTMLInputElement>(settingsScreen.panel, "muted");
+  const sfx = find<HTMLInputElement>(settingsScreen.panel, "sfx");
+  const music = find<HTMLInputElement>(settingsScreen.panel, "music");
   const motionInputs = [
     ...settingsScreen.panel.querySelectorAll<HTMLInputElement>('input[name="motion"]'),
   ];
@@ -180,6 +190,9 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   function showSettings(): void {
     volume.value = String(Math.round(settings.volume * 100));
     muted.checked = settings.muted;
+    sfx.checked = settings.sfx;
+    music.checked = settings.music;
+    sfx.disabled = music.disabled = settings.muted;
     motionInputs.forEach((input) => (input.checked = input.value === settings.motion));
     shadowInputs.forEach((input) => (input.checked = input.value === settings.shadows));
     // Only offered mid-game: from the title screen, Back already goes there.
@@ -247,6 +260,16 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   volume.addEventListener("change", () => playSfx("ui.click"));
   muted.addEventListener("change", () => {
     change({ muted: muted.checked });
+    // The channel toggles sit under the master mute, so they read as off while it is on.
+    sfx.disabled = music.disabled = muted.checked;
+    playSfx("ui.click");
+  });
+  sfx.addEventListener("change", () => {
+    change({ sfx: sfx.checked });
+    playSfx("ui.click");
+  });
+  music.addEventListener("change", () => {
+    change({ music: music.checked });
     playSfx("ui.click");
   });
   motionInputs.forEach((input) =>
