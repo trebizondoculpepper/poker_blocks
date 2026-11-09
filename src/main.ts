@@ -9,12 +9,7 @@ import { presentationOrder, type ScoredLine } from "./scoring";
 import { magnitudeSfxFor } from "./score-presentation";
 
 import { GameSession, type Phase } from "./game-session";
-import {
-  demoSessionConfig,
-  sandboxSessionConfig,
-  unlimited,
-  type SessionConfig,
-} from "./session-config";
+import { demoSessionConfig, sandboxSessionConfig, type SessionConfig } from "./session-config";
 import { tweenValue } from "./easing";
 import { randomRock, stepRock, type Rock, type RockState } from "./motion";
 import { createMaterialise } from "./visual/materialise";
@@ -27,6 +22,7 @@ import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createAudioService, type AudioService } from "./audio-service";
+import { createHudPanels, type HudPanels } from "./hud-panels";
 import { createMenus } from "./menus";
 import { createConsole } from "./console/console-view";
 import { musicTracks } from "./audio/music-catalog";
@@ -69,36 +65,7 @@ if (!app) throw new Error("Missing app element");
 app.innerHTML = '<main class="scene" role="application" aria-label="Poker Blocks"></main>';
 
 const host = app.querySelector<HTMLDivElement>(".scene")!;
-const roundHud = document.createElement("aside");
-roundHud.className = "round-hud";
-roundHud.setAttribute("aria-label", "Round status");
-roundHud.innerHTML = `
-  <div class="hud-heading" data-stat="heading">ROUND</div>
-  <div class="hud-row"><span>Score</span><strong data-stat="score"></strong></div>
-  <div class="hud-row"><span>Target</span><strong data-stat="target"></strong></div>
-  <div class="hud-divider"></div>
-  <div class="hud-row"><span>Moves</span><strong data-stat="moves"></strong></div>
-  <div class="hud-row"><span>Discards</span><strong data-stat="discards"></strong></div>
-  <div class="hud-divider"></div>
-  <div class="hud-row"><span>Coins</span><strong data-stat="coins"></strong></div>
-  <button class="hud-action" type="button" data-stat="action" hidden></button>
-`;
-host.append(roundHud);
-const deckHud = document.createElement("aside");
-deckHud.className = "deck-hud";
-deckHud.innerHTML = '<span>DECK</span><strong data-stat="deck"></strong><small>cards left</small>';
-host.append(deckHud);
-const coinHud = document.createElement("aside");
-coinHud.className = "coin-hud";
-coinHud.setAttribute("aria-label", "Coins");
-coinHud.innerHTML = '<span>COINS</span><strong data-stat="shop-coins"></strong>';
-coinHud.hidden = true;
-host.append(coinHud);
-const shopExitButton = document.createElement("button");
-shopExitButton.className = "hud-action shop-exit";
-shopExitButton.type = "button";
-shopExitButton.hidden = true;
-host.append(shopExitButton);
+const hud: HudPanels = createHudPanels(host);
 const discardArea = document.createElement("div");
 discardArea.className = "discard-area";
 discardArea.setAttribute("aria-label", "Discard area");
@@ -131,7 +98,6 @@ function flashRefused(target: HTMLElement): void {
   if (!reducedMotion) target.classList.add("refused-shake");
   window.setTimeout(() => target.classList.remove("refused-flash", "refused-shake"), 700);
 }
-const stat = (name: string) => host.querySelector<HTMLElement>(`[data-stat="${name}"]`)!;
 const tooltip = document.createElement("div");
 tooltip.className = "inspect-tooltip";
 tooltip.setAttribute("role", "tooltip");
@@ -373,9 +339,9 @@ const audio: AudioService = createAudioService({
 });
 type TraitContext = {
   host: HTMLElement;
-  services: { cameraView: CameraViewService; audio: AudioService };
+  services: { cameraView: CameraViewService; audio: AudioService; hud: HudPanels };
 };
-const traitContext: TraitContext = { host, services: { cameraView, audio } };
+const traitContext: TraitContext = { host, services: { cameraView, audio, hud } };
 const sceneBehaviours = new SceneTraitRegistry<RoomSceneTraits, TraitContext>();
 sceneBehaviours.register("screen", {
   enter(context, { kind }) {
@@ -492,50 +458,25 @@ type Flight = {
 /** Seconds between the blocks of a line setting off. */
 const lineStagger = 0.12;
 const tints: { blocks: RenderedBlock[]; startedAt: number }[] = [];
-const phaseNames: Record<Phase, string> = {
-  "stage-1": "STAGE 1",
-  "stage-2": "STAGE 2",
-  boss: "BOSS STAGE",
-  shop: "SHOP",
-  over: "GAME OVER",
-};
-
-/** The HUD button's label for the current moment, or null when there is nothing to do. */
-function nextActionLabel(outcome: ReturnType<typeof roundOutcome>): string | null {
-  if (game.phase === "shop") return "Continue / Skip shop";
-  if (game.phase === "over") return "New game";
-  if (outcome === "lost") return "End game";
-  // A won stage moves on from its Stage Won pop-up, not from here.
-  return null;
-}
-
 function updateHud(): void {
-  const { round, deck } = game.state;
-  const overlays = overlaysForPhase(roomTraits, game.phase);
-  roundHud.hidden = !overlays?.round;
-  deckHud.hidden = !overlays?.deck;
-  coinHud.hidden = !overlays?.coins;
   // The game state updates as soon as a placement is accepted, but the card still
   // has to land before its scoring presentation begins. Keep outcomes hidden across
   // both parts of that sequence.
   const presenting = pendingAction?.kind === "play" || scoreSteps.length > 0 || outcomeAt !== null;
-  const outcome = presenting || !game.inStage ? "playing" : roundOutcome(game.state);
-  const result = outcome === "won" ? " · WON" : outcome === "lost" ? " · LOST" : "";
-  stat("heading").textContent = `ROUND ${game.round} · ${phaseNames[game.phase]}${result}`;
-  const label = presenting ? null : nextActionLabel(outcome);
-  const action = stat("action") as HTMLButtonElement;
-  action.hidden = label === null;
-  action.textContent = label ?? "";
-  shopExitButton.hidden = !overlays?.shopExit || label === null;
-  shopExitButton.textContent = label ?? "";
-  stat("score").textContent = String(shownScore);
-  const count = (n: number) => (n >= unlimited / 2 ? "∞" : String(n));
-  stat("target").textContent = count(round.targetScore);
-  stat("moves").textContent = count(round.movesLeft);
-  stat("discards").textContent = count(round.discardsLeft);
-  stat("coins").textContent = String(game.state.coins);
-  stat("shop-coins").textContent = String(game.state.coins);
-  stat("deck").textContent = String(deck.length);
+  const { round, deck, coins } = game.state;
+  hud.render({
+    round: game.round,
+    phase: game.phase,
+    overlays: overlaysForPhase(roomTraits, game.phase),
+    presenting,
+    outcome: presenting || !game.inStage ? "playing" : roundOutcome(game.state),
+    score: shownScore,
+    targetScore: round.targetScore,
+    movesLeft: round.movesLeft,
+    discardsLeft: round.discardsLeft,
+    coins,
+    deckSize: deck.length,
+  });
   discardArea.classList.toggle("is-exhausted", !game.dealer.canDiscard(game.state));
   updateDiscardCount();
 }
@@ -1621,8 +1562,7 @@ if (restartRoom) {
   window.history.replaceState(window.history.state, "", roomLink(thisRoom, window.location.href));
 }
 const unbindScreenshot = bindScreenshotShortcut(host, renderer, render);
-stat("action").addEventListener("click", takeNextAction);
-shopExitButton.addEventListener("click", takeNextAction);
+hud.onAction(takeNextAction);
 
 // ----- Developer console: ~ (or `) drops it down -----
 createConsole({
@@ -2023,6 +1963,7 @@ if (import.meta.hot) {
     for (const type of sceneInputEvents) host.removeEventListener(type, routeSceneInput, true);
     window.removeEventListener("blur", onBlur);
     audio.dispose();
+    hud.dispose();
     pendingAction?.effects.forEach((e) => e.finish());
     appearing.forEach(({ effect }) => effect.finish());
     renderedBlocks.slice().forEach(disposeCube);
