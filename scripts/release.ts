@@ -63,8 +63,13 @@ export function release({
   run("npx", ["vp", "build"]);
 
   const [pkg, lock] = manifestsAt(before["package.json"]!, before["package-lock.json"]!, version);
+  // Only a branch this run created is removed on failure; an existing one is refused, never
+  // deleted, so a retry can't lose earlier release work.
+  if (git("branch", "--list", branch)) throw new Error(`${branch} already exists locally.`);
+  let created = false;
   try {
     git("checkout", "--quiet", "-b", branch);
+    created = true;
     writeFileSync(path("package.json"), pkg);
     writeFileSync(path("package-lock.json"), lock);
     git("add", ...files);
@@ -73,11 +78,7 @@ export function release({
   } catch (error) {
     git("checkout", "--quiet", "--force", "main");
     for (const file of files) writeFileSync(path(file), before[file]!);
-    try {
-      git("branch", "-D", branch);
-    } catch {
-      // Never created.
-    }
+    if (created) git("branch", "-D", branch);
     throw error;
   }
   run("gh", [
