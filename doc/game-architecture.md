@@ -398,21 +398,25 @@ The cards' randomness is cosmetic and comes from `Math.random`, never the sessio
 
 `src/scene-behaviours.ts` registers each scene trait against its own config type, and a scene composes whichever subset it needs. Behaviour therefore comes from the scene in front, and a scene that gains or loses a trait leaves the others alone.
 
-| Scene trait               | What it does while its scene is in front                                                              | Composed by             |
-| ------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------- |
-| `screen`                  | Marks the host with the scene, for styling and tests.                                                 | Every scene.            |
-| `roundPanel`              | Shows the round panel, configured with the stage's name and its next-action label per outcome (#180). | Stage 1, stage 2, boss. |
-| `deckPanel`               | Shows the deck counter through the HUD service.                                                       | Stage 1, stage 2, boss. |
-| `coinsPanel`              | Shows the coin counter through the HUD service.                                                       | Shop.                   |
-| `shopExit`                | Shows the shop exit button, configured with its label (#180).                                         | Shop.                   |
-| `fieldPlacement`          | Lets the input service play blocks onto the field.                                                    | Stage 1, stage 2, boss. |
-| `shopStock`               | Shows the shop's stock, and lets its offers be bought, through the shop view.                         | Shop.                   |
-| `pausesBelow`             | Stops lower scenes taking input or updates while a pop-up or menu is open.                            | Settings, stage-won.    |
-| `devManualBlockDestroyer` | Testing only: destroys a double-clicked table block with the configured cause.                        | dev4's play scenes.     |
+**Every game feature is a trait.** What a scene offers is exactly the traits it composes, so its definition lists its features. A scene without `handView` has no hand: it is neither drawn nor reachable. A scene without `discardBin` has no bin. Nothing appears by default, and nothing has to be hidden by a special case (#183).
+
+| Scene trait               | What it does while its scene is in front                                                                                     | Composed by                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `screen`                  | Marks the host with the scene, for styling and tests.                                                                        | Every scene.                  |
+| `roundPanel`              | Shows the round panel, configured with the stage's name and its next-action label per outcome (#180).                        | Stage 1, stage 2, boss.       |
+| `deckPanel`               | Shows the deck counter through the HUD service.                                                                              | Stage 1, stage 2, boss.       |
+| `coinsPanel`              | Shows the coin counter through the HUD service.                                                                              | Shop.                         |
+| `shopExit`                | Shows the shop exit button, configured with its label (#180).                                                                | Shop.                         |
+| `handView`                | The hand exists: drawn by the renderer and reachable by the input. Counted, so a menu pushed over the scene keeps it (#183). | Stage 1, stage 2, boss, shop. |
+| `discardBin`              | Shows the discard bin, which is also the passives' sell target. Counted the same way (#183).                                 | Stage 1, stage 2, boss, shop. |
+| `fieldPlacement`          | Lets the input service play blocks onto the field.                                                                           | Stage 1, stage 2, boss.       |
+| `shopStock`               | Shows the shop's stock, and lets its offers be bought, through the shop view.                                                | Shop.                         |
+| `pausesBelow`             | Stops lower scenes taking input or updates while a pop-up or menu is open.                                                   | Settings, stage-won.          |
+| `devManualBlockDestroyer` | Testing only: destroys a double-clicked table block with the configured cause.                                               | dev4's play scenes.           |
 
 The numbers a panel shows are not the scene's: the run controller keeps handing the HUD service a `HudView` snapshot, and the traits only decide which panels exist. Likewise what a shop stocks is game-run state, chosen by run setup and held by `GameRun`; `shopStock` owns only its display and buying.
 
-`src/main.ts` is the composition root. It may create the DOM host, construct services and the scene manager, connect their narrow interfaces, open the selected mode, run the frame loop and dispose resources. Rules and progression belong in the run controller; gestures in `table-input.ts`; presentation in services and scene traits. The comment at the top of `main.ts` records this boundary, and the architecture test guards it. The legacy branches moved into `src/run-controller.ts` remain in the guardrail baseline; removing them is #36's job.
+`src/main.ts` is the composition root. It may create the DOM host, construct services and the scene manager, connect their narrow interfaces, open the selected mode, run the frame loop and dispose resources. Rules and progression belong in the run controller; gestures in `table-input.ts`; presentation in services and scene traits. The comment at the top of `main.ts` records this boundary, and the architecture test guards it. The run controller has no legacy branches left in the guardrail baseline (#36).
 
 The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameRun`. A `console: { name }` trait lists a mode in the developer console, and a `restartable: { param }` trait makes it honour `&restart=true` (#38).
 

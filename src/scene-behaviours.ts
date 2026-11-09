@@ -36,7 +36,10 @@ export type SceneHost = {
     /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
     renderer: Pick<TableRenderer, "tableEntered" | "handEntered">;
     hud: Pick<HudPanels, "show" | "hide">;
-    input: Pick<TableInput, "setFieldActive" | "cancelGestures" | "discardBinEntered">;
+    input: Pick<
+      TableInput,
+      "setFieldActive" | "cancelGestures" | "discardBinEntered" | "handEntered"
+    >;
     shop: ShopView;
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
     run: Pick<
@@ -155,8 +158,15 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // The hand and the discard bin, like the table, exist while a scene that wants them is on the
   // stack (#183): a menu pushed over a stage leaves them, and the title composes neither.
   behaviours.register("handView", {
-    enter: ({ services }) => services.renderer.handEntered(true),
-    exit: ({ services }) => services.renderer.handEntered(false),
+    // Drawn and reachable together: a scene without the hand can neither see nor touch it.
+    enter({ services }) {
+      services.renderer.handEntered(true);
+      services.input.handEntered(true);
+    },
+    exit({ services }) {
+      services.renderer.handEntered(false);
+      services.input.handEntered(false);
+    },
   });
   behaviours.register("discardBin", {
     enter: ({ services }) => services.input.discardBinEntered(true),

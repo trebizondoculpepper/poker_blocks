@@ -37,6 +37,7 @@ function recordingHost() {
         setFieldActive: (active) => calls.push(`fieldActive:${active}`),
         cancelGestures: () => void calls.push("gestures:cancel"),
         discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
+        handEntered: (entered) => void calls.push(`handInput:${entered}`),
       },
       shop: {
         render: (offers: readonly ShopOffer[], visible: boolean) =>
@@ -108,15 +109,16 @@ describe("scene traits own their behaviour", () => {
     scenes.register(scene("title", {}));
 
     scenes.switchTo("stage");
-    expect(calls).toEqual(["hand:true", "bin:true"]);
+    expect(calls).toEqual(["hand:true", "handInput:true", "bin:true"]);
     calls.length = 0;
     scenes.push("menu");
     scenes.pop();
-    expect(calls.filter((call) => /^(hand|bin):/.test(call))).toEqual([]);
+    expect(calls.filter((call) => /^(hand|handInput|bin):/.test(call))).toEqual([]);
     scenes.switchTo("title");
-    expect(calls.filter((call) => /^(hand|bin):/.test(call)).sort()).toEqual([
+    expect(calls.filter((call) => /^(hand|handInput|bin):/.test(call)).sort()).toEqual([
       "bin:false",
       "hand:false",
+      "handInput:false",
     ]);
   });
 
