@@ -112,6 +112,7 @@ describe("game modes composed from traits", () => {
       coinsPanel: {},
       shopExit: {},
       shopStock: {},
+      runInPlay: {},
       keyAction: { key: "Escape", action: "openPause" },
     });
     // The title, stage-won and game-over scenes show no panels of their own.
@@ -129,6 +130,7 @@ describe("game modes composed from traits", () => {
       roundPanel: {},
       deckPanel: {},
       fieldPlacement: {},
+      runInPlay: {},
       keyAction: { key: "Escape", action: "openPause" },
       devManualBlockDestroyer: { cause: "manual" },
     });

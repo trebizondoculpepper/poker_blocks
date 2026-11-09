@@ -121,8 +121,6 @@ export type RunController = {
    * mode's navigation data; a game action (such as `quitToTitle`) runs its handler.
    */
   dispatch(action: string): void;
-  /** Whether a run is being played under the menus (not just the title screen). */
-  inRun(): boolean;
   /** Buy a shop offer into the hand or the rack; false when refused. */
   buy(id: string, destination: Parameters<GameRun["buyShopOffer"]>[1]): boolean;
   /** Per frame: once an announced outcome's delay has passed, the pop-up or game over follows. */
@@ -653,7 +651,6 @@ export function createRunController<Context>(options: {
       offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),
     shopStock: () => game.state.shopStock ?? [],
     dispatch,
-    inRun: () => scenes.stack[0]?.id !== modeSceneId(currentMode.id, "title"),
     buy(id, destination) {
       const bought = game.buyShopOffer(id, destination);
       if (!bought) {

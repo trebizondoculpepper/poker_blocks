@@ -8,7 +8,6 @@ import type { ShopOffer } from "./shop-stock";
 /** A host that records what the traits did, with no DOM or renderer behind it. */
 function recordingHost() {
   const calls: string[] = [];
-  const inRun = { value: true };
   const shown = new Set<HudPanel>();
   const host: SceneHost = {
     host: { dataset: {} } as HTMLElement,
@@ -37,7 +36,6 @@ function recordingHost() {
       run: {
         shopStock: () => [{ kind: "card", block: {} as never }],
         dispatch: (action) => void calls.push(`action:${action}`),
-        inRun: () => inRun.value,
       },
       overlays: {
         showMenu: (label, choices) =>
@@ -49,7 +47,7 @@ function recordingHost() {
       audio: { setMusicFilter: (kind) => void calls.push(`filter:${kind}`) },
     },
   };
-  return { host, calls, shown, inRun };
+  return { host, calls, shown };
 }
 
 const scene = (id: string, traits: Partial<SceneTraits>) => ({ id, traits });
@@ -176,9 +174,8 @@ describe("the pause menu's scene traits (#87)", () => {
   const stage = gameModeFor("game").scenes.find(({ id }) => id === "game/stage-1")!;
   const title = gameModeFor("game").scenes.find(({ id }) => id === "game/title")!;
 
-  function stack(inRun = true) {
+  function stack() {
     const recorded = recordingHost();
-    recorded.inRun.value = inRun;
     const scenes = new SceneManager(sceneBehaviours(), recorded.host);
     for (const scene of [pause, settings, stage, title]) scenes.register(scene);
     return { ...recorded, scenes };
@@ -197,7 +194,7 @@ describe("the pause menu's scene traits (#87)", () => {
   });
 
   it("leaves out Quit to title over the title screen", () => {
-    const { scenes, calls } = stack(false);
+    const { scenes, calls } = stack();
     scenes.switchTo(title.id);
     scenes.push(pause.id);
     expect(calls).toContain("menu:Paused:resume,openSettings");
@@ -233,8 +230,9 @@ describe("the pause menu's scene traits (#87)", () => {
       "action:resume",
       "action:back",
     ]);
-    // Other keys pass through untouched.
+    // Other keys, and a held key's auto-repeat, pass through untouched.
     expect(scenes.dispatch({ type: "keydown", key: "a" })).toBe(false);
+    expect(scenes.dispatch({ type: "keydown", key: "Escape", repeat: true })).toBe(false);
   });
 
   it("stops input and updates reaching the stage under the menu", () => {

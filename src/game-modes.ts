@@ -39,6 +39,8 @@ export type SceneTraits = {
   musicFilter: { kind: MusicFilter };
   /** Pressing `key` dispatches the named action. */
   keyAction: { key: string; action: string };
+  /** A run is being played while this scene is on the stack (the `inRun` menu condition). */
+  runInPlay: Record<never, never>;
 };
 
 /** One menu item: its action id, its label, and an optional condition it needs. */
@@ -67,6 +69,7 @@ const playSceneTraits: Partial<SceneTraits> = {
   roundPanel: {},
   deckPanel: {},
   fieldPlacement: {},
+  runInPlay: {},
   ...escapeOpensPause,
 };
 
@@ -108,7 +111,10 @@ export const sceneDefinitions = [
   { name: "stage-1", traits: playSceneTraits },
   { name: "stage-2", traits: playSceneTraits },
   { name: "boss", traits: playSceneTraits },
-  { name: "shop", traits: { coinsPanel: {}, shopExit: {}, shopStock: {}, ...escapeOpensPause } },
+  {
+    name: "shop",
+    traits: { coinsPanel: {}, shopExit: {}, shopStock: {}, runInPlay: {}, ...escapeOpensPause },
+  },
   { name: "stage-won", traits: { pausesBelow: { input: true, update: true } } },
   { name: "game-over", traits: {} },
 ] as const satisfies readonly SceneDefinition[];

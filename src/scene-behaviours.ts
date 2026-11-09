@@ -31,20 +31,16 @@ export type SceneHost = {
     input: Pick<TableInput, "setFieldActive">;
     shop: ShopView;
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
-    run: Pick<RunController, "shopStock" | "dispatch" | "inRun">;
+    run: Pick<RunController, "shopStock" | "dispatch">;
     overlays: Pick<Overlays, "showMenu" | "hideMenu" | "showSettings" | "hideSettings">;
     audio: Pick<AudioService, "setMusicFilter">;
   };
 };
 
-/** Each menu condition's test: an item naming one is shown only while it holds. */
-const menuConditions: Record<MenuCondition, (host: SceneHost) => boolean> = {
-  inRun: ({ services }) => services.run.inRun(),
-};
-
 /** The scene input a `keyAction` trait reacts to, by event type. */
 const keyEvents: Record<string, (event: KeyboardEvent, key: string) => boolean> = {
-  keydown: (event, key) => event.key === key,
+  // One press, one action: a held key's auto-repeat would open and close a menu over and over.
+  keydown: (event, key) => event.key === key && !event.repeat,
 };
 
 export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry<
@@ -52,6 +48,21 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   Context
 > {
   const behaviours = new SceneTraitRegistry<SceneTraits, Context>();
+  // How many entered scenes compose `runInPlay`: a run is in play while any of them is on the
+  // stack (a menu pushed over a stage leaves it entered). No scene is identified by name.
+  let runScenes = 0;
+  /** Each menu condition's test: an item naming one is shown only while it holds. */
+  const menuConditions: Record<MenuCondition, () => boolean> = {
+    inRun: () => runScenes > 0,
+  };
+  behaviours.register("runInPlay", {
+    enter() {
+      runScenes++;
+    },
+    exit() {
+      runScenes = Math.max(0, runScenes - 1);
+    },
+  });
   behaviours.register("screen", {
     enter(context, { kind }) {
       context.host.dataset.scene = kind;
@@ -87,7 +98,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
   behaviours.register("menu", {
     enter(context, { label, items }) {
-      const shown = items.filter(({ when }) => !when || menuConditions[when](context));
+      const shown = items.filter(({ when }) => !when || menuConditions[when]());
       context.services.overlays.showMenu(label, shown);
     },
     // Back in front after Settings closed over it.
