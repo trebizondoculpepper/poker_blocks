@@ -33,6 +33,7 @@ import { createShopView, type ShopView } from "./shop-view";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
 import { createHudFrame } from "./hud-frame";
+import { gameplayHudZones, type HudElement } from "./hud-layout";
 import { appVersion } from "./version";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -242,9 +243,17 @@ const overlays: Overlays = createOverlays(host, {
   scenes: run.screenScenes,
   menus: run.menus,
 });
-// The shared HUD frame (#116): gameplay and the shop place their controls in its zones.
+// The shared HUD frame (#116): each HUD element goes in its zone (src/hud-layout.ts, #117).
 const hudFrame = createHudFrame(host);
-hudFrame.place(overlays.menuButton, "top-right");
+const hudElements: Record<HudElement, HTMLElement> = {
+  round: hud.element("round"),
+  deck: hud.element("deck"),
+  coins: hud.element("coins"),
+  shopExit: hud.element("shopExit"),
+  discard: discardArea,
+  menu: overlays.menuButton,
+};
+for (const { element, zone } of gameplayHudZones) hudFrame.place(hudElements[element], zone);
 
 // ----- The start scene -----
 

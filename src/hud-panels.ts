@@ -48,6 +48,8 @@ export type HudView = {
 };
 
 export type HudPanels = {
+  /** A panel's element, for the HUD frame to place (#117). */
+  element(panel: HudPanel): HTMLElement;
   /** A scene composing this panel, with this config, came to the front. */
   show<Panel extends HudPanel>(panel: Panel, config: HudPanelConfigs[Panel]): void;
   /** The scene showing this panel was exited. */
@@ -161,6 +163,7 @@ export function createHudPanels(host: HTMLElement): HudPanels {
   shopExitButton.addEventListener("click", runAction);
 
   return {
+    element: (panel) => elements[panel],
     show(panel, config) {
       (composed as Record<HudPanel, unknown>)[panel] = config;
       // A panel can arrive before its numbers do; reveal it now so it is not blank.

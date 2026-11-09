@@ -1025,8 +1025,10 @@ body,
 }
 
 @media (orientation: landscape) {
-  .hud-frame[data-layout="landscape"] .hud-zone > .settings-button {
+  /* On landscape screens, every element placed in a zone flows into it (#117). */
+  .hud-frame[data-layout="landscape"] .hud-zone > * {
     position: static;
+    margin: 0;
   }
 }
 
