@@ -230,25 +230,14 @@ export function createAttractScene(
   camera.position.set(0, 0, cameraZ);
   camera.lookAt(0, 0, 0);
 
-  // A card's material is almost a mirror: roughness 0.05 with full clearcoat. Brightness
-  // therefore comes from what it *reflects*, not from how many lights are pointed at it. The
-  // table gets that from the card room's environment; this scene has no room, so it needs a
-  // studio of its own — without one the cards reflect black and read as grey lumps, however
-  // strong the lights around them.
-  // The cards' materials bind `reflectionEnvironment` explicitly, which wins over
-  // `scene.environment`, so the scene reflects whatever the table gave them — a dim room meant
-  // for a green baize. A faked gradient stands in for a studio instead: bright above, dark
-  // below, which is what makes a glossy card read as glossy against black.
-
-  // Direct light still shapes the faces: a soft top key for form, and a cool rim so an edge
-  // separates from the black behind it.
-  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x1b2233, 0.9));
-  const key = new THREE.DirectionalLight(0xfff4e2, 2.4);
-  key.position.set(4, 7, 9);
+  // The game's own hand lighting, not an approximation of it. A card is judged against how it
+  // looks in play, so the attract scene uses the exact pair `createTableRenderer` lights the
+  // hand with: a bright neutral hemisphere and a single white key above and to the left. Anything
+  // dimmer reads as grey, however many extra lights are added around it.
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
+  const key = new THREE.DirectionalLight(0xffffff, 2.4);
+  key.position.set(-3, 6, 7);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x9fd8ff, 2.0);
-  rim.position.set(-7, 3, -8);
-  scene.add(rim);
 
   /** One card cube, built once per replacement so materials are disposed with it. */
   function makeCard(): AttractCard {
