@@ -54,6 +54,7 @@ function matches(
 export function scoreFieldWithPassives(
   field: readonly PlacedBlock[],
   rack: readonly PassiveBlock[],
+  flatBonus = 0,
 ): ScoredLine[] {
   const lines = findScoringLines(field);
   const blockRules = rulesFor(rack, "score.beforeBlockValue");
@@ -91,7 +92,7 @@ export function scoreFieldWithPassives(
       line,
       blockIds: line.blocks.map(({ id }) => id),
       ...result,
-      points: Math.max(0, points),
+      points: Math.max(0, points + flatBonus),
     };
   });
 }

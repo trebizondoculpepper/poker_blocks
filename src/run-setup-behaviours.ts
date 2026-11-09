@@ -61,7 +61,7 @@ export function createRunSetupRegistry(
       snapshot: {
         ...context.snapshot,
         phase: "shop",
-        state: shopPreviewState(context.snapshot.state, coins, services.random, shopOffers()),
+        state: shopPreviewState(context.snapshot.state, coins, services.random, shopOffers(), context.snapshot.round),
       },
     }),
   });
@@ -100,7 +100,7 @@ function openingPassives(
 ): PassiveBlock[] {
   const owned = state.passiveRack.map(({ definitionId }) => definitionId);
   const used = new Set(state.passiveRack.map(({ id }) => id));
-  return randomPassiveDefinitions(count, services.random, owned).map((definition) => {
+  return randomPassiveDefinitions(count, services.random, owned, 1).map((definition) => {
     let serial = used.size + 1;
     while (used.has(`passive.${serial}`)) serial++;
     used.add(`passive.${serial}`);

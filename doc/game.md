@@ -65,6 +65,8 @@ The field is cleared at the end of every stage. Placed blocks return to the deck
 
 After every play, **every line on the field** is scored, and the sum is added to the stage's running total. A line that already existed scores again on every later play. Lines built early therefore keep paying, which makes the order of placements a key decision.
 
+At the beginning of each scoring resolution, every installed dice passive rolls once. Its result is added to each line scored by that play; the result is shared across all rows, while different dice roll independently. Dice become shop-eligible by round: D6 in round 1, D8 in round 2, D10 in round 3, and D20 in round 4. Dice use polyhedral passive tokens; card blocks on the scoring board remain cubes.
+
 ### Scoring presentation
 
 After each play, calculate the scores of all lines along the X, Y and Z axes before starting feedback. Each scored result identifies its axis, cells, ordered blocks, contributing cards, hand type and points. Keep lines that score at least one point, then sort them from lowest to highest score. Present them in that order, with the highest-scoring line last. For each line, tint its blocks gold and play a sound from the `score.magnitude.*` family. The score calculation is independent of the visual and sound playback.

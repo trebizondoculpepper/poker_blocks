@@ -34,6 +34,12 @@ export const sfxStyle =
 
 const entries = [
   {
+    id: "passive.dice.roll",
+    trigger: "An installed dice passive rolls at the beginning of a scoring resolution",
+    prompt: "A crisp small die tumble with a soft final clack",
+    durationSeconds: 0.7,
+  },
+  {
     id: "card.select",
     trigger: "A card block is clicked and becomes selected",
     prompt: "Light bright tick, a playing card lifted slightly, soft rising tone",

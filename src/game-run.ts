@@ -25,6 +25,7 @@ import {
   type StageContext,
 } from "./passives";
 import { discardPassiveEffects, scoreFieldWithPassives } from "./passive-effects";
+import { playSfx } from "./audio/sfx";
 import type { ScoredLine } from "./scoring";
 import type { ShopOffer } from "./shop-stock";
 
@@ -360,7 +361,7 @@ export class GameRun {
       Math.min(targetSize, this.rackCapacity) - this.currentState.passiveRack.length,
     );
     const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
-    for (const definition of randomPassiveDefinitions(missing, this.random, owned)) {
+    for (const definition of randomPassiveDefinitions(missing, this.random, owned, this.currentRound)) {
       let serial = this.currentState.passiveRack.length + 1;
       while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;
       this.installPassive(createPassiveBlock(definition.id, `passive.${serial}`));
@@ -371,7 +372,12 @@ export class GameRun {
     if (!this.inStage) return null;
     const next = this.activeDealer.play(this.currentState, action);
     if (next) {
-      this.scoredLines = scoreFieldWithPassives(next.field, next.passiveRack);
+      const dice = next.passiveRack
+        .map(({ definitionId }) => passiveDefinitions.get(definitionId).diceSides)
+        .filter((sides): sides is number => sides !== undefined);
+      const flatBonus = dice.reduce((sum, sides) => sum + 1 + Math.floor(this.random() * sides), 0);
+      if (dice.length) playSfx("passive.dice.roll");
+      this.scoredLines = scoreFieldWithPassives(next.field, next.passiveRack, flatBonus);
       const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
       this.runStats = recordPlay(this.runStats, gained, action.cardIds?.length || 1);
       this.currentState = {
@@ -407,7 +413,7 @@ export class GameRun {
         const followups = [];
         for (let index = 0; index < grants; index++) {
           const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
-          const chosen = randomPassiveDefinitions(1, this.random, owned)[0];
+          const chosen = randomPassiveDefinitions(1, this.random, owned, this.currentRound)[0];
           if (!chosen) break;
           let serial = this.currentState.passiveRack.length + 1;
           while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`))

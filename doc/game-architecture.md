@@ -125,6 +125,8 @@ After each play, scoring calculates all line scores first, filters out zero-poin
 
 ## Passive registry and triggers (design)
 
+Passive tokens use a shared appearance factory for both the rack and shop preview. Definitions may choose registered polyhedron geometry and provide artwork per face; geometry is not keyed to passive IDs inside the consumers. D6/D8/D10/D20 use cube/octahedron/pentagonal-trapezohedron/icosahedron shapes respectively. This geometry is scoped to passive tokens and must not alter the cubic card field or its grid coordinates. Pointer targets remain the stable rack or shop slots rather than individual tiny faces.
+
 The proposed event order, reaction contract, and effect boundaries are specified in [game-events.md](game-events.md). The current game has only a general event emitter; it does not implement that gameplay contract yet.
 
 Passive definitions live in a named registry with a stable id, display name, visual design or icon, and a trait reference. The passive itself is a block instance in the ordered `GameState.passiveRack`. Behavior code belongs to reusable traits, not the block instance or an ad hoc function attached to one registry entry. A trait may listen for gameplay events such as block placement, apply a condition, produce a gameplay effect such as coins proportional to the placed card's rank, and request separate presentation effects.

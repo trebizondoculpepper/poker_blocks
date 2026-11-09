@@ -3,8 +3,8 @@ import { clamp01, easeInOutCubic, lerp } from "./easing";
 import { playSfx } from "./audio/sfx";
 import { cardName } from "./cards";
 import { getMaterialDefinition, materialOf } from "./materials";
-import { passiveFaceTexture } from "./passive-rack";
 import { passiveAppearance, passiveDefinitions } from "./passives";
+import { createPassiveVisual } from "./passive-visual";
 import type { ShopOffer } from "./shop-stock";
 import { createBlockAppearance } from "./visual/block-appearance";
 import { createMaterialise } from "./visual/materialise";
@@ -119,24 +119,17 @@ export function createShopView(
   function makeCube(offer: ShopOffer): { cube: THREE.Object3D; dispose(): void } {
     if (offer.kind === "passive") {
       const appearance = passiveAppearance(offer.block);
-      const texture = passiveFaceTexture(appearance);
-      const geometry = new THREE.BoxGeometry(1.35, 1.35, 1.35);
-      const material = new THREE.MeshStandardMaterial({
-        map: texture,
-        roughness: 0.7,
-        metalness: 0.12,
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      const edgeGeometry = new THREE.EdgesGeometry(geometry);
+      const visual = createPassiveVisual(appearance, 1.35);
+      const mesh = new THREE.Mesh(visual.geometry, visual.materials);
       const edgeMaterial = new THREE.LineBasicMaterial({ color: appearance.palette.edge });
-      mesh.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
+      mesh.add(new THREE.LineSegments(visual.edges, edgeMaterial));
       return {
         cube: mesh,
         dispose: () => {
-          texture.dispose();
-          geometry.dispose();
-          material.dispose();
-          edgeGeometry.dispose();
+          visual.textures.forEach((texture) => texture.dispose());
+          visual.geometry.dispose();
+          visual.materials.forEach((material) => material.dispose());
+          visual.edges.dispose();
           edgeMaterial.dispose();
         },
       };

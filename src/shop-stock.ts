@@ -13,6 +13,7 @@ export function shopPreviewState(
   coins: number,
   random: () => number = Math.random,
   stock: Pick<ShopTrait, "passiveOffers" | "cardOffers"> = { passiveOffers: 2, cardOffers: 3 },
+  round = 1,
 ): GameState {
   const deck = [...state.deck, ...state.hand, ...state.field.map(({ block }) => block)];
   const cardOffers: ShopOffer[] = [];
@@ -31,7 +32,7 @@ export function shopPreviewState(
     usedIds.add(id);
     return id;
   };
-  const passiveOffers: ShopOffer[] = randomPassiveDefinitions(stock.passiveOffers, random).map(
+  const passiveOffers: ShopOffer[] = randomPassiveDefinitions(stock.passiveOffers, random, [], round).map(
     (definition) => ({
       kind: "passive",
       block: createPassiveBlock(definition.id, nextOfferId()),

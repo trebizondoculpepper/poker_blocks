@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { tweenValue } from "./easing";
 import "./passive-rack.css";
-import { passiveAppearance, type PassiveBlock, type PassivePalette } from "./passives";
+import { passiveAppearance, type PassiveBlock } from "./passives";
+import { createPassiveVisual } from "./passive-visual";
 
 const slotWidth = 72;
 const slotGap = 8;
@@ -10,40 +11,13 @@ const cubeSize = 1.45;
 
 type RenderedPassive = {
   id: string;
-  mesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
+  mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial[]>;
   edges: THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>;
-  texture: THREE.CanvasTexture;
+  textures: THREE.CanvasTexture[];
   targetX: number;
   arrivalAt: number | null;
   item: HTMLElement;
 };
-
-/** Each face gets the block's own symbol; this texture is mapped onto all six cube faces. */
-export function passiveFaceTexture(appearance: {
-  symbol: string;
-  palette: PassivePalette;
-}): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 256;
-  const context = canvas.getContext("2d")!;
-  const { face, ink, edge } = appearance.palette;
-  context.fillStyle = face;
-  context.fillRect(0, 0, 256, 256);
-  context.strokeStyle = edge;
-  context.lineWidth = 10;
-  context.strokeRect(12, 12, 232, 232);
-  context.lineWidth = 2;
-  context.strokeRect(24, 24, 208, 208);
-  context.fillStyle = ink;
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.font = `bold ${appearance.symbol.length > 2 ? 92 : 116}px system-ui, sans-serif`;
-  context.fillText(appearance.symbol, 128, 131, 206);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  return texture;
-}
 
 /** A fixed screen-space rack with one Three.js scene for all rotating passive blocks. */
 export function createPassiveRack(
@@ -94,8 +68,6 @@ export function createPassiveRack(
   const camera = new THREE.OrthographicCamera(-1, 1, 1.15, -1.15, 0.1, 30);
   camera.position.set(0, 0, 8);
   camera.lookAt(0, 0, 0);
-  const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-  const edgeGeometry = new THREE.EdgesGeometry(geometry);
   const rendered = new Map<string, RenderedPassive>();
   let liftedId: string | null = null;
   let order: string[] = [];
@@ -111,11 +83,13 @@ export function createPassiveRack(
   };
 
   const clear = () => {
-    for (const { mesh, edges, texture } of rendered.values()) {
+    for (const { mesh, edges, textures } of rendered.values()) {
       scene.remove(mesh);
-      mesh.material.dispose();
+      mesh.geometry.dispose();
+      mesh.material.forEach((material) => material.dispose());
       edges.material.dispose();
-      texture.dispose();
+      edges.geometry.dispose();
+      textures.forEach((texture) => texture.dispose());
     }
     rendered.clear();
   };
@@ -130,9 +104,11 @@ export function createPassiveRack(
       for (const [id, entry] of rendered) {
         if (ids.has(id)) continue;
         scene.remove(entry.mesh);
-        entry.mesh.material.dispose();
+        entry.mesh.geometry.dispose();
+        entry.mesh.material.forEach((material) => material.dispose());
         entry.edges.material.dispose();
-        entry.texture.dispose();
+        entry.edges.geometry.dispose();
+        entry.textures.forEach((texture) => texture.dispose());
         rendered.delete(id);
       }
       // GameMode for every slot the rack has, filled or not.
@@ -149,15 +125,10 @@ export function createPassiveRack(
         let entry = rendered.get(block.id);
         if (!entry) {
           const appearance = passiveAppearance(block);
-          const texture = passiveFaceTexture(appearance);
-          const material = new THREE.MeshStandardMaterial({
-            map: texture,
-            roughness: 0.7,
-            metalness: 0.12,
-          });
-          const mesh = new THREE.Mesh(geometry, material);
+          const visual = createPassiveVisual(appearance, cubeSize);
+          const mesh = new THREE.Mesh(visual.geometry, visual.materials);
           const edges = new THREE.LineSegments(
-            edgeGeometry,
+            visual.edges,
             new THREE.LineBasicMaterial({ color: appearance.palette.edge }),
           );
           mesh.add(edges);
@@ -177,7 +148,7 @@ export function createPassiveRack(
             id: block.id,
             mesh,
             edges,
-            texture,
+            textures: visual.textures,
             targetX: 0,
             arrivalAt: performance.now() + arrivals++ * 180,
             item,
@@ -244,8 +215,6 @@ export function createPassiveRack(
     },
     dispose() {
       clear();
-      geometry.dispose();
-      edgeGeometry.dispose();
       renderer.dispose();
       element.remove();
     },
