@@ -7,7 +7,6 @@
  * with `playSfx` where the action happens (see AGENTS.md, "Every action has a sound").
  */
 import type { MusicController, MusicFilter } from "./audio/music-controller";
-import type { Screen } from "./menus";
 import { createModeMusicBehaviours, type ModeMusicBehaviour } from "./mode-music";
 import type { ModeMusicStyle } from "./game-modes";
 import { silencedAudio, type Settings } from "./settings";
@@ -39,8 +38,6 @@ export type AudioService = {
   playStageMusic(pool: StageMusicPool): void;
   /** A run has just been set up; quiet modes wind the music down. */
   runStarted(): void;
-  /** A menu screen came to the front. */
-  showScreen(screen: Screen): void;
   /** Play a music cue, for a scene's `musicCue` trait. */
   playCue(cue: MusicCue): void;
   /**
@@ -56,7 +53,7 @@ export type AudioService = {
 };
 
 /** A music cue a scene can play as it enters (its `musicCue` trait). */
-export type MusicCue = "windDown";
+export type MusicCue = "windDown" | "title" | "resumeTable";
 
 /** The pools a play scene's `musicTrack` trait can ask for. */
 export type StageMusicPool = "stage" | "boss";
@@ -88,19 +85,12 @@ export function createAudioService(options: {
   let modeMusic: ModeMusicBehaviour = modeMusicBehaviours.ordinary;
   let lastZoomSoundAt = -Infinity;
 
-  // Menu scenes filter the music through their own trait (setMusicFilter); a screen here
-  // only chooses what plays.
-  const screenMusic: Record<Screen, () => void> = {
-    title() {
-      music.playTitle();
-    },
-    game() {
-      modeMusic.resume();
-    },
-  };
   /** What each music cue does; a scene names one through its `musicCue` trait. */
   const musicCues: Record<MusicCue, () => void> = {
     windDown: () => music.windDown(),
+    title: () => music.playTitle(),
+    // Back to the table's music, as the mode plays it (a quiet mode stays wound down).
+    resumeTable: () => modeMusic.resume(),
   };
 
   const unlock = () => music.unlock();
@@ -127,9 +117,6 @@ export function createAudioService(options: {
     },
     playCue(cue) {
       musicCues[cue]();
-    },
-    showScreen(screen) {
-      screenMusic[screen]();
     },
     setMusicFilter(kind) {
       music.filter(kind);

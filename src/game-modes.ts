@@ -182,6 +182,7 @@ export const sceneDefinitions = [
       // After `titleScreen`, so the panel is already showing when the footer is added to it.
       panelFooter: { links: projectLinks },
       attractBackground: {},
+      musicCue: { cue: "title" },
       ...escapeOpensPause,
     },
   },
@@ -240,6 +241,8 @@ export const sceneDefinitions = [
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},
+      // A shop entered from the title (Continue) brings the table's music back.
+      musicCue: { cue: "resumeTable" },
       ...escapeOpensPause,
     },
   },

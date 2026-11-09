@@ -117,12 +117,14 @@ describe("game modes composed from traits", () => {
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},
+      musicCue: { cue: "resumeTable" },
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
     });
     // The title scene owns its own panel, with Continue gated on a save existing.
     expect(traitsOf("game", "title")).toEqual({
       screen: { kind: "title" },
       attractBackground: {},
+      musicCue: { cue: "title" },
       panelFooter: {
         links: [
           {

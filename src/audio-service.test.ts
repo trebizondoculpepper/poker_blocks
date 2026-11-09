@@ -45,31 +45,29 @@ describe("audio service", () => {
     expect(calls).toEqual(["randomStage", "boss", "randomStage"]);
   });
 
-  it("chooses the music for each screen, and leaves filtering to the menu scenes", () => {
+  it("plays each scene's music cue, and leaves filtering to the menu scenes (#179)", () => {
     const { audio, calls } = setup();
-    audio.showScreen("title");
-    audio.showScreen("game");
-    expect(calls).toEqual(["playTitle", "resumeStage"]);
-    calls.length = 0;
+    audio.playCue("title");
+    audio.playCue("resumeTable");
     audio.playCue("windDown");
-    expect(calls).toEqual(["windDown"]);
+    expect(calls).toEqual(["playTitle", "resumeStage", "windDown"]);
     calls.length = 0;
     audio.setMusicFilter("lowpass");
     audio.setMusicFilter(null);
     expect(calls).toEqual(["filter lowpass", "filter "]);
   });
 
-  it("keeps a quiet mode wound down after a run starts and when its game screen resumes", () => {
+  it("keeps a quiet mode wound down after a run starts and when the table's music resumes", () => {
     const { audio, calls } = setup();
     audio.enterMode("quiet");
     audio.runStarted();
-    audio.showScreen("game");
+    audio.playCue("resumeTable");
     expect(calls).toEqual(["windDown", "windDown"]);
 
     calls.length = 0;
     audio.enterMode("ordinary");
     audio.runStarted();
-    audio.showScreen("game");
+    audio.playCue("resumeTable");
     expect(calls).toEqual(["resumeStage"]);
   });
 

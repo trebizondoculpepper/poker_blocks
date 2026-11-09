@@ -6,7 +6,6 @@
  * The game supplies what the menus act on (`MenuCallbacks`) and how to move between
  * scenes (`ScreenScenes`); this service decides which happens when a screen changes.
  */
-import type { AudioService } from "./audio-service";
 import { createMenus, type MenuCallbacks, type MenuChoice, type Menus, type Screen } from "./menus";
 import type { PanelLink, SceneName } from "./game-modes";
 import type { RunStats } from "./run-stats";
@@ -106,11 +105,10 @@ export function createOverlays(
     settings: Settings;
     menus: MenuCallbacks;
     scenes: ScreenScenes;
-    audio: Pick<AudioService, "showScreen">;
     reducedMotion(): boolean;
   },
 ): Overlays {
-  const { scenes, audio } = options;
+  const { scenes } = options;
   const tooltip = document.createElement("div");
   tooltip.className = "inspect-tooltip";
   tooltip.setAttribute("role", "tooltip");
@@ -123,7 +121,6 @@ export function createOverlays(
     onScreen(next) {
       screen = next;
       screenScenes[next](scenes);
-      audio.showScreen(next);
       options.menus.onScreen?.(next);
     },
   });
