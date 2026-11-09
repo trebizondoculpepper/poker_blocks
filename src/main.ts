@@ -26,6 +26,7 @@ import { cellKey, faceFromDirection, faceNormal, type Cell, type Face } from "./
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
+import { createAudioService, type AudioService } from "./audio-service";
 import { createMenus } from "./menus";
 import { createConsole } from "./console/console-view";
 import { musicTracks } from "./audio/music-catalog";
@@ -54,12 +55,10 @@ import {
 } from "./rooms";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
 import type { Screen } from "./menus";
-import { createRoomMusicBehaviours } from "./room-music";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
   prefersReducedMotion,
-  silencedAudio,
   resolveShadowQuality,
   saveSettings,
   type Settings,
@@ -362,11 +361,21 @@ function roomDeck(newGame: boolean): readonly CardBlock[] {
   return makeDevDeck(materials.reshuffle === "each-run" ? newMaterialSeed() : devSeed(newGame));
 }
 let cards: readonly CardBlock[] = roomDeck(false);
+const musicPlayer = createMusicPlayer(musicTracks);
+const audio: AudioService = createAudioService({
+  player: musicPlayer,
+  music: createMusicController(
+    musicPlayer,
+    musicTracks.map(({ id }) => id),
+  ),
+  sfx: { setVolume: setSfxVolume, setMuted: setSfxMuted, play: (id) => playSfx(id) },
+  gestures: window,
+});
 type TraitContext = {
   host: HTMLElement;
-  services: { cameraView: CameraViewService };
+  services: { cameraView: CameraViewService; audio: AudioService };
 };
-const traitContext: TraitContext = { host, services: { cameraView } };
+const traitContext: TraitContext = { host, services: { cameraView, audio } };
 const sceneBehaviours = new SceneTraitRegistry<RoomSceneTraits, TraitContext>();
 sceneBehaviours.register("screen", {
   enter(context, { kind }) {
@@ -631,13 +640,6 @@ let pinch: { zoom: number; distance: number } | null = null;
 function touchSpread(): number {
   const [first, second] = [...touches.values()];
   return first && second ? Math.hypot(second.x - first.x, second.y - first.y) : 0;
-}
-
-let lastZoomSoundAt = -Infinity;
-function soundZoom(): void {
-  const now = performance.now();
-  if (now - lastZoomSoundAt > 350) playSfx("view.zoom");
-  lastZoomSoundAt = now;
 }
 
 function showInspection(block: CardBlock | undefined, clientX: number, clientY: number): void {
@@ -1008,16 +1010,6 @@ const systemMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
 let settings = loadSettings(storage);
 let reducedMotion = false;
-const musicPlayer = createMusicPlayer(musicTracks);
-const music = createMusicController(
-  musicPlayer,
-  musicTracks.map(({ id }) => id),
-);
-const roomMusicBehaviours = createRoomMusicBehaviours({
-  windDown: () => music.windDown(),
-  resumeStage: () => music.resumeStage(),
-});
-let roomMusic = roomMusicBehaviours.ordinary;
 function enterRoom(room: Room, createDeck = true): void {
   thisRoom = room;
   roomTraits = room.traits;
@@ -1026,18 +1018,13 @@ function enterRoom(room: Room, createDeck = true): void {
   if (createDeck) cards = roomDeck(false);
   passiveRackView.setCapacity(roomTraits.passiveRack?.capacity ?? 0);
   passiveRackView.element.hidden = !roomTraits.passiveRack;
-  roomMusic = roomMusicBehaviours[room.musicMode];
+  audio.enterRoom(room.musicMode);
 }
 // Configure the initial mode through the same path used by the developer room switcher.
 enterRoom(thisRoom, false);
 function applySettings(next: Settings): void {
   settings = next;
-  setSfxVolume(next.volume);
-  const silenced = silencedAudio(next);
-  setSfxMuted(silenced.sfx);
-  // Music sits a little under the sound effects at the same volume setting.
-  musicPlayer.setVolume(next.volume * 0.75);
-  musicPlayer.setMuted(silenced.music);
+  audio.applySettings(next);
   reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
   cardRoom.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
 }
@@ -1408,19 +1395,10 @@ function dealHand(): void {
   layoutHand();
 }
 
-// ----- Music: the controller decides transitions; the game just says what is happening -----
 let screen: "title" | "settings" | "game" | "over" = "title";
 
-/** A stage has just started: boss stages get the boss loop, others a random vibe. */
-function musicForNewStage(): void {
-  if (game.phase === "boss") music.switchToBossTrack();
-  else music.switchToRandomStageTrack();
-}
-
 /** Browsers keep audio silent until the player interacts; start music on the first gesture. */
-const unlockMusic = () => music.unlock();
-window.addEventListener("pointerdown", unlockMusic, { capture: true });
-window.addEventListener("keydown", unlockMusic, { capture: true });
+audio.start();
 
 /** When a won stage's outcome has been announced, the stage-won pop-up follows. */
 let stageWonAt: number | null = null;
@@ -1480,7 +1458,7 @@ async function advanceFromStage(): Promise<void> {
     syncSceneToGame();
     resetTable();
     if (game.inStage) {
-      musicForNewStage();
+      audio.stageStarted(game.phase);
       dealHand();
       playSfx("round.start");
     } else if (game.phase === "shop") {
@@ -1578,8 +1556,8 @@ function startRun(session: GameSession, fresh = false): void {
   showSelection();
   autosave();
   playSfx(game.phase === "shop" ? "shop.open" : "round.start");
-  if (game.inStage) musicForNewStage();
-  roomMusic.settle();
+  if (game.inStage) audio.stageStarted(game.phase);
+  audio.runStarted();
 }
 
 const screenSceneTransitions: Record<
@@ -1603,23 +1581,6 @@ const screenSceneActions: Record<"push" | "replace" | "resume", (scene?: RoomSce
     syncSceneToGame();
   },
 };
-const screenMusicActions: Record<Screen, () => void> = {
-  title() {
-    music.unmuffle();
-    music.playTitle();
-  },
-  settings() {
-    music.muffle();
-  },
-  game() {
-    music.unmuffle();
-    roomMusic.resume();
-  },
-  over() {
-    music.unmuffle();
-    music.windDown();
-  },
-};
 const menus = createMenus(host, settings, {
   hasSave: () => loadRun(storage, cards, dealerRegistry, runSaveKey) !== null,
   onContinue() {
@@ -1639,7 +1600,7 @@ const menus = createMenus(host, settings, {
     screen = next;
     const transition = screenSceneTransitions[next];
     screenSceneActions[transition.operation](transition.scene);
-    screenMusicActions[next]();
+    audio.showScreen(next);
   },
 });
 // Rooms that skip the title start straight in play (resuming their run if they keep one).
@@ -1707,13 +1668,13 @@ createConsole({
     autosave();
     return balance;
   },
-  musicTracks: () => music.tracks,
-  musicNow: () => music.current,
+  musicTracks: () => audio.music.tracks,
+  musicNow: () => audio.music.current,
   playMusic(id) {
-    music.unlock();
-    music.play(id);
+    audio.music.unlock();
+    audio.music.play(id);
   },
-  stopMusic: () => music.stop(),
+  stopMusic: () => audio.music.stop(),
 });
 
 /** The blocks a drag plays, in the order they were selected (the dragged one alone if none). */
@@ -1803,7 +1764,7 @@ const onPointerDown = (event: PointerEvent) => {
       pinch = { zoom: cameraView.zoom, distance: touchSpread() };
       for (const id of touches.keys()) renderer.domElement.setPointerCapture(id);
       suppressClickUntil = performance.now() + 400;
-      soundZoom();
+      audio.zoomed();
       return;
     }
     if (pinch) return;
@@ -1979,7 +1940,7 @@ const onWheel = (event: WheelEvent) => {
   if (menus.isOpen) return;
   event.preventDefault();
   cameraView.zoomWithWheel(event.deltaY, event.deltaMode);
-  soundZoom();
+  audio.zoomed();
 };
 const onBlur = () => {
   if (drag) finishDrag(false);
@@ -2061,6 +2022,7 @@ if (import.meta.hot) {
     renderer.domElement.removeEventListener("wheel", onWheel);
     for (const type of sceneInputEvents) host.removeEventListener(type, routeSceneInput, true);
     window.removeEventListener("blur", onBlur);
+    audio.dispose();
     pendingAction?.effects.forEach((e) => e.finish());
     appearing.forEach(({ effect }) => effect.finish());
     renderedBlocks.slice().forEach(disposeCube);

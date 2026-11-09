@@ -223,6 +223,8 @@ Composition is the same at both levels: a block is to its traits what a scene is
 
 `src/camera-view.ts` is the first extracted service. It owns board and hand cameras, the board pivot and assembly, framing, zoom, rotation, camera motion, and viewport resize handling. `main.ts` still detects input gestures and uses the service cameras for block picking and placement, while `TraitContext.services.cameraView` exposes the service to scene traits. The architecture test guards against moving camera creation, framing, or resize behavior back into `main.ts`. Further services are extracted one per PR under #33.
 
+`src/audio-service.ts` is the second. It owns the music controller and player settings, the room's music policy (quiet rooms stay wound down), stage and screen music, unlocking audio on the first gesture, and the rate-limited zoom sound. `main.ts` constructs it and reports events (`stageStarted`, `runStarted`, `showScreen`, `zoomed`); it no longer calls the music controller directly. Game-action sound effects still call `playSfx` where the action happens. `TraitContext.services.audio` exposes the service, and the architecture test keeps music transitions and volume handling out of `main.ts`.
+
 The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameSession`. Developer rooms are no longer a kind of room: a room the console lists has a `console: { name }` trait, and one that honours `&restart=true` has a `restartable: { param }` trait (#38).
 
 ## Architecture to discuss
