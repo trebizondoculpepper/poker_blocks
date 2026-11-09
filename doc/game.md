@@ -194,7 +194,7 @@ This section is the target design and supersedes the table above where they diff
 
 1. Each contributing card's base value gets its material's **additive** value (summed if several apply), then passive `score.beforeBlockValue` effects, in rack order.
 2. The line's working score is computed from block values and the ordinary hand multiplier.
-3. **Multiplicative** material factors multiply the working score (all factors multiplied together).
+3. **Multiplicative** material factors multiply the working score (all factors multiplied together). Whether this comes before or after step 4 is an open question.
 4. Passive `score.beforeLineFinalized` effects resolve in rack order.
 5. **Exponential** effects apply last, one per contributing crystal, in sequence.
 6. Round to an integer once, after all effects; clamp at zero.
