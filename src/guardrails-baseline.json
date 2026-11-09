@@ -30,7 +30,6 @@
     "if (rule.effect.kind !== \"add-coins\") continue;"
   ],
   "src/run-controller.ts": [
-    "switchScene(sceneForPhase[game.phase]);",
     "if (game.phase === \"over\") {",
     "const leavingShop = game.phase === \"shop\";",
     "if (!modeTraits.shop || session.phase !== \"shop\" || session.state.shopStock !== undefined)",
