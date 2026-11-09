@@ -10,7 +10,7 @@
  * Each trait brings its own behaviour, so a scene composes the panels and permissions it
  * wants and nothing has to ask which scene is in front.
  */
-import type { MenuCondition, SceneTraits } from "./game-modes";
+import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
 import type { AudioService } from "./audio-service";
 import type { Overlays } from "./overlays";
 import type { HudPanels } from "./hud-panels";
@@ -33,10 +33,17 @@ export type SceneHost = {
     input: Pick<TableInput, "setFieldActive" | "cancelGestures">;
     shop: ShopView;
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
-    run: Pick<RunController, "shopStock" | "dispatch" | "runStats">;
+    run: Pick<RunController, "shopStock" | "dispatch" | "hasSave" | "runStats">;
     overlays: Pick<
       Overlays,
-      "showMenu" | "hideMenu" | "showSettings" | "hideSettings" | "showGameOver" | "hideGameOver"
+      | "showMenu"
+      | "hideMenu"
+      | "showSettings"
+      | "hideSettings"
+      | "showTitle"
+      | "hideTitle"
+      | "showGameOver"
+      | "hideGameOver"
     >;
     audio: Pick<AudioService, "setMusicFilter" | "playCue">;
     /** Play a registered sound effect (src/audio/sfx.ts). */
@@ -59,9 +66,13 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // stack (a menu pushed over a stage leaves it entered). No scene is identified by name.
   let runScenes = 0;
   /** Each menu condition's test: an item naming one is shown only while it holds. */
-  const menuConditions: Record<MenuCondition, () => boolean> = {
+  const menuConditions: Record<MenuCondition, (context: Context) => boolean> = {
     inRun: () => runScenes > 0,
+    hasSave: (context) => context.services.run.hasSave(),
   };
+  /** The items a menu shows: those whose condition, if any, holds right now. */
+  const itemsToShow = (context: Context, items: readonly MenuItem[]) =>
+    items.filter(({ when }) => !when || menuConditions[when](context));
   behaviours.register("runInPlay", {
     enter() {
       runScenes++;
@@ -105,8 +116,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
   behaviours.register("menu", {
     enter(context, { label, items }) {
-      const shown = items.filter(({ when }) => !when || menuConditions[when]());
-      context.services.overlays.showMenu(label, shown);
+      context.services.overlays.showMenu(label, itemsToShow(context, items));
     },
     // Back in front after Settings closed over it.
     resume(context, config) {
@@ -124,6 +134,16 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   behaviours.register("musicCue", {
     enter: ({ services }, { cue }) => services.audio.playCue(cue),
+  });
+  behaviours.register("titleScreen", {
+    enter(context, { items }) {
+      context.services.overlays.showTitle(itemsToShow(context, items));
+    },
+    // Back in front after a panel opened over it.
+    resume(context, config) {
+      behaviours.get("titleScreen").enter?.(context, config);
+    },
+    exit: (context) => context.services.overlays.hideTitle(),
   });
   behaviours.register("settingsPanel", {
     enter: (context) => context.services.overlays.showSettings(),

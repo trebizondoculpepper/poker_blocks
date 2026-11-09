@@ -8,7 +8,7 @@
  */
 import type { AudioService } from "./audio-service";
 import { createMenus, type MenuCallbacks, type MenuChoice, type Menus, type Screen } from "./menus";
-import type { SceneName } from "./game-modes";
+import type { MenuItem, SceneName } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { Settings } from "./settings";
 import type { StageReward } from "./stage-rewards";
@@ -28,7 +28,10 @@ export type Overlays = {
   readonly screen: Screen;
   /** Whether a menu screen covers the game. */
   readonly isOpen: boolean;
-  showTitle(): void;
+  /** Show the title screen with these items (its scene trait decided which apply). */
+  showTitle(items: readonly MenuItem[]): void;
+  /** The title scene was exited. */
+  hideTitle(): void;
   closeAll(): void;
   /** The pause menu's panel and the Settings panel, shown by their scenes' traits. */
   showMenu(label: string, choices: readonly MenuChoice[]): void;
@@ -82,7 +85,9 @@ export function menuScreenScenes(stack: {
 
 /** Which scene each menu screen puts in front. */
 export const screenScenes: Record<Screen, (scenes: ScreenScenes) => void> = {
-  title: (scenes) => scenes.replace("title"),
+  // The title scene's own `titleScreen` trait puts it in front (#88), so this screen must not
+  // move the stack.
+  title: () => undefined,
   game: (scenes) => scenes.resumeGame(),
 };
 
@@ -122,7 +127,8 @@ export function createOverlays(
     get isOpen() {
       return menus.isOpen;
     },
-    showTitle: () => menus.showTitle(),
+    showTitle: (items) => menus.showTitle(items),
+    hideTitle: () => menus.hideTitle(),
     closeAll: () => menus.closeAll(),
     showMenu: (label, choices) => menus.showMenu(label, choices),
     hideMenu: () => menus.hideMenu(),

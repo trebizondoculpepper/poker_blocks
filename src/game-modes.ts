@@ -42,6 +42,11 @@ export type SceneTraits = {
   gameOverScreen: { items: readonly MenuItem[] };
   /** Entering this scene plays a music cue (src/audio-service.ts, `musicCues`). */
   musicCue: { cue: MusicCue };
+  /**
+   * The title screen is shown while this scene is in front: its panel, and its items whose
+   * conditions hold (Continue needs a save). Choosing an item dispatches its action.
+   */
+  titleScreen: { items: readonly MenuItem[] };
   /** The Settings panel is shown while this scene is in front. */
   settingsPanel: Record<never, never>;
   /** The music is filtered while this scene is in front (low-pass muffles, high-pass thins). */
@@ -57,8 +62,8 @@ export type SceneTraits = {
  * choosing it plays (`ui.click` when left out).
  */
 export type MenuItem = { id: string; label: string; when?: MenuCondition; sfx?: SoundEffectId };
-/** A condition a menu item can require; its test lives in the menu trait's registry. */
-export type MenuCondition = "inRun";
+/** A condition a menu item can require; its test lives in the menu traits' registry. */
+export type MenuCondition = "inRun" | "hasSave";
 export type ModeScene = Scene<SceneTraits>;
 export type ModeMusicStyle = "quiet" | "ordinary";
 
@@ -101,7 +106,19 @@ const pauseMenu: SceneTraits["menu"] = {
  * names, and never keeps its own copy of the catalogue.
  */
 export const sceneDefinitions = [
-  { name: "title", traits: escapeOpensPause },
+  {
+    name: "title",
+    traits: {
+      titleScreen: {
+        items: [
+          { id: "continue", label: "Continue", when: "hasSave" },
+          { id: "new", label: "New game" },
+          { id: "openSettings", label: "Settings" },
+        ],
+      },
+      ...escapeOpensPause,
+    },
+  },
   {
     name: "pause",
     traits: {

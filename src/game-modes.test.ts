@@ -115,9 +115,16 @@ describe("game modes composed from traits", () => {
       runInPlay: {},
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
     });
-    // The title and stage-won scenes show no panels of their own.
+    // The title scene owns its own panel, with Continue gated on a save existing.
     expect(traitsOf("game", "title")).toEqual({
       screen: { kind: "title" },
+      titleScreen: {
+        items: [
+          { id: "continue", label: "Continue", when: "hasSave" },
+          { id: "new", label: "New game" },
+          { id: "openSettings", label: "Settings" },
+        ],
+      },
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
     });
     // The game over scene owns its screen and music cue, with no HUD panels or field input (#90).
