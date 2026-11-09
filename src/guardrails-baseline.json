@@ -1,14 +1,109 @@
 {
-  "src/audio/music-fade.ts": 1,
-  "src/audio/music-plan.ts": 1,
-  "src/game-run.ts": 7,
-  "src/listening-room/main.ts": 1,
-  "src/passive-effects.ts": 9,
-  "src/game-modes.ts": 2,
-  "src/run-controller.ts": 16,
-  "src/save.ts": 6,
-  "src/shop-view.ts": 2,
-  "src/table-input.ts": 1,
-  "src/traits/selectable.ts": 3,
-  "src/visual/block-appearance.ts": 20
+  "src/audio-service.ts": ["stageMusic[phase](music);", "screenMusic[screen]();"],
+  "src/audio/music-fade.ts": ["switch (kind) {"],
+  "src/audio/music-plan.ts": ["switch (scene) {"],
+  "src/game-modes.ts": [
+    "return phase !== \"shop\" && phase !== \"over\" && Boolean(traits.stage.fieldPlacement);",
+    "return phase === \"shop\" ? (traits.shop?.overlays ?? {}) : traits.stage.overlays;"
+  ],
+  "src/game-run.ts": [
+    "session.shopAfter = snapshot.phase === \"shop\" ? (snapshot.shopAfter ?? \"boss\") : null;",
+    "offer.kind === \"passive\" ? this.passivePrices.buy : (this.config.cardPurchasePrice ?? 1);",
+    "if (offer.kind === \"passive\") {",
+    "while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;",
+    "if (event.type !== \"discard.completed\") return [];",
+    "while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`))",
+    ".filter((offer): offer is Extract<ShopOffer, { kind: \"card\" }> => offer.kind === \"card\")"
+  ],
+  "src/hud-panels.ts": [
+    "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
+    "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
+  ],
+  "src/listening-room/main.ts": [
+    "const entry = entries.find((_, index) => soundEffects[index].id === \"score.line\");"
+  ],
+  "src/materials.ts": [
+    "...(transparentMaterials.has(kind) ? { transparent: {} } : {}),",
+    "inspectable: inspectable(`${cardName(card.traits.identity)} · ${materialNames[kind]}`),"
+  ],
+  "src/passive-effects.ts": [
+    "switch (condition.kind) {",
+    "if (rule.effect.kind === \"multiply-value\") value *= rule.effect.factor;",
+    "if (rule.effect.kind === \"add-value\") value += rule.effect.amount;",
+    "if (rule.effect.kind === \"multiply-line\") points *= rule.effect.factor;",
+    "if (rule.effect.kind === \"add-line\")",
+    "if (rule.on !== \"stage.won\" || rule.effect.kind !== \"add-coins\") continue;",
+    "if (rule.condition?.kind === \"stage\") {",
+    "if (rule.effect.kind === \"grant-unowned-passive\") {",
+    "if (rule.effect.kind !== \"add-coins\") continue;"
+  ],
+  "src/run-controller.ts": [
+    "...(traits.sandbox ? sandboxRunRules(demoRunRules) : demoRunRules),",
+    "...(traits.passiveRack ? { rackCapacity: traits.passiveRack.capacity } : {}),",
+    "switchScene(sceneForPhase[game.phase]);",
+    ".filter(({ block }) => block.traits.selectable && selected.has(block.id))",
+    "if (game.phase === \"over\") {",
+    "const leavingShop = game.phase === \"shop\";",
+    "} else if (game.phase === \"shop\") {",
+    "const enterShop = game.phase === \"shop\" && !reducedMotion;",
+    "shop.render(game.state.shopStock ?? [], game.phase === \"shop\", enterShop);",
+    "if (modeTraits.shopPreview) {",
+    "if (!modeTraits.materialSample) return session;",
+    "if (!modeTraits.shop || session.phase !== \"shop\" || session.state.shopStock !== undefined)",
+    "const enterShop = game.phase === \"shop\" && fresh && !reducedMotion;",
+    "shop.render(game.state.shopStock ?? [], game.phase === \"shop\", enterShop);",
+    "playSfx(game.phase === \"shop\" ? \"shop.open\" : \"round.start\");",
+    "game.phase !== \"over\" && !services.presenter.busy && !game.stageRewardsPending,",
+    "offer.kind === \"passive\" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),",
+    "if (bought.kind === \"card\") {"
+  ],
+  "src/run-rules.ts": ["targetScore: Math.round(baseTargets[kind] * (1 + (round - 1) / 2)),"],
+  "src/save.ts": [
+    "offer.kind === \"card\"",
+    "if (!phases.includes(record.phase) || record.phase === \"over\") return null;",
+    "if (!dealers.has(record.dealer)) return null;",
+    "if (offer.kind === \"card\") return { kind: \"card\" as const, block: resolve(offer.cardId) };",
+    "if (offer.kind !== \"passive\" || typeof offer.id !== \"string\" || passiveIds.has(offer.id))",
+    "...(record.phase === \"shop\" && record.shopAfter ? { shopAfter: record.shopAfter } : {}),",
+    "if (snapshot.phase === \"over\") storage.removeItem(key);"
+  ],
+  "src/shop-view.ts": [
+    "if (offer.kind === \"passive\") {",
+    "const passive = offer.kind === \"passive\";"
+  ],
+  "src/table-input.ts": [
+    "canvas.style.cursor = hovered?.block.traits.selectable ? \"pointer\" : \"default\";"
+  ],
+  "src/traits/selectable.ts": [
+    "if (!block.traits.selectable) return block;",
+    "if (block.traits.selectable) return block;",
+    "if (!block.traits.selectable) return current;"
+  ],
+  "src/visual/block-appearance.ts": [
+    "const ink = printInk[kind];",
+    "switch (kind) {",
+    "ior: kind === \"prismatic\" ? 2.33 : 1.5,",
+    "envMapIntensity: kind === \"prismatic\" ? 1.6 : 1.1,",
+    "...(kind === \"prismatic\" ? prismaticFire : {}),",
+    "const prismatic = kind === \"prismatic\";",
+    "const relief = { bumpMap: height ?? texture, bumpScale: patternRelief[kind] };",
+    "if (kind === \"ice\") {",
+    "if (kind === \"gold\") {",
+    "if (kind === \"paper\") {",
+    "kind === \"meat\"",
+    ": kind === \"prismatic\"",
+    ": kind === \"gold\"",
+    "if ([\"prismatic\", \"fire\", \"paper\", \"ice\"].includes(kind)) geometry.scale(0.985, 0.985, 0.985);",
+    "const edgeColor = edgeColors[kind];",
+    "const edgeOpacity = edgeOpacities[kind];",
+    "if (kind === \"prismatic\") {",
+    "if (kind === \"fire\") {",
+    "if (kind === \"ice\") {",
+    "if (kind === \"steel\") {",
+    "kind === \"gold\"",
+    ": kind === \"paper\"",
+    ": kind === \"wood\"",
+    ": kind === \"terracotta\"",
+    "const endTexture = kind === \"wood\" ? faceTexture(identity, kind, true) : null;"
+  ]
 }
