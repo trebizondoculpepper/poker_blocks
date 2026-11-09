@@ -20,7 +20,8 @@ import { passiveDefinitions, type PassiveBlock } from "./passives";
 import type { RenderedBlock } from "./rendered-blocks";
 import { cellKey, type Cell, type Face } from "./traits/attachable";
 import { inspectBlock } from "./traits/inspectable";
-import { toggleBlockSelection, type Selection } from "./traits/selectable";
+import { blockCanDrag, blockCursor, toggleBlockSelection } from "./block-trait-behaviours";
+import type { Selection } from "./traits/selectable";
 import { moveItem } from "./zones";
 
 /** What the input asks of the run. */
@@ -387,7 +388,7 @@ export function createTableInput(options: {
     }
     options.overlays().hideTooltip();
     const source = pickBlock(event.clientX, event.clientY, hand.blocks);
-    if (fieldActive && source?.block.traits.attachable) {
+    if (fieldActive && source && blockCanDrag(source.block)) {
       pointRay(event.clientX, event.clientY, cameraView.handCamera);
       const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
         ? source.cube.position.clone().sub(dragPoint)
@@ -478,7 +479,7 @@ export function createTableInput(options: {
       }
     }
     const hovered = pickAny(event.clientX, event.clientY);
-    canvas.style.cursor = hovered?.block.traits.selectable ? "pointer" : "default";
+    canvas.style.cursor = blockCursor(hovered?.block);
     showInspection(
       event.pointerType === "touch" ? undefined : hovered?.block,
       event.clientX,

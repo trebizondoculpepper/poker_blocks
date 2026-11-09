@@ -32,7 +32,6 @@
   ],
   "src/run-controller.ts": [
     "switchScene(sceneForPhase[game.phase]);",
-    ".filter(({ block }) => block.traits.selectable && selected.has(block.id))",
     "if (game.phase === \"over\") {",
     "const leavingShop = game.phase === \"shop\";",
     "if (!modeTraits.shop || session.phase !== \"shop\" || session.state.shopStock !== undefined)",
@@ -55,13 +54,5 @@
   "src/shop-view.ts": [
     "if (offer.kind === \"passive\") {",
     "const passive = offer.kind === \"passive\";"
-  ],
-  "src/table-input.ts": [
-    "canvas.style.cursor = hovered?.block.traits.selectable ? \"pointer\" : \"default\";"
-  ],
-  "src/traits/selectable.ts": [
-    "if (!block.traits.selectable) return block;",
-    "if (block.traits.selectable) return block;",
-    "if (!block.traits.selectable) return current;"
   ]
 }

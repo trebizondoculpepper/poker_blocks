@@ -37,9 +37,9 @@ describe("the dev1 materials sampler", () => {
 
 describe("the transparent trait", () => {
   it("marks exactly the see-through materials", async () => {
-    const { isTransparent } = await import("./traits/transparent");
+    const { needsLandingHandover } = await import("./block-trait-behaviours");
     for (const card of makeDevDeck(7)) {
-      expect(isTransparent(card)).toBe(
+      expect(needsLandingHandover(card)).toBe(
         getMaterialDefinition(materialOf(card)).traits.transparent !== undefined,
       );
     }

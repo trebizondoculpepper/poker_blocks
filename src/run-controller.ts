@@ -265,7 +265,7 @@ export function createRunController<Context>(options: {
     const { views } = services;
     views.highlight(selected);
     const selectedNames = views.all
-      .filter(({ block }) => block.traits.selectable && selected.has(block.id))
+      .filter(({ block }) => selected.has(block.id))
       .map(({ block }) => cardName(block.traits.identity));
     host.setAttribute(
       "aria-label",
