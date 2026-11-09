@@ -126,6 +126,8 @@ type AttractCard = {
   cube: THREE.Mesh;
   /** The materials to fade, so the geometry and textures are not touched. */
   materials: THREE.MeshStandardMaterial[];
+  /** Extra meshes on the card (a crystal's fire, a fire block's glass). */
+  extras: readonly THREE.Mesh[];
   /** Still fading in; drawn transparent until fully opaque. */
   fading: boolean;
   /** Fully faded in: give each material back its own transparency. */
@@ -263,6 +265,8 @@ export function createAttractScene(
     );
     for (const extra of appearance.extras ?? []) cube.add(extra);
     scene.add(cube);
+    // Anything on the card that reflects (a fire block's glass, say), not only its faces.
+    reflectExtras(appearance.extras ?? []);
     // A card's opacity follows its depth (`depthOpacity`). Opacity only counts on a transparent
     // material, so every card is drawn transparent while it fades in; `update` restores each
     // material's own setting once the card is fully opaque.
@@ -277,6 +281,7 @@ export function createAttractScene(
     return {
       cube,
       materials,
+      extras: appearance.extras ?? [],
       fading: true,
       settle() {
         materials.forEach((surface, index) => {
@@ -294,6 +299,8 @@ export function createAttractScene(
         scene.remove(cube);
         appearance.geometry.dispose();
         for (const material of new Set([...appearance.materials, ...materials])) material.dispose();
+        for (const extra of appearance.extras ?? [])
+          for (const material of [extra.material].flat()) material.dispose();
         for (const texture of appearance.textures) texture.dispose();
       },
     };
@@ -338,6 +345,14 @@ export function createAttractScene(
    * its own WebGL context; a texture cannot cross contexts, so in this renderer it is empty,
    * and a near-mirror card reflecting nothing reads as dull grey whatever the lights do.
    */
+  /** The same for a card's extra meshes: each material that reflects gets this environment. */
+  function reflectExtras(extras: readonly THREE.Mesh[]): void {
+    const reflective = extras
+      .flatMap(({ material }) => [material].flat())
+      .filter((material): material is THREE.MeshStandardMaterial => "envMap" in material);
+    reflect(reflective);
+  }
+
   function reflect(materials: readonly THREE.MeshStandardMaterial[]): void {
     for (const material of materials) {
       material.envMap = environment;
@@ -351,7 +366,10 @@ export function createAttractScene(
     setEnvironment(renderer) {
       if (environment) return;
       environment = sparkleEnvironment(renderer);
-      for (const card of cards) reflect(card.materials);
+      for (const card of cards) {
+        reflect(card.materials);
+        reflectExtras(card.extras);
+      }
     },
     /** Change the tuning live: later cards use it, cards in flight keep theirs. */
     retune(next) {
