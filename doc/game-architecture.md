@@ -229,6 +229,8 @@ Composition is the same at both levels: a block is to its traits what a scene is
 
 `src/console-host.ts` is the fourth. It adapts the game to the developer console's `ConsoleHost`: dev-room names, resetting the current room, opening another room in place (it rewrites the URL with the History API, then asks the game to `openRoom`), and the music commands, which go through the audio service. `main.ts` supplies a narrow `ConsoleApp` (new run, open a room, force an outcome, adjust coins) and no longer builds the console host itself.
 
+`src/overlays.ts` is the fifth. It owns the menu screens (title, settings, game over and the stage-won pop-up), which scene each screen puts in front (`screenScenes`: settings and the stage-won pop-up are pushed, title and game over replace the stack, closing a menu resumes the game's scene), the music cue for each screen, the inspection tooltip and the refused flash on drop targets. `main.ts` supplies the menu callbacks and a `ScreenScenes` adapter over the scene manager. The overlays are built after the settings load, so `TraitContext.services.overlays` is a getter.
+
 The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameSession`. Developer rooms are no longer a kind of room: a room the console lists has a `console: { name }` trait, and one that honours `&restart=true` has a `restartable: { param }` trait (#38).
 
 ## Architecture to discuss

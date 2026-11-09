@@ -52,4 +52,12 @@ describe("scene architecture guardrails", () => {
     expect(host).toContain("window.history.replaceState");
     expect(host).not.toMatch(/window\.location\.(assign|reload)\s*\(/);
   });
+
+  it("keeps menus, screen-to-scene changes, the tooltip and refused flashes in the overlays service", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/services:\s*\{[^}]*\boverlays:\s*Overlays\b/);
+    expect(main).not.toMatch(/\bcreateMenus\(|inspect-tooltip|refused-flash|\bmenus\./);
+    expect(main).not.toMatch(/\bonScreen\(/);
+  });
 });
