@@ -1030,7 +1030,7 @@ body,
    * static, so a panel's own absolutely placed parts (the bin's count badge and refused X) stay
    * anchored to it.
    */
-  .hud-frame[data-layout="landscape"] .hud-zone > * {
+  .scene .hud-frame[data-layout="landscape"] .hud-zone > * {
     position: relative;
     inset: auto;
     margin: 0;
