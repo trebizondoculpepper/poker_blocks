@@ -87,7 +87,7 @@ export const materialDefinitions = [
       ink: { red: "#a3202f", black: "#182d4a", onDark: false },
       edge: { color: 0x303a40, opacity: 1 },
       geometry: box,
-      reliefScale: 0,
+      reliefScale: 3,
       endGrainFaces: noEnds,
     },
   },

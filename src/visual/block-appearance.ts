@@ -829,9 +829,26 @@ function terracottaHeight(
 type SurfaceHandler = (
   texture: THREE.CanvasTexture,
   relief: { bumpMap: THREE.CanvasTexture; bumpScale: number },
+  angle: number,
 ) => THREE.MeshStandardMaterial;
 
 const surfaceRegistry = new Map<string, SurfaceHandler>([
+  [
+    "brushedMetal",
+    (texture, relief, angle) =>
+      new THREE.MeshPhysicalMaterial({
+        map: texture,
+        ...relief,
+        metalness: 1,
+        roughness: 0.42,
+        anisotropy: 0.85,
+        anisotropyRotation: angle,
+        envMap: reflectionEnvironment,
+        envMapIntensity: 0.7,
+        clearcoat: 0.15,
+        clearcoatRoughness: 0.3,
+      }),
+  ],
   [
     "frosted",
     (texture, relief) =>
@@ -883,10 +900,11 @@ function surface(
   texture: THREE.CanvasTexture,
   appearance: MaterialDefinition["appearance"],
   height?: THREE.CanvasTexture,
+  angle = 0,
 ): THREE.MeshStandardMaterial {
   const handler = surfaceRegistry.get(appearance.surface);
   if (!handler) throw new Error(`Unknown surface: ${appearance.surface}`);
-  return handler(texture, { bumpMap: height ?? texture, bumpScale: appearance.reliefScale });
+  return handler(texture, { bumpMap: height ?? texture, bumpScale: appearance.reliefScale }, angle);
 }
 
 /** Directions a steel block's six faces are brushed in, varied per card. */
@@ -901,28 +919,6 @@ function brushAngles(identity: IdentityTrait): number[] {
  * direction (anisotropyRotation matches the face's scratches), so each face catches the
  * light differently as the block turns.
  */
-function brushedSteel(
-  texture: THREE.CanvasTexture,
-  height: THREE.CanvasTexture,
-  angle: number,
-): THREE.MeshPhysicalMaterial {
-  return new THREE.MeshPhysicalMaterial({
-    map: texture,
-    bumpMap: height,
-    bumpScale: 3,
-    metalness: 1,
-    // Rough enough, and the reflections dim enough, that a face turned straight at the
-    // studio's lights glows rather than blowing out to white.
-    roughness: 0.42,
-    anisotropy: 0.85,
-    anisotropyRotation: angle,
-    envMap: reflectionEnvironment,
-    envMapIntensity: 0.7,
-    clearcoat: 0.15,
-    clearcoatRoughness: 0.3,
-  });
-}
-
 type AssemblyContext = {
   identity: IdentityTrait;
   definition: MaterialDefinition;
@@ -934,6 +930,7 @@ type AssemblyHandler = (context: AssemblyContext) => BlockAppearance;
 type HeightHandler = (
   texture: THREE.CanvasTexture,
   identity: IdentityTrait,
+  angle: number,
 ) => THREE.CanvasTexture | undefined;
 
 const heightRegistry = new Map<string, HeightHandler>([
@@ -942,7 +939,7 @@ const heightRegistry = new Map<string, HeightHandler>([
   ["carvedTimber", (texture, identity) => woodHeight(texture, identity)],
   ["engravedGold", (_texture, identity) => goldHeight(identity)],
   ["clayRelief", (texture, identity) => terracottaHeight(texture, identity)],
-  ["steelRelief", () => undefined],
+  ["steelRelief", (_texture, identity, angle) => steelHeight(identity, angle)],
   ["iceRelief", () => undefined],
   ["frameRelief", () => undefined],
 ]);
@@ -983,7 +980,7 @@ function sixFaces(context: AssemblyContext): BlockAppearance {
     let entry = faceCache.get(endGrain);
     if (!entry) {
       const texture = faceTexture(identity, definition, endGrain);
-      const height = makeHeight(texture, identity);
+      const height = makeHeight(texture, identity, 0);
       entry = { texture, height, material: surface(texture, appearance, height) };
       faceCache.set(endGrain, entry);
     }
@@ -997,13 +994,19 @@ function sixFaces(context: AssemblyContext): BlockAppearance {
 
 function brushedFaces(context: AssemblyContext): BlockAppearance {
   const { identity, definition } = context;
+  const makeHeight = heightRegistry.get(definition.appearance.height);
+  if (!makeHeight) throw new Error("Unknown relief handler: " + definition.appearance.height);
   const angles = brushAngles(identity);
   const textures = angles.map((angle) => faceTexture(identity, definition, false, angle));
-  const heights = angles.map((angle) => steelHeight(identity, angle));
+  const heights = textures.map((texture, face) => makeHeight(texture, identity, angles[face]));
   const materials = textures.map((texture, face) =>
-    brushedSteel(texture, heights[face], angles[face]),
+    surface(texture, definition.appearance, heights[face], angles[face]),
   );
-  return appearanceBase(context, [...textures, ...heights], materials);
+  return appearanceBase(
+    context,
+    [...textures, ...heights.filter((height) => height !== undefined)],
+    materials,
+  );
 }
 
 function refractiveCrystal(context: AssemblyContext): BlockAppearance {
