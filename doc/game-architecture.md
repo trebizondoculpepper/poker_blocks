@@ -398,17 +398,17 @@ The cards' randomness is cosmetic and comes from `Math.random`, never the sessio
 
 `src/scene-behaviours.ts` registers each scene trait against its own config type, and a scene composes whichever subset it needs. Behaviour therefore comes from the scene in front, and a scene that gains or loses a trait leaves the others alone.
 
-| Scene trait               | What it does while its scene is in front                                       | Composed by             |
-| ------------------------- | ------------------------------------------------------------------------------ | ----------------------- |
-| `screen`                  | Marks the host with the scene, for styling and tests.                          | Every scene.            |
-| `roundPanel`              | Shows the round panel through the HUD service.                                 | Stage 1, stage 2, boss. |
-| `deckPanel`               | Shows the deck counter through the HUD service.                                | Stage 1, stage 2, boss. |
-| `coinsPanel`              | Shows the coin counter through the HUD service.                                | Shop.                   |
-| `shopExit`                | Shows the shop's exit button through the HUD service.                          | Shop.                   |
-| `fieldPlacement`          | Lets the input service play blocks onto the field.                             | Stage 1, stage 2, boss. |
-| `shopStock`               | Shows the shop's stock, and lets its offers be bought, through the shop view.  | Shop.                   |
-| `pausesBelow`             | Stops lower scenes taking input or updates while a pop-up or menu is open.     | Settings, stage-won.    |
-| `devManualBlockDestroyer` | Testing only: destroys a double-clicked table block with the configured cause. | dev4's play scenes.     |
+| Scene trait               | What it does while its scene is in front                                                              | Composed by             |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------- |
+| `screen`                  | Marks the host with the scene, for styling and tests.                                                 | Every scene.            |
+| `roundPanel`              | Shows the round panel, configured with the stage's name and its next-action label per outcome (#180). | Stage 1, stage 2, boss. |
+| `deckPanel`               | Shows the deck counter through the HUD service.                                                       | Stage 1, stage 2, boss. |
+| `coinsPanel`              | Shows the coin counter through the HUD service.                                                       | Shop.                   |
+| `shopExit`                | Shows the shop exit button, configured with its label (#180).                                         | Shop.                   |
+| `fieldPlacement`          | Lets the input service play blocks onto the field.                                                    | Stage 1, stage 2, boss. |
+| `shopStock`               | Shows the shop's stock, and lets its offers be bought, through the shop view.                         | Shop.                   |
+| `pausesBelow`             | Stops lower scenes taking input or updates while a pop-up or menu is open.                            | Settings, stage-won.    |
+| `devManualBlockDestroyer` | Testing only: destroys a double-clicked table block with the configured cause.                        | dev4's play scenes.     |
 
 The numbers a panel shows are not the scene's: the run controller keeps handing the HUD service a `HudView` snapshot, and the traits only decide which panels exist. Likewise what a shop stocks is game-run state, chosen by run setup and held by `GameRun`; `shopStock` owns only its display and buying.
 

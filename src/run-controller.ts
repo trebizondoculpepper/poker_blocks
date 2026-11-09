@@ -267,7 +267,6 @@ export function createRunController<Context>(options: {
     const { round, deck, coins } = game.state;
     services.hud.render({
       round: game.round,
-      phase: game.phase,
       presenting,
       outcome: presenting || !game.inStage ? "playing" : roundOutcome(game.state),
       score: presenter.shownScore,

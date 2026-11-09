@@ -1,7 +1,3 @@
 {
-  "src/hud-panels.ts": [
-    "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
-    "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
-  ],
   "src/save.ts": ["if (!dealers.has(record.dealer)) return null;"]
 }
