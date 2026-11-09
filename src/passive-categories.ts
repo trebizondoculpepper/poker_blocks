@@ -11,14 +11,17 @@
  */
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { PassivePalette } from "./passives";
+import type { TokenEffectConfig } from "./passive-activation-effects";
 
 /** How a scoring passive changes a score; it picks the accent tint, never the behaviour. */
 export type ScoringOperation = "additive" | "multiplicative" | "exponential";
 
-/** What a category plays when one of its passives activates (registered SFX id). */
+/** What a category plays when one of its passives activates. */
 export type CategoryActivation = {
-  /** A short description of the visual effect, for the presentation that plays it. */
-  visual: string;
+  /** What the look is meant to be, in words. */
+  description: string;
+  /** The rack token's effect: a registered handler (`src/passive-activation-effects.ts`). */
+  effect: TokenEffectConfig;
   /** A registered sound effect id. */
   sfx: SoundEffectId;
 };
@@ -47,25 +50,41 @@ export const passiveCategoryFacet = {
     name: "Scoring",
     palette: { face: "#f3f0e9", ink: "#26282c", edge: "#b9b4aa" },
     finish: "porcelain",
-    activation: { visual: "brief white score pulse", sfx: "passive.activate.scoring" },
+    activation: {
+      description: "brief white score pulse",
+      effect: { id: "pulse", colour: "#ffffff" },
+      sfx: "passive.activate.scoring",
+    },
   },
   economyCategory: {
     name: "Economy",
     palette: { face: "#1f6b3a", ink: "#f4e7b8", edge: "#b58a3c" },
     finish: "brass",
-    activation: { visual: "green coin glint", sfx: "passive.activate.economy" },
+    activation: {
+      description: "green coin glint",
+      effect: { id: "pulse", colour: "#5ee08a" },
+      sfx: "passive.activate.economy",
+    },
   },
   effectCategory: {
     name: "Effect",
     palette: { face: "#16171a", ink: "#e9e6df", edge: "#4a4c52" },
     finish: "obsidian",
-    activation: { visual: "brief dark ripple", sfx: "passive.activate.effect" },
+    activation: {
+      description: "brief dark ripple",
+      effect: { id: "pulse", colour: "#6f6aa8" },
+      sfx: "passive.activate.effect",
+    },
   },
   retriggerCategory: {
     name: "Retrigger",
     palette: { face: "#d9762b", ink: "#2a1606", edge: "#9a4a14" },
     finish: "copper",
-    activation: { visual: "quick orange echo ring", sfx: "passive.activate.retrigger" },
+    activation: {
+      description: "quick orange echo ring",
+      effect: { id: "echo", colour: "#ff9a3c" },
+      sfx: "passive.activate.retrigger",
+    },
   },
 } as const satisfies Record<string, PassiveCategoryDefaults>;
 
