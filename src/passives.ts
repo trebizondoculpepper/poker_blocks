@@ -1,6 +1,8 @@
 import { Registry } from "./core/registry";
 import { categoryPalette, type PassiveCategoryTraits } from "./passive-categories";
-import type { EventRule } from "./event-rules";
+import type { EventRule, HandlerConfig } from "./event-rules";
+import type { CardBlock } from "./cards";
+import type { Line } from "./scoring";
 import type { PassiveFaceDesign, PassiveTokenAppearance } from "./passive-visual";
 import type { BlockMaterial } from "./materials";
 import type { StageKind } from "./run-rules";
@@ -8,20 +10,15 @@ import { inspectable, type InspectableTrait } from "./traits/inspectable";
 
 /** Serializable block data. Behavior lives in the referenced trait definition. */
 export type PassiveRule = {
-  on: "score.beforeBlockValue" | "score.beforeLineFinalized" | "discard.completed" | "stage.won";
+  /** Scoring rules are `EventRule` data (#139); these legacy rules await #63 slice 3. */
+  on: "discard.completed" | "stage.won";
   condition?:
     | { kind: "material"; value: BlockMaterial }
     | { kind: "suit"; values: readonly ("hearts" | "diamonds")[] }
-    | { kind: "line-length"; minimum?: number; maximum?: number }
-    | { kind: "intersection" }
     | { kind: "rank-count"; rank: "A"; minimum: number }
     /** Only at these stages, e.g. a reward paid for boss wins alone (issue #13). */
     | { kind: "stage"; kinds: readonly StageKind[] };
   effect:
-    | { kind: "multiply-value"; factor: number }
-    | { kind: "add-value"; amount: number }
-    | { kind: "multiply-line"; factor: number }
-    | { kind: "add-line"; amount: number; perIntersection?: boolean }
     | { kind: "add-coins"; amount: number; perMatch?: boolean }
     | { kind: "grant-unowned-passive" };
 };
@@ -39,6 +36,9 @@ export type PassiveBlock = {
   };
 };
 
+/** What a `score.*` event carries for its rules' selectors. */
+export type ScoreEventContext = { line: Line; intersections: number; block?: CardBlock };
+
 /** Which stage a lifecycle event belongs to, so a trait can match a moment by condition. */
 export type StageContext = { round: number; kind: StageKind; dealer: string };
 
@@ -48,6 +48,11 @@ export type GameEvent = {
   cardIds?: readonly string[];
   /** On stage and shop lifecycle events: the stage they belong to. */
   stage?: StageContext;
+  /**
+   * On `score.*` events: the scored line (its maximal, gap-free blocks), how many of its cells
+   * cross another line, and on `score.beforeBlockValue` the block being valued.
+   */
+  score?: ScoreEventContext;
   /** On `reward.finalized`: the coins paid, and the balance before and after. */
   reward?: { coins: number; balanceBefore: number; balance: number };
 };
@@ -80,7 +85,10 @@ export type PassiveDefinition = {
   shape?: string;
   /** Artwork per face in logical order: face `i` sits opposite face `count - 1 - i`. */
   faces?: readonly PassiveFaceDesign[];
+  /** Legacy discard and stage-won rules (until #63 slice 3). */
   rules: readonly PassiveRule[];
+  /** Its event rules: named, configured handlers from `src/rule-handlers.ts` (#139). */
+  eventRules?: readonly EventRule[];
   /**
    * Its shop balance (doc/game.md, "Shop rules"): base purchase price in coins and the first
    * round it can be stocked. Absent only on a retired passive.
@@ -96,6 +104,21 @@ export const passiveDefinitions = new Registry<PassiveDefinition>("passive");
 passiveTraits.register("passive.event-rules", {
   id: "passive.event-rules",
   listensTo: [],
+});
+
+/** A rule on each contributing block's value as a line scores. */
+const blockRule = (where: HandlerConfig, ...effects: HandlerConfig[]): EventRule => ({
+  on: "score.beforeBlockValue",
+  select: { id: "scored-block", config: {} },
+  where,
+  effects,
+});
+/** A rule on a line's score before it is finalized. */
+const lineRule = (where: HandlerConfig, ...effects: HandlerConfig[]): EventRule => ({
+  on: "score.beforeLineFinalized",
+  select: { id: "scored-line", config: {} },
+  where,
+  effects,
 });
 
 const definitions: PassiveDefinition[] = [
@@ -117,7 +140,10 @@ const definitions: PassiveDefinition[] = [
     symbol: "×2",
     description: "Doubles every scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [{ on: "score.beforeLineFinalized", effect: { kind: "multiply-line", factor: 2 } }],
+    rules: [],
+    eventRules: [
+      lineRule({ id: "always", config: {} }, { id: "multiply-line-score", config: { factor: 2 } }),
+    ],
   },
   {
     id: "quad-line",
@@ -127,7 +153,10 @@ const definitions: PassiveDefinition[] = [
     symbol: "×4",
     description: "Quadruples every scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [{ on: "score.beforeLineFinalized", effect: { kind: "multiply-line", factor: 4 } }],
+    rules: [],
+    eventRules: [
+      lineRule({ id: "always", config: {} }, { id: "multiply-line-score", config: { factor: 4 } }),
+    ],
   },
   {
     id: "gold-standard",
@@ -153,12 +182,12 @@ const definitions: PassiveDefinition[] = [
     symbol: "◈",
     description: "Doubles the base value of each meat block in a scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [
-      {
-        on: "score.beforeBlockValue",
-        condition: { kind: "material", value: "meat" },
-        effect: { kind: "multiply-value", factor: 2 },
-      },
+    rules: [],
+    eventRules: [
+      blockRule(
+        { id: "material-is", config: { material: "meat" } },
+        { id: "multiply-block-value", config: { factor: 2 } },
+      ),
     ],
   },
   {
@@ -169,12 +198,12 @@ const definitions: PassiveDefinition[] = [
     symbol: "✥",
     description: "Adds 3 to the base value of each wood block in a scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [
-      {
-        on: "score.beforeBlockValue",
-        condition: { kind: "material", value: "wood" },
-        effect: { kind: "add-value", amount: 3 },
-      },
+    rules: [],
+    eventRules: [
+      blockRule(
+        { id: "material-is", config: { material: "wood" } },
+        { id: "add-block-value", config: { amount: 3 } },
+      ),
     ],
   },
   {
@@ -186,12 +215,12 @@ const definitions: PassiveDefinition[] = [
     description:
       "Adds 3 points for each block in a scored line that crosses another line. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [
-      {
-        on: "score.beforeLineFinalized",
-        condition: { kind: "intersection" },
-        effect: { kind: "add-line", amount: 3, perIntersection: true },
-      },
+    rules: [],
+    eventRules: [
+      lineRule(
+        { id: "perpendicular-intersection", config: {} },
+        { id: "add-line-score", config: { amount: 3, perIntersection: true } },
+      ),
     ],
   },
   {
@@ -203,17 +232,16 @@ const definitions: PassiveDefinition[] = [
     description:
       "Subtracts 5 from two-block lines; adds 5 to lines of three or more. Final scores cannot go below zero. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [
-      {
-        on: "score.beforeLineFinalized",
-        condition: { kind: "line-length", maximum: 2 },
-        effect: { kind: "add-line", amount: -5 },
-      },
-      {
-        on: "score.beforeLineFinalized",
-        condition: { kind: "line-length", minimum: 3 },
-        effect: { kind: "add-line", amount: 5 },
-      },
+    rules: [],
+    eventRules: [
+      lineRule(
+        { id: "line-length", config: { maximum: 2 } },
+        { id: "add-line-score", config: { amount: -5 } },
+      ),
+      lineRule(
+        { id: "line-length", config: { minimum: 3 } },
+        { id: "add-line-score", config: { amount: 5 } },
+      ),
     ],
   },
   {
@@ -295,7 +323,11 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
         shape: definition.shape,
         faces: definition.faces,
       },
-      passive: { traitId: definition.traitId, rules: definition.rules },
+      passive: {
+        traitId: definition.traitId,
+        rules: definition.rules,
+        eventRules: definition.eventRules,
+      },
       inspectable: inspectable(`${definition.name} — ${definition.description}`),
       ...(definition.shop ? { priced: { basePrice: definition.shop.basePrice } } : {}),
     },
