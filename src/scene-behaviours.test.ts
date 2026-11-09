@@ -42,6 +42,19 @@ function recordingHost() {
 const scene = (id: string, traits: Partial<SceneTraits>) => ({ id, traits });
 
 describe("scene traits own their behaviour", () => {
+  it("marks the host with the scene in front again after a pushed scene pops (#35)", () => {
+    const { host } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("stage", { screen: { kind: "stage-1" } }));
+    scenes.register(scene("settings", { screen: { kind: "settings" } }));
+
+    scenes.switchTo("stage");
+    scenes.push("settings");
+    expect(host.host.dataset.scene).toBe("settings");
+    scenes.pop();
+    expect(host.host.dataset.scene).toBe("stage-1");
+  });
+
   it("shows and hides each HUD panel on the scene that composes it", () => {
     const { host, calls, shown } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
