@@ -317,6 +317,61 @@ body,
     width: 42px;
     height: 42px;
   }
+
+  /* The rack takes the row under the HUD, so the bin moves below it. */
+  .scene:has(.passive-rack:not([hidden])) .discard-area {
+    top: 300px;
+  }
+
+  .hud-row {
+    margin: 4px 0;
+    font-size: 13px;
+  }
+}
+
+/* Short screens (a phone on its side): compact panels. */
+@media (max-height: 500px) {
+  .round-hud {
+    top: 8px;
+    left: 8px;
+    min-width: 112px;
+    padding: 8px 10px;
+  }
+
+  .hud-heading {
+    margin-bottom: 4px;
+  }
+
+  .hud-row {
+    margin: 2px 0;
+    font-size: 12px;
+  }
+
+  .hud-divider {
+    margin: 5px 0;
+  }
+
+  .deck-hud {
+    right: 8px;
+    bottom: 8px;
+    padding: 8px 10px;
+  }
+
+  .deck-hud strong {
+    font-size: 22px;
+  }
+
+  .discard-area {
+    bottom: 8px;
+    left: 8px;
+    width: 74px;
+    height: 78px;
+  }
+
+  .discard-icon {
+    width: 42px;
+    height: 42px;
+  }
 }
 
 .hud-action {

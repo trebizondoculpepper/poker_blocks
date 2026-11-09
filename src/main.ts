@@ -331,7 +331,7 @@ function structureRadius(): number {
 function desiredCamera(): { distance: number; target: THREE.Vector3 } {
   const cells = [...placed.values()].map(({ cell }) => cell!);
   if (cells.length === 0) {
-    return { distance: initialCameraDistance, target: new THREE.Vector3(0, -0.5, 0) };
+    return { distance: minimumCameraDistance(), target: new THREE.Vector3(0, -0.5, 0) };
   }
   const min = {
     x: Math.min(...cells.map(({ x }) => x)),
@@ -356,9 +356,14 @@ function desiredCamera(): { distance: number; target: THREE.Vector3 } {
   const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * camera.aspect);
   const limitingFov = Math.min(verticalFov, horizontalFov);
   return {
-    distance: Math.max(initialCameraDistance, (radius / Math.sin(limitingFov / 2)) * 1.2),
+    distance: Math.max(minimumCameraDistance(), (radius / Math.sin(limitingFov / 2)) * 1.2),
     target: pivot.position.clone().add(new THREE.Vector3(0, -0.5, 0)),
   };
+}
+
+/** The closest the camera frames the table: farther back on a tall, narrow (portrait) screen. */
+function minimumCameraDistance(): number {
+  return initialCameraDistance * Math.max(1, 0.9 / camera.aspect);
 }
 
 function applyCamera(): void {
@@ -2065,6 +2070,10 @@ const resize = () => {
 };
 const observer = new ResizeObserver(resize);
 observer.observe(host);
+// Some mobile browsers rotate without resizing the observed element in time.
+window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", () => setTimeout(resize, 150));
+window.visualViewport?.addEventListener("resize", resize);
 resize();
 
 let frame = 0;

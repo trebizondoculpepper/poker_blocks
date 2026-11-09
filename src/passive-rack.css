@@ -82,9 +82,38 @@
   visibility: visible;
 }
 
+@media (max-width: 700px), (max-height: 500px) {
+  .passive-rack {
+    gap: 6px;
+    min-width: 0;
+    padding: 6px 10px 8px;
+    border-width: 2px;
+  }
+
+  .passive-rack-slots {
+    min-height: 52px;
+    gap: 5px;
+  }
+
+  .passive-item {
+    width: 48px;
+    height: 52px;
+  }
+
+  .passive-description {
+    top: 54px;
+  }
+}
+
 @media (max-width: 700px) {
   .passive-rack {
-    top: 218px;
+    top: 206px;
+  }
+}
+
+@media (max-height: 500px) {
+  .passive-rack {
+    top: 8px;
   }
 }
 
