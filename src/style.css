@@ -29,8 +29,19 @@ body,
   inset: 0;
 }
 
-.scene .table-canvas-back {
+/*
+ * Background layers (#189): the background traits' canvases, under everything else. A layer is
+ * in the page only while a scene composing its trait is on the stack. Inside, the attract cards
+ * sit behind the table.
+ */
+.scene .background-layers {
+  position: absolute;
   z-index: 0;
+  inset: 0;
+}
+
+.scene .table-canvas-back {
+  z-index: 1;
 }
 
 .scene .table-canvas-front {

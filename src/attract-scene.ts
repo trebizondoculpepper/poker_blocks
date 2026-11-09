@@ -10,6 +10,7 @@
  * construction — never the session's seeded stream — so decorating the title cannot change a
  * replayable run (#134). See doc/randomness.md.
  */
+import { createSceneLayer } from "./scene-layer";
 import * as THREE from "three";
 import { standardDeck, type CardBlock, type IdentityTrait } from "./cards";
 import { getMaterialDefinition, materialOf } from "./materials";
@@ -202,25 +203,36 @@ export function createAttractScene(
   };
 }
 
-/** The host element the attract canvas attaches to, sized by CSS. */
-export function attractHost(host: HTMLElement): HTMLCanvasElement {
+/** What the attract background draws with: a renderer on its own canvas. */
+export type AttractRenderer = Pick<
+  THREE.WebGLRenderer,
+  "render" | "setSize" | "getSize" | "dispose"
+>;
+
+/** The attract sequence's canvas and renderer: quarter resolution, blurred by CSS (#147). */
+function createAttractCanvas(): { canvas: HTMLCanvasElement; renderer: AttractRenderer } {
   const canvas = document.createElement("canvas");
   canvas.className = "attract-canvas";
-  canvas.setAttribute("aria-hidden", "true");
-  host.append(canvas);
-  return canvas;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+  renderer.setPixelRatio(1);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  return { canvas, renderer };
 }
 
 /**
- * The attract background as a service main.ts can wire: it owns the scene, whether it is
- * running, and the cosmetic randomness. Main asks it to start, stop and advance; it never
- * decides anything about scenes (#147).
+ * The attract background as a service main.ts can wire: it owns the scene, its canvas and
+ * renderer, and the cosmetic randomness. The `attractBackground` trait starts and stops it; the
+ * canvas is in the page only while a scene composing that trait is on the stack (#147, #189).
  */
 export type AttractBackground = {
+  /** A scene composing `attractBackground` came to the front: mount the canvas and run. */
   start(): void;
+  /** That scene left: the last one to leave takes the canvas out of the page. */
   stop(): void;
-  /** Per frame: advance the sequence if it is running, and say what to draw if so. */
-  frame(delta: number): { scene: THREE.Scene; camera: THREE.Camera } | null;
+  /** Whether the canvas is in the page and the sequence running. */
+  readonly running: boolean;
+  /** Per frame: advance the sequence and draw it, while it runs. */
+  frame(delta: number): void;
   /** The tuning in force (a dev mode edits it live; see #166). */
   tuning(): AttractTuning;
   /** Replace the tuning; cards already in flight keep the values they were dealt. */
@@ -233,21 +245,47 @@ export type AttractBackground = {
 };
 
 export function createAttractBackground(
+  backgrounds: Pick<HTMLElement, "append" | "clientWidth" | "clientHeight">,
   initial: AttractTuning = defaultAttractTuning,
+  createLayer: () => {
+    canvas: Pick<HTMLCanvasElement, "remove">;
+    renderer: AttractRenderer;
+  } = createAttractCanvas,
 ): AttractBackground {
   // Cosmetic randomness only: `Math.random`, never the session's seeded stream, so the title
   // cannot change a replayable run (#134).
   const scene = createAttractScene(() => Math.random(), initial);
-  let running = false;
   let tuning = initial;
+  // Made the first time it is needed and reused after, so a browser's limited WebGL contexts
+  // are not used up by entering and leaving the title.
+  let layer: ReturnType<typeof createLayer> | null = null;
+  const mount = createSceneLayer(
+    () => {
+      layer ??= createLayer();
+      backgrounds.append(layer.canvas as HTMLCanvasElement);
+    },
+    () => layer?.canvas.remove(),
+  );
   let panel: ReturnType<typeof createAttractTuningPanel> | null = null;
   const scope: AttractBackground = {
-    start: () => (running = true),
-    stop: () => (running = false),
+    start: () => mount.entered(true),
+    stop: () => mount.entered(false),
+    get running() {
+      return mount.mounted;
+    },
     frame(delta) {
-      if (!running) return null;
+      if (!mount.mounted || !layer) return;
       scene.update(delta);
-      return { scene: scene.scene, camera: scene.camera };
+      // Quarter resolution: the blur hides the detail, and the cards are a backdrop.
+      const width = Math.max(1, Math.floor((backgrounds.clientWidth || 1) / 4));
+      const height = Math.max(1, Math.floor((backgrounds.clientHeight || 1) / 4));
+      const size = layer.renderer.getSize(new THREE.Vector2());
+      if (size.x !== width || size.y !== height) {
+        layer.renderer.setSize(width, height, false);
+        scene.camera.aspect = width / height;
+        scene.camera.updateProjectionMatrix();
+      }
+      layer.renderer.render(scene.scene, scene.camera);
     },
     tuning: () => tuning,
     retune(next) {
@@ -266,6 +304,8 @@ export function createAttractBackground(
     dispose() {
       panel?.dispose();
       panel = null;
+      layer?.canvas.remove();
+      layer?.renderer.dispose();
       scene.dispose();
     },
   };
