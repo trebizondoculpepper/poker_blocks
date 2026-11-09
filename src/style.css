@@ -1025,9 +1025,14 @@ body,
 }
 
 @media (orientation: landscape) {
-  /* On landscape screens, every element placed in a zone flows into it (#117). */
+  /*
+   * On landscape screens, every element placed in a zone flows into it (#117). Relative, not
+   * static, so a panel's own absolutely placed parts (the bin's count badge and refused X) stay
+   * anchored to it.
+   */
   .hud-frame[data-layout="landscape"] .hud-zone > * {
-    position: static;
+    position: relative;
+    inset: auto;
     margin: 0;
   }
 }
