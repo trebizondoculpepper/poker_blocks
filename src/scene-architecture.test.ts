@@ -84,4 +84,13 @@ describe("scene architecture guardrails", () => {
       /function (addToBoard|landing|showCandidate|tintRow|updateRotationCenter)\s*\(/,
     );
   });
+
+  it("keeps pointer gestures, selection and the discard target in the input service", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/\binput:\s*TableInput\b/);
+    expect(main).not.toMatch(/addEventListener\("pointer(down|move|up|cancel)"/);
+    expect(main).not.toMatch(/\bpointRay\(|\bpassiveDrag\b|\bboardDrag\b|\bpinch\b/);
+    expect(main).not.toMatch(/toggleBlockSelection\(|discard-count|\bsuppressClickUntil\b/);
+  });
 });

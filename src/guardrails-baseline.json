@@ -3,11 +3,12 @@
   "src/audio/music-plan.ts": 1,
   "src/game-session.ts": 7,
   "src/listening-room/main.ts": 1,
-  "src/main.ts": 21,
+  "src/main.ts": 20,
   "src/passive-effects.ts": 9,
   "src/rooms.ts": 2,
   "src/save.ts": 6,
   "src/shop-view.ts": 2,
+  "src/table-input.ts": 1,
   "src/traits/selectable.ts": 3,
   "src/visual/block-appearance.ts": 20
 }
