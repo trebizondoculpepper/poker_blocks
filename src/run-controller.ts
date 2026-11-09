@@ -40,7 +40,7 @@ import {
 import { clearRun, loadRun, saveRun, type SaveStorage } from "./save";
 import type { SceneManager } from "./scenes";
 import { Randomizer, newSeed } from "./random";
-import { demoRunRules, type RunRules } from "./run-rules";
+import type { RunRules } from "./run-rules";
 import { createRunSetupRegistry } from "./run-setup-behaviours";
 import type { RunSetupServices, RunSetupStep } from "./run-setup";
 import {
@@ -50,7 +50,8 @@ import {
   saveSettings,
   type Settings,
 } from "./settings";
-import { shopPreviewState, type ShopOffer } from "./shop-stock";
+import type { ShopOffer } from "./shop-stock";
+import { baseRunRules } from "./mode-trait-rules";
 import { offerKind } from "./offer-kinds";
 import type { createShopView } from "./shop-view";
 import type { TableInput, TableRules } from "./table-input";
@@ -146,13 +147,6 @@ export type RunController = {
 const stageWonDelayMs = 900;
 /** When a lost stage's outcome has been announced, the game over screen follows. */
 const gameOverDelayMs = 1400;
-
-/** The run rules a mode starts from, before its run setup steps adjust them. */
-function baseRunRules(mode: GameMode): RunRules {
-  return mode.traits.passiveRack
-    ? { ...demoRunRules, rackCapacity: mode.traits.passiveRack.capacity }
-    : demoRunRules;
-}
 
 export function createRunController<Context>(options: {
   host: HTMLElement;
@@ -337,10 +331,6 @@ export function createRunController<Context>(options: {
   function takeNextAction(): void {
     if (services.presenter.busy || services.input.dragging) return;
     playSfx("ui.click");
-    if (game.phase === "over") {
-      followRunPosition();
-      return;
-    }
     // A won stage moves on through its pop-up, which shows what it paid.
     if (game.inStage && roundOutcome(game.state) === "won") {
       showStageWon();
@@ -370,7 +360,6 @@ export function createRunController<Context>(options: {
         endRun();
         return;
       }
-      game = stockShopIfNeeded(game);
       // The table is cleared first, so the scene that comes in front (its sound, the shop's
       // camera entrance) starts on a clean table rather than being reset straight after.
       resetTable();
@@ -418,32 +407,10 @@ export function createRunController<Context>(options: {
     );
   }
 
-  /** The shop trait supplies stock when entering, including saves from before offers existed. */
-  function stockShopIfNeeded(session: GameRun): GameRun {
-    if (!modeTraits.shop || session.phase !== "shop" || session.state.shopStock !== undefined)
-      return session;
-    const snapshot = session.snapshot();
-    return GameRun.fromSnapshot(
-      dealerRegistry,
-      runRules,
-      cards,
-      {
-        ...snapshot,
-        state: shopPreviewState(
-          snapshot.state,
-          snapshot.state.coins,
-          () => randomizer.next(),
-          modeTraits.shop,
-        ),
-      },
-      () => randomizer.next(),
-    );
-  }
-
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
   function startRun(session: GameRun): void {
     const { rack, cameraView, audio } = services;
-    game = stockShopIfNeeded(session);
+    game = session;
     const rackTrait = modeTraits.passiveRack;
     rack.element.hidden = !rackTrait;
     rack.render(game.state.passiveRack);
@@ -524,9 +491,8 @@ export function createRunController<Context>(options: {
       autosave();
     },
     passiveRack: () => game.state.passiveRack,
-    // Not once the run is over, mid-play, or while a won stage's rewards are unpaid.
-    canSellPassives: () =>
-      game.phase !== "over" && !services.presenter.busy && !game.stageRewardsPending,
+    // Not mid-play, nor when the run's rules refuse a sale (run over, rewards unpaid).
+    canSellPassives: () => game.canSellPassives && !services.presenter.busy,
     reorderPassive(from, to) {
       if (!game.reorderPassive(from, to)) return false;
       services.rack.render(game.state.passiveRack);

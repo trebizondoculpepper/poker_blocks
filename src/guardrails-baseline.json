@@ -5,10 +5,5 @@
     "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
     "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
   ],
-  "src/run-controller.ts": [
-    "if (game.phase === \"over\") {",
-    "if (!modeTraits.shop || session.phase !== \"shop\" || session.state.shopStock !== undefined)",
-    "game.phase !== \"over\" && !services.presenter.busy && !game.stageRewardsPending,"
-  ],
   "src/save.ts": ["if (!dealers.has(record.dealer)) return null;"]
 }

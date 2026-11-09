@@ -368,6 +368,15 @@ The extracted services own presentation and interaction. `main.ts` constructs an
 
 `src/run-controller.ts` completes the split. It owns the run and its mode: the `GameRun`, the mode configuration (run rules, deck and save key), starting, resuming and saving runs, moving between stages and the shop, following an announced outcome with the stage-won pop-up or game over, applying settings, and opening the start screen. It answers the other services through `rules` (input), `menus` and `screenScenes` (overlays) and `consoleApp` (the console). `src/scene-behaviours.ts` holds the behaviour each scene trait installs.
 
+**Mode traits shape run rules (#36).** `src/mode-trait-rules.ts` maps a mode trait to its contribution to the run's rules, keyed by the trait: `passiveRack` sets `rackCapacity`, and `shop` sets `stockShop`. `baseRunRules` applies whatever the mode composes, then the run setup steps adjust the result. The run controller holds no phase or mode-trait branches; its last ones moved to their owners:
+
+| Was in the run controller                          | Now owned by                                                                                      |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Stocking a shop entered empty (`modeTraits.shop`)  | `GameRun.stockEmptyShop`, using the rules' `stockShop` from the mode's `shop` trait               |
+| The rack capacity ternary in `baseRunRules`        | The `passiveRack` entry in `modeTraitRules`                                                       |
+| "Can I sell?" (`phase !== "over"`, unpaid rewards) | `GameRun.canSellPassives`, which `sellPassive` also uses; the controller adds only "not mid-play" |
+| Next action at game over (`phase === "over"`)      | Nothing: the game-over scene is already in front, and `advance()` refuses a finished run          |
+
 ### The title's attract sequence
 
 The title screen's background is a slow field of card cubes drifting toward the camera on black, with no table under them (#147). It is its own `THREE.Scene`, camera and canvas: the renderer draws it to a quarter-resolution buffer and CSS blurs it, so the menu over it stays sharp.

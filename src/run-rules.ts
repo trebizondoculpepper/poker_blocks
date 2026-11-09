@@ -1,5 +1,5 @@
 import type { ResaleModifier } from "./resale";
-import type { StageRules } from "./game-state";
+import type { GameState, StageRules } from "./game-state";
 
 export const stageKinds = ["stage-1", "stage-2", "boss"] as const;
 export type StageKind = (typeof stageKinds)[number];
@@ -28,6 +28,12 @@ export type RunRules = {
   resaleModifiers?: readonly ResaleModifier[];
   /** First playable-card shop price; one coin unless a run changes it. */
   cardPurchasePrice?: number;
+  /**
+   * How the run stocks a shop it enters with no stock, a save from before offers existed
+   * included. The mode's `shop` trait supplies it (src/mode-trait-rules.ts); left out, a
+   * shop has no stock.
+   */
+  stockShop?: (state: GameState, random: () => number) => GameState;
 };
 
 /** A stage in the round, in order, with the data that is its own. */
