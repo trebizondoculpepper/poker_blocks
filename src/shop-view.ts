@@ -20,6 +20,13 @@ type DisplayedOffer = {
 
 type Entrance = { startedAt: number; landed: Set<number> };
 
+export type ShopView = {
+  render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
+  burnUnsold(reducedMotion: boolean): Promise<void>;
+  frame(): void;
+  dispose(): void;
+};
+
 /** Shop stock is drawn with the same real cube appearances as cards and installed passives. */
 export function createShopView(
   host: HTMLElement,
@@ -27,7 +34,7 @@ export function createShopView(
   price: (offer: ShopOffer) => number,
   buy: (id: string, destination: Destination) => boolean,
   onEntranceDone: () => void,
-) {
+): ShopView {
   const stock = document.createElement("section");
   stock.className = "shop-stock";
   stock.setAttribute("aria-label", "Shop stock");

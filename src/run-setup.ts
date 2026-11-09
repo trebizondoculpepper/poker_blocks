@@ -1,0 +1,139 @@
+/**
+ * Run setup: the ordered steps a game mode applies when a game run is created.
+ *
+ * A step is plain data (`{ step: "sandbox" }`), and its behaviour lives in `RunSetupRegistry`,
+ * type-checked against that step's own config. Steps compose in declaration order through four
+ * passes, and shared code asks for a pass rather than naming a step:
+ *
+ * - `policy` — rules the mode always plays under, on a new run and a resumed one alike.
+ * - `deck` — the deck a run is played with, dealt fresh or rebuilt from a saved seed.
+ * - `start` — what a new run begins holding, once its opening snapshot exists.
+ *
+ * Run setup applies to a new game run; Continue restores the saved run. The `policy` and `deck`
+ * passes are the exception, because those are properties of the run rather than of the deal.
+ */
+import type { CardBlock } from "./cards";
+import type { RunSnapshot } from "./game-run";
+import type { RunRules } from "./run-rules";
+import type { DevDestructibleMix } from "./traits/destructible";
+
+/** The configuration each run setup step takes. A step with no options takes `{}`. */
+export type RunSetupStepConfigs = {
+  /** Endless play: unlimited plays and discards, a stage cannot be won or lost by itself. */
+  sandbox: Record<never, never>;
+  /**
+   * Every card gets a random material, dealt from a fresh seed that the run records, so
+   * Continue rebuilds the same mix and a new run gets a new one.
+   */
+  materialDeck: Record<never, never>;
+  /** The run begins on a structure holding one block of every material. */
+  materialSample: Record<never, never>;
+  /** Testing only: about `share` of the deck is destructible by the given causes. */
+  destructibleMix: DevDestructibleMix;
+  /** The run begins in the shop with this many coins, for shop development. */
+  shopPreview: { coins: number };
+  /** The passive rack begins holding this many passives (clamped to the rack's capacity). */
+  startingPassives: { count: number };
+};
+
+/** One ordered run setup step, as a mode declares it. */
+export type RunSetupStep = {
+  [Name in keyof RunSetupStepConfigs]: { step: Name } & RunSetupStepConfigs[Name];
+}[keyof RunSetupStepConfigs];
+
+/**
+ * A run's deck and the seed it was dealt from. `seed` is absent for a run whose deck does not
+ * depend on one; a `deck` pass that deals a deck sets it so the run can record it.
+ */
+export type RunDeck = {
+  deck: readonly CardBlock[];
+  seed?: number;
+};
+
+/** What a `start` pass hands to the next step: the run's rules, its deck and its snapshot. */
+export type RunStartContext = {
+  rules: RunRules;
+  deck: RunDeck;
+  snapshot: RunSnapshot;
+};
+
+/**
+ * What a step's behaviour may read beyond its config. `random` and `newSeed` are injected so a
+ * test can pin the material mix and the shop's stock.
+ */
+export type RunSetupServices = {
+  /** The deck the run would have without a material step. */
+  standardDeck: readonly CardBlock[];
+  /** A fresh seed for a deck this step deals. */
+  newSeed(): number;
+  random: () => number;
+};
+
+export type RunSetupBehaviour<Config extends object> = {
+  policy?(rules: RunRules, config: Config, services: RunSetupServices): RunRules;
+  deck?(context: RunDeck, config: Config, services: RunSetupServices): RunDeck;
+  start?(context: RunStartContext, config: Config, services: RunSetupServices): RunStartContext;
+};
+
+/** Type-checked registry: each step name is paired with its own config type. */
+export class RunSetupRegistry {
+  private readonly behaviours = new Map<string, RunSetupBehaviour<object>>();
+
+  register<Name extends keyof RunSetupStepConfigs>(
+    name: Name,
+    behaviour: RunSetupBehaviour<RunSetupStepConfigs[Name]>,
+  ): void {
+    if (this.behaviours.has(name))
+      throw new Error(`Run setup step "${name}" is already registered`);
+    this.behaviours.set(name, behaviour as RunSetupBehaviour<object>);
+  }
+
+  has(name: string): boolean {
+    return this.behaviours.has(name);
+  }
+
+  /** The rules every run in this mode plays under, new or resumed. */
+  policy(steps: readonly RunSetupStep[], rules: RunRules, services: RunSetupServices): RunRules {
+    return this.pass("policy", steps, rules, services);
+  }
+
+  /**
+   * The deck a run is played with. Pass a `seed` to rebuild a saved run's deck; leave it out to
+   * deal a new one, and each step that deals a deck chooses a fresh seed and records it.
+   */
+  deck(steps: readonly RunSetupStep[], context: RunDeck, services: RunSetupServices): RunDeck {
+    return this.pass("deck", steps, context, services);
+  }
+
+  /** The opening snapshot of a new run, after its deck is decided. */
+  start(
+    steps: readonly RunSetupStep[],
+    context: RunStartContext,
+    services: RunSetupServices,
+  ): RunStartContext {
+    return this.pass("start", steps, context, services);
+  }
+
+  /** Apply one pass over the declared steps, in declaration order. */
+  private pass<Value>(
+    name: "policy" | "deck" | "start",
+    steps: readonly RunSetupStep[],
+    value: Value,
+    services: RunSetupServices,
+  ): Value {
+    return steps.reduce((current, step) => {
+      const behaviour = this.get(step.step) as RunSetupBehaviour<object> & {
+        [Key in typeof name]?: (current: Value, config: object, s: RunSetupServices) => Value;
+      };
+      return behaviour[name]?.(current, step, services) ?? current;
+    }, value);
+  }
+
+  private get<Name extends keyof RunSetupStepConfigs>(
+    name: Name,
+  ): RunSetupBehaviour<RunSetupStepConfigs[Name]> {
+    const behaviour = this.behaviours.get(name);
+    if (!behaviour) throw new Error(`Unknown run setup step "${name}"`);
+    return behaviour as RunSetupBehaviour<RunSetupStepConfigs[Name]>;
+  }
+}

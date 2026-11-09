@@ -125,7 +125,7 @@ The proposed event order, reaction contract, and effect boundaries are specified
 
 Passive definitions live in a named registry with a stable id, display name, visual design or icon, and a trait reference. The passive itself is a block instance in the ordered `GameState.passiveRack`. Behavior code belongs to reusable traits, not the block instance or an ad hoc function attached to one registry entry. A trait may listen for gameplay events such as block placement, apply a condition, produce a gameplay effect such as coins proportional to the placed card's rank, and request separate presentation effects.
 
-The passive trait declares its event subscriptions; it need not respond to every event. A reaction may also request a further named gameplay event. The run's passive event queue delivers that event after the current one and applies a loop guard, preserving deterministic ordering and preventing recursive callbacks. The `?mode=dev2` sandbox draws two distinct active passives at each fresh start. Do Nothing remains a retired registry definition solely so older saves can load and replace it without losing the card run.
+The passive trait declares its event subscriptions; it need not respond to every event. A reaction may also request a further named gameplay event. The run's passive event queue delivers that event after the current one and applies a loop guard, preserving deterministic ordering and preventing recursive callbacks. The `?mode=dev2` sandbox draws two distinct active passives at each fresh start. Do Nothing remains a retired registry definition so a save naming it still resolves; `fromSaveRecord` drops it rather than keeping a slot with no effect.
 
 Passives may react throughout the stage or session, not only during scoring. The engine should expose named lifecycle events with explicit timing and context: for example, before the first play in a stage, before/after a block is placed, before/after one line is scored, after all lines are scored, and when a stage is won or lost. These are examples, not an exhaustive event list. A passive's trait checks its configured condition against the event and returns gameplay effects; an event may also lead to separate sound or visual requests. This gives designers callback-like trigger points without storing arbitrary callback code on individual blocks.
 
@@ -193,7 +193,7 @@ Loading rebuilds the blocks from the standard deck and `GameRun.fromSnapshot` re
 
 ### Concepts
 
-- **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, and supplies mode-wide configuration such as save identity and optional game features. Music policy currently lives in its `musicStyle` property, pending a composed trait (PR #44). The scene list is a catalogue of definitions, not a scene graph.
+- **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, supplies mode-wide configuration such as save identity and optional game features, and declares its **run setup** as ordered steps in `runSetup`. Music is a mode trait (`traits.music`) whose behaviour lives in `src/mode-music.ts`. The scene list is a catalogue of definitions, not a scene graph.
 - **Scene** (`Scene`): a presentation context such as title, stage, shop, settings, stage-won or game-over. Scene data composes traits. `SceneManager` calls trait lifecycle hooks when scenes enter and exit.
 - **Scene stack**: the runtime layers currently active. Settings and stage-won are pushed over gameplay and popped to resume it. Title and game-over replace the stack.
 - **Game flow**: decisions about which scene follows an action or run outcome. Today `run-controller.ts` coordinates this using `GameRun.phase` and outcomes. The mode's `startScene` is not yet the authoritative transition graph.
@@ -271,24 +271,57 @@ For each stack operation, the manager invokes `enter` on the newly active scene'
 
 `src/scenes.ts` defines the scene-trait behavior registry and scene-stack manager. A switch exits the stack top-to-bottom and enters the replacement; push enters only the new top; pop exits only the top and resumes what is underneath. Updates run bottom-to-top unless blocked, and input dispatch runs top-to-bottom. DOM input routing is scaffolding: no current scene trait handles real input, so `pausesBelow.input` does not yet pause legacy DOM listeners.
 
-`src/game-modes.ts` defines each mode's scene catalogue, start scene and mode traits. `?mode=` is canonical; `?room=` remains accepted as a legacy URL alias. Developer-console mode changes update the URL and switch in memory without reloading. The scene manager tracks screen transitions, while `run-controller.ts` still coordinates stage/shop progression from run phase and outcomes. This is an interim arrangement, not a mode-owned flow graph.
+`src/game-modes.ts` defines each mode's scene catalogue, start scene, run setup and mode traits. A mode's `startScene` is authoritative for the scene a fresh page opens on: `title` shows the title screen, and any other scene starts play straight away. Whether that start continues the mode's saved run is a separate trait, `resumeSavedRun`: a mode composing it picks up where it left off, and a mode without it always deals a new run, which is what makes dev1's sandbox a sandbox. The two are independent, so a mode can open in play on a fresh run. `?mode=` is canonical; `?room=` remains accepted as a legacy URL alias. Developer-console mode changes update the URL and switch in memory without reloading. The scene manager tracks screen transitions, while `run-controller.ts` still coordinates stage/shop progression from run phase and outcomes. This is an interim arrangement, not a mode-owned flow graph.
+
+### Run setup
+
+Run setup is what a game mode does to a **new** game run, and nothing else. It is ordered data on the mode (`runSetup: RunSetupStep[]`), not flags: a step is `{ step: "sandbox" }`, `{ step: "materialDeck" }` or `{ step: "shopPreview", coins: 5 }`. `src/run-setup.ts` holds the typed `RunSetupRegistry`, which pairs each step name with its own config type the same way `SceneTraitRegistry` pairs scene traits, and `src/run-setup-behaviours.ts` holds the behaviour. The steps compose in declared order in two passes:
+
+- `prepare`, before the run is dealt: the `RunRules` it will be judged by, and the deck it is dealt from. `sandbox` widens the rules; `materialDeck` replaces the deck and records the seed it used; `destructibleMix` (testing only) marks its share of the deck.
+- `start`, once the opening snapshot exists: what the run begins holding. `materialSample` puts a block of every material on the field, `startingPassives` fills the rack (never past its capacity), and `shopPreview` opens the run in a stocked shop.
+
+Choosing the deck is run setup, so every deck decision is one of these steps rather than a mode trait the controller applies afterwards.
+
+Continue never applies a step. A saved run is restored exactly as saved, and the deck it was dealt from is rebuilt from the `seed` recorded in its snapshot, so a reload matches. Because a run always records its own seed, no deck state is kept outside the run: a new run gets a new mix, and Continue gets the same one. Only card ids are saved, so a testing-only deck step is re-derived from the mode's own run setup. Save-format changes go through explicit migration in `src/save.ts`.
+
+A sandbox is a rule policy rather than a starting state, so `rulesForRun` applies it to every run in the mode, including a resumed one. Without that, a reloaded sandbox would lose its endless plays as soon as the next stage began.
+
+The controller therefore calls the registry instead of branching on the mode. `modeTraits` keeps only mode-wide configuration: the save key, the console and restartable traits, the rack and shop configuration, and the music.
 
 The extracted services own presentation and interaction. `main.ts` constructs and connects them; it does not decide what the player may do or which scene follows an outcome.
 
-| Service                                 | Responsibility and current caller                                                                                                                                                                                     |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `camera-view.ts`                        | Owns cameras, board pivot, framing, zoom, rotation and resize. `table-input.ts` uses it for gestures and picking; the run controller and presenter request camera transitions.                                        |
-| `audio-service.ts`                      | Owns music, player settings, gesture unlock and view sounds. The run controller reports mode and game events; `GameMode.musicStyle` currently selects ordinary or quiet music. Action sounds play at the action site. |
-| `hud-panels.ts`                         | Builds round, deck, shop coin and exit panels, then renders a `HudView`. The run controller assembles that view and handles its next-action callback. Panel presence comes from the active scene's overlay data.      |
-| `console-host.ts`                       | Adapts the run controller's `ConsoleApp` and the audio service to developer-console commands. Mode switching updates the URL and opens the mode in memory.                                                            |
-| `overlays.ts`                           | Owns title, settings, game-over and stage-won menus, inspection tooltip and refused flash. The run controller supplies menu actions and scene-stack operations.                                                       |
-| `hand-view.ts` and `rendered-blocks.ts` | Own hand layout, motion, refills and cube rendering. The run controller chooses hand contents; the presenter animates accepted actions.                                                                               |
-| `field-view.ts`                         | Owns placed cubes, centre of mass, drop preview, first-play prompt, picking and row tints. Input obtains legal candidates through run rules and shows them through this service.                                      |
-| `table-input.ts`                        | Turns pointer gestures into plays, discards, reorders, selection, board rotation and zoom. Its `TableRules` comes from the run controller.                                                                            |
-| `table-renderer.ts`                     | Owns the WebGL scenes, lights, reflection environment, drag layer and frame drawing. The card room is its physical backdrop.                                                                                          |
-| `play-presenter.ts`                     | Animates accepted plays and discards, presents scoring lines and announces outcomes to the run controller.                                                                                                            |
+| Service                                 | Responsibility and current caller                                                                                                                                                                                                 |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `camera-view.ts`                        | Owns cameras, board pivot, framing, zoom, rotation and resize. `table-input.ts` uses it for gestures and picking; the run controller and presenter request camera transitions.                                                    |
+| `audio-service.ts`                      | Owns music, player settings, gesture unlock and view sounds. The run controller reports game events; the mode's `music` trait selects ordinary or quiet music through `src/mode-music.ts`. Action sounds play at the action site. |
+| `hud-panels.ts`                         | Builds round, deck, shop coin and exit panels, then renders a `HudView`. The run controller assembles the numbers; a scene shows or hides each panel through the `show`/`hide` API its own panel trait calls.                     |
+| `console-host.ts`                       | Adapts the run controller's `ConsoleApp` and the audio service to developer-console commands. Mode switching updates the URL and opens the mode in memory.                                                                        |
+| `overlays.ts`                           | Owns title, settings, game-over and stage-won menus, inspection tooltip and refused flash. The run controller supplies menu actions and scene-stack operations.                                                                   |
+| `hand-view.ts` and `rendered-blocks.ts` | Own hand layout, motion, refills and cube rendering. The run controller chooses hand contents; the presenter animates accepted actions.                                                                                           |
+| `field-view.ts`                         | Owns placed cubes, centre of mass, drop preview, first-play prompt, picking and row tints. Input obtains legal candidates through run rules and shows them through this service.                                                  |
+| `table-input.ts`                        | Turns pointer gestures into plays, discards, reorders, selection, board rotation and zoom. Its `TableRules` comes from the run controller.                                                                                        |
+| `table-renderer.ts`                     | Owns the WebGL scenes, lights, reflection environment, drag layer and frame drawing. The card room is its physical backdrop.                                                                                                      |
+| `play-presenter.ts`                     | Animates accepted plays and discards, presents scoring lines and announces outcomes to the run controller.                                                                                                                        |
 
 `src/run-controller.ts` completes the split. It owns the run and its mode: the `GameRun`, the mode configuration (run rules, deck and save key), starting, resuming and saving runs, moving between stages and the shop, following an announced outcome with the stage-won pop-up or game over, applying settings, and opening the start screen. It answers the other services through `rules` (input), `menus` and `screenScenes` (overlays) and `consoleApp` (the console). `src/scene-behaviours.ts` holds the behaviour each scene trait installs.
+
+### Scene trait catalogue
+
+`src/scene-behaviours.ts` registers each scene trait against its own config type, and a scene composes whichever subset it needs. Behaviour therefore comes from the scene in front, and a scene that gains or loses a trait leaves the others alone.
+
+| Scene trait               | What it does while its scene is in front                                       | Composed by             |
+| ------------------------- | ------------------------------------------------------------------------------ | ----------------------- |
+| `screen`                  | Marks the host with the scene, for styling and tests.                          | Every scene.            |
+| `roundPanel`              | Shows the round panel through the HUD service.                                 | Stage 1, stage 2, boss. |
+| `deckPanel`               | Shows the deck counter through the HUD service.                                | Stage 1, stage 2, boss. |
+| `coinsPanel`              | Shows the coin counter through the HUD service.                                | Shop.                   |
+| `shopExit`                | Shows the shop's exit button through the HUD service.                          | Shop.                   |
+| `fieldPlacement`          | Lets the input service play blocks onto the field.                             | Stage 1, stage 2, boss. |
+| `shopStock`               | Shows the shop's stock, and lets its offers be bought, through the shop view.  | Shop.                   |
+| `pausesBelow`             | Stops lower scenes taking input or updates while a pop-up or menu is open.     | Settings, stage-won.    |
+| `devManualBlockDestroyer` | Testing only: destroys a double-clicked table block with the configured cause. | dev4's play scenes.     |
+
+The numbers a panel shows are not the scene's: the run controller keeps handing the HUD service a `HudView` snapshot, and the traits only decide which panels exist. Likewise what a shop stocks is game-run state, chosen by run setup and held by `GameRun`; `shopStock` owns only its display and buying.
 
 `src/main.ts` is the composition root. It may create the DOM host, construct services and the scene manager, connect their narrow interfaces, open the selected mode, run the frame loop and dispose resources. Rules and progression belong in the run controller; gestures in `table-input.ts`; presentation in services and scene traits. The comment at the top of `main.ts` records this boundary, and the architecture test guards it. The legacy branches moved into `src/run-controller.ts` remain in the guardrail baseline; removing them is #36's job.
 

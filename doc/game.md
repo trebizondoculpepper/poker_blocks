@@ -190,11 +190,17 @@ The rack is separate from the hand and field. Passives are not discardable. **Bu
 
 ### Dev2 passive sandbox
 
-**Game modes** (`GameMode`, in `src/game-modes.ts`) describe available scenes, the initial scene, and mode-wide configuration. Use `?mode=dev0` through `?mode=dev4` for the developer modes; old `?room=` links are still accepted as aliases. Mode traits configure run setup and features, while scene traits are attached to individual presentation contexts. The passive rack is enabled in the normal game (five slots, starting empty) and in dev2 (five slots, two passives dealt). `GameRun` enforces the rack capacity.
+**Game modes** (`GameMode`, in `src/game-modes.ts`) describe available scenes, the initial scene, mode-wide configuration, and **run setup**. Use `?mode=dev0` through `?mode=dev4` for the developer modes; old `?room=` links are still accepted as aliases.
+
+A mode's **run setup** is the ordered list of steps it applies when a _new_ game run is created: choosing the deck (a material mix and its seed), adjusting the run rules (a sandbox), or preparing the start (a sample structure, a filled rack, a stocked shop). Steps compose in declared order, and each step's meaning lives in one registry rather than in the run controller. Run setup never applies to Continue: a saved run is restored exactly as saved, and its deck is rebuilt from the seed stored in that run.
+
+Where a mode opens and whether it continues are separate decisions. `startScene` picks the scene a fresh page opens on, and the `resumeSavedRun` trait says that a mode opening in play continues its saved run. A mode without it always deals a new run on load — which is why `dev1`'s sandbox never carries a half-played run across a reload.
+
+Which HUD panels appear, and where blocks may be played, belongs to the **scene** in front rather than to the mode: the stage scenes show the round and deck panels and allow placement, and the shop scene shows the coin panel and its exit and owns its stock. Mode traits keep only mode-wide configuration: the save key, the console and restartable traits, the rack and shop configuration, and the music. The passive rack is enabled in the normal game (five slots, starting empty) and in dev2 (five slots, two passives dealt). `GameRun` enforces the rack capacity.
 
 The separate `?mode=dev2` sandbox uses the endless-play `RunRules` as dev1. It deals two distinct passives from the roster below and gives standard cards a mix of gameplay materials. The rack and current run survive a reload. Each passive has configured rule, appearance, rack-residency, and inspection traits. Shop acquisition and one-use passives remain future work. `dev0` and `dev1` keep their existing purposes.
 
-Enter `reset` in the developer console to restart the current dev mode in place. In `dev2`, this draws two new, distinct passives. Add `&restart=true` to a mode URL for the same fresh start on load; the parameter is then removed so later reloads resume normally. An older `dev2` save with the retired Do Nothing block replaces it with active passives while retaining the card run.
+Enter `reset` in the developer console to restart the current dev mode in place. In `dev2`, this draws two new, distinct passives. Add `&restart=true` to a mode URL for the same fresh start on load; the parameter is then removed so later reloads resume normally. A save naming the retired Do Nothing block drops it rather than carrying a slot with no effect.
 
 ### Dev3 shop sandbox
 
@@ -204,7 +210,7 @@ Enter `reset` in the developer console to restart the current dev mode in place.
 
 A block can be **destructible**: its `destructible { by }` trait names what may destroy it. Destroying a block removes it from the field. It costs no play or discard and does not change the score. Nothing settles into the gap, so blocks it held up stay where they are, even floating; settling will be a separate trait. The destroyed card goes to the discard pile, out of play like a discard, and returns to the deck whenever the discard pile does. Destruction emits `block.destroyed`, not a discard event. The only cause today is `manual`; later causes such as melting (#21) or bombs (#24) name their own.
 
-`?mode=dev4` is a destruction sandbox. It opens on a mixed-material structure in sandbox mode (unlimited plays and discards, no win or loss). About half the cards are destructible (always the same cards), and their hover description ends in "Destructible". Double-click a block on the table to destroy it; a block that isn't destructible is refused with the denied sound. The double-click comes from the `devManualBlockDestroyer` scene trait, and the half-and-half mix from the `devDestructibleMix` mode trait. Both are testing-only dev traits. The mode keeps its own saved run; `reset` or `&restart=true` starts it fresh.
+`?mode=dev4` is a destruction sandbox. It opens on a mixed-material structure in sandbox mode (unlimited plays and discards, no win or loss). About half the cards are destructible (always the same cards), and their hover description ends in "Destructible". Double-click a block on the table to destroy it; a block that isn't destructible is refused with the denied sound. The double-click comes from the `devManualBlockDestroyer` scene trait, and the half-and-half mix from the `destructibleMix` run setup step. Both are testing-only. The mode keeps its own saved run; `reset` or `&restart=true` starts it fresh.
 
 ### First dev2 passive set
 

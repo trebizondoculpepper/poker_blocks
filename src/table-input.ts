@@ -27,8 +27,6 @@ import { moveItem } from "./zones";
 export type TableRules = {
   /** A play or discard is still animating: the table takes no new gestures. */
   busy(): boolean;
-  /** Blocks can be played onto the field in this scene. */
-  fieldActive(): boolean;
   inStage(): boolean;
   canPlay(): boolean;
   canDiscard(): boolean;
@@ -67,6 +65,8 @@ export type TableInput = {
   handDrag(): HandDrag | null;
   /** Whether a hand card or the board is being dragged. */
   readonly dragging: boolean;
+  /** The scene in front allows (or no longer allows) blocks to be played onto the field. */
+  setFieldActive(active: boolean): void;
   /** Pick up a passive from the rack (its cube's pointerdown). */
   pickUpPassive(block: PassiveBlock, event: PointerEvent): void;
   /** Refresh the discard target: exhausted when no discards are left, armed with a count. */
@@ -159,6 +159,8 @@ export function createTableInput(options: {
   const { host, canvas, discardArea, rules, cameraView, hand, field, rack, cubeSize } = options;
   const discardCount = discardArea.querySelector<HTMLElement>(".discard-count")!;
   let selected: Selection = new Set();
+  /** Whether the scene in front lets blocks be played onto the field. */
+  let fieldActive = false;
   let drag: Drag | null = null;
   let boardDrag: BoardDrag | null = null;
   let suppressClickUntil = 0;
@@ -263,7 +265,7 @@ export function createTableInput(options: {
     // A group plays as a line (one play) or is discarded; it is not reordered as one.
     const single = drag.group.length === 0;
     drag.candidate =
-      rules.fieldActive() && !overBin && rules.canPlay()
+      fieldActive && !overBin && rules.canPlay()
         ? pickAttachment(drag.lastX, drag.lastY, drag.group.length + 1)
         : null;
     field.showCandidate(drag.candidate);
@@ -385,7 +387,7 @@ export function createTableInput(options: {
     }
     options.overlays().hideTooltip();
     const source = pickBlock(event.clientX, event.clientY, hand.blocks);
-    if (rules.fieldActive() && source?.block.traits.attachable) {
+    if (fieldActive && source?.block.traits.attachable) {
       pointRay(event.clientX, event.clientY, cameraView.handCamera);
       const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
         ? source.cube.position.clone().sub(dragPoint)
@@ -723,6 +725,9 @@ export function createTableInput(options: {
     handDrag: () => (drag?.active ? drag : null),
     get dragging() {
       return Boolean(drag?.active);
+    },
+    setFieldActive(active) {
+      fieldActive = active;
     },
     pickUpPassive(block, event) {
       // Only the primary pointer's main button picks a passive up.

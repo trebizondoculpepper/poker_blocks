@@ -27,7 +27,7 @@ import { browserStorage } from "./save";
 import { SceneManager } from "./scenes";
 import { sceneBehaviours } from "./scene-behaviours";
 import { bindScreenshotShortcut } from "./screenshot";
-import { createShopView } from "./shop-view";
+import { createShopView, type ShopView } from "./shop-view";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
 
@@ -90,6 +90,7 @@ type TraitContext = {
     input: TableInput;
     run: RunController;
     board: BlockDestroyerBoard;
+    shop: ShopView;
   };
 };
 const traitContext: TraitContext = {
@@ -119,6 +120,9 @@ const traitContext: TraitContext = {
     board: {
       blockAt: (clientX, clientY) => input.fieldBlockAt(clientX, clientY),
       destroy: (blockId, cause) => run.destroyBlock(blockId, cause),
+    },
+    get shop() {
+      return shopView;
     },
   },
 };

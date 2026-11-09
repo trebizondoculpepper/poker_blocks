@@ -1,12 +1,8 @@
 {
-  "src/audio-service.ts": ["stageMusic[phase](music);", "screenMusic[screen]();"],
+  "src/audio-service.ts": ["screenMusic[screen]();", "stageMusic[phase](music);"],
   "src/audio/music-fade.ts": ["switch (kind) {"],
   "src/audio/music-plan.ts": ["switch (scene) {"],
-  "src/game-modes.ts": [
-    "...sceneTraits[kind],",
-    "return phase !== \"shop\" && phase !== \"over\" && Boolean(traits.stage.fieldPlacement);",
-    "return phase === \"shop\" ? (traits.shop?.overlays ?? {}) : traits.stage.overlays;"
-  ],
+  "src/game-modes.ts": ["...sceneTraits[kind],"],
   "src/game-run.ts": [
     "session.shopAfter = snapshot.phase === \"shop\" ? (snapshot.shopAfter ?? \"boss\") : null;",
     "offer.kind === \"passive\" ? this.passivePrices.buy : (this.config.cardPurchasePrice ?? 1);",
@@ -18,14 +14,14 @@
   ],
   "src/hud-panels.ts": [
     "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
-    "heading: `ROUND ${view.round} \u00b7 ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
+    "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
   ],
   "src/listening-room/main.ts": [
     "const entry = entries.find((_, index) => soundEffects[index].id === \"score.line\");"
   ],
   "src/materials.ts": [
     "...(transparentMaterials.has(kind) ? { transparent: {} } : {}),",
-    "inspectable: inspectable(`${cardName(card.traits.identity)} \u00b7 ${materialNames[kind]}`),"
+    "inspectable: inspectable(`${cardName(card.traits.identity)} · ${materialNames[kind]}`),"
   ],
   "src/passive-effects.ts": [
     "switch (condition.kind) {",
@@ -39,20 +35,12 @@
     "if (rule.effect.kind !== \"add-coins\") continue;"
   ],
   "src/run-controller.ts": [
-    "...(traits.sandbox ? sandboxRunRules(demoRunRules) : demoRunRules),",
-    "...(traits.passiveRack ? { rackCapacity: traits.passiveRack.capacity } : {}),",
     "switchScene(sceneForPhase[game.phase]);",
     ".filter(({ block }) => block.traits.selectable && selected.has(block.id))",
     "if (game.phase === \"over\") {",
     "const leavingShop = game.phase === \"shop\";",
-    "} else if (game.phase === \"shop\") {",
-    "const enterShop = game.phase === \"shop\" && !reducedMotion;",
-    "shop.render(game.state.shopStock ?? [], game.phase === \"shop\", enterShop);",
-    "if (modeTraits.shopPreview) {",
-    "if (!modeTraits.materialSample) return session;",
     "if (!modeTraits.shop || session.phase !== \"shop\" || session.state.shopStock !== undefined)",
     "const enterShop = game.phase === \"shop\" && fresh && !reducedMotion;",
-    "shop.render(game.state.shopStock ?? [], game.phase === \"shop\", enterShop);",
     "playSfx(game.phase === \"shop\" ? \"shop.open\" : \"round.start\");",
     "game.phase !== \"over\" && !services.presenter.busy && !game.stageRewardsPending,",
     "offer.kind === \"passive\" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),",

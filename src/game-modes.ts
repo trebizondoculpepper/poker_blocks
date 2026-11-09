@@ -3,9 +3,10 @@
  * `?mode=...` selects a developer mode; `?room=...` remains a backwards-compatible alias.
  */
 import { Registry } from "./core/registry";
+import type { RunSetupStep } from "./run-setup";
 import { saveKey } from "./save";
 import type { Scene } from "./scenes";
-import type { DestroyCause, DevDestructibleMix } from "./traits/destructible";
+import type { DestroyCause } from "./traits/destructible";
 
 export const sceneNames = [
   "title",
@@ -21,15 +22,28 @@ export type SceneName = (typeof sceneNames)[number];
 export type SceneTraits = {
   screen: { kind: SceneName };
   pausesBelow: { input: boolean; update: boolean };
+  /** A HUD panel this scene shows while it is in front (see src/hud-panels.ts). */
+  roundPanel: Record<never, never>;
+  deckPanel: Record<never, never>;
+  coinsPanel: Record<never, never>;
+  shopExit: Record<never, never>;
+  /** Blocks may be played onto the field while this scene is in front. */
+  fieldPlacement: Record<never, never>;
+  /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
+  shopStock: Record<never, never>;
   /** Testing only: double-click a block to destroy it with this cause. */
   devManualBlockDestroyer: { cause: DestroyCause };
 };
 export type ModeScene = Scene<SceneTraits>;
 export type ModeMusicStyle = "quiet" | "ordinary";
 
+/** What a fresh page load does in a mode (see ModeTraits.onLoad). */
+export type OnLoad = "title" | "newRun" | "resume";
+
 /**
- * A mode's scenes. `stageTraits` are composed into every play scene (both stages and the
- * boss), for traits that act on the table while a stage is played.
+ * A mode's scenes. Each scene composes only the traits whose behaviour it wants: the play
+ * scenes take field placement and the round and deck panels, the shop takes the coin panel
+ * and its exit. `stageTraits` are composed into every play scene on top of those.
  */
 function scenesForMode(
   modeId: string,
@@ -38,10 +52,10 @@ function scenesForMode(
   const sceneTraits: Record<SceneName, Partial<SceneTraits>> = {
     title: {},
     settings: { pausesBelow: { input: true, update: true } },
-    "stage-1": stageTraits,
-    "stage-2": stageTraits,
-    boss: stageTraits,
-    shop: {},
+    "stage-1": { ...playSceneTraits, ...stageTraits },
+    "stage-2": { ...playSceneTraits, ...stageTraits },
+    boss: { ...playSceneTraits, ...stageTraits },
+    shop: { coinsPanel: {}, shopExit: {}, shopStock: {} },
     "stage-won": { pausesBelow: { input: true, update: true } },
     "game-over": {},
   };
@@ -53,6 +67,13 @@ function scenesForMode(
     },
   }));
 }
+
+/** What every play scene shows and allows: the round and deck panels, and field placement. */
+const playSceneTraits: Partial<SceneTraits> = {
+  roundPanel: {},
+  deckPanel: {},
+  fieldPlacement: {},
+};
 
 export function modeSceneId(modeId: string, scene: SceneName): string {
   return `${modeId}/${scene}`;
@@ -69,42 +90,15 @@ export type PassiveRackTrait = {
 /** The default rack: capacity for five passives, starting empty. */
 export const defaultPassiveRack: PassiveRackTrait = { capacity: 5 };
 
-/** UI panels composed into a stage or shop scene. Omitted panels are not shown. */
-export type SceneOverlays = {
-  round?: Record<string, never>;
-  deck?: Record<string, never>;
-  coins?: Record<string, never>;
-  shopExit?: Record<string, never>;
-};
-
-const standardStageOverlays: SceneOverlays = { round: {}, deck: {} };
-
-/** A shop scene contributes stock, purchase targets, and its table presentation. */
-export type ShopTrait = { passiveOffers: number; cardOffers: number; overlays: SceneOverlays };
-export const defaultShop: ShopTrait = {
-  passiveOffers: 2,
-  cardOffers: 3,
-  overlays: { coins: {}, shopExit: {} },
-};
+/** How much a shop offers. What it actually stocks is game-run state, chosen by run setup. */
+export type ShopTrait = { passiveOffers: number; cardOffers: number };
+export const defaultShop: ShopTrait = { passiveOffers: 2, cardOffers: 3 };
 
 export type ModeTraits = {
   /** Save slot used by runs in this mode. */
   save: { key: string };
-  /** The stage scene's interactions. The shop scene does not compose these. */
-  stage: { fieldPlacement: Record<string, never>; overlays: SceneOverlays };
   passiveRack?: PassiveRackTrait;
   shop?: ShopTrait;
-  /** Endless play: unlimited plays and discards, a stage cannot be won or lost by itself. */
-  sandbox?: Record<string, never>;
-  /**
-   * Every card gets a random material. `reshuffle: "each-run"` deals a new mix whenever a run
-   * starts; "new-game" keeps the mix (and its seed) until a new game, so Continue matches.
-   */
-  materialDeck?: { reshuffle: "each-run" | "new-game" };
-  /** A run starts on a structure holding one block of every material. */
-  materialSample?: Record<string, never>;
-  /** Skip the title screen and go straight into play; `resume` continues the saved run. */
-  skipTitle?: { resume: boolean };
   /**
    * Listed by the developer console under this name (`reset dev2`), and linked by it in
    * the URL (`?mode=dev2`). Modes without it are not listed.
@@ -112,130 +106,127 @@ export type ModeTraits = {
   console?: { name: string };
   /** A fresh run is started on load when this URL parameter is "true"; it is then removed. */
   restartable?: { param: string };
-  /** Testing only: about `share` of the deck is destructible by the given causes. */
-  devDestructibleMix?: DevDestructibleMix;
-  /** Start a fresh run in the shop with this many coins, for shop development. */
-  shopPreview?: { coins: number };
+  /**
+   * What a fresh page load does: show the `title` screen, deal a `newRun`, or `resume` the
+   * mode's saved run when it has one. Configuration, not a flag: `onLoadHandlers` in
+   * src/run-controller.ts dispatches it through a table, so no code asks which mode it is.
+   */
+  onLoad: OnLoad;
+  /** The music this mode plays, through the behaviour in src/mode-music.ts. */
+  music: { style: ModeMusicStyle };
 };
 
 export type GameMode = {
   id: string;
-  /** Temporary music policy until this becomes a composed music trait (PR #44). */
-  musicStyle: ModeMusicStyle;
   /** The scenes this mode can enter without reloading the page. */
   scenes: readonly ModeScene[];
-  /** Scene entered when this mode starts. */
+  /**
+   * The scene a fresh page opens on. `title` shows the title screen; any other scene starts
+   * play straight away.
+   */
   startScene: SceneName;
   /** Other names that open this mode (old links). */
   aliases?: readonly string[];
+  /** Ordered steps applied when a new game run is created; never applied on Continue. */
+  runSetup: readonly RunSetupStep[];
   traits: ModeTraits;
 };
-
-/** Only the active stage scene composes field placement; a shop cannot offer it. */
-export function fieldPlacementActive(traits: ModeTraits, phase: string): boolean {
-  return phase !== "shop" && phase !== "over" && Boolean(traits.stage.fieldPlacement);
-}
-
-/** The active scene decides which independent HUD panels are composed. */
-export function overlaysForPhase(traits: ModeTraits, phase: string): SceneOverlays {
-  return phase === "shop" ? (traits.shop?.overlays ?? {}) : traits.stage.overlays;
-}
 
 export const gameModeRegistry = new Registry<GameMode>("game mode");
 
 const gameModes: GameMode[] = [
   {
     id: "game",
-    musicStyle: "ordinary",
     scenes: scenesForMode("game"),
     startScene: "title",
+    runSetup: [],
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
+      onLoad: "title",
       save: { key: saveKey },
-      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
+      music: { style: "ordinary" },
     },
   },
   {
     id: "dev0",
-    musicStyle: "ordinary",
     scenes: scenesForMode("dev0"),
     startScene: "title",
     aliases: ["dev"],
+    runSetup: [{ step: "materialDeck" }],
     traits: {
+      onLoad: "title",
       save: { key: "poker-blocks.dev-run" },
       console: { name: "dev0" },
       restartable: { param: "restart" },
-      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
-      materialDeck: { reshuffle: "new-game" },
+      music: { style: "ordinary" },
     },
   },
   {
     id: "dev1",
-    musicStyle: "quiet",
     scenes: scenesForMode("dev1"),
     startScene: "stage-1",
+    runSetup: [{ step: "sandbox" }, { step: "materialDeck" }, { step: "materialSample" }],
     traits: {
+      onLoad: "newRun",
       save: { key: "poker-blocks.dev1-run" },
       console: { name: "dev1" },
       restartable: { param: "restart" },
-      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
-      sandbox: {},
-      materialDeck: { reshuffle: "each-run" },
-      materialSample: {},
-      skipTitle: { resume: false },
+      music: { style: "quiet" },
     },
   },
   {
     id: "dev2",
-    musicStyle: "quiet",
     scenes: scenesForMode("dev2"),
     startScene: "stage-1",
+    runSetup: [
+      { step: "sandbox" },
+      { step: "materialDeck" },
+      { step: "startingPassives", count: 2 },
+    ],
     traits: {
+      onLoad: "resume",
       save: { key: "poker-blocks.dev2-run" },
       console: { name: "dev2" },
       restartable: { param: "restart" },
-      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
-      sandbox: {},
-      materialDeck: { reshuffle: "new-game" },
-      passiveRack: { ...defaultPassiveRack, startWith: 2 },
-      skipTitle: { resume: true },
+      passiveRack: { ...defaultPassiveRack },
+      music: { style: "quiet" },
     },
   },
   {
     id: "dev3",
-    musicStyle: "quiet",
     scenes: scenesForMode("dev3"),
     startScene: "shop",
+    runSetup: [{ step: "shopPreview", coins: 5 }],
     traits: {
+      onLoad: "resume",
       save: { key: "poker-blocks.dev3-run" },
       console: { name: "dev3" },
       restartable: { param: "restart" },
-      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
-      shopPreview: { coins: 5 },
-      skipTitle: { resume: true },
+      music: { style: "quiet" },
     },
   },
   {
     // Destruction sandbox: a mixed-material structure in which about half the blocks are
     // destructible; double-click one to destroy it. Destroyed blocks leave gaps.
     id: "dev4",
-    musicStyle: "quiet",
     scenes: scenesForMode("dev4", { devManualBlockDestroyer: { cause: "manual" } }),
     startScene: "stage-1",
+    runSetup: [
+      { step: "sandbox" },
+      { step: "materialDeck" },
+      { step: "destructibleMix", share: 0.5, by: ["manual"] },
+      { step: "materialSample" },
+    ],
     traits: {
+      onLoad: "resume",
       save: { key: "poker-blocks.dev4-run" },
       console: { name: "dev4" },
       restartable: { param: "restart" },
-      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
-      sandbox: {},
-      materialDeck: { reshuffle: "new-game" },
-      materialSample: {},
-      devDestructibleMix: { share: 0.5, by: ["manual"] },
-      skipTitle: { resume: true },
+      music: { style: "quiet" },
     },
   },
 ];

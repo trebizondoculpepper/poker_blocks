@@ -41,6 +41,8 @@ export type RunSnapshot = {
   stats?: RunStats;
   /** The last stage paid out (round:phase) and what it paid, so it never pays twice. */
   rewarded?: { stage: string; reward: StageReward };
+  /** The seed a run setup step dealt this run's deck from, so Continue rebuilds the same deck. */
+  seed?: number;
 };
 
 /**
@@ -60,6 +62,7 @@ export class GameRun {
   private readonly passiveEvents = new PassiveEventQueue();
   private scoredLines: ScoredLine[] = [];
   private rewarded: { stage: string; reward: StageReward } | null = null;
+  private runSeed: number | undefined;
   /** The stage (round:phase) whose final stage.won or stage.lost has been emitted. */
   private decidedStage: string | null = null;
 
@@ -96,6 +99,7 @@ export class GameRun {
     session.shopAfter = snapshot.phase === "shop" ? (snapshot.shopAfter ?? "boss") : null;
     session.runStats = snapshot.stats ?? emptyRunStats;
     session.rewarded = snapshot.rewarded ?? null;
+    session.runSeed = snapshot.seed;
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
     // A stage saved after it was decided already announced its outcome.
     session.decidedStage =
@@ -162,6 +166,11 @@ export class GameRun {
     return (stageKinds as readonly string[]).includes(this.currentPhase);
   }
 
+  /** The run has moved on to a shop between stages. */
+  get inShop(): boolean {
+    return this.shopAfter !== null;
+  }
+
   /**
    * The stage lifecycle events refer to: the current stage, or in a shop the stage that
    * opened it. Null after the run is over.
@@ -200,6 +209,7 @@ export class GameRun {
       state: this.currentState,
       stats: this.runStats,
       ...(this.rewarded ? { rewarded: this.rewarded } : {}),
+      ...(this.runSeed === undefined ? {} : { seed: this.runSeed }),
     };
   }
 

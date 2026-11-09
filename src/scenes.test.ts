@@ -106,6 +106,25 @@ describe("scene manager", () => {
     expect(manager.current?.id).toBe("base");
   });
 
+  it("refreshes the top scene by exiting and entering its traits, stack unchanged", () => {
+    const { calls, manager } = setup();
+    manager.switchTo("base");
+    manager.push("settings");
+    calls.length = 0;
+
+    manager.refresh();
+
+    // The scene re-reads whatever it shows, and no other scene is entered or exited.
+    expect(calls).toEqual(["exit settings", "enter settings"]);
+    expect(manager.stack.map(({ id }) => id)).toEqual(["base", "settings"]);
+  });
+
+  it("does nothing when there is no scene to refresh", () => {
+    const { calls, manager } = setup();
+    expect(() => manager.refresh()).not.toThrow();
+    expect(calls).toEqual([]);
+  });
+
   it("type-checks each behavior against its trait configuration", () => {
     const { behaviours } = setup();
     const invalidPauseBehaviour: SceneTraitBehaviour<string[], { unrelated: string }> = {};

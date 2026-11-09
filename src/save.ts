@@ -6,7 +6,7 @@ import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
 import { parseRunStats, type RunStats } from "./run-stats";
-import { createPassiveBlock } from "./passives";
+import { createPassiveBlock, passiveDefinitions } from "./passives";
 import { stageKinds, type StageKind } from "./run-rules";
 
 /**
@@ -43,6 +43,11 @@ export type SaveRecord = {
   stats?: RunStats;
   /** The last stage paid out and its ledger, so a reload never pays it twice. */
   rewarded?: RunSnapshot["rewarded"];
+  /**
+   * The seed a run setup step dealt this run's deck from. Absent in saves written before run
+   * setup existed, and in runs whose deck does not depend on one.
+   */
+  seed?: number;
 };
 
 const phases: readonly RunPhase[] = ["stage-1", "stage-2", "boss", "shop", "over"];
@@ -80,6 +85,7 @@ export function toSaveRecord(snapshot: RunSnapshot): SaveRecord {
     },
     ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
     ...(snapshot.rewarded ? { rewarded: snapshot.rewarded } : {}),
+    ...(snapshot.seed === undefined ? {} : { seed: snapshot.seed }),
   };
 }
 
@@ -107,12 +113,16 @@ export function fromSaveRecord(
     };
     const { state } = record;
     const passiveIds = new Set<string>();
-    const passiveRack = (state.passiveRack ?? []).map(({ id, definitionId }) => {
+    // A retired passive has no effect, so an older save that installed one drops it here
+    // rather than carrying a dead slot for the rest of the run (doc/game.md).
+    const passiveRack = (state.passiveRack ?? []).flatMap(({ id, definitionId }) => {
       if (typeof id !== "string" || passiveIds.has(id) || typeof definitionId !== "string") {
         throw new Error("bad passive");
       }
       passiveIds.add(id);
-      return createPassiveBlock(definitionId, id);
+      return passiveDefinitions.get(definitionId).retired
+        ? []
+        : [createPassiveBlock(definitionId, id)];
     });
     const shopStock = (state.shopStock ?? []).map((offer) => {
       if (offer.kind === "card") return { kind: "card" as const, block: resolve(offer.cardId) };
@@ -155,10 +165,18 @@ export function fromSaveRecord(
       state: restored,
       stats: parseRunStats(record.stats),
       ...parseRewarded(record.rewarded),
+      ...parseSeed(record.seed),
     };
   } catch {
     return null;
   }
+}
+
+/** A saved deck seed; nothing when the run was dealt no seeded deck. */
+function parseSeed(value: unknown): { seed: number } | Record<string, never> {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 4294967296
+    ? { seed: value }
+    : {};
 }
 
 /** A saved "already paid" marker, or nothing if it is missing or malformed. */
@@ -221,17 +239,29 @@ export function saveRun(
 
 export function loadRun(
   storage: SaveStorage | null,
-  cards: readonly CardBlock[],
+  /**
+   * The deck to resolve a saved run's cards against. A function when the deck depends on the
+   * run (a material mix rebuilt from its own seed); `fromSaveRecord` parses that seed first.
+   */
+  cards: readonly CardBlock[] | ((seed: number | undefined) => readonly CardBlock[]),
   dealers: Registry<Dealer>,
   key = saveKey,
 ): RunSnapshot | null {
   if (!storage) return null;
   try {
     const raw = storage.getItem(key);
-    return raw ? fromSaveRecord(JSON.parse(raw), cards, dealers) : null;
+    if (!raw) return null;
+    const record = JSON.parse(raw) as SaveRecord;
+    const selected = typeof cards === "function" ? cards(seedOf(record)) : cards;
+    return fromSaveRecord(record, selected, dealers);
   } catch {
     return null;
   }
+}
+
+/** A record's saved deck seed, read before its card ids are resolved. */
+function seedOf(record: SaveRecord): number | undefined {
+  return typeof record?.seed === "number" ? record.seed : undefined;
 }
 
 export function clearRun(storage: SaveStorage | null): void {
