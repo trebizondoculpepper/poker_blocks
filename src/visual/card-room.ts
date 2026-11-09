@@ -13,9 +13,17 @@ export type CardRoom = {
 
 const shadowMapSizes: Record<Exclude<ShadowQuality, "off">, number> = { high: 2048, low: 1024 };
 
-export function createCardRoom(scene: THREE.Scene, renderer: THREE.WebGLRenderer): CardRoom {
+/**
+ * The card room, drawn on `layer` (the back canvas, #116). Its shadows are set up on every
+ * renderer in `renderers`, so blocks drawn on the front canvas shade one another too.
+ */
+export function createCardRoom(
+  scene: THREE.Scene,
+  renderers: readonly THREE.WebGLRenderer[],
+  layer: number,
+): CardRoom {
   scene.background = roomBackdrop();
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  for (const renderer of renderers) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const table = new THREE.Group();
   const baize = new THREE.Mesh(
@@ -31,6 +39,7 @@ export function createCardRoom(scene: THREE.Scene, renderer: THREE.WebGLRenderer
   rim.rotation.x = -Math.PI / 2;
   rim.receiveShadow = true;
   table.add(baize, rim);
+  for (const part of [table, baize, rim]) part.layers.set(layer);
   scene.add(table);
 
   // The lamp sits above and slightly in front, so shadows fall back and down onto the
@@ -71,7 +80,7 @@ export function createCardRoom(scene: THREE.Scene, renderer: THREE.WebGLRenderer
     },
     setShadowQuality(quality) {
       const enabled = quality !== "off";
-      renderer.shadowMap.enabled = enabled;
+      for (const renderer of renderers) renderer.shadowMap.enabled = enabled;
       lamp.castShadow = enabled;
       if (enabled) {
         const size = shadowMapSizes[quality];
