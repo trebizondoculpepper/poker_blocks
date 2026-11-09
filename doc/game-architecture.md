@@ -231,6 +231,8 @@ Composition is the same at both levels: a block is to its traits what a scene is
 
 `src/overlays.ts` is the fifth. It owns the menu screens (title, settings, game over and the stage-won pop-up), which scene each screen puts in front (`screenScenes`: settings and the stage-won pop-up are pushed, title and game over replace the stack, closing a menu resumes the game's scene), the music cue for each screen, the inspection tooltip and the refused flash on drop targets. `main.ts` supplies the menu callbacks and a `ScreenScenes` adapter over the scene manager. The overlays are built after the settings load, so `TraitContext.services.overlays` is a getter.
 
+`src/hand-view.ts` is the sixth. It owns the hand's cubes: slot layout (with the gap a dragged card would drop into), gliding to slots, rocking (a selected card vibrates), dealing a stage's hand and drawing refills in one after another with the materialise effect. It builds its cubes through `src/rendered-blocks.ts`, which owns every block's three.js cube (hand or table), its disposal and the selection highlight. `main.ts` decides what the hand holds and tells the service (`sync`, `deal`, `drawIn`, `remove`, `putBack`); `TraitContext.services.hand` exposes it.
+
 The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameSession`. Developer rooms are no longer a kind of room: a room the console lists has a `console: { name }` trait, and one that honours `&restart=true` has a `restartable: { param }` trait (#38).
 
 ## Architecture to discuss

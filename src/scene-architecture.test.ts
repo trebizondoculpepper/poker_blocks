@@ -60,4 +60,15 @@ describe("scene architecture guardrails", () => {
     expect(main).not.toMatch(/\bcreateMenus\(|inspect-tooltip|refused-flash|\bmenus\./);
     expect(main).not.toMatch(/\bonScreen\(/);
   });
+
+  it("keeps hand layout, draw-ins and rocking in the hand service, and cube building in rendered-blocks", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/\bhand:\s*HandView\b/);
+    expect(main).not.toMatch(/\bhandBlocks\b|\bappearing\b|\bstepRock\(|\brandomRock\(/);
+    expect(main).not.toMatch(/createBlockAppearance\(|new THREE\.EdgesGeometry\(geometry\)/);
+    expect(main).not.toMatch(
+      /function (glideHand|handSlotX|visibleHandSlots|createCube|disposeCube)\s*\(/,
+    );
+  });
 });

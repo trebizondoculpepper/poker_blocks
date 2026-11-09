@@ -1,7 +1,7 @@
 import "./style.css";
 import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock } from "./cards";
-import { makeDevDeck, materialOf } from "./materials";
+import { makeDevDeck } from "./materials";
 import { sampleMaterials } from "./material-sampler";
 import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
 import { dealerRegistry, roundOutcome } from "./dealer";
@@ -11,11 +11,10 @@ import { magnitudeSfxFor } from "./score-presentation";
 import { GameSession, type Phase } from "./game-session";
 import { demoSessionConfig, sandboxSessionConfig, type SessionConfig } from "./session-config";
 import { tweenValue } from "./easing";
-import { randomRock, stepRock, type Rock, type RockState } from "./motion";
 import { createMaterialise } from "./visual/materialise";
 import { isTransparent } from "./traits/transparent";
 import { createCardRoom } from "./visual/card-room";
-import { createBlockAppearance, setReflectionEnvironment } from "./visual/block-appearance";
+import { setReflectionEnvironment } from "./visual/block-appearance";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { cellKey, faceFromDirection, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
@@ -25,6 +24,8 @@ import { createAudioService, type AudioService } from "./audio-service";
 import { createHudPanels, type HudPanels } from "./hud-panels";
 import { createConsoleHost } from "./console-host";
 import { createOverlays, type Overlays } from "./overlays";
+import { createBlockViews, type BlockViews, type RenderedBlock } from "./rendered-blocks";
+import { createHandView, type HandView } from "./hand-view";
 import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
@@ -129,32 +130,6 @@ function render(): void {
   cameraView.handCamera.layers.set(0);
 }
 
-type RenderedBlock = {
-  block: CardBlock;
-  cube: THREE.Mesh;
-  geometry: THREE.BufferGeometry;
-  textures: THREE.CanvasTexture[];
-  /** The materials in use now (hand or table). */
-  materials: THREE.MeshStandardMaterial[];
-  handMaterials: THREE.MeshStandardMaterial[];
-  /** Glass and crystal refract on the table, so they change material when they land. */
-  boardMaterials: THREE.MeshStandardMaterial[];
-  /** Meshes inside the block, such as the crystal's fire. */
-  extras: THREE.Mesh[];
-  edgeGeometry: THREE.EdgesGeometry;
-  edgeMaterial: THREE.LineBasicMaterial;
-  location: "board" | "hand";
-  cell: Cell | null;
-  baseY: number;
-  rock: Rock | null;
-  handSlot: number | null;
-  /** A hand block's rock as it runs, so selection can change its speed smoothly. */
-  rockState?: RockState;
-  /** Where the hand layout wants this cube; it glides there each frame. */
-  handX?: number;
-};
-
-const renderedBlocks: RenderedBlock[] = [];
 const placed = new Map<string, RenderedBlock>();
 /** Selected block ids (hand and field). Declared early: the first HUD update reads it. */
 let selected: Selection = new Set();
@@ -171,74 +146,14 @@ cameraView = createCameraViewService({
   render,
 });
 const { assembly } = cameraView;
+const blockViews: BlockViews = createBlockViews({ board: assembly, hand: handScene });
 
 function updateRotationCenter(cell: Cell): void {
   massCenter = addCell(massCenter, cell);
   cameraView.updateRotationCenter(centerOfGravity(massCenter));
 }
-function createCube(
-  block: CardBlock,
-  size: number,
-  location: RenderedBlock["location"],
-): RenderedBlock {
-  const appearance = createBlockAppearance(block.traits.identity, materialOf(block), size);
-  const { geometry, textures, edgeColor, edgeOpacity } = appearance;
-  const handMaterials = appearance.materials;
-  const boardMaterials = appearance.boardMaterials ?? handMaterials;
-  const materials = location === "board" ? boardMaterials : handMaterials;
-  const cube = new THREE.Mesh(geometry, materials);
-  cube.castShadow = cube.receiveShadow = true;
-  const edgeGeometry = new THREE.EdgesGeometry(geometry);
-  const edgeMaterial = new THREE.LineBasicMaterial({
-    color: edgeColor,
-    transparent: edgeOpacity < 1,
-    opacity: edgeOpacity,
-  });
-  cube.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
-  const extras = appearance.extras ?? [];
-  for (const extra of extras) cube.add(extra);
-  (location === "board" ? assembly : handScene).add(cube);
-  const rendered = {
-    block,
-    cube,
-    geometry,
-    textures,
-    materials,
-    handMaterials,
-    boardMaterials,
-    extras,
-    edgeGeometry,
-    edgeMaterial,
-    location,
-    cell: null,
-    baseY: 0,
-    rock: location === "hand" ? randomRock() : null,
-    handSlot: null,
-  } satisfies RenderedBlock;
-  renderedBlocks.push(rendered);
-  return rendered;
-}
-
-function disposeCube(rendered: RenderedBlock): void {
-  rendered.cube.removeFromParent();
-  renderedBlocks.splice(renderedBlocks.indexOf(rendered), 1);
-  rendered.geometry.dispose();
-  rendered.textures.forEach((texture) => texture.dispose());
-  new Set([...rendered.handMaterials, ...rendered.boardMaterials]).forEach((material) =>
-    material.dispose(),
-  );
-  for (const extra of rendered.extras)
-    for (const material of ([] as THREE.Material[]).concat(extra.material)) {
-      // Extras may own per-face texture copies (the ice's meltwater): free those too.
-      (material as THREE.MeshStandardMaterial).map?.dispose();
-      material.dispose();
-    }
-  rendered.edgeGeometry.dispose();
-  rendered.edgeMaterial.dispose();
-}
-
 function addToBoard(block: CardBlock, cell: Cell): RenderedBlock {
-  const rendered = createCube(block, cubeSize, "board");
+  const rendered = blockViews.create(block, cubeSize, "board");
   rendered.cell = cell;
   rendered.baseY = cell.y * cubeSize - 0.45;
   rendered.cube.position.set(cell.x * cubeSize, rendered.baseY, cell.z * cubeSize);
@@ -324,6 +239,7 @@ type TraitContext = {
     audio: AudioService;
     hud: HudPanels;
     overlays: Overlays;
+    hand: HandView;
   };
 };
 const traitContext: TraitContext = {
@@ -335,6 +251,9 @@ const traitContext: TraitContext = {
     // Built later, once the settings and run callbacks it needs exist.
     get overlays() {
       return overlays;
+    },
+    get hand() {
+      return hand;
     },
   },
 };
@@ -380,11 +299,17 @@ function syncSceneToGame(): void {
 // A fresh run sits behind the title screen until the player chooses Continue or New game.
 let game = new GameSession(dealerRegistry, sessionConfig, cards);
 for (const { block, cell } of game.state.field) addToBoard(block, cell);
-const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
-  const rendered = createCube(block, cubeSize / 3, "hand");
-  rendered.handSlot = slot;
-  return rendered;
+const hand: HandView = createHandView({
+  views: blockViews,
+  scene: handScene,
+  cubeSize,
+  baseY: () => cameraView.handBaseY,
+  handSize: () => game.dealer.handSize,
+  reducedMotion: () => reducedMotion,
+  drag: () => (drag?.active ? drag : null),
+  onLayout: () => showSelection(),
 });
+game.state.hand.forEach((block, slot) => (hand.add(block).handSlot = slot));
 const shopView = createShopView(
   host,
   passiveRackView.element,
@@ -397,7 +322,7 @@ const shopView = createShopView(
       return false;
     }
     if (bought.kind === "card") {
-      handBlocks.push(createCube(bought.block, cubeSize / 3, "hand"));
+      hand.add(bought.block);
       syncHandSlots();
     } else passiveRackView.render(game.state.passiveRack);
     shopView.render(game.state.shopStock ?? [], true);
@@ -479,9 +404,7 @@ function updateHud(): void {
 
 /** Hand blocks currently selected, in hand order. */
 function selectedHandBlocks(): RenderedBlock[] {
-  return handBlocks
-    .filter(({ block }) => selected.has(block.id))
-    .sort((a, b) => a.handSlot! - b.handSlot!);
+  return hand.selected(selected);
 }
 
 /** The bin's badge: how many selected hand blocks a click would discard. */
@@ -584,14 +507,8 @@ function showInspection(block: CardBlock | undefined, clientX: number, clientY: 
 }
 
 function showSelection(): void {
-  renderedBlocks.forEach(({ block, materials }) => {
-    const active = Boolean(block.traits.selectable) && selected.has(block.id);
-    new Set(materials).forEach((material) => {
-      material.emissive.setHex(0xffffff);
-      material.emissiveIntensity = active ? 0.28 : 0;
-    });
-  });
-  const selectedNames = renderedBlocks
+  blockViews.highlight(selected);
+  const selectedNames = blockViews.all
     .filter(({ block }) => block.traits.selectable && selected.has(block.id))
     .map(({ block }) => cardName(block.traits.identity));
   host.setAttribute(
@@ -600,53 +517,14 @@ function showSelection(): void {
   );
 }
 
-function handSlotX(slot: number, visibleSlots: number): number {
-  return (slot - (visibleSlots - 1) / 2) * 1.2;
-}
-
-function visibleHandSlots(): number {
-  return Math.max(game.dealer.handSize, ...handBlocks.map(({ handSlot }) => (handSlot ?? -1) + 1));
-}
-
 /** Lay out the hand; while a reorder is previewed, neighbours make room for the dragged card. */
 function layoutHand(): void {
-  const visibleSlots = visibleHandSlots();
-  const preview = drag?.active && drag.reorderSlot !== null ? drag : null;
-  const order = [...handBlocks].sort((a, b) => a.handSlot! - b.handSlot!);
-  if (preview) {
-    order.splice(order.indexOf(preview.source), 1);
-    order.splice(preview.reorderSlot!, 0, preview.source);
-  }
-  handBlocks.forEach((rendered) => {
-    rendered.baseY = cameraView.handBaseY;
-    const slot = preview ? order.indexOf(rendered) : rendered.handSlot!;
-    const firstLayout = rendered.handX === undefined;
-    rendered.handX = handSlotX(slot, visibleSlots);
-    if (isDragged(rendered)) return;
-    rendered.cube.position.y = cameraView.handBaseY;
-    rendered.cube.position.z = 0;
-    if (firstLayout) rendered.cube.position.x = rendered.handX;
-  });
-  showSelection();
-}
-
-function isDragged(rendered: RenderedBlock): boolean {
-  return Boolean(drag?.active && (drag.source === rendered || drag.group.includes(rendered)));
-}
-
-/** Ease hand cubes toward their layout positions so reordering animates. */
-function glideHand(delta: number): void {
-  const step = Math.min(1, delta * 14);
-  for (const rendered of handBlocks) {
-    if (isDragged(rendered) || rendered.handX === undefined) continue;
-    rendered.cube.position.x += (rendered.handX - rendered.cube.position.x) * step;
-  }
+  hand.layout();
 }
 
 /** Visual hand slots always follow the hand order held in GameState. */
 function syncHandSlots(): void {
-  handBlocks.forEach((rendered) => (rendered.handSlot = game.state.hand.indexOf(rendered.block)));
-  layoutHand();
+  hand.sync(game.state.hand);
 }
 
 const raycaster = new THREE.Raycaster();
@@ -790,9 +668,13 @@ function overDiscardArea(clientX: number, clientY: number): boolean {
 function pickBlock(
   clientX: number,
   clientY: number,
-  candidates = renderedBlocks,
+  candidates: readonly RenderedBlock[] = blockViews.all,
 ): RenderedBlock | undefined {
-  pointRay(clientX, clientY, candidates === handBlocks ? cameraView.handCamera : cameraView.camera);
+  pointRay(
+    clientX,
+    clientY,
+    candidates === hand.blocks ? cameraView.handCamera : cameraView.camera,
+  );
   const hit = raycaster.intersectObjects(
     candidates.map(({ cube }) => cube),
     false,
@@ -876,11 +758,10 @@ function updateEmptyFieldPrompt(time: number): void {
 /** The hand position under the pointer, or null when the pointer is not over the hand. */
 function handReorderSlot(clientX: number, clientY: number): number | null {
   const bounds = host.getBoundingClientRect();
-  if (clientY < bounds.top + bounds.height * 0.72 || handBlocks.length < 2) return null;
+  if (clientY < bounds.top + bounds.height * 0.72 || hand.blocks.length < 2) return null;
   pointRay(clientX, clientY, cameraView.handCamera);
   if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return null;
-  const slot = Math.round(dragPoint.x / 1.2 + (visibleHandSlots() - 1) / 2);
-  return Math.max(0, Math.min(handBlocks.length - 1, slot));
+  return hand.slotAt(dragPoint.x);
 }
 
 function updateCandidate(): void {
@@ -956,64 +837,11 @@ function applySettings(next: Settings): void {
 }
 applySettings(settings);
 systemMotionQuery.addEventListener("change", () => applySettings(settings));
-type MaterialiseEffect = ReturnType<typeof createMaterialise>;
-/**
- * Blocks dissolving into view. `wait` holds one back (still invisible) so refills draw in
- * one after another; a sound plays as each starts.
- */
-const appearing: {
-  effect: MaterialiseEffect;
-  edges: THREE.Object3D[];
-  cube?: THREE.Object3D;
-  wait?: number;
-  sound?: boolean;
-}[] = [];
-/** Seconds between cards drawn into the hand, one after another. */
-const drawStagger = 1 / 3;
-
-/**
- * Finish at once any draw-in still running on these blocks, before another dissolve (a
- * discard or a landing) takes them over: two at once on one block would clash.
- */
-function settleAppearing(blocks: readonly RenderedBlock[]): void {
-  const cubes = new Set<THREE.Object3D>(blocks.map(({ cube }) => cube));
-  for (let index = appearing.length - 1; index >= 0; index--) {
-    const entry = appearing[index];
-    if (!entry.cube || !cubes.has(entry.cube)) continue;
-    entry.effect.finish();
-    entry.edges.forEach((edge) => (edge.visible = true));
-    appearing.splice(index, 1);
-  }
-}
-
 function refillHand(): void {
-  const drawn = game.refillHand();
-  const replacements: RenderedBlock[] = [];
-  for (const block of drawn) {
-    const rendered = createCube(block, cubeSize / 3, "hand");
-    handBlocks.push(rendered);
-    replacements.push(rendered);
-  }
-  // Also closes the gap when the deck has run out and nothing was drawn.
-  syncHandSlots();
+  // Drawn left to right, one after another; also closes the gap when the deck has run out.
+  hand.drawIn(game.refillHand(), game.state.hand);
   updateHud();
-  // Drawn left to right, one after another.
-  replacements.sort((a, b) => a.handSlot! - b.handSlot!);
-  replacements.forEach((rendered, index) => {
-    const edges = [...rendered.cube.children];
-    edges.forEach((edge) => (edge.visible = false));
-    rendered.cube.updateWorldMatrix(true, true);
-    const effect = createMaterialise(rendered.cube, { seconds: 0.9, reduced: reducedMotion });
-    appearing.push({
-      effect,
-      edges,
-      cube: rendered.cube,
-      wait: index * drawStagger,
-      sound: true,
-    });
-  });
 }
-
 /** Seconds into a play when the flight has reached its cell and the handover starts. */
 const handoverAt = 1;
 /** Seconds the handover dissolve takes. */
@@ -1029,7 +857,7 @@ function needsHandover(rendered: RenderedBlock): boolean {
 
 /** The table's version of a block, in its cell but not yet visible (it dissolves in). */
 function landing(block: CardBlock, cell: Cell): RenderedBlock {
-  const target = createCube(block, cubeSize, "board");
+  const target = blockViews.create(block, cubeSize, "board");
   target.cell = cell;
   target.baseY = cell.y * cubeSize - 0.45;
   target.cube.position.set(cell.x * cubeSize, target.baseY, cell.z * cubeSize);
@@ -1050,11 +878,11 @@ function startPlacement(sources: readonly RenderedBlock[], candidate: Candidate)
     face: candidate.face ?? undefined,
   });
   if (!next) return false;
-  settleAppearing(sources);
+  hand.settle(sources);
   const landed = next.field.slice(-sources.length);
   const played = new Set(ids);
   selected = new Set([...selected].filter((id) => !played.has(id)));
-  for (const source of sources) handBlocks.splice(handBlocks.indexOf(source), 1);
+  hand.remove(sources);
   syncHandSlots();
   // The cameras use different projections. Match each hand cube's screen position and
   // apparent size in the board view, then let the assembly carry it as it wobbles.
@@ -1105,11 +933,11 @@ function startDiscard(sources: readonly RenderedBlock[]): boolean {
   const coinsBefore = game.state.coins;
   const passivesBefore = game.state.passiveRack.length;
   if (!sources.length || !game.discard(sources.map(({ block }) => block.id))) return false;
-  settleAppearing(sources);
+  hand.settle(sources);
   if (game.state.coins > coinsBefore) playSfx("passive.coins");
   if (game.state.passiveRack.length > passivesBefore) playSfx("passive.granted");
   passiveRackView?.render(game.state.passiveRack);
-  for (const source of sources) handBlocks.splice(handBlocks.indexOf(source), 1);
+  hand.remove(sources);
   syncHandSlots();
   const gone = new Set(sources.map(({ block }) => block.id));
   selected = new Set([...selected].filter((id) => !gone.has(id)));
@@ -1132,22 +960,7 @@ function startDiscard(sources: readonly RenderedBlock[]): boolean {
 const placementTarget = new THREE.Vector3();
 const placementRotation = new THREE.Quaternion();
 function updateAction(now: number, delta: number): void {
-  for (let index = appearing.length - 1; index >= 0; index--) {
-    const entry = appearing[index];
-    const { effect, edges } = entry;
-    // Not its turn yet: it stays invisible (the dissolve has not started).
-    if (entry.wait && entry.wait > 0) {
-      entry.wait -= delta;
-      continue;
-    }
-    if (entry.sound) {
-      entry.sound = false;
-      playSfx("card.deal");
-    }
-    if (effect.update(delta)) continue;
-    edges.forEach((edge) => (edge.visible = true));
-    appearing.splice(index, 1);
-  }
+  hand.updateDrawIns(delta);
   if (!pendingAction) return;
   const action = pendingAction;
   const elapsed = (now - action.startedAt) / 1000;
@@ -1203,7 +1016,7 @@ function updateAction(now: number, delta: number): void {
     action.effects.forEach((effect) => effect.finish());
     for (const flight of action.flights) {
       if (flight.target) {
-        disposeCube(flight.source);
+        blockViews.dispose(flight.source);
         flight.target.cube.visible = true;
         flight.target.cube.children.forEach((edge) => (edge.visible = true));
         placed.set(cellKey(flight.cell), flight.target);
@@ -1225,7 +1038,7 @@ function updateAction(now: number, delta: number): void {
     cameraView.scheduleCameraMove();
     refillHand();
   } else {
-    action.sources.forEach(disposeCube);
+    action.sources.forEach((source) => blockViews.dispose(source));
     refillHand();
   }
   autosave();
@@ -1242,7 +1055,7 @@ function announceScore(now: number): void {
 /** Reusable effect: briefly tint a row of placed blocks toward gold. */
 function tintRow(blocks: readonly CardBlock[], now: number): void {
   const ids = new Set(blocks.map(({ id }) => id));
-  tints.push({ blocks: renderedBlocks.filter(({ block }) => ids.has(block.id)), startedAt: now });
+  tints.push({ blocks: blockViews.all.filter(({ block }) => ids.has(block.id)), startedAt: now });
 }
 
 function updateScoring(now: number): void {
@@ -1291,11 +1104,9 @@ function updateScoring(now: number): void {
 
 /** Remove every block from the scene and put the board and camera back at the start. */
 function resetTable(): void {
-  // disposeCube removes from renderedBlocks, so iterate over a copy.
-  for (const rendered of renderedBlocks.slice()) disposeCube(rendered);
+  blockViews.disposeAll();
   placed.clear();
-  handBlocks.length = 0;
-  appearing.length = 0;
+  hand.clear();
   tints.length = 0;
   selected = new Set();
   massCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
@@ -1305,20 +1116,7 @@ function resetTable(): void {
 
 /** Deal the hand of a new stage into the hand area with the materialise effect. */
 function dealHand(): void {
-  game.state.hand.forEach((block, slot) => {
-    const rendered = createCube(block, cubeSize / 3, "hand");
-    rendered.handSlot = slot;
-    handBlocks.push(rendered);
-    const edges = [...rendered.cube.children];
-    edges.forEach((edge) => (edge.visible = false));
-    rendered.cube.updateWorldMatrix(true, true);
-    appearing.push({
-      effect: createMaterialise(rendered.cube, { seconds: 0.9, reduced: reducedMotion }),
-      edges,
-      cube: rendered.cube,
-    });
-  });
-  layoutHand();
+  hand.deal(game.state.hand);
 }
 
 /** Browsers keep audio silent until the player interacts; start music on the first gesture. */
@@ -1605,8 +1403,7 @@ function finishDrag(drop: boolean): void {
     if (!accepted && reorderSlot !== null && reorderSlot !== from) {
       // A drop inside the hand reorders it: not a play or discard, and nothing refills.
       game.reorderHand(from, reorderSlot);
-      handScene.add(activeDrag.source.cube);
-      activeDrag.source.cube.position.z = 0;
+      hand.putBack([activeDrag.source]);
       syncHandSlots();
       playSfx("hand.reorder");
       autosave();
@@ -1620,10 +1417,7 @@ function finishDrag(drop: boolean): void {
           !game.dealer.canPlay(game.state) ||
           overDiscardArea(activeDrag.lastX, activeDrag.lastY));
       playSfx(refused ? "action.denied" : "card.drag.return");
-      for (const rendered of [activeDrag.source, ...activeDrag.group]) {
-        handScene.add(rendered.cube);
-        rendered.cube.position.z = 0;
-      }
+      hand.putBack([activeDrag.source, ...activeDrag.group]);
       layoutHand();
     }
     cameraView.changeMotionRate(normalMotionRate);
@@ -1665,7 +1459,7 @@ const onPointerDown = (event: PointerEvent) => {
     if (pinch) return;
   }
   overlays.hideTooltip();
-  const source = pickBlock(event.clientX, event.clientY, handBlocks);
+  const source = pickBlock(event.clientX, event.clientY, hand.blocks);
   if (fieldPlacementActive(roomTraits, game.phase) && source?.block.traits.attachable) {
     pointRay(event.clientX, event.clientY, cameraView.handCamera);
     const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
@@ -1752,7 +1546,7 @@ const onPointerMove = (event: PointerEvent) => {
     }
   }
   const hovered =
-    pickBlock(event.clientX, event.clientY, handBlocks) ??
+    pickBlock(event.clientX, event.clientY, hand.blocks) ??
     pickBlock(event.clientX, event.clientY, [...placed.values()]);
   renderer.domElement.style.cursor = hovered?.block.traits.selectable ? "pointer" : "default";
   showInspection(
@@ -1784,7 +1578,7 @@ const onPointerUp = (event: PointerEvent) => {
   if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
   renderer.domElement.style.cursor = "default";
   const hovered =
-    pickBlock(event.clientX, event.clientY, handBlocks) ??
+    pickBlock(event.clientX, event.clientY, hand.blocks) ??
     pickBlock(event.clientX, event.clientY, [...placed.values()]);
   showInspection(
     wasDragging || event.pointerType === "touch" ? undefined : hovered?.block,
@@ -1809,7 +1603,7 @@ const onPointerCancel = (event: PointerEvent) => {
 const onClick = (event: MouseEvent) => {
   if (performance.now() < suppressClickUntil) return;
   const target =
-    pickBlock(event.clientX, event.clientY, handBlocks) ??
+    pickBlock(event.clientX, event.clientY, hand.blocks) ??
     pickBlock(event.clientX, event.clientY, [...placed.values()]);
   if (!target) return;
   const wasSelected = selected.has(target.block.id);
@@ -1880,20 +1674,8 @@ const animate = (time: number) => {
   updateAction(time, delta);
   updateScoring(time);
   sceneManager.update(delta);
-  glideHand(delta);
+  hand.animate(time, delta, selected);
   cardRoom.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
-  // Hand blocks rock gently; a selected one eases into a quick, small vibration.
-  for (const rendered of handBlocks) {
-    if (!rendered.rock) continue;
-    const step = stepRock(
-      rendered.rock,
-      rendered.rockState ?? { angle: time / 1000, excitement: 0 },
-      selected.has(rendered.block.id),
-      Math.min(delta, 0.1),
-    );
-    rendered.rockState = step.state;
-    rendered.cube.rotation.z = step.angle;
-  }
   if (drag?.active) updateCandidate();
   updateEmptyFieldPrompt(time);
   passiveRackView?.frame(time, reducedMotion);
@@ -1922,8 +1704,8 @@ if (import.meta.hot) {
     devConsole.dispose();
     overlays.dispose();
     pendingAction?.effects.forEach((e) => e.finish());
-    appearing.forEach(({ effect }) => effect.finish());
-    renderedBlocks.slice().forEach(disposeCube);
+    hand.dispose();
+    blockViews.disposeAll();
     ghostGeometry.dispose();
     ghostMaterial.dispose();
     ghostEdgeGeometry.dispose();
