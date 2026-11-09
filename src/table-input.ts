@@ -259,7 +259,7 @@ export function createTableInput(options: {
   }
 
   function pickAttachment(clientX: number, clientY: number, count = 1): Candidate | null {
-    if (field.cells().length === 0) {
+    if (field.occupiedCells().length === 0) {
       // The first play of a stage goes to the centre: drop anywhere above the hand.
       const bounds = host.getBoundingClientRect();
       const aboveHand = clientY < bounds.top + bounds.height * 0.72;

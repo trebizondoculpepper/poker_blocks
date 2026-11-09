@@ -233,6 +233,8 @@ export function createPlayPresenter(options: {
       if (!next) return false;
       hand.settle(sources);
       const landed = next.field.slice(-sources.length);
+      // The field knows these cells now, so a drop made before they land is tested against them.
+      for (const { block, cell } of landed) field.expect(block, cell);
       options.deselect(ids);
       hand.remove(sources);
       hand.sync(game().state.hand);
