@@ -98,13 +98,35 @@ export function categoryDefaults(traits: object): PassiveCategoryDefaults {
   return passiveCategoryFacet[name];
 }
 
-/** The colours a passive's category gives it: scoring passives take their operations' tint. */
+/**
+ * How each category resolves its passives' colours from its trait config and defaults. Each
+ * category brings its own; only Scoring tints, by the blend of its operations.
+ */
+const categoryPalettes: {
+  [Name in PassiveCategoryTrait]: (
+    config: PassiveCategoryTraits[Name],
+    defaults: PassiveCategoryDefaults,
+  ) => PassivePalette;
+} = {
+  scoringCategory: ({ operations }, { palette }) => {
+    if (operations.length === 0) return palette;
+    const tint = blendColours(operations.map((operation) => scoringTints[operation]));
+    return { ...palette, ink: tint, edge: tint };
+  },
+  economyCategory: (_config, { palette }) => palette,
+  effectCategory: (_config, { palette }) => palette,
+  retriggerCategory: (_config, { palette }) => palette,
+};
+
+/** The colours a passive's category gives it, resolved by that category's own handler. */
 export function categoryPalette(traits: Partial<PassiveCategoryTraits>): PassivePalette {
-  const { palette } = categoryDefaults(traits);
-  const operations = traits.scoringCategory?.operations ?? [];
-  if (operations.length === 0) return palette;
-  const tint = blendColours(operations.map((operation) => scoringTints[operation]));
-  return { ...palette, ink: tint, edge: tint };
+  const [name] = categoryTraitsOf(traits);
+  if (!name) throw new Error("A passive must compose one category trait");
+  const resolve = categoryPalettes[name] as (
+    config: PassiveCategoryTraits[PassiveCategoryTrait] | undefined,
+    defaults: PassiveCategoryDefaults,
+  ) => PassivePalette;
+  return resolve(traits[name], passiveCategoryFacet[name]);
 }
 
 /** The even mix of several hex colours. */
