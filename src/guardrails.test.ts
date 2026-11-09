@@ -30,11 +30,16 @@ export const forbidden: readonly { name: string; pattern: RegExp }[] = [
   },
   {
     name: "switches over a kind/phase/scene/room/id",
-    pattern: new RegExp(`\\bswitch\\s*\\(\\s*(?:\\w+\\.)*(?:${kindWords})\\b`),
+    pattern: new RegExp(`(?<![.\\w])switch\\s*\\(\\s*(?:\\w+\\.)*(?:${kindWords})\\b`),
   },
   {
     name: "reads a trait as a flag (if (traits.x) / traits.x ? :)",
     pattern: /\bif\s*\(\s*!?\s*(?:\w+\.)*\w*[tT]raits\.\w+\s*\)|\b\w*[tT]raits\.\w+\s*\?\s/,
+  },
+  {
+    name: 'chains literal comparisons on one value (x === "a" || x === "b" / else if)',
+    pattern:
+      /\b(\w+)\s*===\s*["'`]\w[\w.-]+["'`]\s*\|\|\s*\1\s*===\s*["'`]\w|\belse\s+if\s*\(\s*\w+\s*===\s*["'`]\w[\w.-]+["'`]/,
   },
   {
     name: "asks whether a room is a dev room",
