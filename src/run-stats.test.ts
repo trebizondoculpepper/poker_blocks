@@ -40,6 +40,7 @@ describe("run stats", () => {
     for (let stage = 0; stage < 3; stage++) {
       game.forceOutcome("won");
       game.advance();
+      if (stage < 2) game.leaveShop();
     }
     expect(game.phase).toBe("shop");
     expect(game.stats.roundsCompleted).toBe(1);

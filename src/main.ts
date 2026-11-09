@@ -526,7 +526,7 @@ const phaseNames: Record<Phase, string> = {
 
 /** The HUD button's label for the current moment, or null when there is nothing to do. */
 function nextActionLabel(outcome: ReturnType<typeof roundOutcome>): string | null {
-  if (game.phase === "shop") return "Next round";
+  if (game.phase === "shop") return "Continue / Skip shop";
   if (game.phase === "over") return "New game";
   if (outcome === "lost") return "End game";
   // A won stage moves on from its Stage Won pop-up, not from here.
@@ -1443,9 +1443,7 @@ function showStageWon(): void {
   if (!reward) return;
   updateHud();
   autosave();
-  menus.showStageWon(reward, game.phase === "boss" ? "Visit shop" : "Start next stage", () =>
-    advanceFromStage(),
-  );
+  menus.showStageWon(reward, "Visit shop", () => advanceFromStage());
 }
 
 /** The HUD button: move to the next stage, the shop, the next round, or a new game. */
@@ -1484,6 +1482,7 @@ function advanceFromStage(): void {
     playSfx("shop.open");
   }
   shopView?.render(game.state.shopStock ?? [], game.phase === "shop");
+  showSelection();
   updateHud();
   autosave();
 }

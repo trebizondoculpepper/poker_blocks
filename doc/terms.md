@@ -5,11 +5,11 @@ Canonical names used in the rules, the code and the docs. Use these words and no
 | Term              | Meaning                                                                                                                                              |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Run**           | One whole game attempt, from the first stage until a stage is lost or the run is won. In code: a `GameSession`.                                      |
-| **Round**         | Three stages in order: stage 1, stage 2 and the boss stage, followed by the shop. Rounds are numbered from 1.                                        |
+| **Round**         | Three stages in order: stage 1, stage 2 and the boss stage, each followed by a shop. Rounds are numbered from 1.                                     |
 | **Stage**         | One attempt at a score target, with its own plays and discards and an empty field at the start. In code: `StageKind` (`stage-1`, `stage-2`, `boss`). |
 | **Boss stage**    | The third stage of a round. It can use a different registered dealer with extra rules.                                                               |
 | **Phase**         | Where the session is now: one of the three stages, `shop`, or `over` after a loss.                                                                   |
-| **Shop**          | The screen between the boss stage and the next round, where blocks will be bought. A placeholder for now.                                            |
+| **Shop**          | A skippable buying screen after each completed stage. Leaving the boss-stage shop starts the next round.                                             |
 | **Dealer**        | A registered rule set that reads and changes `GameState`: it deals, judges plays and discards, and scores. Each stage names its dealer.              |
 | **Field**         | The blocks placed this stage, each in a grid cell.                                                                                                   |
 | **Centre block**  | The first block played in a stage, placed at the centre of the empty field.                                                                          |

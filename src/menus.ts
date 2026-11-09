@@ -23,7 +23,7 @@ export type Menus = {
   showGameOver(stats: RunStats): void;
   /**
    * A stage is won: show "Stage Won" and count the reward rows in one by one, then offer
-   * `action` (Start next stage, or Visit shop), which calls `onContinue`. The music is
+   * `action` (Visit shop), which calls `onContinue`. The music is
    * left alone.
    */
   showStageWon(reward: StageReward, action: string, onContinue: () => void): void;

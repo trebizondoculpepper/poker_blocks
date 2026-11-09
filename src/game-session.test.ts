@@ -5,6 +5,8 @@ import { baseDealer, type Dealer } from "./dealer";
 import { GameSession } from "./game-session";
 import type { GameState } from "./game-state";
 import type { SessionConfig, StageKind } from "./session-config";
+import { fromSaveRecord, toSaveRecord } from "./save";
+import { shopPreviewState } from "./shop-stock";
 
 const targets: Record<StageKind, number> = { "stage-1": 10, "stage-2": 20, boss: 30 };
 const bossDealer: Dealer = { ...baseDealer, name: "boss" };
@@ -58,9 +60,12 @@ describe("GameSession progression", () => {
     decide(session, "won");
     session.advance();
     expect(session.state.coins).toBe(13);
+    expect(session.phase).toBe("shop");
+    session.leaveShop();
     expect(session.state.round.score).toBe(0);
     decide(session, "won");
     session.advance();
+    session.leaveShop();
     decide(session, "won");
     session.advance();
     expect(session.phase).toBe("shop");
@@ -69,7 +74,7 @@ describe("GameSession progression", () => {
     expect(session.state.coins).toBe(21);
   });
 
-  it("runs stage 1 → stage 2 → boss → shop → next round with each stage's dealer and target", () => {
+  it("runs each stage → shop → next stage, including the boss shop before round 2", () => {
     const session = makeSession();
     const seen: [number, string, string, number][] = [];
     const record = () =>
@@ -84,16 +89,23 @@ describe("GameSession progression", () => {
       decide(session, "won");
       expect(session.advance()).toBe(true);
       record();
+      expect(session.leaveShop()).toBe(true);
+      record();
     }
-    expect(session.leaveShop()).toBe(true);
-    record();
     expect(seen).toEqual([
       [1, "stage-1", "base", 10],
+      [1, "shop", "base", 10],
       [1, "stage-2", "base", 20],
+      [1, "shop", "base", 20],
       [1, "boss", "boss", 30],
       [1, "shop", "boss", 30],
       [2, "stage-1", "base", 20],
     ]);
+    decide(session, "won");
+    session.advance();
+    expect([session.round, session.phase, session.shopAfterStage]).toEqual([2, "shop", "stage-1"]);
+    session.leaveShop();
+    expect([session.round, session.phase]).toEqual([2, "stage-2"]);
   });
 
   it("does not advance an undecided stage, and ends the session on a loss", () => {
@@ -116,6 +128,7 @@ describe("GameSession progression", () => {
     expect(session.state.field).toHaveLength(1);
     decide(session, "won");
     session.advance();
+    session.leaveShop();
     expect(session.state.field).toHaveLength(0);
     expect(session.state.hand).toHaveLength(5);
     expect(session.state.round).toEqual({
@@ -139,6 +152,7 @@ describe("GameSession progression", () => {
       expect(session.state.discardPile).toContain(discarded);
       expect(session.state.deck).not.toContain(discarded);
       expect(session.state.hand).not.toContain(discarded);
+      session.leaveShop();
     }
     expect(session.phase).toBe("boss");
   });
@@ -151,6 +165,10 @@ describe("GameSession progression", () => {
       for (let stage = 0; stage < 3; stage++) {
         decide(session, "won");
         session.advance();
+        if (stage < 2) {
+          session.leaveShop();
+          expect(session.state.discardPile).toContain(discarded);
+        }
       }
       session.leaveShop();
       expect(session.state.discardPile.includes(discarded)).toBe(policy === "keep-out");
@@ -161,5 +179,136 @@ describe("GameSession progression", () => {
   it("exposes progression and dealer identity for saving", () => {
     const session = makeSession();
     expect(session.snapshot()).toMatchObject({ round: 1, phase: "stage-1", dealer: "base" });
+  });
+
+  it("resumes the right next stage after saving each shop, including an old boss shop save", () => {
+    const session = makeSession();
+    const dealers = new Registry<Dealer>("dealer");
+    dealers.register(baseDealer.name, baseDealer);
+    dealers.register(bossDealer.name, bossDealer);
+    for (const completed of ["stage-1", "stage-2", "boss"] as const) {
+      expect(session.phase).toBe(completed);
+      decide(session, "won");
+      session.advance();
+      const saved = toSaveRecord(session.snapshot());
+      expect(saved.shopAfter).toBe(completed);
+      const restored = fromSaveRecord(saved, standardDeck, dealers);
+      expect(restored?.shopAfter).toBe(completed);
+      const resumed = GameSession.fromSnapshot(
+        dealers,
+        {
+          stage: (round, kind) => ({
+            dealer: kind === "boss" ? "boss" : "base",
+            targetScore: targets[kind] * round,
+            plays: 3,
+            discards: 2,
+          }),
+          handAtStageEnd: "return-to-deck",
+          discardPileAfterShop: "keep-out",
+        },
+        standardDeck,
+        restored!,
+        () => 0,
+      );
+      expect(resumed.leaveShop()).toBe(true);
+      expect(resumed.phase).toBe(
+        completed === "stage-1" ? "stage-2" : completed === "stage-2" ? "boss" : "stage-1",
+      );
+      expect(resumed.round).toBe(completed === "boss" ? 2 : 1);
+      session.leaveShop();
+    }
+    const old = toSaveRecord({ ...session.snapshot(), phase: "shop" });
+    delete old.shopAfter;
+    const oldSnapshot = fromSaveRecord(old, standardDeck, dealers);
+    expect(oldSnapshot?.shopAfter).toBeUndefined();
+    const oldShop = GameSession.fromSnapshot(
+      dealers,
+      {
+        stage: (round, kind) => ({
+          dealer: kind === "boss" ? "boss" : "base",
+          targetScore: targets[kind] * round,
+          plays: 3,
+          discards: 2,
+        }),
+        handAtStageEnd: "return-to-deck",
+        discardPileAfterShop: "keep-out",
+      },
+      standardDeck,
+      oldSnapshot!,
+      () => 0,
+    );
+    expect(oldShop.shopAfterStage).toBe("boss");
+    expect(oldShop.leaveShop()).toBe(true);
+    expect(oldShop.phase).toBe("stage-1");
+  });
+
+  it("can skip an empty-cost shop without changing coins and generates fresh stock next time", () => {
+    const session = makeSession();
+    decide(session, "won");
+    session.advance();
+    const dealers = new Registry<Dealer>("dealer");
+    dealers.register(baseDealer.name, baseDealer);
+    const stocked = GameSession.fromSnapshot(
+      dealers,
+      {
+        stage: (round, kind) => ({
+          dealer: "base",
+          targetScore: targets[kind] * round,
+          plays: 3,
+          discards: 2,
+        }),
+        handAtStageEnd: "return-to-deck",
+        discardPileAfterShop: "keep-out",
+      },
+      standardDeck,
+      { ...session.snapshot(), state: shopPreviewState(session.state, 0, () => 0) },
+      () => 0,
+    );
+    const balance = stocked.state.coins;
+    expect(stocked.state.shopStock).toHaveLength(5);
+    expect(stocked.leaveShop()).toBe(true);
+    expect(stocked.state.coins).toBe(balance);
+    expect(stocked.state.shopStock).toBeUndefined();
+    decide(stocked, "won");
+    stocked.advance();
+    expect(stocked.phase).toBe("shop");
+    expect(stocked.state.shopStock).toBeUndefined();
+  });
+
+  it("keeps purchased blocks and the remaining balance when leaving an early shop", () => {
+    const session = makeSession();
+    decide(session, "won");
+    session.advance();
+    const dealers = new Registry<Dealer>("dealer");
+    dealers.register(baseDealer.name, baseDealer);
+    const stocked = GameSession.fromSnapshot(
+      dealers,
+      {
+        stage: (round, kind) => ({
+          dealer: "base",
+          targetScore: targets[kind] * round,
+          plays: 3,
+          discards: 2,
+        }),
+        handAtStageEnd: "return-to-deck",
+        discardPileAfterShop: "keep-out",
+      },
+      standardDeck,
+      { ...session.snapshot(), state: shopPreviewState(session.state, 5, () => 0) },
+      () => 0,
+    );
+    const passive = stocked.state.shopStock!.find(({ kind }) => kind === "passive")!;
+    const card = stocked.state.shopStock!.find(({ kind }) => kind === "card")!;
+    expect(stocked.buyShopOffer(passive.block.id, "passive-rack")).not.toBeNull();
+    expect(stocked.buyShopOffer(card.block.id, "hand")).not.toBeNull();
+    expect(stocked.state.coins).toBe(3);
+    stocked.leaveShop();
+    expect(stocked.phase).toBe("stage-2");
+    expect(stocked.state.coins).toBe(3);
+    expect(stocked.state.passiveRack.some(({ id }) => id === passive.block.id)).toBe(true);
+    expect(
+      [...stocked.state.hand, ...stocked.state.deck].some(({ id }) => id === card.block.id),
+    ).toBe(true);
+    expect(new Set(allCards(stocked.state).map(({ id }) => id)).size).toBe(52);
   });
 });

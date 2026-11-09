@@ -25,7 +25,7 @@ Poker Blocks is an original IP. It draws on public-domain ideas only: standard p
 
 ## A stage
 
-A **round** contains three stages. Stage one has a lower score target, stage two has a higher target, and stage three is a boss stage that may modify the rules. The shop follows the boss stage. The deck and discard pile carry across stages within the round; see [terms.md](terms.md) for the canonical definitions.
+A **round** contains three stages. Stage one has a lower score target, stage two has a higher target, and stage three is a boss stage that may modify the rules. A skippable shop follows **each** completed stage. The deck and discard pile carry across stages within the round; see [terms.md](terms.md) for the canonical definitions.
 
 ### Setup
 
@@ -53,7 +53,7 @@ A modifier block that works while held stays active as long as it is in the hand
 - The stage is **won** as soon as the running total reaches the target score, provided plays have not run out. Play the stage-win sound and show **Stage complete** before advancing.
 - The stage is **lost** if the last play is used and the running total is still short of the target. A lost stage ends the run.
 
-On a win, show a reward ledger with one row for each rule that grants coins. The default rule grants **4 coins for completing the stage**; future traits or passives may add other rows. The ledger shows each row's coins and the total added to the player's finances. Stage score is not a currency and resets to zero when the next stage begins. The player chooses when to continue: after stage 1 or 2, a button starts the next stage; after the boss stage, it opens the shop.
+On a win, show a reward ledger with one row for each rule that grants coins. The default rule grants **4 coins for completing the stage**; future traits or passives may add other rows. The ledger shows each row's coins and the total added to the player's finances. Stage score is not a currency and resets to zero when the next stage begins. The player chooses when to visit the shop after any stage, and can leave it without buying anything.
 
 The session controller owns the reward and transition sequence. Coins persist from one stage to the next, including the boss stage and shop, until the player spends them. Stage lifecycle events carry the round number and stage kind so passive traits can react to a specific moment, such as the first stage or a boss stage. A passive may add an itemized reward, such as interest on the coins already held, before the ledger and new balance are finalized.
 
@@ -135,7 +135,7 @@ Later this formula will be extended in three ways:
 ## Coins
 
 - The current game starts a run with **0 coins**, keeps the balance in GameState and saved runs, and shows it beneath Moves and Discards. Stage transitions leave the balance intact.
-- **Stage won screen (built):** when a stage is won, a "Stage Won" pop-up counts in the reward ledger one row every quarter second, each with a cash sound (`reward.coin`): first the **Stage complete bonus (4 coins)**, then each passive that pays on a stage win, in rack order. It then shows the total earned and the new balance, and a **Start next stage** (or, after the boss, **Visit shop**) button. The music keeps playing. Rewards are paid once per stage (`GameSession.claimStageRewards`, saved with the run), so reopening the pop-up, a reload or a second Continue never pays twice; a lost stage pays nothing.
+- **Stage won screen (built):** when a stage is won, a "Stage Won" pop-up counts in the reward ledger one row every quarter second, each with a cash sound (`reward.coin`): first the **Stage complete bonus (4 coins)**, then each passive that pays on a stage win, in rack order. It then shows the total earned and the new balance, and a **Visit shop** button. The music keeps playing. Rewards are paid once per stage (`GameSession.claimStageRewards`, saved with the run), so reopening the pop-up, a reload or a second Continue never pays twice; a lost stage pays nothing.
 - Completing a stage grants 4 coins by default. Other reward rules may add more ledger rows and coins.
 - Some blocks have economic effects: certain plays earn coins.
 - The player must balance building points against earning coins.
@@ -223,7 +223,7 @@ The two-Ace effect is a first use case for an event leading to another event: th
 ## A run
 
 - A **round** is three stages: **stage 1**, **stage 2** and the **boss stage**. Stage 1 has a lower target than stage 2. The boss stage can use a different dealer, which adds extra rules or restrictions for more challenge.
-- **Planned cadence:** a skippable shop follows every stage, including stage 1 and stage 2; leaving the boss-stage shop starts the next round. The current build still opens a shop only after the boss stage. See [issue #23](https://github.com/trebizondoculpepper/poker_blocks/issues/23).
+- A skippable shop follows every completed stage. Leaving the boss-stage shop starts the next round. See [issue #23](https://github.com/trebizondoculpepper/poker_blocks/issues/23).
 - Target scores rise as the run goes on (_tune_).
 - A run is **won** by beating a fixed number of rounds (_tune_). Losing any stage ends the run.
 - The deck, including blocks bought at the shop, carries over for the whole run.
@@ -235,14 +235,14 @@ The demo uses these placeholders. They live in `src/session-config.ts` so they c
 - **Targets:** stage 1 = 100, stage 2 = 150, boss stage = 200, each growing by half its base every round (round 2: 150, 225, 300). Every stage has 6 plays and 4 discards.
 - **Boss dealer:** the boss stage uses the base dealer until boss rules exist.
 - **Hand at a stage boundary:** cards left in the hand return to the deck before the next stage is dealt.
-- **Discard pile after the shop:** returns to the deck when the player leaves the shop, so the deck does not run out over a long run.
-- **Shop:** currently follows the boss stage and offers two passives and three playable blocks at one coin each; [issue #23](https://github.com/trebizondoculpepper/poker_blocks/issues/23) moves it after every stage.
+- **Discard pile after the boss-stage shop:** returns to the deck after the boss stage, so discards remain unavailable in stage 2 and the boss stage but the deck does not run out over a long run.
+- **Shop:** follows each completed stage and offers two passives and three playable blocks at one coin each. The player can leave without buying.
 
 ### Shop
 
-The shop is an optional **room trait**. Its configuration supplies the number of passive and playable-card offers, while the room composes that trait with the table, hand, passive rack, and session rules. Dev3 starts directly in this composed shop; the normal game activates it after a boss stage. Field placement is a separate stage-scene trait and is absent while the shop scene is active. Shop stock uses the same 3D cube appearances as playable and passive blocks, and each offer exposes its inspectable description on hover or keyboard focus. The shop presentation can independently move the camera to frame the offers where they land on the table.
+The shop is an optional **room trait**. Its configuration supplies the number of passive and playable-card offers, while the room composes that trait with the table, hand, passive rack, and session rules. Dev3 starts directly in this composed shop; the normal game activates it after every won stage. Field placement is a separate stage-scene trait and is absent while the shop scene is active. Shop stock uses the same 3D cube appearances as playable and passive blocks, and each offer exposes its inspectable description on hover or keyboard focus. The shop presentation can independently move the camera to frame the offers where they land on the table.
 
-The current shop opens after the boss stage with five objects at rest on the table: **two passive blocks** and **three playable blocks**. For the first version, every item costs **one coin**; prices will be tuned later. Buying requires enough coins. The player drags a passive to the passive rack or a playable block to the hand. Bought playable blocks become part of the player's collection and carry into later stages. Future shop stock may include special cards and modifier blocks. The planned cadence opens this same shop after every stage and lets the player skip it without buying.
+The shop opens after each completed stage with five objects at rest on the table: **two passive blocks** and **three playable blocks**. For the first version, every item costs **one coin**; prices will be tuned later. Buying requires enough coins. The player drags a passive to the passive rack or a playable block to the hand. Bought playable blocks become part of the player's collection and carry into later stages. Future shop stock may include special cards and modifier blocks. The player can continue to the next stage without spending coins.
 
 The shop entrance is a separate presentation sequence: a deliberately theatrical **SHOP OPEN** sign descends, blocks appear to be thrown onto the table by an unseen hand, and the camera moves to frame them. The items are at rest before the player interacts with them; the animation does not change stock or purchase rules.
 

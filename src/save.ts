@@ -7,6 +7,7 @@ import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
 import { parseRunStats, type RunStats } from "./run-stats";
 import { createPassiveBlock } from "./passives";
+import { stageKinds, type StageKind } from "./session-config";
 
 /**
  * Saved runs store card ids, not CardBlock objects: some traits hold functions, and the
@@ -20,6 +21,8 @@ export type SaveRecord = {
   version: typeof saveVersion;
   round: number;
   phase: Phase;
+  /** Stage immediately before this shop; absent in older boss-only shop saves. */
+  shopAfter?: StageKind;
   dealer: string;
   state: {
     field: { cardId: string; cell: Cell }[];
@@ -51,6 +54,7 @@ export function toSaveRecord(snapshot: SessionSnapshot): SaveRecord {
     version: saveVersion,
     round: snapshot.round,
     phase: snapshot.phase,
+    ...(snapshot.shopAfter ? { shopAfter: snapshot.shopAfter } : {}),
     dealer: snapshot.dealer,
     state: {
       field: state.field.map(({ block, cell }) => ({ cardId: block.id, cell: { ...cell } })),
@@ -90,6 +94,7 @@ export function fromSaveRecord(
     if (record?.version !== saveVersion) return null;
     if (!Number.isInteger(record.round) || record.round < 1) return null;
     if (!phases.includes(record.phase) || record.phase === "over") return null;
+    if (record.shopAfter !== undefined && !stageKinds.includes(record.shopAfter)) return null;
     if (!dealers.has(record.dealer)) return null;
     const byId = new Map(cards.map((card) => [card.id, card]));
     const seen = new Set<string>();
@@ -145,6 +150,7 @@ export function fromSaveRecord(
     return {
       round: record.round,
       phase: record.phase,
+      ...(record.phase === "shop" && record.shopAfter ? { shopAfter: record.shopAfter } : {}),
       dealer: record.dealer,
       state: restored,
       stats: parseRunStats(record.stats),

@@ -30,6 +30,8 @@ export type Phase = StageKind | "shop" | "over";
 export type SessionSnapshot = {
   round: number;
   phase: Phase;
+  /** Stage that opened this shop; absent in older saves, which only had boss shops. */
+  shopAfter?: StageKind;
   dealer: string;
   state: GameState;
   /** Run totals for the game over screen; older saves have none (zeros). */
@@ -39,7 +41,7 @@ export type SessionSnapshot = {
 };
 
 /**
- * Controls one game attempt: stage 1 → stage 2 → boss stage → shop → next round.
+ * Controls one game attempt: each stage → shop → next stage (or round).
  * It keeps the current facts while a registered dealer, chosen per stage, applies the rules.
  */
 export class GameSession {
@@ -50,6 +52,7 @@ export class GameSession {
   private currentState: GameState;
   private currentRound = 1;
   private currentPhase: Phase = "stage-1";
+  private shopAfter: StageKind | null = null;
   private runStats: RunStats = emptyRunStats;
   private readonly passiveEvents = new PassiveEventQueue();
   private scoredLines: ScoredLine[] = [];
@@ -86,6 +89,7 @@ export class GameSession {
     session.currentState = snapshot.state;
     session.currentRound = snapshot.round;
     session.currentPhase = snapshot.phase;
+    session.shopAfter = snapshot.phase === "shop" ? (snapshot.shopAfter ?? "boss") : null;
     session.runStats = snapshot.stats ?? emptyRunStats;
     session.rewarded = snapshot.rewarded ?? null;
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
@@ -116,6 +120,10 @@ export class GameSession {
     return this.currentPhase;
   }
 
+  get shopAfterStage(): StageKind | null {
+    return this.shopAfter;
+  }
+
   get stats(): RunStats {
     return this.runStats;
   }
@@ -133,6 +141,7 @@ export class GameSession {
     return {
       round: this.currentRound,
       phase: this.currentPhase,
+      ...(this.shopAfter ? { shopAfter: this.shopAfter } : {}),
       dealer: this.activeDealer.name,
       state: this.currentState,
       stats: this.runStats,
@@ -362,8 +371,8 @@ export class GameSession {
   }
 
   /**
-   * Move on once the current stage is decided: a win goes to the next stage, or to the
-   * shop after the boss stage; a loss ends the session. Returns false while still playing.
+   * Move on once the current stage is decided: a win opens its shop; a loss ends the
+   * session. Returns false while still playing.
    */
   advance(): boolean {
     if (!this.inStage) return false;
@@ -375,35 +384,30 @@ export class GameSession {
     }
     // A won stage always pays before it is left (once; see claimStageRewards).
     this.claimStageRewards();
-    const next = stageKinds[stageKinds.indexOf(this.currentPhase as StageKind) + 1];
-    if (next) {
-      this.startStage(next);
-    } else {
-      this.currentState = this.clearTable(this.currentState);
-      this.currentPhase = "shop";
-      this.runStats = recordRoundComplete(this.runStats);
-    }
+    this.shopAfter = this.currentPhase as StageKind;
+    this.currentState = this.clearTable(this.currentState);
+    this.currentPhase = "shop";
+    if (this.shopAfter === "boss") this.runStats = recordRoundComplete(this.runStats);
     return true;
   }
 
-  /** Leave the shop for stage 1 of the next round. */
+  /** Leave a shop for the next stage, or stage 1 of the next round after a boss. */
   leaveShop(): boolean {
     if (this.currentPhase !== "shop") return false;
-    this.currentRound++;
+    const completed = this.shopAfter ?? "boss";
     // The sandbox's unbought card offers were borrowed from the deck, so return them.
-    if (this.currentState.shopStock?.length) {
-      this.currentState = {
-        ...this.currentState,
-        deck: [
-          ...this.currentState.deck,
-          ...this.currentState.shopStock
-            .filter((offer): offer is Extract<ShopOffer, { kind: "card" }> => offer.kind === "card")
-            .map(({ block }) => block),
-        ],
-        shopStock: [],
-      };
-    }
-    if (this.config.discardPileAfterShop === "return-to-deck") {
+    this.currentState = {
+      ...this.currentState,
+      deck: [
+        ...this.currentState.deck,
+        ...(this.currentState.shopStock ?? [])
+          .filter((offer): offer is Extract<ShopOffer, { kind: "card" }> => offer.kind === "card")
+          .map(({ block }) => block),
+      ],
+      // Undefined means a later shop will generate fresh stock, including after a skip.
+      shopStock: undefined,
+    };
+    if (completed === "boss" && this.config.discardPileAfterShop === "return-to-deck") {
       const { deck, discardPile } = this.currentState;
       this.currentState = {
         ...this.currentState,
@@ -411,7 +415,10 @@ export class GameSession {
         discardPile: [],
       };
     }
-    this.startStage("stage-1");
+    const next = stageKinds[stageKinds.indexOf(completed) + 1];
+    if (!next) this.currentRound++;
+    this.shopAfter = null;
+    this.startStage(next ?? "stage-1");
     return true;
   }
 
