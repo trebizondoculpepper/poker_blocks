@@ -8,6 +8,7 @@
  * a grate. It is a fake (no lighting, no shadows) but reads as a fire seen through glass.
  */
 import * as THREE from "three";
+import { additiveLight } from "./additive-light";
 
 const vertexShader = /* glsl */ `
   varying vec3 vLocal;
@@ -104,7 +105,10 @@ const fragmentShader = /* glsl */ `
       vec2 flameAt = flame(p / halfSize);
       colour += fireColour(clamp(flameAt.y, 0.0, 1.0)) * flameAt.x * stepLength / halfSize;
     }
-    gl_FragColor = vec4(colour * intensity, 1.0);
+    // Premultiplied light: the glow's own brightness is its coverage, so the transparent front
+    // canvas (#116, #190) holds a valid colour wherever the flame is, and nothing where it isn't.
+    vec3 light = min(colour * intensity, vec3(1.0));
+    gl_FragColor = vec4(light, max(light.r, max(light.g, light.b)));
   }
 `;
 
@@ -126,7 +130,8 @@ export function createFireCore(size: number): THREE.Mesh {
     // table, which refract only solid objects, show it bent through them. Additive and
     // drawn last among them (renderOrder), so nothing behind paints over it.
     transparent: false,
-    blending: THREE.AdditiveBlending,
+    // Premultiplied light blended over what is behind (src/visual/additive-light.ts, #190).
+    ...additiveLight,
     depthWrite: false,
   });
   const core = new THREE.Mesh(
