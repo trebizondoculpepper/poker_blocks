@@ -45,6 +45,11 @@ function recordingHost() {
           roundScore: 0,
           blocksPlayed: 40,
         }),
+        stageReward: () => ({
+          entries: [{ source: "stage.complete", label: "Stage complete bonus", coins: 4 }],
+          balanceBefore: 1,
+          balance: 5,
+        }),
       },
       overlays: {
         showMenu: (label, choices) =>
@@ -55,6 +60,8 @@ function recordingHost() {
         showGameOver: (stats, choices) =>
           void calls.push(`gameOver:${stats.totalScore}:${choices.map(({ id }) => id).join(",")}`),
         hideGameOver: () => void calls.push("gameOver:hide"),
+        showStageWon: (reward, next) => void calls.push(`stageWon:${reward.balance}:${next.id}`),
+        hideStageWon: () => void calls.push("stageWon:hide"),
         showTitle: (items) => void calls.push(`title:${items.map(({ id }) => id).join(",")}`),
         hideTitle: () => void calls.push("title:hide"),
       },
@@ -71,6 +78,22 @@ function recordingHost() {
 const scene = (id: string, traits: Partial<SceneTraits>) => ({ id, traits });
 
 describe("scene traits own their behaviour", () => {
+  it("shows the won stage's paid rewards with its next action, and closes on exit (#91)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("table", {}));
+    scenes.register(
+      scene("reward", { stageWonScreen: { next: { id: "onward", label: "Onward" } } }),
+    );
+
+    scenes.switchTo("table");
+    scenes.push("reward");
+    expect(calls).toEqual(["stageWon:5:onward"]);
+    calls.length = 0;
+    scenes.switchTo("table");
+    expect(calls).toEqual(["stageWon:hide"]);
+  });
+
   it("shows the game over screen with the run's totals and its items, and hides it on exit (#90)", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);

@@ -16,7 +16,8 @@ import { cardName, standardDeck, type CardBlock } from "./cards";
 import type { ConsoleApp } from "./console-host";
 import { dealerRegistry, roundOutcome, type RoundOutcome } from "./dealer";
 import type { FieldView } from "./field-view";
-import { GameRun, type RunPhase } from "./game-run";
+import { GameRun, type RunFlowOutcome, type RunPhase } from "./game-run";
+import type { StageReward } from "./stage-rewards";
 import { followFlow } from "./game-flow";
 import type { HandView } from "./hand-view";
 import type { HudPanels } from "./hud-panels";
@@ -117,6 +118,8 @@ export type RunController = {
   offerPrice(offer: ShopOffer): number;
   /** What the shop is showing while its scene is in front. */
   shopStock(): readonly ShopOffer[];
+  /** The won stage's paid rewards, which the stage-won pop-up shows; null before payment. */
+  stageReward(): StageReward | null;
   /** The run's totals so far, which the game over screen shows. */
   runStats(): RunStats;
   /** Whether a saved run this mode can continue exists (the title's `hasSave` condition). */
@@ -217,7 +220,12 @@ export function createRunController<Context>(options: {
   }
 
   function followRunPosition(): void {
-    followFlow(currentMode.flow, game.positionOutcome, {
+    follow(game.positionOutcome);
+  }
+
+  /** Place the scene the mode's game flow names for a run outcome. */
+  function follow(outcome: RunFlowOutcome): void {
+    followFlow(currentMode.flow, outcome, {
       replace: switchScene,
       push: (name) => scenes.pushIfNotCurrent(modeSceneId(currentMode.id, name)),
       pop: () => {
@@ -318,7 +326,8 @@ export function createRunController<Context>(options: {
     if (!reward) return;
     updateHud();
     autosave();
-    services.overlays.showStageWon(reward, "Visit shop", () => void advanceFromStage());
+    // The stage-won scene shows what was paid; its button dispatches `leaveStage`.
+    follow("run.stage.won");
   }
 
   function takeNextAction(): void {
@@ -513,6 +522,10 @@ export function createRunController<Context>(options: {
 
   /** The game actions a menu can dispatch; navigation is the mode's data, not code. */
   const gameActions: Record<string, () => void> = {
+    // From the stage-won pop-up: on to the shop (or wherever the run goes next).
+    leaveStage() {
+      void advanceFromStage();
+    },
     // From the game over screen: leave it and begin a fresh run.
     newRun() {
       services.overlays.closeAll();
@@ -674,6 +687,7 @@ export function createRunController<Context>(options: {
       offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),
     shopStock: () => game.state.shopStock ?? [],
     runStats: () => game.stats,
+    stageReward: () => game.stageReward,
     hasSave,
     dispatch,
     buy(id, destination) {
