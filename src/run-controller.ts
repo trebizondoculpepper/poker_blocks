@@ -16,6 +16,7 @@ import type { ConsoleApp } from "./console-host";
 import { dealerRegistry, roundOutcome, type RoundOutcome } from "./dealer";
 import type { FieldView } from "./field-view";
 import { GameRun, type RunPhase } from "./game-run";
+import { followFlow } from "./game-flow";
 import type { HandView } from "./hand-view";
 import type { HudPanels } from "./hud-panels";
 import type { MenuCallbacks } from "./menus";
@@ -127,14 +128,6 @@ const stageWonDelayMs = 900;
 /** When a lost stage's outcome has been announced, the game over screen follows. */
 const gameOverDelayMs = 1400;
 
-const sceneForPhase: Record<RunPhase, SceneName> = {
-  "stage-1": "stage-1",
-  "stage-2": "stage-2",
-  boss: "boss",
-  shop: "shop",
-  over: "game-over",
-};
-
 /** The run rules a mode starts from, before its run setup steps adjust them. */
 function baseRunRules(mode: GameMode): RunRules {
   return mode.traits.passiveRack
@@ -206,9 +199,14 @@ export function createRunController<Context>(options: {
     if (scenes.current?.id !== id) scenes.switchTo(id);
   }
 
-  function syncSceneToGame(): void {
-    // Temporary bridge until scene transitions drive GameRun progression (#37).
-    switchScene(sceneForPhase[game.phase]);
+  function followRunPosition(): void {
+    followFlow(currentMode.flow, game.positionOutcome, {
+      replace: switchScene,
+      push: (name) => scenes.pushIfNotCurrent(modeSceneId(currentMode.id, name)),
+      pop: () => {
+        void scenes.pop();
+      },
+    });
   }
 
   /**
@@ -343,7 +341,7 @@ export function createRunController<Context>(options: {
         return;
       }
       game = stockShopIfNeeded(game);
-      syncSceneToGame();
+      followRunPosition();
       resetTable();
       if (game.inStage) {
         services.audio.stageStarted(game.phase);
@@ -365,6 +363,7 @@ export function createRunController<Context>(options: {
   function endRun(): void {
     gameOverAt = null;
     playSfx("run.lost");
+    followRunPosition();
     updateHud();
     autosave();
     services.overlays.showGameOver(game.stats);
@@ -416,7 +415,7 @@ export function createRunController<Context>(options: {
     // The shop scene's own `shopStock` trait shows the stock. A new run begun in the shop
     // already in front causes no scene transition, so refresh that scene: its traits re-read
     // the run and show the new offers instead of the previous run's.
-    syncSceneToGame();
+    followRunPosition();
     refreshScene();
     const enterShop = game.phase === "shop" && fresh && !reducedMotion;
     if (enterShop) cameraView.beginShopEntrance();
@@ -512,7 +511,6 @@ export function createRunController<Context>(options: {
     replace: switchScene,
     resumeGame() {
       scenes.pop();
-      syncSceneToGame();
     },
   };
 
@@ -592,6 +590,7 @@ export function createRunController<Context>(options: {
       services.audio.start();
     },
     open() {
+      switchScene(currentMode.startScene);
       onLoadHandlers[currentMode.traits.onLoad]();
       if (restartMode) {
         window.history.replaceState(

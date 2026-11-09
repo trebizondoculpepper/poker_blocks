@@ -3,6 +3,8 @@
  * `?mode=...` selects a developer mode; `?room=...` remains a backwards-compatible alias.
  */
 import { Registry } from "./core/registry";
+import type { GameFlow } from "./game-flow";
+import type { RunPositionOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
 import { saveKey } from "./save";
 import type { Scene } from "./scenes";
@@ -142,6 +144,8 @@ export type GameMode = {
    * play straight away.
    */
   startScene: SceneName;
+  /** Outcome-keyed scene transitions; scene names are never inferred from run phases. */
+  flow: GameFlow<RunPositionOutcome, SceneName>;
   /** Other names that open this mode (old links). */
   aliases?: readonly string[];
   /** Ordered steps applied when a new game run is created; never applied on Continue. */
@@ -151,11 +155,21 @@ export type GameMode = {
 
 export const gameModeRegistry = new Registry<GameMode>("game mode");
 
+/** Shared default flow. Modes can supply a different graph without changing the runner. */
+export const standardGameFlow: GameFlow<RunPositionOutcome, SceneName> = {
+  "run.position.stage-1": { operation: "replace", scene: "stage-1" },
+  "run.position.stage-2": { operation: "replace", scene: "stage-2" },
+  "run.position.boss": { operation: "replace", scene: "boss" },
+  "run.position.shop": { operation: "replace", scene: "shop" },
+  "run.position.over": { operation: "replace", scene: "game-over" },
+};
+
 const gameModes: GameMode[] = [
   {
     id: "game",
     scenes: composeScenes("game"),
     startScene: "title",
+    flow: standardGameFlow,
     runSetup: [],
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
@@ -170,6 +184,7 @@ const gameModes: GameMode[] = [
     id: "dev0",
     scenes: composeScenes("dev0"),
     startScene: "title",
+    flow: standardGameFlow,
     aliases: ["dev"],
     runSetup: [{ step: "materialDeck" }],
     traits: {
@@ -184,6 +199,7 @@ const gameModes: GameMode[] = [
     id: "dev1",
     scenes: composeScenes("dev1"),
     startScene: "stage-1",
+    flow: standardGameFlow,
     runSetup: [{ step: "sandbox" }, { step: "materialDeck" }, { step: "materialSample" }],
     traits: {
       onLoad: "newRun",
@@ -197,6 +213,7 @@ const gameModes: GameMode[] = [
     id: "dev2",
     scenes: composeScenes("dev2"),
     startScene: "stage-1",
+    flow: standardGameFlow,
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck" },
@@ -215,6 +232,7 @@ const gameModes: GameMode[] = [
     id: "dev3",
     scenes: composeScenes("dev3"),
     startScene: "shop",
+    flow: standardGameFlow,
     runSetup: [{ step: "shopPreview", coins: 5 }],
     traits: {
       onLoad: "resume",
@@ -234,6 +252,7 @@ const gameModes: GameMode[] = [
       { scenes: playScenes, traits: { devManualBlockDestroyer: { cause: "manual" } } },
     ]),
     startScene: "stage-1",
+    flow: standardGameFlow,
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck" },

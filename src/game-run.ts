@@ -29,6 +29,8 @@ import type { ShopOffer } from "./shop-stock";
 
 /** Where a run is: one of a round's three stages, the shop, or finished after a loss. */
 export type RunPhase = StageKind | "shop" | "over";
+/** A position outcome describes the run without naming any scene. */
+export type RunPositionOutcome = `run.position.${RunPhase}`;
 
 /** What a future save/Continue flow needs to restore a run. */
 export type RunSnapshot = {
@@ -148,6 +150,10 @@ export class GameRun {
 
   get phase(): RunPhase {
     return this.currentPhase;
+  }
+
+  get positionOutcome(): RunPositionOutcome {
+    return `run.position.${this.currentPhase}`;
   }
 
   get shopAfterStage(): StageKind | null {
