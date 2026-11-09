@@ -29,6 +29,8 @@ Design decisions belong to the user. An agent never settles an open question by 
 
 ## Labels
 
+Every open ticket that isn't claimed has exactly one readiness label: `status:ready`, `status:needs-design`, `status:blocked` or `status:parked`. Update it when that changes, for example moving a blocked ticket to `status:ready` when its dependency merges. A claimed ticket drops `status:ready` and takes `agent:<name>`.
+
 | Label                                 | Meaning                                                                       |
 | ------------------------------------- | ----------------------------------------------------------------------------- |
 | `agent:<name>`                        | The agent currently working on the issue. Remove it when the issue is closed. |
