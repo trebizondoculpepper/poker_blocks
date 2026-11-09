@@ -8,7 +8,7 @@ import { dealerRegistry, roundOutcome } from "./dealer";
 import { presentationOrder, type ScoredLine } from "./scoring";
 import { magnitudeSfxFor } from "./score-presentation";
 
-import { GameSession, type Phase } from "./game-session";
+import { GameSession, type Phase, type SessionSnapshot } from "./game-session";
 import {
   demoSessionConfig,
   sandboxSessionConfig,
@@ -44,6 +44,7 @@ import {
   fieldPlacementActive,
   overlaysForPhase,
   roomFor,
+  type RunTransformer,
   roomRegistry,
   roomLink,
   roomSceneId,
@@ -314,15 +315,22 @@ let thisRoom = roomFor(roomParams.get("room"));
 let roomTraits = thisRoom.traits;
 let restartRoom = wantsRestart(thisRoom, roomParams);
 /** The room's session rules: endless sandboxes, and the passive rack's capacity. */
-function sessionConfigFor(traits: typeof roomTraits): SessionConfig {
+function sessionConfigFor(
+  traits: typeof roomTraits,
+  transformers: readonly RunTransformer[],
+): SessionConfig {
+  let config = demoSessionConfig;
+  for (const transformer of transformers) {
+    if (transformer.type === "sandbox") config = sandboxSessionConfig(config);
+  }
   return {
-    ...(traits.sandbox ? sandboxSessionConfig(demoSessionConfig) : demoSessionConfig),
+    ...config,
     ...(traits.passiveRack ? { rackCapacity: traits.passiveRack.capacity } : {}),
   };
 }
-let sessionConfig = sessionConfigFor(roomTraits);
+let sessionConfig = sessionConfigFor(roomTraits, thisRoom.runConfig.transformers);
 const devSeedKey = "poker-blocks.dev-material-seed";
-let runSaveKey = roomTraits.save.key;
+let runSaveKey = thisRoom.runConfig.saveKey;
 const passiveRackView = createPassiveRack(host, {
   capacity: roomTraits.passiveRack?.capacity,
   onPickUp: (block, event) => pickUpPassive(block, event),
@@ -357,9 +365,14 @@ function devSeed(fresh = false): number {
 }
 /** A deck for a run in this room: plain, or with materials (fresh, or kept by seed). */
 function roomDeck(newGame: boolean): readonly CardBlock[] {
-  const materials = roomTraits.materialDeck;
-  if (!materials) return standardDeck;
-  return makeDevDeck(materials.reshuffle === "each-run" ? newMaterialSeed() : devSeed(newGame));
+  let deck = standardDeck;
+  for (const transformer of thisRoom.runConfig.transformers) {
+    if (transformer.type === "materialDeck")
+      deck = makeDevDeck(
+        transformer.reshuffle === "each-run" ? newMaterialSeed() : devSeed(newGame),
+      );
+  }
+  return deck;
 }
 let cards: readonly CardBlock[] = roomDeck(false);
 type TraitContext = {
@@ -1021,8 +1034,8 @@ let roomMusic = roomMusicBehaviours.ordinary;
 function enterRoom(room: Room, createDeck = true): void {
   thisRoom = room;
   roomTraits = room.traits;
-  sessionConfig = sessionConfigFor(roomTraits);
-  runSaveKey = roomTraits.save.key;
+  sessionConfig = sessionConfigFor(roomTraits, room.runConfig.transformers);
+  runSaveKey = room.runConfig.saveKey;
   if (createDeck) cards = roomDeck(false);
   passiveRackView.setCapacity(roomTraits.passiveRack?.capacity ?? 0);
   passiveRackView.element.hidden = !roomTraits.passiveRack;
@@ -1519,26 +1532,35 @@ function autosave(): void {
 function newSession(): GameSession {
   cards = roomDeck(true);
   const session = new GameSession(dealerRegistry, sessionConfig, cards);
-  if (roomTraits.shopPreview) {
-    const snapshot = session.snapshot();
-    return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
-      ...snapshot,
-      phase: "shop",
-      state: shopPreviewState(
-        snapshot.state,
-        roomTraits.shopPreview.coins,
-        Math.random,
-        roomTraits.shop,
-      ),
-    });
+  let snapshot = session.snapshot();
+  for (const transformer of thisRoom.runConfig.transformers) {
+    snapshot = applyRunTransformer(transformer, snapshot);
   }
-  if (!roomTraits.materialSample) return session;
-  const { state } = session;
-  const sample = sampleMaterials(state.deck);
-  return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
-    ...session.snapshot(),
-    state: { ...state, field: sample.field, deck: sample.deck },
-  });
+  return snapshot === session.snapshot()
+    ? session
+    : GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, snapshot);
+}
+
+/** Apply the post-deal part of one ordered run transformer. */
+function applyRunTransformer(
+  transformer: RunTransformer,
+  snapshot: SessionSnapshot,
+): SessionSnapshot {
+  switch (transformer.type) {
+    case "sandbox":
+    case "materialDeck":
+      return snapshot;
+    case "shopPreview":
+      return {
+        ...snapshot,
+        phase: "shop",
+        state: shopPreviewState(snapshot.state, transformer.coins, Math.random, roomTraits.shop),
+      };
+    case "materialSample": {
+      const sample = sampleMaterials(snapshot.state.deck);
+      return { ...snapshot, state: { ...snapshot.state, field: sample.field, deck: sample.deck } };
+    }
+  }
 }
 
 /** The shop trait supplies stock when entering, including saves from before offers existed. */

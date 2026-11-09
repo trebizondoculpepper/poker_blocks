@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
 import { devRooms, fieldPlacementActive, overlaysForPhase, roomFor, roomSceneId } from "./rooms";
-import { saveKey } from "./save";
 import { createRoomMusicBehaviours } from "./room-music";
 
 describe("rooms composed from traits", () => {
@@ -27,15 +26,22 @@ describe("rooms composed from traits", () => {
 
   it("keeps each room's behaviour in its traits", () => {
     expect(roomFor(null).traits).toEqual({
-      save: { key: saveKey },
       stage: { fieldPlacement: {}, overlays: { round: {}, deck: {} } },
       passiveRack: { capacity: 5 },
       shop: { passiveOffers: 2, cardOffers: 3, overlays: { coins: {}, shopExit: {} } },
     });
+    expect(roomFor(null).runConfig).toEqual({ saveKey: "poker-blocks.run", transformers: [] });
     expect(roomFor("dev2").traits.passiveRack).toEqual({ capacity: 5, startWith: 2 });
-    expect(roomFor("dev1").traits.materialSample).toEqual({});
-    expect(roomFor("dev0").traits.sandbox).toBeUndefined();
-    expect(roomFor("dev3").traits.shopPreview).toEqual({ coins: 5 });
+    expect(roomFor("dev1").runConfig.transformers).toEqual([
+      { type: "sandbox" },
+      { type: "materialDeck", reshuffle: "each-run" },
+      { type: "materialSample" },
+    ]);
+    expect(roomFor("dev0").runConfig.transformers).not.toContainEqual({ type: "sandbox" });
+    expect(roomFor("dev3").runConfig.transformers).toContainEqual({
+      type: "shopPreview",
+      coins: 5,
+    });
     expect(roomFor("dev3").traits.shop).toEqual({
       passiveOffers: 2,
       cardOffers: 3,

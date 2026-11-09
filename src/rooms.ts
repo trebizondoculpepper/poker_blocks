@@ -81,21 +81,10 @@ export const defaultShop: ShopTrait = {
 };
 
 export type RoomTraits = {
-  /** Where the room keeps its saved run. */
-  save: { key: string };
   /** The stage scene's interactions. The shop scene does not compose these. */
   stage: { fieldPlacement: Record<string, never>; overlays: SceneOverlays };
   passiveRack?: PassiveRackTrait;
   shop?: ShopTrait;
-  /** Endless play: unlimited plays and discards, a stage cannot be won or lost by itself. */
-  sandbox?: Record<string, never>;
-  /**
-   * Every card gets a random material. `reshuffle: "each-run"` deals a new mix whenever a run
-   * starts; "new-game" keeps the mix (and its seed) until a new game, so Continue matches.
-   */
-  materialDeck?: { reshuffle: "each-run" | "new-game" };
-  /** A run starts on a structure holding one block of every material. */
-  materialSample?: Record<string, never>;
   /** Skip the title screen and go straight into play; `resume` continues the saved run. */
   skipTitle?: { resume: boolean };
   /**
@@ -105,9 +94,16 @@ export type RoomTraits = {
   console?: { name: string };
   /** A fresh run is started on load when this URL parameter is "true"; it is then removed. */
   restartable?: { param: string };
-  /** Start a fresh run in the shop with this many coins, for shop development. */
-  shopPreview?: { coins: number };
 };
+
+export type RunTransformer =
+  | { type: "sandbox" }
+  | { type: "materialDeck"; reshuffle: "each-run" | "new-game" }
+  | { type: "materialSample" }
+  | { type: "shopPreview"; coins: number };
+
+/** Run setup is ordered data. Scene traits stay on `Room.traits`. */
+export type RunConfig = { saveKey: string; transformers: readonly RunTransformer[] };
 
 export type Room = {
   id: string;
@@ -119,6 +115,7 @@ export type Room = {
   startScene: RoomSceneName;
   /** Other names that open this room (old links). */
   aliases?: readonly string[];
+  runConfig: RunConfig;
   traits: RoomTraits;
 };
 
@@ -140,9 +137,9 @@ const rooms: Room[] = [
     musicMode: "ordinary",
     scenes: scenesForRoom("game"),
     startScene: "title",
+    runConfig: { saveKey: saveKey, transformers: [] },
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
-      save: { key: saveKey },
       stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
@@ -154,12 +151,14 @@ const rooms: Room[] = [
     scenes: scenesForRoom("dev0"),
     startScene: "title",
     aliases: ["dev"],
+    runConfig: {
+      saveKey: "poker-blocks.dev-run",
+      transformers: [{ type: "materialDeck", reshuffle: "new-game" }],
+    },
     traits: {
-      save: { key: "poker-blocks.dev-run" },
       console: { name: "dev0" },
       restartable: { param: "restart" },
       stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
-      materialDeck: { reshuffle: "new-game" },
     },
   },
   {
@@ -167,14 +166,18 @@ const rooms: Room[] = [
     musicMode: "quiet",
     scenes: scenesForRoom("dev1"),
     startScene: "stage-1",
+    runConfig: {
+      saveKey: "poker-blocks.dev1-run",
+      transformers: [
+        { type: "sandbox" },
+        { type: "materialDeck", reshuffle: "each-run" },
+        { type: "materialSample" },
+      ],
+    },
     traits: {
-      save: { key: "poker-blocks.dev1-run" },
       console: { name: "dev1" },
       restartable: { param: "restart" },
       stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
-      sandbox: {},
-      materialDeck: { reshuffle: "each-run" },
-      materialSample: {},
       skipTitle: { resume: false },
     },
   },
@@ -183,13 +186,14 @@ const rooms: Room[] = [
     musicMode: "quiet",
     scenes: scenesForRoom("dev2"),
     startScene: "stage-1",
+    runConfig: {
+      saveKey: "poker-blocks.dev2-run",
+      transformers: [{ type: "sandbox" }, { type: "materialDeck", reshuffle: "new-game" }],
+    },
     traits: {
-      save: { key: "poker-blocks.dev2-run" },
       console: { name: "dev2" },
       restartable: { param: "restart" },
       stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
-      sandbox: {},
-      materialDeck: { reshuffle: "new-game" },
       passiveRack: { ...defaultPassiveRack, startWith: 2 },
       skipTitle: { resume: true },
     },
@@ -199,14 +203,16 @@ const rooms: Room[] = [
     musicMode: "quiet",
     scenes: scenesForRoom("dev3"),
     startScene: "shop",
+    runConfig: {
+      saveKey: "poker-blocks.dev3-run",
+      transformers: [{ type: "shopPreview", coins: 5 }],
+    },
     traits: {
-      save: { key: "poker-blocks.dev3-run" },
       console: { name: "dev3" },
       restartable: { param: "restart" },
       stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
-      shopPreview: { coins: 5 },
       skipTitle: { resume: true },
     },
   },
