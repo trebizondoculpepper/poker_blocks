@@ -61,6 +61,17 @@ type RackDragTarget = {
 };
 
 export type TableInput = {
+  /**
+   * A scene composing `handView` came to the front, or left (#183). The hand can be hovered,
+   * selected and dragged only while any such scene is on the stack; drawing it is the
+   * renderer's half of the same trait.
+   */
+  handEntered(entered: boolean): void;
+  /**
+   * A scene composing `discardBin` came to the front, or left (#183). The bin, which is also
+   * the passives' sell target, is shown while any such scene is on the stack.
+   */
+  discardBinEntered(entered: boolean): void;
   /** The selected block ids (hand and field). */
   readonly selection: Selection;
   /** Forget these blocks from the selection (they were played or discarded). */
@@ -143,6 +154,8 @@ export function createDiscardTarget(host: HTMLElement): HTMLElement {
   <b class="discard-count" hidden></b>
   <i class="refused-mark" aria-hidden="true"></i>
 `;
+  // Hidden until a scene composing `discardBin` comes to the front (#183).
+  discardArea.hidden = true;
   host.append(discardArea);
   return discardArea;
 }
@@ -225,8 +238,13 @@ export function createTableInput(options: {
     return candidates.find(({ cube }) => cube === hit?.object);
   }
 
+  /** How many scenes in front compose `handView`; the hand takes input only while any does. */
+  let handScenes = 0;
+  /** The hand's blocks the pointer can reach: none while no scene in front shows the hand. */
+  const reachableHand = () => (handScenes > 0 ? hand.blocks : []);
+
   const pickAny = (clientX: number, clientY: number) =>
-    pickBlock(clientX, clientY, hand.blocks) ?? pickBlock(clientX, clientY, field.blocks());
+    pickBlock(clientX, clientY, reachableHand()) ?? pickBlock(clientX, clientY, field.blocks());
 
   function overDiscardArea(clientX: number, clientY: number): boolean {
     const bounds = discardArea.getBoundingClientRect();
@@ -400,7 +418,7 @@ export function createTableInput(options: {
       startHold(event);
     }
     options.overlays().hideTooltip();
-    const source = pickBlock(event.clientX, event.clientY, hand.blocks);
+    const source = pickBlock(event.clientX, event.clientY, reachableHand());
     if (fieldActive && source && blockCanDrag(source.block)) {
       pointRay(event.clientX, event.clientY, cameraView.handCamera);
       const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
@@ -760,7 +778,17 @@ export function createTableInput(options: {
   window.addEventListener("blur", onBlur);
   document.addEventListener("visibilitychange", onVisibilityChange);
 
+  /** How many scenes in front compose `discardBin`; the bin is shown while any does. */
+  let discardBinScenes = 0;
+
   return {
+    handEntered(entered) {
+      handScenes = Math.max(0, handScenes + (entered ? 1 : -1));
+    },
+    discardBinEntered(entered) {
+      discardBinScenes = Math.max(0, discardBinScenes + (entered ? 1 : -1));
+      discardArea.hidden = discardBinScenes === 0;
+    },
     fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
     get selection() {
       return selected;

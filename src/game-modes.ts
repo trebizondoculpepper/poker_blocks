@@ -29,6 +29,10 @@ export type SceneTraits = {
   deckPanel: Record<never, never>;
   coinsPanel: Record<never, never>;
   shopExit: ShopExitConfig;
+  /** The hand is laid out and drawn while this scene is on the stack (#183). */
+  handView: Record<never, never>;
+  /** The discard bin (also the passives' sell target) is shown while this scene is on the stack. */
+  discardBin: Record<never, never>;
   /** Blocks may be played onto the field while this scene is in front. */
   fieldPlacement: Record<never, never>;
   /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
@@ -137,6 +141,8 @@ const escapeOpensPause: Partial<SceneTraits> = {
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
 const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
+  handView: {},
+  discardBin: {},
   deckPanel: {},
   fieldPlacement: {},
   runInPlay: {},
@@ -245,6 +251,9 @@ export const sceneDefinitions = [
     name: "shop",
     traits: {
       tableBackground: {},
+      // Bought cards drop into the hand, and passives are sold on the bin.
+      handView: {},
+      discardBin: {},
       coinsPanel: {},
       shopExit: { label: "Continue / Skip shop" },
       shopStock: {},

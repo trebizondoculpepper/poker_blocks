@@ -230,6 +230,7 @@ body,
   text-align: center;
 }
 
+.discard-area[hidden],
 .discard-count[hidden] {
   display: none;
 }

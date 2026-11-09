@@ -12,7 +12,10 @@ function recordingHost() {
   const host: SceneHost = {
     host: { dataset: {} } as HTMLElement,
     services: {
-      renderer: { tableEntered: (entered) => void calls.push(`table:${entered}`) },
+      renderer: {
+        tableEntered: (entered) => void calls.push(`table:${entered}`),
+        handEntered: (entered) => void calls.push(`hand:${entered}`),
+      },
       attract: {
         start: () => void calls.push("attract:start"),
         stop: () => void calls.push("attract:stop"),
@@ -33,6 +36,8 @@ function recordingHost() {
       input: {
         setFieldActive: (active) => calls.push(`fieldActive:${active}`),
         cancelGestures: () => void calls.push("gestures:cancel"),
+        discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
+        handEntered: (entered) => void calls.push(`handInput:${entered}`),
       },
       shop: {
         render: (offers: readonly ShopOffer[], visible: boolean) =>
@@ -96,6 +101,27 @@ function recordingHost() {
 const scene = (id: string, traits: Partial<SceneTraits>) => ({ id, traits });
 
 describe("scene traits own their behaviour", () => {
+  it("keeps the hand and the discard bin while a menu is pushed over their scene (#183)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("stage", { handView: {}, discardBin: {} }));
+    scenes.register(scene("menu", { pausesBelow: { input: true, update: true } }));
+    scenes.register(scene("title", {}));
+
+    scenes.switchTo("stage");
+    expect(calls).toEqual(["hand:true", "handInput:true", "bin:true"]);
+    calls.length = 0;
+    scenes.push("menu");
+    scenes.pop();
+    expect(calls.filter((call) => /^(hand|handInput|bin):/.test(call))).toEqual([]);
+    scenes.switchTo("title");
+    expect(calls.filter((call) => /^(hand|handInput|bin):/.test(call)).sort()).toEqual([
+      "bin:false",
+      "hand:false",
+      "handInput:false",
+    ]);
+  });
+
   it("shows the won stage's paid rewards with its next action, and closes on exit (#91)", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);

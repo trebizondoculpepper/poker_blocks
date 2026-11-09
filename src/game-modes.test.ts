@@ -111,6 +111,8 @@ describe("game modes composed from traits", () => {
     expect(traitsOf("game", "shop")).toEqual({
       screen: { kind: "shop" },
       tableBackground: {},
+      handView: {},
+      discardBin: {},
       coinsPanel: {},
       shopExit: { label: "Continue / Skip shop" },
       shopStock: {},
@@ -165,12 +167,25 @@ describe("game modes composed from traits", () => {
     });
   });
 
+  it("gives the hand and the discard bin to the play scenes and the shop, never the title (#183)", () => {
+    for (const mode of gameModeRegistry.names()) {
+      const traitsOf = (scene: SceneName) =>
+        gameModeFor(mode).scenes.find(({ id }) => id === modeSceneId(mode, scene))!.traits;
+      expect(traitsOf("title"), mode).not.toHaveProperty("handView");
+      expect(traitsOf("title"), mode).not.toHaveProperty("discardBin");
+      for (const scene of ["stage-1", "stage-2", "boss", "shop"] as const)
+        expect(traitsOf(scene), `${mode} ${scene}`).toMatchObject({ handView: {}, discardBin: {} });
+    }
+  });
+
   it("lets a mode add a play-scene trait without disturbing the rest", () => {
     const boss = gameModeFor("dev4").scenes.find(({ id }) => id === "dev4/stage-1")!;
     expect(boss.traits).toEqual({
       screen: { kind: "stage-1" },
       roundPanel: { stage: "STAGE 1", actions: { lost: "End game" } },
       tableBackground: {},
+      handView: {},
+      discardBin: {},
       deckPanel: {},
       fieldPlacement: {},
       runInPlay: {},
