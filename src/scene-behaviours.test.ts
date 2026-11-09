@@ -37,6 +37,13 @@ function recordingHost() {
       run: {
         shopStock: () => [{ kind: "card", block: {} as never }],
         dispatch: (action) => void calls.push(`action:${action}`),
+        runStats: () => ({
+          roundsCompleted: 2,
+          totalScore: 900,
+          bestRoundScore: 500,
+          roundScore: 0,
+          blocksPlayed: 40,
+        }),
       },
       overlays: {
         showMenu: (label, choices) =>
@@ -44,8 +51,14 @@ function recordingHost() {
         hideMenu: () => void calls.push("menu:hide"),
         showSettings: () => void calls.push("settings:show"),
         hideSettings: () => void calls.push("settings:hide"),
+        showGameOver: (stats, choices) =>
+          void calls.push(`gameOver:${stats.totalScore}:${choices.map(({ id }) => id).join(",")}`),
+        hideGameOver: () => void calls.push("gameOver:hide"),
       },
-      audio: { setMusicFilter: (kind) => void calls.push(`filter:${kind}`) },
+      audio: {
+        setMusicFilter: (kind) => void calls.push(`filter:${kind}`),
+        playCue: (cue) => void calls.push(`cue:${cue}`),
+      },
       sound: (id) => void calls.push(`sound:${id}`),
     },
   };
@@ -55,6 +68,23 @@ function recordingHost() {
 const scene = (id: string, traits: Partial<SceneTraits>) => ({ id, traits });
 
 describe("scene traits own their behaviour", () => {
+  it("shows the game over screen with the run's totals and its items, and hides it on exit (#90)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    const items = [
+      { id: "again", label: "Again" },
+      { id: "leave", label: "Leave" },
+    ];
+    scenes.register(scene("lost", { gameOverScreen: { items }, musicCue: { cue: "windDown" } }));
+    scenes.register(scene("next", {}));
+
+    scenes.switchTo("lost");
+    expect(calls).toEqual(["gameOver:900:again,leave", "cue:windDown"]);
+    calls.length = 0;
+    scenes.switchTo("next");
+    expect(calls).toEqual(["gameOver:hide"]);
+  });
+
   it("marks the host with the scene in front again after a pushed scene pops (#35)", () => {
     const { host } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);

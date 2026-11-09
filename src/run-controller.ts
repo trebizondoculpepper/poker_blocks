@@ -52,6 +52,7 @@ import { shopPreviewState, type ShopOffer } from "./shop-stock";
 import type { createShopView } from "./shop-view";
 import type { TableInput, TableRules } from "./table-input";
 import type { TableRenderer } from "./table-renderer";
+import type { RunStats } from "./run-stats";
 
 type PassiveRackView = ReturnType<typeof createPassiveRack>;
 type ShopView = ReturnType<typeof createShopView>;
@@ -116,6 +117,8 @@ export type RunController = {
   offerPrice(offer: ShopOffer): number;
   /** What the shop is showing while its scene is in front. */
   shopStock(): readonly ShopOffer[];
+  /** The run's totals so far, which the game over screen shows. */
+  runStats(): RunStats;
   /**
    * Carry out a named action from a menu item or key (#87): a navigation action follows the
    * mode's navigation data; a game action (such as `quitToTitle`) runs its handler.
@@ -316,7 +319,6 @@ export function createRunController<Context>(options: {
     playSfx("ui.click");
     if (game.phase === "over") {
       followRunPosition();
-      services.overlays.showGameOver(game.stats);
       return;
     }
     // A won stage moves on through its pop-up, which shows what it paid.
@@ -374,7 +376,6 @@ export function createRunController<Context>(options: {
     followRunPosition();
     updateHud();
     autosave();
-    services.overlays.showGameOver(game.stats);
   }
 
   /**
@@ -502,6 +503,11 @@ export function createRunController<Context>(options: {
 
   /** The game actions a menu can dispatch; navigation is the mode's data, not code. */
   const gameActions: Record<string, () => void> = {
+    // From the game over screen: leave it and begin a fresh run.
+    newRun() {
+      services.overlays.closeAll();
+      startRun(newRun(), true);
+    },
     // The run is already saved at its last safe point; saving here could record a play
     // whose animation (and hand refill) hasn't finished, so just show the title.
     // Pending outcomes and an animating play are dropped with the run's display, so nothing
@@ -654,6 +660,7 @@ export function createRunController<Context>(options: {
     offerPrice: (offer) =>
       offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),
     shopStock: () => game.state.shopStock ?? [],
+    runStats: () => game.stats,
     dispatch,
     buy(id, destination) {
       const bought = game.buyShopOffer(id, destination);
