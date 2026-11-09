@@ -190,7 +190,11 @@ The rack is separate from the hand and field. Passives are not discardable. **Bu
 
 ### Dev2 passive sandbox
 
-**Game modes** (`GameMode`, in `src/game-modes.ts`) describe available scenes, the initial scene, and mode-wide configuration. Use `?mode=dev0` through `?mode=dev4` for the developer modes; old `?room=` links are still accepted as aliases. Mode traits configure run setup and features, while scene traits are attached to individual presentation contexts. The passive rack is enabled in the normal game (five slots, starting empty) and in dev2 (five slots, two passives dealt). `GameRun` enforces the rack capacity.
+**Game modes** (`GameMode`, in `src/game-modes.ts`) describe available scenes, the initial scene, mode-wide configuration, and **run setup**. Use `?mode=dev0` through `?mode=dev4` for the developer modes; old `?room=` links are still accepted as aliases.
+
+A mode's **run setup** is the ordered list of steps it applies when a _new_ game run is created: choosing the deck (a material mix and its seed), adjusting the run rules (a sandbox), or preparing the start (a sample structure, a filled rack, a stocked shop). Steps compose in declared order, and each step's meaning lives in one registry rather than in the run controller. Run setup never applies to Continue: a saved run is restored exactly as saved, and a deck kept until a new game is rebuilt from the seed stored in that run.
+
+Which HUD panels appear, and where blocks may be played, belongs to the **scene** in front rather than to the mode: the stage scenes show the round and deck panels and allow placement, and the shop scene shows the coin panel and its exit and owns its stock. Mode traits keep only mode-wide configuration: the save key, the console and restartable traits, the rack and shop configuration, and the music. The passive rack is enabled in the normal game (five slots, starting empty) and in dev2 (five slots, two passives dealt). `GameRun` enforces the rack capacity.
 
 The separate `?mode=dev2` sandbox uses the endless-play `RunRules` as dev1. It deals two distinct passives from the roster below and gives standard cards a mix of gameplay materials. The rack and current run survive a reload. Each passive has configured rule, appearance, rack-residency, and inspection traits. Shop acquisition and one-use passives remain future work. `dev0` and `dev1` keep their existing purposes.
 

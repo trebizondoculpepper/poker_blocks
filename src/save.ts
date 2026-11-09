@@ -43,6 +43,11 @@ export type SaveRecord = {
   stats?: RunStats;
   /** The last stage paid out and its ledger, so a reload never pays it twice. */
   rewarded?: RunSnapshot["rewarded"];
+  /**
+   * The seed a run setup step dealt this run's deck from. Absent in saves written before run
+   * setup existed, and in runs whose deck does not depend on one.
+   */
+  seed?: number;
 };
 
 const phases: readonly RunPhase[] = ["stage-1", "stage-2", "boss", "shop", "over"];
@@ -80,6 +85,7 @@ export function toSaveRecord(snapshot: RunSnapshot): SaveRecord {
     },
     ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
     ...(snapshot.rewarded ? { rewarded: snapshot.rewarded } : {}),
+    ...(snapshot.seed === undefined ? {} : { seed: snapshot.seed }),
   };
 }
 
@@ -155,10 +161,18 @@ export function fromSaveRecord(
       state: restored,
       stats: parseRunStats(record.stats),
       ...parseRewarded(record.rewarded),
+      ...parseSeed(record.seed),
     };
   } catch {
     return null;
   }
+}
+
+/** A saved deck seed; nothing when absent, so older saves without one still load. */
+function parseSeed(value: unknown): { seed: number } | Record<string, never> {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 4294967296
+    ? { seed: value }
+    : {};
 }
 
 /** A saved "already paid" marker, or nothing if it is missing or malformed. */
@@ -221,17 +235,29 @@ export function saveRun(
 
 export function loadRun(
   storage: SaveStorage | null,
-  cards: readonly CardBlock[],
+  /**
+   * The deck to resolve a saved run's cards against. A function when the deck depends on the
+   * run (a material mix rebuilt from its own seed); `fromSaveRecord` parses that seed first.
+   */
+  cards: readonly CardBlock[] | ((seed: number | undefined) => readonly CardBlock[]),
   dealers: Registry<Dealer>,
   key = saveKey,
 ): RunSnapshot | null {
   if (!storage) return null;
   try {
     const raw = storage.getItem(key);
-    return raw ? fromSaveRecord(JSON.parse(raw), cards, dealers) : null;
+    if (!raw) return null;
+    const record = JSON.parse(raw) as SaveRecord;
+    const selected = typeof cards === "function" ? cards(seedOf(record)) : cards;
+    return fromSaveRecord(record, selected, dealers);
   } catch {
     return null;
   }
+}
+
+/** A record's saved deck seed, read before its card ids are resolved. */
+function seedOf(record: SaveRecord): number | undefined {
+  return typeof record?.seed === "number" ? record.seed : undefined;
 }
 
 export function clearRun(storage: SaveStorage | null): void {

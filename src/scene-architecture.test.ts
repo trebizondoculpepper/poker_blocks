@@ -129,4 +129,44 @@ describe("scene architecture guardrails", () => {
     expect(main).not.toMatch(/\bGameRun\b|\bgame\.(state|phase|play|advance)\b/);
     expect(main.match(/\bif \(/g) ?? []).toHaveLength(2);
   });
+
+  it("keeps mode-level panel and placement flags from returning (#53)", () => {
+    const modes = readFileSync(new URL("./game-modes.ts", import.meta.url), "utf8");
+    const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
+
+    // Which panels show, and where blocks may be played, is the scene's business now: a scene
+    // composes `roundPanel`, `deckPanel`, `coinsPanel`, `shopExit`, `fieldPlacement` or
+    // `shopStock`. Nothing may ask a mode for an overlay set or a placement flag again.
+    expect(modes).not.toMatch(/\bSceneOverlays\b|\boverlaysForPhase\b|\bfieldPlacementActive\b/);
+    expect(modes).not.toMatch(/traits\.\w*overlays|overlays\s*:/);
+    expect(run).not.toMatch(/overlaysForPhase|fieldPlacementActive|\bfieldActive\b/);
+    // The HUD is shown and hidden by traits, not by handing it a set of overlays to render.
+    expect(run).not.toMatch(/hud\.render\(\{[^}]*overlays/);
+  });
+
+  it("keeps run setup off the mode traits, and out of the Continue path (#34)", () => {
+    const modes = readFileSync(new URL("./game-modes.ts", import.meta.url), "utf8");
+    const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
+
+    // Run setup is ordered data on the mode: steps, not flags a controller branches on.
+    expect(modes).toContain("runSetup:");
+    // Each mode's `traits` block holds configuration only; the setup words appear in `runSetup`.
+    for (const [, block] of modes.matchAll(/traits:\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g)) {
+      for (const flag of [
+        "sandbox",
+        "materialDeck",
+        "materialSample",
+        "shopPreview",
+        "skipTitle",
+      ]) {
+        expect(block).not.toMatch(new RegExp(`\\b${flag}\\b`));
+      }
+    }
+    // Continue restores the saved run; only a new run goes through the setup registry.
+    expect(run).toContain("runSetup.prepare(");
+    expect(run).toContain("runSetup.start(");
+    // The controller names no setup step of its own; it asks the registry.
+    expect(run).not.toMatch(/\bskipTitle\b|\bmaterialSample\b|\bmaterialDeck\b/);
+    expect(run.match(/\bshopPreview\b/g) ?? []).toEqual([]);
+  });
 });

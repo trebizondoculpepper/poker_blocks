@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   developerModes,
-  fieldPlacementActive,
-  overlaysForPhase,
   gameModeFor,
   gameModeFromParams,
   modeSceneId,
+  sceneNames,
+  type SceneName,
 } from "./game-modes";
 import { saveKey } from "./save";
 import { createModeMusicBehaviours } from "./mode-music";
@@ -41,32 +41,24 @@ describe("game modes composed from traits", () => {
     expect(modeLink(gameModeFor(null), base).search).toBe("?restart=true&debug=1");
   });
 
-  it("keeps each mode's behaviour in its traits", () => {
+  it("keeps mode-wide configuration in traits and run setup out of them", () => {
     expect(gameModeFor(null).traits).toEqual({
       save: { key: saveKey },
-      stage: { fieldPlacement: {}, overlays: { round: {}, deck: {} } },
       passiveRack: { capacity: 5 },
-      shop: { passiveOffers: 2, cardOffers: 3, overlays: { coins: {}, shopExit: {} } },
+      shop: { passiveOffers: 2, cardOffers: 3 },
+      music: { style: "ordinary" },
     });
-    expect(gameModeFor("dev2").traits.passiveRack).toEqual({ capacity: 5, startWith: 2 });
-    expect(gameModeFor("dev1").traits.materialSample).toEqual({});
-    expect(gameModeFor("dev0").traits.sandbox).toBeUndefined();
-    expect(gameModeFor("dev3").traits.shopPreview).toEqual({ coins: 5 });
-    expect(gameModeFor("dev3").traits.shop).toEqual({
-      passiveOffers: 2,
-      cardOffers: 3,
-      overlays: { coins: {}, shopExit: {} },
-    });
-    expect(gameModeFor("dev3").traits.skipTitle).toEqual({ resume: true });
-    expect(gameModeFor("dev1").musicStyle).toBe("quiet");
-    expect(gameModeFor(null).musicStyle).toBe("ordinary");
-    expect(fieldPlacementActive(gameModeFor("dev3").traits, "stage")).toBe(true);
-    expect(fieldPlacementActive(gameModeFor("dev3").traits, "shop")).toBe(false);
-    expect(overlaysForPhase(gameModeFor(null).traits, "stage-1")).toEqual({ round: {}, deck: {} });
-    expect(overlaysForPhase(gameModeFor(null).traits, "shop")).toEqual({
-      coins: {},
-      shopExit: {},
-    });
+    expect(gameModeFor(null).runSetup).toEqual([]);
+    expect(gameModeFor("dev1").runSetup).toEqual([
+      { step: "sandbox" },
+      { step: "materialDeck", reshuffle: "each-run" },
+      { step: "materialSample" },
+    ]);
+    expect(gameModeFor("dev0").runSetup).not.toContainEqual({ step: "sandbox" });
+    expect(gameModeFor("dev2").runSetup).toContainEqual({ step: "passiveRack", startWith: 2 });
+    expect(gameModeFor("dev3").runSetup).toEqual([{ step: "shopPreview", coins: 5 }]);
+    expect(gameModeFor("dev1").traits.music.style).toBe("quiet");
+    expect(gameModeFor(null).traits.music.style).toBe("ordinary");
   });
 
   it("gives every mode a registered scene set and an explicit start scene", () => {
@@ -79,27 +71,65 @@ describe("game modes composed from traits", () => {
     }
     expect(gameModeFor("dev3").startScene).toBe("shop");
     expect(gameModeFor("dev1").startScene).toBe("stage-1");
-    expect(gameModeFor("dev4").scenes.find(({ id }) => id === "dev4/stage-1")?.traits).toEqual({
+    expect(gameModeFor(null).startScene).toBe("title");
+  });
+
+  it("composes HUD panels, field placement and shop stock into the scenes that need them", () => {
+    const traitsOf = (mode: string, scene: SceneName) =>
+      gameModeFor(mode).scenes.find(({ id }) => id === modeSceneId(mode, scene))!.traits;
+    for (const stage of ["stage-1", "stage-2", "boss"] as const) {
+      expect(traitsOf("game", stage)).toMatchObject({
+        roundPanel: {},
+        deckPanel: {},
+        fieldPlacement: {},
+      });
+      expect(traitsOf("game", stage)).not.toHaveProperty("coinsPanel");
+      expect(traitsOf("game", stage)).not.toHaveProperty("shopStock");
+    }
+    expect(traitsOf("game", "shop")).toEqual({
+      screen: { kind: "shop" },
+      coinsPanel: {},
+      shopExit: {},
+      shopStock: {},
+    });
+    // The title, stage-won and game-over scenes show no panels of their own.
+    expect(traitsOf("game", "title")).toEqual({ screen: { kind: "title" } });
+    expect(traitsOf("game", "game-over")).toEqual({ screen: { kind: "game-over" } });
+  });
+
+  it("lets a mode add a play-scene trait without disturbing the rest", () => {
+    const boss = gameModeFor("dev4").scenes.find(({ id }) => id === "dev4/stage-1")!;
+    expect(boss.traits).toEqual({
       screen: { kind: "stage-1" },
+      roundPanel: {},
+      deckPanel: {},
+      fieldPlacement: {},
       devManualBlockDestroyer: { cause: "manual" },
     });
+    // Every mode lists every scene, so a mode never loses a scene it did not mention.
+    expect(gameModeFor("dev4").scenes).toHaveLength(sceneNames.length);
   });
 });
 
 describe("mode music lifecycle", () => {
-  it("keeps quiet modes wound down when their game screen resumes", () => {
+  it("keeps quiet modes wound down and gives ordinary modes a track per stage", () => {
     const calls: string[] = [];
     const behaviours = createModeMusicBehaviours({
       windDown: () => calls.push("windDown"),
       resumeStage: () => calls.push("resumeStage"),
+      playBoss: () => calls.push("boss"),
+      playRandomStage: () => calls.push("random"),
     });
 
     behaviours.quiet.settle();
     behaviours.quiet.resume();
+    behaviours.quiet.playStage("boss");
     behaviours.ordinary.settle();
     behaviours.ordinary.resume();
+    behaviours.ordinary.playStage("boss");
+    behaviours.ordinary.playStage("stage");
 
-    expect(calls).toEqual(["windDown", "windDown", "resumeStage"]);
+    expect(calls).toEqual(["windDown", "windDown", "windDown", "resumeStage", "boss", "random"]);
   });
 });
 

@@ -50,13 +50,13 @@ export type AudioService = {
 const musicVolumeShare = 0.75;
 const zoomSoundGapMs = 350;
 
-/** A boss stage gets the boss loop; every other start gets a random stage vibe. */
-const stageMusic: Record<RunPhase, (music: MusicController) => void> = {
-  "stage-1": (music) => music.switchToRandomStageTrack(),
-  "stage-2": (music) => music.switchToRandomStageTrack(),
-  boss: (music) => music.switchToBossTrack(),
-  shop: (music) => music.switchToRandomStageTrack(),
-  over: (music) => music.switchToRandomStageTrack(),
+/** Which track a run's phase asks for, as a lookup rather than a branch on the phase. */
+const stageTrack: Record<RunPhase, "boss" | "stage"> = {
+  "stage-1": "stage",
+  "stage-2": "stage",
+  boss: "boss",
+  shop: "stage",
+  over: "stage",
 };
 
 export function createAudioService(options: {
@@ -72,6 +72,8 @@ export function createAudioService(options: {
   const modeMusicBehaviours = createModeMusicBehaviours({
     windDown: () => music.windDown(),
     resumeStage: () => music.resumeStage(),
+    playBoss: () => music.switchToBossTrack(),
+    playRandomStage: () => music.switchToRandomStageTrack(),
   });
   let modeMusic: ModeMusicBehaviour = modeMusicBehaviours.ordinary;
   let lastZoomSoundAt = -Infinity;
@@ -111,7 +113,8 @@ export function createAudioService(options: {
       modeMusic = modeMusicBehaviours[style];
     },
     stageStarted(phase) {
-      stageMusic[phase](music);
+      // A run stands in the shop before any stage; the shop's music is the stage vibe.
+      modeMusic.playStage(stageTrack[phase]);
     },
     runStarted() {
       modeMusic.settle();

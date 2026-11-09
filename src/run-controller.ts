@@ -18,7 +18,6 @@ import type { FieldView } from "./field-view";
 import { GameRun, type RunPhase } from "./game-run";
 import type { HandView } from "./hand-view";
 import type { HudPanels } from "./hud-panels";
-import { sampleMaterials } from "./material-sampler";
 import { makeDevDeck } from "./materials";
 import type { MenuCallbacks } from "./menus";
 import type { Overlays, ScreenScenes } from "./overlays";
@@ -26,8 +25,6 @@ import type { createPassiveRack } from "./passive-rack";
 import type { PlayPresenter } from "./play-presenter";
 import type { BlockViews } from "./rendered-blocks";
 import {
-  fieldPlacementActive,
-  overlaysForPhase,
   gameModeFromParams,
   modeLink,
   modeSceneId,
@@ -35,11 +32,12 @@ import {
   type GameMode,
   type SceneName,
   type SceneTraits,
-  type ModeTraits,
 } from "./game-modes";
 import { loadRun, saveRun, type SaveStorage } from "./save";
 import type { SceneManager } from "./scenes";
-import { demoRunRules, sandboxRunRules, type RunRules } from "./run-rules";
+import { demoRunRules, type RunRules } from "./run-rules";
+import { createRunSetupRegistry } from "./run-setup-behaviours";
+import type { RunSetupServices, RunSetupStep } from "./run-setup";
 import {
   loadSettings,
   prefersReducedMotion,
@@ -113,6 +111,8 @@ export type RunController = {
   takeNextAction(): void;
   /** A shop offer's price. */
   offerPrice(offer: ShopOffer): number;
+  /** What the shop is showing while its scene is in front. */
+  shopStock(): readonly ShopOffer[];
   /** Buy a shop offer into the hand or the rack; false when refused. */
   buy(id: string, destination: Parameters<GameRun["buyShopOffer"]>[1]): boolean;
   /** Per frame: once an announced outcome's delay has passed, the pop-up or game over follows. */
@@ -136,16 +136,11 @@ const sceneForPhase: Record<RunPhase, SceneName> = {
   over: "game-over",
 };
 
-/** The mode's run rules: endless sandboxes, and the passive rack's capacity. */
-function runRulesFor(traits: ModeTraits): RunRules {
-  return {
-    ...(traits.sandbox ? sandboxRunRules(demoRunRules) : demoRunRules),
-    ...(traits.passiveRack ? { rackCapacity: traits.passiveRack.capacity } : {}),
-  };
-}
-
-function newMaterialSeed(): number {
-  return Math.floor(Math.random() * 4294967296);
+/** The run rules a mode starts from, before its run setup steps adjust them. */
+function baseRunRules(mode: GameMode): RunRules {
+  return mode.traits.passiveRack
+    ? { ...demoRunRules, rackCapacity: mode.traits.passiveRack.capacity }
+    : demoRunRules;
 }
 
 export function createRunController<Context>(options: {
@@ -165,9 +160,9 @@ export function createRunController<Context>(options: {
   let currentMode = gameModeFromParams(options.params);
   let modeTraits = currentMode.traits;
   const restartMode = wantsRestart(currentMode, options.params);
-  let runRules = runRulesFor(modeTraits);
+  let runRules = baseRunRules(currentMode);
   let runSaveKey = modeTraits.save.key;
-  let cards: readonly CardBlock[] = modeDeck(false);
+  let cards: readonly CardBlock[] = standardDeck;
   // A fresh run sits behind the title screen until the player chooses Continue or New game.
   let game = new GameRun(dealerRegistry, runRules, cards);
   let settings = loadSettings(storage);
@@ -179,6 +174,7 @@ export function createRunController<Context>(options: {
   const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const onSystemMotion = () => applySettings(settings);
 
+  /** The seed a deck that is kept until a new game is dealt from; kept in browser storage. */
   function devSeed(fresh = false): number {
     try {
       const raw = storage?.getItem(devSeedKey);
@@ -195,7 +191,7 @@ export function createRunController<Context>(options: {
     } catch {
       // A dev run still works when browser storage is unavailable.
     }
-    const seed = newMaterialSeed();
+    const seed = Math.floor(Math.random() * 4294967296);
     try {
       storage?.setItem(devSeedKey, String(seed));
     } catch {
@@ -204,15 +200,21 @@ export function createRunController<Context>(options: {
     return seed;
   }
 
-  /** A deck for a run in this mode: plain, or with materials (fresh, or kept by seed). */
-  function modeDeck(newGame: boolean): readonly CardBlock[] {
-    return withDevDestructibleMix(materialDeck(newGame), modeTraits.devDestructibleMix);
+  const runSetup = createRunSetupRegistry(() => currentMode.traits.shop);
+  const setupServices = (): RunSetupServices => ({
+    standardDeck,
+    keptSeed: () => devSeed(true),
+    random: Math.random,
+  });
+
+  /** A deck with the mode's testing-only destructible mix, for a run in this mode. */
+  function withMix(deck: readonly CardBlock[]): readonly CardBlock[] {
+    return withDevDestructibleMix(deck, modeTraits.devDestructibleMix);
   }
 
-  function materialDeck(newGame: boolean): readonly CardBlock[] {
-    const materials = modeTraits.materialDeck;
-    if (!materials) return standardDeck;
-    return makeDevDeck(materials.reshuffle === "each-run" ? newMaterialSeed() : devSeed(newGame));
+  /** The cards a saved run's deck is rebuilt from: its own seed, or the mode's plain deck. */
+  function cardsForSavedRun(seed: number | undefined): readonly CardBlock[] {
+    return withMix(seed === undefined ? standardDeck : makeDevDeck(seed));
   }
 
   function switchScene(name: SceneName): void {
@@ -228,12 +230,12 @@ export function createRunController<Context>(options: {
   function enterMode(mode: GameMode, createDeck = true): void {
     currentMode = mode;
     modeTraits = mode.traits;
-    runRules = runRulesFor(modeTraits);
+    runRules = baseRunRules(mode);
     runSaveKey = modeTraits.save.key;
-    if (createDeck) cards = modeDeck(false);
+    if (createDeck) cards = withMix(standardDeck);
     services.rack.setCapacity(modeTraits.passiveRack?.capacity ?? 0);
     services.rack.element.hidden = !modeTraits.passiveRack;
-    services.audio.enterMode(mode.musicStyle);
+    services.audio.enterMode(mode.traits.music.style);
   }
 
   function applySettings(next: Settings): void {
@@ -253,7 +255,6 @@ export function createRunController<Context>(options: {
     services.hud.render({
       round: game.round,
       phase: game.phase,
-      overlays: overlaysForPhase(modeTraits, game.phase),
       presenting,
       outcome: presenting || !game.inStage ? "playing" : roundOutcome(game.state),
       score: presenter.shownScore,
@@ -378,30 +379,24 @@ export function createRunController<Context>(options: {
     services.overlays.showGameOver(game.stats);
   }
 
-  /** A new run: material samples in dev0/1; dev2 rack is filled in startRun. */
+  /**
+   * A new game run, with the mode's run setup applied: `prepare` decides the rules and the
+   * deck before the deal, `start` adjusts the opening snapshot after it. Continue never
+   * comes through here; see `resume`.
+   */
   function newRun(): GameRun {
-    cards = modeDeck(true);
-    const session = new GameRun(dealerRegistry, runRules, cards);
-    if (modeTraits.shopPreview) {
-      const snapshot = session.snapshot();
-      return GameRun.fromSnapshot(dealerRegistry, runRules, cards, {
-        ...snapshot,
-        phase: "shop",
-        state: shopPreviewState(
-          snapshot.state,
-          modeTraits.shopPreview.coins,
-          Math.random,
-          modeTraits.shop,
-        ),
-      });
-    }
-    if (!modeTraits.materialSample) return session;
-    const { state } = session;
-    const sample = sampleMaterials(state.deck);
-    return GameRun.fromSnapshot(dealerRegistry, runRules, cards, {
-      ...session.snapshot(),
-      state: { ...state, field: sample.field, deck: sample.deck },
-    });
+    const steps: readonly RunSetupStep[] = currentMode.runSetup;
+    const services = setupServices();
+    const prepared = runSetup.prepare(
+      steps,
+      { rules: baseRunRules(currentMode), deck: standardDeck },
+      services,
+    );
+    runRules = prepared.rules;
+    cards = withMix(prepared.deck);
+    const opening = new GameRun(dealerRegistry, runRules, cards).snapshot();
+    const started = runSetup.start(steps, { prepare: prepared, snapshot: opening }, services);
+    return GameRun.fromSnapshot(dealerRegistry, runRules, cards, started.snapshot);
   }
 
   /** The shop trait supplies stock when entering, including saves from before offers existed. */
@@ -418,12 +413,9 @@ export function createRunController<Context>(options: {
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
   function startRun(session: GameRun, fresh = false): void {
     const { rack, shop, cameraView, audio } = services;
-    session = stockShopIfNeeded(session);
-    game = session;
+    game = stockShopIfNeeded(session);
     const rackTrait = modeTraits.passiveRack;
     rack.element.hidden = !rackTrait;
-    if (rackTrait?.startWith)
-      game.fillPassiveRack(Math.min(rackTrait.startWith, rackTrait.capacity));
     rack.render(game.state.passiveRack);
     gameOverAt = null;
     // A run resumed on a won stage moves on from its pop-up (paid once; see the run).
@@ -433,10 +425,13 @@ export function createRunController<Context>(options: {
     for (const { block, cell } of game.state.field) services.field.add(block, cell);
     cameraView.frameToStructure();
     if (game.inStage) services.hand.deal(game.state.hand);
-    const enterShop = game.phase === "shop" && fresh && !reducedMotion;
-    shop.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
+    // The shop scene's own `shopStock` trait shows or hides the stock as the scene changes.
     syncSceneToGame();
-    if (enterShop) cameraView.beginShopEntrance();
+    const enterShop = game.phase === "shop" && fresh && !reducedMotion;
+    if (enterShop) {
+      shop.render(game.state.shopStock ?? [], true, true);
+      cameraView.beginShopEntrance();
+    }
     updateHud();
     showSelection();
     autosave();
@@ -445,13 +440,18 @@ export function createRunController<Context>(options: {
     audio.runStarted();
   }
 
-  const loadSaved = () => loadRun(storage, cards, dealerRegistry, runSaveKey);
-  const resume = (snapshot: NonNullable<ReturnType<typeof loadSaved>>) =>
-    GameRun.fromSnapshot(dealerRegistry, runRules, cards, snapshot);
+  /**
+   * The saved run for this mode, if there is one. Its deck is rebuilt from the seed the run
+   * itself was dealt from, so Continue matches even if browser storage has moved on.
+   */
+  const loadSaved = () => loadRun(storage, cardsForSavedRun, dealerRegistry, runSaveKey);
+  const resume = (snapshot: NonNullable<ReturnType<typeof loadSaved>>) => {
+    cards = cardsForSavedRun(snapshot.seed);
+    return GameRun.fromSnapshot(dealerRegistry, runRules, cards, snapshot);
+  };
 
   const rules: TableRules = {
     busy: () => services.presenter.busy,
-    fieldActive: () => fieldPlacementActive(modeTraits, game.phase),
     inStage: () => game.inStage,
     canPlay: () => game.dealer.canPlay(game.state),
     canDiscard: () => game.dealer.canDiscard(game.state),
@@ -583,9 +583,11 @@ export function createRunController<Context>(options: {
       services.audio.start();
     },
     open() {
-      const skipTitle = modeTraits.skipTitle;
-      if (skipTitle) {
-        const saved = skipTitle.resume && !restartMode ? loadSaved() : null;
+      // The mode's start scene decides: the title screen, or straight into play. A start
+      // scene inside play resumes the mode's saved run, so a reload picks up where it was.
+      const startsInPlay = currentMode.startScene !== "title";
+      if (startsInPlay) {
+        const saved = restartMode ? null : loadSaved();
         startRun(saved ? resume(saved) : newRun(), !saved);
         services.overlays.closeAll();
       } else if (restartMode) {
@@ -618,6 +620,7 @@ export function createRunController<Context>(options: {
     takeNextAction,
     offerPrice: (offer) =>
       offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),
+    shopStock: () => game.state.shopStock ?? [],
     buy(id, destination) {
       const bought = game.buyShopOffer(id, destination);
       if (!bought) {
@@ -648,7 +651,6 @@ export function createRunController<Context>(options: {
     promptFirstPlay(time) {
       // The same outline as a valid attachment preview.
       const cell =
-        fieldPlacementActive(modeTraits, game.phase) &&
         game.inStage &&
         game.state.field.length === 0 &&
         game.state.hand.length > 0 &&

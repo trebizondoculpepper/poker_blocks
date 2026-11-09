@@ -41,6 +41,11 @@ export type RunSnapshot = {
   stats?: RunStats;
   /** The last stage paid out (round:phase) and what it paid, so it never pays twice. */
   rewarded?: { stage: string; reward: StageReward };
+  /**
+   * The seed a run setup step dealt this run's deck from, when the deck is kept until a new
+   * game. Continue rebuilds the same deck from it; older saves have none.
+   */
+  seed?: number;
 };
 
 /**
@@ -60,6 +65,7 @@ export class GameRun {
   private readonly passiveEvents = new PassiveEventQueue();
   private scoredLines: ScoredLine[] = [];
   private rewarded: { stage: string; reward: StageReward } | null = null;
+  private runSeed: number | undefined;
   /** The stage (round:phase) whose final stage.won or stage.lost has been emitted. */
   private decidedStage: string | null = null;
 
@@ -96,6 +102,7 @@ export class GameRun {
     session.shopAfter = snapshot.phase === "shop" ? (snapshot.shopAfter ?? "boss") : null;
     session.runStats = snapshot.stats ?? emptyRunStats;
     session.rewarded = snapshot.rewarded ?? null;
+    session.runSeed = snapshot.seed;
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
     // A stage saved after it was decided already announced its outcome.
     session.decidedStage =
@@ -200,6 +207,7 @@ export class GameRun {
       state: this.currentState,
       stats: this.runStats,
       ...(this.rewarded ? { rewarded: this.rewarded } : {}),
+      ...(this.runSeed === undefined ? {} : { seed: this.runSeed }),
     };
   }
 

@@ -1,19 +1,19 @@
 /**
  * HUD panels service: the round status panel, the deck counter, the shop's coin counter and
- * the shop exit button. The game hands it a snapshot of what to show; the panels a scene
- * composes (its overlays) decide which ones are visible.
+ * the shop exit button. A scene shows the panels it composes through `show` and `hide`; the
+ * game hands it a snapshot of the numbers, which are the same whatever is on show.
  */
 import type { RoundOutcome } from "./dealer";
 import type { RunPhase } from "./game-run";
-import type { SceneOverlays } from "./game-modes";
 import { unlimited } from "./run-rules";
+
+/** The independent panels a scene may show. */
+export type HudPanel = "round" | "deck" | "coins" | "shopExit";
 
 /** What the HUD shows at one moment. */
 export type HudView = {
   round: number;
   phase: RunPhase;
-  /** The panels the current scene composes. */
-  overlays: SceneOverlays | undefined;
   /** A play is still landing or being scored: hide outcomes and the next-action button. */
   presenting: boolean;
   /** The stage outcome to announce ("playing" while undecided or outside a stage). */
@@ -28,6 +28,10 @@ export type HudView = {
 };
 
 export type HudPanels = {
+  /** A scene composing this panel came to the front. */
+  show(panel: HudPanel): void;
+  /** The scene showing this panel was exited. */
+  hide(panel: HudPanel): void;
   render(view: HudView): void;
   /** Run when the player presses the HUD's next-action button or the shop exit. */
   onAction(handler: () => void): void;
@@ -68,7 +72,8 @@ const count = (n: number) => (n >= unlimited / 2 ? "∞" : String(n));
 
 /** What each panel shows for a view: pure, so it is tested without a DOM. */
 export type HudDisplay = {
-  visible: { round: boolean; deck: boolean; coins: boolean; shopExit: boolean };
+  /** Which panels are on show, as composed by the scene in front. */
+  visible: Record<HudPanel, boolean>;
   /** The next-action button's label, or null to hide it. */
   action: string | null;
   stats: Record<
@@ -77,16 +82,18 @@ export type HudDisplay = {
   >;
 };
 
-export function hudDisplay(view: HudView): HudDisplay {
-  const { overlays } = view;
+export function hudDisplay(
+  view: HudView,
+  composed: Readonly<Record<HudPanel, boolean>>,
+): HudDisplay {
   const outcome = view.presenting ? "playing" : view.outcome;
   const action = view.presenting ? null : nextActionLabels[view.phase](outcome);
   return {
     visible: {
-      round: Boolean(overlays?.round),
-      deck: Boolean(overlays?.deck),
-      coins: Boolean(overlays?.coins),
-      shopExit: Boolean(overlays?.shopExit) && action !== null,
+      round: composed.round,
+      deck: composed.deck,
+      coins: composed.coins,
+      shopExit: composed.shopExit && action !== null,
     },
     action,
     stats: {
@@ -136,6 +143,19 @@ export function createHudPanels(host: HTMLElement): HudPanels {
   host.append(shopExitButton);
 
   const panels = [roundHud, deckHud, coinHud];
+  /** Which panels the scene in front composes; `render` applies it to the DOM. */
+  const composed: Record<HudPanel, boolean> = {
+    round: false,
+    deck: false,
+    coins: false,
+    shopExit: false,
+  };
+  const elements: Record<HudPanel, HTMLElement> = {
+    round: roundHud,
+    deck: deckHud,
+    coins: coinHud,
+    shopExit: shopExitButton,
+  };
   const stat = (name: string) =>
     panels
       .map((panel) => panel.querySelector<HTMLElement>(`[data-stat="${name}"]`))
@@ -147,8 +167,17 @@ export function createHudPanels(host: HTMLElement): HudPanels {
   shopExitButton.addEventListener("click", runAction);
 
   return {
+    show(panel) {
+      composed[panel] = true;
+      // A panel can arrive before its numbers do; reveal it now so it is not blank.
+      elements[panel].hidden = false;
+    },
+    hide(panel) {
+      composed[panel] = false;
+      elements[panel].hidden = true;
+    },
     render(view) {
-      const display = hudDisplay(view);
+      const display = hudDisplay(view, composed);
       roundHud.hidden = !display.visible.round;
       deckHud.hidden = !display.visible.deck;
       coinHud.hidden = !display.visible.coins;
