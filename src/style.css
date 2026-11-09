@@ -329,6 +329,17 @@ body,
   }
 }
 
+/*
+ * Portrait tablets: the hand spans the full width (its band grows with the width), so the bin
+ * and the deck counter sit above it instead of over the end cards (issue #5).
+ */
+@media (min-width: 701px) and (orientation: portrait) {
+  .deck-hud,
+  .discard-area {
+    bottom: calc(22vw + 12px + env(safe-area-inset-bottom));
+  }
+}
+
 /* Short screens (a phone on its side): compact panels. */
 @media (max-height: 500px) {
   .round-hud {

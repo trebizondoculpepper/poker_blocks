@@ -20,6 +20,10 @@ import { passiveAppearance, type PassiveBlock } from "./passives";
 import type { RenderedBlock } from "./rendered-blocks";
 import { cellKey, type Cell, type Face } from "./traits/attachable";
 import { inspectBlock } from "./traits/inspectable";
+import { createHoldGesture } from "./hold-gesture";
+
+/** How far above a holding finger its inspection label sits, in CSS pixels. */
+const holdLabelLift = 110;
 import { blockCanDrag, blockCursor, toggleBlockSelection } from "./block-trait-behaviours";
 import type { Selection } from "./traits/selectable";
 import { moveItem } from "./zones";
@@ -167,6 +171,8 @@ export function createTableInput(options: {
   let suppressClickUntil = 0;
   const touches = new Map<number, { x: number; y: number }>();
   let pinch: { zoom: number; distance: number } | null = null;
+  /** Touch has no hover: press and hold a block to read its inspection text. */
+  const hold = createHoldGesture();
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -376,6 +382,7 @@ export function createTableInput(options: {
       touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (touches.size >= 2) {
         // A second finger changes the gesture, never places or discards a card.
+        hold.cancel();
         if (drag) finishDrag(false);
         if (boardDrag) finishBoardDrag();
         pinch = { zoom: cameraView.zoom, distance: touchSpread() };
@@ -385,6 +392,7 @@ export function createTableInput(options: {
         return;
       }
       if (pinch) return;
+      startHold(event);
     }
     options.overlays().hideTooltip();
     const source = pickBlock(event.clientX, event.clientY, hand.blocks);
@@ -422,6 +430,8 @@ export function createTableInput(options: {
   };
 
   const onPointerMove = (event: PointerEvent) => {
+    hold.move(event.pointerId, event.clientX, event.clientY);
+    if (hold.holding) return;
     const finger = touches.get(event.pointerId);
     if (finger) {
       finger.x = event.clientX;
@@ -493,6 +503,13 @@ export function createTableInput(options: {
   };
 
   const onPointerUp = (event: PointerEvent) => {
+    if (hold.up(event.pointerId)) {
+      // A hold only inspects: lifting it neither taps, plays nor rotates.
+      touches.delete(event.pointerId);
+      options.overlays().hideTooltip();
+      suppressClickUntil = performance.now() + 400;
+      return;
+    }
     if (event.pointerType === "touch") {
       touches.delete(event.pointerId);
       if (pinch) {
@@ -519,6 +536,7 @@ export function createTableInput(options: {
   };
 
   const onPointerCancel = (event: PointerEvent) => {
+    hold.cancel();
     if (event.pointerType === "touch") {
       touches.delete(event.pointerId);
       if (pinch) {
@@ -531,6 +549,30 @@ export function createTableInput(options: {
     if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
     options.overlays().hideTooltip();
     canvas.style.cursor = "default";
+  };
+
+  /** Start a hold on the block under a finger; when it holds, inspect instead of dragging. */
+  function startHold(event: PointerEvent): void {
+    const target = pickAny(event.clientX, event.clientY);
+    if (!target) return;
+    const { pointerId, clientX, clientY } = event;
+    hold.down(pointerId, clientX, clientY, () => {
+      if (drag?.pointerId === pointerId) finishDrag(false);
+      if (boardDrag?.pointerId === pointerId) finishBoardDrag();
+      // Above the finger, so the label never sits under it or over the card.
+      showInspection(target.block, clientX, clientY - holdLabelLift);
+    });
+  }
+
+  /** The app was hidden or lost focus mid-gesture: nothing completes. */
+  const onVisibilityChange = () => {
+    if (document.hidden) onBlur();
+  };
+
+  /** Capture taken away mid-gesture (by the browser or system) counts as a cancel. */
+  const onLostCapture = (event: PointerEvent) => {
+    if (drag?.pointerId === event.pointerId || boardDrag?.pointerId === event.pointerId)
+      onPointerCancel(event);
   };
 
   const onClick = (event: MouseEvent) => {
@@ -553,6 +595,8 @@ export function createTableInput(options: {
   };
 
   const onBlur = () => {
+    hold.cancel();
+    options.overlays().hideTooltip();
     if (drag) finishDrag(false);
     if (boardDrag) finishBoardDrag();
     touches.clear();
@@ -697,6 +741,7 @@ export function createTableInput(options: {
     ["pointerleave", onPointerLeave],
     ["pointerup", onPointerUp],
     ["pointercancel", onPointerCancel],
+    ["lostpointercapture", onLostCapture],
     ["click", onClick],
     ["wheel", onWheel, { passive: false }],
   ];
@@ -708,6 +753,7 @@ export function createTableInput(options: {
   for (const [type, listener, listenerOptions] of canvasListeners)
     canvas.addEventListener(type, listener as EventListener, listenerOptions);
   window.addEventListener("blur", onBlur);
+  document.addEventListener("visibilitychange", onVisibilityChange);
 
   return {
     fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
@@ -754,6 +800,7 @@ export function createTableInput(options: {
       for (const [type, listener] of canvasListeners)
         canvas.removeEventListener(type, listener as EventListener);
       window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     },
   };
 }
