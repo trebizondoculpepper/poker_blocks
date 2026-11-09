@@ -8,7 +8,7 @@ Use the mouse wheel, trackpad scroll, or a two-finger pinch on the game canvas t
 
 Press **Command-Shift-K** on Mac or **Control-Shift-K** elsewhere to capture the whole game window, including the hand and overlays, in a 3840 × 2160 PNG. The screenshot copies to the clipboard; if the browser cannot copy images, it downloads a PNG and offers a Save button. A window with a different aspect ratio is fitted inside the 4K image without cropping.
 
-The rules of the game being designed are in [doc/game.md](doc/game.md), with canonical terms in [doc/terms.md](doc/terms.md). The agreed game principles and open architecture questions are recorded in [doc/game-architecture.md](doc/game-architecture.md). Sound effects are listed in [doc/sound_design.md](doc/sound_design.md). Keep future project documents in `doc/`.
+The rules of the game being designed are in [doc/game.md](doc/game.md), with canonical terms in [doc/terms.md](doc/terms.md). The agreed game principles and open architecture questions are recorded in [doc/game-architecture.md](doc/game-architecture.md). Sound effects are listed in [doc/sound_design.md](doc/sound_design.md). Every remaining special case in the code, with the ticket that removes it, is mapped in [doc/special-cases-audit.md](doc/special-cases-audit.md). Keep future project documents in `doc/`.
 
 ## Materials dev mode
 
