@@ -42,6 +42,8 @@ Scoring passives are `EventRule` data on their definitions (`eventRules`). Every
 3. **`score.beforeLineFinalized`:** the chosen hand's points become the line's working value, and the line rules apply. The result is clamped at zero.
 4. **Evaluate, then commit:** evaluation is pure. Only the chosen hand's contributing blocks, and then the line's rules, are committed as the line's `activations` (which passive fired, on which event and block, and the commands its effects collected). Presentation can show them (#81).
 
+**Cards bring rules too (#141).** A card's material expands its `scoringModifier` into the card's own rules (`cardScoringRules`, `src/materials.ts`). For each block value, the card's own rules run first, then the rack's. After the hand is chosen, the line runs three phases in order: `score.lineMultiply`, then `score.linePower`, then `score.beforeLineFinalized`. Each phase runs the **contributing** cards' rules first, then the rack's. The score is rounded once, after every effect, and clamped at zero. Activations name their source: a passive's instance id, or the card's id for a material rule.
+
 A new scoring behaviour is one handler registration. No scoring code changes; `src/scoring-rules.test.ts` registers a test-only effect to prove it.
 
 ### Discard and stage-won path (#170)

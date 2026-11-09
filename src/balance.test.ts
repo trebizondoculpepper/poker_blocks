@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import { validatePassiveBalance } from "./balance";
+import { validateMaterialBalance, validatePassiveBalance } from "./balance";
+import { materialDefinitions } from "./materials";
 import { passiveDefinitions, createPassiveBlock } from "./passives";
 import { defaultResale, resaleValue } from "./resale";
 
@@ -14,6 +15,15 @@ describe("the balance config (#7, #103)", () => {
 
   it("gives every passive the shop can stock a valid balance on its own definition", () => {
     expect(validatePassiveBalance(definitions)).toEqual([]);
+  });
+
+  it("gives every material a valid scoring modifier (#141)", () => {
+    expect(validateMaterialBalance(materialDefinitions)).toEqual([]);
+    expect(
+      validateMaterialBalance([
+        { ...materialDefinitions[1], scoringModifier: { multiplicative: 0 } },
+      ]),
+    ).toEqual(["wood: multiplicative must be positive"]);
   });
 
   it("reports a missing balance or a bad price", () => {

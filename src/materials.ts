@@ -1,11 +1,18 @@
 import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
+import type { EventRule } from "./event-rules";
+import { scoringModifierRules, type ScoringModifier } from "./scoring-modifier";
 
 /** Data on each material definition, consumed by reusable appearance handlers. */
 export type MaterialDefinition = {
   id: string;
   name: string;
   traits: { transparent?: Record<string, never> };
+  /**
+   * How the material changes a line it contributes to (#141). Left out until the material's
+   * scoring is designed: meat, fire, ice and gold wait on #104–#107.
+   */
+  scoringModifier?: ScoringModifier;
   appearance: {
     pattern: string;
     assembly: string;
@@ -63,6 +70,7 @@ export const materialDefinitions = [
     id: "wood",
     name: "Wood",
     traits: {},
+    scoringModifier: { additive: 1 },
     appearance: {
       pattern: "timberGrain",
       assembly: "sixFaces",
@@ -79,6 +87,7 @@ export const materialDefinitions = [
     id: "steel",
     name: "Steel",
     traits: {},
+    scoringModifier: { multiplicative: 1.25 },
     appearance: {
       pattern: "brushedRivets",
       assembly: "brushedFaces",
@@ -95,6 +104,7 @@ export const materialDefinitions = [
     id: "prismatic",
     name: "Prismatic Crystal",
     traits: { transparent: {} },
+    scoringModifier: { exponential: 1.1 },
     appearance: {
       pattern: "rainbowCrystal",
       assembly: "refractiveCrystal",
@@ -221,6 +231,11 @@ export function getMaterialDefinition(kind: BlockMaterial): MaterialDefinition {
 
 export function materialOf(block: CardBlock): BlockMaterial {
   return block.traits.material?.kind ?? "paper";
+}
+
+/** The scoring rules a card brings with it: its material's scoring modifier, expanded. */
+export function cardScoringRules(block: CardBlock): EventRule[] {
+  return scoringModifierRules(getMaterialDefinition(materialOf(block)).scoringModifier);
 }
 
 function seededRandom(seed: number): () => number {

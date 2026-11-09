@@ -99,6 +99,11 @@ ruleHandlers.registerEffect<{ factor: number }, unknown>(
   "multiply-line-score",
   ({ factor }, _selected, frame) => working(frame, (value) => value * factor),
 );
+/** Raises the working score to `power` (a prismatic crystal's exponential modifier). */
+ruleHandlers.registerEffect<{ power: number }, unknown>(
+  "power-line-score",
+  ({ power }, _selected, frame) => working(frame, (value) => value ** power),
+);
 /** Adds `amount` once, or once per crossing cell with `perIntersection`. */
 ruleHandlers.registerEffect<
   { amount: number; perIntersection?: boolean },

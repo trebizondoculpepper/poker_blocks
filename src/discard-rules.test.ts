@@ -71,7 +71,7 @@ describe("discard and stage-won passives run as event rules and commands (#170)"
     const event = { type: "discard.completed", blocks: discarded };
     expect(passiveActivations(passive("seeing-red", 1), event)).toEqual([
       {
-        passiveId: "passive.1",
+        sourceId: "passive.1",
         on: "discard.completed",
         blockId: undefined,
         commands: [{ id: "add-coins", config: { amount: 2 } }],
