@@ -311,7 +311,7 @@ Shop transactions and the entrance animation are tracked separately in [shop gam
 
 ### Shop rules (design, [issue #7](https://github.com/trebizondoculpepper/poker_blocks/issues/7))
 
-This section is the target design. It replaces the first-version placeholders above (two passives, three cards, one coin each) once implemented. It records only agreed rules; questions still open are listed at the end and asked on the issue.
+This section is the agreed target design. It replaces the first-version placeholders above (two passives, three cards, one coin each) once implemented ([#18](https://github.com/trebizondoculpepper/poker_blocks/issues/18)).
 
 #### Agreed rules
 
@@ -325,19 +325,19 @@ This section is the target design. It replaces the first-version placeholders ab
 
 #### Passive catalogue
 
-| Passive                                                                        | Base price | Earliest round |
-| ------------------------------------------------------------------------------ | ---------: | -------------: |
-| ×2                                                                             |          4 |              1 |
-| ×4                                                                             |          9 |              2 |
-| Gold Standard                                                                  |          5 |       4 (gold) |
-| Carnivore                                                                      |          3 |       3 (meat) |
-| Woodworker                                                                     |          4 |       1 (wood) |
-| Crossroads                                                                     |          2 |              1 |
-| Long Haul                                                                      |          4 |              1 |
-| Seeing Red                                                                     |          6 |              1 |
-| Scrapper                                                                       |          8 |              2 |
-| Ace Exchange                                                                   |          5 |              2 |
-| Le Chef ([#22](https://github.com/trebizondoculpepper/poker_blocks/issues/22)) |        TBD |       3 (meat) |
+| Passive                                                                          | Base price | Earliest round |
+| -------------------------------------------------------------------------------- | ---------: | -------------: |
+| ×2                                                                               |          4 |              1 |
+| ×4                                                                               |          9 |              2 |
+| Gold Standard                                                                    |          5 |       4 (gold) |
+| Carnivore                                                                        |          3 |       3 (meat) |
+| Woodworker                                                                       |          4 |       1 (wood) |
+| Crossroads                                                                       |          2 |              1 |
+| Long Haul                                                                        |          4 |              1 |
+| Seeing Red                                                                       |          6 |              1 |
+| Scrapper                                                                         |          8 |              2 |
+| Ace Exchange                                                                     |          5 |              2 |
+| Le Chef ([#104](https://github.com/trebizondoculpepper/poker_blocks/issues/104)) |          5 |       3 (meat) |
 
 A passive whose effect names a material is never eligible before that material unlocks.
 
@@ -363,9 +363,31 @@ Round 1 stage 1 targets **300**. Each next target is the previous one ×1.75 (st
 - **Validation at load (and in a test):** every price is a positive integer; unlock rounds are positive integers; weights are non-negative; keyframe rounds are strictly increasing and not before the unlock round; every passive that names a material unlocks no earlier than that material.
 - **Base prices are data; modifiers are separate:** a future price-changing passive is an event rule that adjusts a working price, never an edit to the config.
 
-#### Open questions
+#### Drawing stock
 
-Asked on [issue #7](https://github.com/trebizondoculpepper/poker_blocks/issues/7): how stock is drawn to meet the minimums; where a bought card goes; when a bought passive installs and what a full rack does; passive resale value and where selling is allowed; Le Chef's price; shop controls and refusal feedback; whether a save keeps the shop's stock.
+Stock meets its minimums first, then follows the weights: one offer is drawn from the eligible passives and one from the eligible playable cards, and the remaining slots are filled from the whole eligible pool by normalized weight.
+
+#### Buying, selling and leaving
+
+- **A bought playable card goes straight into the hand.** In the shop the hand may hold more than its usual size.
+- **A bought passive is dragged into a free rack slot** and installs there immediately. The rack has a fixed capacity; while it is full, a passive can't be bought until one is sold.
+- **Selling** a passive works at any time, in a stage or in the shop ([#16](https://github.com/trebizondoculpepper/poker_blocks/issues/16)). It pays half the passive's base price, rounded down, with a minimum of 1 coin ([#103](https://github.com/trebizondoculpepper/poker_blocks/issues/103)); future passives may modify the payout.
+- **Refusals** (too few coins, a full rack) use the shared refused feedback: `action.denied` and the red X ([#18](https://github.com/trebizondoculpepper/poker_blocks/issues/18)). Nothing is spent.
+- **Leaving** through the shop exit discards unbought stock and continues to the next stage, or to the next round after the boss's shop.
+
+| Example       | Before                         | Action                        | After                                |
+| ------------- | ------------------------------ | ----------------------------- | ------------------------------------ |
+| Buy           | 6 coins, ×2 offered at 4       | Drag ×2 into a free rack slot | 2 coins; ×2 installed; offer gone    |
+| Too few coins | 3 coins, ×2 offered at 4       | Drag ×2 to the rack           | Refused, red X; nothing changes      |
+| Full rack     | Rack full, 9 coins, ×2 offered | Drag ×2 to the rack           | Refused, red X; nothing changes      |
+| Sell          | Scrapper (base 8) installed    | Drag it to Sell               | +4 coins; Scrapper removed           |
+| Exit          | Two offers unbought            | Press the exit                | Offers gone; the next stage is dealt |
+
+#### State, ownership and saves
+
+- The game run owns the stock, coins, hand, deck and rack; the shop scene only presents them. Buying, selling and leaving each apply completely or are refused with no change.
+- **Ownership:** every card the player owns is in exactly one of deck, hand, field or discard pile, and every passive in exactly one of stock or rack. A purchase moves an offer from stock to its destination in one step.
+- **Continue** restores purchases and the remaining stock exactly; a reload never rerolls the shop.
 
 ### Rack reorganization
 
