@@ -13,6 +13,11 @@ export type MaterialDefinition = {
    * scoring is designed: meat, fire, ice and gold wait on #104–#107.
    */
   scoringModifier?: ScoringModifier;
+  /**
+   * What a new card of this material costs in the shop before its rank surcharge (#143). A
+   * material without one is never offered.
+   */
+  shop?: { basePrice: number };
   appearance: {
     pattern: string;
     assembly: string;
@@ -54,6 +59,7 @@ export const materialDefinitions = [
     id: "paper",
     name: "Paper",
     traits: {},
+    shop: { basePrice: 1 },
     appearance: {
       pattern: "cardSheet",
       assembly: "sixFaces",
@@ -70,6 +76,7 @@ export const materialDefinitions = [
     id: "wood",
     name: "Wood",
     traits: {},
+    shop: { basePrice: 3 },
     scoringModifier: { additive: 1 },
     appearance: {
       pattern: "timberGrain",
@@ -87,6 +94,7 @@ export const materialDefinitions = [
     id: "steel",
     name: "Steel",
     traits: {},
+    shop: { basePrice: 4 },
     scoringModifier: { multiplicative: 1.25 },
     appearance: {
       pattern: "brushedRivets",
@@ -104,6 +112,7 @@ export const materialDefinitions = [
     id: "prismatic",
     name: "Prismatic Crystal",
     traits: { transparent: {} },
+    shop: { basePrice: 12 },
     scoringModifier: { exponential: 1.1 },
     appearance: {
       pattern: "rainbowCrystal",
@@ -139,6 +148,7 @@ export const materialDefinitions = [
     id: "gold",
     name: "Gold",
     traits: {},
+    shop: { basePrice: 8 },
     appearance: {
       pattern: "goldFoil",
       assembly: "sixFaces",
@@ -171,6 +181,7 @@ export const materialDefinitions = [
     id: "ice",
     name: "Ice",
     traits: { transparent: {} },
+    shop: { basePrice: 2 },
     appearance: {
       pattern: "frostedIce",
       assembly: "frostedBlock",
@@ -187,6 +198,7 @@ export const materialDefinitions = [
     id: "meat",
     name: "Meat",
     traits: {},
+    shop: { basePrice: 6 },
     appearance: {
       pattern: "marbledFlesh",
       assembly: "sixFaces",
@@ -203,6 +215,7 @@ export const materialDefinitions = [
     id: "fire",
     name: "Fire",
     traits: { transparent: {} },
+    shop: { basePrice: 4 },
     appearance: {
       pattern: "ironFrame",
       assembly: "flameFrame",
@@ -248,6 +261,19 @@ function seededRandom(seed: number): () => number {
   };
 }
 
+/** A card made of a material: its traits, and its name in the inspector. */
+export function withMaterial(card: CardBlock, definition: MaterialDefinition): CardBlock {
+  return {
+    ...card,
+    traits: {
+      ...card.traits,
+      material: { kind: definition.id as BlockMaterial },
+      ...definition.traits,
+      inspectable: inspectable(`${cardName(card.traits.identity)} · ${definition.name}`),
+    },
+  };
+}
+
 /** Give every standard card one stable visual material for this dev run. */
 export function makeDevDeck(seed: number): readonly CardBlock[] {
   const random = seededRandom(seed);
@@ -258,16 +284,5 @@ export function makeDevDeck(seed: number): readonly CardBlock[] {
     const other = Math.floor(random() * (index + 1));
     [assignments[index], assignments[other]] = [assignments[other], assignments[index]];
   }
-  return standardDeck.map((card, index) => {
-    const definition = assignments[index];
-    return {
-      ...card,
-      traits: {
-        ...card.traits,
-        material: { kind: definition.id },
-        ...definition.traits,
-        inspectable: inspectable(`${cardName(card.traits.identity)} · ${definition.name}`),
-      },
-    };
-  });
+  return standardDeck.map((card, index) => withMaterial(card, assignments[index]));
 }

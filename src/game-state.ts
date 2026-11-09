@@ -18,6 +18,12 @@ export type GameState = {
   passiveRack: readonly PassiveBlock[];
   /** Offers at rest in the shop; absent in older runs. */
   shopStock?: readonly ShopOffer[];
+  /**
+   * Every card bought this run, newest last (#143). They are also in the deck, hand, field or
+   * discard pile like any card; this ledger lets a save rebuild cards that aren't in the
+   * starting deck.
+   */
+  boughtCards?: readonly CardBlock[];
   /** Run currency; unlike stage score, this carries across stages and the shop. */
   coins: number;
   round: Readonly<Round>;

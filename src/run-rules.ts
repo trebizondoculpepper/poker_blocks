@@ -26,8 +26,6 @@ export type RunRules = {
    * (src/resale.ts). None by default; future sale-modifying passives plug in here.
    */
   resaleModifiers?: readonly ResaleModifier[];
-  /** First playable-card shop price; one coin unless a run changes it. */
-  cardPurchasePrice?: number;
   /**
    * How the run stocks a shop it enters with no stock, a save from before offers existed
    * included. The mode's `shop` trait supplies it (src/mode-trait-rules.ts); left out, a

@@ -359,7 +359,6 @@ export class GameRun {
   /** What an offer's kind may read from the run to price and receive it (#67). */
   get offerRun(): OfferRun {
     return {
-      rules: this.config,
       rackCapacity: this.rackCapacity,
       handSize: this.activeDealer.handSize,
     };

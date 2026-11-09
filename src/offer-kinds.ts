@@ -6,11 +6,12 @@
  *
  * Prices come from the run's rules and the balance config; a kind only says which to use.
  */
-import type { CardBlock } from "./cards";
+import { cardOfferPrice } from "./balance";
+import { createCard, ranks, suits, type CardBlock } from "./cards";
+import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
 import { Registry } from "./core/registry";
 import type { GameState } from "./game-state";
 import { createPassiveBlock, type PassiveBlock } from "./passives";
-import type { RunRules } from "./run-rules";
 
 /** Anything a shop can offer: a block with an id. */
 export type OfferBlock = { readonly id: string };
@@ -23,7 +24,6 @@ export type OfferDestination = "hand" | "passive-rack";
 
 /** What a kind's purchase may read from the run. */
 export type OfferRun = {
-  rules: Pick<RunRules, "cardPurchasePrice">;
   rackCapacity: number;
   handSize: number;
 };
@@ -31,9 +31,8 @@ export type OfferRun = {
 /** A saved offer: its kind plus whatever its kind writes. */
 export type SavedOffer = { kind: string; [field: string]: unknown };
 
-/** What restoring an offer may use: the run's cards by id, and the passive ids already taken. */
+/** What restoring an offer may use: the passive ids already taken. */
 export type OfferRestore = {
-  card(id: unknown): CardBlock;
   takePassiveId(id: unknown): string;
 };
 
@@ -70,16 +69,46 @@ export function offerKind(offer: Pick<ShopOffer, "kind">): OfferKind<OfferBlock>
 export const isOfferKind = (name: unknown): boolean =>
   typeof name === "string" && registry.has(name);
 
-// A playable card: bought into the hand. The sandbox's cards are borrowed from the deck, so an
-// unbought one goes back to it.
+/** A card saved in full, so it can be rebuilt without a starting deck to look it up in. */
+export type SavedCard = { id: string; rank: string; suit: string; material: string };
+
+export function saveCard(card: CardBlock): SavedCard {
+  const { rank, suit } = card.traits.identity;
+  return { id: card.id, rank, suit: suit.name, material: materialOf(card) };
+}
+
+/** Rebuild a fully saved card; throws on a malformed record. */
+export function restoreCard(saved: { [field: string]: unknown }): CardBlock {
+  const rank = ranks.find((candidate) => candidate === saved.rank);
+  const suit = suits.find(({ name }) => name === saved.suit);
+  if (!rank || !suit) throw new Error("bad card");
+  return withMaterial(
+    createCard({ rank, suit }, text(saved.id)),
+    getMaterialDefinition(text(saved.material) as BlockMaterial),
+  );
+}
+
+/** A saved field that must be a string. */
+function text(value: unknown): string {
+  if (typeof value !== "string") throw new Error("bad card field");
+  return value;
+}
+
+// A playable card: a new card of some material (#143), costing its material's base price plus
+// its rank's surcharge. Dropped on the shop's buy target, it joins the run's deck and its
+// ledger of bought cards; an unbought one simply goes.
 registerOfferKind<CardBlock>("card", {
   destination: "hand",
-  price: (_block, { rules }) => rules.cardPurchasePrice ?? 1,
-  receive: (state, block, { handSize }) =>
-    state.hand.length >= handSize ? null : { ...state, hand: [...state.hand, block] },
-  unbought: (state, block) => ({ ...state, deck: [...state.deck, block] }),
-  save: (block) => ({ kind: "card", cardId: block.id }),
-  restore: (saved, restore) => restore.card(saved.cardId),
+  price: (block) =>
+    cardOfferPrice(block.traits.identity.rank, getMaterialDefinition(materialOf(block))),
+  receive: (state, block) => ({
+    ...state,
+    deck: [...state.deck, block],
+    boughtCards: [...(state.boughtCards ?? []), block],
+  }),
+  unbought: (state) => state,
+  save: (block) => ({ kind: "card", ...saveCard(block) }),
+  restore: (saved) => restoreCard(saved),
 });
 
 // A passive: costs its base price (its definition's shop balance, #7, #144), bought into a free

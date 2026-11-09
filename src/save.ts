@@ -8,7 +8,15 @@ import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
 import { parseRunStats, type RunStats } from "./run-stats";
 import { createPassiveBlock, passiveDefinitions } from "./passives";
-import { isOfferKind, offerKind, type OfferRestore, type SavedOffer } from "./offer-kinds";
+import {
+  isOfferKind,
+  offerKind,
+  restoreCard,
+  saveCard,
+  type OfferRestore,
+  type SavedCard,
+  type SavedOffer,
+} from "./offer-kinds";
 import { stageKinds, type StageKind } from "./run-rules";
 import type { GameFlow, FlowTransition } from "./game-flow";
 import type { SceneName } from "./game-modes";
@@ -48,6 +56,8 @@ export type SaveRecord = {
     passiveRack?: { id: string; definitionId: string }[];
     /** Each offer as its kind saves it (src/offer-kinds.ts). */
     shopStock?: SavedOffer[];
+    /** Cards bought this run, saved in full (#143); absent in older saves. */
+    boughtCards?: SavedCard[];
     /** Optional so runs saved before the economy was added begin with zero coins. */
     coins?: number;
     round: GameState["round"];
@@ -128,6 +138,7 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
             shopStock: state.shopStock.map((offer) => offerKind(offer).save(offer.block)),
           }
         : {}),
+      ...(state.boughtCards?.length ? { boughtCards: state.boughtCards.map(saveCard) } : {}),
       coins: state.coins,
       round: { ...state.round },
     },
@@ -153,7 +164,11 @@ export function fromSaveRecord(
     if (!phase) return null;
     if (record.shopAfter !== undefined && !stageKinds.includes(record.shopAfter)) return null;
     if (!dealers.has(record.dealer)) return null;
-    const byId = new Map(cards.map((card) => [card.id, card]));
+    // The run's cards: its starting deck plus every card it bought (#143).
+    const boughtCards = (record.state.boughtCards ?? []).map(restoreCard);
+    const runCards = [...cards, ...boughtCards];
+    const byId = new Map(runCards.map((card) => [card.id, card]));
+    if (byId.size !== runCards.length) return null;
     const seen = new Set<string>();
     const resolve = (id: unknown): CardBlock => {
       if (typeof id !== "string" || seen.has(id)) throw new Error("bad card");
@@ -177,14 +192,19 @@ export function fromSaveRecord(
     });
     // Each offer is rebuilt by its own kind; an unknown kind makes the save invalid.
     const restoreOffer: OfferRestore = {
-      card: resolve,
       takePassiveId(id) {
         if (typeof id !== "string" || passiveIds.has(id)) throw new Error("bad passive id");
         passiveIds.add(id);
         return id;
       },
     };
-    const shopStock = (state.shopStock ?? []).map((saved) => {
+    // Saves from before #143 borrowed card offers from the starting deck and saved only their
+    // id. Such a card goes back to the deck, and its offer is dropped.
+    const borrowed = (state.shopStock ?? []).flatMap((saved) =>
+      Object.hasOwn(saved ?? {}, "cardId") ? [resolve(saved.cardId)] : [],
+    );
+    const offers = (state.shopStock ?? []).filter((saved) => !Object.hasOwn(saved ?? {}, "cardId"));
+    const shopStock = offers.map((saved) => {
       if (!isOfferKind(saved?.kind)) throw new Error("bad shop offer");
       return { kind: saved.kind, block: offerKind(saved).restore(saved, restoreOffer) };
     });
@@ -198,10 +218,11 @@ export function fromSaveRecord(
     const restored: GameState = {
       field,
       hand: state.hand.map(resolve),
-      deck: state.deck.map(resolve),
+      deck: [...state.deck.map(resolve), ...borrowed],
       discardPile: state.discardPile.map(resolve),
       passiveRack,
       ...(state.shopStock ? { shopStock } : {}),
+      ...(boughtCards.length ? { boughtCards } : {}),
       coins: nonnegativeInteger(state.coins ?? 0),
       round: {
         score: number(state.round.score),
@@ -210,7 +231,7 @@ export function fromSaveRecord(
         discardsLeft: number(state.round.discardsLeft),
       },
     };
-    if (seen.size !== cards.length) return null;
+    if (seen.size !== runCards.length) return null;
     return {
       round: record.round,
       phase,
