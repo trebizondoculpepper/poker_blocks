@@ -460,13 +460,14 @@ function meltwaterSkin(
  */
 function cloudyIce(
   texture: THREE.CanvasTexture,
-  height: THREE.CanvasTexture,
+  height: THREE.CanvasTexture | undefined,
   size: number,
+  reliefScale: number,
 ): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
     map: texture,
-    bumpMap: height,
-    bumpScale: 3,
+    bumpMap: height ?? texture,
+    bumpScale: reliefScale,
     transmission: 0.7,
     roughness: 0.6,
     ior: 1.31,
@@ -830,9 +831,32 @@ type SurfaceHandler = (
   texture: THREE.CanvasTexture,
   relief: { bumpMap: THREE.CanvasTexture; bumpScale: number },
   angle: number,
+  appearance: MaterialDefinition["appearance"],
 ) => THREE.MeshStandardMaterial;
 
 const surfaceRegistry = new Map<string, SurfaceHandler>([
+  [
+    "clear",
+    (texture, _relief, _angle, appearance) => {
+      const optics = appearance.optics;
+      if (!optics) throw new Error("Clear surface needs optics");
+      return clearInHand(texture, optics);
+    },
+  ],
+  [
+    "iron",
+    (texture, relief) =>
+      new THREE.MeshStandardMaterial({
+        map: texture,
+        ...relief,
+        metalness: 0.75,
+        roughness: 0.5,
+        envMap: reflectionEnvironment,
+        envMapIntensity: 0.8,
+        alphaTest: 0.5,
+        side: THREE.DoubleSide,
+      }),
+  ],
   [
     "brushedMetal",
     (texture, relief, angle) =>
@@ -904,7 +928,12 @@ function surface(
 ): THREE.MeshStandardMaterial {
   const handler = surfaceRegistry.get(appearance.surface);
   if (!handler) throw new Error(`Unknown surface: ${appearance.surface}`);
-  return handler(texture, { bumpMap: height ?? texture, bumpScale: appearance.reliefScale }, angle);
+  return handler(
+    texture,
+    { bumpMap: height ?? texture, bumpScale: appearance.reliefScale },
+    angle,
+    appearance,
+  );
 }
 
 /** Directions a steel block's six faces are brushed in, varied per card. */
@@ -940,9 +969,20 @@ const heightRegistry = new Map<string, HeightHandler>([
   ["engravedGold", (_texture, identity) => goldHeight(identity)],
   ["clayRelief", (texture, identity) => terracottaHeight(texture, identity)],
   ["steelRelief", (_texture, identity, angle) => steelHeight(identity, angle)],
-  ["iceRelief", () => undefined],
-  ["frameRelief", () => undefined],
+  ["iceRelief", (_texture, identity) => iceRoughHeight(identity)],
+  ["frameRelief", () => frameHeight()],
 ]);
+
+function heightFor(
+  texture: THREE.CanvasTexture,
+  identity: IdentityTrait,
+  appearance: MaterialDefinition["appearance"],
+  angle = 0,
+): THREE.CanvasTexture | undefined {
+  const makeHeight = heightRegistry.get(appearance.height);
+  if (!makeHeight) throw new Error("Unknown relief handler: " + appearance.height);
+  return makeHeight(texture, identity, angle);
+}
 
 function appearanceBase(
   context: AssemblyContext,
@@ -965,8 +1005,6 @@ function appearanceBase(
 function sixFaces(context: AssemblyContext): BlockAppearance {
   const { identity, definition } = context;
   const appearance = definition.appearance;
-  const makeHeight = heightRegistry.get(appearance.height);
-  if (!makeHeight) throw new Error("Unknown relief handler: " + appearance.height);
   const faceCache = new Map<
     boolean,
     {
@@ -980,7 +1018,7 @@ function sixFaces(context: AssemblyContext): BlockAppearance {
     let entry = faceCache.get(endGrain);
     if (!entry) {
       const texture = faceTexture(identity, definition, endGrain);
-      const height = makeHeight(texture, identity, 0);
+      const height = heightFor(texture, identity, appearance);
       entry = { texture, height, material: surface(texture, appearance, height) };
       faceCache.set(endGrain, entry);
     }
@@ -994,11 +1032,11 @@ function sixFaces(context: AssemblyContext): BlockAppearance {
 
 function brushedFaces(context: AssemblyContext): BlockAppearance {
   const { identity, definition } = context;
-  const makeHeight = heightRegistry.get(definition.appearance.height);
-  if (!makeHeight) throw new Error("Unknown relief handler: " + definition.appearance.height);
   const angles = brushAngles(identity);
   const textures = angles.map((angle) => faceTexture(identity, definition, false, angle));
-  const heights = textures.map((texture, face) => makeHeight(texture, identity, angles[face]));
+  const heights = textures.map((texture, face) =>
+    heightFor(texture, identity, definition.appearance, angles[face]),
+  );
   const materials = textures.map((texture, face) =>
     surface(texture, definition.appearance, heights[face], angles[face]),
   );
@@ -1014,13 +1052,14 @@ function refractiveCrystal(context: AssemblyContext): BlockAppearance {
   const optics = definition.appearance.optics;
   if (!optics) throw new Error("Refractive crystal needs optics");
   const texture = faceTexture(identity, definition, false, 0, false);
+  const height = heightFor(texture, identity, definition.appearance);
   const print = printSkin(identity, definition.appearance, geometry);
   const mask = clearMask(texture);
-  const inHand = clearInHand(texture, optics);
+  const inHand = surface(texture, definition.appearance, height);
   const onTable = clearOnTable(texture, mask, optics, size);
   return appearanceBase(
     context,
-    [texture, mask, print.texture],
+    [texture, ...[height].filter((value) => value !== undefined), mask, print.texture],
     Array.from({ length: 6 }, () => inHand),
     [createCrystalFire(geometry), print.skin],
     Array.from({ length: 6 }, () => onTable),
@@ -1031,21 +1070,11 @@ function flameFrame(context: AssemblyContext): BlockAppearance {
   const { identity, definition, geometry, size } = context;
   const texture = faceTexture(identity, definition, false, 0, false);
   const print = printSkin(identity, definition.appearance, geometry);
-  const height = frameHeight();
-  const iron = new THREE.MeshStandardMaterial({
-    map: texture,
-    bumpMap: height,
-    bumpScale: 2.5,
-    metalness: 0.75,
-    roughness: 0.5,
-    envMap: reflectionEnvironment,
-    envMapIntensity: 0.8,
-    alphaTest: 0.5,
-    side: THREE.DoubleSide,
-  });
+  const height = heightFor(texture, identity, definition.appearance);
+  const iron = surface(texture, definition.appearance, height);
   return appearanceBase(
     context,
-    [texture, height, print.texture],
+    [texture, ...[height].filter((value) => value !== undefined), print.texture],
     Array.from({ length: 6 }, () => iron),
     [createFireCore(size), print.skin],
   );
@@ -1054,14 +1083,14 @@ function flameFrame(context: AssemblyContext): BlockAppearance {
 function frostedBlock(context: AssemblyContext): BlockAppearance {
   const { identity, definition, geometry, size } = context;
   const texture = faceTexture(identity, definition, false, 0, false);
-  const height = iceRoughHeight(identity);
+  const height = heightFor(texture, identity, definition.appearance);
   const print = printSkin(identity, definition.appearance, geometry);
   const melt = meltwaterSkin(identity, geometry);
   const inHand = surface(texture, definition.appearance, height);
-  const onTable = cloudyIce(texture, height, size);
+  const onTable = cloudyIce(texture, height, size, definition.appearance.reliefScale);
   return appearanceBase(
     context,
-    [texture, height, print.texture, melt.texture],
+    [texture, ...[height].filter((value) => value !== undefined), print.texture, melt.texture],
     Array.from({ length: 6 }, () => inHand),
     [melt.skin, print.skin],
     Array.from({ length: 6 }, () => onTable),
