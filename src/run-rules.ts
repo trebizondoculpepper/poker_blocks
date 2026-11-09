@@ -35,7 +35,26 @@ export type PassivePrices = { buy: number; sell: number };
 /** First version: a passive costs 1 coin and sells for 1 coin. */
 export const defaultPassivePrices: PassivePrices = { buy: 1, sell: 1 };
 
-const baseTargets: Record<StageKind, number> = { "stage-1": 100, "stage-2": 150, boss: 200 };
+/** A stage in the round, in order, with the data that is its own. */
+export type StageDefinition = {
+  kind: StageKind;
+  /** The round 1 target; later rounds grow it (see `demoRunRules`). */
+  baseTarget: number;
+};
+
+/** The demo round: each stage's own data, in play order. */
+export const demoStages: readonly StageDefinition[] = [
+  { kind: "stage-1", baseTarget: 100 },
+  { kind: "stage-2", baseTarget: 150 },
+  { kind: "boss", baseTarget: 200 },
+];
+
+/** A stage's own definition. */
+function stageDefinition(kind: StageKind): StageDefinition {
+  const definition = demoStages.find((stage) => stage.kind === kind);
+  if (!definition) throw new Error(`No stage definition for ${kind}`);
+  return definition;
+}
 
 /**
  * Placeholder demo progression: targets grow by half the base each round, every stage
@@ -45,7 +64,7 @@ export const demoRunRules: RunRules = {
   stage(round, kind) {
     return {
       dealer: "base",
-      targetScore: Math.round(baseTargets[kind] * (1 + (round - 1) / 2)),
+      targetScore: Math.round(stageDefinition(kind).baseTarget * (1 + (round - 1) / 2)),
       plays: 6,
       discards: 4,
     };
