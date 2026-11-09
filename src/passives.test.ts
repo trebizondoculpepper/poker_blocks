@@ -67,4 +67,30 @@ describe("passive rack and events", () => {
     expect(() => queue.drain(3)).toThrow(/Passive event limit exceeded: loop → loop/);
     expect(queue.drain()).toEqual([]);
   });
+
+  it("subscribes a block from serialized event-rule data", () => {
+    const queue = new PassiveEventQueue();
+    const passive: PassiveBlock = {
+      ...block("new-rule", "passive.event-rules"),
+      traits: {
+        ...block("new-rule", "passive.event-rules").traits,
+        passive: {
+          traitId: "passive.event-rules",
+          eventRules: [
+            {
+              on: "test.custom",
+              select: { id: "test.select", config: {} },
+              where: { id: "test.where", config: {} },
+              effects: [],
+            },
+          ],
+        },
+      },
+    };
+    queue.syncRack([passive]);
+    const seen: string[] = [];
+    queue.emit({ type: "test.custom" });
+    queue.drain(128, (listener) => (seen.push(listener.id), []));
+    expect(seen).toEqual(["new-rule"]);
+  });
 });

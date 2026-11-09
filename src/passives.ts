@@ -1,4 +1,5 @@
 import { Registry } from "./core/registry";
+import type { EventRule } from "./event-rules";
 import type { BlockMaterial } from "./materials";
 import type { StageKind } from "./run-rules";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
@@ -29,7 +30,7 @@ export type PassiveBlock = {
   traits: {
     rackResident?: { zone: "passive-rack" };
     appearance?: { symbol: string; palette: PassiveDefinition["palette"] };
-    passive: { traitId: string; rules?: readonly PassiveRule[] };
+    passive: { traitId: string; rules?: readonly PassiveRule[]; eventRules?: readonly EventRule[] };
     inspectable: InspectableTrait;
   };
 };
@@ -255,6 +256,7 @@ export class PassiveEventQueue {
       for (const type of new Set([
         ...trait.listensTo,
         ...(block.traits.passive.rules ?? []).map(({ on }) => on),
+        ...(block.traits.passive.eventRules ?? []).map(({ on }) => on),
       ])) {
         const listeners = this.listeners.get(type) ?? [];
         listeners.push(block);
