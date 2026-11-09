@@ -49,14 +49,15 @@ export type Menus = {
   /** Close the title and settings screens, back to the game. */
   closeAll(): void;
   /** The run is lost: show how it went, with a button for each choice (#90). */
-  showGameOver(stats: RunStats, choices: readonly MenuChoice[]): void;
+  showGameOver(stats: RunStats, choices: readonly MenuChoice[], seed: number | null): void;
   hideGameOver(): void;
   /**
    * A stage is won: show "Stage Won" and count the reward rows in one by one, then offer
    * `action` (Visit shop), which calls `onContinue`. The music is
    * left alone.
    */
-  showStageWon(reward: StageReward, next: MenuChoice): void;
+  /** Show the pop-up, with the session seed so a run can be replayed (#134). */
+  showStageWon(reward: StageReward, next: MenuChoice, seed: number | null): void;
   /** Close the stage-won pop-up, cancelling any rows still counting in. */
   hideStageWon(): void;
   readonly isOpen: boolean;
@@ -101,7 +102,8 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
        <div><dt>Highest scoring round</dt><dd data-run="bestRoundScore"></dd></div>
        <div><dt>Blocks played</dt><dd data-run="blocksPlayed"></dd></div>
      </dl>
-     <div class="menu-buttons" data-menu="game-over-choices"></div>`,
+     <div class="menu-buttons" data-menu="game-over-choices"></div>
+     <div class="menu-seed" data-menu="game-over-seed" hidden></div>`,
   );
 
   const stageWon = overlay("stage-won-screen", "Stage won");
@@ -113,7 +115,8 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
        <div><dt>Total earned</dt><dd data-menu="total"></dd></div>
        <div><dt>Coins</dt><dd data-menu="balance"></dd></div>
      </dl>
-     <div class="menu-buttons"><button type="button" data-menu="stage-next" hidden></button></div>`,
+     <div class="menu-buttons"><button type="button" data-menu="stage-next" hidden></button></div>
+     <div class="menu-seed" data-menu="stage-won-seed" hidden></div>`,
   );
 
   const settingsButton = document.createElement("button");
@@ -354,13 +357,43 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
   }
   const gameOverChoices = find<HTMLDivElement>(gameOver.panel, "game-over-choices");
+  const gameOverSeed = find<HTMLDivElement>(gameOver.panel, "game-over-seed");
+  const stageWonSeed = find<HTMLDivElement>(stageWon.panel, "stage-won-seed");
 
   /** The game over screen: the run's totals, and one button per choice. */
-  function showGameOver(stats: RunStats, gameOverItems: readonly MenuChoice[]): void {
+  /**
+   * The session's random seed, with a button that copies it (#134). A run can be replayed from
+   * this seed with the same software version and the same actions.
+   */
+  function showSeed(into: HTMLElement, seed: number | null): void {
+    if (seed === null) return void (into.hidden = true);
+    into.hidden = false;
+    into.replaceChildren();
+    const label = document.createElement("span");
+    label.textContent = `Seed ${seed}`;
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.textContent = "Copy";
+    copy.addEventListener("click", () => {
+      playSfx("ui.click");
+      void navigator.clipboard?.writeText(String(seed)).then(
+        () => (copy.textContent = "Copied"),
+        () => (copy.textContent = "Copy failed"),
+      );
+    });
+    into.append(label, copy);
+  }
+
+  function showGameOver(
+    stats: RunStats,
+    gameOverItems: readonly MenuChoice[],
+    seed: number | null,
+  ): void {
     for (const cell of gameOver.panel.querySelectorAll<HTMLElement>("[data-run]")) {
       cell.textContent = String(stats[cell.dataset.run as keyof RunStats]);
     }
     gameOverChoices.replaceChildren(...gameOverItems.map(choiceButton));
+    showSeed(gameOverSeed, seed);
     open(gameOver.root);
   }
 
@@ -392,13 +425,14 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     settingsButton.hidden = false;
   }
 
-  function showStageWon(reward: StageReward, next: MenuChoice): void {
+  function showStageWon(reward: StageReward, next: MenuChoice, seed: number | null): void {
     rowTimers.forEach((timer) => window.clearTimeout(timer));
     ledger.replaceChildren();
     totals.hidden = true;
     stageNext.hidden = true;
     stageNext.textContent = next.label;
     stageNextChoice = next;
+    showSeed(stageWonSeed, seed);
     // Not open(): the game screen (and its music) stays as it is behind the pop-up.
     title.root.hidden = settingsScreen.root.hidden = gameOver.root.hidden = true;
     // A pause menu left open under it can't be reached until the dialog closes.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { fixedRandom } from "./random";
 import { standardDeck } from "./cards";
 import { Registry } from "./core/registry";
 import { baseDealer, dealerRegistry, type Dealer } from "./dealer";
@@ -73,7 +74,13 @@ describe("discarding several blocks at once", () => {
     game.refillHand();
     const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
     const snapshot = fromSaveRecord(record, standardDeck, dealerRegistry)!;
-    const restored = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, snapshot);
+    const restored = GameRun.fromSnapshot(
+      dealerRegistry,
+      demoRunRules,
+      standardDeck,
+      snapshot,
+      fixedRandom(),
+    );
     expect(restored.snapshot()).toEqual(game.snapshot());
     expect(restored.state.discardPile).toHaveLength(2);
     expect(restored.state.round.discardsLeft).toBe(discards - 1);
