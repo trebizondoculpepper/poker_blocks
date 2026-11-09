@@ -159,18 +159,65 @@ These prototypes have no material-specific rules yet. **Jelly** is excluded unti
 
 ### Basic scoring materials (planned)
 
-The shop's material pool expands by **round number**, through configured unlocks and stock weights rather than branches for named materials. Round 1 is the first round; its first shop can offer wood. Steel becomes eligible in round 2. Prismatic crystal becomes eligible in **round 4, after round 3 is complete**. Unlocking makes a material possible in stock, not guaranteed. Gold is reserved for an economic role and is not part of this played-material scoring progression.
+The shop's material pool expands by **round number**, through configured unlocks and stock weights rather than branches for named materials. Round 1 is the first round; its first shop can offer wood. Steel becomes eligible in round 2. Prismatic crystal becomes eligible in **round 5** (see "Material scoring" below). Unlocking makes a material possible in stock, not guaranteed. Gold is reserved for an economic role and is not part of this played-material scoring progression.
 
 | Material          | Earliest shop round | Effect when its block contributes to a scored hand                                                                                                                                                                                         |
 | ----------------- | ------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Paper             |       Starting deck | No material bonus.                                                                                                                                                                                                                         |
 | Wood              |                   1 | Add a small configured amount to that block's base value; **+1** is the first tuning value.                                                                                                                                                |
 | Steel             |                   2 | Multiply the line's working score by a configured factor; the factor is still to be tuned. Conductive and resilient are possible later traits, not part of this initial effect.                                                            |
-| Prismatic crystal |                   4 | After ordinary scoring changes, raise the line's working score to a configured power; **1.1** is the first tuning value. Each contributing prismatic applies its power in sequence, and the result is rounded only after all such effects. |
+| Prismatic crystal |                   5 | After ordinary scoring changes, raise the line's working score to a configured power; **1.1** is the first tuning value. Each contributing prismatic applies its power in sequence, and the result is rounded only after all such effects. |
 
 Only blocks that **contribute to the selected scoring hand** activate these material effects. A block present in a longer line but excluded from its best scoring hand has no material effect, unless a separate modifier explicitly extends eligibility. Material behavior belongs in configured traits; the line scorer supplies contributor IDs and the effect runner applies each eligible operation at its defined scoring phase. Exact steel strength, prismatic balance, and ordering with future passive effects remain tuning/design questions. This progression is not implemented yet; [material design issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8) tracks it.
 
 Material interactions will be built one combination at a time from configured, reusable traits, without material-name branches in the controller. The first mission is [ice beside fire](https://github.com/trebizondoculpepper/poker_blocks/issues/21): a timed destructible reaction removes melted ice, then face-connected groups settle toward the field's center of gravity before scoring. When numeric ice melts above another number card, the lower card permanently gains the ice's printed number before the field settles: 5 above 9 of Hearts makes **14 of Hearts**. Such nonstandard numeric ranks are valid in this game and must stay distinct from named Ace identity. The next mission is [meat beside fire](https://github.com/trebizondoculpepper/poker_blocks/issues/22): a `cookable` trait advances doneness over turns and a French themed passive rewards steak that is cooked but not overcooked. `Cookable` must support other ingredient progressions, such as salmon becoming opaque, flaky, then dry, through configuration. Flammable, brittle, corrodible, and conductive are possible later traits; their exact rules remain open.
+
+### Material scoring (design, [issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8))
+
+This section is the target design and supersedes the table above where they differ. It records only agreed rules; open questions are listed at the end and asked on the issue.
+
+#### Agreed model
+
+- Every card has **exactly one** material at a time (`traits.material.kind`; paper when absent). Changing a card's material is a distant-future idea.
+- First-version material behaviour is **scoring only**, and only when the card **contributes to the scored hand** of its line.
+- A material's effect is a **`scoringModifier` trait** configured in the balance config, with three inputs and their neutral values: `additive` (0), `multiplicative` (1), `exponential` (1).
+- Materials contribute **event rules** exactly as passives do ([#63](https://github.com/trebizondoculpepper/poker_blocks/issues/63)): `scoringModifier` expands to rules on `score.beforeBlockValue` (additive) and `score.beforeLineFinalized` (multiplicative, exponential), run by the same queue. The scorer never names a material.
+
+| Material          | Additive | Multiplicative | Exponential |  Unlock round |
+| ----------------- | -------: | -------------: | ----------: | ------------: |
+| Paper             |        0 |              1 |           1 | starting deck |
+| Wood              |       +1 |              1 |           1 |             1 |
+| Steel             |        0 |           1.25 |           1 |             2 |
+| Prismatic crystal |        0 |              1 |         1.1 |             5 |
+
+#### Order of operations (Agreed)
+
+1. Each contributing card's base value gets its material's **additive** value (summed if several apply), then passive `score.beforeBlockValue` effects, in rack order.
+2. The line's working score is computed from block values and the ordinary hand multiplier.
+3. **Multiplicative** material factors multiply the working score (all factors multiplied together). Whether this comes before or after step 4 is an open question.
+4. Passive `score.beforeLineFinalized` effects resolve in rack order.
+5. **Exponential** effects apply last, one per contributing crystal, in sequence.
+6. Round to an integer once, after all effects; clamp at zero.
+
+#### Worked examples
+
+Values use the current hand table (a pair's base values summed, ×2 hand multiplier). Exact hand values are those in "Hand value" above; only the material arithmetic matters here.
+
+- **Wood pair:** two wooden 7s. Base 7 + 7 → (7+1) + (7+1) = 16; ×2 = **32** (paper: 28).
+- **Steel in a pair:** one steel 7 and one paper 7. 14 ×2 = 28; ×1.25 = **35**.
+- **Two steels:** both 7s steel. 28 × 1.25 × 1.25 = 43.75 → **44**.
+- **Crystal:** a crystal 7 and a paper 7. 28^1.1 = 39.07 → **39**.
+- **Non-contributor:** a steel 3 in a line whose best hand is a pair of 7s has no effect.
+
+#### Balance config guardrails
+
+- One config entry per material holds its traits and values; nothing else holds material numbers.
+- Validation (at load and in a test): `additive` is a finite number, `multiplicative` and `exponential` are positive, unlock rounds are positive integers, and keyframes are ordered (see the shop rules).
+- A guardrail test confirms the scorer and effect runner contain no material ids.
+
+#### Open questions
+
+Asked on [issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8): whether material line effects resolve before or after passives in the same phase; whether meat, flame, ice and gold have any scoring effect in the first version; material cues and inspection text; how a save records a card's material. Steel and crystal strengths are first tuning values.
 
 ## Passives (design)
 

@@ -141,6 +141,8 @@ The proposed hand and passive rack are ordered zones in `GameState`. A generic r
 
 ## Line scoring
 
+**Materials (design, #8):** a card's material is a block trait. Its scoring effect is a `scoringModifier` trait (`additive`, `multiplicative`, `exponential`) whose values come from the balance config. It contributes event rules to the same queue as passives (#63): additive on `score.beforeBlockValue`, multiplicative and exponential on `score.beforeLineFinalized`, for contributing cards only. The line scorer supplies contributor ids and never names a material; see `doc/game.md`, "Material scoring", for the order of operations.
+
 `src/scoring.ts` holds pure scoring primitives with no UI, sound or state changes. `findScoringLines` returns every maximal gap-free run of two or more placed blocks along X, then Y, then Z, with its cells and blocks in cell order. `scoreLine` returns one line's numeric score, and `evaluateLine` adds the hand type and the ids of the cards that counted. Card points come from the configured `scorable` trait (`src/traits/scorable.ts`), never from the block type. `scoreField` scores every line, and `presentationOrder` drops zero-point lines and sorts the rest lowest first.
 
 After each successful play the base dealer adds the points of every line on the field to the running total. `roundOutcome` reports the stage as won once the total reaches the target and lost when plays run out short of it; the dealer then refuses further plays and discards. The formula and its provisional edge rules are in `doc/game.md`.
