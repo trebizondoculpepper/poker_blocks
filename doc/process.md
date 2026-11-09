@@ -35,6 +35,13 @@ The user answers questions in a regular Q&A round. **Whoever records the answers
 
 ## Labels
 
+**A blocked ticket always says why.** Whoever sets `status:blocked`, `status:needs-design` or `status:incomplete` posts a comment with:
+
+- **Why it's blocked:** the specific thing missing. For example a ticket that must merge first (by number), a question for the user (quoted), a design to be done, or a credential such as an API key the user must add.
+- **What unblocks it:** the action needed, and who can take it.
+
+Update the comment when the blocker changes.
+
 Every open ticket that isn't claimed has exactly one readiness label: `status:ready`, `status:needs-design`, `status:blocked` or `status:parked`. Update it when that changes, for example moving a blocked ticket to `status:ready` when its dependency merges. A claimed ticket drops `status:ready` and takes `agent:<name>`.
 
 | Label                                 | Meaning                                                                       |
