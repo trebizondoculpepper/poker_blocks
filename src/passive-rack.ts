@@ -19,7 +19,7 @@ type RenderedPassive = {
 };
 
 /** Each face gets the block's own symbol; this texture is mapped onto all six cube faces. */
-function faceTexture(
+export function passiveFaceTexture(
   appearance: NonNullable<PassiveBlock["traits"]["appearance"]> | PassiveDefinition,
 ): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
@@ -128,7 +128,7 @@ export function createPassiveRack(
         if (!entry) {
           const definition = passiveDefinitions.get(block.definitionId);
           const appearance = block.traits.appearance ?? definition;
-          const texture = faceTexture(appearance);
+          const texture = passiveFaceTexture(appearance);
           const material = new THREE.MeshStandardMaterial({
             map: texture,
             roughness: 0.7,

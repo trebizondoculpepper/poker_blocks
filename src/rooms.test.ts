@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { devRooms, roomFor } from "./rooms";
+import { devRooms, fieldPlacementActive, roomFor } from "./rooms";
 import { saveKey } from "./save";
 
 describe("rooms composed from traits", () => {
@@ -14,6 +14,7 @@ describe("rooms composed from traits", () => {
   it("keeps each room's behaviour in its traits", () => {
     expect(roomFor(null).traits).toEqual({
       save: { key: saveKey },
+      stage: { fieldPlacement: {} },
       passiveRack: { capacity: 5 },
       shop: { passiveOffers: 2, cardOffers: 3 },
     });
@@ -23,6 +24,8 @@ describe("rooms composed from traits", () => {
     expect(roomFor("dev3").traits.shopPreview).toEqual({ coins: 5 });
     expect(roomFor("dev3").traits.shop).toEqual({ passiveOffers: 2, cardOffers: 3 });
     expect(roomFor("dev3").traits.skipTitle).toEqual({ resume: true });
+    expect(fieldPlacementActive(roomFor("dev3").traits, "stage")).toBe(true);
+    expect(fieldPlacementActive(roomFor("dev3").traits, "shop")).toBe(false);
   });
 });
 

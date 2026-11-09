@@ -45,7 +45,7 @@ import { bindScreenshotShortcut } from "./screenshot";
 import { createPassiveRack } from "./passive-rack";
 import { shopPreviewState } from "./shop-stock";
 import { createShopView } from "./shop-view";
-import { devRooms, roomFor } from "./rooms";
+import { devRooms, fieldPlacementActive, roomFor } from "./rooms";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
@@ -924,6 +924,7 @@ function showCandidate(candidate: Candidate | null): void {
 /** Invite the first play using the same outline as a valid attachment preview. */
 function updateEmptyFieldPrompt(time: number): void {
   const cell =
+    fieldPlacementActive(roomTraits, game.phase) &&
     game.inStage &&
     game.state.field.length === 0 &&
     game.state.hand.length > 0 &&
@@ -968,7 +969,7 @@ function updateCandidate(): void {
   // A group plays as a line (one play) or is discarded; it is not reordered as one.
   const single = drag.group.length === 0;
   drag.candidate =
-    !overBin && game.dealer.canPlay(game.state)
+    fieldPlacementActive(roomTraits, game.phase) && !overBin && game.dealer.canPlay(game.state)
       ? pickAttachment(drag.lastX, drag.lastY, drag.group.length + 1)
       : null;
   showCandidate(drag.candidate);
@@ -1764,7 +1765,7 @@ const onPointerDown = (event: PointerEvent) => {
   }
   tooltip.hidden = true;
   const source = pickBlock(event.clientX, event.clientY, handBlocks);
-  if (source?.block.traits.attachable) {
+  if (fieldPlacementActive(roomTraits, game.phase) && source?.block.traits.attachable) {
     pointRay(event.clientX, event.clientY, handCamera);
     const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
       ? source.cube.position.clone().sub(dragPoint)
@@ -2009,6 +2010,7 @@ const animate = (time: number) => {
   if (drag?.active) updateCandidate();
   updateEmptyFieldPrompt(time);
   passiveRackView?.frame(time, reducedMotion);
+  shopView?.frame();
   render();
   frame = requestAnimationFrame(animate);
 };

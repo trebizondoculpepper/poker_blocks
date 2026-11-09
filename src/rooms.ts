@@ -26,6 +26,8 @@ export const defaultShop: ShopTrait = { passiveOffers: 2, cardOffers: 3 };
 export type RoomTraits = {
   /** Where the room keeps its saved run. */
   save: { key: string };
+  /** The stage scene's interactions. The shop scene does not compose these. */
+  stage: { fieldPlacement: Record<string, never> };
   passiveRack?: PassiveRackTrait;
   shop?: ShopTrait;
   /** Endless play: unlimited plays and discards, a stage cannot be won or lost by itself. */
@@ -54,6 +56,11 @@ export type Room = {
   traits: RoomTraits;
 };
 
+/** Only the active stage scene composes field placement; a shop cannot offer it. */
+export function fieldPlacementActive(traits: RoomTraits, phase: string): boolean {
+  return phase !== "shop" && phase !== "over" && Boolean(traits.stage.fieldPlacement);
+}
+
 export const roomRegistry = new Registry<Room>("room");
 
 const rooms: Room[] = [
@@ -63,6 +70,7 @@ const rooms: Room[] = [
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
       save: { key: saveKey },
+      stage: { fieldPlacement: {} },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
     },
@@ -71,13 +79,18 @@ const rooms: Room[] = [
     id: "dev0",
     aliases: ["dev"],
     dev: true,
-    traits: { save: { key: "poker-blocks.dev-run" }, materialDeck: { reshuffle: "new-game" } },
+    traits: {
+      save: { key: "poker-blocks.dev-run" },
+      stage: { fieldPlacement: {} },
+      materialDeck: { reshuffle: "new-game" },
+    },
   },
   {
     id: "dev1",
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev1-run" },
+      stage: { fieldPlacement: {} },
       sandbox: {},
       materialDeck: { reshuffle: "each-run" },
       materialSample: {},
@@ -90,6 +103,7 @@ const rooms: Room[] = [
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev2-run" },
+      stage: { fieldPlacement: {} },
       sandbox: {},
       materialDeck: { reshuffle: "new-game" },
       passiveRack: { ...defaultPassiveRack, startWith: 2 },
@@ -102,6 +116,7 @@ const rooms: Room[] = [
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev3-run" },
+      stage: { fieldPlacement: {} },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
       shopPreview: { coins: 5 },
