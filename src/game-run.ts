@@ -1,8 +1,9 @@
 import type { CardBlock } from "./cards";
+import { blockCanDestroy } from "./block-trait-behaviours";
 import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
 import type { GameState, PlacedBlock, PlayAction } from "./game-state";
-import { canDestroy, type DestroyCause } from "./traits/destructible";
+import type { DestroyCause } from "./traits/destructible";
 import { moveItem } from "./zones";
 import { ledgerTotal, stageRewardLedger, type StageReward } from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
@@ -122,7 +123,7 @@ export class GameRun {
    */
   destroyBlock(blockId: string, cause: DestroyCause): PlacedBlock | null {
     const placed = this.currentState.field.find(({ block }) => block.id === blockId);
-    if (!placed || !canDestroy(placed.block, cause)) return null;
+    if (!placed || !blockCanDestroy(placed.block, cause)) return null;
     this.currentState = {
       ...this.currentState,
       field: this.currentState.field.filter((other) => other !== placed),
