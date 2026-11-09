@@ -120,6 +120,18 @@ describe("game modes composed from traits", () => {
     // The title scene owns its own panel, with Continue gated on a save existing.
     expect(traitsOf("game", "title")).toEqual({
       screen: { kind: "title" },
+      panelFooter: {
+        links: [
+          {
+            label: "Get source code",
+            href: "https://github.com/trebizondoculpepper/poker_blocks",
+          },
+          {
+            label: "Report a bug",
+            href: "https://github.com/trebizondoculpepper/poker_blocks/issues/new",
+          },
+        ],
+      },
       titleScreen: {
         items: [
           {

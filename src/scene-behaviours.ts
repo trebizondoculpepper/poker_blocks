@@ -46,7 +46,11 @@ export type SceneHost = {
       | "hideTitle"
       | "showGameOver"
       | "hideGameOver"
+      | "showPanelFooter"
+      | "hidePanelFooter"
     >;
+    /** The build's version, shown in a panel's footer (`src/version.ts`). */
+    version: string;
     audio: Pick<AudioService, "setMusicFilter" | "playStageMusic" | "playCue">;
     /** Play a registered sound effect (src/audio/sfx.ts). */
     sound(id: SoundEffectId): void;
@@ -172,6 +176,15 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       behaviours.get("titleScreen").enter?.(context, config);
     },
     exit: (context) => context.services.overlays.hideTitle(),
+  });
+  behaviours.register("panelFooter", {
+    enter: (context, { links }) =>
+      context.services.overlays.showPanelFooter(links, context.services.version),
+    // Back in front after a panel opened over it: its footer was removed with that panel,
+    // because a footer belongs to the panel in front, so re-add it here.
+    resume: (context, { links }) =>
+      context.services.overlays.showPanelFooter(links, context.services.version),
+    exit: (context) => context.services.overlays.hidePanelFooter(),
   });
   behaviours.register("settingsPanel", {
     enter: (context) => context.services.overlays.showSettings(),

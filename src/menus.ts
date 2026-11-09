@@ -2,6 +2,7 @@
 // into the game; progression rules stay in the run controller.
 import { playSfx } from "./audio/sfx";
 import type { SoundEffectId } from "./audio/sfx-registry";
+import type { PanelLink } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
 import type { Settings } from "./settings";
@@ -36,6 +37,9 @@ export type Menus = {
   /** The title's items are the title scene trait's decision, so they are passed in. */
   showTitle(items: readonly MenuChoice[]): void;
   hideTitle(): void;
+  /** The footer of the panel in front: the version, then links out (#129). */
+  showPanelFooter(links: readonly PanelLink[], version: string): void;
+  hidePanelFooter(): void;
   /** Show a menu of choices (the pause menu) over whatever is in front. */
   showMenu(label: string, choices: readonly MenuChoice[]): void;
   hideMenu(): void;
@@ -119,6 +123,8 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   const find = <T extends HTMLElement>(root: HTMLElement, name: string) =>
     root.querySelector<T>(`[data-menu="${name}"]`)!;
+  /** The footer currently shown, so hiding removes exactly that one. */
+  let shownFooter: HTMLElement | null = null;
   const titleItems = find<HTMLDivElement>(title.panel, "items");
   const confirm = find<HTMLDivElement>(title.panel, "confirm");
   const choices = find<HTMLDivElement>(pauseMenu.panel, "choices");
@@ -153,6 +159,53 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   function hideTitle(): void {
     title.root.hidden = true;
+  }
+
+  /**
+   * The footer sits in the panel in front: the build version, then each link out (#129). The
+   * scene trait decides what a panel shows; this only renders it.
+   */
+  function showPanelFooter(links: readonly PanelLink[], version: string): void {
+    const panel = panelInFront();
+    if (!panel) return;
+    const footer = document.createElement("div");
+    footer.className = "menu-footer";
+    footer.dataset.menu = "footer";
+    const versionLine = document.createElement("small");
+    versionLine.className = "menu-version";
+    versionLine.textContent = `v${version}`;
+    footer.append(versionLine);
+    for (const link of links) {
+      if (!link.href) continue;
+      const anchor = document.createElement("a");
+      anchor.className = "menu-link";
+      anchor.href = link.href;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.textContent = link.label;
+      anchor.addEventListener("click", () => playSfx("ui.click"));
+      footer.append(anchor);
+    }
+    hidePanelFooter();
+    panel.append(footer);
+    shownFooter = footer;
+  }
+
+  /**
+   * Remove the footer this service added. It is not a document-wide query, because a covering
+   * scene's exit must not take the footer of the scene it uncovers with it.
+   */
+  function hidePanelFooter(): void {
+    shownFooter?.remove();
+    shownFooter = null;
+  }
+
+  /** The panel belonging to the overlay in front, for a footer the scene asked for there. */
+  function panelInFront(): HTMLElement | null {
+    for (const screen of [gameOver, stageWon, settingsScreen, pauseMenu, title]) {
+      if (!screen.root.hidden) return screen.panel;
+    }
+    return null;
   }
 
   /**
@@ -391,6 +444,8 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   return {
     showTitle,
     hideTitle,
+    showPanelFooter,
+    hidePanelFooter,
     closeAll,
     showGameOver,
     hideGameOver,

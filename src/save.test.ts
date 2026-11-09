@@ -164,6 +164,19 @@ describe("run storage", () => {
     expect(storage.data.has(saveKey)).toBe(false);
   });
 
+  it("clears only the slot it is given, so a dev mode clears its own save (#149)", () => {
+    const storage = memoryStorage();
+    const snapshot = playedSession().snapshot();
+    saveRun(storage, snapshot);
+    saveRun(storage, snapshot, "poker-blocks.dev2-run");
+
+    clearRun(storage, "poker-blocks.dev2-run");
+
+    expect(storage.data.has("poker-blocks.dev2-run")).toBe(false);
+    // The normal game's run is untouched.
+    expect(loadRun(storage, standardDeck, dealerRegistry)).toEqual(snapshot);
+  });
+
   it("ignores unreadable data and works without storage", () => {
     const storage = memoryStorage();
     storage.setItem(saveKey, "{not json");

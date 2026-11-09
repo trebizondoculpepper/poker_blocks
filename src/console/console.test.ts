@@ -17,6 +17,7 @@ function fakeHost() {
     next: () => void calls.push("next"),
     newGame: () => void calls.push("new"),
     home: () => void calls.push("home"),
+    hardReset: () => void calls.push("hardReset"),
     mode: () => null,
     modes: () => ["dev0", "dev1", "dev2", "dev3"],
     resetMode: (mode: string | null) => void calls.push(`reset ${mode}`),
@@ -99,6 +100,16 @@ describe("the commands", () => {
     expect(text("reset")).toEqual(["new run"]);
     expect(text("reset dev9")[0]).toMatch(/no mode/);
     expect(calls).toEqual(["reset dev2", "reset null"]);
+  });
+
+  it("recognises a multi-word command, and leaves single-word ones alone (#149)", () => {
+    const { text, calls } = fakeHost();
+    expect(text("hard reset")).toEqual(["run discarded"]);
+    expect(calls).toEqual(["hardReset"]);
+    calls.length = 0;
+    // `reset` must still mean reset, not be shadowed by the longer name.
+    expect(text("reset")).toEqual(["new run"]);
+    expect(calls).toEqual(["reset null"]);
   });
 
   it("goes home to the main menu", () => {
