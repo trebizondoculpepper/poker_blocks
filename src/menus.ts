@@ -1,6 +1,7 @@
 // Title, settings and game over screens: plain DOM overlays above the scene. They only call back
 // into the game; progression rules stay in the run controller.
 import { playSfx } from "./audio/sfx";
+import type { MenuItem } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
 import type { Settings } from "./settings";
@@ -26,7 +27,9 @@ export type MenuCallbacks = {
 };
 
 export type Menus = {
-  showTitle(): void;
+  /** The title's items are the title scene trait's decision, so they are passed in. */
+  showTitle(items: readonly MenuItem[]): void;
+  hideTitle(): void;
   /** Show a menu of choices (the pause menu) over whatever is in front. */
   showMenu(label: string, choices: readonly MenuChoice[]): void;
   hideMenu(): void;
@@ -52,17 +55,13 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     "beforeend",
     `<h1 class="menu-title">POKER BLOCKS</h1>
      <p class="menu-subtitle">Poker solitaire in three dimensions</p>
-     <div class="menu-buttons">
-       <button type="button" data-menu="continue">Continue</button>
-       <button type="button" data-menu="new">New game</button>
-       <div class="menu-confirm" data-menu="confirm" hidden>
-         <p>Start again? Your saved game will be lost.</p>
-         <div class="menu-row">
-           <button type="button" data-menu="confirm-yes">Start new game</button>
-           <button type="button" data-menu="confirm-no">Keep it</button>
-         </div>
+     <div class="menu-buttons" data-menu="items"></div>
+     <div class="menu-confirm" data-menu="confirm" hidden>
+       <p>Start again? Your saved game will be lost.</p>
+       <div class="menu-row">
+         <button type="button" data-menu="confirm-yes">Start new game</button>
+         <button type="button" data-menu="confirm-no">Keep it</button>
        </div>
-       <button type="button" data-menu="settings">Settings</button>
      </div>`,
   );
 
@@ -116,8 +115,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   const find = <T extends HTMLElement>(root: HTMLElement, name: string) =>
     root.querySelector<T>(`[data-menu="${name}"]`)!;
-  const continueButton = find<HTMLButtonElement>(title.panel, "continue");
-  const newButton = find<HTMLButtonElement>(title.panel, "new");
+  const titleItems = find<HTMLDivElement>(title.panel, "items");
   const confirm = find<HTMLDivElement>(title.panel, "confirm");
   const choices = find<HTMLDivElement>(pauseMenu.panel, "choices");
 
@@ -142,15 +140,60 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     callbacks.onScreen?.("game");
   }
 
-  function showTitle(): void {
-    // With no save, Continue stays visible but greyed out, and says why on hover (#10).
-    const canContinue = callbacks.hasSave();
-    continueButton.setAttribute("aria-disabled", String(!canContinue));
-    continueButton.title = canContinue ? "" : noGameInProgress;
+  function showTitle(items: readonly MenuItem[]): void {
     confirm.hidden = true;
-    newButton.hidden = false;
+    fillTitleItems(items);
     open(title.root);
     callbacks.onScreen?.("title");
+  }
+
+  function hideTitle(): void {
+    title.root.hidden = true;
+  }
+
+  /**
+   * The title's buttons come from the scene's `titleScreen` trait, so which ones appear (and
+   * whether Continue is offered at all) is configuration, not this file's decision.
+   */
+  function fillTitleItems(items: readonly MenuItem[]): void {
+    titleItems.replaceChildren();
+    for (const item of items) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = item.label;
+      button.dataset.menu = item.id;
+      button.addEventListener("click", () => chooseTitleItem(item.id));
+      titleItems.append(button);
+    }
+  }
+
+  /**
+   * The title's own commands, keyed by the item id its scene trait declares. An id not in this
+   * table is a navigation action, which the run controller's flow data handles.
+   */
+  const titleCommands: Record<string, () => void> = {
+    continue() {
+      closeAll();
+      callbacks.onContinue();
+    },
+    new() {
+      // Starting again discards a saved run, so it asks first (#10). Focus goes to the
+      // non-destructive choice, so a held or repeated Enter cannot overwrite the save.
+      if (callbacks.hasSave()) {
+        confirm.hidden = false;
+        find<HTMLButtonElement>(confirm, "confirm-no").focus();
+        return;
+      }
+      closeAll();
+      callbacks.onNewGame();
+    },
+  };
+
+  function chooseTitleItem(id: string): void {
+    playSfx("ui.click");
+    const command = Object.hasOwn(titleCommands, id) ? titleCommands[id] : null;
+    if (command) return command();
+    callbacks.onAction(id);
   }
 
   /**
@@ -214,26 +257,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     settingsButton.hidden = !title.root.hidden || !gameOver.root.hidden || !stageWon.root.hidden;
   }
 
-  continueButton.addEventListener("click", () => {
-    if (continueButton.getAttribute("aria-disabled") === "true") {
-      playSfx("action.denied");
-      return;
-    }
-    playSfx("ui.click");
-    closeAll();
-    callbacks.onContinue();
-  });
-  newButton.addEventListener("click", () => {
-    playSfx("ui.click");
-    if (callbacks.hasSave()) {
-      newButton.hidden = true;
-      confirm.hidden = false;
-      find<HTMLButtonElement>(confirm, "confirm-no").focus();
-      return;
-    }
-    closeAll();
-    callbacks.onNewGame();
-  });
   find(confirm, "confirm-yes").addEventListener("click", () => {
     playSfx("ui.click");
     closeAll();
@@ -242,12 +265,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   find(confirm, "confirm-no").addEventListener("click", () => {
     playSfx("ui.back");
     confirm.hidden = true;
-    newButton.hidden = false;
-    newButton.focus();
-  });
-  find(title.panel, "settings").addEventListener("click", () => {
-    playSfx("ui.click");
-    callbacks.onAction("openSettings");
+    titleItems.querySelector<HTMLButtonElement>("button")?.focus();
   });
   // The touch-visible button opens the same pause menu as Escape.
   settingsButton.addEventListener("click", () => {
@@ -264,7 +282,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   });
   find(gameOver.panel, "main-menu").addEventListener("click", () => {
     playSfx("ui.back");
-    showTitle();
+    callbacks.onAction("quitToTitle");
   });
 
   function showGameOver(stats: RunStats): void {
@@ -351,6 +369,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   return {
     showTitle,
+    hideTitle,
     closeAll,
     showGameOver,
     showStageWon,
