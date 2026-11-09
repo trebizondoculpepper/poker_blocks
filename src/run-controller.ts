@@ -635,7 +635,8 @@ export function createRunController<Context>(options: {
       services.audio.start();
     },
     open() {
-      switchScene(currentMode.startScene);
+      // Each load handler puts its own scene in front (the title, or the run's scene through
+      // the flow), so the first scene enters once, with its run ready.
       onLoadHandlers[currentMode.traits.onLoad]();
       if (restartMode) {
         window.history.replaceState(
