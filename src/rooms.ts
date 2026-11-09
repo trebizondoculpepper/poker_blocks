@@ -98,6 +98,13 @@ export type RoomTraits = {
   materialSample?: Record<string, never>;
   /** Skip the title screen and go straight into play; `resume` continues the saved run. */
   skipTitle?: { resume: boolean };
+  /**
+   * Listed by the developer console under this name (`reset dev2`), and linked by it in
+   * the URL (`?room=dev2`). Rooms without it are not listed.
+   */
+  console?: { name: string };
+  /** A fresh run is started on load when this URL parameter is "true"; it is then removed. */
+  restartable?: { param: string };
   /** Start a fresh run in the shop with this many coins, for shop development. */
   shopPreview?: { coins: number };
 };
@@ -106,16 +113,12 @@ export type Room = {
   id: string;
   /** Temporary music policy until this becomes a composed music trait (#34). */
   musicMode: RoomMusicMode;
-  /** Console-visible room name and URL value; omitted for the default game. */
-  consoleName?: string;
   /** The scenes this mode can enter without reloading the page. */
   scenes: readonly RoomScene[];
   /** Scene entered when this mode starts. */
   startScene: RoomSceneName;
   /** Other names that open this room (old links). */
   aliases?: readonly string[];
-  /** A developer room: listed by the console's `reset`. */
-  dev: boolean;
   traits: RoomTraits;
 };
 
@@ -137,7 +140,6 @@ const rooms: Room[] = [
     musicMode: "ordinary",
     scenes: scenesForRoom("game"),
     startScene: "title",
-    dev: false,
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
       save: { key: saveKey },
@@ -149,13 +151,13 @@ const rooms: Room[] = [
   {
     id: "dev0",
     musicMode: "ordinary",
-    consoleName: "dev0",
     scenes: scenesForRoom("dev0"),
     startScene: "title",
     aliases: ["dev"],
-    dev: true,
     traits: {
       save: { key: "poker-blocks.dev-run" },
+      console: { name: "dev0" },
+      restartable: { param: "restart" },
       stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       materialDeck: { reshuffle: "new-game" },
     },
@@ -163,12 +165,12 @@ const rooms: Room[] = [
   {
     id: "dev1",
     musicMode: "quiet",
-    consoleName: "dev1",
     scenes: scenesForRoom("dev1"),
     startScene: "stage-1",
-    dev: true,
     traits: {
       save: { key: "poker-blocks.dev1-run" },
+      console: { name: "dev1" },
+      restartable: { param: "restart" },
       stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       sandbox: {},
       materialDeck: { reshuffle: "each-run" },
@@ -179,12 +181,12 @@ const rooms: Room[] = [
   {
     id: "dev2",
     musicMode: "quiet",
-    consoleName: "dev2",
     scenes: scenesForRoom("dev2"),
     startScene: "stage-1",
-    dev: true,
     traits: {
       save: { key: "poker-blocks.dev2-run" },
+      console: { name: "dev2" },
+      restartable: { param: "restart" },
       stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       sandbox: {},
       materialDeck: { reshuffle: "new-game" },
@@ -195,12 +197,12 @@ const rooms: Room[] = [
   {
     id: "dev3",
     musicMode: "quiet",
-    consoleName: "dev3",
     scenes: scenesForRoom("dev3"),
     startScene: "shop",
-    dev: true,
     traits: {
       save: { key: "poker-blocks.dev3-run" },
+      console: { name: "dev3" },
+      restartable: { param: "restart" },
       stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
@@ -219,7 +221,26 @@ export function roomFor(name: string | null): Room {
   return roomRegistry.get(aliased ?? "game");
 }
 
-/** The developer rooms, in order. */
+/** The console's name for a room: none for a room the console does not list. */
+export function consoleNames(room: Room): string[] {
+  return [room.traits.console?.name ?? []].flat();
+}
+
+/** The rooms the developer console lists, by console name, in order. */
 export function devRooms(): string[] {
-  return roomRegistry.names().filter((id) => roomRegistry.get(id).dev);
+  return roomRegistry.names().flatMap((id) => consoleNames(roomRegistry.get(id)));
+}
+
+/** Whether this page load asks the room for a fresh run (`&restart=true`). */
+export function wantsRestart(room: Room, params: URLSearchParams): boolean {
+  return [room.traits.restartable?.param ?? []].flat().some((p) => params.get(p) === "true");
+}
+
+/** A link to the room: `?room=<console name>`, or no parameter for an unlisted room. */
+export function roomLink(room: Room, href: string): URL {
+  const url = new URL(href);
+  url.searchParams.delete("room");
+  for (const name of consoleNames(room)) url.searchParams.set("room", name);
+  for (const param of [room.traits.restartable?.param ?? []].flat()) url.searchParams.delete(param);
+  return url;
 }

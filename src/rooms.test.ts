@@ -12,6 +12,19 @@ describe("rooms composed from traits", () => {
     expect(devRooms()).toEqual(["dev0", "dev1", "dev2", "dev3"]);
   });
 
+  it("lists, links and restarts rooms through their console and restartable traits", async () => {
+    const { consoleNames, roomLink, wantsRestart } = await import("./rooms");
+    const restart = new URLSearchParams("room=dev2&restart=true");
+    expect(consoleNames(roomFor(null))).toEqual([]);
+    expect(consoleNames(roomFor("dev2"))).toEqual(["dev2"]);
+    expect(wantsRestart(roomFor("dev2"), restart)).toBe(true);
+    expect(wantsRestart(roomFor("dev2"), new URLSearchParams("room=dev2"))).toBe(false);
+    expect(wantsRestart(roomFor(null), new URLSearchParams("restart=true"))).toBe(false);
+    const base = "http://x/?room=dev2&restart=true&debug=1";
+    expect(roomLink(roomFor("dev3"), base).search).toBe("?debug=1&room=dev3");
+    expect(roomLink(roomFor(null), base).search).toBe("?restart=true&debug=1");
+  });
+
   it("keeps each room's behaviour in its traits", () => {
     expect(roomFor(null).traits).toEqual({
       save: { key: saveKey },
