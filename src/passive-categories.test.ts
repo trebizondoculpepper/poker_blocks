@@ -14,6 +14,7 @@ import { createPassiveBlock, passiveDefinitions, passivePalette } from "./passiv
 const gameplaySources = import.meta.glob<string>(
   [
     "./event-rules.ts",
+    "./rule-handlers.ts",
     "./passive-effects.ts",
     "./scoring.ts",
     "./game-run.ts",

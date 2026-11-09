@@ -17,13 +17,32 @@ The first set uses these reusable trait types:
 
 `EventRule` uses named, reusable condition handlers (such as `material-is`, `suit-in`, `rank-count-at-least`, `line-length`, and `perpendicular-intersection`) and effect handlers (such as `add-block-value`, `multiply-block-value`, `add-line-score`, `multiply-line-score`, `add-coins`, and `grant-random-unowned-passive`). The handlers are trait/runtime code. Registry entries supply values and selectors, not new functions. New conditions and effects can extend this vocabulary without changing the block container.
 
-The first migration slice introduces serializable `EventRule({ on, select, where, effects[] })` data and an `EventRuleRegistry` that dispatches registered selectors, conditions, and ordered effects. The queue can subscribe from this new data. Live passives still use the legacy `PassiveRule` shape and calculation path until the scoring and action migrations land; this slice does not change their results. Each handler registration is typed against its own configuration. Unknown handler IDs fail during evaluation. The runner does not inspect those IDs to choose behavior.
+The first migration slice introduces serializable `EventRule({ on, select, where, effects[] })` data and an `EventRuleRegistry` that dispatches registered selectors, conditions, and ordered effects. The queue can subscribe from this new data. Scoring passives use it now (slice 2, #139; see "Scoring path" below). Discard and stage-won rules still use the legacy `PassiveRule` shape until slice 3. Each handler registration is typed against its own configuration. Unknown handler IDs fail during evaluation. The runner does not inspect those IDs to choose behavior.
 
 For example, Seeing Red is data shaped like `EventRule({ on: "discard.completed", select: "discarded-blocks", where: { suitIn: ["hearts", "diamonds"] }, effects: [{ addCoinsPerMatch: 1 }] })` alongside its rack, inspection, and appearance trait configurations. The same rule trait and `suitIn` predicate can serve another block with different suits or a different amount.
 
 At stage start, register the installed blocks' subscriptions; update registrations when a block is installed, sold, or destroyed. For one event, take a snapshot of rack order and resolve subscribed blocks **left to right**. Resolve a block's configured rules and effects in their listed order. Apply an effect before moving to the next passive, so later passives see the updated working value. Events caused by effects go to the back of the FIFO queue; a newly installed passive does not retroactively respond to the event that installed it. Keep the queue's loop limit and error reporting.
 
 Only the relevant phase may change a working value. `score.beforeBlockValue` can adjust one contributing block's value; `score.beforeLineFinalized` can adjust the line's working score; `discard.completed` can award coins or install a passive. Clamp a line's final score to zero after all its line effects have resolved, so a penalty never subtracts points from the stage total. One-block runs remain unscored. The line length used by conditions is the number of blocks in the **maximal, gap-free line**, even when a long line scores using a five-block subset.
+
+### Scoring path (#139)
+
+Scoring passives are `EventRule` data on their definitions (`eventRules`). Every handler they name is registered in `src/rule-handlers.ts`:
+
+| Kind      | Handlers                                                                                   |
+| --------- | ------------------------------------------------------------------------------------------ |
+| Selectors | `scored-block` (the block being valued), `scored-line` (the line, with its crossing count) |
+| Condition | `always`, `material-is`, `line-length`, `perpendicular-intersection`                       |
+| Effects   | `multiply-block-value`, `add-block-value`, `multiply-line-score`, `add-line-score`         |
+
+`scoreFieldWithPassives` (`src/passive-effects.ts`) takes the rack's rules subscribed to each scoring event, in rack order and then listed order, and runs them over a working value. It never asks which rule or passive it is running.
+
+1. **`score.beforeBlockValue`:** for each block in a line, the event carries the line, its crossing count and the block. The rules turn the block's base value into its working value.
+2. **Candidate hands:** a line of six or more tries every five-block subset using those working values. A block's value is the same in every candidate, so each block is evaluated once.
+3. **`score.beforeLineFinalized`:** the chosen hand's points become the line's working value, and the line rules apply. The result is clamped at zero.
+4. **Evaluate, then commit:** evaluation is pure. Only the chosen hand's contributing blocks, and then the line's rules, are committed as the line's `activations` (which passive fired, on which event and block, and the commands its effects collected). Presentation can show them (#81).
+
+A new scoring behaviour is one handler registration. No scoring code changes; `src/scoring-rules.test.ts` registers a test-only effect to prove it.
 
 ## Categories
 

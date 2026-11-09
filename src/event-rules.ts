@@ -16,9 +16,12 @@ export type EventRule = {
 export type RuleCommand = { id: string; config: unknown };
 export type RuleFrame = {
   event: Readonly<GameEvent>;
-  state: Readonly<GameState>;
+  /** The game state, where the event has one; pure scoring evaluates without it. */
+  state?: Readonly<GameState>;
   workingValue?: number;
   commands: readonly RuleCommand[];
+  /** Set by `evaluate`: whether the rule's condition matched and its effects ran. */
+  fired?: boolean;
 };
 
 type Selector = (config: unknown, frame: Readonly<RuleFrame>) => unknown;
@@ -63,11 +66,12 @@ export class EventRuleRegistry {
       selected,
       frame,
     );
-    if (!matched) return { ...frame };
-    return rule.effects.reduce<RuleFrame>(
+    if (!matched) return { ...frame, fired: false };
+    const result = rule.effects.reduce<RuleFrame>(
       (working, effect) => get(this.effects, effect.id, "effect")(effect.config, selected, working),
       { ...frame },
     );
+    return { ...result, fired: true };
   }
 }
 
