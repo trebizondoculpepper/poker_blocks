@@ -1,3 +1,4 @@
+import type { ResaleModifier } from "./resale";
 import type { StageRules } from "./game-state";
 
 export const stageKinds = ["stage-1", "stage-2", "boss"] as const;
@@ -20,20 +21,25 @@ export type RunRules = {
   stageReward?: number;
   /** How many passives the rack can hold; unlimited when left out. */
   rackCapacity?: number;
-  /** What passives cost and fetch, in coins; `defaultPassivePrices` when left out. */
+  /** What passives cost, in coins; `defaultPassivePrices` when left out. */
   passivePrices?: PassivePrices;
+  /**
+   * Changes to a passive's sale payout, applied in order after the default resale policy
+   * (src/resale.ts). None by default; future sale-modifying passives plug in here.
+   */
+  resaleModifiers?: readonly ResaleModifier[];
   /** First playable-card shop price; one coin unless a run changes it. */
   cardPurchasePrice?: number;
 };
 
 /**
- * The passive price policy (issue #16). Owned by the run so another session can set a
- * different spread; selling may later fetch less than buying.
+ * The passive purchase price (issue #16). Selling is the resale policy in src/resale.ts, from
+ * each passive's base price in the balance config (#103).
  */
-export type PassivePrices = { buy: number; sell: number };
+export type PassivePrices = { buy: number };
 
-/** First version: a passive costs 1 coin and sells for 1 coin. */
-export const defaultPassivePrices: PassivePrices = { buy: 1, sell: 1 };
+/** First version: a passive costs 1 coin to buy, until the shop uses base prices (#18). */
+export const defaultPassivePrices: PassivePrices = { buy: 1 };
 
 /** A stage in the round, in order, with the data that is its own. */
 export type StageDefinition = {

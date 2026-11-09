@@ -33,6 +33,8 @@ export type PassiveBlock = {
     appearance?: { symbol: string; palette: PassivePalette };
     passive: { traitId: string; rules?: readonly PassiveRule[]; eventRules?: readonly EventRule[] };
     inspectable: InspectableTrait;
+    /** What it cost in the shop, before modifiers; the resale policy reads it (#103). */
+    priced?: { basePrice: number };
   };
 };
 
@@ -57,6 +59,9 @@ export type PassiveTraitDefinition = {
 
 export type PassivePalette = { face: string; ink: string; edge: string };
 
+/** A passive's shop balance: fixed data; price modifiers apply on top, never here. */
+export type PassiveShopBalance = { basePrice: number; unlockRound: number };
+
 export type PassiveDefinition = {
   id: string;
   name: string;
@@ -71,6 +76,11 @@ export type PassiveDefinition = {
   /** Overrides the category's default colours for this passive. */
   palette?: PassivePalette;
   rules: readonly PassiveRule[];
+  /**
+   * Its shop balance (doc/game.md, "Shop rules"): base purchase price in coins and the first
+   * round it can be stocked. Absent only on a retired passive.
+   */
+  shop?: PassiveShopBalance;
   /** Excluded from new draws; kept so a save that names it still resolves. */
   retired?: boolean;
 };
@@ -98,6 +108,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "double-line",
+    shop: { basePrice: 4, unlockRound: 1 },
     categoryTrait: { scoringCategory: {} },
     name: "×2",
     symbol: "×2",
@@ -108,6 +119,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "quad-line",
+    shop: { basePrice: 9, unlockRound: 2 },
     categoryTrait: { scoringCategory: {} },
     name: "×4",
     symbol: "×4",
@@ -118,6 +130,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "gold-standard",
+    shop: { basePrice: 5, unlockRound: 4 },
     categoryTrait: { economyCategory: {} },
     name: "Gold Standard",
     symbol: "$",
@@ -134,6 +147,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "carnivore",
+    shop: { basePrice: 3, unlockRound: 3 },
     categoryTrait: { scoringCategory: {} },
     name: "Carnivore",
     symbol: "◈",
@@ -150,6 +164,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "woodworker",
+    shop: { basePrice: 4, unlockRound: 1 },
     categoryTrait: { scoringCategory: {} },
     name: "Woodworker",
     symbol: "✥",
@@ -166,6 +181,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "crossroads",
+    shop: { basePrice: 2, unlockRound: 1 },
     categoryTrait: { scoringCategory: {} },
     name: "Crossroads",
     symbol: "✳",
@@ -183,6 +199,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "long-haul",
+    shop: { basePrice: 4, unlockRound: 1 },
     categoryTrait: { scoringCategory: {} },
     name: "Long Haul",
     symbol: "↗",
@@ -205,6 +222,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "scrapper",
+    shop: { basePrice: 8, unlockRound: 2 },
     categoryTrait: { economyCategory: {} },
     name: "Scrapper",
     symbol: "⚙",
@@ -215,6 +233,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "seeing-red",
+    shop: { basePrice: 6, unlockRound: 1 },
     categoryTrait: { economyCategory: {} },
     name: "Seeing Red",
     symbol: "♥♦",
@@ -231,6 +250,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "ace-exchange",
+    shop: { basePrice: 5, unlockRound: 2 },
     categoryTrait: { utilityCategory: {} },
     name: "Ace Exchange",
     symbol: "AA",
@@ -280,6 +300,7 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
       appearance: { symbol: definition.symbol, palette: passivePalette(definition) },
       passive: { traitId: definition.traitId, rules: definition.rules },
       inspectable: inspectable(`${definition.name} — ${definition.description}`),
+      ...(definition.shop ? { priced: { basePrice: definition.shop.basePrice } } : {}),
     },
   };
 }
