@@ -236,10 +236,11 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
       callbacks.onContinue();
     },
     new() {
-      // Starting again discards a saved run, so it asks first (#10).
+      // Starting again discards a saved run, so it asks first (#10). Focus goes to the
+      // non-destructive choice, so a held or repeated Enter cannot overwrite the save.
       if (callbacks.hasSave()) {
         confirm.hidden = false;
-        find<HTMLButtonElement>(confirm, "confirm-yes").focus();
+        find<HTMLButtonElement>(confirm, "confirm-no").focus();
         return;
       }
       closeAll();
