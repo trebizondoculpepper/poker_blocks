@@ -94,7 +94,7 @@ type TraitContext = {
     input: TableInput;
     run: RunController;
     board: BlockDestroyerBoard;
-    attract: { start(): void; stop(): void; showTuning(): void };
+    attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
     shop: ShopView;
     version: string;
     sound: (id: SoundEffectId) => void;
