@@ -1,50 +1,18 @@
-import type { CardBlock } from "./cards";
 import type { PlacedBlock } from "./game-state";
-import { materialOf } from "./materials";
 import type { EventRule, RuleCommand } from "./event-rules";
-import type { GameEvent, PassiveBlock, PassiveRule } from "./passives";
+import type { GameEvent, PassiveBlock } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
-import type { StageKind } from "./run-rules";
 import { evaluateLine, findScoringLines, type Line, type ScoredLine } from "./scoring";
 import { cellKey } from "./traits/attachable";
 import { scorableValue } from "./traits/scorable";
 
-/** Legacy predicates for discard and stage-won rules, until they move to event rules (#63 slice 3). */
-function matches(
-  rule: PassiveRule,
-  context: {
-    block?: CardBlock;
-    discarded?: readonly CardBlock[];
-    stage?: StageKind;
-  },
-): boolean {
-  const condition = rule.condition;
-  if (!condition) return true;
-  switch (condition.kind) {
-    case "material":
-      return !!context.block && materialOf(context.block) === condition.value;
-    case "suit":
-      return (
-        !!context.block &&
-        condition.values.includes(context.block.traits.identity.suit.name as "hearts" | "diamonds")
-      );
-    case "rank-count":
-      return (
-        (context.discarded?.filter((block) => block.traits.identity.rank === condition.rank)
-          .length ?? 0) >= condition.minimum
-      );
-    case "stage":
-      return !!context.stage && condition.kinds.includes(context.stage);
-  }
-}
-
-/** A passive's rule that fired for a scored line, reported so presentation can show it. */
+/** A passive's rule that fired, reported so presentation can show it. */
 export type PassiveActivation = {
   passiveId: string;
   on: string;
   /** On `score.beforeBlockValue`: the contributing block the rule changed. */
   blockId?: string;
-  /** Commands the rule's effects collected, committed with the line. */
+  /** Commands the rule's effects collected, for the game run to commit. */
   commands: readonly RuleCommand[];
 };
 
@@ -149,49 +117,12 @@ function crossingCells(line: Line, lines: readonly Line[]): number {
 }
 
 /**
- * Coins one passive pays when a stage is won, judged on the blocks still in the hand: per
- * matching block (perMatch), or once if any block (or, with no condition, always).
+ * One passive's rules subscribed to `event`, evaluated in their listed order: the ones that
+ * fired, each with the commands its effects collected (#170). Pure; the caller commits.
  */
-export function stageWonPassiveCoins(
+export function passiveActivations(
   passive: PassiveBlock,
-  hand: readonly CardBlock[],
-  stage?: StageKind,
-): number {
-  let coins = 0;
-  for (const rule of passive.traits.passive.rules ?? []) {
-    if (rule.on !== "stage.won" || rule.effect.kind !== "add-coins") continue;
-    // A stage condition tests the won stage itself, not the blocks left in the hand.
-    if (rule.condition?.kind === "stage") {
-      if (matches(rule, { stage })) coins += rule.effect.amount;
-      continue;
-    }
-    if (!rule.condition) {
-      coins += rule.effect.amount;
-      continue;
-    }
-    const matching = hand.filter((block) => matches(rule, { block })).length;
-    coins += rule.effect.amount * (rule.effect.perMatch ? matching : Number(matching > 0));
-  }
-  return coins;
-}
-
-/** One listener's outcome for a single discard action, in rack order. */
-export function discardPassiveEffects(
-  passive: PassiveBlock,
-  discarded: readonly CardBlock[],
-): { coins: number; grants: number } {
-  let coins = 0;
-  let grants = 0;
-  for (const rule of passive.traits.passive.rules ?? []) {
-    if (rule.on !== "discard.completed") continue;
-    if (rule.effect.kind === "grant-unowned-passive") {
-      if (matches(rule, { discarded })) grants++;
-      continue;
-    }
-    if (rule.effect.kind !== "add-coins") continue;
-    const matching = discarded.filter((block) => matches(rule, { block, discarded }));
-    coins +=
-      rule.effect.amount * (rule.effect.perMatch ? matching.length : Number(matching.length > 0));
-  }
-  return { coins, grants };
+  event: Readonly<GameEvent>,
+): PassiveActivation[] {
+  return evaluateRules(subscribedRules([passive], event.type), event, 0).activations;
 }

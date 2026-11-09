@@ -11,6 +11,8 @@ import { EventRuleRegistry, type RuleFrame } from "./event-rules";
 import type { BlockMaterial } from "./materials";
 import { materialOf } from "./materials";
 import type { ScoreEventContext } from "./passives";
+import type { StageKind } from "./run-rules";
+import type { HandlerConfig } from "./event-rules";
 
 export const ruleHandlers = new EventRuleRegistry();
 
@@ -33,6 +35,18 @@ ruleHandlers.registerSelector<Record<never, never>, ScoreEventContext | undefine
   (_config, frame) => frame.event.score,
 );
 
+/** The event's blocks (discarded, or the hand at a stage win) for which `where` holds. */
+ruleHandlers.registerSelector<{ where: HandlerConfig }, readonly CardBlock[]>(
+  "event-blocks",
+  ({ where }, frame) =>
+    (frame.event.blocks ?? []).filter((block) => ruleHandlers.holds(where, block, frame)),
+);
+/** On `stage.won`: the stage of the round that was won. */
+ruleHandlers.registerSelector<Record<never, never>, StageKind | undefined>(
+  "won-stage",
+  (_config, frame) => frame.event.stageKind,
+);
+
 // ----- Conditions: whether the rule applies -----
 
 ruleHandlers.registerCondition("always", () => true);
@@ -51,6 +65,24 @@ ruleHandlers.registerCondition<
 ruleHandlers.registerCondition<Record<never, never>, ScoreEventContext | undefined>(
   "perpendicular-intersection",
   (_config, score) => (score?.intersections ?? 0) > 0,
+);
+
+ruleHandlers.registerCondition<{ suits: readonly string[] }, CardBlock | undefined>(
+  "suit-in",
+  ({ suits }, block) => !!block && suits.includes(block.traits.identity.suit.name),
+);
+ruleHandlers.registerCondition<{ rank: string }, CardBlock | undefined>(
+  "rank-is",
+  ({ rank }, block) => block?.traits.identity.rank === rank,
+);
+/** At least `minimum` selected things (blocks, say). */
+ruleHandlers.registerCondition<{ minimum: number }, readonly unknown[]>(
+  "count-at-least",
+  ({ minimum }, selected) => selected.length >= minimum,
+);
+ruleHandlers.registerCondition<{ stages: readonly StageKind[] }, StageKind | undefined>(
+  "stage-in",
+  ({ stages }, stage) => !!stage && stages.includes(stage),
 );
 
 // ----- Effects: what the rule does to the working value -----
@@ -73,4 +105,25 @@ ruleHandlers.registerEffect<
   ScoreEventContext | undefined
 >("add-line-score", ({ amount, perIntersection }, score, frame) =>
   working(frame, (value) => value + amount * (perIntersection ? (score?.intersections ?? 0) : 1)),
+);
+
+// ----- Effects that collect commands, committed by the game run (src/rule-commands.ts) -----
+
+/** Ask for a command; the rule itself changes nothing. */
+const command = (frame: Readonly<RuleFrame>, id: string, config: unknown): RuleFrame => ({
+  ...frame,
+  commands: [...frame.commands, { id, config }],
+});
+ruleHandlers.registerEffect<{ amount: number }, unknown>(
+  "add-coins",
+  ({ amount }, _selected, frame) => command(frame, "add-coins", { amount }),
+);
+/** `amount` coins for each selected thing (each matching block, say). */
+ruleHandlers.registerEffect<{ amount: number }, readonly unknown[]>(
+  "add-coins-per-selected",
+  ({ amount }, selected, frame) =>
+    command(frame, "add-coins", { amount: amount * selected.length }),
+);
+ruleHandlers.registerEffect("grant-random-unowned-passive", (_config, _selected, frame) =>
+  command(frame, "grant-unowned-passive", {}),
 );

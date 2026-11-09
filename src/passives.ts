@@ -4,24 +4,8 @@ import type { EventRule, HandlerConfig } from "./event-rules";
 import type { CardBlock } from "./cards";
 import type { Line } from "./scoring";
 import type { PassiveFaceDesign, PassiveTokenAppearance } from "./passive-visual";
-import type { BlockMaterial } from "./materials";
 import type { StageKind } from "./run-rules";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
-
-/** Serializable block data. Behavior lives in the referenced trait definition. */
-export type PassiveRule = {
-  /** Scoring rules are `EventRule` data (#139); these legacy rules await #63 slice 3. */
-  on: "discard.completed" | "stage.won";
-  condition?:
-    | { kind: "material"; value: BlockMaterial }
-    | { kind: "suit"; values: readonly ("hearts" | "diamonds")[] }
-    | { kind: "rank-count"; rank: "A"; minimum: number }
-    /** Only at these stages, e.g. a reward paid for boss wins alone (issue #13). */
-    | { kind: "stage"; kinds: readonly StageKind[] };
-  effect:
-    | { kind: "add-coins"; amount: number; perMatch?: boolean }
-    | { kind: "grant-unowned-passive" };
-};
 
 export type PassiveBlock = {
   id: string;
@@ -29,7 +13,7 @@ export type PassiveBlock = {
   traits: Partial<PassiveCategoryTraits> & {
     rackResident?: { zone: "passive-rack" };
     appearance?: PassiveTokenAppearance;
-    passive: { traitId: string; rules?: readonly PassiveRule[]; eventRules?: readonly EventRule[] };
+    passive: { traitId: string; eventRules?: readonly EventRule[] };
     inspectable: InspectableTrait;
     /** What it cost in the shop, before modifiers; the resale policy reads it (#103). */
     priced?: { basePrice: number };
@@ -53,6 +37,10 @@ export type GameEvent = {
    * cross another line, and on `score.beforeBlockValue` the block being valued.
    */
   score?: ScoreEventContext;
+  /** The blocks the event is about: the discarded blocks, or the hand when a stage is won. */
+  blocks?: readonly CardBlock[];
+  /** On `stage.won`: which stage of the round was won. */
+  stageKind?: StageKind;
   /** On `reward.finalized`: the coins paid, and the balance before and after. */
   reward?: { coins: number; balanceBefore: number; balance: number };
 };
@@ -85,10 +73,8 @@ export type PassiveDefinition = {
   shape?: string;
   /** Artwork per face in logical order: face `i` sits opposite face `count - 1 - i`. */
   faces?: readonly PassiveFaceDesign[];
-  /** Legacy discard and stage-won rules (until #63 slice 3). */
-  rules: readonly PassiveRule[];
-  /** Its event rules: named, configured handlers from `src/rule-handlers.ts` (#139). */
-  eventRules?: readonly EventRule[];
+  /** Its event rules: named, configured handlers from `src/rule-handlers.ts` (#139, #170). */
+  eventRules: readonly EventRule[];
   /**
    * Its shop balance (doc/game.md, "Shop rules"): base purchase price in coins and the first
    * round it can be stocked. Absent only on a retired passive.
@@ -121,6 +107,14 @@ const lineRule = (where: HandlerConfig, ...effects: HandlerConfig[]): EventRule 
   effects,
 });
 
+/** `amount` coins for each of the event's blocks matching `where` (none, no activation). */
+const coinsPerBlock = (on: string, where: HandlerConfig, amount: number): EventRule => ({
+  on,
+  select: { id: "event-blocks", config: { where } },
+  where: { id: "count-at-least", config: { minimum: 1 } },
+  effects: [{ id: "add-coins-per-selected", config: { amount } }],
+});
+
 const definitions: PassiveDefinition[] = [
   {
     id: "do-nothing",
@@ -129,7 +123,7 @@ const definitions: PassiveDefinition[] = [
     symbol: "∅",
     description: "Has no effect. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [],
+    eventRules: [],
     retired: true,
   },
   {
@@ -140,7 +134,6 @@ const definitions: PassiveDefinition[] = [
     symbol: "×2",
     description: "Doubles every scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [],
     eventRules: [
       lineRule({ id: "always", config: {} }, { id: "multiply-line-score", config: { factor: 2 } }),
     ],
@@ -153,7 +146,6 @@ const definitions: PassiveDefinition[] = [
     symbol: "×4",
     description: "Quadruples every scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [],
     eventRules: [
       lineRule({ id: "always", config: {} }, { id: "multiply-line-score", config: { factor: 4 } }),
     ],
@@ -166,12 +158,8 @@ const definitions: PassiveDefinition[] = [
     symbol: "$",
     description: "When you win a stage, +1 coin for each gold block still in your hand.",
     traitId: "passive.event-rules",
-    rules: [
-      {
-        on: "stage.won",
-        condition: { kind: "material", value: "gold" },
-        effect: { kind: "add-coins", amount: 1, perMatch: true },
-      },
+    eventRules: [
+      coinsPerBlock("stage.won", { id: "material-is", config: { material: "gold" } }, 1),
     ],
   },
   {
@@ -182,7 +170,6 @@ const definitions: PassiveDefinition[] = [
     symbol: "◈",
     description: "Doubles the base value of each meat block in a scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [],
     eventRules: [
       blockRule(
         { id: "material-is", config: { material: "meat" } },
@@ -198,7 +185,6 @@ const definitions: PassiveDefinition[] = [
     symbol: "✥",
     description: "Adds 3 to the base value of each wood block in a scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [],
     eventRules: [
       blockRule(
         { id: "material-is", config: { material: "wood" } },
@@ -215,7 +201,6 @@ const definitions: PassiveDefinition[] = [
     description:
       "Adds 3 points for each block in a scored line that crosses another line. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [],
     eventRules: [
       lineRule(
         { id: "perpendicular-intersection", config: {} },
@@ -232,7 +217,6 @@ const definitions: PassiveDefinition[] = [
     description:
       "Subtracts 5 from two-block lines; adds 5 to lines of three or more. Final scores cannot go below zero. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [],
     eventRules: [
       lineRule(
         { id: "line-length", config: { maximum: 2 } },
@@ -252,7 +236,7 @@ const definitions: PassiveDefinition[] = [
     symbol: "⚙",
     description: "Earns 1 coin for each block discarded. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [{ on: "discard.completed", effect: { kind: "add-coins", amount: 1, perMatch: true } }],
+    eventRules: [coinsPerBlock("discard.completed", { id: "always", config: {} }, 1)],
   },
   {
     id: "seeing-red",
@@ -262,12 +246,12 @@ const definitions: PassiveDefinition[] = [
     symbol: "♥♦",
     description: "Earns 1 coin for each Heart or Diamond discarded. Unlimited use.",
     traitId: "passive.event-rules",
-    rules: [
-      {
-        on: "discard.completed",
-        condition: { kind: "suit", values: ["hearts", "diamonds"] },
-        effect: { kind: "add-coins", amount: 1, perMatch: true },
-      },
+    eventRules: [
+      coinsPerBlock(
+        "discard.completed",
+        { id: "suit-in", config: { suits: ["hearts", "diamonds"] } },
+        1,
+      ),
     ],
   },
   {
@@ -279,11 +263,12 @@ const definitions: PassiveDefinition[] = [
     description:
       "Discard at least two Aces together to gain one random passive you do not own. Triggers once per qualifying discard; unlimited use.",
     traitId: "passive.event-rules",
-    rules: [
+    eventRules: [
       {
         on: "discard.completed",
-        condition: { kind: "rank-count", rank: "A", minimum: 2 },
-        effect: { kind: "grant-unowned-passive" },
+        select: { id: "event-blocks", config: { where: { id: "rank-is", config: { rank: "A" } } } },
+        where: { id: "count-at-least", config: { minimum: 2 } },
+        effects: [{ id: "grant-random-unowned-passive", config: {} }],
       },
     ],
   },
@@ -325,7 +310,6 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
       },
       passive: {
         traitId: definition.traitId,
-        rules: definition.rules,
         eventRules: definition.eventRules,
       },
       inspectable: inspectable(`${definition.name} — ${definition.description}`),
@@ -345,7 +329,6 @@ export class PassiveEventQueue {
       const trait = passiveTraits.get(block.traits.passive.traitId);
       for (const type of new Set([
         ...trait.listensTo,
-        ...(block.traits.passive.rules ?? []).map(({ on }) => on),
         ...(block.traits.passive.eventRules ?? []).map(({ on }) => on),
       ])) {
         const listeners = this.listeners.get(type) ?? [];

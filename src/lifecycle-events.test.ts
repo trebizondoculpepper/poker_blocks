@@ -3,7 +3,8 @@ import { standardDeck } from "./cards";
 import { Registry } from "./core/registry";
 import { baseDealer, type Dealer } from "./dealer";
 import { GameRun } from "./game-run";
-import { passiveTraits, type GameEvent, type PassiveBlock, type PassiveRule } from "./passives";
+import { passiveTraits, type GameEvent, type PassiveBlock } from "./passives";
+import type { EventRule } from "./event-rules";
 import type { RunRules, StageKind } from "./run-rules";
 import { inspectable } from "./traits/inspectable";
 
@@ -43,12 +44,12 @@ passiveTraits.register("test.lifecycle.recorder", {
     return [];
   },
 });
-const passive = (id: string, traitId: string, rules: PassiveRule[] = []): PassiveBlock => ({
+const passive = (id: string, traitId: string, eventRules: EventRule[] = []): PassiveBlock => ({
   id,
   definitionId: id,
   traits: {
     rackResident: { zone: "passive-rack" },
-    passive: { traitId, rules },
+    passive: { traitId, eventRules },
     inspectable: inspectable(id),
   },
 });
@@ -132,8 +133,9 @@ describe("session lifecycle events (issue #13)", () => {
       passive("boss-bounty", "passive.event-rules", [
         {
           on: "stage.won",
-          condition: { kind: "stage", kinds: ["boss"] },
-          effect: { kind: "add-coins", amount: 3 },
+          select: { id: "won-stage", config: {} },
+          where: { id: "stage-in", config: { stages: ["boss"] } },
+          effects: [{ id: "add-coins", config: { amount: 3 } }],
         },
       ]),
     );

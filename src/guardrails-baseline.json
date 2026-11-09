@@ -1,21 +1,9 @@
 {
   "src/audio-service.ts": ["screenMusic[screen]();"],
   "src/audio/music-fade.ts": ["switch (kind) {"],
-  "src/game-run.ts": [
-    "while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;",
-    "if (event.type !== \"discard.completed\") return [];",
-    "while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`))"
-  ],
   "src/hud-panels.ts": [
     "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
     "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
-  ],
-  "src/passive-effects.ts": [
-    "switch (condition.kind) {",
-    "if (rule.on !== \"stage.won\" || rule.effect.kind !== \"add-coins\") continue;",
-    "if (rule.condition?.kind === \"stage\") {",
-    "if (rule.effect.kind === \"grant-unowned-passive\") {",
-    "if (rule.effect.kind !== \"add-coins\") continue;"
   ],
   "src/run-controller.ts": [
     "if (game.phase === \"over\") {",

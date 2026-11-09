@@ -18,7 +18,8 @@ import {
   type PassiveBlock,
   type StageContext,
 } from "./passives";
-import { discardPassiveEffects, scoreFieldWithPassives } from "./passive-effects";
+import { passiveActivations, scoreFieldWithPassives } from "./passive-effects";
+import { commitCommands, type CommandTarget } from "./rule-commands";
 import type { RandomCursor } from "./random";
 import type { ScoredLine } from "./scoring";
 import { offerKind, type OfferDestination, type OfferRun, type ShopOffer } from "./offer-kinds";
@@ -376,10 +377,35 @@ export class GameRun {
     );
     const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
     for (const definition of randomPassiveDefinitions(missing, this.random, owned)) {
-      let serial = this.currentState.passiveRack.length + 1;
-      while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;
-      this.installPassive(createPassiveBlock(definition.id, `passive.${serial}`));
+      this.installPassive(createPassiveBlock(definition.id, this.freePassiveId()));
     }
+  }
+
+  /** What a fired rule's commands may change in this run (src/rule-commands.ts). */
+  private readonly commandTarget: CommandTarget = ((run: GameRun) => ({
+    get state() {
+      return run.currentState;
+    },
+    update: (state: GameState) => void (run.currentState = state),
+    grantUnownedPassive: () => run.grantUnownedPassive(),
+  }))(this);
+
+  /** A passive instance id no installed passive has: `passive.<n>`, from the rack size up. */
+  private freePassiveId(): string {
+    const taken = new Set(this.currentState.passiveRack.map(({ id }) => id));
+    let serial = this.currentState.passiveRack.length + 1;
+    while (taken.has(`passive.${serial}`)) serial++;
+    return `passive.${serial}`;
+  }
+
+  /** Install one random passive the rack doesn't hold; the event it causes, if any. */
+  private grantUnownedPassive(): GameEvent[] {
+    const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
+    const chosen = randomPassiveDefinitions(1, this.random, owned)[0];
+    if (!chosen) return [];
+    const id = this.freePassiveId();
+    this.installPassive(createPassiveBlock(chosen.id, id));
+    return [{ type: "passive.installed", blockId: id }];
   }
 
   play(action: PlayAction): GameState | null {
@@ -413,26 +439,15 @@ export class GameRun {
       this.passiveEvents.emit({
         type: "discard.completed",
         cardIds: discarded.map(({ id }) => id),
+        blocks: discarded,
       });
-      this.passiveEvents.drain(128, (block, event) => {
-        if (event.type !== "discard.completed") return [];
-        const { coins, grants } = discardPassiveEffects(block, discarded);
-        if (coins)
-          this.currentState = { ...this.currentState, coins: this.currentState.coins + coins };
-        const followups = [];
-        for (let index = 0; index < grants; index++) {
-          const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
-          const chosen = randomPassiveDefinitions(1, this.random, owned)[0];
-          if (!chosen) break;
-          let serial = this.currentState.passiveRack.length + 1;
-          while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`))
-            serial++;
-          const id = `passive.${serial}`;
-          this.installPassive(createPassiveBlock(chosen.id, id));
-          followups.push({ type: "passive.installed", blockId: id });
-        }
-        return followups;
-      });
+      // Each listener's fired rules are committed as they resolve, left to right (#170).
+      this.passiveEvents.drain(128, (block, event) =>
+        commitCommands(
+          passiveActivations(block, event).flatMap(({ commands }) => commands),
+          this.commandTarget,
+        ),
+      );
       this.announceOutcome();
     }
     return next ? this.currentState : null;

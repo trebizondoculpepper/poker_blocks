@@ -3,7 +3,9 @@
  * session applies the coins once per stage, and the stage-won screen shows the rows.
  */
 import type { GameState } from "./game-state";
-import { stageWonPassiveCoins } from "./passive-effects";
+import { passiveActivations } from "./passive-effects";
+import { commitCommands } from "./rule-commands";
+import type { PassiveBlock } from "./passives";
 import { passiveDefinitions } from "./passives";
 import type { StageKind } from "./run-rules";
 
@@ -29,7 +31,7 @@ export function stageRewardLedger(
     { source: "stage.complete", label: "Stage complete bonus", coins: bonus },
   ];
   for (const passive of state.passiveRack) {
-    const coins = stageWonPassiveCoins(passive, state.hand, stage);
+    const coins = stageWonCoins(state, passive, stage);
     if (!coins) continue;
     const name = passiveDefinitions.has(passive.definitionId)
       ? passiveDefinitions.get(passive.definitionId).name
@@ -37,6 +39,28 @@ export function stageRewardLedger(
     entries.push({ source: `passive.${passive.definitionId}`, label: name, coins });
   }
   return entries;
+}
+
+/**
+ * The coins one passive's `stage.won` rules pay, judged on the hand still held: its fired
+ * rules' commands committed to a copy of the state (#170), so the ledger stays pure.
+ */
+function stageWonCoins(state: GameState, passive: PassiveBlock, stage?: StageKind): number {
+  const commands = passiveActivations(passive, {
+    type: "stage.won",
+    blocks: state.hand,
+    stageKind: stage,
+  }).flatMap(({ commands }) => commands);
+  let preview = state;
+  commitCommands(commands, {
+    get state() {
+      return preview;
+    },
+    update: (next) => void (preview = next),
+    // A stage-won ledger only pays coins; nothing is installed from it.
+    grantUnownedPassive: () => [],
+  });
+  return preview.coins - state.coins;
 }
 
 export function ledgerTotal(entries: readonly RewardEntry[]): number {
