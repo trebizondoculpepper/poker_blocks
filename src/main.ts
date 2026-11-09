@@ -14,6 +14,7 @@ import { createMusicPlayer } from "./audio/music-player";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createCameraViewService, type CameraViewService } from "./camera-view";
 import { createConsoleHost } from "./console-host";
+import type { SoundEffectId } from "./audio/sfx-registry";
 import { createFieldView, type FieldView } from "./field-view";
 import { createHandView, type HandView } from "./hand-view";
 import { createHudPanels, type HudPanels } from "./hud-panels";
@@ -91,6 +92,7 @@ type TraitContext = {
     run: RunController;
     board: BlockDestroyerBoard;
     shop: ShopView;
+    sound: (id: SoundEffectId) => void;
   };
 };
 const traitContext: TraitContext = {
@@ -124,6 +126,7 @@ const traitContext: TraitContext = {
     get shop() {
       return shopView;
     },
+    sound: (id) => playSfx(id),
   },
 };
 const sceneManager = new SceneManager(sceneBehaviours<TraitContext>(), traitContext);

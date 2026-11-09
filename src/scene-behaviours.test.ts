@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
 import { sceneBehaviours, type SceneHost } from "./scene-behaviours";
-import type { SceneTraits } from "./game-modes";
+import { gameModeFor, type SceneTraits } from "./game-modes";
 import type { HudPanel } from "./hud-panels";
 import type { ShopOffer } from "./shop-stock";
 
@@ -33,7 +33,19 @@ function recordingHost() {
         frame: () => undefined,
         dispose: () => undefined,
       },
-      run: { shopStock: () => [{ kind: "card", block: {} as never }] },
+      run: {
+        shopStock: () => [{ kind: "card", block: {} as never }],
+        dispatch: (action) => void calls.push(`action:${action}`),
+      },
+      overlays: {
+        showMenu: (label, choices) =>
+          void calls.push(`menu:${label}:${choices.map(({ id }) => id).join(",")}`),
+        hideMenu: () => void calls.push("menu:hide"),
+        showSettings: () => void calls.push("settings:show"),
+        hideSettings: () => void calls.push("settings:hide"),
+      },
+      audio: { setMusicFilter: (kind) => void calls.push(`filter:${kind}`) },
+      sound: (id) => void calls.push(`sound:${id}`),
     },
   };
   return { host, calls, shown };
@@ -154,5 +166,86 @@ describe("scene traits own their behaviour", () => {
       registry.register("roundHud", {});
     };
     expect(unknownTrait).toBeTypeOf("function");
+  });
+});
+
+describe("the pause menu's scene traits (#87)", () => {
+  const pause = gameModeFor("game").scenes.find(({ id }) => id === "game/pause")!;
+  const settings = gameModeFor("game").scenes.find(({ id }) => id === "game/settings")!;
+  const stage = gameModeFor("game").scenes.find(({ id }) => id === "game/stage-1")!;
+  const title = gameModeFor("game").scenes.find(({ id }) => id === "game/title")!;
+
+  function stack() {
+    const recorded = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), recorded.host);
+    for (const scene of [pause, settings, stage, title]) scenes.register(scene);
+    return { ...recorded, scenes };
+  }
+  const escape = { type: "keydown", key: "Escape" };
+
+  it("shows Resume, Settings and Quit to title in a run, muffled, and hides them on leaving", () => {
+    const { scenes, calls } = stack();
+    scenes.switchTo(stage.id);
+    calls.length = 0;
+    scenes.push(pause.id);
+    expect(calls).toEqual(["menu:Paused:resume,openSettings,quitToTitle", "filter:lowpass"]);
+    calls.length = 0;
+    scenes.pop();
+    expect(calls).toEqual(["filter:null", "menu:hide"]);
+  });
+
+  it("leaves out Quit to title over the title screen", () => {
+    const { scenes, calls } = stack();
+    scenes.switchTo(title.id);
+    scenes.push(pause.id);
+    expect(calls).toContain("menu:Paused:resume,openSettings");
+  });
+
+  it("Settings over the pause menu swaps to the high-pass, and Back restores the low-pass", () => {
+    const { scenes, calls } = stack();
+    scenes.switchTo(stage.id);
+    scenes.push(pause.id);
+    calls.length = 0;
+    scenes.push(settings.id);
+    expect(calls).toEqual(["settings:show", "filter:highpass"]);
+    calls.length = 0;
+    scenes.pop();
+    expect(calls).toEqual([
+      "filter:null",
+      "settings:hide",
+      "menu:Paused:resume,openSettings,quitToTitle",
+      "filter:lowpass",
+    ]);
+  });
+
+  it("routes Escape to the scene in front: open the menu, resume, or go back", () => {
+    const { scenes, calls } = stack();
+    scenes.switchTo(stage.id);
+    expect(scenes.dispatch(escape)).toBe(true);
+    scenes.push(pause.id);
+    scenes.dispatch(escape);
+    scenes.push(settings.id);
+    scenes.dispatch(escape);
+    expect(calls.filter((call) => /^(action|sound):/.test(call))).toEqual([
+      "sound:ui.click",
+      "action:openPause",
+      "sound:ui.back",
+      "action:resume",
+      "sound:ui.back",
+      "action:back",
+    ]);
+    // Other keys, and a held key's auto-repeat, pass through untouched.
+    expect(scenes.dispatch({ type: "keydown", key: "a" })).toBe(false);
+    expect(scenes.dispatch({ type: "keydown", key: "Escape", repeat: true })).toBe(false);
+  });
+
+  it("stops input and updates reaching the stage under the menu", () => {
+    const { scenes, calls } = stack();
+    scenes.switchTo(stage.id);
+    scenes.push(pause.id);
+    calls.length = 0;
+    scenes.dispatch(escape);
+    // Only the pause menu's own key action ran; the stage's never did.
+    expect(calls).toEqual(["sound:ui.back", "action:resume"]);
   });
 });

@@ -7,7 +7,7 @@
  * scenes (`ScreenScenes`); this service decides which happens when a screen changes.
  */
 import type { AudioService } from "./audio-service";
-import { createMenus, type MenuCallbacks, type Menus, type Screen } from "./menus";
+import { createMenus, type MenuCallbacks, type MenuChoice, type Menus, type Screen } from "./menus";
 import type { SceneName } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { Settings } from "./settings";
@@ -30,6 +30,11 @@ export type Overlays = {
   readonly isOpen: boolean;
   showTitle(): void;
   closeAll(): void;
+  /** The pause menu's panel and the Settings panel, shown by their scenes' traits. */
+  showMenu(label: string, choices: readonly MenuChoice[]): void;
+  hideMenu(): void;
+  showSettings(): void;
+  hideSettings(): void;
   showGameOver(stats: RunStats): void;
   /** The stage-won pop-up, pushed over the stage; its button runs `onContinue`. */
   showStageWon(reward: StageReward, action: string, onContinue: () => void): void;
@@ -76,7 +81,6 @@ export function menuScreenScenes(stack: {
 /** Which scene each menu screen puts in front. */
 export const screenScenes: Record<Screen, (scenes: ScreenScenes) => void> = {
   title: (scenes) => scenes.replace("title"),
-  settings: (scenes) => scenes.push("settings"),
   game: (scenes) => scenes.resumeGame(),
   // The game over screen is presentation only: the mode's game flow has already placed the
   // scene for a lost run (`run.position.over`), so this screen must not move the stack.
@@ -121,6 +125,10 @@ export function createOverlays(
     },
     showTitle: () => menus.showTitle(),
     closeAll: () => menus.closeAll(),
+    showMenu: (label, choices) => menus.showMenu(label, choices),
+    hideMenu: () => menus.hideMenu(),
+    showSettings: () => menus.showSettings(),
+    hideSettings: () => menus.hideSettings(),
     showGameOver: (stats) => menus.showGameOver(stats),
     showStageWon(reward, action, onContinue) {
       scenes.push("stage-won");

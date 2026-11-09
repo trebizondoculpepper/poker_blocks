@@ -22,12 +22,11 @@ export type MusicController = {
   /** Back to the table (closing settings): the current stage's track. */
   resumeStage(): void;
   /**
-   * Muffle whatever is playing (a low-pass filter easing in over about 2 s), as when the
-   * menu is open over the game. The track does not change.
+   * Filter whatever is playing, easing over about 2 s; the track does not change. `lowpass`
+   * muffles it (the pause menu), `highpass` thins it (Settings), and null clears both. Setting
+   * one replaces the other.
    */
-  muffle(): void;
-  /** Ease the muffle back off (about 2 s). */
-  unmuffle(): void;
+  filter(kind: MusicFilter | null): void;
   /** Wind the music down to silence, like a record player losing power. */
   windDown(): void;
   /** Wind back up whatever was playing before the wind-down. */
@@ -43,6 +42,9 @@ export type MusicController = {
   readonly tracks: readonly string[];
 };
 
+/** A menu's music filter: muffled (low-pass) or thinned (high-pass). */
+export type MusicFilter = "lowpass" | "highpass";
+
 /** The muffled cut-off, in hertz: the music as if through a wall. */
 export const muffledCutoff = 550;
 /** Seconds the muffle takes to come on or go off. */
@@ -51,13 +53,32 @@ export const muffleSeconds = 2;
 export function createMusicController(
   player: Pick<
     MusicPlayer,
-    "play" | "stop" | "windDown" | "windUp" | "unlock" | "current" | "setLowPass" | "clearLowPass"
+    | "play"
+    | "stop"
+    | "windDown"
+    | "windUp"
+    | "unlock"
+    | "current"
+    | "setLowPass"
+    | "clearLowPass"
+    | "setHighPass"
+    | "clearHighPass"
   >,
   tracks: readonly string[],
   plan: MusicPlan = defaultMusicPlan,
   random: () => number = Math.random,
 ): MusicController {
   let unlocked = false;
+  const filters: Record<MusicFilter, { on: () => void; off: () => void }> = {
+    lowpass: {
+      on: () => player.setLowPass(muffledCutoff, muffleSeconds),
+      off: () => player.clearLowPass(muffleSeconds),
+    },
+    highpass: {
+      on: () => player.setHighPass(muffledCutoff, muffleSeconds),
+      off: () => player.clearHighPass(muffleSeconds),
+    },
+  };
   /** The loop for the current stage, kept while visiting settings. */
   let stageTrack: string | null = null;
   /** The last request, replayed on unlock. */
@@ -101,8 +122,13 @@ export function createMusicController(
     },
     resumeStage: () => request(playStage),
     // Not a request: the filter applies to whatever plays, so it never replaces one.
-    muffle: () => player.setLowPass(muffledCutoff, muffleSeconds),
-    unmuffle: () => player.clearLowPass(muffleSeconds),
+    filter(kind) {
+      // The filter asked for comes on and every other one goes off.
+      for (const [name, filter] of Object.entries(filters)) {
+        if (name === kind) filter.on();
+        else filter.off();
+      }
+    },
     windDown: () =>
       request(() => {
         if (woundDown) return;

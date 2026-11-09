@@ -4,6 +4,8 @@
  */
 import { Registry } from "./core/registry";
 import type { GameFlow } from "./game-flow";
+import type { MusicFilter } from "./audio/music-controller";
+import type { SoundEffectId } from "./audio/sfx-registry";
 import type { RunPositionOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
 import { saveKey } from "./save";
@@ -27,7 +29,25 @@ export type SceneTraits = {
   shopStock: Record<never, never>;
   /** Testing only: double-click a block to destroy it with this cause. */
   devManualBlockDestroyer: { cause: DestroyCause };
+  /**
+   * A menu of items shown while this scene is in front. Choosing one dispatches its `id` as a
+   * named action; `when` names a menu condition (src/scene-behaviours.ts) the item needs.
+   */
+  menu: { label: string; items: readonly MenuItem[] };
+  /** The Settings panel is shown while this scene is in front. */
+  settingsPanel: Record<never, never>;
+  /** The music is filtered while this scene is in front (low-pass muffles, high-pass thins). */
+  musicFilter: { kind: MusicFilter };
+  /** Pressing `key` dispatches the named action, with the sound a button for it would play. */
+  keyAction: { key: string; action: string; sfx?: SoundEffectId };
+  /** A run is being played while this scene is on the stack (the `inRun` menu condition). */
+  runInPlay: Record<never, never>;
 };
+
+/** One menu item: its action id, its label, and an optional condition it needs. */
+export type MenuItem = { id: string; label: string; when?: MenuCondition };
+/** A condition a menu item can require; its test lives in the menu trait's registry. */
+export type MenuCondition = "inRun";
 export type ModeScene = Scene<SceneTraits>;
 export type ModeMusicStyle = "quiet" | "ordinary";
 
@@ -40,11 +60,28 @@ export type SceneDefinition = {
   readonly traits: Partial<SceneTraits>;
 };
 
+/** Escape opens the pause menu from the title and from play (#87). */
+const escapeOpensPause: Partial<SceneTraits> = {
+  keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
+};
+
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
 const playSceneTraits: Partial<SceneTraits> = {
   roundPanel: {},
   deckPanel: {},
   fieldPlacement: {},
+  runInPlay: {},
+  ...escapeOpensPause,
+};
+
+/** The pause menu: the same menu from the title and from play (#87). */
+const pauseMenu: SceneTraits["menu"] = {
+  label: "Paused",
+  items: [
+    { id: "resume", label: "Resume" },
+    { id: "openSettings", label: "Settings" },
+    { id: "quitToTitle", label: "Quit to title", when: "inRun" },
+  ],
 };
 
 /**
@@ -53,12 +90,32 @@ const playSceneTraits: Partial<SceneTraits> = {
  * names, and never keeps its own copy of the catalogue.
  */
 export const sceneDefinitions = [
-  { name: "title", traits: {} },
-  { name: "settings", traits: { pausesBelow: { input: true, update: true } } },
+  { name: "title", traits: escapeOpensPause },
+  {
+    name: "pause",
+    traits: {
+      menu: pauseMenu,
+      pausesBelow: { input: true, update: true },
+      musicFilter: { kind: "lowpass" },
+      keyAction: { key: "Escape", action: "resume", sfx: "ui.back" },
+    },
+  },
+  {
+    name: "settings",
+    traits: {
+      settingsPanel: {},
+      pausesBelow: { input: true, update: true },
+      musicFilter: { kind: "highpass" },
+      keyAction: { key: "Escape", action: "back", sfx: "ui.back" },
+    },
+  },
   { name: "stage-1", traits: playSceneTraits },
   { name: "stage-2", traits: playSceneTraits },
   { name: "boss", traits: playSceneTraits },
-  { name: "shop", traits: { coinsPanel: {}, shopExit: {}, shopStock: {} } },
+  {
+    name: "shop",
+    traits: { coinsPanel: {}, shopExit: {}, shopStock: {}, runInPlay: {}, ...escapeOpensPause },
+  },
   { name: "stage-won", traits: { pausesBelow: { input: true, update: true } } },
   { name: "game-over", traits: {} },
 ] as const satisfies readonly SceneDefinition[];
@@ -149,11 +206,24 @@ export type GameMode = {
   startScene: SceneName;
   /** Outcome-keyed scene transitions; scene names are never inferred from run phases. */
   flow: GameFlow<RunPositionOutcome, SceneName>;
+  /** Menu navigation: each navigation action's stack operation (open a menu, go back). */
+  navigation: GameFlow<NavigationAction, SceneName>;
   /** Other names that open this mode (old links). */
   aliases?: readonly string[];
   /** Ordered steps applied when a new game run is created; never applied on Continue. */
   runSetup: readonly RunSetupStep[];
   traits: ModeTraits;
+};
+
+/** The menu actions that only move between scenes; the flow data says how. */
+export type NavigationAction = "openPause" | "openSettings" | "back" | "resume";
+
+/** Shared default navigation: menus push over what is in front and pop back to it. */
+export const standardNavigation: GameFlow<NavigationAction, SceneName> = {
+  openPause: { operation: "push", scene: "pause" },
+  openSettings: { operation: "push", scene: "settings" },
+  back: { operation: "pop" },
+  resume: { operation: "pop" },
 };
 
 export const gameModeRegistry = new Registry<GameMode>("game mode");
@@ -164,6 +234,7 @@ const gameModes: GameMode[] = [
     scenes: composeScenes("game"),
     startScene: "title",
     flow: standardGameFlow,
+    navigation: standardNavigation,
     runSetup: [],
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
@@ -179,6 +250,7 @@ const gameModes: GameMode[] = [
     scenes: composeScenes("dev0"),
     startScene: "title",
     flow: standardGameFlow,
+    navigation: standardNavigation,
     aliases: ["dev"],
     runSetup: [{ step: "materialDeck" }],
     traits: {
@@ -194,6 +266,7 @@ const gameModes: GameMode[] = [
     scenes: composeScenes("dev1"),
     startScene: "stage-1",
     flow: standardGameFlow,
+    navigation: standardNavigation,
     runSetup: [{ step: "sandbox" }, { step: "materialDeck" }, { step: "materialSample" }],
     traits: {
       onLoad: "newRun",
@@ -208,6 +281,7 @@ const gameModes: GameMode[] = [
     scenes: composeScenes("dev2"),
     startScene: "stage-1",
     flow: standardGameFlow,
+    navigation: standardNavigation,
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck" },
@@ -227,6 +301,7 @@ const gameModes: GameMode[] = [
     scenes: composeScenes("dev3"),
     startScene: "shop",
     flow: standardGameFlow,
+    navigation: standardNavigation,
     runSetup: [{ step: "shopPreview", coins: 5 }],
     traits: {
       onLoad: "resume",
@@ -247,6 +322,7 @@ const gameModes: GameMode[] = [
     ]),
     startScene: "stage-1",
     flow: standardGameFlow,
+    navigation: standardNavigation,
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck" },

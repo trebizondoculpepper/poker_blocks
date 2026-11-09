@@ -723,11 +723,10 @@ export function createTableInput(options: {
     event.preventDefault();
     event.stopImmediatePropagation();
   };
-  // This host capture route is scaffolding: current key handlers on window still receive
-  // events outside the host, and no registered scene trait consumes input yet.
+  // Pointer input inside the host is routed to the scenes during capture. Keys go to the scenes
+  // from the window, after bubbling, so a focused field or the open developer console (which
+  // stops the keys it uses) handles them first (#87).
   const sceneInputEvents = [
-    "keydown",
-    "keyup",
     "pointerdown",
     "pointerup",
     "pointercancel",
@@ -750,6 +749,7 @@ export function createTableInput(options: {
   window.addEventListener("pointercancel", onPassiveCancel);
   discardArea.addEventListener("click", onDiscardClick);
   for (const type of sceneInputEvents) host.addEventListener(type, routeSceneInput, true);
+  window.addEventListener("keydown", routeSceneInput);
   for (const [type, listener, listenerOptions] of canvasListeners)
     canvas.addEventListener(type, listener as EventListener, listenerOptions);
   window.addEventListener("blur", onBlur);
@@ -795,6 +795,7 @@ export function createTableInput(options: {
       window.removeEventListener("pointermove", movePassive);
       window.removeEventListener("pointerup", onPassiveUp);
       window.removeEventListener("pointercancel", onPassiveCancel);
+      window.removeEventListener("keydown", routeSceneInput);
       discardArea.removeEventListener("click", onDiscardClick);
       for (const type of sceneInputEvents) host.removeEventListener(type, routeSceneInput, true);
       for (const [type, listener] of canvasListeners)

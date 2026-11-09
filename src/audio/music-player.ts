@@ -53,6 +53,12 @@ export type MusicPlayer = {
    */
   setLowPass(hz: number, seconds?: number): void;
   clearLowPass(seconds?: number): void;
+  /**
+   * Thin the music through a high-pass filter, easing its cut-off up to `hz` over `seconds`
+   * (the Settings sound, distinct from the pause menu's low-pass). clearHighPass eases it off.
+   */
+  setHighPass(hz: number, seconds?: number): void;
+  clearHighPass(seconds?: number): void;
   setMuted(muted: boolean): void;
   /** Call from a user gesture: browsers keep audio suspended until one happens. */
   unlock(): void;
@@ -60,6 +66,17 @@ export type MusicPlayer = {
 
 /** A low-pass cut-off high enough to leave the music untouched. */
 const openCutoff = 20000;
+/** A high-pass cut-off low enough to leave the music untouched. */
+const openHighCutoff = 10;
+
+/** Ease a filter's cut-off to `hz` over `seconds`; exponential, even steps to the ear. */
+function sweep(context: AudioContext, filter: BiquadFilterNode, hz: number, seconds: number): void {
+  const now = context.currentTime;
+  const frequency = filter.frequency;
+  frequency.cancelScheduledValues(now);
+  frequency.setValueAtTime(frequency.value, now);
+  frequency.exponentialRampToValueAtTime(hz, now + Math.max(0.01, seconds));
+}
 
 /** Seconds into a loop for a shared beat position (beat 0 is the first downbeat). */
 export function loopOffset(info: LoopInfo, beat: number): number {
@@ -76,6 +93,9 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
   let filter: BiquadFilterNode | null = null;
   /** The cut-off asked for, kept so a filter made later (on unlock) starts there. */
   let cutoff = openCutoff;
+  /** High-pass after the low-pass: wide open unless Settings thins the music. */
+  let highFilter: BiquadFilterNode | null = null;
+  let highCutoff = openHighCutoff;
   let volume = 0.6;
   let muted = false;
   const buffers = new Map<string, Promise<AudioBuffer>>();
@@ -93,7 +113,11 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
       filter.type = "lowpass";
       filter.Q.value = 0.7;
       filter.frequency.value = cutoff;
-      master.connect(filter).connect(context.destination);
+      highFilter = context.createBiquadFilter();
+      highFilter.type = "highpass";
+      highFilter.Q.value = 0.7;
+      highFilter.frequency.value = highCutoff;
+      master.connect(filter).connect(highFilter).connect(context.destination);
     }
     return { context, master };
   }
@@ -256,16 +280,21 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
     setLowPass(hz, seconds = 2) {
       cutoff = Math.max(40, Math.min(openCutoff, hz));
       if (!context || !filter) return;
-      const now = context.currentTime;
-      const frequency = filter.frequency;
-      frequency.cancelScheduledValues(now);
-      frequency.setValueAtTime(frequency.value, now);
-      // Exponential: even steps to the ear, as a filter sweep should be.
-      frequency.exponentialRampToValueAtTime(cutoff, now + Math.max(0.01, seconds));
+      sweep(context, filter, cutoff, seconds);
     },
 
     clearLowPass(seconds = 2) {
       this.setLowPass(openCutoff, seconds);
+    },
+
+    setHighPass(hz, seconds = 2) {
+      highCutoff = Math.max(openHighCutoff, Math.min(openCutoff, hz));
+      if (!context || !highFilter) return;
+      sweep(context, highFilter, highCutoff, seconds);
+    },
+
+    clearHighPass(seconds = 2) {
+      this.setHighPass(openHighCutoff, seconds);
     },
 
     setVolume(next) {

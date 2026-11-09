@@ -179,7 +179,7 @@ The **Shadows** setting chooses high (2048 px shadow map), low (1024 px) or off;
 
 ## Title, settings and saving
 
-The page opens on a title screen (`src/menus.ts`) over the empty table. **Continue** appears only when a valid saved run exists and resumes it exactly; **New game** asks for confirmation first if it would replace a save; **Settings** opens the settings screen. A settings button at the top of the game screen (or Escape) opens the same screen during play, and Back returns to wherever it was opened from. When a run is lost, the HUD's "New game" returns to the title screen. The screens are DOM overlays that cover the scene, so the board takes no input while one is open.
+The page opens on a title screen (`src/menus.ts`) over the empty table. **Continue** appears only when a valid saved run exists and resumes it exactly; **New game** asks for confirmation first if it would replace a save; **Settings** opens the settings screen. Escape, or the ⚙ button during play, opens the **pause menu** (Resume, Settings, and Quit to title during a run), and Back returns to wherever Settings was opened from. When a run is lost, the HUD's "New game" returns to the title screen. The screens are DOM overlays that cover the scene, so the board takes no input while one is open.
 
 Settings (`src/settings.ts`) are sound volume, mute, sound effects on/off, music on/off (both under the master mute, which silences everything and greys out the two toggles), motion (follow system, reduced or full) and shadows (automatic, high, low or off). They apply immediately and persist in `localStorage` under `poker-blocks.settings`; invalid stored values fall back to defaults field by field.
 
@@ -228,7 +228,7 @@ SceneManager ── owns ──> active scene stack; calls scene trait lifecycle
 RunRules + the mode's run setup ── create ──> GameRun
 ```
 
-The Escape/settings menu is a scene pushed over gameplay. Popping it resumes the underlying scene. Stage-won is pushed while rewards are presented; the shop is a scene between stages while the same run persists. Title and game-over currently replace the stack. A future victory ending should be represented by a scene as well.
+The pause menu is a scene pushed over gameplay or the title, and Settings is a scene pushed over either. Popping it resumes the underlying scene. Stage-won is pushed while rewards are presented; the shop is a scene between stages while the same run persists. Title and game-over currently replace the stack. A future victory ending should be represented by a scene as well.
 
 ### Example: game progression is a flow
 
@@ -257,7 +257,7 @@ Here `stage-won` is a success presentation for one stage, not the end of a compl
 
 ### Example: title, game and Escape menu use a scene stack
 
-The stack answers **what is currently layered on top of what?** Starting a new game replaces the title scene with the active stage scene. Opening Settings from gameplay pushes it above that stage. Closing Settings pops only the top item, revealing the same stage and run state underneath.
+The stack answers **what is currently layered on top of what?** Starting a new game replaces the title scene with the active stage scene. Escape pushes the pause menu above that stage; choosing Settings pushes Settings above the pause menu. Back pops only the top item, revealing the pause menu, and Resume pops that, revealing the same stage and run state underneath.
 
 ```mermaid
 sequenceDiagram
@@ -269,17 +269,36 @@ sequenceDiagram
   Player->>Flow: New game
   Flow->>Stack: replace(Stage)
   Stack->>Stage: enter traits
-  Player->>Flow: Escape
-  Flow->>Stack: push(Settings)
-  Stack->>Settings: enter traits
+  participant Pause as Pause scene
+  Player->>Flow: Escape (keyAction: openPause)
+  Flow->>Stack: push(Pause)
+  Stack->>Pause: enter traits (menu, low-pass)
   Note over Stack,Stage: Stage remains on the stack; scene-managed input and updates pause
-  Player->>Flow: Close settings
+  Player->>Flow: Settings (menu item: openSettings)
+  Flow->>Stack: push(Settings)
+  Stack->>Settings: enter traits (panel, high-pass)
+  Player->>Flow: Back
   Flow->>Stack: pop()
   Stack->>Settings: exit traits
+  Stack->>Pause: resume traits (menu again, low-pass again)
+  Player->>Flow: Resume
+  Flow->>Stack: pop()
+  Stack->>Pause: exit traits (menu hidden, filter cleared)
   Note over Stack,Stage: Stage is visible again; it is not re-entered
 ```
 
 For each stack operation, the manager invokes `enter` on the newly active scene's composed traits and `exit` on traits of scenes removed from the stack. A push does not exit the scene underneath; a pop does not re-enter it, but calls its traits' `resume` hooks so they can restore what the popped scene changed (the `screen` trait puts back `host.dataset.scene`). A replace exits the old stack and enters the replacement. Trait hooks can start or stop scene-owned behavior such as music, input handling or animation. In this code these hooks are named `enter` and `exit` (often called `onEnter` and `onExit` in engine APIs), and they belong to each trait attached to the scene rather than to a special callback on the stack item.
+
+### Menus as scenes (#87)
+
+The pause menu is the pilot for screens as scenes. It is the `pause` scene, composed of four traits:
+
+- **`menu { label, items }`** shows a menu of items while the scene is in front and hides it on exit. An item is `{ id, label, when? }`. `when` names a **menu condition** from a registry in `src/scene-behaviours.ts`. `inRun` holds while a scene composing the `runInPlay` trait (the stages and the shop) is on the stack, so Quit to title appears only during a run; no scene is identified by name. Choosing an item dispatches its `id` as a named action; the menu never decides what happens.
+- **`pausesBelow`** stops input and updates reaching the scene underneath.
+- **`musicFilter { kind }`** filters the music while the scene is in front: `lowpass` muffles it (the pause menu), `highpass` thins it (Settings), both with the 550 Hz cut-off and a two-second ease. A scene pushed over it replaces the filter with its own, and `resume` restores it; exit clears it.
+- **`keyAction { key, action }`** dispatches a named action for a key, once per press (a held key's auto-repeat is ignored). Escape opens the pause menu from the title, the stages and the shop, resumes from the pause menu, and goes back from Settings. Keys reach the scenes from the window after bubbling, so a focused field or the open developer console handles them first.
+
+**Actions.** `RunController.dispatch(action)` carries out a named action. A **navigation action** (`openPause`, `openSettings`, `back`, `resume`) is mode data: `GameMode.navigation` maps each one to a stack operation, applied by the same `followFlow` as the game flow. A **game action** (`quitToTitle`) runs its handler in the run controller. The Settings scene composes `settingsPanel`, which shows and hides the existing Settings panel; turning Settings itself into scene-owned controls is #89.
 
 ### Run rules and the game flow (#94)
 

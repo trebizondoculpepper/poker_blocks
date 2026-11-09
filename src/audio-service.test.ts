@@ -15,8 +15,7 @@ function setup() {
     switchToRandomStageTrack: log("randomStage"),
     switchToBossTrack: log("boss"),
     resumeStage: log("resumeStage"),
-    muffle: log("muffle"),
-    unmuffle: log("unmuffle"),
+    filter: log("filter"),
     windDown: log("windDown"),
     windUp: log("windUp"),
     woundDown: false,
@@ -47,21 +46,16 @@ describe("audio service", () => {
     expect(calls).toEqual(["randomStage", "boss", "randomStage"]);
   });
 
-  it("muffles for settings and resumes the mode's music for the game screen", () => {
+  it("chooses the music for each screen, and leaves filtering to the menu scenes", () => {
     const { audio, calls } = setup();
     audio.showScreen("title");
-    audio.showScreen("settings");
     audio.showScreen("game");
     audio.showScreen("over");
-    expect(calls).toEqual([
-      "unmuffle",
-      "playTitle",
-      "muffle",
-      "unmuffle",
-      "resumeStage",
-      "unmuffle",
-      "windDown",
-    ]);
+    expect(calls).toEqual(["playTitle", "resumeStage", "windDown"]);
+    calls.length = 0;
+    audio.setMusicFilter("lowpass");
+    audio.setMusicFilter(null);
+    expect(calls).toEqual(["filter lowpass", "filter "]);
   });
 
   it("keeps a quiet mode wound down after a run starts and when its game screen resumes", () => {
@@ -69,13 +63,13 @@ describe("audio service", () => {
     audio.enterMode("quiet");
     audio.runStarted();
     audio.showScreen("game");
-    expect(calls).toEqual(["windDown", "unmuffle", "windDown"]);
+    expect(calls).toEqual(["windDown", "windDown"]);
 
     calls.length = 0;
     audio.enterMode("ordinary");
     audio.runStarted();
     audio.showScreen("game");
-    expect(calls).toEqual(["unmuffle", "resumeStage"]);
+    expect(calls).toEqual(["resumeStage"]);
   });
 
   it("sets music a little under the effects, and honours the master and channel mutes", () => {

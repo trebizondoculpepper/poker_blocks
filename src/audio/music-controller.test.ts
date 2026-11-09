@@ -37,6 +37,8 @@ function setup() {
     unlock: () => log.push("unlock"),
     setLowPass: (hz: number, seconds?: number) => log.push(`lowpass ${hz} ${seconds}`),
     clearLowPass: (seconds?: number) => log.push(`lowpass open ${seconds}`),
+    setHighPass: (hz: number, seconds?: number) => log.push(`highpass ${hz} ${seconds}`),
+    clearHighPass: (seconds?: number) => log.push(`highpass open ${seconds}`),
   };
   const music = createMusicController(player, tracks, defaultMusicPlan, () => 0);
   return { music, log };
@@ -116,15 +118,20 @@ describe("music controller", () => {
     expect(log.at(-1)).toBe(`windUp ${stage}`);
   });
 
-  it("muffles and unmuffles without changing the track", () => {
+  it("filters without changing the track: low-pass or high-pass replaces the other (#87)", () => {
     const { music, log } = setup();
     music.unlock();
     music.switchToRandomStageTrack();
     const track = music.current;
-    music.muffle();
-    expect(log.at(-1)).toBe("lowpass 550 2");
+    log.length = 0;
+    music.filter("lowpass");
+    expect(log).toEqual(["lowpass 550 2", "highpass open 2"]);
+    log.length = 0;
+    music.filter("highpass");
+    expect(log).toEqual(["lowpass open 2", "highpass 550 2"]);
+    log.length = 0;
+    music.filter(null);
+    expect(log).toEqual(["lowpass open 2", "highpass open 2"]);
     expect(music.current).toBe(track);
-    music.unmuffle();
-    expect(log.at(-1)).toBe("lowpass open 2");
   });
 });
