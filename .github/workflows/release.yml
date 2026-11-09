@@ -13,6 +13,12 @@ on:
 permissions:
   contents: write
 
+# One release run at a time, never cancelling one under way, so draft recovery below only ever
+# sees a draft left by an interrupted run.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
