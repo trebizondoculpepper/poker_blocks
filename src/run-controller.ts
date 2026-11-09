@@ -49,6 +49,7 @@ import {
   type Settings,
 } from "./settings";
 import { shopPreviewState, type ShopOffer } from "./shop-stock";
+import { offerKind, type OfferBlock, type OfferDestination } from "./offer-kinds";
 import type { createShopView } from "./shop-view";
 import type { TableInput, TableRules } from "./table-input";
 import type { TableRenderer } from "./table-renderer";
@@ -502,6 +503,17 @@ export function createRunController<Context>(options: {
     },
   };
 
+  /** How a bought offer appears, by where its kind puts it (#67). */
+  const boughtInto: Record<OfferDestination, (block: OfferBlock) => void> = {
+    hand(block) {
+      services.hand.add(block as CardBlock);
+      services.hand.sync(game.state.hand);
+    },
+    "passive-rack"() {
+      services.rack.render(game.state.passiveRack);
+    },
+  };
+
   /** The game actions a menu can dispatch; navigation is the mode's data, not code. */
   const gameActions: Record<string, () => void> = {
     // From the game over screen: leave it and begin a fresh run.
@@ -672,8 +684,7 @@ export function createRunController<Context>(options: {
       }
     },
     takeNextAction,
-    offerPrice: (offer) =>
-      offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),
+    offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),
     shopStock: () => game.state.shopStock ?? [],
     runStats: () => game.stats,
     hasSave,
@@ -684,10 +695,7 @@ export function createRunController<Context>(options: {
         playSfx("action.denied");
         return false;
       }
-      if (bought.kind === "card") {
-        services.hand.add(bought.block);
-        services.hand.sync(game.state.hand);
-      } else services.rack.render(game.state.passiveRack);
+      boughtInto[offerKind(bought).destination](bought.block);
       services.shop.render(game.state.shopStock ?? [], true);
       updateHud();
       autosave();

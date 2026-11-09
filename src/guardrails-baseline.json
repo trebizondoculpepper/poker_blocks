@@ -2,12 +2,9 @@
   "src/audio-service.ts": ["screenMusic[screen]();"],
   "src/audio/music-fade.ts": ["switch (kind) {"],
   "src/game-run.ts": [
-    "offer.kind === \"passive\" ? this.passivePrices.buy : (this.config.cardPurchasePrice ?? 1);",
-    "if (offer.kind === \"passive\") {",
     "while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;",
     "if (event.type !== \"discard.completed\") return [];",
-    "while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`))",
-    ".filter((offer): offer is Extract<ShopOffer, { kind: \"card\" }> => offer.kind === \"card\")"
+    "while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`))"
   ],
   "src/hud-panels.ts": [
     "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
@@ -27,18 +24,7 @@
   "src/run-controller.ts": [
     "if (game.phase === \"over\") {",
     "if (!modeTraits.shop || session.phase !== \"shop\" || session.state.shopStock !== undefined)",
-    "game.phase !== \"over\" && !services.presenter.busy && !game.stageRewardsPending,",
-    "offer.kind === \"passive\" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),",
-    "if (bought.kind === \"card\") {"
+    "game.phase !== \"over\" && !services.presenter.busy && !game.stageRewardsPending,"
   ],
-  "src/save.ts": [
-    "offer.kind === \"card\"",
-    "if (!dealers.has(record.dealer)) return null;",
-    "if (offer.kind === \"card\") return { kind: \"card\" as const, block: resolve(offer.cardId) };",
-    "if (offer.kind !== \"passive\" || typeof offer.id !== \"string\" || passiveIds.has(offer.id))"
-  ],
-  "src/shop-view.ts": [
-    "if (offer.kind === \"passive\") {",
-    "const passive = offer.kind === \"passive\";"
-  ]
+  "src/save.ts": ["if (!dealers.has(record.dealer)) return null;"]
 }

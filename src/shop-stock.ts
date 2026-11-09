@@ -1,11 +1,9 @@
-import type { CardBlock } from "./cards";
 import type { GameState } from "./game-state";
-import { createPassiveBlock, randomPassiveDefinitions, type PassiveBlock } from "./passives";
+import { createPassiveBlock, randomPassiveDefinitions } from "./passives";
 import type { ShopTrait } from "./game-modes";
+import type { ShopOffer } from "./offer-kinds";
 
-export type ShopOffer =
-  | { kind: "card"; block: CardBlock }
-  | { kind: "passive"; block: PassiveBlock };
+export type { ShopOffer } from "./offer-kinds";
 
 /** The first shop sandbox borrows three unique cards from its deck for display. */
 export function shopPreviewState(
