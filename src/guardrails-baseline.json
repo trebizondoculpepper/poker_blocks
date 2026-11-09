@@ -1,7 +1,6 @@
 {
-  "src/audio-service.ts": ["screenMusic[screen]();", "stageMusic[phase](music);"],
+  "src/audio-service.ts": ["screenMusic[screen]();"],
   "src/audio/music-fade.ts": ["switch (kind) {"],
-  "src/audio/music-plan.ts": ["switch (scene) {"],
   "src/game-run.ts": [
     "offer.kind === \"passive\" ? this.passivePrices.buy : (this.config.cardPurchasePrice ?? 1);",
     "if (offer.kind === \"passive\") {",

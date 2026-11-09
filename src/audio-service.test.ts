@@ -37,11 +37,11 @@ function setup() {
 }
 
 describe("audio service", () => {
-  it("plays the boss loop for boss stages and a random vibe for the others", () => {
+  it("plays the boss loop from the boss pool and a random vibe from the stage pool (#92)", () => {
     const { audio, calls } = setup();
-    audio.stageStarted("stage-1");
-    audio.stageStarted("boss");
-    audio.stageStarted("stage-2");
+    audio.playStageMusic("stage");
+    audio.playStageMusic("boss");
+    audio.playStageMusic("stage");
     expect(calls).toEqual(["randomStage", "boss", "randomStage"]);
   });
 

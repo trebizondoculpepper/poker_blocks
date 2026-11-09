@@ -4,7 +4,8 @@
  * screens ask this module what to play.
  */
 
-export type MusicScene = "title" | "stage" | "boss";
+/** A pool of tracks a scene can ask to play from. */
+export type MusicPool = "title" | "stage" | "boss";
 
 export type MusicPlan = {
   /** One of these, chosen at random, plays on the title screen. */
@@ -29,12 +30,22 @@ export function stagePool(all: readonly string[], plan: MusicPlan = defaultMusic
   return all.filter((id) => id !== plan.boss && !plan.reserved.includes(id));
 }
 
+/** The tracks each pool offers, from the plan and the loops available. */
+const poolTracks: Record<
+  MusicPool,
+  (all: readonly string[], plan: MusicPlan) => readonly string[]
+> = {
+  title: (_all, plan) => plan.title,
+  stage: (all, plan) => stagePool(all, plan),
+  boss: (_all, plan) => [plan.boss],
+};
+
 /**
- * Pick the track for a scene. Stages get a random vibe, avoiding an immediate repeat of
+ * Pick a track from a pool. Stages get a random vibe, avoiding an immediate repeat of
  * `previous` when there is any choice.
  */
 export function pickTrack(
-  scene: MusicScene,
+  pool: MusicPool,
   all: readonly string[],
   random: () => number = Math.random,
   previous: string | null = null,
@@ -45,12 +56,5 @@ export function pickTrack(
     const fresh = available.length > 1 ? available.filter((id) => id !== previous) : available;
     return fresh.length ? fresh[Math.floor(random() * fresh.length)] : null;
   };
-  switch (scene) {
-    case "title":
-      return pickFrom(plan.title);
-    case "boss":
-      return all.includes(plan.boss) ? plan.boss : null;
-    case "stage":
-      return pickFrom(stagePool(all, plan));
-  }
+  return pickFrom(poolTracks[pool](all, plan));
 }
