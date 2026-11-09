@@ -2,6 +2,10 @@
 
 <!-- What this changes and the issue it closes. -->
 
+## Design and architecture check
+
+<!-- Link the relevant issue and design sections. Explain any intentional change to doc/game.md or doc/game-architecture.md; if neither needs changing, say why. -->
+
 ## Composition check (required, see AGENTS.md "No special cases")
 
 - [ ] Adds no branch on a phase, scene, room, mode, screen, material, kind, type, dealer, name or id (no `=== "literal"`, no `switch`).

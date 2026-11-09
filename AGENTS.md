@@ -23,6 +23,22 @@ Instead, give the behaviour a home: a trait with `enter`/`exit`/`update`/`handle
 
 **This is enforced.** `src/guardrails.test.ts` fails CI when a file gains a forbidden branch. Legacy branches are listed in `src/guardrails-baseline.json`, whose counts may only go down: when you remove one, lower the count; never raise it. A line ending in `// branch-ok: #<issue>` is exempt only when that issue records why the exception is justified and the user agreed to it. CodeRabbit (`.coderabbit.yaml`) also requests changes on any PR that adds such a branch, and the PR template asks you to confirm it.
 
+## Code Review Rules
+
+The primary review question is whether this PR moves the code toward the **target architecture** in [doc/game-architecture.md](doc/game-architecture.md), even where current code is still transitional. Review the changed behavior against that target, not merely against neighboring legacy code. Report a concrete inconsistency with the changed lines and the relevant rule or design decision; do not request speculative features or a complete migration in an unrelated PR.
+
+### Composable architecture
+
+- Compare new behavior with the "No special cases" rule above and the target design in [doc/game-architecture.md](doc/game-architecture.md). Flag new or expanded block, scene, room, mode, dealer, or material-specific branches; trait-presence flags; behavior placed on objects instead of traits; and new game logic in `src/main.ts`. The safe path is configured traits, their lifecycle hooks, or shared registries. Do not flag untouched legacy code just because it exists. Treat an exception as agreed only when its `// branch-ok: #<issue>` points to the recorded user decision.
+
+### Game rules and intended behavior
+
+- Compare changed gameplay with the linked issue and the applicable rules in [doc/game.md](doc/game.md). Flag behavior that contradicts an agreed rule or misses a stated acceptance criterion. A PR may intentionally change a rule if it updates the design document in the same change and explains the decision.
+
+### State and presentation
+
+- Check that scoring, purchases, rewards, and other gameplay outcomes come from game state and rules, while animations, tinting, audio, and camera movement only present those outcomes. Flag a presentation effect that decides or mutates gameplay results. Pure visual changes do not need a game-rules document update.
+
 ## Working with other agents
 
 - Use the local checkout by default. Before changing files, check the worktree and the relevant GitHub issue for another agent's active work. If sharing the checkout would risk overlapping edits or commits, create a separate Git worktree and branch for the issue. Do not overwrite another agent's uncommitted files.
