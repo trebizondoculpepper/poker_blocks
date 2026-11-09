@@ -1,4 +1,5 @@
 import type { CardBlock } from "./cards";
+import { resaleValue } from "./resale";
 import { blockCanDestroy } from "./block-trait-behaviours";
 import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
@@ -295,10 +296,12 @@ export class GameRun {
     // before the payout would quietly lose its row.
     if (this.stageRewardsPending) return null;
     const rack = this.currentState.passiveRack;
-    if (!rack.some(({ id }) => id === passiveId)) return null;
-    const price = this.passivePrices.sell;
-    // A bad price policy must not corrupt the balance (a save would then not load).
-    if (!Number.isSafeInteger(price) || price < 0) return null;
+    const passive = rack.find(({ id }) => id === passiveId);
+    if (!passive) return null;
+    // The resale policy prices it; a bad price must not corrupt the balance (a save would
+    // then not load), so resaleValue refuses one with null.
+    const price = resaleValue(passive, this.config.resaleModifiers);
+    if (price === null) return null;
     this.currentState = {
       ...this.currentState,
       passiveRack: rack.filter(({ id }) => id !== passiveId),
