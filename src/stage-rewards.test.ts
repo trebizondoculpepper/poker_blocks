@@ -1,19 +1,18 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import { makeDevDeck, materialOf } from "./materials";
 import { createPassiveBlock } from "./passives";
 import { fromSaveRecord, toSaveRecord } from "./save";
-import { demoSessionConfig } from "./session-config";
+import { demoRunRules } from "./run-rules";
 import { ledgerTotal, stageCompleteBonus, stageRewardLedger } from "./stage-rewards";
 
-const newSession = (cards = standardDeck) =>
-  new GameSession(dealerRegistry, demoSessionConfig, cards, () => 0);
+const newRun = (cards = standardDeck) => new GameRun(dealerRegistry, demoRunRules, cards, () => 0);
 
 describe("stage rewards", () => {
   it("pays the four-coin completion bonus once, however often it is asked", () => {
-    const game = newSession();
+    const game = newRun();
     expect(game.claimStageRewards()).toBeNull(); // not won yet
     game.forceOutcome("won");
     const first = game.claimStageRewards()!;
@@ -28,7 +27,7 @@ describe("stage rewards", () => {
   });
 
   it("pays nothing for a lost stage", () => {
-    const game = newSession();
+    const game = newRun();
     game.forceOutcome("lost");
     expect(game.claimStageRewards()).toBeNull();
     game.advance();
@@ -37,7 +36,7 @@ describe("stage rewards", () => {
 
   it("adds a row for a passive that pays per gold block left in the hand", () => {
     const deck = makeDevDeck(3);
-    const game = newSession(deck);
+    const game = newRun(deck);
     game.installPassive(createPassiveBlock("gold-standard", "passive.gold"));
     const golds = deck.filter((block) => materialOf(block) === "gold").slice(0, 2);
     const other = deck.find((block) => materialOf(block) === "wood")!;
@@ -52,17 +51,12 @@ describe("stage rewards", () => {
   });
 
   it("is not paid again after a save and reload", () => {
-    const game = newSession();
+    const game = newRun();
     game.forceOutcome("won");
     game.claimStageRewards();
     const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
     const snapshot = fromSaveRecord(record, standardDeck, dealerRegistry)!;
-    const resumed = GameSession.fromSnapshot(
-      dealerRegistry,
-      demoSessionConfig,
-      standardDeck,
-      snapshot,
-    );
+    const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, snapshot);
     expect(resumed.claimStageRewards()?.balance).toBe(4);
     expect(resumed.state.coins).toBe(4);
   });

@@ -1,13 +1,13 @@
 import type { CardBlock } from "./cards";
 import type { Registry } from "./core/registry";
 import type { Dealer } from "./dealer";
-import type { Phase, SessionSnapshot } from "./game-session";
+import type { RunPhase, RunSnapshot } from "./game-run";
 import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
 import { parseRunStats, type RunStats } from "./run-stats";
 import { createPassiveBlock } from "./passives";
-import { stageKinds, type StageKind } from "./session-config";
+import { stageKinds, type StageKind } from "./run-rules";
 
 /**
  * Saved runs store card ids, not CardBlock objects: some traits hold functions, and the
@@ -20,7 +20,7 @@ export const saveKey = "poker-blocks.run";
 export type SaveRecord = {
   version: typeof saveVersion;
   round: number;
-  phase: Phase;
+  phase: RunPhase;
   /** Stage immediately before this shop; absent in older boss-only shop saves. */
   shopAfter?: StageKind;
   dealer: string;
@@ -42,12 +42,12 @@ export type SaveRecord = {
   /** Added after version 1 shipped; optional so older saves still load. */
   stats?: RunStats;
   /** The last stage paid out and its ledger, so a reload never pays it twice. */
-  rewarded?: SessionSnapshot["rewarded"];
+  rewarded?: RunSnapshot["rewarded"];
 };
 
-const phases: readonly Phase[] = ["stage-1", "stage-2", "boss", "shop", "over"];
+const phases: readonly RunPhase[] = ["stage-1", "stage-2", "boss", "shop", "over"];
 
-export function toSaveRecord(snapshot: SessionSnapshot): SaveRecord {
+export function toSaveRecord(snapshot: RunSnapshot): SaveRecord {
   const ids = (blocks: readonly CardBlock[]) => blocks.map(({ id }) => id);
   const { state } = snapshot;
   return {
@@ -88,7 +88,7 @@ export function fromSaveRecord(
   value: unknown,
   cards: readonly CardBlock[],
   dealers: Registry<Dealer>,
-): SessionSnapshot | null {
+): RunSnapshot | null {
   try {
     const record = value as SaveRecord;
     if (record?.version !== saveVersion) return null;
@@ -162,10 +162,8 @@ export function fromSaveRecord(
 }
 
 /** A saved "already paid" marker, or nothing if it is missing or malformed. */
-function parseRewarded(
-  value: unknown,
-): { rewarded: NonNullable<SessionSnapshot["rewarded"]> } | null {
-  const saved = value as SessionSnapshot["rewarded"];
+function parseRewarded(value: unknown): { rewarded: NonNullable<RunSnapshot["rewarded"]> } | null {
+  const saved = value as RunSnapshot["rewarded"];
   if (!saved || typeof saved.stage !== "string" || !Array.isArray(saved.reward?.entries))
     return null;
   const entries = saved.reward.entries
@@ -208,7 +206,7 @@ export function browserStorage(): SaveStorage | null {
 /** Save a run, or clear the save once the run is over. Returns false if storage failed. */
 export function saveRun(
   storage: SaveStorage | null,
-  snapshot: SessionSnapshot,
+  snapshot: RunSnapshot,
   key = saveKey,
 ): boolean {
   if (!storage) return false;
@@ -226,7 +224,7 @@ export function loadRun(
   cards: readonly CardBlock[],
   dealers: Registry<Dealer>,
   key = saveKey,
-): SessionSnapshot | null {
+): RunSnapshot | null {
   if (!storage) return null;
   try {
     const raw = storage.getItem(key);

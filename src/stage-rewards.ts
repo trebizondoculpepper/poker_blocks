@@ -5,7 +5,7 @@
 import type { GameState } from "./game-state";
 import { stageWonPassiveCoins } from "./passive-effects";
 import { passiveDefinitions } from "./passives";
-import type { StageKind } from "./session-config";
+import type { StageKind } from "./run-rules";
 
 /** One line of the ledger: where the coins come from, what to call it, how many. */
 export type RewardEntry = { source: string; label: string; coins: number };

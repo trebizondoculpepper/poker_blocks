@@ -1,5 +1,5 @@
 // Title, settings and game over screens: plain DOM overlays above the scene. They only call back
-// into the game; progression rules stay in the session controller.
+// into the game; progression rules stay in the run controller.
 import { playSfx } from "./audio/sfx";
 import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";

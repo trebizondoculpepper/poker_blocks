@@ -66,13 +66,13 @@ describe("audio service", () => {
 
   it("keeps a quiet room wound down after a run starts and when its game screen resumes", () => {
     const { audio, calls } = setup();
-    audio.enterRoom("quiet");
+    audio.enterMode("quiet");
     audio.runStarted();
     audio.showScreen("game");
     expect(calls).toEqual(["windDown", "unmuffle", "windDown"]);
 
     calls.length = 0;
-    audio.enterRoom("ordinary");
+    audio.enterMode("ordinary");
     audio.runStarted();
     audio.showScreen("game");
     expect(calls).toEqual(["unmuffle", "resumeStage"]);

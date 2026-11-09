@@ -1,15 +1,12 @@
 /**
- * Rooms are composed from traits. A room (the normal game, or a dev room opened with
- * `?room=...`) is plain data: an id and a set of room traits, each with its own
- * configuration. The game reads the traits ("does this room have a passive rack?") rather
- * than asking which room it is, so a feature such as the passive rack can be composed into
- * any room by adding its trait.
+ * A game mode defines the available scenes and start scene, plus mode-wide traits for a run.
+ * `?mode=...` selects a developer mode; `?room=...` remains a backwards-compatible alias.
  */
 import { Registry } from "./core/registry";
 import { saveKey } from "./save";
 import type { Scene } from "./scenes";
 
-export const roomSceneNames = [
+export const sceneNames = [
   "title",
   "settings",
   "stage-1",
@@ -19,16 +16,16 @@ export const roomSceneNames = [
   "stage-won",
   "game-over",
 ] as const;
-export type RoomSceneName = (typeof roomSceneNames)[number];
-export type RoomSceneTraits = {
-  screen: { kind: RoomSceneName };
+export type SceneName = (typeof sceneNames)[number];
+export type SceneTraits = {
+  screen: { kind: SceneName };
   pausesBelow: { input: boolean; update: boolean };
 };
-export type RoomScene = Scene<RoomSceneTraits>;
-export type RoomMusicMode = "quiet" | "ordinary";
+export type ModeScene = Scene<SceneTraits>;
+export type ModeMusicStyle = "quiet" | "ordinary";
 
-function scenesForRoom(roomId: string): readonly RoomScene[] {
-  const sceneTraits: Record<RoomSceneName, Partial<RoomSceneTraits>> = {
+function scenesForMode(modeId: string): readonly ModeScene[] {
+  const sceneTraits: Record<SceneName, Partial<SceneTraits>> = {
     title: {},
     settings: { pausesBelow: { input: true, update: true } },
     "stage-1": {},
@@ -38,8 +35,8 @@ function scenesForRoom(roomId: string): readonly RoomScene[] {
     "stage-won": { pausesBelow: { input: true, update: true } },
     "game-over": {},
   };
-  return roomSceneNames.map((kind) => ({
-    id: roomSceneId(roomId, kind),
+  return sceneNames.map((kind) => ({
+    id: modeSceneId(modeId, kind),
     traits: {
       screen: { kind },
       ...sceneTraits[kind],
@@ -47,11 +44,11 @@ function scenesForRoom(roomId: string): readonly RoomScene[] {
   }));
 }
 
-export function roomSceneId(roomId: string, scene: RoomSceneName): string {
-  return `${roomId}/${scene}`;
+export function modeSceneId(modeId: string, scene: SceneName): string {
+  return `${modeId}/${scene}`;
 }
 
-/** The passive rack: shown in the room, holding at most `capacity` passives. */
+/** The passive rack: shown in modes that compose it, holding at most `capacity` passives. */
 export type PassiveRackTrait = {
   /** How many passives the rack can hold. */
   capacity: number;
@@ -59,7 +56,7 @@ export type PassiveRackTrait = {
   startWith?: number;
 };
 
-/** The default rack: room for five passives, starting empty. */
+/** The default rack: capacity for five passives, starting empty. */
 export const defaultPassiveRack: PassiveRackTrait = { capacity: 5 };
 
 /** UI panels composed into a stage or shop scene. Omitted panels are not shown. */
@@ -80,8 +77,8 @@ export const defaultShop: ShopTrait = {
   overlays: { coins: {}, shopExit: {} },
 };
 
-export type RoomTraits = {
-  /** Where the room keeps its saved run. */
+export type ModeTraits = {
+  /** Save slot used by runs in this mode. */
   save: { key: string };
   /** The stage scene's interactions. The shop scene does not compose these. */
   stage: { fieldPlacement: Record<string, never>; overlays: SceneOverlays };
@@ -100,7 +97,7 @@ export type RoomTraits = {
   skipTitle?: { resume: boolean };
   /**
    * Listed by the developer console under this name (`reset dev2`), and linked by it in
-   * the URL (`?room=dev2`). Rooms without it are not listed.
+   * the URL (`?mode=dev2`). Modes without it are not listed.
    */
   console?: { name: string };
   /** A fresh run is started on load when this URL parameter is "true"; it is then removed. */
@@ -109,36 +106,36 @@ export type RoomTraits = {
   shopPreview?: { coins: number };
 };
 
-export type Room = {
+export type GameMode = {
   id: string;
   /** Temporary music policy until this becomes a composed music trait (#34). */
-  musicMode: RoomMusicMode;
+  musicStyle: ModeMusicStyle;
   /** The scenes this mode can enter without reloading the page. */
-  scenes: readonly RoomScene[];
+  scenes: readonly ModeScene[];
   /** Scene entered when this mode starts. */
-  startScene: RoomSceneName;
-  /** Other names that open this room (old links). */
+  startScene: SceneName;
+  /** Other names that open this mode (old links). */
   aliases?: readonly string[];
-  traits: RoomTraits;
+  traits: ModeTraits;
 };
 
 /** Only the active stage scene composes field placement; a shop cannot offer it. */
-export function fieldPlacementActive(traits: RoomTraits, phase: string): boolean {
+export function fieldPlacementActive(traits: ModeTraits, phase: string): boolean {
   return phase !== "shop" && phase !== "over" && Boolean(traits.stage.fieldPlacement);
 }
 
 /** The active scene decides which independent HUD panels are composed. */
-export function overlaysForPhase(traits: RoomTraits, phase: string): SceneOverlays {
+export function overlaysForPhase(traits: ModeTraits, phase: string): SceneOverlays {
   return phase === "shop" ? (traits.shop?.overlays ?? {}) : traits.stage.overlays;
 }
 
-export const roomRegistry = new Registry<Room>("room");
+export const gameModeRegistry = new Registry<GameMode>("game mode");
 
-const rooms: Room[] = [
+const gameModes: GameMode[] = [
   {
     id: "game",
-    musicMode: "ordinary",
-    scenes: scenesForRoom("game"),
+    musicStyle: "ordinary",
+    scenes: scenesForMode("game"),
     startScene: "title",
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
@@ -150,8 +147,8 @@ const rooms: Room[] = [
   },
   {
     id: "dev0",
-    musicMode: "ordinary",
-    scenes: scenesForRoom("dev0"),
+    musicStyle: "ordinary",
+    scenes: scenesForMode("dev0"),
     startScene: "title",
     aliases: ["dev"],
     traits: {
@@ -164,8 +161,8 @@ const rooms: Room[] = [
   },
   {
     id: "dev1",
-    musicMode: "quiet",
-    scenes: scenesForRoom("dev1"),
+    musicStyle: "quiet",
+    scenes: scenesForMode("dev1"),
     startScene: "stage-1",
     traits: {
       save: { key: "poker-blocks.dev1-run" },
@@ -180,8 +177,8 @@ const rooms: Room[] = [
   },
   {
     id: "dev2",
-    musicMode: "quiet",
-    scenes: scenesForRoom("dev2"),
+    musicStyle: "quiet",
+    scenes: scenesForMode("dev2"),
     startScene: "stage-1",
     traits: {
       save: { key: "poker-blocks.dev2-run" },
@@ -196,8 +193,8 @@ const rooms: Room[] = [
   },
   {
     id: "dev3",
-    musicMode: "quiet",
-    scenes: scenesForRoom("dev3"),
+    musicStyle: "quiet",
+    scenes: scenesForMode("dev3"),
     startScene: "shop",
     traits: {
       save: { key: "poker-blocks.dev3-run" },
@@ -211,36 +208,39 @@ const rooms: Room[] = [
     },
   },
 ];
-for (const room of rooms) roomRegistry.register(room.id, room);
+for (const mode of gameModes) gameModeRegistry.register(mode.id, mode);
 
-/** The room a `?room=` value opens: by id or alias; anything else is the normal game. */
-export function roomFor(name: string | null): Room {
-  if (!name) return roomRegistry.get("game");
-  if (roomRegistry.has(name)) return roomRegistry.get(name);
-  const aliased = roomRegistry.names().find((id) => roomRegistry.get(id).aliases?.includes(name));
-  return roomRegistry.get(aliased ?? "game");
+/** Resolve a mode id or alias; unknown values open the normal game. */
+export function gameModeFor(name: string | null): GameMode {
+  if (!name) return gameModeRegistry.get("game");
+  if (gameModeRegistry.has(name)) return gameModeRegistry.get(name);
+  const aliased = gameModeRegistry
+    .names()
+    .find((id) => gameModeRegistry.get(id).aliases?.includes(name));
+  return gameModeRegistry.get(aliased ?? "game");
 }
 
-/** The console's name for a room: none for a room the console does not list. */
-export function consoleNames(room: Room): string[] {
-  return [room.traits.console?.name ?? []].flat();
+/** The console's name for a mode: none for a mode the console does not list. */
+export function modeConsoleNames(mode: GameMode): string[] {
+  return [mode.traits.console?.name ?? []].flat();
 }
 
-/** The rooms the developer console lists, by console name, in order. */
-export function devRooms(): string[] {
-  return roomRegistry.names().flatMap((id) => consoleNames(roomRegistry.get(id)));
+/** The modes the developer console lists, by console name, in order. */
+export function developerModes(): string[] {
+  return gameModeRegistry.names().flatMap((id) => modeConsoleNames(gameModeRegistry.get(id)));
 }
 
-/** Whether this page load asks the room for a fresh run (`&restart=true`). */
-export function wantsRestart(room: Room, params: URLSearchParams): boolean {
-  return [room.traits.restartable?.param ?? []].flat().some((p) => params.get(p) === "true");
+/** Whether this page load asks the mode for a fresh run (`&restart=true`). */
+export function wantsRestart(mode: GameMode, params: URLSearchParams): boolean {
+  return [mode.traits.restartable?.param ?? []].flat().some((p) => params.get(p) === "true");
 }
 
-/** A link to the room: `?room=<console name>`, or no parameter for an unlisted room. */
-export function roomLink(room: Room, href: string): URL {
+/** A canonical `?mode=` link, or no mode parameter for an unlisted mode. */
+export function modeLink(mode: GameMode, href: string): URL {
   const url = new URL(href);
+  url.searchParams.delete("mode");
   url.searchParams.delete("room");
-  for (const name of consoleNames(room)) url.searchParams.set("room", name);
-  for (const param of [room.traits.restartable?.param ?? []].flat()) url.searchParams.delete(param);
+  for (const name of modeConsoleNames(mode)) url.searchParams.set("mode", name);
+  for (const param of [mode.traits.restartable?.param ?? []].flat()) url.searchParams.delete(param);
   return url;
 }

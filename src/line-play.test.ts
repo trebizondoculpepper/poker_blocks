@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
-import { demoSessionConfig } from "./session-config";
+import { GameRun } from "./game-run";
+import { demoRunRules } from "./run-rules";
 import { cellKey } from "./traits/attachable";
 
-const session = () => new GameSession(dealerRegistry, demoSessionConfig, standardDeck, () => 0);
+const session = () => new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0);
 
 describe("placing several blocks as one play", () => {
   it("lays a line east from the centre on an empty field, in selection order, for one play", () => {

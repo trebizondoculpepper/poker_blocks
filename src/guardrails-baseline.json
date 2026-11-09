@@ -1,10 +1,10 @@
 {
   "src/audio/music-fade.ts": 1,
   "src/audio/music-plan.ts": 1,
-  "src/game-session.ts": 7,
+  "src/game-run.ts": 7,
   "src/listening-room/main.ts": 1,
   "src/passive-effects.ts": 9,
-  "src/rooms.ts": 2,
+  "src/game-modes.ts": 2,
   "src/run-controller.ts": 16,
   "src/save.ts": 6,
   "src/shop-view.ts": 2,

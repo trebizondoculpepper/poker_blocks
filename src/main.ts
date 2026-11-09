@@ -18,11 +18,11 @@ import { createOverlays, type Overlays } from "./overlays";
 import { createPassiveRack } from "./passive-rack";
 import { createPlayPresenter, type PlayPresenter } from "./play-presenter";
 import { createBlockViews, type BlockViews } from "./rendered-blocks";
-import { roomRegistry } from "./rooms";
+import { gameModeRegistry } from "./game-modes";
 import { createRunController, type RunController } from "./run-controller";
 import { browserStorage } from "./save";
 import { SceneManager } from "./scenes";
-import { roomSceneBehaviours } from "./scene-behaviours";
+import { sceneBehaviours } from "./scene-behaviours";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView } from "./shop-view";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
@@ -114,9 +114,9 @@ const traitContext: TraitContext = {
     },
   },
 };
-const sceneManager = new SceneManager(roomSceneBehaviours<TraitContext>(), traitContext);
-for (const roomId of roomRegistry.names()) {
-  for (const scene of roomRegistry.get(roomId).scenes) sceneManager.register(scene);
+const sceneManager = new SceneManager(sceneBehaviours<TraitContext>(), traitContext);
+for (const modeId of gameModeRegistry.names()) {
+  for (const scene of gameModeRegistry.get(modeId).scenes) sceneManager.register(scene);
 }
 
 // ----- The run, and the services that show it -----
@@ -155,10 +155,10 @@ const run: RunController = createRunController({
   },
 });
 const passiveRackView = createPassiveRack(host, {
-  capacity: run.room.traits.passiveRack?.capacity,
+  capacity: run.mode.traits.passiveRack?.capacity,
   onPickUp: (block, event) => input.pickUpPassive(block, event),
 });
-passiveRackView.element.hidden = !run.room.traits.passiveRack;
+passiveRackView.element.hidden = !run.mode.traits.passiveRack;
 const hand: HandView = createHandView({
   views: blockViews,
   scene: view.handScene,

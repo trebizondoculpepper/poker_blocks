@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import {
   clearRun,
   fromSaveRecord,
@@ -11,7 +11,7 @@ import {
   toSaveRecord,
   type SaveStorage,
 } from "./save";
-import { demoSessionConfig } from "./session-config";
+import { demoRunRules } from "./run-rules";
 import { createPassiveBlock } from "./passives";
 
 function memoryStorage(): SaveStorage & { data: Map<string, string> } {
@@ -36,8 +36,8 @@ const brokenStorage: SaveStorage = {
   },
 };
 
-function playedSession(): GameSession {
-  const session = new GameSession(dealerRegistry, demoSessionConfig, standardDeck, () => 0);
+function playedSession(): GameRun {
+  const session = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0);
   session.play({ cardId: session.state.hand[0].id });
   session.refillHand();
   session.discard(session.state.hand[0].id);
@@ -46,18 +46,13 @@ function playedSession(): GameSession {
 }
 
 describe("save records", () => {
-  it("round-trips a session through JSON", () => {
+  it("round-trips a run through JSON", () => {
     const session = playedSession();
     const json = JSON.parse(JSON.stringify(toSaveRecord(session.snapshot())));
     const snapshot = fromSaveRecord(json, standardDeck, dealerRegistry)!;
     expect(snapshot).toEqual(session.snapshot());
     expect(snapshot.state.field[0].block.traits.selectable).toBeUndefined();
-    const resumed = GameSession.fromSnapshot(
-      dealerRegistry,
-      demoSessionConfig,
-      standardDeck,
-      snapshot,
-    );
+    const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, snapshot);
     expect(resumed.snapshot()).toEqual(session.snapshot());
     const all = [
       ...resumed.state.field.map(({ block }) => block.id),
@@ -127,7 +122,7 @@ describe("save records", () => {
 });
 
 describe("run storage", () => {
-  it("keeps dev-room and normal saves separate", () => {
+  it("keeps dev-mode and normal saves separate", () => {
     const storage = memoryStorage();
     const session = playedSession();
     expect(saveRun(storage, session.snapshot(), "poker-blocks.dev-run")).toBe(true);

@@ -100,9 +100,9 @@ The canonical domain terms are in [terms.md](terms.md): a **stage** is one score
 
 The stage opens with an empty field and a dealer-filled hand. The player may discard before placing anything. The first play is a drag from the hand into the empty field, creating the centre block and consuming one play.
 
-`GameSession` owns progression through stage one, shop, stage two, shop, boss stage, shop, and the next round. It selects the active dealer and target score for each stage, asks that dealer to set the stage's field and allowances, and carries the deck and discard pile across the three stages. Its snapshot includes the current round, phase, and stage that opened a shop for save/Continue.
+`GameRun` owns progression through stage one, shop, stage two, shop, boss stage, shop, and the next round. It selects the active dealer and target score for each stage, asks that dealer to set the stage's field and allowances, and carries the deck and discard pile across the three stages. Its snapshot includes the current round, phase, and stage that opened a shop for save/Continue.
 
-A registered dealer reads `GameState` to decide whether a move is legal and returns the next state after a play or discard. The base dealer owns the current five-card hand, six plays, four discards, provisional target score of 100, opening deal, face attachment rules, and hand refill. `GameSession` holds the active dealer and current state; switching to another registered dealer preserves the exact state value. A future boss dealer can change rule methods without moving cards between zones or adding boss checks to the scene.
+A registered dealer reads `GameState` to decide whether a move is legal and returns the next state after a play or discard. The base dealer owns the current five-card hand, six plays, four discards, provisional target score of 100, opening deal, face attachment rules, and hand refill. `GameRun` holds the active dealer and current state; switching to another registered dealer preserves the exact state value. A future boss dealer can change rule methods without moving cards between zones or adding boss checks to the scene.
 
 ## Placement and card appearance
 
@@ -124,7 +124,7 @@ The proposed event order, reaction contract, and effect boundaries are specified
 
 Passive definitions live in a named registry with a stable id, display name, visual design or icon, and a trait reference. The passive itself is a block instance in the ordered `GameState.passiveRack`. Behavior code belongs to reusable traits, not the block instance or an ad hoc function attached to one registry entry. A trait may listen for gameplay events such as block placement, apply a condition, produce a gameplay effect such as coins proportional to the placed card's rank, and request separate presentation effects.
 
-The passive trait declares its event subscriptions; it need not respond to every event. A reaction may also request a further named gameplay event. The session's passive event queue delivers that event after the current one and applies a loop guard, preserving deterministic ordering and preventing recursive callbacks. The `?room=dev2` sandbox draws two distinct active passives at each fresh start. Do Nothing remains a retired registry definition solely so older saves can load and replace it without losing the card run.
+The passive trait declares its event subscriptions; it need not respond to every event. A reaction may also request a further named gameplay event. The run's passive event queue delivers that event after the current one and applies a loop guard, preserving deterministic ordering and preventing recursive callbacks. The `?mode=dev2` sandbox draws two distinct active passives at each fresh start. Do Nothing remains a retired registry definition solely so older saves can load and replace it without losing the card run.
 
 Passives may react throughout the stage or session, not only during scoring. The engine should expose named lifecycle events with explicit timing and context: for example, before the first play in a stage, before/after a block is placed, before/after one line is scored, after all lines are scored, and when a stage is won or lost. These are examples, not an exhaustive event list. A passive's trait checks its configured condition against the event and returns gameplay effects; an event may also lead to separate sound or visual requests. This gives designers callback-like trigger points without storing arbitrary callback code on individual blocks.
 
@@ -144,15 +144,15 @@ When the placed card lands, the scene presents each scoring line from lowest to 
 
 ## Session controller
 
-`GameSession` (`src/game-session.ts`) controls one run: stage 1 → shop → stage 2 → shop → boss stage → shop → next round. It holds the round number, the phase (a stage, `shop` or `over`), the stage that opened the current shop, the active dealer and the current `GameState`. `advance()` opens a shop after any won stage and sets the phase to `over` on a loss. `leaveShop()` starts the next stage, or stage 1 of the next round after a boss. The shop can be skipped without spending coins. `snapshot()` preserves the completed stage so Continue leaves a restored shop for the right destination; older boss-only shop saves still lead to the next round.
+`GameRun` (`src/game-run.ts`) controls one run: stage 1 → shop → stage 2 → shop → boss stage → shop → next round. It holds the round number, the phase (a stage, `shop` or `over`), the stage that opened the current shop, the active dealer and the current `GameState`. `advance()` opens a shop after any won stage and sets the phase to `over` on a loss. `leaveShop()` starts the next stage, or stage 1 of the next round after a boss. The shop can be skipped without spending coins. `snapshot()` preserves the completed stage so Continue leaves a restored shop for the right destination; older boss-only shop saves still lead to the next round.
 
-Each stage's dealer, target, plays and discards come from a `SessionConfig` (`src/session-config.ts`), not from the scene. The config also names the open rules as explicit options: what happens to the hand at a stage boundary, and whether the discard pile returns to the deck after the boss-stage shop. Earlier shops do not recycle discards. `demoSessionConfig` holds the documented placeholders.
+Each stage's dealer, target, plays and discards come from a `RunRules` (`src/run-rules.ts`), not from the scene. The config also names the open rules as explicit options: what happens to the hand at a stage boundary, and whether the discard pile returns to the deck after the boss-stage shop. Earlier shops do not recycle discards. `demoRunRules` holds the documented placeholders.
 
 A dealer's `startStage` returns the field to the deck, sets the stage's counters and fills the hand. The field starts empty, and the first play needs no target: `placementFor` returns the centre cell when the field is empty. In the scene, dropping a hand block anywhere above the hand on an empty field plays it at the centre. When a stage is decided, a button in the round panel offers the next step (next stage, shop, next round or a new game), and taking it clears the table and deals the new hand.
 
 ## Ordered zones and hand reordering
 
-`GameState.hand` is the source of truth for hand order; the scene's hand slots always follow it (`syncHandSlots`). `src/zones.ts` provides `moveItem` and `insertAt` for any ordered zone, so the future passive rack can reuse them. `GameSession.reorderHand(from, to)` moves a card without changing counters, score or any other zone, and `refillHand(slot)` puts a drawn card in the gap left by the card just played or discarded.
+`GameState.hand` is the source of truth for hand order; the scene's hand slots always follow it (`syncHandSlots`). `src/zones.ts` provides `moveItem` and `insertAt` for any ordered zone, so the future passive rack can reuse them. `GameRun.reorderHand(from, to)` moves a card without changing counters, score or any other zone, and `refillHand(slot)` puts a drawn card in the gap left by the card just played or discarded.
 
 In the scene, a dragged hand card that is over the hand area (the bottom of the screen, where neither a field face nor the discard area applies) previews its new position: the other cards glide aside. Dropping there reorders the hand, plays `hand.reorder` and autosaves; dropping on a field face or the discard area still plays or discards. The passive rack itself, and resolving passives in rack order, wait for the passive implementation (issue #4).
 
@@ -186,40 +186,38 @@ The run is saved automatically (`src/save.ts`) at safe points only: when a place
 }
 ```
 
-Loading rebuilds the blocks from the standard deck and `GameSession.fromSnapshot` restores the session. A record with another version, an unknown phase or dealer, unknown or duplicate card ids, a missing card or malformed numbers is ignored, which hides Continue. A lost run (phase `over`) clears the save. All storage access is wrapped so the game still works, without Continue or remembered settings, when storage is unavailable.
+Loading rebuilds the blocks from the standard deck and `GameRun.fromSnapshot` restores the session. A record with another version, an unknown phase or dealer, unknown or duplicate card ids, a missing card or malformed numbers is ignored, which hides Continue. A lost run (phase `over`) clears the save. All storage access is wrapped so the game still works, without Continue or remembered settings, when storage is unavailable.
 
 ## Modes, scenes and traits
 
-This section names the composition concepts above the block level and how they relate. The target design is tracked in epic #30 (tickets #31–#38); what exists today is marked as such.
-
 ### Concepts
 
-- **Trait**: a reusable behaviour plus its plain-data configuration. The same pattern applies at every level: a block trait (`explosive`, `transparent`), a scene trait (`passiveRack`, `music`, `menu`) or a run-config trait (`sandbox`, `materialDeck`). A trait's presence installs its behaviour through lifecycle hooks (`enter`, `exit`, `update`, `handles`); no caller asks `if (traits.x)`.
-- **Scene**: a plain object, `{ id, traits }`, with no behaviour of its own. Title, stage, boss stage, shop, stage won, game over, settings and the Esc menu are all scenes. What a scene shows and allows (field placement, HUD panels, the passive rack, menu items, music) comes entirely from its traits.
-- **Scene manager**: enters and exits scenes, calling each composed trait's hooks. It can switch scenes, or push one scene over another and pop it again; the Esc menu and stage-won pop-up are pushed scenes, and a `pausesBelow` trait stops the scene underneath taking input or updates.
-- **Mode (today: room)**: a playable configuration of the game. It is a scene graph (which scenes exist, the start scene, and transitions keyed by outcomes such as `won`, `lost`, `continue`) plus run-config traits applied when a run starts. The main game and dev0–dev3 are modes. A dev room is just a mode with different traits and a different start scene; dev3, for example, starts in the shop scene.
-- **Run-config trait**: shapes a run when it starts (save key, sandbox limits, material mix, a shop preview with coins). These are composable transformers over the session config, deck and starting snapshot, applied in order.
-- **GameSession**: the pure rules engine for one run: deck, hand, field, scoring, coins, passives and saving. It knows nothing about scenes, rendering or input. The scene graph decides what comes next; the session reports outcomes.
-- **Services**: camera, input, hand, field, HUD panels, audio, overlays and console, each behind a narrow interface. Traits reach them through the context passed to their hooks.
-- **main.ts**: wiring only. It builds the services, the scene manager and the selected mode, enters the start scene, and holds no game logic, phase checks or trait if-chains.
+- **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, and supplies mode-wide configuration such as save identity, music policy and optional game features. It is not a scene graph: the list is a catalogue of scene definitions.
+- **Scene** (`Scene`): a presentation context such as title, stage, shop, settings, stage-won or game-over. Scene data composes traits. `SceneManager` calls trait lifecycle hooks when scenes enter and exit.
+- **Scene stack**: the runtime layers currently active. Settings and stage-won are pushed over gameplay and popped to resume it. Title and game-over replace the stack.
+- **Game flow**: decisions about which scene follows an action or run outcome. Today `run-controller.ts` coordinates this using `GameRun.phase` and outcomes. The mode's `startScene` is not yet the authoritative transition graph.
+- **GameRun**: mutable state for one playthrough: cards, field, scoring, coins, passives, phase and save snapshot. It remains the same run while the scene stack changes.
+- **RunRules**: progression and economy rules used to create a run. Mode traits may further configure its save key, starting deck and optional features.
+- **Trait**: reusable behavior plus plain data, attached at a declared scope. A mode trait is not automatically copied onto each scene; composition between scopes must be explicit.
+- **Services**: camera, input, hand, field, HUD, audio, overlays and console, exposed through narrow interfaces to behaviors.
 
 ### How they fit together
 
-```
-main.ts ── builds ──> services + SceneManager + Mode
-Mode = run-config traits + scene graph (scenes, start, transitions)
-Scene = { id, traits }  ──>  trait behaviours (enter/exit/update/handles) use services
-GameSession = rules for one run; emits outcomes that drive scene transitions
-Block = { id, traits }  ──>  block trait behaviours inside the field and hand
+```text
+main.ts ── builds ──> services + SceneManager + selected GameMode
+GameMode ── catalogs ──> Scene definitions and start scene
+run-controller ── coordinates ──> GameRun state and game flow
+SceneManager ── owns ──> active scene stack; calls scene trait lifecycle hooks
+RunRules + mode configuration ── create ──> GameRun
 ```
 
-Composition is the same at both levels: a block is to its traits what a scene is to its traits. Adding a feature means writing a trait and composing it where it applies, never adding a branch to `main.ts`.
+The Escape/settings menu is a scene pushed over gameplay. Popping it resumes the underlying scene. Stage-won is pushed while rewards are presented; the shop is a scene between stages while the same run persists. Title and game-over currently replace the stack. A future victory ending should be represented by a scene as well.
 
 ### Where the code is today
 
-`src/scenes.ts` now defines scenes, the typed scene-trait behavior registry, and the scene-stack manager. The manager enters trait hooks in composition order and exits them in reverse order. A switch exits the stack top-to-bottom, then enters the replacement scene. A push enters only the new top scene; scenes underneath remain suspended without exit or re-entry. A pop exits only the top scene and resumes the scene below without re-entering it. Updates run bottom-to-top through visible scenes; a trait behavior can block updates below. The manager's input dispatch runs top-to-bottom; a handler consumes an event by returning `true`, while a trait behavior can block propagation below. The DOM input routing is scaffolding for later tickets: no current trait handles real input, so `pausesBelow.input` does not yet pause the legacy DOM listeners.
+`src/scenes.ts` defines the scene-trait behavior registry and scene-stack manager. A switch exits the stack top-to-bottom and enters the replacement; push enters only the new top; pop exits only the top and resumes what is underneath. Updates run bottom-to-top unless blocked, and input dispatch runs top-to-bottom. DOM input routing is scaffolding: no current scene trait handles real input, so `pausesBelow.input` does not yet pause legacy DOM listeners.
 
-`src/rooms.ts` now gives each room a scene set and a declared start scene, including dev3's shop start. The start scene is not authoritative yet: the temporary `syncSceneToGame` bridge derives the active scene from `GameSession.phase`, so dev3 reaches the shop because of `shopPreview`. The bridge must be removed when the scene graph drives progression in #37. Console room changes replace the URL with the History API and switch the active mode in memory; they do not reload the page. The scene registry currently tracks screen transitions while the existing menu renderer and phase machine continue to own their behavior. Tickets #33–38 continue the migration.
+`src/game-modes.ts` defines each mode's scene catalogue, start scene and mode traits. `?mode=` is canonical; `?room=` remains accepted as a legacy URL alias. Developer-console mode changes update the URL and switch in memory without reloading. The scene manager tracks screen transitions, while `run-controller.ts` still coordinates stage/shop progression from run phase and outcomes. This is an interim arrangement, not a mode-owned flow graph.
 
 `src/camera-view.ts` is the first extracted service. It owns board and hand cameras, the board pivot and assembly, framing, zoom, rotation, camera motion, and viewport resize handling. `main.ts` still detects input gestures and uses the service cameras for block picking and placement, while `TraitContext.services.cameraView` exposes the service to scene traits. The architecture test guards against moving camera creation, framing, or resize behavior back into `main.ts`. Further services are extracted one per PR under #33.
 
@@ -227,7 +225,7 @@ Composition is the same at both levels: a block is to its traits what a scene is
 
 `src/hud-panels.ts` is the third. It builds the round panel, deck counter, shop coin counter and shop exit button, and turns a `HudView` snapshot (round, phase, the scene's overlays, whether a play is still presenting, the outcome and the counters) into what they show, including the stage heading and the next-action label. `hudDisplay` is the pure part, tested without a DOM. `main.ts` builds the snapshot in `updateHud` and binds the next action with `hud.onAction`; `TraitContext.services.hud` exposes the service.
 
-`src/console-host.ts` is the fourth. It adapts the game to the developer console's `ConsoleHost`: dev-room names, resetting the current room, opening another room in place (it rewrites the URL with the History API, then asks the game to `openRoom`), and the music commands, which go through the audio service. `main.ts` supplies a narrow `ConsoleApp` (new run, open a room, force an outcome, adjust coins) and no longer builds the console host itself.
+`src/console-host.ts` is the fourth. It adapts the game to the developer console's `ConsoleHost`: dev-room names, resetting the current room, opening another room in place (it rewrites the URL with the History API, then asks the game to `openGameMode`), and the music commands, which go through the audio service. `main.ts` supplies a narrow `ConsoleApp` (new run, open a room, force an outcome, adjust coins) and no longer builds the console host itself.
 
 `src/overlays.ts` is the fifth. It owns the menu screens (title, settings, game over and the stage-won pop-up), which scene each screen puts in front (`screenScenes`: settings and the stage-won pop-up are pushed, title and game over replace the stack, closing a menu resumes the game's scene), the music cue for each screen, the inspection tooltip and the refused flash on drop targets. `main.ts` supplies the menu callbacks and a `ScreenScenes` adapter over the scene manager. The overlays are built after the settings load, so `TraitContext.services.overlays` is a getter.
 
@@ -241,11 +239,11 @@ Composition is the same at both levels: a block is to its traits what a scene is
 
 `src/play-presenter.ts` is the tenth. It shows a play or discard the rules have accepted: played blocks fly to their cells one after another (a transparent block dissolves into its table version as it lands), discarded blocks dissolve away, and then the scoring lines are presented lowest first, each tinting its row and adding its points, before the outcome is announced. It keeps a play and a discard as separate states rather than one kind-tagged value. `main.ts` reacts to the announced outcome (the stage-won pop-up or game over follows) and exposes the service as `TraitContext.services.presenter`.
 
-`src/run-controller.ts` completes the split. It owns the run and its mode: the `GameSession`, the room (session config, deck, save key), starting, resuming and saving runs, moving between stages and the shop, following an announced outcome with the stage-won pop-up or game over, applying settings, and opening the start screen. It answers the other services through `rules` (input), `menus` and `screenScenes` (overlays) and `consoleApp` (the console). `src/scene-behaviours.ts` holds the behaviour each room-scene trait installs.
+`src/run-controller.ts` completes the split. It owns the run and its mode: the `GameRun`, the mode configuration (run rules, deck and save key), starting, resuming and saving runs, moving between stages and the shop, following an announced outcome with the stage-won pop-up or game over, applying settings, and opening the start screen. It answers the other services through `rules` (input), `menus` and `screenScenes` (overlays) and `consoleApp` (the console). `src/scene-behaviours.ts` holds the behaviour each scene trait installs.
 
 `src/main.ts` is now the composition root: it builds the services, the scene manager and the run controller, wires them to each other, opens the start scene and runs the frame loop. It has no behaviour of its own, and the architecture test keeps it that way (no named functions, no game state, no decisions beyond setup). The legacy branches that moved out of `main.ts` with the run flow are counted against `src/run-controller.ts` in the guardrail baseline; removing them is #36's job.
 
-The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameSession`. Developer rooms are no longer a kind of room: a room the console lists has a `console: { name }` trait, and one that honours `&restart=true` has a `restartable: { param }` trait (#38).
+The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameRun`. A `console: { name }` trait lists a mode in the developer console, and a `restartable: { param }` trait makes it honour `&restart=true` (#38).
 
 ## Architecture to discuss
 

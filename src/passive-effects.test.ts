@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck, type CardBlock } from "./cards";
 import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import type { PlacedBlock } from "./game-state";
 import { scoreFieldWithPassives } from "./passive-effects";
 import { createPassiveBlock, randomPassiveDefinitions } from "./passives";
-import { demoSessionConfig, sandboxSessionConfig } from "./session-config";
+import { demoRunRules, sandboxRunRules } from "./run-rules";
 
 const card = (rank: string, suit: string): CardBlock =>
   standardDeck.find(
@@ -51,20 +51,15 @@ describe("configured passive effects", () => {
   });
 
   it("awards discard coins and grants one unowned passive for two Aces", () => {
-    const game = new GameSession(
-      dealerRegistry,
-      sandboxSessionConfig(demoSessionConfig),
-      standardDeck,
-      () => 0,
-    );
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
     game.installPassive(passive("scrapper", 1));
     game.installPassive(passive("seeing-red", 2));
     game.installPassive(passive("ace-exchange", 3));
     const state = game.state;
     const aces = [card("A", "hearts"), card("A", "spades")];
-    const resumed = GameSession.fromSnapshot(
+    const resumed = GameRun.fromSnapshot(
       dealerRegistry,
-      sandboxSessionConfig(demoSessionConfig),
+      sandboxRunRules(demoRunRules),
       standardDeck,
       { ...game.snapshot(), state: { ...state, hand: aces } },
       () => 0,
@@ -84,17 +79,12 @@ describe("configured passive effects", () => {
   });
 
   it("replaces a retired passive from an older save with two active blocks", () => {
-    const game = new GameSession(
-      dealerRegistry,
-      sandboxSessionConfig(demoSessionConfig),
-      standardDeck,
-      () => 0,
-    );
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
     const original = passive("do-nothing", 1);
     game.installPassive(original);
-    const restored = GameSession.fromSnapshot(
+    const restored = GameRun.fromSnapshot(
       dealerRegistry,
-      sandboxSessionConfig(demoSessionConfig),
+      sandboxRunRules(demoRunRules),
       standardDeck,
       game.snapshot(),
       () => 0,
@@ -110,19 +100,14 @@ describe("configured passive effects", () => {
   });
 
   it("uses the same modified lines for the stage total and presentation", () => {
-    const game = new GameSession(
-      dealerRegistry,
-      sandboxSessionConfig(demoSessionConfig),
-      standardDeck,
-      () => 0,
-    );
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
     game.installPassive(passive("double-line", 1));
     const state = game.state;
     const first = card("7", "hearts");
     const second = card("7", "clubs");
-    const resumed = GameSession.fromSnapshot(
+    const resumed = GameRun.fromSnapshot(
       dealerRegistry,
-      sandboxSessionConfig(demoSessionConfig),
+      sandboxRunRules(demoRunRules),
       standardDeck,
       { ...game.snapshot(), state: { ...state, field: [placed(first, 0)], hand: [second] } },
       () => 0,

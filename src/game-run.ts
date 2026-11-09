@@ -9,9 +9,9 @@ import {
   defaultPassivePrices,
   stageKinds,
   type PassivePrices,
-  type SessionConfig,
+  type RunRules,
   type StageKind,
-} from "./session-config";
+} from "./run-rules";
 import {
   createPassiveBlock,
   PassiveEventQueue,
@@ -25,13 +25,13 @@ import { discardPassiveEffects, scoreFieldWithPassives } from "./passive-effects
 import type { ScoredLine } from "./scoring";
 import type { ShopOffer } from "./shop-stock";
 
-/** Where a session is: one of a round's three stages, the shop, or finished after a loss. */
-export type Phase = StageKind | "shop" | "over";
+/** Where a run is: one of a round's three stages, the shop, or finished after a loss. */
+export type RunPhase = StageKind | "shop" | "over";
 
-/** What a future save/Continue flow needs to restore a session. */
-export type SessionSnapshot = {
+/** What a future save/Continue flow needs to restore a run. */
+export type RunSnapshot = {
   round: number;
-  phase: Phase;
+  phase: RunPhase;
   /** Stage that opened this shop; absent in older saves, which only had boss shops. */
   shopAfter?: StageKind;
   dealer: string;
@@ -46,14 +46,14 @@ export type SessionSnapshot = {
  * Controls one game attempt: each stage → shop → next stage (or round).
  * It keeps the current facts while a registered dealer, chosen per stage, applies the rules.
  */
-export class GameSession {
+export class GameRun {
   private readonly dealers: Registry<Dealer>;
-  private readonly config: SessionConfig;
+  private readonly config: RunRules;
   private readonly random: () => number;
   private activeDealer: Dealer;
   private currentState: GameState;
   private currentRound = 1;
-  private currentPhase: Phase = "stage-1";
+  private currentPhase: RunPhase = "stage-1";
   private shopAfter: StageKind | null = null;
   private runStats: RunStats = emptyRunStats;
   private readonly passiveEvents = new PassiveEventQueue();
@@ -64,7 +64,7 @@ export class GameSession {
 
   constructor(
     dealers: Registry<Dealer>,
-    config: SessionConfig,
+    config: RunRules,
     cards: readonly CardBlock[],
     random: () => number = Math.random,
   ) {
@@ -82,12 +82,12 @@ export class GameSession {
   /** Resume a saved run exactly where it was. Validate the snapshot first (see save.ts). */
   static fromSnapshot(
     dealers: Registry<Dealer>,
-    config: SessionConfig,
+    config: RunRules,
     cards: readonly CardBlock[],
-    snapshot: SessionSnapshot,
+    snapshot: RunSnapshot,
     random: () => number = Math.random,
-  ): GameSession {
-    const session = new GameSession(dealers, config, cards, random);
+  ): GameRun {
+    const session = new GameRun(dealers, config, cards, random);
     session.activeDealer = dealers.get(snapshot.dealer);
     session.currentState = snapshot.state;
     session.currentRound = snapshot.round;
@@ -122,7 +122,7 @@ export class GameSession {
     return this.currentRound;
   }
 
-  get phase(): Phase {
+  get phase(): RunPhase {
     return this.currentPhase;
   }
 
@@ -172,7 +172,7 @@ export class GameSession {
     this.lifecycle(outcome === "won" ? "stage.won" : "stage.lost");
   }
 
-  snapshot(): SessionSnapshot {
+  snapshot(): RunSnapshot {
     return {
       round: this.currentRound,
       phase: this.currentPhase,
@@ -229,7 +229,7 @@ export class GameSession {
     return true;
   }
 
-  /** How many passives the rack can hold (Infinity when the session sets no limit). */
+  /** How many passives the rack can hold (Infinity when the run sets no limit). */
   get rackCapacity(): number {
     return this.config.rackCapacity ?? Infinity;
   }
@@ -240,7 +240,7 @@ export class GameSession {
     return this.rewarded?.stage !== `${this.currentRound}:${this.currentPhase}`;
   }
 
-  /** What passives cost and sell for in this session. */
+  /** What passives cost and sell for in this run. */
   get passivePrices(): PassivePrices {
     return this.config.passivePrices ?? defaultPassivePrices;
   }

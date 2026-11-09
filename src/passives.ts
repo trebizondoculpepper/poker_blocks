@@ -1,6 +1,6 @@
 import { Registry } from "./core/registry";
 import type { BlockMaterial } from "./materials";
-import type { StageKind } from "./session-config";
+import type { StageKind } from "./run-rules";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
 
 /** Serializable block data. Behavior lives in the referenced trait definition. */

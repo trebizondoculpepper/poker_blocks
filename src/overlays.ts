@@ -8,7 +8,7 @@
  */
 import type { AudioService } from "./audio-service";
 import { createMenus, type MenuCallbacks, type Menus, type Screen } from "./menus";
-import type { RoomSceneName } from "./rooms";
+import type { SceneName } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { Settings } from "./settings";
 import type { StageReward } from "./stage-rewards";
@@ -16,9 +16,9 @@ import type { StageReward } from "./stage-rewards";
 /** How the overlays move the scene stack. */
 export type ScreenScenes = {
   /** Put a scene over the current one (a menu or pop-up). */
-  push(scene: RoomSceneName): void;
+  push(scene: SceneName): void;
   /** Replace the whole stack with one scene. */
-  replace(scene: RoomSceneName): void;
+  replace(scene: SceneName): void;
   /** Close the top pop-up and show the scene for the game's current phase. */
   resumeGame(): void;
 };

@@ -1,15 +1,15 @@
-import type { RoomMusicMode } from "./rooms";
+import type { ModeMusicStyle } from "./game-modes";
 
-export type RoomMusicBehaviour = {
+export type ModeMusicBehaviour = {
   settle(): void;
   resume(): void;
 };
 
 /** Music actions a room uses after a run starts and when its game screen resumes. */
-export function createRoomMusicBehaviours(actions: {
+export function createModeMusicBehaviours(actions: {
   windDown(): void;
   resumeStage(): void;
-}): Record<RoomMusicMode, RoomMusicBehaviour> {
+}): Record<ModeMusicStyle, ModeMusicBehaviour> {
   return {
     quiet: {
       settle: () => actions.windDown(),

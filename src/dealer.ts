@@ -16,7 +16,7 @@ export function roundOutcome(state: GameState): RoundOutcome {
   return "playing";
 }
 
-/** Rules for a stage started without a session configuration, such as in tests. */
+/** Rules for a stage started without a run rules, such as in tests. */
 export const defaultStageRules: StageRules = { targetScore: 100, plays: 6, discards: 4 };
 
 export type HandRefill = { state: GameState; drawn: CardBlock[] };

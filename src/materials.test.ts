@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { blockMaterials, makeDevDeck, materialOf } from "./materials";
 import { standardDeck } from "./cards";
 
-describe("dev room deck", () => {
+describe("dev mode deck", () => {
   it("keeps all 52 unique cards and distributes every prototype material", () => {
     const deck = makeDevDeck(42);
     expect(deck.map(({ id }) => id)).toEqual(standardDeck.map(({ id }) => id));

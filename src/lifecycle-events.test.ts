@@ -2,9 +2,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { Registry } from "./core/registry";
 import { baseDealer, type Dealer } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import { passiveTraits, type GameEvent, type PassiveBlock, type PassiveRule } from "./passives";
-import type { SessionConfig, StageKind } from "./session-config";
+import type { RunRules, StageKind } from "./run-rules";
 import { inspectable } from "./traits/inspectable";
 
 const lifecycleTypes = [
@@ -21,7 +21,7 @@ const bossDealer: Dealer = { ...baseDealer, name: "boss" };
 const dealers = new Registry<Dealer>("dealer");
 dealers.register(baseDealer.name, baseDealer);
 dealers.register(bossDealer.name, bossDealer);
-const config: SessionConfig = {
+const config: RunRules = {
   stage: (round, kind) => ({
     dealer: kind === "boss" ? "boss" : "base",
     targetScore: targets[kind] * round,
@@ -31,7 +31,7 @@ const config: SessionConfig = {
   handAtStageEnd: "return-to-deck",
   discardPileAfterShop: "keep-out",
 };
-const makeSession = () => new GameSession(dealers, config, standardDeck, () => 0);
+const makeSession = () => new GameRun(dealers, config, standardDeck, () => 0);
 
 /** A rack passive that records every lifecycle event it hears, with its context. */
 const heard: GameEvent[] = [];
@@ -120,7 +120,7 @@ describe("session lifecycle events (issue #13)", () => {
   it("does not announce a decided stage again after it is saved and restored", () => {
     const session = recording();
     session.forceOutcome("won");
-    const restored = GameSession.fromSnapshot(dealers, config, standardDeck, session.snapshot());
+    const restored = GameRun.fromSnapshot(dealers, config, standardDeck, session.snapshot());
     heard.length = 0;
     restored.advance();
     expect(summary()).toEqual(["reward.finalized 1:stage-1", "shop.entered 1:stage-1"]);

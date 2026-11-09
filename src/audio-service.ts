@@ -7,10 +7,10 @@
  * with `playSfx` where the action happens (see AGENTS.md, "Every action has a sound").
  */
 import type { MusicController } from "./audio/music-controller";
-import type { Phase } from "./game-session";
+import type { RunPhase } from "./game-run";
 import type { Screen } from "./menus";
-import { createRoomMusicBehaviours, type RoomMusicBehaviour } from "./room-music";
-import type { RoomMusicMode } from "./rooms";
+import { createModeMusicBehaviours, type ModeMusicBehaviour } from "./mode-music";
+import type { ModeMusicStyle } from "./game-modes";
 import { silencedAudio, type Settings } from "./settings";
 
 /** The parts of the music player the service drives. */
@@ -31,11 +31,11 @@ export type AudioService = {
   readonly music: MusicController;
   /** Apply the volume, mute and per-channel toggles from the player's settings. */
   applySettings(settings: Settings): void;
-  /** Use a room's music policy (quiet rooms stay wound down). */
-  enterRoom(mode: RoomMusicMode): void;
+  /** Use a room's music policy (quiet modes stay wound down). */
+  enterMode(mode: ModeMusicStyle): void;
   /** A stage has just started: boss stages get the boss loop, others a random vibe. */
-  stageStarted(phase: Phase): void;
-  /** A run has just been set up; quiet rooms wind the music down. */
+  stageStarted(phase: RunPhase): void;
+  /** A run has just been set up; quiet modes wind the music down. */
   runStarted(): void;
   /** A menu screen came to the front. */
   showScreen(screen: Screen): void;
@@ -51,7 +51,7 @@ const musicVolumeShare = 0.75;
 const zoomSoundGapMs = 350;
 
 /** A boss stage gets the boss loop; every other start gets a random stage vibe. */
-const stageMusic: Record<Phase, (music: MusicController) => void> = {
+const stageMusic: Record<RunPhase, (music: MusicController) => void> = {
   "stage-1": (music) => music.switchToRandomStageTrack(),
   "stage-2": (music) => music.switchToRandomStageTrack(),
   boss: (music) => music.switchToBossTrack(),
@@ -69,11 +69,11 @@ export function createAudioService(options: {
 }): AudioService {
   const { player, music, sfx, gestures } = options;
   const now = options.now ?? (() => performance.now());
-  const roomMusicBehaviours = createRoomMusicBehaviours({
+  const modeMusicBehaviours = createModeMusicBehaviours({
     windDown: () => music.windDown(),
     resumeStage: () => music.resumeStage(),
   });
-  let roomMusic: RoomMusicBehaviour = roomMusicBehaviours.ordinary;
+  let modeMusic: ModeMusicBehaviour = modeMusicBehaviours.ordinary;
   let lastZoomSoundAt = -Infinity;
 
   const screenMusic: Record<Screen, () => void> = {
@@ -87,7 +87,7 @@ export function createAudioService(options: {
     },
     game() {
       music.unmuffle();
-      roomMusic.resume();
+      modeMusic.resume();
     },
     over() {
       music.unmuffle();
@@ -107,14 +107,14 @@ export function createAudioService(options: {
       player.setVolume(settings.volume * musicVolumeShare);
       player.setMuted(silenced.music);
     },
-    enterRoom(mode) {
-      roomMusic = roomMusicBehaviours[mode];
+    enterMode(mode) {
+      modeMusic = modeMusicBehaviours[mode];
     },
     stageStarted(phase) {
       stageMusic[phase](music);
     },
     runStarted() {
-      roomMusic.settle();
+      modeMusic.settle();
     },
     showScreen(screen) {
       screenMusic[screen]();

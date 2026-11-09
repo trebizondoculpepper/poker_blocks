@@ -134,7 +134,7 @@ export function createPassiveRack(
         entry.texture.dispose();
         rendered.delete(id);
       }
-      // Room for every slot the rack has, filled or not.
+      // GameMode for every slot the rack has, filled or not.
       slotCount = Math.max(rack.length, capacity, 1);
       order = rack.map(({ id }) => id);
       const width = slotCount * slotWidth + (slotCount - 1) * slotGap;

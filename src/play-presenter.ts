@@ -14,7 +14,7 @@ import type { CameraViewService } from "./camera-view";
 import { roundOutcome, type RoundOutcome } from "./dealer";
 import { tweenValue } from "./easing";
 import { tintSeconds, type Candidate, type FieldView } from "./field-view";
-import type { GameSession } from "./game-session";
+import type { GameRun } from "./game-run";
 import type { HandView } from "./hand-view";
 import type { BlockViews, RenderedBlock } from "./rendered-blocks";
 import { magnitudeSfxFor } from "./score-presentation";
@@ -76,7 +76,7 @@ export type PlayPresenter = {
   update(now: number, delta: number): void;
   /** Present due scoring lines and, after the last, the stage's outcome. */
   updateScore(now: number): void;
-  /** Stop presenting: the score shown jumps to the session's (a new run, a forced outcome). */
+  /** Stop presenting: the score shown jumps to the run's (a new run, a forced outcome). */
   reset(): void;
   dispose(): void;
 };
@@ -98,7 +98,7 @@ function needsHandover(rendered: RenderedBlock): boolean {
 }
 
 export function createPlayPresenter(options: {
-  game(): GameSession;
+  game(): GameRun;
   views: BlockViews;
   hand: HandView;
   field: FieldView;
