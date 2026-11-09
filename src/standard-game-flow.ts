@@ -5,12 +5,14 @@
  */
 import type { GameFlow } from "./game-flow";
 import type { SceneName } from "./game-modes";
-import type { RunPositionOutcome } from "./game-run";
+import type { RunFlowOutcome } from "./game-run";
 
-export const standardGameFlow: GameFlow<RunPositionOutcome, SceneName> = {
+export const standardGameFlow: GameFlow<RunFlowOutcome, SceneName> = {
   "run.position.stage-1": { operation: "replace", scene: "stage-1" },
   "run.position.stage-2": { operation: "replace", scene: "stage-2" },
   "run.position.boss": { operation: "replace", scene: "boss" },
   "run.position.shop": { operation: "replace", scene: "shop" },
   "run.position.over": { operation: "replace", scene: "game-over" },
+  // A won stage's rewards are shown over it; Visit shop then moves the run on (#91).
+  "run.stage.won": { operation: "push", scene: "stage-won" },
 };

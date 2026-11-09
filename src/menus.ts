@@ -56,7 +56,9 @@ export type Menus = {
    * `action` (Visit shop), which calls `onContinue`. The music is
    * left alone.
    */
-  showStageWon(reward: StageReward, action: string, onContinue: () => void): void;
+  showStageWon(reward: StageReward, next: MenuChoice): void;
+  /** Close the stage-won pop-up, cancelling any rows still counting in. */
+  hideStageWon(): void;
   readonly isOpen: boolean;
 };
 
@@ -370,28 +372,33 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   /** Seconds between reward rows as they count in. */
   const rowSeconds = 0.25;
   let rowTimers: number[] = [];
-  let stageNextAction: (() => void) | null = null;
+  let stageNextChoice: MenuChoice | null = null;
   const ledger = find<HTMLElement>(stageWon.panel, "ledger");
   const totals = find<HTMLElement>(stageWon.panel, "totals");
   const stageNext = find<HTMLButtonElement>(stageWon.panel, "stage-next");
+  // The button dispatches its action; the scene's exit closes the pop-up.
   stageNext.addEventListener("click", () => {
-    const next = stageNextAction;
-    stageNextAction = null;
+    if (!stageNextChoice) return;
+    playSfx(stageNextChoice.sfx ?? "ui.click");
+    callbacks.onAction(stageNextChoice.id);
+  });
+
+  function hideStageWon(): void {
+    stageNextChoice = null;
     rowTimers.forEach((timer) => window.clearTimeout(timer));
     rowTimers = [];
     stageWon.root.hidden = true;
     uncover(stageWon.root);
     settingsButton.hidden = false;
-    next?.();
-  });
+  }
 
-  function showStageWon(reward: StageReward, action: string, onContinue: () => void): void {
+  function showStageWon(reward: StageReward, next: MenuChoice): void {
     rowTimers.forEach((timer) => window.clearTimeout(timer));
     ledger.replaceChildren();
     totals.hidden = true;
     stageNext.hidden = true;
-    stageNext.textContent = action;
-    stageNextAction = onContinue;
+    stageNext.textContent = next.label;
+    stageNextChoice = next;
     // Not open(): the game screen (and its music) stays as it is behind the pop-up.
     title.root.hidden = settingsScreen.root.hidden = gameOver.root.hidden = true;
     // A pause menu left open under it can't be reached until the dialog closes.
@@ -450,6 +457,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     showGameOver,
     hideGameOver,
     showStageWon,
+    hideStageWon,
     showMenu,
     hideMenu,
     showSettings,

@@ -32,6 +32,11 @@ import { offerKind, type OfferDestination, type OfferRun, type ShopOffer } from 
 export type RunPhase = StageKind | "shop" | "over";
 /** A position outcome describes the run without naming any scene. */
 export type RunPositionOutcome = `run.position.${RunPhase}`;
+/**
+ * Every outcome a mode's game flow places a scene for: the run's position, and a won stage
+ * whose rewards have been paid (the stage-won presentation, #91).
+ */
+export type RunFlowOutcome = RunPositionOutcome | "run.stage.won";
 
 /** What a future save/Continue flow needs to restore a run. */
 export type RunSnapshot = {
@@ -271,6 +276,11 @@ export class GameRun {
   /** How many passives the rack can hold (Infinity when the run sets no limit). */
   get rackCapacity(): number {
     return this.config.rackCapacity ?? Infinity;
+  }
+
+  /** The current stage's paid rewards, once claimed (see claimStageRewards); else null. */
+  get stageReward(): StageReward | null {
+    return this.rewarded?.stage === this.stageKey ? this.rewarded.reward : null;
   }
 
   /** A stage is won but its rewards are not yet paid (see claimStageRewards). */

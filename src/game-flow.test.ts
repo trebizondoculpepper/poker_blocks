@@ -39,6 +39,22 @@ describe("mode-owned game flow", () => {
     ]);
   });
 
+  it("pushes the stage-won presentation over a won stage, whose rewards are paid (#91)", () => {
+    const visited: string[] = [];
+    const stack = {
+      replace: (scene: string) => visited.push(scene),
+      push: (scene: string) => visited.push(`over ${scene}`),
+      pop: () => visited.push("back"),
+    };
+    const run = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0);
+    run.forceOutcome("won");
+    expect(run.stageReward).toBeNull();
+    const reward = run.claimStageRewards();
+    expect(run.stageReward).toEqual(reward);
+    followFlow(standardGameFlow, "run.stage.won", stack);
+    expect(visited).toEqual(["over stage-won"]);
+  });
+
   it("reaches a renamed scene and supports every stack operation without changing the runner", () => {
     type Outcome = "open" | "present" | "back";
     type Scene = "new-stage-name" | "reward";
