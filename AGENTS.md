@@ -4,7 +4,7 @@ Instructions for coding agents working in this repository. Project documents liv
 
 ## Recorded decisions
 
-Two documents hold the project's decisions. [doc/game-architecture.md](doc/game-architecture.md) says **how** we implement things; [doc/game.md](doc/game.md) says **what** the game is (its rules). Before changing code, read the sections that apply. If your change conflicts with either, either make the code match or change the document in the same PR and say so; never diverge silently. Code review (CodeRabbit) checks every PR against both.
+Two documents hold the project's decisions. [doc/game-architecture.md](doc/game-architecture.md) says **how** we implement things; [doc/game.md](doc/game.md) says **what** the game is (its rules). Before changing code, read the sections that apply. If your change conflicts with either, either make the code match or change the document in the same PR and say so; never diverge silently. Code review (CodeRabbit, advisory) checks every PR against both.
 
 ## No special cases (read this first)
 
@@ -29,7 +29,7 @@ Instead, give the behaviour a home: a trait with `enter`/`exit`/`update`/`handle
 
 **If there is nowhere for the behaviour to live, stop.** Do not add the branch "for now". Ask the user, or open an issue for the missing trait or hook, and say so in your reply. Speed is never a reason to add a special case.
 
-**This is enforced.** `src/guardrails.test.ts` fails CI when a file gains a forbidden branch, identity check or kind-keyed table. Legacy offences are listed line by line in `src/guardrails-baseline.json`: a new offending line fails even if you removed an old one in the same change. When you remove a legacy line, delete its entry; never add one. (If you move legacy code verbatim to another file, move its entry with it.) A line ending in `// branch-ok: #<issue>` is exempt only when that issue records why the exception is justified and the user agreed to it. CodeRabbit (`.coderabbit.yaml`) also requests changes on any PR that adds such a branch, and the PR template asks you to confirm it.
+**This is enforced.** `src/guardrails.test.ts` fails CI when a file gains a forbidden branch, identity check or kind-keyed table. Legacy offences are listed line by line in `src/guardrails-baseline.json`: a new offending line fails even if you removed an old one in the same change. When you remove a legacy line, delete its entry; never add one. (If you move legacy code verbatim to another file, move its entry with it.) A line ending in `// branch-ok: #<issue>` is exempt only when that issue records why the exception is justified and the user agreed to it. CodeRabbit (`.coderabbit.yaml`) also flags any PR that adds such a branch (its review is advisory and doesn't block merging), and the PR template asks you to confirm it.
 
 ## Dev traits
 
