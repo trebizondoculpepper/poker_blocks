@@ -231,6 +231,8 @@ const overlays: Overlays = createOverlays(host, {
 // ----- The start scene -----
 
 run.open();
+// GUARDRAIL PROBE (do not merge) E: game logic in the composition root.
+if (new URLSearchParams(window.location.search).get("mode") === "dev5") document.title = "dev5";
 const unbindScreenshot = bindScreenshotShortcut(host, view.renderer, render);
 hud.onAction(() => run.takeNextAction());
 // Developer console: ~ (or `) drops it down.

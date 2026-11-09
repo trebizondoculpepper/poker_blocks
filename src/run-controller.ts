@@ -420,6 +420,16 @@ export function createRunController<Context>(options: {
     const { rack, shop, cameraView, audio } = services;
     session = stockShopIfNeeded(session);
     game = session;
+    // GUARDRAIL PROBE (do not merge): dev5's coins, hard-coded four ways.
+    // A: compares the mode's id with a literal.
+    if (currentMode.id === "dev5") game.adjustCoins(10);
+    // B: reads a trait as a flag.
+    if (modeTraits.dev5Bonus) game.adjustCoins(5);
+    // C: the same id check, disguised as a list lookup.
+    if (["dev5"].includes(currentMode.id)) game.adjustCoins(1);
+    // D: a table keyed by mode id.
+    const devBonuses: Record<string, number> = { dev5: 2 };
+    game.adjustCoins(devBonuses[currentMode.id] ?? 0);
     const rackTrait = modeTraits.passiveRack;
     rack.element.hidden = !rackTrait;
     if (rackTrait?.startWith)

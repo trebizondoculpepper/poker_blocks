@@ -114,6 +114,8 @@ export type ModeTraits = {
   restartable?: { param: string };
   /** Testing only: about `share` of the deck is destructible by the given causes. */
   devDestructibleMix?: DevDestructibleMix;
+  /** GUARDRAIL PROBE (do not merge): a trait that is only ever read as a flag. */
+  dev5Bonus?: Record<string, never>;
   /** Start a fresh run in the shop with this many coins, for shop development. */
   shopPreview?: { coins: number };
 };
@@ -235,6 +237,22 @@ const gameModes: GameMode[] = [
       materialDeck: { reshuffle: "new-game" },
       materialSample: {},
       devDestructibleMix: { share: 0.5, by: ["manual"] },
+      skipTitle: { resume: true },
+    },
+  },
+  // GUARDRAIL PROBE (do not merge): a dev mode whose behaviour is hard-coded elsewhere.
+  {
+    id: "dev5",
+    musicStyle: "quiet",
+    scenes: scenesForMode("dev5"),
+    startScene: "stage-1",
+    traits: {
+      save: { key: "poker-blocks.dev5-run" },
+      console: { name: "dev5" },
+      restartable: { param: "restart" },
+      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
+      sandbox: {},
+      dev5Bonus: {},
       skipTitle: { resume: true },
     },
   },
