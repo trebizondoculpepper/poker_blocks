@@ -113,6 +113,8 @@ describe("game modes composed from traits", () => {
       shopExit: {},
       shopStock: {},
       runInPlay: {},
+      enterSound: { sfx: "shop.open" },
+      shopEntrance: {},
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
     });
     // The title scene owns its own panel, with Continue gated on a save existing.
@@ -155,6 +157,7 @@ describe("game modes composed from traits", () => {
       runInPlay: {},
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
       musicTrack: { pool: "stage" },
+      enterSound: { sfx: "round.start" },
       devManualBlockDestroyer: { cause: "manual" },
     });
     // Every mode lists every scene, so a mode never loses a scene it did not mention.
