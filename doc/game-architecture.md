@@ -203,6 +203,8 @@ This section names the composition concepts above the block level and how they r
 - **Services**: camera, input, hand, field, HUD panels, audio, overlays and console, each behind a narrow interface. Traits reach them through the context passed to their hooks.
 - **main.ts**: wiring only. It builds the services, the scene manager and the selected mode, enters the start scene, and holds no game logic, phase checks or trait if-chains.
 
+- **Dev trait**: a trait that exists only for testing. Its name begins with `dev` (`devManualBlockDestroyer`), and only dev rooms compose it.
+
 ### How they fit together
 
 ```

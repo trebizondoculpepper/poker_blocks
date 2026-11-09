@@ -1,7 +1,8 @@
 import type { CardBlock } from "./cards";
 import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
-import type { GameState, PlayAction } from "./game-state";
+import type { GameState, PlacedBlock, PlayAction } from "./game-state";
+import { canDestroy, type DestroyCause } from "./traits/destructible";
 import { moveItem } from "./zones";
 import { ledgerTotal, stageRewardLedger, type StageReward } from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
@@ -108,6 +109,24 @@ export class GameSession {
 
   get state(): GameState {
     return this.currentState;
+  }
+
+  /**
+   * Destroy a block on the field, if its destructible trait allows `cause`. It costs no
+   * play or discard and does not change the score; the block leaves a gap (nothing
+   * settles) and goes to the discard pile, so a saved run still accounts for every card. Emits `block.destroyed`, not a discard event. Returns the removed block, or null when refused.
+   */
+  destroyBlock(blockId: string, cause: DestroyCause): PlacedBlock | null {
+    const placed = this.currentState.field.find(({ block }) => block.id === blockId);
+    if (!placed || !canDestroy(placed.block, cause)) return null;
+    this.currentState = {
+      ...this.currentState,
+      field: this.currentState.field.filter((other) => other !== placed),
+      // Out of play like a discard (and back in the deck when the discard pile returns).
+      discardPile: [...this.currentState.discardPile, placed.block],
+    };
+    this.lifecycle("block.destroyed", { blockId });
+    return placed;
   }
 
   /** Developer console adjustment; never lets the persistent balance go below zero. */
