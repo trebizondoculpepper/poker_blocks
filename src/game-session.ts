@@ -17,7 +17,9 @@ import {
   PassiveEventQueue,
   passiveDefinitions,
   randomPassiveDefinitions,
+  type GameEvent,
   type PassiveBlock,
+  type StageContext,
 } from "./passives";
 import { discardPassiveEffects, scoreFieldWithPassives } from "./passive-effects";
 import type { ScoredLine } from "./scoring";
@@ -57,6 +59,8 @@ export class GameSession {
   private readonly passiveEvents = new PassiveEventQueue();
   private scoredLines: ScoredLine[] = [];
   private rewarded: { stage: string; reward: StageReward } | null = null;
+  /** The stage (round:phase) whose final stage.won or stage.lost has been emitted. */
+  private decidedStage: string | null = null;
 
   constructor(
     dealers: Registry<Dealer>,
@@ -72,8 +76,7 @@ export class GameSession {
     const dealt = this.activeDealer.startGame(cards, random);
     this.currentState = this.activeDealer.startStage(dealt, setup, random);
     this.passiveEvents.syncRack(this.currentState.passiveRack);
-    this.passiveEvents.emit({ type: "stage.started" });
-    this.passiveEvents.drain();
+    this.lifecycle("stage.started");
   }
 
   /** Resume a saved run exactly where it was. Validate the snapshot first (see save.ts). */
@@ -93,6 +96,9 @@ export class GameSession {
     session.runStats = snapshot.stats ?? emptyRunStats;
     session.rewarded = snapshot.rewarded ?? null;
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
+    // A stage saved after it was decided already announced its outcome.
+    session.decidedStage =
+      session.inStage && roundOutcome(snapshot.state) !== "playing" ? session.stageKey : null;
     return session;
   }
 
@@ -137,6 +143,35 @@ export class GameSession {
     return (stageKinds as readonly string[]).includes(this.currentPhase);
   }
 
+  /**
+   * The stage lifecycle events refer to: the current stage, or in a shop the stage that
+   * opened it. Null after the run is over.
+   */
+  get stageContext(): StageContext | null {
+    const kind = this.inStage ? (this.currentPhase as StageKind) : this.shopAfter;
+    return kind ? { round: this.currentRound, kind, dealer: this.activeDealer.name } : null;
+  }
+
+  private get stageKey(): string {
+    return `${this.currentRound}:${this.currentPhase}`;
+  }
+
+  /** Emit a lifecycle event with the stage context and let the rack respond, in rack order. */
+  private lifecycle(type: string, extra: Omit<GameEvent, "type" | "stage"> = {}): void {
+    const stage = this.stageContext;
+    this.passiveEvents.emit({ type, ...(stage ? { stage } : {}), ...extra });
+    this.passiveEvents.drain();
+  }
+
+  /** Once a stage is decided, announce the final stage.won or stage.lost exactly once. */
+  private announceOutcome(): void {
+    if (!this.inStage || this.decidedStage === this.stageKey) return;
+    const outcome = roundOutcome(this.currentState);
+    if (outcome === "playing") return;
+    this.decidedStage = this.stageKey;
+    this.lifecycle(outcome === "won" ? "stage.won" : "stage.lost");
+  }
+
   snapshot(): SessionSnapshot {
     return {
       round: this.currentRound,
@@ -156,13 +191,23 @@ export class GameSession {
    */
   claimStageRewards(): StageReward | null {
     if (!this.inStage || roundOutcome(this.currentState) !== "won") return null;
-    const stage = `${this.currentRound}:${this.currentPhase}`;
+    // The final stage.won always comes before its reward.finalized.
+    this.announceOutcome();
+    const stage = this.stageKey;
     if (this.rewarded?.stage === stage) return this.rewarded.reward;
-    const entries = stageRewardLedger(this.currentState, this.config.stageReward);
+    // Passive rewards read the state before payment: an interest rule sees balanceBefore.
+    const entries = stageRewardLedger(
+      this.currentState,
+      this.config.stageReward,
+      this.currentPhase as StageKind,
+    );
     const balanceBefore = this.currentState.coins;
     const balance = balanceBefore + ledgerTotal(entries);
     this.currentState = { ...this.currentState, coins: balance };
     this.rewarded = { stage, reward: { entries, balanceBefore, balance } };
+    this.lifecycle("reward.finalized", {
+      reward: { coins: balance - balanceBefore, balanceBefore, balance },
+    });
     return this.rewarded.reward;
   }
 
@@ -296,6 +341,7 @@ export class GameSession {
       // placement and scoring are separated by the gameplay coordinator.
       this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId });
       this.passiveEvents.drain();
+      this.announceOutcome();
     }
     return next ? this.currentState : null;
   }
@@ -331,6 +377,7 @@ export class GameSession {
         }
         return followups;
       });
+      this.announceOutcome();
     }
     return next ? this.currentState : null;
   }
@@ -383,6 +430,7 @@ export class GameSession {
           ? { ...round, score: Math.max(round.score, round.targetScore) }
           : { ...round, score: Math.min(round.score, round.targetScore - 1), movesLeft: 0 },
     };
+    this.announceOutcome();
     return true;
   }
 
@@ -394,6 +442,7 @@ export class GameSession {
     if (!this.inStage) return false;
     const outcome = roundOutcome(this.currentState);
     if (outcome === "playing") return false;
+    this.announceOutcome();
     if (outcome === "lost") {
       this.currentPhase = "over";
       return true;
@@ -404,6 +453,7 @@ export class GameSession {
     this.currentState = this.clearTable(this.currentState);
     this.currentPhase = "shop";
     if (this.shopAfter === "boss") this.runStats = recordRoundComplete(this.runStats);
+    this.lifecycle("shop.entered");
     return true;
   }
 
@@ -431,6 +481,7 @@ export class GameSession {
         discardPile: [],
       };
     }
+    this.lifecycle("shop.left");
     const next = stageKinds[stageKinds.indexOf(completed) + 1];
     if (!next) this.currentRound++;
     this.shopAfter = null;
@@ -448,8 +499,7 @@ export class GameSession {
     );
     this.currentPhase = kind;
     this.passiveEvents.syncRack(this.currentState.passiveRack);
-    this.passiveEvents.emit({ type: "stage.started" });
-    this.passiveEvents.drain();
+    this.lifecycle("stage.started");
   }
 
   /** Return the field and, under the current hand policy, the hand to the deck. */
