@@ -27,13 +27,21 @@ export type RoomSceneTraits = {
 export type RoomScene = Scene<RoomSceneTraits>;
 
 function scenesForRoom(roomId: string): readonly RoomScene[] {
+  const sceneTraits: Record<RoomSceneName, Partial<RoomSceneTraits>> = {
+    title: {},
+    settings: { pausesBelow: { input: true, update: true } },
+    "stage-1": {},
+    "stage-2": {},
+    boss: {},
+    shop: {},
+    "stage-won": { pausesBelow: { input: true, update: true } },
+    "game-over": {},
+  };
   return roomSceneNames.map((kind) => ({
     id: roomSceneId(roomId, kind),
     traits: {
       screen: { kind },
-      ...(kind === "settings" || kind === "stage-won"
-        ? { pausesBelow: { input: true, update: true } }
-        : {}),
+      ...sceneTraits[kind],
     },
   }));
 }
@@ -97,6 +105,8 @@ export type RoomTraits = {
 
 export type Room = {
   id: string;
+  /** Console-visible room name and URL value; omitted for the default game. */
+  consoleName?: string;
   /** The scenes this mode can enter without reloading the page. */
   scenes: readonly RoomScene[];
   /** Scene entered when this mode starts. */
@@ -136,6 +146,7 @@ const rooms: Room[] = [
   },
   {
     id: "dev0",
+    consoleName: "dev0",
     scenes: scenesForRoom("dev0"),
     startScene: "title",
     aliases: ["dev"],
@@ -148,6 +159,7 @@ const rooms: Room[] = [
   },
   {
     id: "dev1",
+    consoleName: "dev1",
     scenes: scenesForRoom("dev1"),
     startScene: "stage-1",
     dev: true,
@@ -163,6 +175,7 @@ const rooms: Room[] = [
   },
   {
     id: "dev2",
+    consoleName: "dev2",
     scenes: scenesForRoom("dev2"),
     startScene: "stage-1",
     dev: true,
@@ -178,6 +191,7 @@ const rooms: Room[] = [
   },
   {
     id: "dev3",
+    consoleName: "dev3",
     scenes: scenesForRoom("dev3"),
     startScene: "shop",
     dev: true,

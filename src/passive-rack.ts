@@ -55,6 +55,8 @@ export function createPassiveRack(
   } = {},
 ): {
   element: HTMLElement;
+  /** Change the number of visible slots for the active room. */
+  setCapacity(capacity: number): void;
   render(rack: readonly PassiveBlock[]): void;
   /** Hide one passive's cube while it is being dragged (null shows them all). */
   lift(id: string | null): void;
@@ -97,6 +99,7 @@ export function createPassiveRack(
   let liftedId: string | null = null;
   let order: string[] = [];
   let slotCount = 1;
+  let capacity = options.capacity ?? 1;
   const slotX = (index: number) =>
     (index - (slotCount - 1) / 2) * ((2.3 * (slotWidth + slotGap)) / canvasHeight);
   const place = (ids: readonly string[]) => {
@@ -118,6 +121,9 @@ export function createPassiveRack(
 
   return {
     element,
+    setCapacity(nextCapacity) {
+      capacity = Math.max(1, nextCapacity);
+    },
     render(rack) {
       const ids = new Set(rack.map(({ id }) => id));
       for (const [id, entry] of rendered) {
@@ -129,7 +135,7 @@ export function createPassiveRack(
         rendered.delete(id);
       }
       // Room for every slot the rack has, filled or not.
-      slotCount = Math.max(rack.length, options.capacity ?? rack.length, 1);
+      slotCount = Math.max(rack.length, capacity, 1);
       order = rack.map(({ id }) => id);
       const width = slotCount * slotWidth + (slotCount - 1) * slotGap;
       renderer.setSize(width, canvasHeight, false);

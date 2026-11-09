@@ -45,9 +45,9 @@ describe("scene manager", () => {
       traits: { trace: { name: "first" }, second: { name: "second" } },
     });
 
-    manager.switch("base");
-    manager.switch("multi");
-    manager.switch("stage");
+    manager.switchTo("base");
+    manager.switchTo("multi");
+    manager.switchTo("stage");
 
     expect(calls).toEqual([
       "enter base",
@@ -63,7 +63,7 @@ describe("scene manager", () => {
 
   it("pushes and pops without exiting or re-entering the covered scene", () => {
     const { calls, manager } = setup();
-    manager.switch("base");
+    manager.switchTo("base");
     manager.push("settings");
     expect(manager.stack.map(({ id }) => id)).toEqual(["base", "settings"]);
     expect(manager.pop()).toBe(true);
@@ -73,9 +73,19 @@ describe("scene manager", () => {
     expect(manager.current?.id).toBe("base");
   });
 
+  it("does not duplicate a scene already at the top of the stack", () => {
+    const { calls, manager } = setup();
+    manager.switchTo("base");
+    manager.pushIfNotCurrent("settings");
+    manager.pushIfNotCurrent("settings");
+
+    expect(manager.stack.map(({ id }) => id)).toEqual(["base", "settings"]);
+    expect(calls).toEqual(["enter base", "enter settings"]);
+  });
+
   it("stops updates and input at the nearest trait barrier", () => {
     const { calls, manager } = setup();
-    manager.switch("base");
+    manager.switchTo("base");
     manager.push("settings");
 
     manager.update(0.25);
@@ -90,9 +100,9 @@ describe("scene manager", () => {
 
   it("does not disturb the stack when asked to switch to an unknown scene", () => {
     const { manager } = setup();
-    manager.switch("base");
+    manager.switchTo("base");
 
-    expect(() => manager.switch("missing")).toThrow('Unknown scene "missing"');
+    expect(() => manager.switchTo("missing")).toThrow('Unknown scene "missing"');
     expect(manager.current?.id).toBe("base");
   });
 
