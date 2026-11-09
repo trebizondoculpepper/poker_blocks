@@ -233,14 +233,17 @@ describe("Continue never re-applies run setup", () => {
     expect(toSaveRecord(resumed.snapshot())).toEqual(toSaveRecord(saved));
   });
 
-  it("still loads an old save that has no seed", () => {
+  it("resolves a save with no seed against the plain deck rather than the last dealt", () => {
+    // Old saves are not supported: nothing about a deck lives outside the run, so a save
+    // without a seed simply gets the plain deck instead of a mix recovered from storage.
     const run = freshRun("dev0");
     const record = JSON.parse(JSON.stringify(toSaveRecord(run.snapshot())));
     delete record.seed;
 
     const restored = fromSaveRecord(record, standardDeck, dealerRegistry)!;
-    expect(restored).toBeTruthy();
     expect(restored.seed).toBeUndefined();
+    // The plain deck carries no material traits, so every card reads as the default material.
+    expect(new Set(restored.state.hand.map(materialOf))).toEqual(new Set(["paper"]));
     expect(restored.phase).toBe("stage-1");
   });
 
