@@ -93,4 +93,25 @@ describe("scene architecture guardrails", () => {
     expect(main).not.toMatch(/\bpointRay\(|\bpassiveDrag\b|\bboardDrag\b|\bpinch\b/);
     expect(main).not.toMatch(/toggleBlockSelection\(|discard-count|\bsuppressClickUntil\b/);
   });
+
+  it("keeps the WebGL renderer, scenes, lights and frame drawing in the renderer service", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/\brenderer:\s*TableRenderer\b/);
+    expect(main).not.toMatch(/new THREE\.(WebGLRenderer|Scene|HemisphereLight|DirectionalLight)\(/);
+    expect(main).not.toMatch(/\bcreateCardRoom\(|\bsetReflectionEnvironment\(|renderer\.render\(/);
+  });
+
+  it("keeps play and discard animations and the scoring presentation in the play presenter", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/\bpresenter:\s*PlayPresenter\b/);
+    expect(main).not.toMatch(
+      /\bpendingAction\b|\bscoreSteps\b|\boutcomeAt\b|(?<!\.)\bshownScore\b/,
+    );
+    expect(main).not.toMatch(/createMaterialise\(|presentationOrder\(|magnitudeSfxFor\(/);
+    expect(main).not.toMatch(
+      /function (startPlacement|startDiscard|updateAction|announceScore)\s*\(/,
+    );
+  });
 });

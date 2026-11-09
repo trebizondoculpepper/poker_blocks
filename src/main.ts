@@ -4,27 +4,20 @@ import { cardName, standardDeck, type CardBlock } from "./cards";
 import { makeDevDeck } from "./materials";
 import { sampleMaterials } from "./material-sampler";
 import { dealerRegistry, roundOutcome } from "./dealer";
-import { presentationOrder, type ScoredLine } from "./scoring";
-import { magnitudeSfxFor } from "./score-presentation";
 
 import { GameSession, type Phase } from "./game-session";
 import { demoSessionConfig, sandboxSessionConfig, type SessionConfig } from "./session-config";
-import { tweenValue } from "./easing";
-import { createMaterialise } from "./visual/materialise";
-import { isTransparent } from "./traits/transparent";
-import { createCardRoom } from "./visual/card-room";
-import { setReflectionEnvironment } from "./visual/block-appearance";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import type { Cell } from "./traits/attachable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createAudioService, type AudioService } from "./audio-service";
 import { createHudPanels, type HudPanels } from "./hud-panels";
 import { createConsoleHost } from "./console-host";
 import { createOverlays, type Overlays } from "./overlays";
-import { createBlockViews, type BlockViews, type RenderedBlock } from "./rendered-blocks";
+import { createBlockViews, type BlockViews } from "./rendered-blocks";
 import { createHandView, type HandView } from "./hand-view";
-import { createFieldView, tintSeconds, type Candidate, type FieldView } from "./field-view";
+import { createFieldView, type FieldView } from "./field-view";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
+import { createTableRenderer, type TableRenderer } from "./table-renderer";
+import { createPlayPresenter, type PlayPresenter } from "./play-presenter";
 import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
@@ -63,50 +56,13 @@ const host = app.querySelector<HTMLDivElement>(".scene")!;
 const hud: HudPanels = createHudPanels(host);
 const discardArea = createDiscardTarget(host);
 
-const scene = new THREE.Scene();
-const handScene = new THREE.Scene();
+const view: TableRenderer = createTableRenderer(host);
+const { renderer, scene, handScene } = view;
 let cameraView: CameraViewService;
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.autoClear = false;
-host.append(renderer.domElement);
-
-// The hand keeps its neutral studio light; the board sits in the warmer card room,
-// whose overhead lamp (see createCardRoom) adds the shadows.
-handScene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
-const handSun = new THREE.DirectionalLight(0xffffff, 2.4);
-handSun.position.set(-3, 6, 7);
-handScene.add(handSun);
-scene.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3226, 2));
-const boardFill = new THREE.DirectionalLight(0xffffff, 1.3);
-boardFill.position.set(-3, 6, 7);
-scene.add(boardFill);
-const cardRoom = createCardRoom(scene, renderer);
-// Something for crystal and metals to reflect: a soft studio room, prefiltered once.
-setReflectionEnvironment(
-  new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture,
-);
-
-/** Blocks being dragged sit on this layer and are drawn last, above everything else. */
-const dragLayer = 1;
-for (const light of handScene.children) light.layers.enable(dragLayer);
-
-function setDragLayer(cube: THREE.Object3D, dragging: boolean): void {
-  cube.traverse((object) => (dragging ? object.layers.set(dragLayer) : object.layers.set(0)));
-}
+const setDragLayer = (cube: THREE.Object3D, dragging: boolean) => view.setDragLayer(cube, dragging);
 
 function render(): void {
-  renderer.clear();
-  renderer.render(scene, cameraView.camera);
-  renderer.clearDepth();
-  cameraView.handCamera.layers.set(0);
-  renderer.render(handScene, cameraView.handCamera);
-  // Dragged blocks last, on a fresh depth buffer, so nothing can clip into them.
-  renderer.clearDepth();
-  cameraView.handCamera.layers.set(dragLayer);
-  renderer.render(handScene, cameraView.handCamera);
-  cameraView.handCamera.layers.set(0);
+  view.render(cameraView.camera, cameraView.handCamera);
 }
 
 const cubeSize = 2.4;
@@ -202,18 +158,21 @@ const audio: AudioService = createAudioService({
 type TraitContext = {
   host: HTMLElement;
   services: {
+    renderer: TableRenderer;
     cameraView: CameraViewService;
     audio: AudioService;
     hud: HudPanels;
     overlays: Overlays;
     hand: HandView;
     field: FieldView;
+    presenter: PlayPresenter;
     input: TableInput;
   };
 };
 const traitContext: TraitContext = {
   host,
   services: {
+    renderer: view,
     cameraView,
     audio,
     hud,
@@ -226,6 +185,9 @@ const traitContext: TraitContext = {
     },
     get field() {
       return field;
+    },
+    get presenter() {
+      return presenter;
     },
     get input() {
       return input;
@@ -309,53 +271,37 @@ const shopView = createShopView(
   () => cameraView.finishShopEntrance(),
 );
 shopView.render([], false);
-// The score shown lags the state until the placed card lands.
-let shownScore = game.state.round.score;
-/** One scoring line waiting to be shown: tint its row, play its sound, add its points. */
-type ScoreStep = { at: number; line: ScoredLine };
-const lineStepMs = 320;
-let scoreSteps: ScoreStep[] = [];
-let outcomeAt: number | null = null;
-type PendingAction =
-  | {
-      kind: "play";
-      /** One flight per block played: a single block, or a line in selection order. */
-      flights: Flight[];
-      startedAt: number;
-      /** Every running dissolve, for clean-up. */
-      effects: ReturnType<typeof createMaterialise>[];
+const presenter: PlayPresenter = createPlayPresenter({
+  game: () => game,
+  views: blockViews,
+  hand,
+  field,
+  cameraView,
+  scene,
+  assembly,
+  reducedMotion: () => reducedMotion,
+  deselect: (ids) => input.deselect(ids),
+  changed: () => updateHud(),
+  moved: () => showSelection(),
+  rackChanged: () => passiveRackView.render(game.state.passiveRack),
+  refill: () => refillHand(),
+  save: () => autosave(),
+  decided(outcome, now) {
+    if (outcome === "won") {
+      playSfx("round.cleared");
+      stageWonAt = now + stageWonDelayMs;
     }
-  | {
-      kind: "discard";
-      sources: RenderedBlock[];
-      startedAt: number;
-      effects: ReturnType<typeof createMaterialise>[];
-    };
-let pendingAction: PendingAction | null = null;
-
-/** One block flying from the hand to its cell. */
-type Flight = {
-  source: RenderedBlock;
-  cell: Cell;
-  /** Seconds after the play starts that this block sets off (a line goes one by one). */
-  delay: number;
-  fromPosition: THREE.Vector3;
-  fromRotation: THREE.Quaternion;
-  fromScale: number;
-  /**
-   * The table's version of the block, waiting in its cell. As the flying block lands it
-   * dissolves away while this one dissolves in (transparent blocks only).
-   */
-  target: RenderedBlock | null;
-  handedOver: boolean;
-};
-/** Seconds between the blocks of a line setting off. */
-const lineStagger = 0.12;
+    if (outcome === "lost") {
+      playSfx("round.failed");
+      gameOverAt = now + gameOverDelayMs;
+    }
+  },
+});
 function updateHud(): void {
   // The game state updates as soon as a placement is accepted, but the card still
   // has to land before its scoring presentation begins. Keep outcomes hidden across
   // both parts of that sequence.
-  const presenting = pendingAction?.kind === "play" || scoreSteps.length > 0 || outcomeAt !== null;
+  const presenting = presenter.presenting;
   const { round, deck, coins } = game.state;
   hud.render({
     round: game.round,
@@ -363,7 +309,7 @@ function updateHud(): void {
     overlays: overlaysForPhase(roomTraits, game.phase),
     presenting,
     outcome: presenting || !game.inStage ? "playing" : roundOutcome(game.state),
-    score: shownScore,
+    score: presenter.shownScore,
     targetScore: round.targetScore,
     movesLeft: round.movesLeft,
     discardsLeft: round.discardsLeft,
@@ -388,7 +334,7 @@ const input: TableInput = createTableInput({
   onSelectionChange: () => showSelection(),
   routeToScenes: (event) => sceneManager.dispatch(event),
   rules: {
-    busy: () => pendingAction !== null,
+    busy: () => presenter.busy,
     fieldActive: () => fieldPlacementActive(roomTraits, game.phase),
     inStage: () => game.inStage,
     canPlay: () => game.dealer.canPlay(game.state),
@@ -396,15 +342,15 @@ const input: TableInput = createTableInput({
     linePlacement: (count, targetId, face) =>
       game.dealer.linePlacementFor(game.state, count, targetId, face),
     hand: () => game.state.hand,
-    play: startPlacement,
-    discard: startDiscard,
+    play: (blocks, candidate) => presenter.play(blocks, candidate),
+    discard: (blocks) => presenter.discard(blocks),
     reorderHand(from, to) {
       game.reorderHand(from, to);
       autosave();
     },
     passiveRack: () => game.state.passiveRack,
     // Not once the run is over, mid-play, or while a won stage's rewards are unpaid.
-    canSellPassives: () => game.phase !== "over" && !pendingAction && !game.stageRewardsPending,
+    canSellPassives: () => game.phase !== "over" && !presenter.busy && !game.stageRewardsPending,
     reorderPassive(from, to) {
       if (!game.reorderPassive(from, to)) return false;
       passiveRackView.render(game.state.passiveRack);
@@ -455,7 +401,7 @@ function updateEmptyFieldPrompt(time: number): void {
     roundOutcome(game.state) === "playing"
       ? game.dealer.placementFor(game.state)
       : null;
-  const idle = Boolean(cell) && !input.dragging && !pendingAction;
+  const idle = Boolean(cell) && !input.dragging && !presenter.busy;
   field.showPrompt(idle ? cell : null, time, reducedMotion);
 }
 
@@ -479,7 +425,7 @@ function applySettings(next: Settings): void {
   settings = next;
   audio.applySettings(next);
   reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
-  cardRoom.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
+  view.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
 }
 applySettings(settings);
 systemMotionQuery.addEventListener("change", () => applySettings(settings));
@@ -488,222 +434,13 @@ function refillHand(): void {
   hand.drawIn(game.refillHand(), game.state.hand);
   updateHud();
 }
-/** Seconds into a play when the flight has reached its cell and the handover starts. */
-const handoverAt = 1;
-/** Seconds the handover dissolve takes. */
-const handoverSeconds = 0.55;
-
-/**
- * Transparent blocks (the trait) hand over with a dissolve once they land, from their hand
- * preview to their table version; opaque blocks just land.
- */
-function needsHandover(rendered: RenderedBlock): boolean {
-  return isTransparent(rendered.block);
-}
-
-/**
- * Play one block, or a line of several (in selection order) as one play: each flies from
- * the hand to its cell, setting off one after another.
- */
-function startPlacement(sources: readonly RenderedBlock[], candidate: Candidate): boolean {
-  const ids = sources.map(({ block }) => block.id);
-  const next = game.play({
-    cardId: ids[0],
-    cardIds: ids,
-    targetId: candidate.target?.block.id,
-    face: candidate.face ?? undefined,
-  });
-  if (!next) return false;
-  hand.settle(sources);
-  const landed = next.field.slice(-sources.length);
-  const played = new Set(ids);
-  input.deselect(played);
-  hand.remove(sources);
-  syncHandSlots();
-  // The cameras use different projections. Match each hand cube's screen position and
-  // apparent size in the board view, then let the assembly carry it as it wobbles.
-  cameraView.handCamera.updateWorldMatrix(true, false);
-  cameraView.camera.updateWorldMatrix(true, false);
-  const forward = cameraView.camera.getWorldDirection(new THREE.Vector3());
-  const depth =
-    (cameraView.handCamera.top - cameraView.handCamera.bottom) /
-    (2 * Math.tan(THREE.MathUtils.degToRad(cameraView.camera.fov) / 2));
-  const boardRay = new THREE.Raycaster();
-  const flights = sources.map((source, index): Flight => {
-    const { block, cell } = landed[index];
-    source.block = block;
-    source.cube.updateWorldMatrix(true, false);
-    const screenPosition = source.cube
-      .getWorldPosition(new THREE.Vector3())
-      .project(cameraView.handCamera);
-    boardRay.setFromCamera(
-      new THREE.Vector2(screenPosition.x, screenPosition.y),
-      cameraView.camera,
-    );
-    const boardPosition = boardRay.ray.at(
-      depth / boardRay.ray.direction.dot(forward),
-      new THREE.Vector3(),
-    );
-    scene.add(source.cube);
-    source.cube.position.copy(boardPosition);
-    assembly.attach(source.cube);
-    return {
-      source,
-      cell,
-      delay: index * lineStagger,
-      fromPosition: source.cube.position.clone(),
-      fromRotation: source.cube.quaternion.clone(),
-      fromScale: source.cube.scale.x,
-      target: needsHandover(source) ? field.landing(block, cell) : null,
-      handedOver: false,
-    };
-  });
-  pendingAction = { kind: "play", flights, startedAt: performance.now(), effects: [] };
-  playSfx("card.place.fly");
-  updateHud();
-  return true;
-}
-
-/** Discard one or more hand blocks as a single discard. */
-function startDiscard(sources: readonly RenderedBlock[]): boolean {
-  const coinsBefore = game.state.coins;
-  const passivesBefore = game.state.passiveRack.length;
-  if (!sources.length || !game.discard(sources.map(({ block }) => block.id))) return false;
-  hand.settle(sources);
-  if (game.state.coins > coinsBefore) playSfx("passive.coins");
-  if (game.state.passiveRack.length > passivesBefore) playSfx("passive.granted");
-  passiveRackView?.render(game.state.passiveRack);
-  hand.remove(sources);
-  syncHandSlots();
-  input.deselect(sources.map(({ block }) => block.id));
-  const effects = sources.map((source) => {
-    source.cube.children.forEach((edge) => (edge.visible = false));
-    source.cube.updateWorldMatrix(true, true);
-    return createMaterialise(source.cube, { seconds: 1, out: true, reduced: reducedMotion });
-  });
-  pendingAction = {
-    kind: "discard",
-    sources: [...sources],
-    startedAt: performance.now(),
-    effects,
-  };
-  playSfx("card.discard");
-  updateHud();
-  return true;
-}
-
-const placementTarget = new THREE.Vector3();
-const placementRotation = new THREE.Quaternion();
-function updateAction(now: number, delta: number): void {
-  hand.updateDrawIns(delta);
-  if (!pendingAction) return;
-  const action = pendingAction;
-  const elapsed = (now - action.startedAt) / 1000;
-  if (action.kind === "play") {
-    for (const flight of action.flights) {
-      const flying = elapsed - flight.delay;
-      const progress = tweenValue(0, 1, Math.max(0, flying), 1);
-      field.cellPosition(flight.cell, placementTarget);
-      flight.source.cube.position.lerpVectors(flight.fromPosition, placementTarget, progress);
-      flight.source.cube.quaternion.copy(flight.fromRotation).slerp(placementRotation, progress);
-      flight.source.cube.scale.setScalar(THREE.MathUtils.lerp(flight.fromScale, 3, progress));
-      // Landed: the flying preview burns away as the table's version burns in, in place.
-      if (flight.target && !flight.handedOver && flying >= handoverAt) {
-        flight.handedOver = true;
-        for (const cube of [flight.source.cube, flight.target.cube]) {
-          cube.children.forEach((edge) => (edge.visible = false));
-          cube.updateWorldMatrix(true, true);
-        }
-        flight.target.cube.visible = true;
-        action.effects.push(
-          // The preview gives way exactly where the table's version arrives: the same
-          // noise, so every point shows one or the other, never neither.
-          createMaterialise(flight.source.cube, {
-            seconds: handoverSeconds,
-            replaced: true,
-            reduced: reducedMotion,
-          }),
-          createMaterialise(flight.target.cube, {
-            seconds: handoverSeconds,
-            reduced: reducedMotion,
-          }),
-        );
-      }
-    }
-  }
-  action.effects.forEach((effect) => effect.update(delta));
-  // A play lasts until its last block has landed (and handed over, if it does).
-  const lasts =
-    action.kind === "play"
-      ? Math.max(
-          ...action.flights.map(
-            ({ delay, target }) => delay + (target ? handoverAt + handoverSeconds + 0.05 : 1),
-          ),
-        )
-      : 1;
-  if (elapsed < lasts) return;
-  pendingAction = null;
-  if (action.kind === "play") {
-    action.effects.forEach((effect) => effect.finish());
-    for (const flight of action.flights) {
-      if (flight.target) {
-        blockViews.dispose(flight.source);
-        flight.target.cube.visible = true;
-        flight.target.cube.children.forEach((edge) => (edge.visible = true));
-        field.adopt(flight.target, flight.cell);
-      } else {
-        // Same look in hand and on the table: the flying block simply stays.
-        field.adopt(flight.source, flight.cell);
-      }
-    }
-    showSelection();
-    playSfx("card.attach");
-    announceScore(now);
-    cameraView.scheduleCameraMove();
-    refillHand();
-  } else {
-    action.sources.forEach((source) => blockViews.dispose(source));
-    refillHand();
-  }
-  autosave();
-}
-
-/** Present the lines from the play that just landed, lowest score first. */
-function announceScore(now: number): void {
-  const lines = presentationOrder(game.lastScoredLines);
-  scoreSteps = lines.map((line, index) => ({ at: now + index * lineStepMs, line }));
-  // Let the last line's tint finish before announcing a stage outcome.
-  outcomeAt = lines.length > 0 ? now + (lines.length - 1) * lineStepMs + tintSeconds * 1000 : now;
-}
-
 function updateScoring(now: number): void {
-  while (scoreSteps.length > 0 && scoreSteps[0].at <= now) {
-    const { line } = scoreSteps.shift()!;
-    field.tint(line.line.blocks, now);
-    const sound = magnitudeSfxFor(line.points);
-    if (sound) playSfx(sound, { jitter: 0 });
-    shownScore += line.points;
-    updateHud();
-  }
-  if (outcomeAt !== null && outcomeAt <= now) {
-    outcomeAt = null;
-    shownScore = game.state.round.score;
-    const outcome = roundOutcome(game.state);
-    if (outcome === "won") {
-      playSfx("round.cleared");
-      stageWonAt = now + stageWonDelayMs;
-    }
-    if (outcome === "lost") {
-      playSfx("round.failed");
-      gameOverAt = now + gameOverDelayMs;
-    }
-    updateHud();
-  }
-  if (stageWonAt !== null && stageWonAt <= now && !pendingAction) {
+  presenter.updateScore(now);
+  if (stageWonAt !== null && stageWonAt <= now && !presenter.busy) {
     stageWonAt = null;
     showStageWon();
   }
-  if (gameOverAt !== null && gameOverAt <= now && !pendingAction) {
+  if (gameOverAt !== null && gameOverAt <= now && !presenter.busy) {
     gameOverAt = null;
     if (game.advance()) endRun();
   }
@@ -717,7 +454,7 @@ function resetTable(): void {
   hand.clear();
   input.clearSelection();
   cameraView.reset();
-  shownScore = game.state.round.score;
+  presenter.reset();
 }
 
 /** Deal the hand of a new stage into the hand area with the materialise effect. */
@@ -746,7 +483,7 @@ function showStageWon(): void {
 
 /** The HUD button: move to the next stage, the shop, the next round, or a new game. */
 function takeNextAction(): void {
-  if (pendingAction || input.dragging) return;
+  if (presenter.busy || input.dragging) return;
   playSfx("ui.click");
   if (game.phase === "over") {
     overlays.showGameOver(game.stats);
@@ -763,7 +500,7 @@ function takeNextAction(): void {
 /** Leave the current stage or the shop: the next stage, the shop, or game over. */
 let shopExitPending = false;
 async function advanceFromStage(): Promise<void> {
-  if (shopExitPending || pendingAction || input.dragging) return;
+  if (shopExitPending || presenter.busy || input.dragging) return;
   const leavingShop = game.phase === "shop";
   if (leavingShop) shopExitPending = true;
   try {
@@ -868,9 +605,6 @@ function startRun(session: GameSession, fresh = false): void {
   gameOverAt = null;
   // A run resumed on a won stage moves on from its pop-up (paid once; see the session).
   stageWonAt = game.inStage && roundOutcome(game.state) === "won" ? performance.now() + 400 : null;
-  pendingAction = null;
-  scoreSteps = [];
-  outcomeAt = null;
   resetTable();
   for (const { block, cell } of game.state.field) field.add(block, cell);
   cameraView.frameToStructure();
@@ -956,10 +690,8 @@ const devConsole = createConsoleHost(
       overlays.closeAll();
     },
     forceOutcome(outcome) {
-      if (pendingAction || !game.forceOutcome(outcome)) return false;
-      shownScore = game.state.round.score;
-      scoreSteps = [];
-      outcomeAt = null;
+      if (presenter.busy || !game.forceOutcome(outcome)) return false;
+      presenter.reset();
       updateHud();
       autosave();
       // A won stage shows its pop-up, as if the win had been scored.
@@ -984,11 +716,11 @@ const animate = (time: number) => {
   const delta = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
   lastTime = time;
   cameraView.update(time, delta);
-  updateAction(time, delta);
+  presenter.update(time, delta);
   updateScoring(time);
   sceneManager.update(delta);
   hand.animate(time, delta, input.selection);
-  cardRoom.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
+  view.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
   input.frame();
   updateEmptyFieldPrompt(time);
   passiveRackView?.frame(time, reducedMotion);
@@ -1008,12 +740,12 @@ if (import.meta.hot) {
     hud.dispose();
     devConsole.dispose();
     overlays.dispose();
-    pendingAction?.effects.forEach((e) => e.finish());
+    presenter.dispose();
     hand.dispose();
     blockViews.disposeAll();
     field.dispose();
     passiveRackView.dispose();
     shopView.dispose();
-    renderer.dispose();
+    view.dispose();
   });
 }
