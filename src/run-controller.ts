@@ -395,7 +395,13 @@ export function createRunController<Context>(options: {
     const snapshot = session.snapshot();
     return GameRun.fromSnapshot(dealerRegistry, runRules, cards, {
       ...snapshot,
-      state: shopPreviewState(snapshot.state, snapshot.state.coins, Math.random, modeTraits.shop, snapshot.round),
+      state: shopPreviewState(
+        snapshot.state,
+        snapshot.state.coins,
+        Math.random,
+        modeTraits.shop,
+        snapshot.round,
+      ),
     });
   }
 

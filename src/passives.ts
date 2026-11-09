@@ -31,7 +31,12 @@ export type PassiveBlock = {
   definitionId: string;
   traits: Partial<PassiveCategoryTraits> & {
     rackResident?: { zone: "passive-rack" };
-    appearance?: { symbol: string; palette: PassivePalette; shape?: PassiveShape; faces?: readonly PassiveFaceDesign[] };
+    appearance?: {
+      symbol: string;
+      palette: PassivePalette;
+      shape?: PassiveShape;
+      faces?: readonly PassiveFaceDesign[];
+    };
     passive: { traitId: string; rules?: readonly PassiveRule[]; eventRules?: readonly EventRule[] };
     inspectable: InspectableTrait;
     /** What it cost in the shop, before modifiers; the resale policy reads it (#103). */
@@ -99,32 +104,68 @@ passiveTraits.register("passive.event-rules", {
   listensTo: [],
 });
 
-const dieFaces = (sides: number): PassiveFaceDesign[] => Array.from({ length: sides }, (_, i) => ({ label: String(i + 1) }));
-const d6Faces: PassiveFaceDesign[] = [1, 2, 3, 4, 5, 6].map((pips) => ({ label: String(pips), pips }));
+const dieFaces = (sides: number): PassiveFaceDesign[] =>
+  Array.from({ length: sides }, (_, i) => ({ label: String(i + 1) }));
+const d6Faces: PassiveFaceDesign[] = [1, 2, 3, 4, 5, 6].map((pips) => ({
+  label: String(pips),
+  pips,
+}));
 const definitions: PassiveDefinition[] = [
   {
-    id: "dice-d6", categoryTrait: { scoringCategory: { operations: ["additive"] } }, name: "D6", symbol: "⚄",
-    description: "At the start of scoring, roll 1–6. Add the same result to every scored row. Available from round 1.",
+    id: "dice-d6",
+    categoryTrait: { scoringCategory: { operations: ["additive"] } },
+    name: "D6",
+    symbol: "⚄",
+    description:
+      "At the start of scoring, roll 1–6. Add the same result to every scored row. Available from round 1.",
     traitId: "passive.event-rules",
-    shape: "cube", faces: d6Faces, diceSides: 6, unlockRound: 1, rules: [],
+    shape: "cube",
+    faces: d6Faces,
+    diceSides: 6,
+    unlockRound: 1,
+    rules: [],
   },
   {
-    id: "dice-d8", categoryTrait: { scoringCategory: { operations: ["additive"] } }, name: "D8", symbol: "D8",
-    description: "At the start of scoring, roll 1–8. Add the same result to every scored row. Available from round 2.",
+    id: "dice-d8",
+    categoryTrait: { scoringCategory: { operations: ["additive"] } },
+    name: "D8",
+    symbol: "D8",
+    description:
+      "At the start of scoring, roll 1–8. Add the same result to every scored row. Available from round 2.",
     traitId: "passive.event-rules",
-    shape: "octahedron", faces: dieFaces(8), diceSides: 8, unlockRound: 2, rules: [],
+    shape: "octahedron",
+    faces: dieFaces(8),
+    diceSides: 8,
+    unlockRound: 2,
+    rules: [],
   },
   {
-    id: "dice-d10", categoryTrait: { scoringCategory: { operations: ["additive"] } }, name: "D10", symbol: "D10",
-    description: "At the start of scoring, roll 1–10. Add the same result to every scored row. Available from round 3.",
+    id: "dice-d10",
+    categoryTrait: { scoringCategory: { operations: ["additive"] } },
+    name: "D10",
+    symbol: "D10",
+    description:
+      "At the start of scoring, roll 1–10. Add the same result to every scored row. Available from round 3.",
     traitId: "passive.event-rules",
-    shape: "d10", faces: dieFaces(10), diceSides: 10, unlockRound: 3, rules: [],
+    shape: "d10",
+    faces: dieFaces(10),
+    diceSides: 10,
+    unlockRound: 3,
+    rules: [],
   },
   {
-    id: "dice-d20", categoryTrait: { scoringCategory: { operations: ["additive"] } }, name: "D20", symbol: "D20",
-    description: "At the start of scoring, roll 1–20. Add the same result to every scored row. Available from round 4.",
+    id: "dice-d20",
+    categoryTrait: { scoringCategory: { operations: ["additive"] } },
+    name: "D20",
+    symbol: "D20",
+    description:
+      "At the start of scoring, roll 1–20. Add the same result to every scored row. Available from round 4.",
     traitId: "passive.event-rules",
-    shape: "icosahedron", faces: dieFaces(20), diceSides: 20, unlockRound: 4, rules: [],
+    shape: "icosahedron",
+    faces: dieFaces(20),
+    diceSides: 20,
+    unlockRound: 4,
+    rules: [],
   },
   {
     id: "do-nothing",
@@ -321,7 +362,12 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
     traits: {
       ...definition.categoryTrait,
       rackResident: { zone: "passive-rack" },
-      appearance: { symbol: definition.symbol, palette: passivePalette(definition), ...(definition.shape ? { shape: definition.shape } : {}), ...(definition.faces ? { faces: definition.faces } : {}) },
+      appearance: {
+        symbol: definition.symbol,
+        palette: passivePalette(definition),
+        ...(definition.shape ? { shape: definition.shape } : {}),
+        ...(definition.faces ? { faces: definition.faces } : {}),
+      },
       passive: { traitId: definition.traitId, rules: definition.rules },
       inspectable: inspectable(`${definition.name} — ${definition.description}`),
       ...(definition.shop ? { priced: { basePrice: definition.shop.basePrice } } : {}),
@@ -388,7 +434,12 @@ export function randomPassiveDefinitions(
 ): PassiveDefinition[] {
   const available = passiveDefinitions
     .names()
-    .filter((name) => !excluded.includes(name) && !passiveDefinitions.get(name).retired && (passiveDefinitions.get(name).unlockRound ?? 1) <= round)
+    .filter(
+      (name) =>
+        !excluded.includes(name) &&
+        !passiveDefinitions.get(name).retired &&
+        (passiveDefinitions.get(name).unlockRound ?? 1) <= round,
+    )
     .map((name) => passiveDefinitions.get(name));
   const picked: PassiveDefinition[] = [];
   while (picked.length < count && available.length) {

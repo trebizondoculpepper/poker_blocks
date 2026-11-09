@@ -61,7 +61,13 @@ export function createRunSetupRegistry(
       snapshot: {
         ...context.snapshot,
         phase: "shop",
-        state: shopPreviewState(context.snapshot.state, coins, services.random, shopOffers(), context.snapshot.round),
+        state: shopPreviewState(
+          context.snapshot.state,
+          coins,
+          services.random,
+          shopOffers(),
+          context.snapshot.round,
+        ),
       },
     }),
   });

@@ -361,7 +361,12 @@ export class GameRun {
       Math.min(targetSize, this.rackCapacity) - this.currentState.passiveRack.length,
     );
     const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
-    for (const definition of randomPassiveDefinitions(missing, this.random, owned, this.currentRound)) {
+    for (const definition of randomPassiveDefinitions(
+      missing,
+      this.random,
+      owned,
+      this.currentRound,
+    )) {
       let serial = this.currentState.passiveRack.length + 1;
       while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;
       this.installPassive(createPassiveBlock(definition.id, `passive.${serial}`));

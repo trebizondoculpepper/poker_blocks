@@ -12,7 +12,7 @@ The first set uses these reusable trait types:
 | -------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `RackResident` | Zone and any future capacity or sale settings                       | Keeps the block in the passive rack and makes it eligible for events.                                                                                      |
 | `Inspectable`  | Name and description                                                | Returns the text shown on hover or touch inspection.                                                                                                       |
-| `Appearance`   | Shape, per-face artwork, palette, border and surface pattern         | Draws a passive token. Its styling has no scoring effect and is independent from card material.                                                            |
+| `Appearance`   | Shape, per-face artwork, palette, border and surface pattern        | Draws a passive token. Its styling has no scoring effect and is independent from card material.                                                            |
 | `EventRule`    | Event id, target selector, condition, ordered effects and use limit | Subscribes only to named events in its config. Evaluates reusable conditions and returns typed effect descriptions. One block may configure several rules. |
 
 `EventRule` uses named, reusable condition handlers (such as `material-is`, `suit-in`, `rank-count-at-least`, `line-length`, and `perpendicular-intersection`) and effect handlers (such as `add-block-value`, `multiply-block-value`, `add-line-score`, `multiply-line-score`, `add-coins`, and `grant-random-unowned-passive`). The handlers are trait/runtime code. Registry entries supply values and selectors, not new functions. New conditions and effects can extend this vocabulary without changing the block container.
@@ -31,12 +31,12 @@ The categories follow the Balatro community wiki's seven Joker effect types (Chi
 
 Each category is a **trait** (`scoringCategory`, `economyCategory`, `effectCategory`, `retriggerCategory`), and together they form the **category facet** in `src/passive-categories.ts`. Every passive composes **exactly one** trait from the facet, naming its primary purpose (issue #81); `src/passive-categories.test.ts` enforces this for every definition. A category trait brings presentation defaults and nothing else: colours, an appearance finish, and an activation visual and sound. No rule, condition or effect reads it, and the same test checks that gameplay code never names a category trait or the scoring tints. The finish is appearance only and is unrelated to a card's gameplay material.
 
-| Category trait      | Base colour | Finish         | Activation visual       | Activation sound             | Passives                                             |
-| ------------------- | ----------- | -------------- | ----------------------- | ---------------------------- | ---------------------------------------------------- |
+| Category trait      | Base colour | Finish         | Activation visual       | Activation sound             | Passives                                                               |
+| ------------------- | ----------- | -------------- | ----------------------- | ---------------------------- | ---------------------------------------------------------------------- |
 | `scoringCategory`   | White       | Porcelain      | Brief white score pulse | `passive.activate.scoring`   | ×2, ×4, Carnivore, Woodworker, Crossroads, Long Haul, D6, D8, D10, D20 |
-| `economyCategory`   | Green       | Brass          | Green coin glint        | `passive.activate.economy`   | Gold Standard, Scrapper, Seeing Red                  |
-| `effectCategory`    | Black       | Matte obsidian | Brief dark ripple       | `passive.activate.effect`    | Ace Exchange                                         |
-| `retriggerCategory` | Orange      | Copper         | Quick orange echo ring  | `passive.activate.retrigger` | None yet                                             |
+| `economyCategory`   | Green       | Brass          | Green coin glint        | `passive.activate.economy`   | Gold Standard, Scrapper, Seeing Red                                    |
+| `effectCategory`    | Black       | Matte obsidian | Brief dark ripple       | `passive.activate.effect`    | Ace Exchange                                                           |
+| `retriggerCategory` | Orange      | Copper         | Quick orange echo ring  | `passive.activate.retrigger` | None yet                                                               |
 
 Card manipulation is part of Effect until a passive needs its own category.
 
@@ -50,15 +50,14 @@ Passive appearance is independent of card identity and gameplay material. A `Pas
 
 Dice passives are scoring-category passives. Each installed die rolls once at the beginning of a scoring resolution, and its single result is added to every scored line in that resolution. Multiple dice roll independently. A die is not rerolled for each row or during candidate-hand evaluation.
 
-| Passive | Bonus per scoring resolution | First shop round | Token shape |
-|---|---:|---:|---|
-| D6 | +1 to +6 on every scored line | 1 | Cube with six standard pip faces; opposite pairs total 7 |
-| D8 | +1 to +8 on every scored line | 2 | Octahedron, numbered 1–8 |
-| D10 | +1 to +10 on every scored line | 3 | Pentagonal trapezohedron, numbered 1–10 |
-| D20 | +1 to +20 on every scored line | 4 | Icosahedron, numbered 1–20 |
+| Passive |   Bonus per scoring resolution | First shop round | Token shape                                              |
+| ------- | -----------------------------: | ---------------: | -------------------------------------------------------- |
+| D6      |  +1 to +6 on every scored line |                1 | Cube with six standard pip faces; opposite pairs total 7 |
+| D8      |  +1 to +8 on every scored line |                2 | Octahedron, numbered 1–8                                 |
+| D10     | +1 to +10 on every scored line |                3 | Pentagonal trapezohedron, numbered 1–10                  |
+| D20     | +1 to +20 on every scored line |                4 | Icosahedron, numbered 1–20                               |
 
 Later dice are filtered out of shop stock until their listed round and are excluded from opening passives.
-
 
 ## Definitions
 
@@ -72,10 +71,10 @@ Every row below also carries rack residency, an inspectable name and effect desc
 | **Woodworker** (`woodworker`)                   | On `score.beforeBlockValue`, if the contributor's gameplay material is **wood**, add **3** to that block's working value.                                                                                                                                 | Honey-colored wood-look cube with a branded chisel mark and visible end grain.                    |
 | **Crossroads** (`crossroads`)                   | On `score.beforeLineFinalized`, count blocks in the current line that also belong to a perpendicular gap-free line of at least two blocks; add **3 per such block**. Count each intersecting block once for this line even if it crosses both other axes. | Slate cube with three fine white axes meeting at a bright central dot.                            |
 | **Long Haul** (`long-haul`)                     | On `score.beforeLineFinalized`, add **−5** when the line has exactly two blocks; add **+5** when it has three or more.                                                                                                                                    | Split charcoal and cream cube: a short dotted stroke below and a longer rising stroke above.      |
-| **D6** (`dice-d6`)                              | Roll once per scoring resolution; add the same random value from **1–6** to every scored line. Available from round 1.                                                                                                                                   | White cube with six distinct standard pip layouts; opposite faces sum to 7.                       |
-| **D8** (`dice-d8`)                              | Roll once per scoring resolution; add the same random value from **1–8** to every scored line. Available from round 2.                                                                                                                                   | White octahedron with numbered triangular faces.                                                  |
-| **D10** (`dice-d10`)                            | Roll once per scoring resolution; add the same random value from **1–10** to every scored line. Available from round 3.                                                                                                                                 | White pentagonal trapezohedron with ten numbered kite faces.                                      |
-| **D20** (`dice-d20`)                            | Roll once per scoring resolution; add the same random value from **1–20** to every scored line. Available from round 4.                                                                                                                                 | White icosahedron with numbered triangular faces; opposite faces sum to 21.                       |
+| **D6** (`dice-d6`)                              | Roll once per scoring resolution; add the same random value from **1–6** to every scored line. Available from round 1.                                                                                                                                    | White cube with six distinct standard pip layouts; opposite faces sum to 7.                       |
+| **D8** (`dice-d8`)                              | Roll once per scoring resolution; add the same random value from **1–8** to every scored line. Available from round 2.                                                                                                                                    | White octahedron with numbered triangular faces.                                                  |
+| **D10** (`dice-d10`)                            | Roll once per scoring resolution; add the same random value from **1–10** to every scored line. Available from round 3.                                                                                                                                   | White pentagonal trapezohedron with ten numbered kite faces.                                      |
+| **D20** (`dice-d20`)                            | Roll once per scoring resolution; add the same random value from **1–20** to every scored line. Available from round 4.                                                                                                                                   | White icosahedron with numbered triangular faces; opposite faces sum to 21.                       |
 | **Scrapper** (`scrapper`)                       | On `discard.completed`, count all blocks discarded by that one action; add **1 coin per block**.                                                                                                                                                          | Worn steel cube with a stamped scrap mark and a small gold coin inset.                            |
 | **Seeing Red** (`seeing-red`)                   | On `discard.completed`, count discarded blocks whose suit is Hearts or Diamonds; add **1 coin per matching block**. This stacks with Scrapper.                                                                                                            | Cream cube with paired red ♥ and ♦ marks, red edge stitching.                                     |
 | **Ace Exchange** (`ace-exchange`, working name) | On `discard.completed`, if the action contains **at least two Aces**, grant **one** random passive definition the player does not already own. Trigger once for the action, including a three- or four-Ace discard.                                       | Violet cube with two overlapping A marks and a small empty-slot sparkle.                          |

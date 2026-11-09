@@ -32,12 +32,15 @@ export function shopPreviewState(
     usedIds.add(id);
     return id;
   };
-  const passiveOffers: ShopOffer[] = randomPassiveDefinitions(stock.passiveOffers, random, [], round).map(
-    (definition) => ({
-      kind: "passive",
-      block: createPassiveBlock(definition.id, nextOfferId()),
-    }),
-  );
+  const passiveOffers: ShopOffer[] = randomPassiveDefinitions(
+    stock.passiveOffers,
+    random,
+    [],
+    round,
+  ).map((definition) => ({
+    kind: "passive",
+    block: createPassiveBlock(definition.id, nextOfferId()),
+  }));
   return {
     ...state,
     field: [],
