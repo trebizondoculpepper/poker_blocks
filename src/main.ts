@@ -55,8 +55,10 @@ import {
   roomSceneId,
   type RoomSceneName,
   type RoomSceneTraits,
+  type Room,
 } from "./rooms";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
+import type { Screen } from "./menus";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
@@ -454,12 +456,8 @@ function sessionConfigFor(traits: typeof roomTraits): SessionConfig {
 let sessionConfig = sessionConfigFor(roomTraits);
 const devSeedKey = "poker-blocks.dev-material-seed";
 let runSaveKey = roomTraits.save.key;
-const rackCapacity = Math.max(
-  1,
-  ...roomRegistry.names().map((id) => roomRegistry.get(id).traits.passiveRack?.capacity ?? 0),
-);
 const passiveRackView = createPassiveRack(host, {
-  capacity: rackCapacity,
+  capacity: roomTraits.passiveRack?.capacity,
   onPickUp: (block, event) => pickUpPassive(block, event),
 });
 passiveRackView.element.hidden = !roomTraits.passiveRack;
@@ -515,29 +513,26 @@ const sceneManager = new SceneManager(sceneBehaviours, host);
 for (const roomId of roomRegistry.names()) {
   for (const scene of roomRegistry.get(roomId).scenes) sceneManager.register(scene);
 }
-function sceneForPhase(phase: Phase): RoomSceneName {
-  switch (phase) {
-    case "stage-1":
-    case "stage-2":
-    case "boss":
-    case "shop":
-      return phase;
-    case "over":
-      return "game-over";
-  }
-}
+const sceneForPhase: Record<Phase, RoomSceneName> = {
+  "stage-1": "stage-1",
+  "stage-2": "stage-2",
+  boss: "boss",
+  shop: "shop",
+  over: "game-over",
+};
 function sceneId(name: RoomSceneName): string {
   return roomSceneId(thisRoom.id, name);
 }
 function switchScene(name: RoomSceneName): void {
   const id = sceneId(name);
-  if (sceneManager.current?.id !== id) sceneManager.switch(id);
+  if (sceneManager.current?.id !== id) sceneManager.switchTo(id);
 }
 function pushScene(name: RoomSceneName): void {
-  sceneManager.push(sceneId(name));
+  sceneManager.pushIfNotCurrent(sceneId(name));
 }
 function syncSceneToGame(): void {
-  switchScene(sceneForPhase(game.phase));
+  // Temporary bridge until scene transitions drive GameSession progression (#37).
+  switchScene(sceneForPhase[game.phase]);
 }
 // A fresh run sits behind the title screen until the player chooses Continue or New game.
 let game = new GameSession(dealerRegistry, sessionConfig, cards);
@@ -1166,6 +1161,17 @@ const music = createMusicController(
   musicPlayer,
   musicTracks.map(({ id }) => id),
 );
+function enterRoom(room: Room): void {
+  thisRoom = room;
+  roomTraits = room.traits;
+  sessionConfig = sessionConfigFor(roomTraits);
+  runSaveKey = roomTraits.save.key;
+  cards = roomDeck(false);
+  passiveRackView.setCapacity(roomTraits.passiveRack?.capacity ?? 0);
+  passiveRackView.element.hidden = !roomTraits.passiveRack;
+}
+// Configure the initial mode through the same path used by the developer room switcher.
+enterRoom(thisRoom);
 function applySettings(next: Settings): void {
   settings = next;
   setSfxVolume(next.volume);
@@ -1603,7 +1609,7 @@ async function advanceFromStage(): Promise<void> {
     if (leavingShop) {
       const session = game;
       if (session.state.shopStock?.length) playSfx("shop.stock.burn");
-      await shopView?.burnUnsold(reducedMotion);
+      await shopView.burnUnsold(reducedMotion);
       // A different run may have been started while the old shop was dissolving.
       if (game !== session) return;
     }
@@ -1625,7 +1631,7 @@ async function advanceFromStage(): Promise<void> {
       playSfx("shop.open");
     }
     const enterShop = game.phase === "shop" && !reducedMotion;
-    shopView?.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
+    shopView.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
     if (enterShop) beginShopCameraEntrance();
     showSelection();
     updateHud();
@@ -1712,7 +1718,7 @@ function startRun(session: GameSession, fresh = false): void {
   applyCamera();
   if (game.inStage) dealHand();
   const enterShop = game.phase === "shop" && fresh && !reducedMotion;
-  shopView?.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
+  shopView.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
   syncSceneToGame();
   if (enterShop) beginShopCameraEntrance();
   updateHud();
@@ -1720,8 +1726,47 @@ function startRun(session: GameSession, fresh = false): void {
   autosave();
   playSfx(game.phase === "shop" ? "shop.open" : "round.start");
   if (game.inStage) musicForNewStage();
+  if (roomTraits.quiet) music.windDown();
 }
 
+const screenSceneTransitions: Record<
+  Screen,
+  { scene?: RoomSceneName; operation: "push" | "replace" | "resume" }
+> = {
+  title: { scene: "title", operation: "replace" },
+  settings: { scene: "settings", operation: "push" },
+  game: { operation: "resume" },
+  over: { scene: "game-over", operation: "replace" },
+};
+const screenSceneActions: Record<"push" | "replace" | "resume", (scene?: RoomSceneName) => void> = {
+  push(scene) {
+    pushScene(scene!);
+  },
+  replace(scene) {
+    switchScene(scene!);
+  },
+  resume() {
+    sceneManager.pop();
+    syncSceneToGame();
+  },
+};
+const screenMusicActions: Record<Screen, () => void> = {
+  title() {
+    music.unmuffle();
+    music.playTitle();
+  },
+  settings() {
+    music.muffle();
+  },
+  game() {
+    music.unmuffle();
+    music.resumeStage();
+  },
+  over() {
+    music.unmuffle();
+    music.windDown();
+  },
+};
 const menus = createMenus(host, settings, {
   hasSave: () => loadRun(storage, cards, dealerRegistry, runSaveKey) !== null,
   onContinue() {
@@ -1739,24 +1784,9 @@ const menus = createMenus(host, settings, {
   },
   onScreen(next) {
     screen = next;
-    if (next === "settings") {
-      if (sceneManager.current?.id !== sceneId("settings")) pushScene("settings");
-    } else if (sceneManager.current?.id === sceneId("settings")) {
-      sceneManager.pop();
-    } else if (next === "title") {
-      switchScene("title");
-    } else if (next === "over") {
-      switchScene("game-over");
-    } else {
-      syncSceneToGame();
-    }
-    // Leaving the menu takes the muffle off again.
-    if (next !== "settings") music.unmuffle();
-    if (next === "title") music.playTitle();
-    // The menu muffles whatever is playing instead of changing the song.
-    else if (next === "settings") music.muffle();
-    else if (next === "over") music.windDown();
-    else music.resumeStage();
+    const transition = screenSceneTransitions[next];
+    screenSceneActions[transition.operation](transition.scene);
+    screenMusicActions[next]();
   },
 });
 // Rooms that skip the title start straight in play (resuming their run if they keep one).
@@ -1773,8 +1803,6 @@ if (skipTitle) {
   startRun(newSession(), true);
   menus.closeAll();
 } else menus.showTitle();
-// Quiet rooms: the record player starts wound down.
-if (roomTraits.quiet) music.windDown();
 if (restartRoom) {
   const cleanUrl = new URL(window.location.href);
   cleanUrl.searchParams.delete("restart");
@@ -1794,33 +1822,26 @@ createConsole({
     menus.closeAll();
   },
   home: () => menus.showTitle(),
-  room: () => (thisRoom.dev ? thisRoom.id : null),
+  room: () => thisRoom.consoleName ?? null,
   rooms: () => devRooms(),
   resetRoom(room) {
-    const currentRoom = thisRoom.dev ? thisRoom.id : null;
+    const currentRoom = thisRoom.consoleName ?? null;
     if (!room || room === currentRoom) {
       startRun(newSession());
       menus.closeAll();
       return;
     }
     const nextRoom = roomRegistry.get(room);
-    thisRoom = nextRoom;
-    roomTraits = nextRoom.traits;
-    sessionConfig = sessionConfigFor(roomTraits);
-    runSaveKey = roomTraits.save.key;
-    cards = roomDeck(false);
-    restartRoom = nextRoom.dev;
-    passiveRackView.element.hidden = !roomTraits.passiveRack;
+    enterRoom(nextRoom);
     const url = new URL(window.location.href);
-    if (nextRoom.dev) url.searchParams.set("room", nextRoom.id);
-    else url.searchParams.delete("room");
+    url.searchParams.delete("room");
+    if (nextRoom.consoleName) url.searchParams.set("room", nextRoom.consoleName);
     url.searchParams.delete("restart");
     window.history.replaceState(window.history.state, "", url);
+    // startScene is declarative until the scene graph drives session progression (#37).
     switchScene(nextRoom.startScene);
     startRun(newSession(), true);
     menus.closeAll();
-    if (roomTraits.quiet) music.windDown();
-    restartRoom = false;
   },
   forceOutcome(outcome) {
     if (pendingAction || !game.forceOutcome(outcome)) return false;
@@ -2126,6 +2147,8 @@ const routeSceneInput = (event: Event) => {
   event.preventDefault();
   event.stopImmediatePropagation();
 };
+// This host capture route is scaffolding: current key handlers on window still receive events
+// outside the host, and no registered scene trait consumes input yet.
 const sceneInputEvents = [
   "keydown",
   "keyup",
@@ -2207,7 +2230,7 @@ const animate = (time: number) => {
   if (drag?.active) updateCandidate();
   updateEmptyFieldPrompt(time);
   passiveRackView?.frame(time, reducedMotion);
-  shopView?.frame();
+  shopView.frame();
   render();
   frame = requestAnimationFrame(animate);
 };
@@ -2236,8 +2259,8 @@ if (import.meta.hot) {
     ghostEdgeMaterial.dispose();
     faceGeometry.dispose();
     faceMaterial.dispose();
-    passiveRackView?.dispose();
-    shopView?.dispose();
+    passiveRackView.dispose();
+    shopView.dispose();
     renderer.dispose();
   });
 }

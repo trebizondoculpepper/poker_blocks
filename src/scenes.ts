@@ -77,7 +77,7 @@ export class SceneManager<Traits extends SceneTraitConfigs, Context> {
   }
 
   /** Replace the entire stack with one scene. Unknown ids leave the current stack alone. */
-  switch(id: string): void {
+  switchTo(id: string): void {
     const next = this.requireScene(id);
     for (let index = this.active.length - 1; index >= 0; index--) {
       this.exit(this.scenes.get(this.active[index]!)!);
@@ -92,6 +92,12 @@ export class SceneManager<Traits extends SceneTraitConfigs, Context> {
     const next = this.requireScene(id);
     this.active.push(next.id);
     this.enter(next);
+  }
+
+  /** Push a scene only when it is not already the active top scene. */
+  pushIfNotCurrent(id: string): void {
+    const next = this.requireScene(id);
+    if (this.active.at(-1) !== next.id) this.push(next.id);
   }
 
   /** Exit only the top scene; the scene underneath resumes without another enter call. */
