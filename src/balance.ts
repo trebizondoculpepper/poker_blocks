@@ -1,8 +1,7 @@
 /**
- * Balance config validation (doc/game.md, "Shop rules"). Each tuning number lives on the
- * definition it belongs to (a passive's `shop` balance is on its definition), so nothing keeps
- * a side table keyed by identity. This module checks those numbers in one place, and
- * `balance.test.ts` runs the check, so a bad entry fails CI rather than a run.
+ * Shared game tuning and balance validation (doc/game.md, "Shop rules"). Values that belong
+ * to a specific definition (such as a passive's shop price) stay on that definition, so
+ * nothing keeps a side table keyed by identity. This module checks those values in one place.
  *
  * Base prices are fixed data. Anything that changes a price later (a passive that raises a sale
  * payout, say) is a modifier applied on top, never an edit to the definition.
@@ -10,6 +9,11 @@
 import type { MaterialDefinition } from "./materials";
 import type { PassiveDefinition } from "./passives";
 import { validateScoringModifier } from "./scoring-modifier";
+
+/** Shared defaults for the base game; a different dealer may override its hand size. */
+export const gameTuning = {
+  baseHandSize: 6,
+} as const;
 
 /** Everything wrong with these passives' shop balance; retired passives need none. */
 export function validatePassiveBalance(definitions: readonly PassiveDefinition[]): string[] {

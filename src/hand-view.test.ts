@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck, type CardBlock } from "./cards";
+import { handCameraPortraitHalfWidth } from "./camera-view";
 import { createHandView, type HandDrag } from "./hand-view";
 import type { BlockViews, RenderedBlock } from "./rendered-blocks";
 
@@ -68,6 +69,21 @@ describe("hand view", () => {
     expect(bySlot.map(xOf)).toEqual([-2.4, -1.2, 0, 1.2, 2.4]);
     expect(bySlot.every(({ cube }) => cube.position.y === -2)).toBe(true);
     expect(layouts()).toBe(1);
+  });
+
+  it("centres six blocks within portrait camera bounds, even when rotated", () => {
+    const { hand } = setup(6);
+    const sixCards = standardDeck.slice(0, 6);
+    for (const card of sixCards) hand.add(card);
+    hand.sync(sixCards);
+    const bySlot = [...hand.blocks].sort((a, b) => a.handSlot! - b.handSlot!);
+    for (const [index, x] of [-3, -1.8, -0.6, 0.6, 1.8, 3].entries())
+      expect(xOf(bySlot[index])).toBeCloseTo(x);
+    // A rotating 0.8-unit cube can reach its half diagonal beyond its slot centre.
+    const halfDiagonal = (Math.SQRT2 * (2.4 / 3)) / 2;
+    expect(Math.max(...bySlot.map((block) => Math.abs(xOf(block)) + halfDiagonal))).toBeLessThan(
+      handCameraPortraitHalfWidth,
+    );
   });
 
   it("opens a gap where a dragged card would drop, without moving the dragged card", () => {

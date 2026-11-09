@@ -19,7 +19,7 @@ Poker Blocks is an original IP. It draws on public-domain ideas only: standard p
 - **Modifier block:** a special block that changes play. Some modifier blocks work while held in the hand, and some once placed on the field.
 - **Passive block:** a block that can be installed in a rack at the top of the screen. Passives are mostly bought from the shop, though some may enter the deck through game events. They are not discarded; they can be sold at any time by dragging them to a sell target next to the discard area.
 - **Deck:** the player's collection of blocks. It starts as a standard 52-card deck and changes over a run. Since the deck can be modified, it may contain duplicate cards and cards a standard deck doesn't have.
-- **Hand:** up to 5 blocks drawn from the deck.
+- **Hand:** up to 6 blocks drawn from the deck with the base dealer; another dealer may set a different size.
 - **Field:** the structure of blocks placed this stage. It is built in an unbounded 3D grid of cells around a centre block.
 - **Coins:** the currency, spent at the shop.
 
@@ -42,7 +42,7 @@ On each turn the player does one of the following:
 - **Play a line:** with several hand blocks selected, drag them (any one carries the rest) onto a face: they are placed as a straight line running out from that face, in the order they were selected, as **one play**, and the field is scored once as a normal chain. A line that would reach a block already on the field is refused whole. On an empty field it can be the first play (the line runs east from the centre).
 - **Discard:** remove one or more hand blocks, including before the first play. Select blocks and click the bin, select blocks and drag any one of them to the bin (the selection goes with it), or drag a single unselected block to the bin. Each discard uses one discard allowance however many blocks it removes, and does not score. When no discards are left, the bin refuses the drop with a red X. _(A cap on blocks per discard may come later from dealers or passives; for now the whole hand may go.)_
 
-After either action, the hand is refilled from the deck up to the stage dealer's hand size (5 for the base dealer), or until the deck runs out. Surviving blocks pack left in their current order; drawn blocks join at the right.
+After either action, the hand is refilled from the deck up to the stage dealer's hand size (6 for the base dealer, from `gameTuning.baseHandSize` in `src/balance.ts`), or until the deck runs out. Surviving blocks pack left in their current order; drawn blocks join at the right.
 
 At any time the player can also drag a block within the hand to change its position. Reordering is free: it is not a play or discard, uses nothing and does not refill the hand. Hand order matters for effects that read it, and it is saved with the run.
 

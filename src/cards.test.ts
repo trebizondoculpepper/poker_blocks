@@ -26,13 +26,13 @@ describe("standard deck", () => {
     expect(cardName({ rank: "K", suit: suits[1] })).toBe("King of Hearts");
   });
 
-  it("draws a featured block and a distinct five-block hand", () => {
+  it("draws a featured block and a distinct six-block hand", () => {
     const firstDraw = drawCards(standardDeck, 1, () => 0);
     const secondDraw = drawCards(firstDraw.deck, baseDealer.handSize, () => 0);
     expect(firstDraw.cards).toHaveLength(1);
-    expect(secondDraw.cards).toHaveLength(5);
-    expect(secondDraw.deck).toHaveLength(46);
-    expect(new Set([...firstDraw.cards, ...secondDraw.cards]).size).toBe(6);
+    expect(secondDraw.cards).toHaveLength(6);
+    expect(secondDraw.deck).toHaveLength(45);
+    expect(new Set([...firstDraw.cards, ...secondDraw.cards]).size).toBe(7);
     expect(secondDraw.cards.every((block) => !secondDraw.deck.includes(block))).toBe(true);
     expect(standardDeck).toHaveLength(52);
   });

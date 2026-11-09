@@ -44,7 +44,7 @@ describe("hand reordering", () => {
   it("reorders the hand without touching counters, score, deck or other zones", () => {
     const game = session();
     const before = game.state;
-    expect(game.reorderHand(0, 4)).toBe(true);
+    expect(game.reorderHand(0, before.hand.length - 1)).toBe(true);
     expect(game.state.hand).toEqual([...before.hand.slice(1), before.hand[0]]);
     expect(new Set(game.state.hand)).toEqual(new Set(before.hand));
     expect(game.state.round).toEqual(before.round);
@@ -62,13 +62,13 @@ describe("hand reordering", () => {
 
   it("packs survivors left and appends drawn cards on the right", () => {
     const game = session();
-    const [a, b, c, d, e] = game.state.hand;
+    const [a, b, c, ...survivors] = game.state.hand;
     game.play({ cardId: c.id });
     const [drawn] = game.refillHand();
-    expect(game.state.hand).toEqual([a, b, d, e, drawn]);
+    expect(game.state.hand).toEqual([a, b, ...survivors, drawn]);
     game.discard(a.id);
     const [next] = game.refillHand();
-    expect(game.state.hand).toEqual([b, d, e, drawn, next]);
+    expect(game.state.hand).toEqual([b, ...survivors, drawn, next]);
   });
 });
 

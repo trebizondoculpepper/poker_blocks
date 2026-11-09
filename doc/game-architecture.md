@@ -8,9 +8,9 @@ Poker Blocks will be a puzzle game in the style of poker solitaire. Its main sou
 
 A basic block represents one of the 52 cards in a standard deck. An `identifiable` trait holds its rank and suit and answers shared identity queries. Every geometric face of its cube shows that same identity; geometric faces are distinct from behavior traits. The identity model should later admit special cards unique to this game.
 
-The deck is the collection of cards currently possessed. At the start of this game's demo, one card is drawn for the large center block and five other cards are drawn into the hand. The hand is a list of five cards. All six draws are distinct, leaving 46 cards in the deck. The five hand blocks are one-third the size of the center block and appear in a row at the bottom of the screen. Reloading deals a new set.
+The deck is the collection of cards currently possessed. A new stage starts with an empty field. The base dealer draws six distinct blocks into the hand from a standard 52-card deck, leaving 46 in the deck at the start of a new run. The first play places the centre block on the field. The hand is rendered in a row at the bottom of the screen.
 
-The five-card starting hand is a rule for Poker Blocks.
+The base hand size is a tuning value in `src/balance.ts`; another dealer may set a different size.
 
 ## Agreed principles
 
@@ -81,7 +81,7 @@ An inspectable trait instance implements `inspect(): string`. The hover UI calls
 
 The `attachable` trait lists the faces of a block that may accept another block: `north`, `south`, `east`, `west`, `up`, and `down`. Standard cards allow all six. A face can accept a dragged hand block only when its neighboring grid cell is empty. The block snaps face-to-face into that cell, leaves the hand, and becomes part of the structure. Any exposed face of any placed block can be used; dragging the structure reveals its other sides.
 
-The dealer is a rule system, rather than a block. After a successful attachment it draws from the remaining deck until the hand contains five cards, or the deck is empty. The six starting cards and all subsequent draws remain unique.
+The dealer is a rule system, rather than a block. After a successful attachment it draws from the remaining deck until the hand contains six cards, or the deck is empty. The six opening hand blocks and all subsequent draws remain unique.
 
 When dragging a hand block starts, the structure's wobble slows to one-tenth of normal over half a second. On drop or cancel it eases back over half a second. Small numeric easing helpers live in `src/easing.ts` for later animations.
 
@@ -105,7 +105,7 @@ The stage opens with an empty field and a dealer-filled hand. The player may dis
 
 `GameRun` owns progression through stage one, shop, stage two, shop, boss stage, shop, and the next round. It selects the active dealer and target score for each stage, asks that dealer to set the stage's field and allowances, and carries the deck and discard pile across the three stages. Its snapshot includes the current round, phase, and stage that opened a shop for save/Continue.
 
-A registered dealer reads `GameState` to decide whether a move is legal and returns the next state after a play or discard. The base dealer owns the current five-card hand, six plays, four discards, provisional target score of 100, opening deal, face attachment rules, and hand refill. `GameRun` holds the active dealer and current state; switching to another registered dealer preserves the exact state value. A future boss dealer can change rule methods without moving cards between zones or adding boss checks to the scene.
+A registered dealer reads `GameState` to decide whether a move is legal and returns the next state after a play or discard. The base dealer owns the current six-block hand, six plays, four discards, provisional target score of 100, opening deal, face attachment rules, and hand refill. `GameRun` holds the active dealer and current state; switching to another registered dealer preserves the exact state value. A future boss dealer can change rule methods without moving cards between zones or adding boss checks to the scene.
 
 ## Placement and card appearance
 
