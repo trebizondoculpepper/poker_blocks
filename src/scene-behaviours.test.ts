@@ -12,10 +12,12 @@ function recordingHost() {
   const host: SceneHost = {
     host: { dataset: {} } as HTMLElement,
     services: {
+      renderer: { tableEntered: (entered) => void calls.push(`table:${entered}`) },
       attract: {
         start: () => void calls.push("attract:start"),
         stop: () => void calls.push("attract:stop"),
         showTuning: () => void calls.push("attract:tuning"),
+        hideTuning: () => void calls.push("attract:tuning-hide"),
       },
       board: {
         blockAt: () => {
@@ -263,6 +265,7 @@ describe("the pause menu's scene traits (#87)", () => {
     scenes.push(pause.id);
     // Opening it also ends any drag under way on the table (#124).
     expect(calls).toEqual([
+      "table:true",
       "menu:Paused:resume,openSettings,quitToTitle",
       "footer:1.2.3:Get source code,Report a bug",
       "gestures:cancel",
@@ -270,7 +273,7 @@ describe("the pause menu's scene traits (#87)", () => {
     ]);
     calls.length = 0;
     scenes.pop();
-    expect(calls).toEqual(["filter:null", "footer:hide", "menu:hide"]);
+    expect(calls).toEqual(["filter:null", "footer:hide", "menu:hide", "table:false"]);
   });
 
   it("leaves out Quit to title over the title screen", () => {
@@ -286,12 +289,15 @@ describe("the pause menu's scene traits (#87)", () => {
     scenes.push(pause.id);
     calls.length = 0;
     scenes.push(settings.id);
-    expect(calls).toEqual(["settings:show", "gestures:cancel", "filter:highpass"]);
+    expect(calls).toEqual(["table:true", "settings:show", "gestures:cancel", "filter:highpass"]);
     calls.length = 0;
     scenes.pop();
     expect(calls).toEqual([
       "filter:null",
       "settings:hide",
+      // Settings does not compose `tableBackground`: the pause menu under it already drew the
+      // table, and a scene pushed over one must not turn it off on the way out.
+      "table:false",
       "menu:Paused:resume,openSettings,quitToTitle",
       // The pause panel's footer comes back with the panel it belongs to.
       "footer:1.2.3:Get source code,Report a bug",
