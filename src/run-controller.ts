@@ -8,6 +8,7 @@
  * It decides what happens; the other services show it.
  */
 import type { DestroyCause } from "./traits/destructible";
+import { blockHighlighted } from "./block-trait-behaviours";
 import type { AudioService } from "./audio-service";
 import { playSfx } from "./audio/sfx";
 import type { CameraViewService } from "./camera-view";
@@ -265,7 +266,7 @@ export function createRunController<Context>(options: {
     const { views } = services;
     views.highlight(selected);
     const selectedNames = views.all
-      .filter(({ block }) => block.traits.selectable && selected.has(block.id))
+      .filter(({ block }) => blockHighlighted(block, selected))
       .map(({ block }) => cardName(block.traits.identity));
     host.setAttribute(
       "aria-label",

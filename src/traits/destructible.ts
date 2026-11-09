@@ -5,6 +5,7 @@
  * test mode, later melting or bombs) is a separate trait that names its cause.
  */
 import { cardName, type CardBlock } from "../cards";
+import type { BlockTraitBehavior } from "../block-trait-behaviours";
 import { inspectBlock, inspectable } from "./inspectable";
 
 /** What can destroy a block. "manual" is the testing mode's double-click. */
@@ -13,9 +14,9 @@ export type DestroyCause = "manual";
 export type DestructibleTrait = { by: readonly DestroyCause[] };
 
 /** Whether `cause` may destroy this block. A block without the trait cannot be destroyed. */
-export function canDestroy(block: CardBlock, cause: DestroyCause): boolean {
-  return block.traits.destructible?.by.includes(cause) ?? false;
-}
+export const destructibleBehavior: BlockTraitBehavior = {
+  canDestroy: (config, _block, cause) => (config as DestructibleTrait).by.includes(cause),
+};
 
 /** Dev mode configuration (testing only): which share of a deck is destructible, and by what. */
 export type DevDestructibleMix = { share: number; by: readonly DestroyCause[] };

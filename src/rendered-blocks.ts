@@ -6,6 +6,7 @@
  */
 import * as THREE from "three";
 import type { CardBlock } from "./cards";
+import { blockHighlighted } from "./block-trait-behaviours";
 import { materialOf } from "./materials";
 import { randomRock, type Rock, type RockState } from "./motion";
 import type { Selection } from "./traits/selectable";
@@ -118,7 +119,7 @@ export function createBlockViews(parents: {
     },
     highlight(selected) {
       all.forEach(({ block, materials }) => {
-        const active = Boolean(block.traits.selectable) && selected.has(block.id);
+        const active = blockHighlighted(block, selected);
         new Set(materials).forEach((material) => {
           material.emissive.setHex(0xffffff);
           material.emissiveIntensity = active ? 0.28 : 0;

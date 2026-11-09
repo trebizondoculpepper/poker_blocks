@@ -6,7 +6,8 @@ import { gameModeFor } from "./game-modes";
 import { devManualBlockDestroyer } from "./scene-traits/dev-manual-block-destroyer";
 import { demoRunRules, sandboxRunRules } from "./run-rules";
 import { inspectBlock } from "./traits/inspectable";
-import { canDestroy, withDevDestructibleMix } from "./traits/destructible";
+import { blockCanDestroy } from "./block-trait-behaviours";
+import { withDevDestructibleMix } from "./traits/destructible";
 
 describe("the destructible trait", () => {
   it("only lets the causes it names destroy a block", () => {
@@ -17,17 +18,17 @@ describe("the destructible trait", () => {
         traits: { ...standardDeck[1].traits, destructible: { by: ["manual" as const] } },
       },
     ];
-    expect(canDestroy(plain, "manual")).toBe(false);
-    expect(canDestroy(marked, "manual")).toBe(true);
+    expect(blockCanDestroy(plain, "manual")).toBe(false);
+    expect(blockCanDestroy(marked, "manual")).toBe(true);
   });
 
   it("marks a stable share of a deck, and says so in the description", () => {
     const deck = withDevDestructibleMix(standardDeck, { share: 0.5, by: ["manual"] });
-    const marked = deck.filter((card) => canDestroy(card, "manual"));
+    const marked = deck.filter((card) => blockCanDestroy(card, "manual"));
     expect(marked.length).toBeGreaterThan(10);
     expect(marked.length).toBeLessThan(42);
     const again = withDevDestructibleMix(standardDeck, { share: 0.5, by: ["manual"] });
-    expect(again.filter((card) => canDestroy(card, "manual")).map(({ id }) => id)).toEqual(
+    expect(again.filter((card) => blockCanDestroy(card, "manual")).map(({ id }) => id)).toEqual(
       marked.map(({ id }) => id),
     );
     expect(inspectBlock(marked[0])).toMatch(/Destructible$/);

@@ -20,7 +20,7 @@ import type { BlockViews, RenderedBlock } from "./rendered-blocks";
 import { magnitudeSfxFor } from "./score-presentation";
 import { presentationOrder, type ScoredLine } from "./scoring";
 import type { Cell } from "./traits/attachable";
-import { isTransparent } from "./traits/transparent";
+import { needsLandingHandover } from "./block-trait-behaviours";
 import { createMaterialise } from "./visual/materialise";
 
 type Materialise = ReturnType<typeof createMaterialise>;
@@ -94,7 +94,7 @@ const handoverSeconds = 0.55;
  * preview to their table version; opaque blocks just land.
  */
 function needsHandover(rendered: RenderedBlock): boolean {
-  return isTransparent(rendered.block);
+  return needsLandingHandover(rendered.block);
 }
 
 export function createPlayPresenter(options: {

@@ -1,9 +1,10 @@
 import type { CardBlock } from "./cards";
+import { blockAttachmentCell } from "./block-trait-behaviours";
 import { Registry } from "./core/registry";
 import { drawCards } from "./deal";
 import type { GameState, PlayAction, StageRules } from "./game-state";
 import { scoreField } from "./scoring";
-import { attachmentCell, cellKey, faceNormal, type Cell, type Face } from "./traits/attachable";
+import { cellKey, faceNormal, type Cell, type Face } from "./traits/attachable";
 import { withSelectable, withoutSelectable } from "./traits/selectable";
 
 export type RoundOutcome = "playing" | "won" | "lost";
@@ -95,8 +96,8 @@ export const baseDealer: Dealer = {
     if (!targetId || !face) return null;
     const target = state.field.find(({ block }) => block.id === targetId);
     if (!target) return null;
-    return attachmentCell(
-      target.block.traits.attachable,
+    return blockAttachmentCell(
+      target.block,
       target.cell,
       face,
       new Set(state.field.map(({ cell }) => cellKey(cell))),
