@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { clamp01, easeInOutCubic, lerp } from "./easing";
 import { playSfx } from "./audio/sfx";
 import { cardName } from "./cards";
@@ -176,6 +177,10 @@ export function createShopView(
   renderer.domElement.className = "shop-cubes-canvas";
   renderer.domElement.setAttribute("aria-hidden", "true");
   host.append(renderer.domElement);
+  // The shop draws on its own WebGL context, so it can't use the table's prefiltered
+  // reflections: a metal offer would reflect nothing and look black (#200). It prefilters the
+  // same studio room for itself.
+  const reflections = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
   const displayed: DisplayedOffer[] = [];
   let burn: {
     startedAt: number;
@@ -257,6 +262,7 @@ export function createShopView(
       item.append(slot, label, tooltip);
       const cube = makeCube(offer);
       cube.cube.rotation.set(-0.34, 0.48, 0);
+      reflectInShop(cube.cube, reflections.texture);
       scene.add(cube.cube);
       displayed.push({ item, slot, ...cube });
       item.addEventListener("pointerdown", (event) => {
@@ -429,6 +435,7 @@ export function createShopView(
     frame,
     dispose: () => {
       clear();
+      reflections.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       stock.remove();
@@ -437,4 +444,16 @@ export function createShopView(
       skip.remove();
     },
   };
+}
+
+/** Point every reflective material in an offer at the shop's own reflections (#200). */
+function reflectInShop(object: THREE.Object3D, environment: THREE.Texture): void {
+  object.traverse((child) => {
+    const materials = (child as THREE.Mesh).material;
+    for (const material of [materials].flat())
+      if (material && "envMap" in material && material.envMap) {
+        material.envMap = environment;
+        material.needsUpdate = true;
+      }
+  });
 }
