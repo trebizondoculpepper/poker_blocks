@@ -5,7 +5,9 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #111726;
+  /* Black, so the title's attract backdrop is full-bleed and the table never shows through
+     the canvas edges (#147). */
+  background: #000;
 }
 
 .scene {
@@ -17,6 +19,24 @@ body,
 .scene canvas {
   display: block;
   touch-action: none;
+}
+
+/*
+ * The title's attract background (#147): quarter resolution, stretched to fill and blurred, so
+ * the cards read as a soft backdrop and every word of the menu stays sharp above it.
+ */
+.scene canvas.attract-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  /* The neighbour canvas is inset by the host's padding; the attract backdrop must not be. */
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  /* Black under the blurred cards: the table must not show through (#147). */
+  background: #000;
+  filter: blur(6px) saturate(0.85) brightness(0.9);
+  pointer-events: none;
 }
 
 .inspect-tooltip {
@@ -941,4 +961,64 @@ body,
 .menu-panel button[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* The dev-only attract tuning panel (#166). Never composed by the normal game. */
+.attract-tuning {
+  position: fixed;
+  right: 16px;
+  top: 16px;
+  z-index: 1200;
+  width: 260px;
+  padding: 14px;
+  border: 1px solid #8191a7;
+  border-radius: 12px;
+  background: #1c2739f2;
+  color: #f6f0e3;
+  font-size: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.attract-tuning h2 {
+  margin: 0;
+  color: #9ce6d7;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.attract-knob {
+  display: grid;
+  gap: 4px;
+}
+
+.attract-knob-label {
+  color: #c9c3b6;
+}
+
+.attract-knob-label output {
+  color: #9ce6d7;
+  font-variant-numeric: tabular-nums;
+}
+
+.attract-knob-field {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  align-items: center;
+  gap: 8px;
+  color: #8b93a3;
+}
+
+.attract-knob-field input {
+  width: 100%;
+}
+
+.attract-tuning button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #8191a7;
+  border-radius: 8px;
+  background: #27324a;
+  color: #f6f0e3;
 }

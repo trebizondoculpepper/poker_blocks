@@ -17,6 +17,11 @@ export type TableRenderer = {
   /** Draw a cube (and its edges) above everything else while it is dragged. */
   setDragLayer(cube: THREE.Object3D, dragging: boolean): void;
   render(boardCamera: THREE.Camera, handCamera: THREE.Camera): void;
+  /**
+   * Draw the title's attract sequence instead of the table (#147), at quarter resolution into
+   * its own canvas; CSS blurs it. Pass null to stop drawing it.
+   */
+  attract(scene: THREE.Scene | null, camera: THREE.Camera | null, delta: number): void;
   setShadowQuality(quality: ShadowQuality): void;
   /** Per frame: the card room's lamp follows the structure. */
   frame(center: THREE.Vector3, radius: number, delta: number): void;
@@ -27,6 +32,17 @@ export type TableRenderer = {
 const dragLayer = 1;
 
 export function createTableRenderer(host: HTMLElement): TableRenderer {
+  // The attract sequence has its own renderer and canvas, so it can run at quarter resolution
+  // without disturbing the table's drawing.
+  const attractCanvas = document.createElement("canvas");
+  attractCanvas.className = "attract-canvas";
+  attractCanvas.setAttribute("aria-hidden", "true");
+  attractCanvas.hidden = true;
+  const attractRenderer = new THREE.WebGLRenderer({ canvas: attractCanvas, antialias: false });
+  attractRenderer.setPixelRatio(1);
+  attractRenderer.outputColorSpace = THREE.SRGBColorSpace;
+  host.append(attractCanvas);
+
   const scene = new THREE.Scene();
   const handScene = new THREE.Scene();
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -71,10 +87,30 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
       renderer.render(handScene, handCamera);
       handCamera.layers.set(0);
     },
+    attract(attractScene, attractCamera, delta) {
+      if (!attractScene || !attractCamera) {
+        attractCanvas.hidden = true;
+        return;
+      }
+      attractCanvas.hidden = false;
+      // Quarter resolution: the blur hides the detail, and the cards are a backdrop.
+      const width = Math.max(1, Math.floor((host.clientWidth || 1) / 4));
+      const height = Math.max(1, Math.floor((host.clientHeight || 1) / 4));
+      const size = attractRenderer.getSize(new THREE.Vector2());
+      if (size.x !== width || size.y !== height) {
+        attractRenderer.setSize(width, height, false);
+        (attractCamera as THREE.PerspectiveCamera).aspect = width / height;
+        (attractCamera as THREE.PerspectiveCamera).updateProjectionMatrix();
+      }
+      attractRenderer.render(attractScene, attractCamera);
+      void delta;
+    },
     setShadowQuality: (quality) => cardRoom.setShadowQuality(quality),
     frame: (center, radius, delta) => cardRoom.frame(center, radius, delta),
     dispose() {
       renderer.dispose();
+      attractRenderer.dispose();
+      attractCanvas.remove();
     },
   };
 }

@@ -12,6 +12,7 @@ import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
+import { createAttractBackground } from "./attract-scene";
 import { createCameraViewService, type CameraViewService } from "./camera-view";
 import { createConsoleHost } from "./console-host";
 import type { SoundEffectId } from "./audio/sfx-registry";
@@ -92,11 +93,13 @@ type TraitContext = {
     input: TableInput;
     run: RunController;
     board: BlockDestroyerBoard;
+    attract: { start(): void; stop(): void; showTuning(): void };
     shop: ShopView;
     version: string;
     sound: (id: SoundEffectId) => void;
   };
 };
+const attract = createAttractBackground();
 const traitContext: TraitContext = {
   host,
   services: {
@@ -125,6 +128,7 @@ const traitContext: TraitContext = {
       blockAt: (clientX, clientY) => input.fieldBlockAt(clientX, clientY),
       destroy: (blockId, cause) => run.destroyBlock(blockId, cause),
     },
+    attract,
     get shop() {
       return shopView;
     },
@@ -260,6 +264,8 @@ const animate = (time: number) => {
   run.followOutcomes(time);
   field.update(time);
   sceneManager.update(delta);
+  const background = attract.frame(delta);
+  view.attract(background?.scene ?? null, background?.camera ?? null, delta);
   hand.animate(time, delta, input.selection);
   view.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
   input.frame();
@@ -282,6 +288,7 @@ if (import.meta.hot) {
     devConsole.dispose();
     overlays.dispose();
     run.dispose();
+    attract.dispose();
     presenter.dispose();
     hand.dispose();
     blockViews.disposeAll();

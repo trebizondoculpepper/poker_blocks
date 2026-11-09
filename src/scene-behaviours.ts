@@ -30,6 +30,8 @@ export type SceneHost = {
   host: HTMLElement;
   services: {
     board: BlockDestroyerBoard;
+    /** The title's attract sequence: started and stopped by a scene trait (#147). */
+    attract: { start(): void; stop(): void; showTuning(): void };
     hud: Pick<HudPanels, "show" | "hide">;
     input: Pick<TableInput, "setFieldActive" | "cancelGestures">;
     shop: ShopView;
@@ -133,6 +135,19 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
     exit({ services }) {
       services.shop.render([], false);
+    },
+  });
+  behaviours.register("attractBackground", {
+    // Start the attract sequence as the scene enters; stop it on exit so the table is the only
+    // thing drawn during play (#147).
+    enter: ({ services }) => services.attract.start(),
+    exit: ({ services }) => services.attract.stop(),
+  });
+  behaviours.register("devAttractTuning", {
+    // Testing only: the panel drives the attract background's live tuning (#166).
+    enter: ({ services }) => services.attract.showTuning(),
+    exit: () => {
+      /* The panel is owned by the service, which hides it when the attract scene stops. */
     },
   });
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());

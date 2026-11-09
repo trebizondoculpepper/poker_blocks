@@ -28,6 +28,13 @@ export type SceneTraits = {
   fieldPlacement: Record<never, never>;
   /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
   shopStock: Record<never, never>;
+  /**
+   * The blurred card attract sequence is the background while this scene is in front (#147).
+   * It is cosmetic: it draws no game state and its randomness is not the session's.
+   */
+  attractBackground: Record<never, never>;
+  /** Testing only: live sliders for the attract sequence's velocity, spin and spawn rate. */
+  devAttractTuning: Record<never, never>;
   /** Testing only: double-click a block to destroy it with this cause. */
   devManualBlockDestroyer: { cause: DestroyCause };
   /**
@@ -168,6 +175,7 @@ export const sceneDefinitions = [
       },
       // After `titleScreen`, so the panel is already showing when the footer is added to it.
       panelFooter: { links: projectLinks },
+      attractBackground: {},
       ...escapeOpensPause,
     },
   },
@@ -461,6 +469,22 @@ const gameModes: GameMode[] = [
       save: { key: "poker-blocks.dev4-run" },
       console: { name: "dev4" },
       restartable: { param: "restart" },
+      music: { style: "quiet" },
+    },
+  },
+  {
+    // Attract-sequence sandbox (#166): the title's background with live tuning sliders, so its
+    // feel can be dialled in without editing constants. It opens straight on the title scene.
+    id: "dev-attract",
+    scenes: composeScenes("dev-attract", [{ scenes: ["title"], traits: { devAttractTuning: {} } }]),
+    startScene: "title",
+    flow: standardGameFlow,
+    navigation: standardNavigation,
+    runSetup: [],
+    traits: {
+      onLoad: "title",
+      save: { key: "poker-blocks.dev-attract-run" },
+      console: { name: "dev-attract" },
       music: { style: "quiet" },
     },
   },
