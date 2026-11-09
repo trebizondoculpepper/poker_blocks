@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { clamp01, easeInOutCubic, lerp } from "./easing";
+import { playSfx } from "./audio/sfx";
 import { cardName } from "./cards";
 import { materialOf } from "./materials";
 import { passiveFaceTexture } from "./passive-rack";
@@ -16,12 +18,15 @@ type DisplayedOffer = {
   dispose(): void;
 };
 
+type Entrance = { startedAt: number; landed: Set<number> };
+
 /** Shop stock is drawn with the same real cube appearances as cards and installed passives. */
 export function createShopView(
   host: HTMLElement,
   rack: HTMLElement | null,
   price: (offer: ShopOffer) => number,
   buy: (id: string, destination: Destination) => boolean,
+  onEntranceDone: () => void,
 ) {
   const stock = document.createElement("section");
   stock.className = "shop-stock";
@@ -30,6 +35,20 @@ export function createShopView(
   handTarget.className = "shop-hand-target";
   handTarget.textContent = "DROP PLAYABLE BLOCKS INTO HAND";
   host.append(stock, handTarget);
+  const sign = document.createElement("div");
+  sign.className = "shop-open-sign";
+  sign.textContent = "SHOP OPEN";
+  sign.setAttribute("aria-hidden", "true");
+  const skip = document.createElement("button");
+  skip.type = "button";
+  skip.className = "shop-entrance-skip";
+  skip.textContent = "Skip entrance";
+  skip.hidden = true;
+  skip.addEventListener("click", () => {
+    finishEntrance();
+    frame();
+  });
+  host.append(sign, skip);
 
   const scene = new THREE.Scene();
   scene.add(new THREE.HemisphereLight(0xffffff, 0x788091, 2.4));
@@ -62,11 +81,13 @@ export function createShopView(
     resolve(): void;
   } | null = null;
   let burnPromise: Promise<void> | null = null;
+  let entrance: Entrance | null = null;
   const pixelsPerUnit = 50;
   let canvasWidth = 0;
   let canvasHeight = 0;
 
   function clear(): void {
+    finishEntrance();
     for (const job of burn?.jobs ?? []) job.effect?.finish();
     burn?.resolve();
     burn = null;
@@ -76,6 +97,16 @@ export function createShopView(
       entry.dispose();
     }
     displayed.length = 0;
+  }
+
+  function finishEntrance(): void {
+    const wasEntering = entrance !== null;
+    entrance = null;
+    stock.inert = false;
+    stock.classList.remove("is-entering");
+    sign.classList.remove("is-visible");
+    skip.hidden = true;
+    if (wasEntering) onEntranceDone();
   }
 
   function makeCube(offer: ShopOffer): { cube: THREE.Object3D; dispose(): void } {
@@ -146,7 +177,7 @@ export function createShopView(
     return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
   };
 
-  function render(offers: readonly ShopOffer[], visible: boolean): void {
+  function render(offers: readonly ShopOffer[], visible: boolean, animateEntrance = false): void {
     stock.hidden = handTarget.hidden = renderer.domElement.hidden = !visible;
     clear();
     stock.replaceChildren();
@@ -214,11 +245,20 @@ export function createShopView(
       });
       stock.append(item);
     }
+    if (animateEntrance && displayed.length > 0) {
+      entrance = { startedAt: performance.now(), landed: new Set() };
+      stock.inert = true;
+      stock.classList.add("is-entering");
+      sign.classList.add("is-visible");
+      skip.hidden = false;
+      playSfx("shop.stock.toss");
+    }
     frame();
   }
 
   /** Stagger the unsold offers' Perlin burn-out across roughly 1.5 seconds. */
   function burnUnsold(reducedMotion: boolean): Promise<void> {
+    finishEntrance();
     if (burnPromise) return burnPromise;
     if (displayed.length === 0) {
       render([], false);
@@ -283,13 +323,49 @@ export function createShopView(
       camera.bottom = -height / (2 * pixelsPerUnit);
       camera.updateProjectionMatrix();
     }
-    for (const entry of displayed) {
+    const elapsed = entrance ? performance.now() - entrance.startedAt : 0;
+    const cameraProgress = easeInOutCubic(clamp01(elapsed / 1700));
+    camera.position.set(
+      entrance ? lerp(-1.7, 0, cameraProgress) : 0,
+      entrance ? lerp(3.2, 0, cameraProgress) : 0,
+      15,
+    );
+    camera.lookAt(camera.position.x, camera.position.y, 0);
+    for (const [index, entry] of displayed.entries()) {
       const slot = entry.slot.getBoundingClientRect();
+      const x = (slot.left + slot.width / 2 - bounds.left - width / 2) / pixelsPerUnit;
+      const y = (height / 2 - (slot.top + slot.height / 2 - bounds.top)) / pixelsPerUnit;
+      if (!entrance) {
+        entry.cube.position.set(x, y, 0);
+        entry.cube.rotation.set(-0.34, 0.48, 0);
+        continue;
+      }
+      const start = 470 + index * 155;
+      const progress = clamp01((elapsed - start) / 830);
+      const travel = easeInOutCubic(progress);
+      const bounce = progress < 0.72 ? 0 : Math.sin(((progress - 0.72) / 0.28) * Math.PI) * 0.25;
       entry.cube.position.set(
-        (slot.left + slot.width / 2 - bounds.left - width / 2) / pixelsPerUnit,
-        (height / 2 - (slot.top + slot.height / 2 - bounds.top)) / pixelsPerUnit,
+        x + lerp(index % 2 ? 2.1 : -2.1, 0, travel),
+        y + lerp(5.3, 0, travel) + bounce,
         0,
       );
+      entry.cube.rotation.set(
+        -0.34 + (1 - travel) * (index + 1) * 1.4,
+        0.48 + (1 - travel) * (index + 1) * 2.1,
+        (1 - travel) * 1.8,
+      );
+      if (progress === 1 && !entrance.landed.has(index)) {
+        entrance.landed.add(index);
+        playSfx("shop.stock.land");
+      }
+    }
+    if (entrance) {
+      sign.style.setProperty(
+        "--shop-sign-offset",
+        `${lerp(-110, 0, easeInOutCubic(clamp01(elapsed / 850)))}vh`,
+      );
+      sign.style.opacity = String(clamp01((2100 - elapsed) / 350));
+      if (elapsed >= 470 + (displayed.length - 1) * 155 + 830) finishEntrance();
     }
     renderer.render(scene, camera);
   }
@@ -304,6 +380,8 @@ export function createShopView(
       renderer.domElement.remove();
       stock.remove();
       handTarget.remove();
+      sign.remove();
+      skip.remove();
     },
   };
 }

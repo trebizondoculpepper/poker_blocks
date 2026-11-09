@@ -229,6 +229,14 @@ const entries = [
     durationSeconds: 1.0,
   },
   {
+    id: "shop.stock.toss",
+    trigger: "The shop offers begin their entrance toss onto the table",
+  },
+  {
+    id: "shop.stock.land",
+    trigger: "A tossed shop offer lands on the table",
+  },
+  {
     id: "shop.buy",
     trigger: "A player buys one shop block and it joins the hand or passive rack",
   },
