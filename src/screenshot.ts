@@ -68,6 +68,18 @@ export type ScreenshotLayers = {
   front: THREE.WebGLRenderer;
 };
 
+/**
+ * Whether a child of the game's host draws over the front canvas: a higher z-index, or the same
+ * one later in the page (the passive rack, shop overlays, menus).
+ */
+function drawsOver(element: HTMLElement, frontCanvas: HTMLElement): boolean {
+  const z = (node: HTMLElement) => Number.parseInt(getComputedStyle(node).zIndex, 10) || 0;
+  const mine = z(element);
+  const front = z(frontCanvas);
+  if (mine !== front) return mine > front;
+  return Boolean(frontCanvas.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
 /** A WebGL canvas copied to a 2D one, so it survives the next frame. */
 function copyCanvas(renderer: THREE.WebGLRenderer): HTMLCanvasElement {
   renderer.getContext().finish();
@@ -98,7 +110,8 @@ async function capture(
   const oldRatio = back.getPixelRatio();
   let backImage: HTMLCanvasElement;
   let frontImage: HTMLCanvasElement;
-  let overlays: HTMLCanvasElement;
+  let under: HTMLCanvasElement;
+  let over: HTMLCanvasElement;
   try {
     // Freeze both WebGL layers before the asynchronous DOM capture.
     for (const renderer of [back, front]) renderer.setPixelRatio(layout.scale);
@@ -106,13 +119,26 @@ async function capture(
     backImage = copyCanvas(back);
     frontImage = copyCanvas(front);
     const { toCanvas } = await import("html-to-image");
-    overlays = await toCanvas(host, {
-      filter: (node) => node !== back.domElement && node !== front.domElement,
-      pixelRatio: layout.scale,
-      width,
-      height,
-      skipAutoScale: true,
-    });
+    // The DOM in two parts either side of the front canvas: the HUD under the blocks, and the
+    // rack, shop overlays and menus over them, as on screen.
+    const domLayer = (above: boolean) =>
+      toCanvas(host, {
+        filter: (node) =>
+          node !== back.domElement &&
+          node !== front.domElement &&
+          (node === host || layerOf(node) === above),
+        pixelRatio: layout.scale,
+        width,
+        height,
+        skipAutoScale: true,
+      });
+    const layerOf = (node: Node): boolean => {
+      let top: Node | null = node;
+      while (top && top.parentNode !== host) top = top.parentNode;
+      return top instanceof HTMLElement ? drawsOver(top, front.domElement) : false;
+    };
+    under = await domLayer(false);
+    over = await domLayer(true);
   } finally {
     for (const renderer of [back, front]) renderer.setPixelRatio(oldRatio);
     render();
@@ -124,9 +150,8 @@ async function capture(
   if (!context) throw new Error("Could not create a screenshot canvas.");
   context.fillStyle = "#111726";
   context.fillRect(0, 0, output.width, output.height);
-  // In the table's own order: the room, the HUD over it, the blocks over both. (Menus and the
-  // passive rack are in the DOM layer, so a block can cover them in a capture.)
-  for (const image of [backImage, overlays, frontImage])
+  // In the screen's own order: the room, the HUD, the blocks, then the rack, shop and menus.
+  for (const image of [backImage, under, frontImage, over])
     context.drawImage(image, layout.x, layout.y, layout.width, layout.height);
   const blob = await new Promise<Blob | null>((resolve) => output.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("Could not encode the screenshot.");
