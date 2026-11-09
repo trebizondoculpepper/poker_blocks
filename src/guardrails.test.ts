@@ -119,11 +119,27 @@ export const forbidden: readonly {
 const commentOnly = /^\s*(?:\/\/|\/?\*)/;
 
 /** The rules a line breaks, or none. Each offending line counts once. */
-export function offences(line: string, file = ""): string[] {
+export function offences(line: string, file = "", registries: readonly string[] = []): string[] {
   if (commentOnly.test(line) || /\/\/\s*branch-ok:\s*#\d+/.test(line)) return [];
+  // Asking a registry whether it holds an id is looking the thing up (AGENTS.md), not a
+  // membership test on a kind (#181), so `<registry>.has(...)` is read as a lookup.
+  const read = registries.length
+    ? line.replace(new RegExp(`\\b(?:${registries.join("|")})\\s*\\.has\\(`, "g"), "lookup(")
+    : line;
   return forbidden
-    .filter(({ pattern, except }) => !except?.includes(file) && pattern.test(line))
+    .filter(({ pattern, except }) => !except?.includes(file) && pattern.test(read))
     .map(({ name }) => name);
+}
+
+/**
+ * The names of every `Registry` the sources declare (`x: Registry<…>` or `x = new Registry`),
+ * so their `.has` lookups aren't mistaken for membership tests on a kind (#181).
+ */
+export function registryNames(texts: readonly string[]): string[] {
+  const names = new Set<string>();
+  const declared = /\b([\w$]+)\s*(?::\s*(?:Readonly<)?Registry\s*<|=\s*new\s+Registry\b)/g;
+  for (const text of texts) for (const match of text.matchAll(declared)) names.add(match[1]!);
+  return [...names];
 }
 
 /** One offending line: where it is, what it breaks, and its text (the baseline's key). */
@@ -132,9 +148,10 @@ type Hit = { line: number; rules: string[]; text: string };
 /** Offending lines per file, exempt lines excluded. */
 export function scan(): Map<string, Hit[]> {
   const found = new Map<string, Hit[]>();
+  const registries = registryNames(sources.map(([, text]) => text));
   for (const [file, text] of sources) {
     const hits = text.split("\n").flatMap((line, i) => {
-      const rules = offences(line, file);
+      const rules = offences(line, file, registries);
       return rules.length ? [{ line: i + 1, rules, text: line.trim() }] : [];
     });
     if (hits.length) found.set(file, hits);
@@ -215,6 +232,14 @@ describe("the guardrail's patterns", () => {
     "const id = modeSceneId(currentMode.id, name);",
     'const devKey = "poker-blocks.dev-material-seed";',
   ])("does not flag %s", (line) => expect(offences(line)).toEqual([]));
+
+  it("reads .has on a registry as a lookup, but still flags it on any other set (#181)", () => {
+    const registries = registryNames(["function load(dealers: Registry<Dealer>) {}"]);
+    expect(registries).toEqual(["dealers"]);
+    expect(offences("if (!dealers.has(record.dealer)) return null;", "", registries)).toEqual([]);
+    expect(offences("if (!seen.has(record.dealer)) return null;", "", registries)).not.toEqual([]);
+    expect(registryNames(['export const modes = new Registry<Mode>("mode");'])).toEqual(["modes"]);
+  });
 
   it("counts a line that breaks several rules once", () =>
     expect(offences('if (kind === "aa" || kind === "bb") go();')).toHaveLength(2));
