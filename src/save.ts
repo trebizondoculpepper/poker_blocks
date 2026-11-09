@@ -198,7 +198,13 @@ export function fromSaveRecord(
         return id;
       },
     };
-    const shopStock = (state.shopStock ?? []).map((saved) => {
+    // Saves from before #143 borrowed card offers from the starting deck and saved only their
+    // id. Such a card goes back to the deck, and its offer is dropped.
+    const borrowed = (state.shopStock ?? []).flatMap((saved) =>
+      Object.hasOwn(saved ?? {}, "cardId") ? [resolve(saved.cardId)] : [],
+    );
+    const offers = (state.shopStock ?? []).filter((saved) => !Object.hasOwn(saved ?? {}, "cardId"));
+    const shopStock = offers.map((saved) => {
       if (!isOfferKind(saved?.kind)) throw new Error("bad shop offer");
       return { kind: saved.kind, block: offerKind(saved).restore(saved, restoreOffer) };
     });
@@ -212,7 +218,7 @@ export function fromSaveRecord(
     const restored: GameState = {
       field,
       hand: state.hand.map(resolve),
-      deck: state.deck.map(resolve),
+      deck: [...state.deck.map(resolve), ...borrowed],
       discardPile: state.discardPile.map(resolve),
       passiveRack,
       ...(state.shopStock ? { shopStock } : {}),

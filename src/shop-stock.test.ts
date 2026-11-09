@@ -138,3 +138,20 @@ describe("card offers (#143)", () => {
     ).toEqual([1, 3, 4, 6, 2, 4, 8, 12]);
   });
 });
+
+describe("saves from before #143", () => {
+  it("return a borrowed card offer to the deck instead of failing to load", () => {
+    const game = shop();
+    const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
+    // The old format: the shop borrowed the deck's last card and saved only its id.
+    const lent = record.state.deck.pop();
+    record.state.shopStock = [
+      ...record.state.shopStock.filter((offer: { kind: string }) => offer.kind !== "card"),
+      { kind: "card", cardId: lent },
+    ];
+    const restored = fromSaveRecord(record, standardDeck, dealerRegistry);
+    expect(restored).not.toBeNull();
+    expect(restored?.state.deck.map(({ id }) => id)).toContain(lent);
+    expect(restored?.state.shopStock?.every(({ kind }) => kind === "passive")).toBe(true);
+  });
+});
