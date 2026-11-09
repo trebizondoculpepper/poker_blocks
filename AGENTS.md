@@ -8,6 +8,8 @@ Two documents hold the project's decisions. [doc/game-architecture.md](doc/game-
 
 ## No special cases (read this first)
 
+**The hard rule: no special cases, and no if/else chains, in generic code.** Generic code (the event queue, the scorer, the run controller, services, registries and their runners) never asks what something is. It dispatches to the handler registered for it. The point of the game is that unexpected behaviour emerges from composing traits, and every special case makes that harder.
+
 This is the project's most important rule, and the one most often broken. The game is built by **composition**: blocks, scenes and modes are plain data with traits attached, and every behaviour lives in a trait. See [doc/game-architecture.md](doc/game-architecture.md), "Modes, scenes and traits".
 
 **Never write code that branches on what kind of thing something is.** That includes:
