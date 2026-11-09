@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit review configuration. The project's core rule is composition:
+# no special-case branching. See AGENTS.md, "No special cases".
+language: en-GB
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  auto_review:
+    enabled: true
+    drafts: false
+  pre_merge_checks:
+    override_requested_reviewers_only: true
+    description:
+      mode: warning
+    custom_checks:
+      - name: "No special-case branching"
+        mode: error
+        instructions: |
+          Pass/fail criteria. FAIL if the diff ADDS (not merely moves or deletes) any of:
+          1. A comparison of a phase, scene, room, mode, screen, material, kind, type,
+             dealer, name or id against a literal, e.g. `game.phase === "shop"`,
+             `kind === "steel"`, `room.id === "dev3"`, or the reverse order.
+          2. A `switch` over any of those values.
+          3. A trait read as a flag: `if (traits.x)`, `if (!roomTraits.x)`,
+             `roomTraits.x ? a : b`, `traits.x && doSomething()`. A trait must carry its
+             behaviour (lifecycle hooks or a registry of handlers), not be checked.
+          4. A check of whether a room or mode is a developer one (`.dev`).
+          5. New game logic in `src/main.ts` (rules, scoring, phase or scene decisions,
+             per-room behaviour). main.ts may only construct services, the scene manager
+             and the mode.
+          6. Any increase to a count in `src/guardrails-baseline.json`, or a new file in it.
+          Exceptions: a line ending in `// branch-ok: #<issue>` passes only if the linked
+          issue states why the branch is necessary. Validating untrusted input (e.g. parsing
+          a save file, `typeof x === "string"`) and tests are not special cases.
+          PASS otherwise. When failing, name each offending line and suggest the trait,
+          registry entry or configuration that should own the behaviour instead.
+      - name: "Baseline only shrinks"
+        mode: error
+        instructions: |
+          Pass/fail criteria. If `src/guardrails-baseline.json` changes, every changed count
+          must be lower than before and no file may be added. Removing an entry is allowed.
+          FAIL on any increase or new entry.
+  path_instructions:
+    - path: "src/main.ts"
+      instructions: |
+        main.ts is wiring only. Flag any added conditional that depends on game state,
+        phase, scene, room, mode or a trait's presence, and any added game rule. Request
+        that it move into a trait, a scene's traits, or a service.
+    - path: "src/**/*.ts"
+      instructions: |
+        Enforce AGENTS.md "No special cases": behaviour comes from composed traits, never
+        from branching on what kind of thing something is. Prefer registries keyed by id
+        (lookup tables of handlers) over if/else or switch chains on kinds. Flag trait
+        presence checks used as flags. Ask for tests for new traits.
+    - path: "src/rooms.ts"
+      instructions: |
+        Rooms/modes and scenes must be plain data: ids and trait configurations. Flag any
+        function here that branches on phase, room or scene ids.
+    - path: "doc/**"
+      instructions: |
+        Docs must stay consistent with AGENTS.md "No special cases" and the "Modes, scenes
+        and traits" section of doc/game-architecture.md. Flag docs that describe new
+        behaviour as a special case rather than a trait.
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "doc/game-architecture.md"

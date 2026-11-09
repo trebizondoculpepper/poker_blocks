@@ -18,6 +18,7 @@ The five-card starting hand is a rule for Poker Blocks.
 - A block is defined by data and configured trait instances. Block types do not own behavior code.
 - Behavior code lives in reusable traits. Each trait instance carries configuration for its block.
 - The game engine should run traits through shared rules and events. It should not branch on specific block types or implement one-off block behavior.
+- The same holds at every level, not only blocks: no code branches on a phase, scene, room, mode, screen, material, kind or id, and no code reads a trait as a flag (`if (traits.x)`). A trait brings its behaviour with it. This is enforced by `src/guardrails.test.ts` and by review; see AGENTS.md, "No special cases".
 - The same trait can be attached to multiple block definitions with different configurations, and multiple traits can be attached to one block.
 
 ## Examples

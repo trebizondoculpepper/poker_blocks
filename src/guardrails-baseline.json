@@ -1,0 +1,13 @@
+{
+  "src/audio/music-fade.ts": 1,
+  "src/audio/music-plan.ts": 1,
+  "src/game-session.ts": 7,
+  "src/listening-room/main.ts": 1,
+  "src/main.ts": 28,
+  "src/passive-effects.ts": 9,
+  "src/rooms.ts": 3,
+  "src/save.ts": 6,
+  "src/shop-view.ts": 2,
+  "src/traits/selectable.ts": 3,
+  "src/visual/block-appearance.ts": 26
+}

@@ -2,6 +2,23 @@
 
 Instructions for coding agents working in this repository. Project documents live in `doc/`; the game rules are in [doc/game.md](doc/game.md).
 
+## No special cases (read this first)
+
+This is the project's most important rule, and the one most often broken. The game is built by **composition**: blocks, scenes and modes are plain data with traits attached, and every behaviour lives in a trait. See [doc/game-architecture.md](doc/game-architecture.md), "Modes, scenes and traits".
+
+**Never write code that branches on what kind of thing something is.** That includes:
+
+- comparing a phase, scene, room, mode, screen, material, kind, type, dealer, name or id against a literal (`if (game.phase === "shop")`, `kind === "steel"`, `room.id === "dev3"`);
+- `switch` over any of those;
+- reading a trait as a flag (`if (traits.quiet)`, `roomTraits.sandbox ? a : b`). A trait that is merely checked is a special case with a new name. A trait must _bring_ its behaviour, through its lifecycle hooks or a registry of handlers keyed by the trait;
+- asking whether a room or mode is a developer one (`room.dev`).
+
+Instead, give the behaviour a home: a trait with `enter`/`exit`/`update`/`handles`, a registry entry keyed by id (a lookup table of handlers, not a chain of `if`s), or configuration data that shared code reads uniformly. `src/main.ts` is wiring only: it builds services, the scene manager and the mode, and holds no game logic.
+
+**If there is nowhere for the behaviour to live, stop.** Do not add the branch "for now". Ask the user, or open an issue for the missing trait or hook, and say so in your reply. Speed is never a reason to add a special case.
+
+**This is enforced.** `src/guardrails.test.ts` fails CI when a file gains a forbidden branch. Legacy branches are listed in `src/guardrails-baseline.json`, whose counts may only go down: when you remove one, lower the count; never raise it. A line ending in `// branch-ok: #<issue>` is exempt only when that issue records why the exception is justified and the user agreed to it. CodeRabbit (`.coderabbit.yaml`) also requests changes on any PR that adds such a branch, and the PR template asks you to confirm it.
+
 ## Working with other agents
 
 - Use the local checkout by default. Before changing files, check the worktree and the relevant GitHub issue for another agent's active work. If sharing the checkout would risk overlapping edits or commits, create a separate Git worktree and branch for the issue. Do not overwrite another agent's uncommitted files.
