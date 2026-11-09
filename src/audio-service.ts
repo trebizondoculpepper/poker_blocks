@@ -2,11 +2,11 @@
  * Audio service: the music player and controller, the mode's music policy, the volume and
  * mute settings, and the sounds that are about the view rather than a game action.
  *
- * The game says what is happening ("a stage started", "the settings screen is open"); this
+ * The game says what is happening ("a stage started", "the pause menu is open"); this
  * service decides what the music does. Sound effects for game actions are still played
  * with `playSfx` where the action happens (see AGENTS.md, "Every action has a sound").
  */
-import type { MusicController } from "./audio/music-controller";
+import type { MusicController, MusicFilter } from "./audio/music-controller";
 import type { Screen } from "./menus";
 import { createModeMusicBehaviours, type ModeMusicBehaviour } from "./mode-music";
 import type { ModeMusicStyle } from "./game-modes";
@@ -39,6 +39,11 @@ export type AudioService = {
   runStarted(): void;
   /** A menu screen came to the front. */
   showScreen(screen: Screen): void;
+  /**
+   * Filter the music for the scene in front (its `musicFilter` trait), or clear it: low-pass
+   * for the pause menu, high-pass for Settings. The track does not change.
+   */
+  setMusicFilter(kind: MusicFilter | null): void;
   /** The board view zoomed; the zoom sound plays at most every 350 ms. */
   zoomed(): void;
   /** Listen for the first gesture, which browsers require before audio can play. */
@@ -76,21 +81,16 @@ export function createAudioService(options: {
   let modeMusic: ModeMusicBehaviour = modeMusicBehaviours.ordinary;
   let lastZoomSoundAt = -Infinity;
 
+  // Menu scenes filter the music through their own trait (setMusicFilter); a screen here
+  // only chooses what plays.
   const screenMusic: Record<Screen, () => void> = {
     title() {
-      music.unmuffle();
       music.playTitle();
     },
-    // The menu muffles whatever is playing instead of changing the song.
-    settings() {
-      music.muffle();
-    },
     game() {
-      music.unmuffle();
       modeMusic.resume();
     },
     over() {
-      music.unmuffle();
       music.windDown();
     },
   };
@@ -119,6 +119,9 @@ export function createAudioService(options: {
     },
     showScreen(screen) {
       screenMusic[screen]();
+    },
+    setMusicFilter(kind) {
+      music.filter(kind);
     },
     zoomed() {
       const at = now();

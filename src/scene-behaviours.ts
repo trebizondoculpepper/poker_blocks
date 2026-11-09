@@ -9,7 +9,9 @@
  * Each trait brings its own behaviour, so a scene composes the panels and permissions it
  * wants and nothing has to ask which scene is in front.
  */
-import type { SceneTraits } from "./game-modes";
+import type { MenuCondition, SceneTraits } from "./game-modes";
+import type { AudioService } from "./audio-service";
+import type { Overlays } from "./overlays";
 import type { HudPanels } from "./hud-panels";
 import type { RunController } from "./run-controller";
 import type { ShopView } from "./shop-view";
@@ -28,9 +30,21 @@ export type SceneHost = {
     hud: Pick<HudPanels, "show" | "hide">;
     input: Pick<TableInput, "setFieldActive">;
     shop: ShopView;
-    /** The run, for the game state a scene trait presents. */
-    run: Pick<RunController, "shopStock">;
+    /** The run, for the game state a scene trait presents and the actions it dispatches. */
+    run: Pick<RunController, "shopStock" | "dispatch" | "inRun">;
+    overlays: Pick<Overlays, "showMenu" | "hideMenu" | "showSettings" | "hideSettings">;
+    audio: Pick<AudioService, "setMusicFilter">;
   };
+};
+
+/** Each menu condition's test: an item naming one is shown only while it holds. */
+const menuConditions: Record<MenuCondition, (host: SceneHost) => boolean> = {
+  inRun: ({ services }) => services.run.inRun(),
+};
+
+/** The scene input a `keyAction` trait reacts to, by event type. */
+const keyEvents: Record<string, (event: KeyboardEvent, key: string) => boolean> = {
+  keydown: (event, key) => event.key === key,
 };
 
 export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry<
@@ -71,6 +85,38 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
   });
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
+  behaviours.register("menu", {
+    enter(context, { label, items }) {
+      const shown = items.filter(({ when }) => !when || menuConditions[when](context));
+      context.services.overlays.showMenu(label, shown);
+    },
+    // Back in front after Settings closed over it.
+    resume(context, config) {
+      behaviours.get("menu").enter?.(context, config);
+    },
+    exit(context) {
+      context.services.overlays.hideMenu();
+    },
+  });
+  behaviours.register("settingsPanel", {
+    enter: (context) => context.services.overlays.showSettings(),
+    exit: (context) => context.services.overlays.hideSettings(),
+  });
+  // A menu scene filters the music while in front. A covering scene's filter replaces it, and
+  // coming back in front restores it; leaving clears it.
+  behaviours.register("musicFilter", {
+    enter: (context, { kind }) => context.services.audio.setMusicFilter(kind),
+    resume: (context, { kind }) => context.services.audio.setMusicFilter(kind),
+    exit: (context) => context.services.audio.setMusicFilter(null),
+  });
+  behaviours.register("keyAction", {
+    handles(context, { key, action }, event) {
+      const matches = keyEvents[(event as Event).type];
+      if (!matches?.(event as KeyboardEvent, key)) return false;
+      context.services.run.dispatch(action);
+      return true;
+    },
+  });
   behaviours.register("pausesBelow", {
     blocksBelow(_context, config, operation) {
       return config[operation];

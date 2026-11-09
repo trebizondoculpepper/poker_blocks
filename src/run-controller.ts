@@ -29,6 +29,7 @@ import {
   gameModeFromParams,
   modeLink,
   modeSceneId,
+  type NavigationAction,
   wantsRestart,
   type GameMode,
   type OnLoad,
@@ -115,6 +116,13 @@ export type RunController = {
   offerPrice(offer: ShopOffer): number;
   /** What the shop is showing while its scene is in front. */
   shopStock(): readonly ShopOffer[];
+  /**
+   * Carry out a named action from a menu item or key (#87): a navigation action follows the
+   * mode's navigation data; a game action (such as `quitToTitle`) runs its handler.
+   */
+  dispatch(action: string): void;
+  /** Whether a run is being played under the menus (not just the title screen). */
+  inRun(): boolean;
   /** Buy a shop offer into the hand or the rack; false when refused. */
   buy(id: string, destination: Parameters<GameRun["buyShopOffer"]>[1]): boolean;
   /** Per frame: once an announced outcome's delay has passed, the pop-up or game over follows. */
@@ -494,8 +502,30 @@ export function createRunController<Context>(options: {
     },
   };
 
+  /** The game actions a menu can dispatch; navigation is the mode's data, not code. */
+  const gameActions: Record<string, () => void> = {
+    // The run is autosaved at every safe point; save once more, then show the title.
+    quitToTitle() {
+      autosave();
+      services.overlays.showTitle();
+    },
+  };
+
+  function dispatch(action: string): void {
+    if (Object.hasOwn(currentMode.navigation, action)) {
+      followFlow(currentMode.navigation, action as NavigationAction, {
+        replace: switchScene,
+        push: (name) => scenes.pushIfNotCurrent(modeSceneId(currentMode.id, name)),
+        pop: () => void scenes.pop(),
+      });
+      return;
+    }
+    gameActions[action]?.();
+  }
+
   const menus: MenuCallbacks = {
     hasSave: () => loadSaved() !== null,
+    onAction: dispatch,
     onContinue() {
       const snapshot = loadSaved();
       if (snapshot) startRun(resume(snapshot));
@@ -622,6 +652,8 @@ export function createRunController<Context>(options: {
     offerPrice: (offer) =>
       offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),
     shopStock: () => game.state.shopStock ?? [],
+    dispatch,
+    inRun: () => scenes.stack[0]?.id !== modeSceneId(currentMode.id, "title"),
     buy(id, destination) {
       const bought = game.buyShopOffer(id, destination);
       if (!bought) {

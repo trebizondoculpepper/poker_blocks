@@ -112,9 +112,13 @@ describe("game modes composed from traits", () => {
       coinsPanel: {},
       shopExit: {},
       shopStock: {},
+      keyAction: { key: "Escape", action: "openPause" },
     });
     // The title, stage-won and game-over scenes show no panels of their own.
-    expect(traitsOf("game", "title")).toEqual({ screen: { kind: "title" } });
+    expect(traitsOf("game", "title")).toEqual({
+      screen: { kind: "title" },
+      keyAction: { key: "Escape", action: "openPause" },
+    });
     expect(traitsOf("game", "game-over")).toEqual({ screen: { kind: "game-over" } });
   });
 
@@ -125,6 +129,7 @@ describe("game modes composed from traits", () => {
       roundPanel: {},
       deckPanel: {},
       fieldPlacement: {},
+      keyAction: { key: "Escape", action: "openPause" },
       devManualBlockDestroyer: { cause: "manual" },
     });
     // Every mode lists every scene, so a mode never loses a scene it did not mention.

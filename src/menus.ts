@@ -5,20 +5,30 @@ import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
 import type { MotionSetting, Settings, ShadowSetting } from "./settings";
 
-export type Screen = "title" | "settings" | "game" | "over";
+export type Screen = "title" | "game" | "over";
+
+/** One menu item as a menu shows it: choosing it dispatches `id` as a named action. */
+export type MenuChoice = { id: string; label: string };
 
 export type MenuCallbacks = {
   hasSave(): boolean;
   onContinue(): void;
   onNewGame(): void;
   onSettingsChange(settings: Settings): void;
+  /** A named action chosen from a menu or button (open the pause menu, Settings, Back…). */
+  onAction(id: string): void;
   /** Which screen is now in front, for music and similar screen-level effects. */
   onScreen?(screen: Screen): void;
 };
 
 export type Menus = {
   showTitle(): void;
+  /** Show a menu of choices (the pause menu) over whatever is in front. */
+  showMenu(label: string, choices: readonly MenuChoice[]): void;
+  hideMenu(): void;
+  /** Show or hide the Settings panel, over whatever is in front. */
   showSettings(): void;
+  hideSettings(): void;
   /** Close the title and settings screens, back to the game. */
   closeAll(): void;
   /** The run is lost: show how it went, with New Run and Main menu. */
@@ -47,8 +57,6 @@ const motionLabels: Record<MotionSetting, string> = {
 
 export function createMenus(host: HTMLElement, initial: Settings, callbacks: MenuCallbacks): Menus {
   let settings = { ...initial };
-  /** Where Back from settings returns to. */
-  let settingsFrom: "title" | "game" = "game";
 
   const title = overlay("title-screen", "Poker Blocks");
   title.panel.insertAdjacentHTML(
@@ -67,6 +75,13 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
        </div>
        <button type="button" data-menu="settings">Settings</button>
      </div>`,
+  );
+
+  // Created before Settings, so Settings opened from it sits on top.
+  const pauseMenu = overlay("pause-screen", "Paused");
+  pauseMenu.panel.insertAdjacentHTML(
+    "beforeend",
+    `<h2 class="menu-heading">PAUSED</h2><div class="menu-buttons" data-menu="choices"></div>`,
   );
 
   const settingsScreen = overlay("settings-screen", "Settings");
@@ -107,7 +122,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
          )
          .join("")}
      </fieldset>
-     <div class="menu-buttons"><button type="button" data-menu="back">Back</button><button type="button" data-menu="quit">Quit to title screen</button></div>`,
+     <div class="menu-buttons"><button type="button" data-menu="back">Back</button></div>`,
   );
 
   const gameOver = overlay("game-over-screen", "Game over");
@@ -141,7 +156,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const settingsButton = document.createElement("button");
   settingsButton.type = "button";
   settingsButton.className = "settings-button";
-  settingsButton.setAttribute("aria-label", "Settings");
+  settingsButton.setAttribute("aria-label", "Menu");
   settingsButton.textContent = "⚙";
   host.append(settingsButton);
 
@@ -150,7 +165,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const continueButton = find<HTMLButtonElement>(title.panel, "continue");
   const newButton = find<HTMLButtonElement>(title.panel, "new");
   const confirm = find<HTMLDivElement>(title.panel, "confirm");
-  const quit = find<HTMLButtonElement>(settingsScreen.panel, "quit");
+  const choices = find<HTMLDivElement>(pauseMenu.panel, "choices");
   const volume = find<HTMLInputElement>(settingsScreen.panel, "volume");
   const muted = find<HTMLInputElement>(settingsScreen.panel, "muted");
   const sfx = find<HTMLInputElement>(settingsScreen.panel, "sfx");
@@ -165,6 +180,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   function open(screen: HTMLElement): void {
     title.root.hidden = screen !== title.root;
     settingsScreen.root.hidden = screen !== settingsScreen.root;
+    pauseMenu.root.hidden = screen !== pauseMenu.root;
     gameOver.root.hidden = screen !== gameOver.root;
     stageWon.root.hidden = screen !== stageWon.root;
     settingsButton.hidden = true;
@@ -174,6 +190,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   function closeAll(): void {
     title.root.hidden =
       settingsScreen.root.hidden =
+      pauseMenu.root.hidden =
       gameOver.root.hidden =
       stageWon.root.hidden =
         true;
@@ -189,6 +206,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     callbacks.onScreen?.("title");
   }
 
+  /** Settings is a panel over whatever is in front (the title or the pause menu). */
   function showSettings(): void {
     volume.value = String(Math.round(settings.volume * 100));
     muted.checked = settings.muted;
@@ -197,21 +215,45 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     sfx.disabled = music.disabled = settings.muted;
     motionInputs.forEach((input) => (input.checked = input.value === settings.motion));
     shadowInputs.forEach((input) => (input.checked = input.value === settings.shadows));
-    // Only offered mid-game: from the title screen, Back already goes there.
-    quit.hidden = settingsFrom !== "game";
-    open(settingsScreen.root);
-    callbacks.onScreen?.("settings");
+    settingsScreen.root.hidden = false;
+    settingsButton.hidden = true;
+    settingsScreen.panel.querySelector<HTMLElement>("input")?.focus();
+  }
+
+  function hideSettings(): void {
+    settingsScreen.root.hidden = true;
+  }
+
+  /** The pause menu: one button per choice, each dispatching its id as an action. */
+  function showMenu(label: string, menuChoices: readonly MenuChoice[]): void {
+    pauseMenu.root.setAttribute("aria-label", label);
+    choices.replaceChildren(
+      ...menuChoices.map(({ id, label: text }) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.menu = id;
+        button.textContent = text;
+        button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
+        button.addEventListener("click", () => {
+          playSfx("ui.click");
+          callbacks.onAction(id);
+        });
+        return button;
+      }),
+    );
+    pauseMenu.root.hidden = false;
+    settingsButton.hidden = true;
+    choices.querySelector<HTMLElement>("button")?.focus();
+  }
+
+  function hideMenu(): void {
+    pauseMenu.root.hidden = true;
+    settingsButton.hidden = !title.root.hidden || !gameOver.root.hidden || !stageWon.root.hidden;
   }
 
   function change(next: Partial<Settings>): void {
     settings = { ...settings, ...next };
     callbacks.onSettingsChange(settings);
-  }
-
-  function back(): void {
-    playSfx("ui.back");
-    if (settingsFrom === "title") showTitle();
-    else closeAll();
   }
 
   continueButton.addEventListener("click", () => {
@@ -243,19 +285,16 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   });
   find(title.panel, "settings").addEventListener("click", () => {
     playSfx("ui.click");
-    settingsFrom = "title";
-    showSettings();
+    callbacks.onAction("openSettings");
   });
+  // The touch-visible button opens the same pause menu as Escape.
   settingsButton.addEventListener("click", () => {
     playSfx("ui.click");
-    settingsFrom = "game";
-    showSettings();
+    callbacks.onAction("openPause");
   });
-  find(settingsScreen.panel, "back").addEventListener("click", back);
-  // The run is autosaved at every safe point, so the title screen offers Continue.
-  quit.addEventListener("click", () => {
+  find(settingsScreen.panel, "back").addEventListener("click", () => {
     playSfx("ui.back");
-    showTitle();
+    callbacks.onAction("back");
   });
   // Preview the new volume once the slider is released, so dragging is not noisy.
   volume.addEventListener("input", () => change({ volume: Number(volume.value) / 100 }));
@@ -364,15 +403,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     );
   }
 
-  window.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    if (!settingsScreen.root.hidden) back();
-    else if (title.root.hidden && gameOver.root.hidden && stageWon.root.hidden) {
-      settingsFrom = "game";
-      showSettings();
-    }
-  });
-
   function overlay(className: string, label: string): { root: HTMLElement; panel: HTMLElement } {
     const root = document.createElement("div");
     root.className = `menu-overlay ${className}`;
@@ -392,14 +422,15 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     closeAll,
     showGameOver,
     showStageWon,
-    showSettings() {
-      settingsFrom = "game";
-      showSettings();
-    },
+    showMenu,
+    hideMenu,
+    showSettings,
+    hideSettings,
     get isOpen() {
       return (
         !title.root.hidden ||
         !settingsScreen.root.hidden ||
+        !pauseMenu.root.hidden ||
         !gameOver.root.hidden ||
         !stageWon.root.hidden
       );
