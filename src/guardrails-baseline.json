@@ -14,9 +14,6 @@
     "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
     "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
   ],
-  "src/listening-room/main.ts": [
-    "const entry = entries.find((_, index) => soundEffects[index].id === \"score.line\");"
-  ],
   "src/passive-effects.ts": [
     "switch (condition.kind) {",
     "if (rule.effect.kind === \"multiply-value\") value *= rule.effect.factor;",
