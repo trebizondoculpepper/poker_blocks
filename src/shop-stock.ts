@@ -12,7 +12,7 @@ export function shopPreviewState(
   state: GameState,
   coins: number,
   random: () => number = Math.random,
-  stock: ShopTrait = { passiveOffers: 2, cardOffers: 3 },
+  stock: Pick<ShopTrait, "passiveOffers" | "cardOffers"> = { passiveOffers: 2, cardOffers: 3 },
 ): GameState {
   const deck = [...state.deck, ...state.hand, ...state.field.map(({ block }) => block)];
   const cardOffers: ShopOffer[] = [];
