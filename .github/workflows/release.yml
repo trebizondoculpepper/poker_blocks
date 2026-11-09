@@ -65,8 +65,11 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           zip_name="poker-blocks-v${VERSION}-web.zip"
+          # A version with a suffix (0.1.0-beta.1) is published as a prerelease.
+          flags=()
+          case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
           (cd dist && zip -qr "../${zip_name}" .)
-          gh release create "v${VERSION}" "${zip_name}" \
+          gh release create "v${VERSION}" "${zip_name}" "${flags[@]}" \
             --target "${GITHUB_SHA}" \
             --title "Poker Blocks v${VERSION}" \
             --generate-notes

@@ -20,7 +20,9 @@ export function versionChangeProblem(change: {
 }): string | null {
   const { subject, before, after, lock, lockRoot } = change;
   if (before === after) return null;
-  if (subject !== `Release v${after}`)
+  // A squash merge adds the PR number: "Release v0.1.0 (#140)".
+  const escaped = after.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (!new RegExp(`^Release v${escaped}( \\(#\\d+\\))?$`).test(subject))
     return `changes the version ${before ?? "(none)"} → ${after} but is not "Release v${after}" (only npm run release changes it)`;
   if (lock !== after || lockRoot !== after)
     return `leaves the lockfile at ${lock} / ${lockRoot}, not ${after}`;

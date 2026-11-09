@@ -39,6 +39,9 @@ describe("the version guard (#128)", () => {
 
   it("lets only a release commit change the version, with the lockfile in step", () => {
     expect(versionChangeProblem({ ...change, subject: "Release v0.2.0" })).toBeNull();
+    // As a squash merge titles it.
+    expect(versionChangeProblem({ ...change, subject: "Release v0.2.0 (#140)" })).toBeNull();
+    expect(versionChangeProblem({ ...change, subject: "Release v0.2.0 and more" })).toMatch(/not/);
     expect(versionChangeProblem({ ...change, subject: "Bump version" })).toMatch(/not "Release/);
     expect(
       versionChangeProblem({ ...change, subject: "Release v0.2.0", lockRoot: "0.1.0" }),
