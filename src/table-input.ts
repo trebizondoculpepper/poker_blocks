@@ -72,6 +72,11 @@ export type TableInput = {
   readonly dragging: boolean;
   /** The scene in front allows (or no longer allows) blocks to be played onto the field. */
   setFieldActive(active: boolean): void;
+  /**
+   * Abandon every gesture in progress (a hand, board or passive drag, a hold, a pinch): nothing
+   * is played, discarded, sold or rotated, and dragged blocks return (#124).
+   */
+  cancelGestures(): void;
   /** Pick up a passive from the rack (its cube's pointerdown). */
   pickUpPassive(block: PassiveBlock, event: PointerEvent): void;
   /** Refresh the discard target: exhausted when no discards are left, armed with a count. */
@@ -773,6 +778,11 @@ export function createTableInput(options: {
     },
     setFieldActive(active) {
       fieldActive = active;
+    },
+    cancelGestures() {
+      onBlur();
+      const lifted = passiveDrag;
+      if (lifted) dropPassive({ pointerId: lifted.pointerId } as PointerEvent, true);
     },
     pickUpPassive(block, event) {
       // Only the primary pointer's main button picks a passive up.

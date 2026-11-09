@@ -504,7 +504,11 @@ export function createRunController<Context>(options: {
   const gameActions: Record<string, () => void> = {
     // The run is already saved at its last safe point; saving here could record a play
     // whose animation (and hand refill) hasn't finished, so just show the title.
+    // Pending outcomes and an animating play are dropped with the run's display, so nothing
+    // can change the title or the save afterwards (#124); Continue resumes the last save.
     quitToTitle() {
+      stageWonAt = gameOverAt = null;
+      services.presenter.reset();
       services.overlays.showTitle();
     },
   };
@@ -669,6 +673,8 @@ export function createRunController<Context>(options: {
     },
     followOutcomes(time) {
       const { presenter } = services;
+      // A won or lost stage waits while a menu is open over it, and is shown on resuming.
+      if (services.overlays.isOpen) return;
       if (stageWonAt !== null && stageWonAt <= time && !presenter.busy) {
         stageWonAt = null;
         showStageWon();

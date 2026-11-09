@@ -29,7 +29,7 @@ export type SceneHost = {
   services: {
     board: BlockDestroyerBoard;
     hud: Pick<HudPanels, "show" | "hide">;
-    input: Pick<TableInput, "setFieldActive">;
+    input: Pick<TableInput, "setFieldActive" | "cancelGestures">;
     shop: ShopView;
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
     run: Pick<RunController, "shopStock" | "dispatch">;
@@ -134,6 +134,11 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
   });
   behaviours.register("pausesBelow", {
+    // A scene that stops input below it also ends any gesture already under way there, so a
+    // drag begun before Escape can't play a card behind the menu (#124).
+    enter(context, { input }) {
+      if (input) context.services.input.cancelGestures();
+    },
     blocksBelow(_context, config, operation) {
       return config[operation];
     },

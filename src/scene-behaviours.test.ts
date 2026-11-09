@@ -25,6 +25,7 @@ function recordingHost() {
       },
       input: {
         setFieldActive: (active) => calls.push(`fieldActive:${active}`),
+        cancelGestures: () => void calls.push("gestures:cancel"),
       },
       shop: {
         render: (offers: readonly ShopOffer[], visible: boolean) =>
@@ -188,7 +189,12 @@ describe("the pause menu's scene traits (#87)", () => {
     scenes.switchTo(stage.id);
     calls.length = 0;
     scenes.push(pause.id);
-    expect(calls).toEqual(["menu:Paused:resume,openSettings,quitToTitle", "filter:lowpass"]);
+    // Opening it also ends any drag under way on the table (#124).
+    expect(calls).toEqual([
+      "menu:Paused:resume,openSettings,quitToTitle",
+      "gestures:cancel",
+      "filter:lowpass",
+    ]);
     calls.length = 0;
     scenes.pop();
     expect(calls).toEqual(["filter:null", "menu:hide"]);
@@ -207,7 +213,7 @@ describe("the pause menu's scene traits (#87)", () => {
     scenes.push(pause.id);
     calls.length = 0;
     scenes.push(settings.id);
-    expect(calls).toEqual(["settings:show", "filter:highpass"]);
+    expect(calls).toEqual(["settings:show", "gestures:cancel", "filter:highpass"]);
     calls.length = 0;
     scenes.pop();
     expect(calls).toEqual([
