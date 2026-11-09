@@ -126,6 +126,10 @@ type AttractCard = {
   cube: THREE.Mesh;
   /** The materials to fade, so the geometry and textures are not touched. */
   materials: THREE.MeshStandardMaterial[];
+  /** Still fading in; drawn transparent until fully opaque. */
+  fading: boolean;
+  /** Fully faded in: give each material back its own transparency. */
+  settle(): void;
   /** The spin axis, tilting each card's tumble slightly differently. */
   axis: THREE.Vector3;
   spin: number;
@@ -247,22 +251,39 @@ export function createAttractScene(
   function makeCard(): AttractCard {
     const { identity, material } = randomCard(random, tuning.materialWeights);
     const appearance = createBlockAppearance(identity, getMaterialDefinition(material), cubeSize);
+    // The card as it looks on the table, where its finish differs from the hand's: crystal and
+    // glass refract there (transmission, dispersion) and reflect at full strength, while their
+    // hand finish is alpha-blended, which scales every glint down (#203).
+    const materials = appearance.boardMaterials ?? appearance.materials;
     const cube = new THREE.Mesh(
       // A card's own appearance: the same geometry and face textures the table uses, so the
       // field reads as this game's cards rather than as generic blocks.
       appearance.geometry,
-      appearance.materials,
+      materials,
     );
     for (const extra of appearance.extras ?? []) cube.add(extra);
     scene.add(cube);
-    // A card's opacity follows its depth (`depthOpacity`); it starts transparent and `update`
-    // raises it as the card comes out of the distance.
-    for (const material of appearance.materials) material.opacity = 0;
-    reflect(appearance.materials);
+    // A card's opacity follows its depth (`depthOpacity`). Opacity only counts on a transparent
+    // material, so every card is drawn transparent while it fades in; `update` restores each
+    // material's own setting once the card is fully opaque.
+    const ownTransparency = materials.map(({ transparent }) => transparent);
+    for (const surface of materials) {
+      surface.transparent = true;
+      surface.opacity = 0;
+      surface.needsUpdate = true;
+    }
+    reflect(materials);
 
     return {
       cube,
-      materials: appearance.materials,
+      materials,
+      fading: true,
+      settle() {
+        materials.forEach((surface, index) => {
+          surface.transparent = ownTransparency[index]!;
+          surface.needsUpdate = true;
+        });
+      },
       // A different axis per card: mostly y, tilted a little, so the tumbling varies.
       axis: new THREE.Vector3(random() - 0.5, 1, random() - 0.5).normalize(),
       // Dealt from the tuned distributions, so changing a mean changes what appears next
@@ -272,7 +293,7 @@ export function createAttractScene(
       dispose() {
         scene.remove(cube);
         appearance.geometry.dispose();
-        for (const material of appearance.materials) material.dispose();
+        for (const material of new Set([...appearance.materials, ...materials])) material.dispose();
         for (const texture of appearance.textures) texture.dispose();
       },
     };
@@ -329,12 +350,7 @@ export function createAttractScene(
     camera,
     setEnvironment(renderer) {
       if (environment) return;
-      // The game's own environment, a prefiltered RoomEnvironment as `createTableRenderer`
-      // makes for the hand, but built by this renderer so it exists in this WebGL context.
-      environment = new THREE.PMREMGenerator(renderer).fromScene(
-        new RoomEnvironment(),
-        0.04,
-      ).texture;
+      environment = sparkleEnvironment(renderer);
       for (const card of cards) reflect(card.materials);
     },
     /** Change the tuning live: later cards use it, cards in flight keep theirs. */
@@ -347,8 +363,14 @@ export function createAttractScene(
         card.cube.position.z += card.speed * delta * 1.2;
         card.cube.rotateOnAxis(card.axis, card.spin * delta);
         // Fade in with depth, eased, between `spawnZ` and `fadedInZ`; fully opaque after.
-        const opacity = depthOpacity(card.cube.position.z);
-        for (const material of card.materials) material.opacity = opacity;
+        if (card.fading) {
+          const opacity = depthOpacity(card.cube.position.z);
+          for (const material of card.materials) material.opacity = opacity;
+          if (opacity >= 1) {
+            card.fading = false;
+            card.settle();
+          }
+        }
         // A card is replaced once it has passed the camera, and never sooner than the tuned
         // interval allows, so the field can be made busier or calmer without changing depth.
         if (card.cube.position.z <= despawnZ || sinceSpawn > 0) continue;
@@ -366,6 +388,68 @@ export function createAttractScene(
       environment = null;
     },
   };
+}
+
+/** How many points of light the sparkle environment scatters around the room. */
+const sparkleCount = 40;
+
+/**
+ * What the attract cards reflect (#203): the game's own room environment, as
+ * `createTableRenderer` makes for the hand, plus a scatter of small, bright points of light.
+ * It is an environment map, so the cards see it and the camera never does: the backdrop on
+ * screen stays plain, while crystal, gold and steel catch glints as they tumble.
+ *
+ * Built by this renderer, so it exists in this WebGL context: a texture prefiltered by the
+ * game's renderer would be empty here. The points sit on a fixed golden-angle spiral, so
+ * nothing here draws on any randomness.
+ */
+function sparkleEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture {
+  const room = new RoomEnvironment();
+  const geometry = new THREE.SphereGeometry(0.42, 12, 8);
+  const materials: THREE.MeshBasicMaterial[] = [];
+  for (let index = 0; index < sparkleCount; index++) {
+    // Evenly over a sphere (golden-angle spiral), inside the room around the cards.
+    const y = 1 - (2 * (index + 0.5)) / sparkleCount;
+    const ring = Math.sqrt(1 - y * y);
+    const angle = index * Math.PI * (3 - Math.sqrt(5));
+    // Every point a pure spectral colour, the hues spread over the whole rainbow, so crystal
+    // catches prismatic fire rather than white glints. Far brighter than 1, so a glint
+    // survives the prefilter's blur.
+    const colour = new THREE.Color().setHSL((index * 0.381966) % 1, 1, 0.55);
+    const material = new THREE.MeshBasicMaterial({ color: colour.multiplyScalar(14) });
+    materials.push(material);
+    const point = new THREE.Mesh(geometry, material);
+    point.position.set(Math.cos(angle) * ring * 6, y * 6, Math.sin(angle) * ring * 6);
+    room.add(point);
+  }
+  // Long bright bars, like a photographer's strip softboxes. Brushed steel stretches a
+  // highlight along its brush direction, so it needs a long light to streak across a face;
+  // crystal edges and gold catch them as flashes. Placed at a few angles around the cards.
+  const strip = new THREE.BoxGeometry(0.35, 7, 0.35);
+  const stripMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0xffffff).multiplyScalar(9),
+  });
+  const strips = [
+    { position: [-6, 2, 3], rotation: [0, 0, 0.25] },
+    { position: [6, 1, 2], rotation: [0, 0, -0.35] },
+    { position: [0, 6, -3], rotation: [0, 0, Math.PI / 2] },
+    { position: [3, -5, 4], rotation: [0.4, 0, 1.1] },
+    { position: [-4, 3, -6], rotation: [0.2, 0.5, -0.8] },
+  ] as const;
+  for (const { position, rotation } of strips) {
+    const bar = new THREE.Mesh(strip, stripMaterial);
+    bar.position.set(position[0], position[1], position[2]);
+    bar.rotation.set(rotation[0], rotation[1], rotation[2]);
+    room.add(bar);
+  }
+  const generator = new THREE.PMREMGenerator(renderer);
+  const texture = generator.fromScene(room, 0.04).texture;
+  strip.dispose();
+  stripMaterial.dispose();
+  generator.dispose();
+  geometry.dispose();
+  for (const material of materials) material.dispose();
+  return texture;
 }
 
 /** What the attract background draws with: a renderer on its own canvas. */
