@@ -25,6 +25,7 @@ export type RoomSceneTraits = {
   pausesBelow: { input: boolean; update: boolean };
 };
 export type RoomScene = Scene<RoomSceneTraits>;
+export type RoomMusicMode = "quiet" | "ordinary";
 
 function scenesForRoom(roomId: string): readonly RoomScene[] {
   const sceneTraits: Record<RoomSceneName, Partial<RoomSceneTraits>> = {
@@ -99,12 +100,12 @@ export type RoomTraits = {
   skipTitle?: { resume: boolean };
   /** Start a fresh run in the shop with this many coins, for shop development. */
   shopPreview?: { coins: number };
-  /** The music starts wound down (silent until something winds it up). */
-  quiet?: Record<string, never>;
 };
 
 export type Room = {
   id: string;
+  /** Temporary music policy until this becomes a composed music trait (#34). */
+  musicMode: RoomMusicMode;
   /** Console-visible room name and URL value; omitted for the default game. */
   consoleName?: string;
   /** The scenes this mode can enter without reloading the page. */
@@ -133,6 +134,7 @@ export const roomRegistry = new Registry<Room>("room");
 const rooms: Room[] = [
   {
     id: "game",
+    musicMode: "ordinary",
     scenes: scenesForRoom("game"),
     startScene: "title",
     dev: false,
@@ -146,6 +148,7 @@ const rooms: Room[] = [
   },
   {
     id: "dev0",
+    musicMode: "ordinary",
     consoleName: "dev0",
     scenes: scenesForRoom("dev0"),
     startScene: "title",
@@ -159,6 +162,7 @@ const rooms: Room[] = [
   },
   {
     id: "dev1",
+    musicMode: "quiet",
     consoleName: "dev1",
     scenes: scenesForRoom("dev1"),
     startScene: "stage-1",
@@ -170,11 +174,11 @@ const rooms: Room[] = [
       materialDeck: { reshuffle: "each-run" },
       materialSample: {},
       skipTitle: { resume: false },
-      quiet: {},
     },
   },
   {
     id: "dev2",
+    musicMode: "quiet",
     consoleName: "dev2",
     scenes: scenesForRoom("dev2"),
     startScene: "stage-1",
@@ -186,11 +190,11 @@ const rooms: Room[] = [
       materialDeck: { reshuffle: "new-game" },
       passiveRack: { ...defaultPassiveRack, startWith: 2 },
       skipTitle: { resume: true },
-      quiet: {},
     },
   },
   {
     id: "dev3",
+    musicMode: "quiet",
     consoleName: "dev3",
     scenes: scenesForRoom("dev3"),
     startScene: "shop",
@@ -202,7 +206,6 @@ const rooms: Room[] = [
       shop: { ...defaultShop },
       shopPreview: { coins: 5 },
       skipTitle: { resume: true },
-      quiet: {},
     },
   },
 ];
