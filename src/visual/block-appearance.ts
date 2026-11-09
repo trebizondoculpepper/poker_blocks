@@ -499,34 +499,34 @@ function drawMeat(g: CanvasRenderingContext2D, random: () => number): void {
   border(g, "#722e3e", 6);
 }
 
+/**
+ * Each material's print: the ink for red and black suits, and whether the face is dark
+ * (which takes a dark shadow). Brushed steel is a light, bright grey, so it prints like paper.
+ */
+const printInk: Record<BlockMaterial, { red: string; black: string; onDark: boolean }> = {
+  paper: { red: "#bd3651", black: "#182d4a", onDark: false },
+  wood: { red: "#a32536", black: "#422716", onDark: true },
+  steel: { red: "#a3202f", black: "#182d4a", onDark: false },
+  fire: { red: "#6e1a1a", black: "#24282c", onDark: false },
+  prismatic: { red: "#bd3651", black: "#182d4a", onDark: false },
+  gold: { red: "#bd3651", black: "#422716", onDark: true },
+  terracotta: { red: "#bd3651", black: "#422716", onDark: true },
+  ice: { red: "#bd3651", black: "#182d4a", onDark: false },
+  meat: { red: "#bd3651", black: "#f4e9db", onDark: true },
+};
+
 /** The rank and suit, in the colours that suit the material. */
 function drawPrint(
   g: CanvasRenderingContext2D,
   identity: IdentityTrait,
   kind: BlockMaterial,
 ): void {
-  // Brushed steel is now a light, bright grey, so it takes dark print like paper.
-  const dark = ["wood", "gold", "terracotta", "meat"].includes(kind);
+  const ink = printInk[kind];
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.shadowColor = dark ? "#28170caa" : "#ffffffbb";
-  g.shadowBlur = dark ? 5 : 3;
-  g.fillStyle =
-    kind === "fire"
-      ? identity.suit.color === "#bd3651"
-        ? "#6e1a1a"
-        : "#24282c"
-      : identity.suit.color === "#bd3651"
-        ? kind === "wood"
-          ? "#a32536"
-          : kind === "steel"
-            ? "#a3202f"
-            : "#bd3651"
-        : dark
-          ? kind === "steel" || kind === "meat"
-            ? "#f4e9db"
-            : "#422716"
-          : "#182d4a";
+  g.shadowColor = ink.onDark ? "#28170caa" : "#ffffffbb";
+  g.shadowBlur = ink.onDark ? 5 : 3;
+  g.fillStyle = identity.suit.color === "#bd3651" ? ink.red : ink.black;
   g.font = "bold 80px system-ui, sans-serif";
   g.fillText(identity.rank, 128, 100);
   g.font = "94px Georgia, serif";
@@ -932,6 +932,22 @@ function surface(
   });
 }
 
+/**
+ * How strongly each material's box edges are outlined. Rounded castings (meat, gold), the
+ * cut-cornered cards (paper) and the lump of ice have no box edges to outline.
+ */
+const edgeOpacities: Record<BlockMaterial, number> = {
+  paper: 0,
+  wood: 1,
+  steel: 1,
+  fire: 1,
+  prismatic: 0.55,
+  gold: 0,
+  terracotta: 1,
+  ice: 0,
+  meat: 0,
+};
+
 const edgeColors: Record<BlockMaterial, number> = {
   paper: 0x6b6c73,
   wood: 0x76502b,
@@ -1000,14 +1016,7 @@ export function createBlockAppearance(
   // two faces are not in the same plane and do not flicker (z-fight) through each other.
   if (["prismatic", "fire", "paper", "ice"].includes(kind)) geometry.scale(0.985, 0.985, 0.985);
   const edgeColor = edgeColors[kind];
-  // Rounded castings (meat, gold), the cut-cornered cards (paper) and the lump of ice have
-  // no box edges to outline.
-  const edgeOpacity =
-    kind === "meat" || kind === "gold" || kind === "paper" || kind === "ice"
-      ? 0
-      : kind === "prismatic"
-        ? 0.55
-        : 1;
+  const edgeOpacity = edgeOpacities[kind];
 
   if (kind === "prismatic") {
     // One clear stone: the same material on all six faces; the print rides on a skin.

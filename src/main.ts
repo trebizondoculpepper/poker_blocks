@@ -1661,6 +1661,25 @@ function startRun(session: GameSession, fresh = false): void {
   if (game.inStage) musicForNewStage();
 }
 
+/**
+ * What the music does on each screen. The menu muffles whatever is playing instead of
+ * changing the song; leaving it takes the muffle off again.
+ */
+const screenMusic: Record<"title" | "settings" | "game" | "over", () => void> = {
+  title: () => {
+    music.unmuffle();
+    music.playTitle();
+  },
+  settings: () => music.muffle(),
+  over: () => {
+    music.unmuffle();
+    music.windDown();
+  },
+  game: () => {
+    music.unmuffle();
+    music.resumeStage();
+  },
+};
 const menus = createMenus(host, settings, {
   hasSave: () => loadRun(storage, cards, dealerRegistry, runSaveKey) !== null,
   onContinue() {
@@ -1678,13 +1697,7 @@ const menus = createMenus(host, settings, {
   },
   onScreen(next) {
     screen = next;
-    // Leaving the menu takes the muffle off again.
-    if (next !== "settings") music.unmuffle();
-    if (next === "title") music.playTitle();
-    // The menu muffles whatever is playing instead of changing the song.
-    else if (next === "settings") music.muffle();
-    else if (next === "over") music.windDown();
-    else music.resumeStage();
+    screenMusic[next]();
   },
 });
 // Rooms that skip the title start straight in play (resuming their run if they keep one).
