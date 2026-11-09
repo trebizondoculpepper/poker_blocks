@@ -1525,6 +1525,15 @@ function newSession(): GameSession {
 
 /** Swap in a session (new or resumed) and rebuild the scene from its state. */
 function startRun(session: GameSession): void {
+  // Older Dev 3 saves reached the shop before stock existed. Fill them once; an empty
+  // shopStock array means the player bought everything and must stay empty on reload.
+  if (roomTraits.shopPreview && session.phase === "shop" && session.state.shopStock === undefined) {
+    const snapshot = session.snapshot();
+    session = GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
+      ...snapshot,
+      state: shopPreviewState(snapshot.state, snapshot.state.coins),
+    });
+  }
   game = session;
   const rack = roomTraits.passiveRack;
   if (rack?.startWith) game.fillPassiveRack(Math.min(rack.startWith, rack.capacity));
