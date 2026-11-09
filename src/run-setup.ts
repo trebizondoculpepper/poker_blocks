@@ -27,10 +27,10 @@ export type RunSetupStepConfigs = {
   /** Endless play: unlimited plays and discards, a stage cannot be won or lost by itself. */
   sandbox: Record<never, never>;
   /**
-   * Every card gets a random material. `reshuffle: "each-run"` deals a new mix whenever a
-   * run starts; `"new-game"` keeps the seed in the saved run, so Continue matches.
+   * Every card gets a random material, dealt from a fresh seed that the run records, so
+   * Continue rebuilds the same mix and a new run gets a new one.
    */
-  materialDeck: { reshuffle: "each-run" | "new-game" };
+  materialDeck: Record<never, never>;
   /** The run begins on a structure holding one block of every material. */
   materialSample: Record<never, never>;
   /** Testing only: about `share` of the deck is destructible by the given causes. */
@@ -50,7 +50,7 @@ export type RunSetupStep = {
 export type RunPrepareContext = {
   rules: RunRules;
   deck: readonly CardBlock[];
-  /** Kept in the saved run so a kept deck is rebuilt identically on Continue. */
+  /** Recorded in the run, so Continue rebuilds the same deck. */
   seed?: number;
 };
 
@@ -61,14 +61,14 @@ export type RunStartContext = {
 };
 
 /**
- * What a step's behaviour may read beyond its config. `random` and `newSeed` are injected so
- * a test can pin the material mix and the shop's stock.
+ * What a step's behaviour may read beyond its config. `random` and `newSeed` are injected so a
+ * test can pin the material mix and the shop's stock.
  */
 export type RunSetupServices = {
   /** The deck the run would have without a material step. */
   standardDeck: readonly CardBlock[];
-  /** The seed to keep for a deck that survives until a new game. */
-  keptSeed(): number;
+  /** A fresh seed for a deck this step deals. */
+  newSeed(): number;
   random: () => number;
 };
 

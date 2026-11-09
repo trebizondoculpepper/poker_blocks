@@ -155,7 +155,7 @@ const gameModes: GameMode[] = [
     startScene: "title",
     resumeSavedRun: {},
     aliases: ["dev"],
-    runSetup: [{ step: "materialDeck", reshuffle: "new-game" }],
+    runSetup: [{ step: "materialDeck" }],
     traits: {
       save: { key: "poker-blocks.dev-run" },
       console: { name: "dev0" },
@@ -168,11 +168,7 @@ const gameModes: GameMode[] = [
     scenes: scenesForMode("dev1"),
     startScene: "stage-1",
     opensInPlay: {},
-    runSetup: [
-      { step: "sandbox" },
-      { step: "materialDeck", reshuffle: "each-run" },
-      { step: "materialSample" },
-    ],
+    runSetup: [{ step: "sandbox" }, { step: "materialDeck" }, { step: "materialSample" }],
     traits: {
       save: { key: "poker-blocks.dev1-run" },
       console: { name: "dev1" },
@@ -188,7 +184,7 @@ const gameModes: GameMode[] = [
     resumeSavedRun: {},
     runSetup: [
       { step: "sandbox" },
-      { step: "materialDeck", reshuffle: "new-game" },
+      { step: "materialDeck" },
       { step: "startingPassives", count: 2 },
     ],
     traits: {
@@ -225,7 +221,7 @@ const gameModes: GameMode[] = [
     resumeSavedRun: {},
     runSetup: [
       { step: "sandbox" },
-      { step: "materialDeck", reshuffle: "new-game" },
+      { step: "materialDeck" },
       { step: "destructibleMix", share: 0.5, by: ["manual"] },
       { step: "materialSample" },
     ],

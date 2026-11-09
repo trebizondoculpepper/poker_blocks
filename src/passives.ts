@@ -61,7 +61,7 @@ export type PassiveDefinition = {
   traitId: string;
   palette: { face: string; ink: string; edge: string };
   rules: readonly PassiveRule[];
-  /** Kept only to restore old saves; excluded from new draws. */
+  /** Excluded from new draws; kept so a save that names it still resolves. */
   retired?: boolean;
 };
 

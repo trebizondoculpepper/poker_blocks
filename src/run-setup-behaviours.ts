@@ -28,8 +28,8 @@ export function createRunSetupRegistry(
   });
 
   registry.register("materialDeck", {
-    prepare: (context, { reshuffle }, services) => {
-      const seed = reshuffle === "each-run" ? randomSeed(services) : services.keptSeed();
+    prepare: (context, _config, services) => {
+      const seed = services.newSeed();
       return { ...context, deck: makeDevDeck(seed), seed };
     },
     start: (context) => ({
@@ -109,8 +109,4 @@ function openingPassives(
     used.add(`passive.${serial}`);
     return createPassiveBlock(definition.id, `passive.${serial}`);
   });
-}
-
-function randomSeed(services: RunSetupServices): number {
-  return Math.floor(services.random() * 4294967296);
 }

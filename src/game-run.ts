@@ -41,10 +41,7 @@ export type RunSnapshot = {
   stats?: RunStats;
   /** The last stage paid out (round:phase) and what it paid, so it never pays twice. */
   rewarded?: { stage: string; reward: StageReward };
-  /**
-   * The seed a run setup step dealt this run's deck from, when the deck is kept until a new
-   * game. Continue rebuilds the same deck from it; older saves have none.
-   */
+  /** The seed a run setup step dealt this run's deck from, so Continue rebuilds the same deck. */
   seed?: number;
 };
 

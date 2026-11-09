@@ -65,7 +65,7 @@ describe("game modes composed from traits", () => {
     expect(gameModeFor(null).runSetup).toEqual([]);
     expect(gameModeFor("dev1").runSetup).toEqual([
       { step: "sandbox" },
-      { step: "materialDeck", reshuffle: "each-run" },
+      { step: "materialDeck" },
       { step: "materialSample" },
     ]);
     expect(gameModeFor("dev0").runSetup).not.toContainEqual({ step: "sandbox" });

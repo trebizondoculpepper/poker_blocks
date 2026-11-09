@@ -172,7 +172,7 @@ export function fromSaveRecord(
   }
 }
 
-/** A saved deck seed; nothing when absent, so older saves without one still load. */
+/** A saved deck seed; nothing when the run was dealt no seeded deck. */
 function parseSeed(value: unknown): { seed: number } | Record<string, never> {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 4294967296
     ? { seed: value }

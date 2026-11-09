@@ -17,7 +17,7 @@ import { fromSaveRecord, toSaveRecord } from "./save";
 
 const services: RunSetupServices = {
   standardDeck,
-  keptSeed: () => 4201,
+  newSeed: () => 4201,
   random: () => 0,
 };
 
@@ -47,11 +47,20 @@ function freshRun(modeId: string): GameRun {
 describe("run setup registry", () => {
   it("type-checks each step's behaviour against that step's own configuration", () => {
     const registry = new RunSetupRegistry();
-    registry.register("materialDeck", {
-      // @ts-expect-error a materialDeck step takes a reshuffle policy, not a coin count
-      start: (context, { coins: _coins }: { coins: number }) => context,
+    // Named with its step, each behaviour is checked against that step's own configuration.
+    registry.register("shopPreview", {
+      start: (context, { coins }) => ({
+        ...context,
+        snapshot: { ...context.snapshot, state: { ...context.snapshot.state, coins } },
+      }),
     });
-    expect(registry.has("materialDeck")).toBe(true);
+    // A name no step declares is rejected where it is registered.
+    const unknownStep = () => {
+      // @ts-expect-error "shopStock" is a scene trait, not a run setup step
+      registry.register("shopStock", {});
+    };
+    expect(unknownStep).toBeTypeOf("function");
+    expect(registry.has("shopPreview")).toBe(true);
   });
 
   it("composes prepare steps in declared order, then start steps in the same order", () => {
@@ -115,12 +124,18 @@ describe("run setup steps", () => {
   });
 
   it("materialDeck deals a material mix and records the seed in the run", () => {
-    const kept = prepared([{ step: "materialDeck", reshuffle: "new-game" }]);
-    expect(kept.seed).toBe(4201);
-    expect(kept.deck.map(materialOf)).not.toEqual(standardDeck.map(materialOf));
+    const dealt = prepared([{ step: "materialDeck" }]);
+    expect(dealt.seed).toBe(4201);
+    expect(dealt.deck.map(materialOf)).not.toEqual(standardDeck.map(materialOf));
 
-    const fresh = prepared([{ step: "materialDeck", reshuffle: "each-run" }]);
-    expect(fresh.deck).not.toBe(kept.deck);
+    // The seed is offered by the service, so the next run deals a different mix.
+    const other = createRunSetupRegistry(() => undefined).prepare(
+      [{ step: "materialDeck" }],
+      { rules: demoRunRules, deck: standardDeck },
+      { ...services, newSeed: () => 90210 },
+    );
+    expect(other.seed).toBe(90210);
+    expect(other.deck).not.toEqual(dealt.deck);
   });
 
   it("materialSample starts the run on a structure holding a block of each material", () => {
@@ -153,7 +168,7 @@ describe("run setup steps", () => {
 
   it("destructibleMix marks its share of the deck without changing which cards exist", () => {
     const mixed = prepared([
-      { step: "materialDeck", reshuffle: "new-game" },
+      { step: "materialDeck" },
       { step: "destructibleMix", share: 1, by: ["manual"] },
     ]);
     expect(mixed.deck.map(({ id }) => id)).toEqual(standardDeck.map(({ id }) => id));

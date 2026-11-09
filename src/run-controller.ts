@@ -126,7 +126,6 @@ export type RunController = {
   dispose(): void;
 };
 
-const devSeedKey = "poker-blocks.dev-material-seed";
 /** When a won stage's outcome has been announced, the stage-won pop-up follows. */
 const stageWonDelayMs = 900;
 /** When a lost stage's outcome has been announced, the game over screen follows. */
@@ -178,36 +177,10 @@ export function createRunController<Context>(options: {
   const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const onSystemMotion = () => applySettings(settings);
 
-  /** The seed a deck that is kept until a new game is dealt from; kept in browser storage. */
-  function devSeed(fresh = false): number {
-    try {
-      const raw = storage?.getItem(devSeedKey);
-      const stored = Number(raw);
-      if (
-        !fresh &&
-        raw !== null &&
-        raw !== undefined &&
-        Number.isInteger(stored) &&
-        stored >= 0 &&
-        stored < 4294967296
-      )
-        return stored;
-    } catch {
-      // A dev run still works when browser storage is unavailable.
-    }
-    const seed = Math.floor(Math.random() * 4294967296);
-    try {
-      storage?.setItem(devSeedKey, String(seed));
-    } catch {
-      /* Storage is optional. */
-    }
-    return seed;
-  }
-
   const runSetup = createRunSetupRegistry(() => currentMode.traits.shop);
   const setupServices = (): RunSetupServices => ({
     standardDeck,
-    keptSeed: () => devSeed(true),
+    newSeed: () => Math.floor(Math.random() * 4294967296),
     random: Math.random,
   });
 
@@ -230,14 +203,12 @@ export function createRunController<Context>(options: {
   }
 
   /**
-   * The cards a saved run's deck is rebuilt from. A run setup step records the seed it dealt,
-   * and old saves have none, so a material mode falls back to the seed kept for it in browser
-   * storage. Only card ids are saved, so the testing-only mix is re-applied from the mode's
-   * own run setup rather than persisted.
+   * The cards a saved run's deck is rebuilt from: the seed that run was dealt from, which a
+   * `materialDeck` step records in the run itself. Only card ids are saved, so the testing-only
+   * mix is re-applied from the mode's own run setup rather than persisted.
    */
   function cardsForSavedRun(seed: number | undefined): readonly CardBlock[] {
-    const material = currentMode.runSetup.some((step) => step.step === "materialDeck");
-    const deck = material ? makeDevDeck(seed ?? devSeed()) : standardDeck;
+    const deck = seed === undefined ? standardDeck : makeDevDeck(seed);
     return withDevDestructibleMix(deck, declaredMix(currentMode.runSetup) ?? { share: 0, by: [] });
   }
 
