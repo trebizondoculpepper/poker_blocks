@@ -12,11 +12,22 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
+      # Full history: the build's version counts the commits since the last release (#128).
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
       - uses: voidzero-dev/setup-vp@v1.22.0
         with:
           node-version: "26"
           cache: true
+      # Only a release commit may change the version (scripts/version-guard.ts).
+      - name: Version guard
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node scripts/version-guard.ts "origin/${{ github.base_ref }}" HEAD
+          else
+            node scripts/version-guard.ts "${{ github.event.before }}" "${{ github.sha }}"
+          fi
       - run: vp check
       - run: vp test run --passWithNoTests
       - run: vp build
