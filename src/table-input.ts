@@ -16,7 +16,7 @@ import type { CardBlock } from "./cards";
 import type { Candidate, FieldView } from "./field-view";
 import type { HandDrag, HandView } from "./hand-view";
 import type { Overlays } from "./overlays";
-import { passiveDefinitions, type PassiveBlock } from "./passives";
+import { passiveAppearance, type PassiveBlock } from "./passives";
 import type { RenderedBlock } from "./rendered-blocks";
 import { cellKey, type Cell, type Face } from "./traits/attachable";
 import { inspectBlock } from "./traits/inspectable";
@@ -611,9 +611,7 @@ export function createTableInput(options: {
       if (Math.hypot(event.clientX - passiveDrag.startX, event.clientY - passiveDrag.startY) < 6)
         return;
       // A real drag: lift the cube out of the rack and show a token under the pointer.
-      const appearance =
-        passiveDrag.block.traits.appearance ??
-        passiveDefinitions.get(passiveDrag.block.definitionId);
+      const appearance = passiveAppearance(passiveDrag.block);
       const floating = document.createElement("div");
       floating.className = "passive-floating";
       floating.textContent = appearance.symbol;
