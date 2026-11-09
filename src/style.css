@@ -559,14 +559,16 @@ body,
   font-size: 11px;
 }
 
-/* The panel's footer: the build version and links out, aligned to the bottom-right (#129). */
+/* The build version and links out, in the far bottom-right of the screen (#129). */
 .menu-footer {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 18px;
   font-size: 12px;
 }
 
