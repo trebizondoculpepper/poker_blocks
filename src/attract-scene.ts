@@ -300,7 +300,7 @@ export function createAttractScene(
         appearance.geometry.dispose();
         for (const material of new Set([...appearance.materials, ...materials])) material.dispose();
         for (const extra of appearance.extras ?? [])
-          for (const material of [extra.material].flat()) material.dispose();
+          for (const used of new Array<THREE.Material>().concat(extra.material)) used.dispose();
         for (const texture of appearance.textures) texture.dispose();
       },
     };
