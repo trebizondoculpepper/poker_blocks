@@ -49,6 +49,7 @@ import {
   type Settings,
 } from "./settings";
 import { shopPreviewState, type ShopOffer } from "./shop-stock";
+import { offerKind } from "./offer-kinds";
 import type { createShopView } from "./shop-view";
 import type { TableInput, TableRules } from "./table-input";
 import type { TableRenderer } from "./table-renderer";
@@ -502,6 +503,18 @@ export function createRunController<Context>(options: {
     },
   };
 
+  /**
+   * Show what a purchase changed, read from the run's state rather than from the offer: any
+   * new hand cards join the hand, and the rack is redrawn. A kind that adds neither (one that
+   * pays coins, say) needs nothing here (#67).
+   */
+  function showPurchase(): void {
+    const shown = new Set(services.hand.blocks.map(({ block }) => block.id));
+    for (const block of game.state.hand) if (!shown.has(block.id)) services.hand.add(block);
+    services.hand.sync(game.state.hand);
+    services.rack.render(game.state.passiveRack);
+  }
+
   /** The game actions a menu can dispatch; navigation is the mode's data, not code. */
   const gameActions: Record<string, () => void> = {
     // From the game over screen: leave it and begin a fresh run.
@@ -672,8 +685,7 @@ export function createRunController<Context>(options: {
       }
     },
     takeNextAction,
-    offerPrice: (offer) =>
-      offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),
+    offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),
     shopStock: () => game.state.shopStock ?? [],
     runStats: () => game.stats,
     hasSave,
@@ -684,10 +696,7 @@ export function createRunController<Context>(options: {
         playSfx("action.denied");
         return false;
       }
-      if (bought.kind === "card") {
-        services.hand.add(bought.block);
-        services.hand.sync(game.state.hand);
-      } else services.rack.render(game.state.passiveRack);
+      showPurchase();
       services.shop.render(game.state.shopStock ?? [], true);
       updateHud();
       autosave();

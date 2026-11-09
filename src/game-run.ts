@@ -26,7 +26,7 @@ import {
 } from "./passives";
 import { discardPassiveEffects, scoreFieldWithPassives } from "./passive-effects";
 import type { ScoredLine } from "./scoring";
-import type { ShopOffer } from "./shop-stock";
+import { offerKind, type OfferDestination, type OfferRun, type ShopOffer } from "./offer-kinds";
 
 /** Where a run is: one of a round's three stages, the shop, or finished after a loss. */
 export type RunPhase = StageKind | "shop" | "over";
@@ -311,38 +311,37 @@ export class GameRun {
     return price;
   }
 
-  /** Buy an offer into the appropriate rack. A refused drop leaves the state untouched. */
-  buyShopOffer(id: string, destination: "hand" | "passive-rack"): ShopOffer | null {
-    if (this.currentPhase !== "shop") return null;
+  /** What an offer's kind may read from the run to price and receive it (#67). */
+  get offerRun(): OfferRun {
+    return {
+      rules: this.config,
+      passiveBuyPrice: this.passivePrices.buy,
+      rackCapacity: this.rackCapacity,
+      handSize: this.activeDealer.handSize,
+    };
+  }
+
+  /**
+   * Buy an offer into the place its kind goes (the hand or the rack). Refused, leaving the state
+   * untouched, when dropped elsewhere, unaffordable, or when it doesn't fit there.
+   */
+  buyShopOffer(id: string, destination: OfferDestination): ShopOffer | null {
+    if (!this.inShop) return null;
     const offer = this.currentState.shopStock?.find(({ block }) => block.id === id);
     if (!offer) return null;
-    const price =
-      offer.kind === "passive" ? this.passivePrices.buy : (this.config.cardPurchasePrice ?? 1);
+    const kind = offerKind(offer);
+    if (destination !== kind.destination) return null;
+    const run = this.offerRun;
+    const price = kind.price(offer.block, run);
     if (!Number.isSafeInteger(price) || price < 0 || this.currentState.coins < price) return null;
-    if (offer.kind === "passive") {
-      if (
-        destination !== "passive-rack" ||
-        this.currentState.passiveRack.length >= this.rackCapacity ||
-        this.currentState.passiveRack.some(({ id: owned }) => owned === id)
-      )
-        return null;
-      this.currentState = {
-        ...this.currentState,
-        passiveRack: [...this.currentState.passiveRack, offer.block],
-        shopStock: this.currentState.shopStock!.filter(({ block }) => block.id !== id),
-        coins: this.currentState.coins - price,
-      };
-      this.passiveEvents.syncRack(this.currentState.passiveRack);
-    } else {
-      if (destination !== "hand" || this.currentState.hand.length >= this.activeDealer.handSize)
-        return null;
-      this.currentState = {
-        ...this.currentState,
-        hand: [...this.currentState.hand, offer.block],
-        shopStock: this.currentState.shopStock!.filter(({ block }) => block.id !== id),
-        coins: this.currentState.coins - price,
-      };
-    }
+    const received = kind.receive(this.currentState, offer.block, run);
+    if (!received) return null;
+    this.currentState = {
+      ...received,
+      shopStock: received.shopStock?.filter(({ block }) => block.id !== id),
+      coins: received.coins - price,
+    };
+    this.passiveEvents.syncRack(this.currentState.passiveRack);
     return offer;
   }
 
@@ -504,16 +503,14 @@ export class GameRun {
     if (this.currentPhase !== "shop") return false;
     const completed = this.shopAfter ?? finalStage;
     const next = nextStage(completed);
-    // The sandbox's unbought card offers were borrowed from the deck, so return them.
+    // Each unbought offer's kind says what leaving does with it (borrowed cards go back to the
+    // deck). Undefined stock means a later shop generates fresh stock, including after a skip.
+    const stock = this.currentState.shopStock ?? [];
     this.currentState = {
-      ...this.currentState,
-      deck: [
-        ...this.currentState.deck,
-        ...(this.currentState.shopStock ?? [])
-          .filter((offer): offer is Extract<ShopOffer, { kind: "card" }> => offer.kind === "card")
-          .map(({ block }) => block),
-      ],
-      // Undefined means a later shop will generate fresh stock, including after a skip.
+      ...stock.reduce(
+        (state, offer) => offerKind(offer).unbought(state, offer.block),
+        this.currentState,
+      ),
       shopStock: undefined,
     };
     // Leaving the round's last shop ends the round, under the run's discard pile policy.
