@@ -257,7 +257,7 @@ Enter `reset` in the developer console to restart the current dev mode in place.
 
 ### Dev3 shop sandbox
 
-`?mode=dev3` skips the title screen and opens directly in the shop scene with five coins, two passive offers, and three playable card offers. Drag an offer to the passive rack or hand to buy it: a passive costs its base price (2–9 coins), a card its material's price plus its rank's surcharge. It has its own saved run; `reset` in the developer console or `&restart=true` in the URL starts the shop again with five coins and fresh offers. This is a shop sandbox; the full shop flow remains [issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18). In any mode, the console command `coins` shows the balance, `coins +5` adds five, and `coins -2` removes two (stopping at zero). Changes update the HUD and saved run.
+`?mode=dev3` skips the title screen and opens directly in the shop scene with five coins and a round-1 stock of 5–9 offers. Drag an offer to the passive rack or hand to buy it: a passive costs its base price (2–9 coins), a card its material's price plus its rank's surcharge. It has its own saved run; `reset` in the developer console or `&restart=true` in the URL starts the shop again with five coins and fresh offers. This is a shop sandbox; the full shop flow remains [issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18). In any mode, the console command `coins` shows the balance, `coins +5` adds five, and `coins -2` removes two (stopping at zero). Changes update the HUD and saved run.
 
 ### Destructible blocks and the Dev4 destruction sandbox
 
@@ -307,7 +307,7 @@ The demo uses these placeholders. They live in `src/run-rules.ts` so they can be
 
 The shop is a mode feature presented through the **shop scene**. Its configuration supplies the number of passive and playable-card offers, while the active mode enables the shop alongside the table, hand, passive rack, and run rules. Dev3 starts directly in this composed shop; the normal game activates it after every won stage. Field placement is a separate stage-scene trait and is absent while the shop scene is active. Shop stock uses the same 3D cube appearances as playable and passive blocks, and each offer exposes its inspectable description on hover or keyboard focus. The shop presentation can independently move the camera to frame the offers where they land on the table.
 
-The shop opens after each completed stage with five objects at rest on the table: **two passive blocks** and **three playable blocks**. A passive costs its **base price** from the catalogue below (#144); a playable block is a **new card of a material** ([#143](https://github.com/trebizondoculpepper/poker_blocks/issues/143)), not one borrowed from the deck, and may repeat a card the deck already holds. It costs its material's base price (paper 1, ice 2, wood 3, steel 4, fire 4, meat 6, gold 8, prismatic crystal 12 coins; terracotta has no price and is never offered) plus a rank surcharge: nothing for 2–10, 1 coin for J, Q and K, 2 coins for an ace. Prices live on the material definitions and the surcharge in the balance config (`src/balance.ts`). Buying requires enough coins. The player drags a passive to the passive rack, or a playable block to the shop's buy target (today the hand area; the BUY layout is [#118](https://github.com/trebizondoculpepper/poker_blocks/issues/118)). A bought card **joins the run's deck**, not the hand, and carries into later stages; saves record it in full. Active cards can't be sold; paid removal is [#156](https://github.com/trebizondoculpepper/poker_blocks/issues/156). Until [#145](https://github.com/trebizondoculpepper/poker_blocks/issues/145) adds round weights, a card offer's rank, suit and priced material are drawn evenly. Future shop stock may include special cards and modifier blocks. The player can continue to the next stage without spending coins.
+The shop opens after each completed stage with **5–9 offers** at rest on the table, drawn by round and weight ([#145](https://github.com/trebizondoculpepper/poker_blocks/issues/145), see "Drawing stock" below): passives first, then playable blocks. A passive costs its **base price** from the catalogue below (#144); a playable block is a **new card of a material** ([#143](https://github.com/trebizondoculpepper/poker_blocks/issues/143)), not one borrowed from the deck, and may repeat a card the deck already holds. It costs its material's base price (paper 1, ice 2, wood 3, steel 4, fire 4, meat 6, gold 8, prismatic crystal 12 coins; terracotta has no price and is never offered) plus a rank surcharge: nothing for 2–10, 1 coin for J, Q and K, 2 coins for an ace. Prices live on the material definitions and the surcharge in the balance config (`src/balance.ts`). Buying requires enough coins. The player drags a passive to the passive rack, or a playable block to the shop's buy target (today the hand area; the BUY layout is [#118](https://github.com/trebizondoculpepper/poker_blocks/issues/118)). A bought card **joins the run's deck**, not the hand, and carries into later stages; saves record it in full. Active cards can't be sold; paid removal is [#156](https://github.com/trebizondoculpepper/poker_blocks/issues/156). A card offer's material is drawn by its weight curve; its rank and suit are drawn evenly. Future shop stock may include special cards and modifier blocks. The player can continue to the next stage without spending coins.
 
 The shop entrance is a separate presentation sequence: a deliberately theatrical **SHOP OPEN** sign descends, blocks appear to be thrown onto the table by an unseen hand, and the camera moves to frame them. The items are at rest before the player interacts with them; the animation does not change stock or purchase rules.
 
@@ -351,11 +351,25 @@ Material unlocks by round: 1 wood; 2 steel; 3 meat, flame and ice; 4 gold; 5 pri
 
 Every offer type in the balance config has a **minimum unlock round**, a **default weight** and optional **weight keyframes** by round. A type is eligible from its unlock round. Its weight is interpolated linearly between keyframes and holds the last keyframe's value afterwards. Drawing normalizes the eligible weights; weights are relative, not probabilities.
 
-| Material card     | Weight keyframes                |
-| ----------------- | ------------------------------- |
-| Wood              | 1 from round 1                  |
-| Steel             | 0.5 at round 2, 1 at round 4    |
-| Prismatic crystal | 0.25 at round 5, 0.5 at round 6 |
+Built in [#145](https://github.com/trebizondoculpepper/poker_blocks/issues/145). A material's curve is on its definition (`shop.weights` in `src/materials.ts`); before its first keyframe it is locked (weight 0), and a weight of 0 makes it ineligible.
+
+| Material card     | Weight keyframes                                                      |
+| ----------------- | --------------------------------------------------------------------- |
+| Paper             | 4 at round 1, falling linearly to 0 at round 8 (never offered after)  |
+| Wood              | 1 at round 1, 2 in rounds 2–3, falling to 0.25 at round 8, then holds |
+| Steel             | 0.5 at round 2, 1 at round 4                                          |
+| Meat, flame, ice  | 0.75 at round 3 (their unlock), 1 at round 4                          |
+| Gold              | 1 from round 4                                                        |
+| Prismatic crystal | 0.25 at round 5, 0.5 at round 6                                       |
+
+Passives are drawn from their unlock round by a named frequency curve (`shop.frequency` on the passive, curves in `src/offer-weights.ts`). Labels map to weights: common 4, uncommon 2, rare 1, absent 0. Passives the run already owns are not offered, and a shop offers each passive at most once; card offers may repeat cards the deck holds.
+
+| Rounds | Additive scoring | Multiplicative scoring | Exponential scoring | Other passives |
+| ------ | ---------------: | ---------------------: | ------------------: | -------------: |
+| 1–2    |       common (4) |               rare (1) |          absent (0) |              1 |
+| 3–4    |         rare (1) |             common (4) |            rare (1) |              1 |
+| 5–6    |     uncommon (2) |             common (4) |        uncommon (2) |              1 |
+| 7+     |     uncommon (2) |             common (4) |          common (4) |              1 |
 
 #### Stage targets
 
@@ -369,7 +383,7 @@ Round 1 stage 1 targets **300**. Each next target is the previous one ×1.75 (st
 
 #### Drawing stock
 
-Stock meets its minimums first, then follows the weights: one offer is drawn from the eligible passives and one from the eligible playable cards, and the remaining slots are filled from the whole eligible pool by normalized weight.
+The shop's size is drawn evenly from 5 to 9 each visit (the mode's `shop` trait sets the range). Stock meets its minimums first, then follows the weights: one offer is drawn from the eligible passives and one from the eligible playable cards, and the remaining slots are filled from the whole eligible pool by normalized weight.
 
 #### Buying, selling and leaving
 

@@ -9,6 +9,7 @@
 import type { MaterialDefinition } from "./materials";
 import type { PassiveDefinition } from "./passives";
 import { validateScoringModifier } from "./scoring-modifier";
+import { passiveFrequencies, validateWeightCurve } from "./offer-weights";
 
 /** Shared defaults for the base game; a different dealer may override its hand size. */
 export const gameTuning = {
@@ -21,7 +22,7 @@ export const gameTuning = {
 } as const;
 
 /** A new card's shop price: its material's base price plus its rank's surcharge (#143). */
-export function cardOfferPrice(rank: string, material: Pick<MaterialDefinition, "shop">): number {
+export function cardOfferPrice(rank: string, material: { shop?: { basePrice: number } }): number {
   return (material.shop?.basePrice ?? Number.NaN) + (gameTuning.cardRankSurcharge[rank] ?? 0);
 }
 
@@ -37,6 +38,9 @@ export function validatePassiveBalance(definitions: readonly PassiveDefinition[]
       ...(Number.isSafeInteger(shop.unlockRound) && shop.unlockRound >= 1
         ? []
         : [`${id}: unlock round must be a positive whole number`]),
+      ...(passiveFrequencies.has(shop.frequency)
+        ? validateWeightCurve(id, passiveFrequencies.get(shop.frequency))
+        : [`${id}: no frequency curve named ${shop.frequency}`]),
     ];
   });
 }
@@ -48,5 +52,6 @@ export function validateMaterialBalance(definitions: readonly MaterialDefinition
     ...(shop === undefined || (Number.isSafeInteger(shop.basePrice) && shop.basePrice >= 1)
       ? []
       : [`${id}: base price must be a positive whole number of coins`]),
+    ...(shop ? validateWeightCurve(id, shop.weights) : []),
   ]);
 }

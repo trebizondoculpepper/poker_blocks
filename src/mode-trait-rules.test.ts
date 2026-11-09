@@ -30,9 +30,9 @@ describe("mode traits shape the run's rules (#36)", () => {
   it("lets the run stock its own shop when it enters one with no stock", () => {
     const stocked = toShop(run(baseRunRules({ traits })));
     expect(stocked.inShop).toBe(true);
-    expect(stocked.state.shopStock?.length).toBe(
-      traits.shop!.passiveOffers + traits.shop!.cardOffers,
-    );
+    const size = stocked.state.shopStock?.length ?? 0;
+    expect(size).toBeGreaterThanOrEqual(traits.shop!.minOffers);
+    expect(size).toBeLessThanOrEqual(traits.shop!.maxOffers);
     // A run whose rules don't stock shops enters an empty one.
     expect(toShop(run(demoRunRules)).state.shopStock).toBeUndefined();
   });

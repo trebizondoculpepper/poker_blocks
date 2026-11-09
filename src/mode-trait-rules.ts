@@ -17,7 +17,7 @@ export const modeTraitRules: TraitRules = {
   /** A shop entered with no stock is stocked from the trait's offer counts. */
   shop: (rules, shop) => ({
     ...rules,
-    stockShop: (state, random) => shopPreviewState(state, state.coins, random, shop),
+    stockShop: (state, random, round) => shopPreviewState(state, state.coins, random, shop, round),
   }),
 };
 

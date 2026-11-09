@@ -62,6 +62,9 @@
   top: 43%;
   left: 50%;
   display: flex;
+  /* Up to nine offers (#145): wrap onto a second row rather than run off the screen. */
+  flex-wrap: wrap;
+  justify-content: center;
   gap: clamp(8px, 2vw, 28px);
   width: max-content;
   max-width: calc(100vw - 180px);

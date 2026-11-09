@@ -32,7 +32,9 @@ describe("the balance config (#7, #103)", () => {
       `${first.id}: no shop balance`,
     ]);
     expect(
-      validatePassiveBalance([{ ...first, shop: { basePrice: 0, unlockRound: 1 } }]),
+      validatePassiveBalance([
+        { ...first, shop: { basePrice: 0, unlockRound: 1, frequency: "even" } },
+      ]),
     ).toHaveLength(1);
   });
 

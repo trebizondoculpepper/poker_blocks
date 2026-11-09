@@ -323,6 +323,7 @@ export class GameRun {
     this.currentState = (this.config.stockShop ?? ((state) => state))(
       this.currentState,
       this.random,
+      this.round,
     );
   }
 
