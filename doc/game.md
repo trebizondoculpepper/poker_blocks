@@ -144,7 +144,7 @@ Later this formula will be extended in three ways:
 
 The default card material is **paper**. **Wood** resembles a softwood block with grain running along one axis. Four side faces show lengthwise grain; the two opposite end faces have a distinct end-grain texture. Rank and suit remain readable on every face.
 
-The playable `?mode=dev0` experiment (formerly `?room=dev`) assigns a random visual material to each of the 52 cards at the start of a new game. Its own save preserves those assignments without affecting a normal run. The `?mode=dev1` materials room opens on a structure with one block of every material, attached at random, for judging the substances next to each other. The current visual prototypes are:
+The playable `?mode=dev0` experiment (formerly `?room=dev`) assigns a random visual material to each of the 52 cards at the start of a new game. Its own save preserves those assignments without affecting a normal run. The `?mode=dev1` materials mode opens on a structure with one block of every material, attached at random, for judging the substances next to each other. The current visual prototypes are:
 
 - **Wood:** branded rank and suit, with red suits inked red.
 - **Steel:** brushed steel plates, riveted at the corners; each face is brushed in its own direction and its anisotropic reflections catch the light differently as the block turns.
@@ -190,7 +190,7 @@ The rack is separate from the hand and field. Passives are not discardable. **Bu
 
 ### Dev2 passive sandbox
 
-**Game modes** (`GameMode`, in `src/game-modes.ts`) describe available scenes, the initial scene, and mode-wide configuration. Use `?mode=dev0` through `?mode=dev3` for the developer modes; old `?room=` links are still accepted as aliases. Mode traits configure run setup and features, while scene traits are attached to individual presentation contexts. The passive rack is enabled in the normal game (five slots, starting empty) and in dev2 (five slots, two passives dealt). `GameRun` enforces the rack capacity.
+**Game modes** (`GameMode`, in `src/game-modes.ts`) describe available scenes, the initial scene, and mode-wide configuration. Use `?mode=dev0` through `?mode=dev4` for the developer modes; old `?room=` links are still accepted as aliases. Mode traits configure run setup and features, while scene traits are attached to individual presentation contexts. The passive rack is enabled in the normal game (five slots, starting empty) and in dev2 (five slots, two passives dealt). `GameRun` enforces the rack capacity.
 
 The separate `?mode=dev2` sandbox uses the endless-play `RunRules` as dev1. It deals two distinct passives from the roster below and gives standard cards a mix of gameplay materials. The rack and current run survive a reload. Each passive has configured rule, appearance, rack-residency, and inspection traits. Shop acquisition and one-use passives remain future work. `dev0` and `dev1` keep their existing purposes.
 
@@ -204,7 +204,7 @@ Enter `reset` in the developer console to restart the current dev mode in place.
 
 A block can be **destructible**: its `destructible { by }` trait names what may destroy it. Destroying a block removes it from the field. It costs no play or discard and does not change the score. Nothing settles into the gap, so blocks it held up stay where they are, even floating; settling will be a separate trait. The destroyed card goes to the discard pile, out of play like a discard, and returns to the deck whenever the discard pile does. Destruction emits `block.destroyed`, not a discard event. The only cause today is `manual`; later causes such as melting (#21) or bombs (#24) name their own.
 
-`?room=dev4` is a destruction sandbox. It opens on a mixed-material structure in sandbox mode (unlimited plays and discards, no win or loss). About half the cards are destructible (always the same cards), and their hover description ends in "Destructible". Double-click a block on the table to destroy it; a block that isn't destructible is refused with the denied sound. The double-click comes from the `devManualBlockDestroyer` scene trait, and the half-and-half mix from the `devDestructibleMix` run trait. Both are testing-only dev traits. The room keeps its own saved run; `reset` or `&restart=true` starts it fresh.
+`?mode=dev4` is a destruction sandbox. It opens on a mixed-material structure in sandbox mode (unlimited plays and discards, no win or loss). About half the cards are destructible (always the same cards), and their hover description ends in "Destructible". Double-click a block on the table to destroy it; a block that isn't destructible is refused with the denied sound. The double-click comes from the `devManualBlockDestroyer` scene trait, and the half-and-half mix from the `devDestructibleMix` mode trait. Both are testing-only dev traits. The mode keeps its own saved run; `reset` or `&restart=true` starts it fresh.
 
 ### First dev2 passive set
 

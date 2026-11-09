@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
 
 describe("scene architecture guardrails", () => {
-  it("switches rooms without navigating or reloading the document", () => {
+  it("switches modes without navigating or reloading the document", () => {
     for (const file of ["./main.ts", "./run-controller.ts", "./console-host.ts"]) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
       expect(source).not.toMatch(/window\.location\.(assign|reload)\s*\(/);

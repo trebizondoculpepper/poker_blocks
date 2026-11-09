@@ -519,7 +519,7 @@ export function createRunController<Context>(options: {
     mode: () => currentMode,
     openMode(mode) {
       enterMode(mode);
-      // startScene is declarative until the scene graph drives run progression (#37).
+      // startScene is declarative until game flow drives run progression (#37).
       switchScene(mode.startScene);
       startRun(newRun(), true);
       services.overlays.closeAll();

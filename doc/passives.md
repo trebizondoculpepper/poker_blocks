@@ -49,7 +49,7 @@ For Ace Exchange, “owned” includes installed passives and any future passive
 
 A rule with `on: "stage.won"` pays coins when a stage is won, judged on the blocks still in the hand, and appears as its own row in the stage-won ledger (rack order). **Gold Standard** (`gold-standard`) is the first: `{ on: "stage.won", condition: { kind: "material", value: "gold" }, effect: { kind: "add-coins", amount: 1, perMatch: true } }`, one coin per gold block left in the hand. A `{ kind: "stage", kinds: ["boss"] }` condition instead tests the won stage itself, so a rule can pay for boss wins only (one flat amount, not per hand block).
 
-## Dev room and verification
+## Dev mode and verification
 
 On a **fresh** `dev2` run, choose two different definitions from this roster and install one instance of each, in chosen rack order. Reloading a saved run preserves its rack and coin balance rather than drawing again. Give card blocks randomized gameplay materials so Carnivore and Woodworker can actually be tried. A new-game action redraws the pair.
 

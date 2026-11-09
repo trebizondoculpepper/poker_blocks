@@ -41,12 +41,7 @@ describe("GameRun.destroyBlock", () => {
       ...card,
       traits: { ...card.traits, destructible: { by: ["manual" as const] } },
     }));
-    const game = new GameRun(
-      dealerRegistry,
-      sandboxRunRules(demoRunRules),
-      deck,
-      () => 0,
-    );
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), deck, () => 0);
     game.play({ cardId: game.state.hand[0].id });
     return game;
   };
@@ -77,12 +72,7 @@ describe("a run with a destroyed block", () => {
       ...card,
       traits: { ...card.traits, destructible: { by: ["manual" as const] } },
     }));
-    const game = new GameRun(
-      dealerRegistry,
-      sandboxRunRules(demoRunRules),
-      deck,
-      () => 0,
-    );
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), deck, () => 0);
     game.play({ cardId: game.state.hand[0].id });
     game.destroyBlock(game.state.field[0].block.id, "manual");
     const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
@@ -121,6 +111,8 @@ describe("DevManualBlockDestroyer", () => {
     expect(traitsOf("stage-1").devManualBlockDestroyer).toEqual({ cause: "manual" });
     expect(traitsOf("shop").devManualBlockDestroyer).toBeUndefined();
     for (const room of ["game", "dev0", "dev1", "dev2", "dev3"])
-      expect(gameModeFor(room).scenes.some(({ traits }) => traits.devManualBlockDestroyer)).toBe(false);
+      expect(gameModeFor(room).scenes.some(({ traits }) => traits.devManualBlockDestroyer)).toBe(
+        false,
+      );
   });
 });

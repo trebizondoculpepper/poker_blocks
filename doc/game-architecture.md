@@ -192,16 +192,16 @@ Loading rebuilds the blocks from the standard deck and `GameRun.fromSnapshot` re
 
 ### Concepts
 
-- **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, and supplies mode-wide configuration such as save identity, music policy and optional game features. It is not a scene graph: the list is a catalogue of scene definitions.
+- **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, and supplies mode-wide configuration such as save identity and optional game features. Music policy currently lives in its `musicStyle` property, pending a composed trait (#34). The scene list is a catalogue of definitions, not a scene graph.
 - **Scene** (`Scene`): a presentation context such as title, stage, shop, settings, stage-won or game-over. Scene data composes traits. `SceneManager` calls trait lifecycle hooks when scenes enter and exit.
 - **Scene stack**: the runtime layers currently active. Settings and stage-won are pushed over gameplay and popped to resume it. Title and game-over replace the stack.
 - **Game flow**: decisions about which scene follows an action or run outcome. Today `run-controller.ts` coordinates this using `GameRun.phase` and outcomes. The mode's `startScene` is not yet the authoritative transition graph.
-- **GameRun**: mutable state for one playthrough: cards, field, scoring, coins, passives, phase and save snapshot. It remains the same run while the scene stack changes.
+- **GameRun**: live mutable state for one playthrough: cards, field, scoring, coins, passives and phase. It remains the same run while the scene stack changes. Its `snapshot()` method produces data that the run controller persists through `save.ts`.
 - **RunRules**: progression and economy rules used to create a run. Mode traits may further configure its save key, starting deck and optional features.
 - **Trait**: reusable behavior plus plain data, attached at a declared scope. A mode trait is not automatically copied onto each scene; composition between scopes must be explicit.
 - **Services**: camera, input, hand, field, HUD, audio, overlays and console, exposed through narrow interfaces to behaviors.
 
-- **Dev trait**: a trait that exists only for testing. Its name begins with `dev` (`devManualBlockDestroyer`), and only dev rooms compose it.
+- **Dev trait**: a trait that exists only for testing. Its name begins with `dev` (`devManualBlockDestroyer`), and only dev modes compose it.
 
 ### How they fit together
 
@@ -217,7 +217,7 @@ The Escape/settings menu is a scene pushed over gameplay. Popping it resumes the
 
 ### Example: game progression is a flow
 
-Flow answers **what happens next?** A mode's flow follows game events and run outcomes to choose the next scene. The scene manager performs that choice; the `GameRun` remains the same object as the player advances through stages and shops.
+Flow answers **what happens next?** The run controller currently follows game events and run outcomes to choose the next scene, and the scene manager applies the stack change; the `GameRun` remains the same object as the player advances through stages and shops.
 
 ```mermaid
 flowchart TD
@@ -256,7 +256,7 @@ sequenceDiagram
   Player->>Flow: Escape
   Flow->>Stack: push(Settings)
   Stack->>Settings: enter traits
-  Note over Stack,Stage: Stage remains on the stack, suspended underneath
+  Note over Stack,Stage: Stage remains on the stack; scene-managed input and updates pause
   Player->>Flow: Close settings
   Flow->>Stack: pop()
   Stack->>Settings: exit traits
@@ -271,29 +271,24 @@ For each stack operation, the manager invokes `enter` on the newly active scene'
 
 `src/game-modes.ts` defines each mode's scene catalogue, start scene and mode traits. `?mode=` is canonical; `?room=` remains accepted as a legacy URL alias. Developer-console mode changes update the URL and switch in memory without reloading. The scene manager tracks screen transitions, while `run-controller.ts` still coordinates stage/shop progression from run phase and outcomes. This is an interim arrangement, not a mode-owned flow graph.
 
-`src/camera-view.ts` is the first extracted service. It owns board and hand cameras, the board pivot and assembly, framing, zoom, rotation, camera motion, and viewport resize handling. `main.ts` still detects input gestures and uses the service cameras for block picking and placement, while `TraitContext.services.cameraView` exposes the service to scene traits. The architecture test guards against moving camera creation, framing, or resize behavior back into `main.ts`. Further services are extracted one per PR under #33.
+The extracted services own presentation and interaction. `main.ts` constructs and connects them; it does not decide what the player may do or which scene follows an outcome.
 
-`src/audio-service.ts` is the second. It owns the music controller and player settings, the room's music policy (quiet rooms stay wound down), stage and screen music, unlocking audio on the first gesture, and the rate-limited zoom sound. `main.ts` constructs it and reports events (`stageStarted`, `runStarted`, `showScreen`, `zoomed`); it no longer calls the music controller directly. Game-action sound effects still call `playSfx` where the action happens. `TraitContext.services.audio` exposes the service, and the architecture test keeps music transitions and volume handling out of `main.ts`.
-
-`src/hud-panels.ts` is the third. It builds the round panel, deck counter, shop coin counter and shop exit button, and turns a `HudView` snapshot (round, phase, the scene's overlays, whether a play is still presenting, the outcome and the counters) into what they show, including the stage heading and the next-action label. `hudDisplay` is the pure part, tested without a DOM. `main.ts` builds the snapshot in `updateHud` and binds the next action with `hud.onAction`; `TraitContext.services.hud` exposes the service.
-
-`src/console-host.ts` is the fourth. It adapts the game to the developer console's `ConsoleHost`: dev-room names, resetting the current room, opening another room in place (it rewrites the URL with the History API, then asks the game to `openGameMode`), and the music commands, which go through the audio service. `main.ts` supplies a narrow `ConsoleApp` (new run, open a room, force an outcome, adjust coins) and no longer builds the console host itself.
-
-`src/overlays.ts` is the fifth. It owns the menu screens (title, settings, game over and the stage-won pop-up), which scene each screen puts in front (`screenScenes`: settings and the stage-won pop-up are pushed, title and game over replace the stack, closing a menu resumes the game's scene), the music cue for each screen, the inspection tooltip and the refused flash on drop targets. `main.ts` supplies the menu callbacks and a `ScreenScenes` adapter over the scene manager. The overlays are built after the settings load, so `TraitContext.services.overlays` is a getter.
-
-`src/hand-view.ts` is the sixth. It owns the hand's cubes: slot layout (with the gap a dragged card would drop into), gliding to slots, rocking (a selected card vibrates), dealing a stage's hand and drawing refills in one after another with the materialise effect. It builds its cubes through `src/rendered-blocks.ts`, which owns every block's three.js cube (hand or table), its disposal and the selection highlight. `main.ts` decides what the hand holds and tells the service (`sync`, `deal`, `drawIn`, `remove`, `putBack`); `TraitContext.services.hand` exposes it.
-
-`src/field-view.ts` is the seventh. It owns the placed cubes and their cells, the structure's centre of mass (the board's rotation centre follows it), the drop preview (a ghost per cell and the face highlight), the pulsing outline that invites a stage's first play, finding the placed block and face under a ray, and the gold tint on a scoring row. The dealer still decides where a line may go; `main.ts` asks it and hands the candidate to `field.showCandidate`. `TraitContext.services.field` exposes the service.
-
-`src/table-input.ts` is the eighth. It turns pointer events into gestures: dragging a hand card (carrying the rest of the selection) to play, discard or reorder it, dragging the board to rotate it, pinch and wheel zoom, clicking to select, and dragging a passive to reorder or sell it. It also owns the selection and the shared Discard/Sell target. The rules come from a `TableRules` object `main.ts` supplies (whether the table is busy, what the dealer allows, and the play, discard, reorder and sell actions); each gesture plays its sound in the service. `TraitContext.services.input` exposes it.
-
-`src/table-renderer.ts` is the ninth. It owns the WebGL renderer, the board scene in the card room and the hand scene in its studio light, the reflection environment, the drag layer and drawing a frame (board, then hand, then dragged blocks on a fresh depth buffer). `TraitContext.services.renderer` exposes it.
-
-`src/play-presenter.ts` is the tenth. It shows a play or discard the rules have accepted: played blocks fly to their cells one after another (a transparent block dissolves into its table version as it lands), discarded blocks dissolve away, and then the scoring lines are presented lowest first, each tinting its row and adding its points, before the outcome is announced. It keeps a play and a discard as separate states rather than one kind-tagged value. `main.ts` reacts to the announced outcome (the stage-won pop-up or game over follows) and exposes the service as `TraitContext.services.presenter`.
+| Service                                 | Responsibility and current caller                                                                                                                                                                                     |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `camera-view.ts`                        | Owns cameras, board pivot, framing, zoom, rotation and resize. `table-input.ts` uses it for gestures and picking; the run controller and presenter request camera transitions.                                        |
+| `audio-service.ts`                      | Owns music, player settings, gesture unlock and view sounds. The run controller reports mode and game events; `GameMode.musicStyle` currently selects ordinary or quiet music. Action sounds play at the action site. |
+| `hud-panels.ts`                         | Builds round, deck, shop coin and exit panels, then renders a `HudView`. The run controller assembles that view and handles its next-action callback. Panel presence comes from the active scene's overlay data.      |
+| `console-host.ts`                       | Adapts the run controller's `ConsoleApp` and the audio service to developer-console commands. Mode switching updates the URL and opens the mode in memory.                                                            |
+| `overlays.ts`                           | Owns title, settings, game-over and stage-won menus, inspection tooltip and refused flash. The run controller supplies menu actions and scene-stack operations.                                                       |
+| `hand-view.ts` and `rendered-blocks.ts` | Own hand layout, motion, refills and cube rendering. The run controller chooses hand contents; the presenter animates accepted actions.                                                                               |
+| `field-view.ts`                         | Owns placed cubes, centre of mass, drop preview, first-play prompt, picking and row tints. Input obtains legal candidates through run rules and shows them through this service.                                      |
+| `table-input.ts`                        | Turns pointer gestures into plays, discards, reorders, selection, board rotation and zoom. Its `TableRules` comes from the run controller.                                                                            |
+| `table-renderer.ts`                     | Owns the WebGL scenes, lights, reflection environment, drag layer and frame drawing. The card room is its physical backdrop.                                                                                          |
+| `play-presenter.ts`                     | Animates accepted plays and discards, presents scoring lines and announces outcomes to the run controller.                                                                                                            |
 
 `src/run-controller.ts` completes the split. It owns the run and its mode: the `GameRun`, the mode configuration (run rules, deck and save key), starting, resuming and saving runs, moving between stages and the shop, following an announced outcome with the stage-won pop-up or game over, applying settings, and opening the start screen. It answers the other services through `rules` (input), `menus` and `screenScenes` (overlays) and `consoleApp` (the console). `src/scene-behaviours.ts` holds the behaviour each scene trait installs.
 
-`src/main.ts` is now the composition root: it builds the services, the scene manager and the run controller, wires them to each other, opens the start scene and runs the frame loop. It has no behaviour of its own, and the architecture test keeps it that way (no named functions, no game state, no decisions beyond setup). The legacy branches that moved out of `main.ts` with the run flow are counted against `src/run-controller.ts` in the guardrail baseline; removing them is #36's job.
+`src/main.ts` is the composition root. It may create the DOM host, construct services and the scene manager, connect their narrow interfaces, open the selected mode, run the frame loop and dispose resources. Rules and progression belong in the run controller; gestures in `table-input.ts`; presentation in services and scene traits. The comment at the top of `main.ts` records this boundary, and the architecture test guards it. The legacy branches moved into `src/run-controller.ts` remain in the guardrail baseline; removing them is #36's job.
 
 The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameRun`. A `console: { name }` trait lists a mode in the developer console, and a `restartable: { param }` trait makes it honour `&restart=true` (#38).
 

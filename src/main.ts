@@ -1,7 +1,9 @@
 /**
- * The composition root: builds the services, the scene manager and the run controller,
- * wires them to each other, opens the start screen and runs the frame loop. Behaviour lives
- * in the services (see doc/game-architecture.md, "Where the code is today").
+ * Composition root. Allowed here: create the DOM host, construct services and the scene
+ * manager, connect their narrow interfaces, open the selected mode, run the frame loop,
+ * and dispose resources. Put rules and progression in the run controller; gestures in
+ * table-input; presentation in view services and scene traits. Keep mode, phase and
+ * scene decisions out of this file. See doc/game-architecture.md.
  */
 import type { BlockDestroyerBoard } from "./scene-traits/dev-manual-block-destroyer";
 import "./style.css";

@@ -15,7 +15,7 @@ This is the project's most important rule, and the one most often broken. The ga
 - comparing a phase, scene, room, mode, screen, material, kind, type, dealer, name or id against a literal (`if (game.phase === "shop")`, `kind === "steel"`, `room.id === "dev3"`);
 - `switch` over any of those;
 - reading a trait as a flag (`if (traits.quiet)`, `modeTraits.sandbox ? a : b`). A trait that is merely checked is a special case with a new name. A trait must _bring_ its behaviour, through its lifecycle hooks or a registry of handlers keyed by the trait;
-- asking whether a room or mode is a developer one. Modes compose a `console` trait to be listed by the developer console and a `restartable` trait to honour `&restart=true`; there is no `dev` flag.
+- asking whether a mode is a developer one. Modes compose a `console` trait to be listed by the developer console and a `restartable` trait to honour `&restart=true`; there is no `dev` flag.
 
 Instead, give the behaviour a home: a trait with `enter`/`exit`/`update`/`handles`, a registry entry keyed by id (a lookup table of handlers, not a chain of `if`s), or configuration data that shared code reads uniformly. `src/main.ts` is wiring only: it builds services, the scene manager and the mode, and holds no game logic.
 
@@ -25,7 +25,7 @@ Instead, give the behaviour a home: a trait with `enter`/`exit`/`update`/`handle
 
 ## Dev traits
 
-A trait that exists only for testing (a game feature no player should meet) has a name beginning with **Dev**: `devManualBlockDestroyer`, `devDestructibleMix`. Compose dev traits only into dev rooms, never into the normal game. A dev trait follows every other rule here; being for testing is not a licence for special cases.
+A trait that exists only for testing (a game feature no player should meet) has a name beginning with **Dev**: `devManualBlockDestroyer`, `devDestructibleMix`. Compose dev traits only into dev modes, never into the normal game. A dev trait follows every other rule here; being for testing is not a licence for special cases.
 
 ## Code Review Rules
 

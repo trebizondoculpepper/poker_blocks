@@ -61,11 +61,11 @@ describe("game modes composed from traits", () => {
 
   it("gives every mode a registered scene set and an explicit start scene", () => {
     for (const id of ["game", ...developerModes()]) {
-      const room = gameModeFor(id);
-      expect(room.scenes.some(({ id: scene }) => scene === modeSceneId(id, room.startScene))).toBe(
+      const mode = gameModeFor(id);
+      expect(mode.scenes.some(({ id: scene }) => scene === modeSceneId(id, mode.startScene))).toBe(
         true,
       );
-      expect(new Set(room.scenes.map(({ id: scene }) => scene)).size).toBe(room.scenes.length);
+      expect(new Set(mode.scenes.map(({ id: scene }) => scene)).size).toBe(mode.scenes.length);
     }
     expect(gameModeFor("dev3").startScene).toBe("shop");
     expect(gameModeFor("dev1").startScene).toBe("stage-1");
