@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { devRooms, fieldPlacementActive, overlaysForPhase, roomFor } from "./rooms";
+import { devRooms, fieldPlacementActive, overlaysForPhase, roomFor, roomSceneId } from "./rooms";
 import { saveKey } from "./save";
 
 describe("rooms composed from traits", () => {
@@ -35,6 +35,18 @@ describe("rooms composed from traits", () => {
       coins: {},
       shopExit: {},
     });
+  });
+
+  it("gives every mode a registered scene set and an explicit start scene", () => {
+    for (const id of ["game", ...devRooms()]) {
+      const room = roomFor(id);
+      expect(room.scenes.some(({ id: scene }) => scene === roomSceneId(id, room.startScene))).toBe(
+        true,
+      );
+      expect(new Set(room.scenes.map(({ id: scene }) => scene)).size).toBe(room.scenes.length);
+    }
+    expect(roomFor("dev3").startScene).toBe("shop");
+    expect(roomFor("dev1").startScene).toBe("stage-1");
   });
 });
 

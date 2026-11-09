@@ -46,7 +46,17 @@ import { createPassiveRack } from "./passive-rack";
 import { shopPreviewState } from "./shop-stock";
 import { createShopView } from "./shop-view";
 import { moveItem } from "./zones";
-import { devRooms, fieldPlacementActive, overlaysForPhase, roomFor } from "./rooms";
+import {
+  devRooms,
+  fieldPlacementActive,
+  overlaysForPhase,
+  roomFor,
+  roomRegistry,
+  roomSceneId,
+  type RoomSceneName,
+  type RoomSceneTraits,
+} from "./rooms";
+import { SceneManager, SceneTraitRegistry } from "./scenes";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
@@ -431,22 +441,28 @@ const storage = browserStorage();
  */
 const roomParams = new URLSearchParams(window.location.search);
 /** This page's room: the normal game, or a dev room. Its traits say how it behaves. */
-const thisRoom = roomFor(roomParams.get("room"));
-const { traits: roomTraits } = thisRoom;
-const restartRoom = thisRoom.dev && roomParams.get("restart") === "true";
+let thisRoom = roomFor(roomParams.get("room"));
+let roomTraits = thisRoom.traits;
+let restartRoom = thisRoom.dev && roomParams.get("restart") === "true";
 /** The room's session rules: endless sandboxes, and the passive rack's capacity. */
-const sessionConfig: SessionConfig = {
-  ...(roomTraits.sandbox ? sandboxSessionConfig(demoSessionConfig) : demoSessionConfig),
-  ...(roomTraits.passiveRack ? { rackCapacity: roomTraits.passiveRack.capacity } : {}),
-};
+function sessionConfigFor(traits: typeof roomTraits): SessionConfig {
+  return {
+    ...(traits.sandbox ? sandboxSessionConfig(demoSessionConfig) : demoSessionConfig),
+    ...(traits.passiveRack ? { rackCapacity: traits.passiveRack.capacity } : {}),
+  };
+}
+let sessionConfig = sessionConfigFor(roomTraits);
 const devSeedKey = "poker-blocks.dev-material-seed";
-const runSaveKey = roomTraits.save.key;
-const passiveRackView = roomTraits.passiveRack
-  ? createPassiveRack(host, {
-      capacity: roomTraits.passiveRack.capacity,
-      onPickUp: (block, event) => pickUpPassive(block, event),
-    })
-  : null;
+let runSaveKey = roomTraits.save.key;
+const rackCapacity = Math.max(
+  1,
+  ...roomRegistry.names().map((id) => roomRegistry.get(id).traits.passiveRack?.capacity ?? 0),
+);
+const passiveRackView = createPassiveRack(host, {
+  capacity: rackCapacity,
+  onPickUp: (block, event) => pickUpPassive(block, event),
+});
+passiveRackView.element.hidden = !roomTraits.passiveRack;
 function newMaterialSeed(): number {
   return Math.floor(Math.random() * 4294967296);
 }
@@ -481,6 +497,48 @@ function roomDeck(newGame: boolean): readonly CardBlock[] {
   return makeDevDeck(materials.reshuffle === "each-run" ? newMaterialSeed() : devSeed(newGame));
 }
 let cards: readonly CardBlock[] = roomDeck(false);
+const sceneBehaviours = new SceneTraitRegistry<RoomSceneTraits, HTMLElement>();
+sceneBehaviours.register("screen", {
+  enter(element, { kind }) {
+    element.dataset.scene = kind;
+  },
+  exit(element, { kind }) {
+    if (element.dataset.scene === kind) delete element.dataset.scene;
+  },
+});
+sceneBehaviours.register("pausesBelow", {
+  blocksBelow(_element, config, operation) {
+    return config[operation];
+  },
+});
+const sceneManager = new SceneManager(sceneBehaviours, host);
+for (const roomId of roomRegistry.names()) {
+  for (const scene of roomRegistry.get(roomId).scenes) sceneManager.register(scene);
+}
+function sceneForPhase(phase: Phase): RoomSceneName {
+  switch (phase) {
+    case "stage-1":
+    case "stage-2":
+    case "boss":
+    case "shop":
+      return phase;
+    case "over":
+      return "game-over";
+  }
+}
+function sceneId(name: RoomSceneName): string {
+  return roomSceneId(thisRoom.id, name);
+}
+function switchScene(name: RoomSceneName): void {
+  const id = sceneId(name);
+  if (sceneManager.current?.id !== id) sceneManager.switch(id);
+}
+function pushScene(name: RoomSceneName): void {
+  sceneManager.push(sceneId(name));
+}
+function syncSceneToGame(): void {
+  switchScene(sceneForPhase(game.phase));
+}
 // A fresh run sits behind the title screen until the player chooses Continue or New game.
 let game = new GameSession(dealerRegistry, sessionConfig, cards);
 for (const { block, cell } of game.state.field) addToBoard(block, cell);
@@ -489,31 +547,30 @@ const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
   rendered.handSlot = slot;
   return rendered;
 });
-const shopView = roomTraits.shop
-  ? createShopView(
-      host,
-      passiveRackView?.element ?? null,
-      (offer) =>
-        offer.kind === "passive" ? game.passivePrices.buy : (sessionConfig.cardPurchasePrice ?? 1),
-      (id, destination) => {
-        const bought = game.buyShopOffer(id, destination);
-        if (!bought) {
-          playSfx("action.denied");
-          return false;
-        }
-        if (bought.kind === "card") {
-          handBlocks.push(createCube(bought.block, cubeSize / 3, "hand"));
-          syncHandSlots();
-        } else passiveRackView?.render(game.state.passiveRack);
-        shopView?.render(game.state.shopStock ?? [], true);
-        updateHud();
-        autosave();
-        playSfx("shop.buy");
-        return true;
-      },
-      finishShopCameraEntrance,
-    )
-  : null;
+const shopView = createShopView(
+  host,
+  passiveRackView.element,
+  (offer) =>
+    offer.kind === "passive" ? game.passivePrices.buy : (sessionConfig.cardPurchasePrice ?? 1),
+  (id, destination) => {
+    const bought = game.buyShopOffer(id, destination);
+    if (!bought) {
+      playSfx("action.denied");
+      return false;
+    }
+    if (bought.kind === "card") {
+      handBlocks.push(createCube(bought.block, cubeSize / 3, "hand"));
+      syncHandSlots();
+    } else passiveRackView.render(game.state.passiveRack);
+    shopView.render(game.state.shopStock ?? [], true);
+    updateHud();
+    autosave();
+    playSfx("shop.buy");
+    return true;
+  },
+  finishShopCameraEntrance,
+);
+shopView.render([], false);
 // The score shown lags the state until the placed card lands.
 let shownScore = game.state.round.score;
 /** One scoring line waiting to be shown: tint its row, play its sound, add its points. */
@@ -1516,6 +1573,7 @@ function showStageWon(): void {
   if (!reward) return;
   updateHud();
   autosave();
+  pushScene("stage-won");
   menus.showStageWon(reward, "Visit shop", () => void advanceFromStage());
 }
 
@@ -1557,6 +1615,7 @@ async function advanceFromStage(): Promise<void> {
       return;
     }
     game = stockShopIfNeeded(game);
+    syncSceneToGame();
     resetTable();
     if (game.inStage) {
       musicForNewStage();
@@ -1636,8 +1695,9 @@ function startRun(session: GameSession, fresh = false): void {
   session = stockShopIfNeeded(session);
   game = session;
   const rack = roomTraits.passiveRack;
+  passiveRackView.element.hidden = !rack;
   if (rack?.startWith) game.fillPassiveRack(Math.min(rack.startWith, rack.capacity));
-  passiveRackView?.render(game.state.passiveRack);
+  passiveRackView.render(game.state.passiveRack);
   gameOverAt = null;
   // A run resumed on a won stage moves on from its pop-up (paid once; see the session).
   stageWonAt = game.inStage && roundOutcome(game.state) === "won" ? performance.now() + 400 : null;
@@ -1653,6 +1713,7 @@ function startRun(session: GameSession, fresh = false): void {
   if (game.inStage) dealHand();
   const enterShop = game.phase === "shop" && fresh && !reducedMotion;
   shopView?.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
+  syncSceneToGame();
   if (enterShop) beginShopCameraEntrance();
   updateHud();
   showSelection();
@@ -1678,6 +1739,17 @@ const menus = createMenus(host, settings, {
   },
   onScreen(next) {
     screen = next;
+    if (next === "settings") {
+      if (sceneManager.current?.id !== sceneId("settings")) pushScene("settings");
+    } else if (sceneManager.current?.id === sceneId("settings")) {
+      sceneManager.pop();
+    } else if (next === "title") {
+      switchScene("title");
+    } else if (next === "over") {
+      switchScene("game-over");
+    } else {
+      syncSceneToGame();
+    }
     // Leaving the menu takes the muffle off again.
     if (next !== "settings") music.unmuffle();
     if (next === "title") music.playTitle();
@@ -1731,11 +1803,24 @@ createConsole({
       menus.closeAll();
       return;
     }
-    // Switching to a different dev room uses its one-shot restart URL.
+    const nextRoom = roomRegistry.get(room);
+    thisRoom = nextRoom;
+    roomTraits = nextRoom.traits;
+    sessionConfig = sessionConfigFor(roomTraits);
+    runSaveKey = roomTraits.save.key;
+    cards = roomDeck(false);
+    restartRoom = nextRoom.dev;
+    passiveRackView.element.hidden = !roomTraits.passiveRack;
     const url = new URL(window.location.href);
-    url.searchParams.set("room", room);
-    url.searchParams.set("restart", "true");
-    window.location.assign(url);
+    if (nextRoom.dev) url.searchParams.set("room", nextRoom.id);
+    else url.searchParams.delete("room");
+    url.searchParams.delete("restart");
+    window.history.replaceState(window.history.state, "", url);
+    switchScene(nextRoom.startScene);
+    startRun(newSession(), true);
+    menus.closeAll();
+    if (roomTraits.quiet) music.windDown();
+    restartRoom = false;
   },
   forceOutcome(outcome) {
     if (pendingAction || !game.forceOutcome(outcome)) return false;
@@ -2036,6 +2121,21 @@ const onBlur = () => {
   touches.clear();
   pinch = null;
 };
+const routeSceneInput = (event: Event) => {
+  if (!sceneManager.dispatch(event)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+};
+const sceneInputEvents = [
+  "keydown",
+  "keyup",
+  "pointerdown",
+  "pointerup",
+  "pointercancel",
+  "click",
+  "wheel",
+];
+for (const type of sceneInputEvents) host.addEventListener(type, routeSceneInput, true);
 renderer.domElement.addEventListener("pointerdown", onPointerDown);
 renderer.domElement.addEventListener("pointermove", onPointerMove);
 renderer.domElement.addEventListener("pointerleave", onPointerLeave);
@@ -2089,6 +2189,7 @@ const animate = (time: number) => {
   updateCamera(time);
   updateAction(time, delta);
   updateScoring(time);
+  sceneManager.update(delta);
   glideHand(delta);
   cardRoom.frame(pivot.position, structureRadius(), delta);
   // Hand blocks rock gently; a selected one eases into a quick, small vibration.
@@ -2124,6 +2225,7 @@ if (import.meta.hot) {
     renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
     renderer.domElement.removeEventListener("click", onClick);
     renderer.domElement.removeEventListener("wheel", onWheel);
+    for (const type of sceneInputEvents) host.removeEventListener(type, routeSceneInput, true);
     window.removeEventListener("blur", onBlur);
     pendingAction?.effects.forEach((e) => e.finish());
     appearing.forEach(({ effect }) => effect.finish());
