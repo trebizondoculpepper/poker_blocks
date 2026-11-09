@@ -38,15 +38,26 @@ const devModeNames = gameModeRegistry
       : [];
   })
   .filter((name, index, all) => all.indexOf(name) === index);
-const devModeAlternatives = devModeNames.join("|");
+const devModeAlternatives = devModeNames
+  .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|");
 
 const ident = "[\\w$]";
 const literal = "[\"'`][^\"'`]*[\"'`]";
 const word = "[\"'`][\\w$][^\"'`]+[\"'`]";
 const eq = "[!=]==?";
 
-/** A lookup or membership test: `.includes(x)`, `.has(x)`, `.indexOf(x)`, or `table[x]`. */
-const lookupOf = `(?:\\.(?:includes|has|indexOf)\\(\\s*|[\\w$)\\]]\\s*\\[\\s*)`;
+/**
+ * A lookup or membership test: `.includes(x)`, `.has(x)`, `.indexOf(x)`, `.get(x)`, or `table[x]`
+ * (including an inline `{ … }[x]`). A registry's own lookup (`fooRegistry.get(x)`) is the
+ * permitted way to resolve a handle, so it is not a lookup here.
+ */
+const lookupOf = `(?:(?<![rR]egistry)\\.(?:includes|has|indexOf|get)\\(\\s*|[\\w$)\\]}]\\s*\\[\\s*)`;
+/**
+ * The same without `.get(x)`: event channels and registries of handlers keyed by an event
+ * type or a dealer name are the endorsed pattern, so `.get(type)` is not a side table.
+ */
+const lookupOfKind = `(?:\\.(?:includes|has|indexOf)\\(\\s*|[\\w$)\\]}]\\s*\\[\\s*)`;
 
 /** Each forbidden shape, with the reason an agent will read in the failure. */
 export const forbidden: readonly {
@@ -78,15 +89,12 @@ export const forbidden: readonly {
       `${lookupOf}(?:${ident}+\\??\\.)*${ident}*(?:[mM]ode|[sS]cene|[rR]oom)\\??\\.(?:id|name)\\s*[\\])]`,
     ),
 
-    // The registries themselves store and look things up by id.
-    except: ["src/scenes.ts", "src/core/registry.ts", "src/game-modes.ts"],
+    // The registry implementations themselves store and look things up by id.
+    except: ["src/scenes.ts", "src/core/registry.ts"],
   },
   {
     name: "looks a table or set up by a kind/phase/scene/material (data belongs on the definition)",
-    pattern: new RegExp(`${lookupOf}(?:${ident}+\\??\\.)*(?:${kindKeys})\\s*[\\])]`),
-
-    // The mode definitions build each mode's scene catalogue from its scene kinds.
-    except: ["src/game-modes.ts"],
+    pattern: new RegExp(`${lookupOfKind}(?:${ident}+\\??\\.)*(?:${kindKeys})\\s*[\\])]`),
   },
   {
     name: "names a specific developer mode outside src/game-modes.ts",
@@ -172,6 +180,9 @@ describe("the guardrail's patterns", () => {
     'if (["dev3"].includes(currentMode.id)) go();',
     "const bonus = { dev3: 2 }[currentMode.id] ?? 0;",
     "const bonus = bonuses[currentMode.id];",
+    "const bonus = { classic: 2 }[currentMode.id] ?? 0;",
+    "const bonus = bonuses.get(currentMode.id);",
+    "const colour = { steel: 1 }[kind];",
     "if (allowed.has(scene.id)) go();",
     "const colour = edgeColours[kind];",
     "const label = labels[game.phase];",
@@ -196,6 +207,10 @@ describe("the guardrail's patterns", () => {
     "const block = blocks[index];",
     "run(host, [mode]) {",
     "const scene = gameModeRegistry.get(id);",
+    'if (!sceneRegistry.has(scene.id)) throw new Error("unknown scene");',
+    "const mode = gameModeRegistry.get(params.mode);",
+    "const listeners = this.listeners.get(event.type) ?? [];",
+    "this.activeDealer = dealers.get(setup.dealer);",
     "const id = modeSceneId(currentMode.id, name);",
     'const devKey = "poker-blocks.dev-material-seed";',
   ])("does not flag %s", (line) => expect(offences(line)).toEqual([]));
