@@ -172,6 +172,29 @@ export function createConsole(hostOptions: Omit<ConsoleHost, "clear" | "history"
 
   // Heard first, on the window: the console key from anywhere but another field; and,
   // while it is down, everything typed is its own.
+  /** Moves through the history: -1 for older, +1 for newer. */
+  const browseHistory = (step: number) => {
+    if (at === history.length) draft = input.value;
+    at = Math.max(0, Math.min(history.length, at + step));
+    const line = at === history.length ? draft : history[at];
+    setInput(line, line.length);
+  };
+  const scrollPage = (step: number) => screen.scrollBy({ top: step * screen.clientHeight * 0.8 });
+  /**
+   * The command line's keys. "handled" means the key keeps its tab-completion cycle
+   * running instead of resetting it.
+   */
+  const lineKeys: Record<string, () => "handled" | void> = {
+    Enter: () => submit(),
+    Tab: () => {
+      complete();
+      return "handled";
+    },
+    ArrowUp: () => browseHistory(-1),
+    ArrowDown: () => browseHistory(1),
+    PageUp: () => scrollPage(-1),
+    PageDown: () => scrollPage(1),
+  };
   const keydown = (event: KeyboardEvent) => {
     if (isConsoleKey(event.code, event.key) && !event.ctrlKey && !event.metaKey) {
       const elsewhere =
@@ -198,23 +221,12 @@ export function createConsole(hostOptions: Omit<ConsoleHost, "clear" | "history"
       const selecting = (window.getSelection()?.toString() ?? "") !== "";
       const modifier = ["Meta", "Control", "Alt", "Shift", "OS"].includes(event.key);
       if (!modifier && !event.metaKey && !event.ctrlKey && !selecting) input.focus();
-    } else if (event.key === "Enter") {
+    } else if (Object.hasOwn(lineKeys, event.key)) {
       event.preventDefault();
-      submit();
-    } else if (event.key === "Tab") {
-      event.preventDefault();
-      complete();
-      event.stopImmediatePropagation();
-      return;
-    } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-      event.preventDefault();
-      if (at === history.length) draft = input.value;
-      at = Math.max(0, Math.min(history.length, at + (event.key === "ArrowUp" ? -1 : 1)));
-      const line = at === history.length ? draft : history[at];
-      setInput(line, line.length);
-    } else if (event.key === "PageUp" || event.key === "PageDown") {
-      event.preventDefault();
-      screen.scrollBy({ top: (event.key === "PageUp" ? -1 : 1) * screen.clientHeight * 0.8 });
+      if (lineKeys[event.key]() === "handled") {
+        event.stopImmediatePropagation();
+        return;
+      }
     }
     cycling = null;
     event.stopImmediatePropagation();
