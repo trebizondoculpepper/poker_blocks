@@ -229,7 +229,7 @@ Installed passives live in an ordered rack at the top of the screen. Their passi
 
 Those events can occur anywhere in the game loop: before the first play of a stage, when a block is played, while a line's score is being prepared, after a line is scored, after the whole field is scored, or at victory or loss. Each trigger has an explicit moment and event context so a trait can test its condition. Score-changing effects must resolve before their score is finalized; reactions to a finalized score happen afterward. The event and effect coordinator, rather than the pure `scoreLine` function, runs these responses.
 
-Each passive has one **category** (scoring, economy or utility) that sets its default look and never its behaviour; see [passives.md](passives.md), "Categories".
+Each passive has one **category** (Scoring, Economy, Effect or Retrigger) that sets its default look, activation effect and sound, and never its behaviour. Scoring passives are white porcelain with an accent showing their operation: icy blue for additive, indigo for multiplicative, violet for exponential. See [passives.md](passives.md), "Categories".
 
 Simple passive examples are **×2** and **×4** blocks, with matching icons, that multiply each line's score. By default, passives responding to the same event resolve **left to right in the rack**, unless a trait explicitly defines another timing rule. Players may reorder installed passives by dragging them between rack slots. Order can matter when future effects combine addition and multiplication; for example, adding 10 before doubling differs from doubling before adding 10.
 
