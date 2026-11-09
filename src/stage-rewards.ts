@@ -5,6 +5,7 @@
 import type { GameState } from "./game-state";
 import { stageWonPassiveCoins } from "./passive-effects";
 import { passiveDefinitions } from "./passives";
+import type { StageKind } from "./session-config";
 
 /** One line of the ledger: where the coins come from, what to call it, how many. */
 export type RewardEntry = { source: string; label: string; coins: number };
@@ -19,12 +20,16 @@ export const stageCompleteBonus = 4;
  * The ledger for a won stage: the completion bonus first, then each passive that pays on a
  * stage win, in the rack's left-to-right order. Passives paying nothing are left out.
  */
-export function stageRewardLedger(state: GameState, bonus = stageCompleteBonus): RewardEntry[] {
+export function stageRewardLedger(
+  state: GameState,
+  bonus = stageCompleteBonus,
+  stage?: StageKind,
+): RewardEntry[] {
   const entries: RewardEntry[] = [
     { source: "stage.complete", label: "Stage complete bonus", coins: bonus },
   ];
   for (const passive of state.passiveRack) {
-    const coins = stageWonPassiveCoins(passive, state.hand);
+    const coins = stageWonPassiveCoins(passive, state.hand, stage);
     if (!coins) continue;
     const name = passiveDefinitions.has(passive.definitionId)
       ? passiveDefinitions.get(passive.definitionId).name

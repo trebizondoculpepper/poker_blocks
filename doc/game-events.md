@@ -1,6 +1,6 @@
 # Gameplay events and effects
 
-Status: initial contract for the scoring and passive implementation. The `dev2` prototype wires `stage.started`, `play.completed` (after the current dealer has scored), and `discard.completed` through a FIFO passive event queue. The earlier `play.placed` timing and the scoring and effect phases below remain design work.
+Status: initial contract for the scoring and passive implementation. The session wires `play.completed` (after the current dealer has scored), `discard.completed`, and the stage and shop lifecycle events below through a FIFO passive event queue. The earlier `play.placed` timing and the scoring and effect phases below remain design work.
 
 ## Boundaries
 
@@ -24,6 +24,16 @@ An invalid play emits an action-denied presentation event only. It consumes noth
 `stage.started` fires after the dealer has prepared an empty field, allowances, and hand. It provides a separate hook for effects that should occur before any play or discard. Discarding has its own `discard.before` and `discard.completed` points and does not enter the scoring sequence.
 
 Stage lifecycle events include round number and stage kind (`stage-1`, `stage-2`, or `boss`), so a trait can match a particular stage without a separate hard-coded event name for every round. After a final `stage.won`, the session controller gathers reward entries: the default four-coin completion entry, followed by eligible trait effects in their defined order. It applies their sum to the persistent coin balance exactly once, emits a finalized reward result for the ledger, and waits for the player's next-stage or shop action. A passive that awards interest reads the coin balance at its documented point in this sequence. The stage score resets when the next stage starts; coins do not.
+
+**Built in [issue #13](https://github.com/trebizondoculpepper/poker_blocks/issues/13):** each lifecycle event carries `stage: { round, kind, dealer }` (in a shop, the stage that opened it). In order, a stage emits:
+
+1. `stage.started`
+2. once decided, exactly one of `stage.won` or `stage.lost`
+3. on a win, `reward.finalized` with `reward: { coins, balanceBefore, balance }`
+4. on leaving the stage, `shop.entered`
+5. on leaving the shop, `shop.left`, followed by the next stage's `stage.started`
+
+A loss pays nothing and ends the run. `stage.won`, `stage.lost` and `reward.finalized` are emitted once per stage, even if outcomes, rewards or advances are requested again, or a decided stage is saved and restored. Passive reward rules read the state **before** payment, so an interest rule would see `balanceBefore`. A rule condition `{ kind: "stage", kinds: [...] }` limits a rule to particular stages, such as paying only for boss wins, without a stage-specific branch in the controller.
 
 ## Context and ordering
 

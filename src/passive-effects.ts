@@ -2,6 +2,7 @@ import type { CardBlock } from "./cards";
 import type { PlacedBlock } from "./game-state";
 import { materialOf } from "./materials";
 import type { PassiveBlock, PassiveRule } from "./passives";
+import type { StageKind } from "./session-config";
 import { evaluateLine, findScoringLines, type Line, type ScoredLine } from "./scoring";
 import { cellKey } from "./traits/attachable";
 import { scorableValue } from "./traits/scorable";
@@ -20,6 +21,7 @@ function matches(
     line?: Line;
     intersections?: number;
     discarded?: readonly CardBlock[];
+    stage?: StageKind;
   },
 ): boolean {
   const condition = rule.condition;
@@ -43,6 +45,8 @@ function matches(
         (context.discarded?.filter((block) => block.traits.identity.rank === condition.rank)
           .length ?? 0) >= condition.minimum
       );
+    case "stage":
+      return !!context.stage && condition.kinds.includes(context.stage);
   }
 }
 
@@ -96,10 +100,19 @@ export function scoreFieldWithPassives(
  * Coins one passive pays when a stage is won, judged on the blocks still in the hand: per
  * matching block (perMatch), or once if any block (or, with no condition, always).
  */
-export function stageWonPassiveCoins(passive: PassiveBlock, hand: readonly CardBlock[]): number {
+export function stageWonPassiveCoins(
+  passive: PassiveBlock,
+  hand: readonly CardBlock[],
+  stage?: StageKind,
+): number {
   let coins = 0;
   for (const rule of passive.traits.passive.rules ?? []) {
     if (rule.on !== "stage.won" || rule.effect.kind !== "add-coins") continue;
+    // A stage condition tests the won stage itself, not the blocks left in the hand.
+    if (rule.condition?.kind === "stage") {
+      if (matches(rule, { stage })) coins += rule.effect.amount;
+      continue;
+    }
     if (!rule.condition) {
       coins += rule.effect.amount;
       continue;

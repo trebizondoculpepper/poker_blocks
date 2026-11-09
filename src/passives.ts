@@ -1,5 +1,6 @@
 import { Registry } from "./core/registry";
 import type { BlockMaterial } from "./materials";
+import type { StageKind } from "./session-config";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
 
 /** Serializable block data. Behavior lives in the referenced trait definition. */
@@ -10,7 +11,9 @@ export type PassiveRule = {
     | { kind: "suit"; values: readonly ("hearts" | "diamonds")[] }
     | { kind: "line-length"; minimum?: number; maximum?: number }
     | { kind: "intersection" }
-    | { kind: "rank-count"; rank: "A"; minimum: number };
+    | { kind: "rank-count"; rank: "A"; minimum: number }
+    /** Only at these stages, e.g. a reward paid for boss wins alone (issue #13). */
+    | { kind: "stage"; kinds: readonly StageKind[] };
   effect:
     | { kind: "multiply-value"; factor: number }
     | { kind: "add-value"; amount: number }
@@ -31,7 +34,18 @@ export type PassiveBlock = {
   };
 };
 
-export type GameEvent = { type: string; blockId?: string; cardIds?: readonly string[] };
+/** Which stage a lifecycle event belongs to, so a trait can match a moment by condition. */
+export type StageContext = { round: number; kind: StageKind; dealer: string };
+
+export type GameEvent = {
+  type: string;
+  blockId?: string;
+  cardIds?: readonly string[];
+  /** On stage and shop lifecycle events: the stage they belong to. */
+  stage?: StageContext;
+  /** On `reward.finalized`: the coins paid, and the balance before and after. */
+  reward?: { coins: number; balanceBefore: number; balance: number };
+};
 
 export type PassiveTraitDefinition = {
   id: string;
