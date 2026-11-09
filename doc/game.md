@@ -157,6 +157,8 @@ The playable `?room=dev0` experiment (formerly `?room=dev`) assigns a random vis
 
 These prototypes have no material-specific rules yet. **Jelly** is excluded until its motion and attachment behavior are designed.
 
+Material interactions will be built one combination at a time from configured, reusable traits, without material-name branches in the controller. The first mission is [ice beside fire](https://github.com/trebizondoculpepper/poker_blocks/issues/21): a timed destructible reaction removes melted ice, then face-connected groups settle toward the field's center of gravity before scoring. The next is [meat beside fire](https://github.com/trebizondoculpepper/poker_blocks/issues/22): a `cookable` trait advances doneness over turns and a French themed passive rewards steak that is cooked but not overcooked. `Cookable` must support other ingredient progressions, such as salmon becoming opaque, flaky, then dry, through configuration. Flammable, brittle, corrodible, and conductive are possible later traits; their exact rules remain open.
+
 ## Passives (design)
 
 Passives are intended to be a major source of combinations throughout a run. Their effects may change line scores, how card values work, coin income, or other rules at defined moments in the game loop. Players should be able to combine these effects in unexpected ways.
@@ -208,7 +210,7 @@ The two-Ace effect is a first use case for an event leading to another event: th
 ## A run
 
 - A **round** is three stages: **stage 1**, **stage 2** and the **boss stage**. Stage 1 has a lower target than stage 2. The boss stage can use a different dealer, which adds extra rules or restrictions for more challenge.
-- After each boss stage there is a **shop**, and leaving it starts the next round.
+- **Planned cadence:** a skippable shop follows every stage, including stage 1 and stage 2; leaving the boss-stage shop starts the next round. The current build still opens a shop only after the boss stage. See [issue #23](https://github.com/trebizondoculpepper/poker_blocks/issues/23).
 - Target scores rise as the run goes on (_tune_).
 - A run is **won** by beating a fixed number of rounds (_tune_). Losing any stage ends the run.
 - The deck, including blocks bought at the shop, carries over for the whole run.
@@ -221,13 +223,13 @@ The demo uses these placeholders. They live in `src/session-config.ts` so they c
 - **Boss dealer:** the boss stage uses the base dealer until boss rules exist.
 - **Hand at a stage boundary:** cards left in the hand return to the deck before the next stage is dealt.
 - **Discard pile after the shop:** returns to the deck when the player leaves the shop, so the deck does not run out over a long run.
-- **Shop:** an empty placeholder screen with a button to start the next round.
+- **Shop:** currently follows the boss stage and offers two passives and three playable blocks at one coin each; [issue #23](https://github.com/trebizondoculpepper/poker_blocks/issues/23) moves it after every stage.
 
 ### Shop
 
 The shop is an optional **room trait**. Its configuration supplies the number of passive and playable-card offers, while the room composes that trait with the table, hand, passive rack, and session rules. Dev3 starts directly in this composed shop; the normal game activates it after a boss stage. Field placement is a separate stage-scene trait and is absent while the shop scene is active. Shop stock uses the same 3D cube appearances as playable and passive blocks, and each offer exposes its inspectable description on hover or keyboard focus. The shop presentation can independently move the camera to frame the offers where they land on the table.
 
-The planned default shop opens after the boss stage with five objects at rest on the table: **two passive blocks** and **three playable blocks**. For the first version, every item costs **one coin**; prices will be tuned later. Buying requires enough coins. The player drags a passive to the passive rack or a playable block to the hand. Bought playable blocks become part of the player's collection and carry into later stages. Future shop stock may include special cards and modifier blocks.
+The current shop opens after the boss stage with five objects at rest on the table: **two passive blocks** and **three playable blocks**. For the first version, every item costs **one coin**; prices will be tuned later. Buying requires enough coins. The player drags a passive to the passive rack or a playable block to the hand. Bought playable blocks become part of the player's collection and carry into later stages. Future shop stock may include special cards and modifier blocks. The planned cadence opens this same shop after every stage and lets the player skip it without buying.
 
 The shop entrance is a separate presentation sequence: a deliberately theatrical **SHOP OPEN** sign descends, blocks appear to be thrown onto the table by an unseen hand, and the camera moves to frame them. The items are at rest before the player interacts with them; the animation does not change stock or purchase rules.
 
