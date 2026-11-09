@@ -4,7 +4,9 @@
 language: en-GB
 reviews:
   profile: assertive
-  request_changes_workflow: true
+  # Findings are comments; blocking comes from the CodeRabbit check on the current commit
+  # (a required status check on main), so a stale review never holds a PR.
+  request_changes_workflow: false
   high_level_summary: true
   auto_review:
     enabled: true
