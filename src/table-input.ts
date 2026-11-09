@@ -139,6 +139,8 @@ const normalMotionRate = 1;
 export function createDiscardTarget(host: HTMLElement): HTMLElement {
   const discardArea = document.createElement("div");
   discardArea.className = "discard-area";
+  // A drop target and a button: it takes pointers even inside the pass-through HUD frame.
+  discardArea.dataset.interactive = "";
   discardArea.setAttribute("aria-label", "Discard area");
   discardArea.setAttribute("role", "button");
   discardArea.innerHTML = `
