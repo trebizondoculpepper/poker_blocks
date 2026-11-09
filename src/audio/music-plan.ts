@@ -4,26 +4,29 @@
  * screens ask this module what to play.
  */
 
-export type MusicScene = "title" | "settings" | "stage" | "boss";
+export type MusicScene = "title" | "stage" | "boss";
 
 export type MusicPlan = {
   /** One of these, chosen at random, plays on the title screen. */
   title: readonly string[];
-  /** Reserved for the settings screen. */
-  settings: string;
+  /**
+   * Loops kept out of the stage rotation. The Settings screen once had its own track; it now
+   * filters whatever is playing (#87, #89), and its old loop stays out of the rotation.
+   */
+  reserved: readonly string[];
   /** Reserved for boss stages. */
   boss: string;
 };
 
 export const defaultMusicPlan: MusicPlan = {
   title: ["blaxploitation-horns", "stripped-sleaze"],
-  settings: "style-ambient-lounge",
+  reserved: ["style-ambient-lounge"],
   boss: "solitaire-boss",
 };
 
-/** Tracks a normal stage may use: everything except the reserved boss and settings loops. */
+/** Tracks a normal stage may use: everything except the boss loop and the reserved loops. */
 export function stagePool(all: readonly string[], plan: MusicPlan = defaultMusicPlan): string[] {
-  return all.filter((id) => id !== plan.boss && id !== plan.settings);
+  return all.filter((id) => id !== plan.boss && !plan.reserved.includes(id));
 }
 
 /**
@@ -45,8 +48,6 @@ export function pickTrack(
   switch (scene) {
     case "title":
       return pickFrom(plan.title);
-    case "settings":
-      return all.includes(plan.settings) ? plan.settings : null;
     case "boss":
       return all.includes(plan.boss) ? plan.boss : null;
     case "stage":
