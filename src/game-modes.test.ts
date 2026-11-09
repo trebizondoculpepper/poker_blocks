@@ -19,7 +19,7 @@ describe("game modes composed from traits", () => {
     expect(gameModeFor("dev2").id).toBe("dev2");
     expect(gameModeFor("dev").id).toBe("dev0");
     expect(gameModeFor("nonsense").id).toBe("game");
-    expect(developerModes()).toEqual(["dev0", "dev1", "dev2", "dev3", "dev4"]);
+    expect(developerModes()).toEqual(["dev0", "dev1", "dev2", "dev3", "dev4", "dev-attract"]);
   });
 
   it("opens a mode from ?mode=, falling back to the legacy ?room= alias", () => {
@@ -120,6 +120,7 @@ describe("game modes composed from traits", () => {
     // The title scene owns its own panel, with Continue gated on a save existing.
     expect(traitsOf("game", "title")).toEqual({
       screen: { kind: "title" },
+      attractBackground: {},
       panelFooter: {
         links: [
           {

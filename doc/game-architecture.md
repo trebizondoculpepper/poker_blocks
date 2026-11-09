@@ -368,6 +368,18 @@ The extracted services own presentation and interaction. `main.ts` constructs an
 
 `src/run-controller.ts` completes the split. It owns the run and its mode: the `GameRun`, the mode configuration (run rules, deck and save key), starting, resuming and saving runs, moving between stages and the shop, following an announced outcome with the stage-won pop-up or game over, applying settings, and opening the start screen. It answers the other services through `rules` (input), `menus` and `screenScenes` (overlays) and `consoleApp` (the console). `src/scene-behaviours.ts` holds the behaviour each scene trait installs.
 
+### The title's attract sequence
+
+The title screen's background is a slow field of card cubes drifting toward the camera on black, with no table under them (#147). It is its own `THREE.Scene`, camera and canvas: the renderer draws it to a quarter-resolution buffer and CSS blurs it, so the menu over it stays sharp.
+
+It is a **scene trait** (`attractBackground`), so the title composes it and no generic code asks which scene is in front. The pause menu and gameplay do not compose it, so the table stays visible behind those.
+
+Its motion is **configuration**, `AttractTuning` in `src/attract-scene.ts`: a mean and a deviation for velocity (units per second), spin (radians per second) and the interval between a card passing the camera and its replacement appearing. A card is dealt its values when it spawns, so changing a value changes what appears next rather than moving cards already in flight.
+
+`?mode=dev-attract` composes a `devAttractTuning` trait that shows live sliders for those six values, plus a **Copy values** button that puts them on the clipboard in the shape `defaultAttractTuning` expects. It is a dev mode: the normal game never composes it.
+
+The cards' randomness is cosmetic and comes from `Math.random`, never the session's seeded stream, so the title cannot change a replayable run (#134). `src/random-guardrail.test.ts` enforces that.
+
 ### Scene trait catalogue
 
 `src/scene-behaviours.ts` registers each scene trait against its own config type, and a scene composes whichever subset it needs. Behaviour therefore comes from the scene in front, and a scene that gains or loses a trait leaves the others alone.
