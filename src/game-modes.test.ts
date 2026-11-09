@@ -19,7 +19,15 @@ describe("game modes composed from traits", () => {
     expect(gameModeFor("dev2").id).toBe("dev2");
     expect(gameModeFor("dev").id).toBe("dev0");
     expect(gameModeFor("nonsense").id).toBe("game");
-    expect(developerModes()).toEqual(["dev0", "dev1", "dev2", "dev3", "dev4", "dev-attract"]);
+    expect(developerModes()).toEqual([
+      "dev0",
+      "dev1",
+      "dev2",
+      "dev3",
+      "dev4",
+      "dev-style",
+      "dev-attract",
+    ]);
   });
 
   it("opens a mode from ?mode=, falling back to the legacy ?room= alias", () => {

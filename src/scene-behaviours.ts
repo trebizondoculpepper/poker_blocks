@@ -24,6 +24,7 @@ import {
   type BlockDestroyerBoard,
 } from "./scene-traits/dev-manual-block-destroyer";
 import { SceneTraitRegistry } from "./scenes";
+import { devHudStyleAudition, hudStyle } from "./scene-traits/hud-style";
 import type { SoundEffectId } from "./audio/sfx-registry";
 
 /** What a scene trait's behaviour may touch. */
@@ -192,6 +193,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.attract.hideTuning(),
   });
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
+  behaviours.register("hudStyle", hudStyle<Context>());
+  behaviours.register("devHudStyleAudition", devHudStyleAudition<Context>());
   behaviours.register("menu", {
     enter(context, { label, items }) {
       context.services.overlays.showMenu(label, itemsToShow(context, items));

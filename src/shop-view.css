@@ -117,9 +117,8 @@
 
 .shop-offer-label {
   max-width: 110px;
-  font:
-    700 11px system-ui,
-    sans-serif;
+  color: var(--hud-ink, inherit);
+  font: 700 11px var(--hud-font, system-ui, sans-serif);
   text-align: center;
   text-shadow: 0 2px 4px #000;
 }
@@ -164,13 +163,11 @@
   width: min(600px, 65vw);
   height: 125px;
   transform: translateX(-50%);
-  border: 3px dotted #f4f0e8;
-  border-radius: 10px;
-  color: #f4f0e8;
-  font:
-    700 11px system-ui,
-    sans-serif;
-  letter-spacing: 0.12em;
+  border: var(--hud-target-border, 3px dotted #f4f0e8);
+  border-radius: var(--hud-panel-radius, 10px);
+  color: var(--hud-ink, #f4f0e8);
+  font: 700 11px var(--hud-heading-font, system-ui, sans-serif);
+  letter-spacing: var(--hud-heading-spacing, 0.12em);
   text-align: center;
   padding-top: 8px;
   pointer-events: none;
