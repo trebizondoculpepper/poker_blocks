@@ -116,6 +116,8 @@ export type RunController = {
   offerPrice(offer: ShopOffer): number;
   /** What the shop is showing while its scene is in front. */
   shopStock(): readonly ShopOffer[];
+  /** Whether a saved run this mode can continue exists (the title's `hasSave` condition). */
+  hasSave(): boolean;
   /**
    * Carry out a named action from a menu item or key (#87): a navigation action follows the
    * mode's navigation data; a game action (such as `quitToTitle`) runs its handler.
@@ -204,6 +206,11 @@ export function createRunController<Context>(options: {
   function switchScene(name: SceneName): void {
     const id = modeSceneId(currentMode.id, name);
     if (scenes.current?.id !== id) scenes.switchTo(id);
+  }
+
+  /** Put one of this mode's scenes in front, whether or not it is already there. */
+  function showScene(name: SceneName): void {
+    scenes.switchTo(modeSceneId(currentMode.id, name));
   }
 
   function followRunPosition(): void {
@@ -452,7 +459,10 @@ export function createRunController<Context>(options: {
    */
   const onLoadHandlers: Record<OnLoad, () => void> = {
     title() {
-      if (!restartMode) return services.overlays.showTitle();
+      if (!restartMode) {
+        showScene("title");
+        return;
+      }
       startRun(newRun(), true);
       services.overlays.closeAll();
     },
@@ -509,7 +519,8 @@ export function createRunController<Context>(options: {
     quitToTitle() {
       stageWonAt = gameOverAt = null;
       services.presenter.reset();
-      services.overlays.showTitle();
+      // The title scene's `titleScreen` trait shows the panel as it enters.
+      showScene("title");
     },
   };
 
@@ -525,8 +536,10 @@ export function createRunController<Context>(options: {
     gameActions[action]?.();
   }
 
+  const hasSave = (): boolean => loadSaved() !== null;
+
   const menus: MenuCallbacks = {
-    hasSave: () => loadSaved() !== null,
+    hasSave,
     onAction: dispatch,
     onContinue() {
       const snapshot = loadSaved();
@@ -557,7 +570,7 @@ export function createRunController<Context>(options: {
       startRun(newRun());
       services.overlays.closeAll();
     },
-    home: () => services.overlays.showTitle(),
+    home: () => showScene("title"),
     mode: () => currentMode,
     openMode(mode) {
       enterMode(mode);
@@ -654,6 +667,7 @@ export function createRunController<Context>(options: {
     offerPrice: (offer) =>
       offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),
     shopStock: () => game.state.shopStock ?? [],
+    hasSave,
     dispatch,
     buy(id, destination) {
       const bought = game.buyShopOffer(id, destination);

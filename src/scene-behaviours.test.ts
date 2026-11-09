@@ -35,6 +35,7 @@ function recordingHost() {
         dispose: () => undefined,
       },
       run: {
+        hasSave: () => false,
         shopStock: () => [{ kind: "card", block: {} as never }],
         dispatch: (action) => void calls.push(`action:${action}`),
       },
@@ -44,6 +45,8 @@ function recordingHost() {
         hideMenu: () => void calls.push("menu:hide"),
         showSettings: () => void calls.push("settings:show"),
         hideSettings: () => void calls.push("settings:hide"),
+        showTitle: (items) => void calls.push(`title:${items.map(({ id }) => id).join(",")}`),
+        hideTitle: () => void calls.push("title:hide"),
       },
       audio: { setMusicFilter: (kind) => void calls.push(`filter:${kind}`) },
       sound: (id) => void calls.push(`sound:${id}`),
@@ -253,5 +256,48 @@ describe("the pause menu's scene traits (#87)", () => {
     scenes.dispatch(escape);
     // Only the pause menu's own key action ran; the stage's never did.
     expect(calls).toEqual(["sound:ui.back", "action:resume"]);
+  });
+});
+
+describe("the title screen's scene trait (#88)", () => {
+  const title = gameModeFor("game").scenes.find(({ id }) => id === "game/title")!;
+  const stage = gameModeFor("game").scenes.find(({ id }) => id === "game/stage-1")!;
+
+  function stack(hasSave: boolean) {
+    const recorded = recordingHost();
+    recorded.host.services.run.hasSave = () => hasSave;
+    const scenes = new SceneManager(sceneBehaviours(), recorded.host);
+    scenes.register(title);
+    scenes.register(stage);
+    return { ...recorded, scenes };
+  }
+
+  it("shows the items its scene declares, leaving out one whose condition fails", () => {
+    // Continue needs a save, so with none the scene shows New game and Settings only.
+    const without = stack(false);
+    without.scenes.switchTo(title.id);
+    expect(without.calls).toContain("title:new,openSettings");
+
+    const withSave = stack(true);
+    withSave.scenes.switchTo(title.id);
+    expect(withSave.calls).toContain("title:continue,new,openSettings");
+  });
+
+  it("hides the panel when its scene is left", () => {
+    const { scenes, calls } = stack(true);
+    scenes.switchTo(title.id);
+    calls.length = 0;
+    scenes.switchTo(stage.id);
+    expect(calls).toContain("title:hide");
+  });
+
+  it("re-shows the items when it comes back in front, so Continue reflects the latest save", () => {
+    const { scenes, calls } = stack(false);
+    scenes.switchTo(title.id);
+    scenes.push(stage.id);
+    calls.length = 0;
+    scenes.pop();
+    // Coming back in front re-reads the conditions, so Continue appears once a save exists.
+    expect(calls).toContain("title:new,openSettings");
   });
 });
