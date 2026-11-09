@@ -15,13 +15,17 @@ This is the project's most important rule, and the one most often broken. The ga
 - comparing a phase, scene, room, mode, screen, material, kind, type, dealer, name or id against a literal (`if (game.phase === "shop")`, `kind === "steel"`, `room.id === "dev3"`);
 - `switch` over any of those;
 - reading a trait as a flag (`if (traits.quiet)`, `modeTraits.sandbox ? a : b`). A trait that is merely checked is a special case with a new name. A trait must _bring_ its behaviour, through its lifecycle hooks or a registry of handlers keyed by the trait;
-- asking whether a mode is a developer one. Modes compose a `console` trait to be listed by the developer console and a `restartable` trait to honour `&restart=true`; there is no `dev` flag.
+- asking whether a mode is a developer one. Modes compose a `console` trait to be listed by the developer console and a `restartable` trait to honour `&restart=true`; there is no `dev` flag;
+- using a mode's or scene's **identity** to decide behaviour in any disguise: a membership test (`["dev3"].includes(mode.id)`, `allowed.has(scene.id)`), a table indexed by it (`{ dev3: 2 }[mode.id]`, `bonuses[mode.id]`), or naming a specific mode anywhere outside `src/game-modes.ts`;
+- a side table or set keyed by a kind of thing (`edgeColours[material]`, `labels[phase]`, `transparentMaterials.has(kind)`). That is the same special case written as data.
 
-Instead, give the behaviour a home: a trait with `enter`/`exit`/`update`/`handles`, a registry entry keyed by id (a lookup table of handlers, not a chain of `if`s), or configuration data that shared code reads uniformly. `src/main.ts` is wiring only: it builds services, the scene manager and the mode, and holds no game logic.
+**Identity is opaque.** A mode's or scene's id is a handle: code may use it to look the thing up in its registry, to build a save key, URL or scene id, or to display it. Code may never use it to choose behaviour. Everything a mode or scene does differently is declared on that mode or scene, as traits or run setup steps, and a thing's data lives on its own definition (its trait configuration), not in a table somewhere else keyed by its id or kind.
+
+Instead, give the behaviour a home: a trait with `enter`/`exit`/`update`/`handles`, a **registry of handlers keyed by trait or step name** (never by a mode, scene or other identity), or configuration data on the definition that shared code reads uniformly. `src/main.ts` is wiring only: it builds services, the scene manager and the mode, and holds no game logic.
 
 **If there is nowhere for the behaviour to live, stop.** Do not add the branch "for now". Ask the user, or open an issue for the missing trait or hook, and say so in your reply. Speed is never a reason to add a special case.
 
-**This is enforced.** `src/guardrails.test.ts` fails CI when a file gains a forbidden branch. Legacy branches are listed in `src/guardrails-baseline.json`, whose counts may only go down: when you remove one, lower the count; never raise it. A line ending in `// branch-ok: #<issue>` is exempt only when that issue records why the exception is justified and the user agreed to it. CodeRabbit (`.coderabbit.yaml`) also requests changes on any PR that adds such a branch, and the PR template asks you to confirm it.
+**This is enforced.** `src/guardrails.test.ts` fails CI when a file gains a forbidden branch, identity check or kind-keyed table. Legacy offences are listed line by line in `src/guardrails-baseline.json`: a new offending line fails even if you removed an old one in the same change. When you remove a legacy line, delete its entry; never add one. (If you move legacy code verbatim to another file, move its entry with it.) A line ending in `// branch-ok: #<issue>` is exempt only when that issue records why the exception is justified and the user agreed to it. CodeRabbit (`.coderabbit.yaml`) also requests changes on any PR that adds such a branch, and the PR template asks you to confirm it.
 
 ## Dev traits
 
@@ -33,7 +37,7 @@ The primary review question is whether this PR moves the code toward the **targe
 
 ### Composable architecture
 
-- Compare new behavior with the "No special cases" rule above and the target design in [doc/game-architecture.md](doc/game-architecture.md). Flag new or expanded block, scene, room, mode, dealer, or material-specific branches; trait-presence flags; behavior placed on objects instead of traits; and new game logic in `src/main.ts`. The safe path is configured traits, their lifecycle hooks, or shared registries. Do not flag untouched legacy code just because it exists. Treat an exception as agreed only when its `// branch-ok: #<issue>` points to the recorded user decision.
+- Compare new behavior with the "No special cases" rule above and the target design in [doc/game-architecture.md](doc/game-architecture.md). Flag new or expanded block, scene, mode, dealer, or material-specific branches; trait-presence flags; a mode's or scene's identity used as a key or in a membership test, or a mode named outside `src/game-modes.ts`; side tables or sets keyed by a kind, phase, scene or material (however the special case is spelled); behavior placed on objects instead of traits; and new game logic in `src/main.ts`. The safe path is configured traits, their lifecycle hooks, or shared registries. Do not flag untouched legacy code just because it exists. Treat an exception as agreed only when its `// branch-ok: #<issue>` points to the recorded user decision.
 
 ### Game rules and intended behavior
 

@@ -27,11 +27,26 @@ reviews:
           3. A trait read as a flag: `if (traits.x)`, `if (!roomTraits.x)`,
              `roomTraits.x ? a : b`, `traits.x && doSomething()`. A trait must carry its
              behaviour (lifecycle hooks or a registry of handlers), not be checked.
-          4. A check of whether a room or mode is a developer one (`.dev`).
+          4. A check of whether a mode is a developer one (`.dev`).
           5. New game logic in `src/main.ts` (rules, scoring, phase or scene decisions,
-             per-room behaviour). main.ts may only construct services, the scene manager
-             and the mode.
-          6. Any increase to a count in `src/guardrails-baseline.json`, or a new file in it.
+             per-mode behaviour). main.ts may only construct services, the scene manager
+             and the run controller.
+          6. Any new line in `src/guardrails-baseline.json` (entries may only be removed, or
+             moved verbatim together with their code).
+          7. A mode's or scene's identity used to choose behaviour in ANY spelling, not only
+             `===`: a membership test (`["dev3"].includes(mode.id)`, `ids.has(scene.id)`),
+             a table or map indexed by it (`{ dev3: 2 }[mode.id]`, `bonuses[mode.id]`), a
+             helper that hides the check (`isShopScene(id)`), or naming a specific mode
+             anywhere outside `src/game-modes.ts`. Identity is opaque: ids may be used to
+             look things up in their registry, build save keys, URLs and scene ids, or for
+             display, never to select behaviour.
+          8. A side table or set keyed by a kind, phase, scene, screen or material
+             (`edgeColours[material]`, `labels[phase]`, `transparent.has(kind)`): the same
+             special case written as data. That data belongs on the thing's definition, as
+             trait configuration.
+          General test: if adding a new mode, scene or material would require editing this
+          code (adding an id to a list, a key to a table, a case to a branch), it is a
+          special case, whatever its syntax. Registries keyed by trait or step name are fine.
           Exceptions: a line ending in `// branch-ok: #<issue>` passes only if the linked
           issue states why the branch is necessary. Validating untrusted input (e.g. parsing
           a save file, `typeof x === "string"`) and tests are not special cases.
@@ -44,9 +59,9 @@ reviews:
           doc/game-architecture.md (especially "Agreed principles" and "Modes, scenes and
           traits") and AGENTS.md. Do not only check the diff compiles; ask where the
           behaviour lives and whether that is the right place. FAIL if any of:
-          1. Behaviour is put in the wrong layer: game rules outside GameSession or a trait;
-             rendering or DOM work inside GameSession or rules code; scene sequencing
-             hard-coded rather than expressed as scene-graph data.
+          1. Behaviour is put in the wrong layer: game rules outside GameRun, run setup or a
+             trait; rendering or DOM work inside GameRun or rules code; scene sequencing
+             hard-coded rather than expressed as game-flow data on the game mode.
           2. A block, scene or mode gains behaviour code of its own instead of composing a
              reusable, configured trait (definitions must stay plain, serialisable data).
           3. A trait is used only as a flag that other code checks, rather than carrying its
@@ -55,6 +70,8 @@ reviews:
              settings store, save path or scene/overlay system) instead of extending it.
           5. A module reaches into another's internals or shared mutable module state where
              a service interface or event should be used; new coupling to src/main.ts.
+          8. Identity used as behaviour: a mode or scene id (or a kind, phase or material)
+             used as a key into code or data that lives outside that thing's definition.
           6. The change contradicts the documented design without updating the docs in the
              same PR, or adds a concept (new kind of scene, trait family, save field) that
              the docs do not describe.
@@ -87,15 +104,17 @@ reviews:
       - name: "Baseline only shrinks"
         mode: error
         instructions: |
-          Pass/fail criteria. If `src/guardrails-baseline.json` changes, every changed count
-          must be lower than before and no file may be added. Removing an entry is allowed.
-          FAIL on any increase or new entry.
+          Pass/fail criteria. `src/guardrails-baseline.json` lists each legacy offending
+          line verbatim. If it changes, lines may only be removed, or moved verbatim to
+          another file together with the code that moved. FAIL on any new line, any edited
+          line text that is not a pure move, or a new file entry not explained by a move.
   path_instructions:
     - path: "src/main.ts"
       instructions: |
-        main.ts is wiring only. Flag any added conditional that depends on game state,
-        phase, scene, room, mode or a trait's presence, and any added game rule. Request
-        that it move into a trait, a scene's traits, or a service.
+        main.ts is the composition root (wiring only). Flag any added conditional that
+        depends on game state, phase, scene, mode or a trait's presence, any mode or scene
+        named here, and any added game rule. Request that it move into a trait, a scene's
+        traits, a service or the run controller.
     - path: "src/**/*.ts"
       instructions: |
         Review against the project's recorded decisions first, correctness second:
@@ -103,13 +122,17 @@ reviews:
         Flag any conflict with an earlier decision, citing the section, and say whether
         the code or the document should change.
         Enforce AGENTS.md "No special cases": behaviour comes from composed traits, never
-        from branching on what kind of thing something is. Prefer registries keyed by id
-        (lookup tables of handlers) over if/else or switch chains on kinds. Flag trait
-        presence checks used as flags. Ask for tests for new traits.
-    - path: "src/rooms.ts"
+        from branching on what kind of thing something is. A registry of handlers keyed by
+        TRAIT or STEP NAME is the right shape; a table keyed by a mode, scene, phase or
+        material id is a special case in disguise. Identity is opaque: flag any mode or
+        scene id used in a comparison, `includes`/`has`, a table index, or a helper that
+        hides such a check, and any mode named outside src/game-modes.ts. Flag trait
+        presence checks used as flags (`if`, `?:`, `&&`). Ask for tests for new traits.
+    - path: "src/game-modes.ts"
       instructions: |
-        Rooms/modes and scenes must be plain data: ids and trait configurations. Flag any
-        function here that branches on phase, room or scene ids.
+        Game modes and their scenes must be plain data: ids, trait configurations and run
+        setup steps. This is the only file that may name a specific mode. Flag any function
+        here that branches on phase, mode or scene ids.
     - path: "doc/**"
       instructions: |
         Docs must stay consistent with AGENTS.md "No special cases" and the "Modes, scenes
