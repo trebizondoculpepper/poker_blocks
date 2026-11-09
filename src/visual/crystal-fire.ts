@@ -9,6 +9,7 @@
  * gem. A sharp reflected glint adds the sparkle. Nothing here is physically exact.
  */
 import * as THREE from "three";
+import { additiveLight } from "./additive-light";
 
 const vertexShader = /* glsl */ `
   varying vec3 vWorldPosition;
@@ -53,7 +54,10 @@ const fragmentShader = /* glsl */ `
     // Sparkle: a very tight glint off the facet.
     vec3 glint = reflect(view, normal);
     float sparkle = pow(max(dot(glint, normalize(vec3(0.3, 0.9, 0.3))), 0.0), 300.0) * 4.0;
-    gl_FragColor = vec4((fire + sparkle) * intensity, 1.0);
+    // Premultiplied light: the glow's own brightness is its coverage, so the transparent front
+    // canvas (#116, #190) holds a valid colour wherever the flame is, and nothing where it isn't.
+    vec3 light = min((fire + sparkle) * intensity, vec3(1.0));
+    gl_FragColor = vec4(light, max(light.r, max(light.g, light.b)));
   }
 `;
 
@@ -72,7 +76,8 @@ export function createCrystalFire(geometry: THREE.BufferGeometry): THREE.Mesh {
     // table, which refract only solid objects, show it bent through them. Additive and
     // drawn last among them (renderOrder), so nothing behind paints over it.
     transparent: false,
-    blending: THREE.AdditiveBlending,
+    // Premultiplied light blended over what is behind (src/visual/additive-light.ts, #190).
+    ...additiveLight,
     depthWrite: false,
   });
   const fire = new THREE.Mesh(geometry, material);
