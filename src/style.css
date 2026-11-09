@@ -484,6 +484,11 @@ body,
   font-family: system-ui, sans-serif;
 }
 
+/* The title sits over the attract sequence, whose cards should read sharply: no blur (#203). */
+.menu-overlay.title-screen {
+  backdrop-filter: none;
+}
+
 .menu-overlay[hidden] {
   display: none;
 }
