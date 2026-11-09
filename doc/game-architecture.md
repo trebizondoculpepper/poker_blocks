@@ -210,7 +210,7 @@ main.ts ── builds ──> services + SceneManager + selected GameMode
 GameMode ── catalogs ──> Scene definitions and start scene
 run-controller ── coordinates ──> GameRun state and game flow
 SceneManager ── owns ──> active scene stack; calls scene trait lifecycle hooks
-RunRules + mode configuration ── create ──> GameRun
+RunRules + the mode's run setup ── create ──> GameRun
 ```
 
 The Escape/settings menu is a scene pushed over gameplay. Popping it resumes the underlying scene. Stage-won is pushed while rewards are presented; the shop is a scene between stages while the same run persists. Title and game-over currently replace the stack. A future victory ending should be represented by a scene as well.
