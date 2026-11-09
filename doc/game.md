@@ -190,7 +190,7 @@ The rack is separate from the hand and field. Passives are not discardable. **Bu
 
 ### Dev2 passive sandbox
 
-**Rooms are composed from room traits** (`src/rooms.ts`): each room (the normal game, or a dev room opened with `?room=`) is data, an id plus traits such as `passiveRack { capacity, startWith }`, `sandbox`, `materialDeck`, `materialSample`, `skipTitle` and `quiet`, and the game reads the traits rather than asking which room it is. The passive rack is composed into the normal game (five slots, starting empty) and into dev2 (five slots, two passives dealt). The rack's capacity is enforced by the session: a full rack takes no more.
+**Rooms are composed from room traits** (`src/rooms.ts`): each room (the normal game, or a dev room opened with `?room=`) is data, an id plus traits such as `passiveRack { capacity, startWith }`, `sandbox`, `materialDeck`, `materialSample` and `skipTitle`, and the game reads the traits rather than asking which room it is. A temporary `musicMode` field keeps dev1–dev3 quiet until music becomes a composed trait in #34. The passive rack is composed into the normal game (five slots, starting empty) and into dev2 (five slots, two passives dealt). The rack's capacity is enforced by the session: a full rack takes no more.
 
 The separate `?room=dev2` sandbox reuses the endless-play session configuration from `dev1`. It deals two distinct passives from the roster below and gives standard cards a mix of gameplay materials. The rack and current run survive a reload. Each passive has configured rule, appearance, rack-residency, and inspection traits. Shop acquisition and one-use passives remain future work. `dev0` and `dev1` keep their existing purposes.
 

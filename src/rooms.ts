@@ -7,6 +7,49 @@
  */
 import { Registry } from "./core/registry";
 import { saveKey } from "./save";
+import type { Scene } from "./scenes";
+
+export const roomSceneNames = [
+  "title",
+  "settings",
+  "stage-1",
+  "stage-2",
+  "boss",
+  "shop",
+  "stage-won",
+  "game-over",
+] as const;
+export type RoomSceneName = (typeof roomSceneNames)[number];
+export type RoomSceneTraits = {
+  screen: { kind: RoomSceneName };
+  pausesBelow: { input: boolean; update: boolean };
+};
+export type RoomScene = Scene<RoomSceneTraits>;
+export type RoomMusicMode = "quiet" | "ordinary";
+
+function scenesForRoom(roomId: string): readonly RoomScene[] {
+  const sceneTraits: Record<RoomSceneName, Partial<RoomSceneTraits>> = {
+    title: {},
+    settings: { pausesBelow: { input: true, update: true } },
+    "stage-1": {},
+    "stage-2": {},
+    boss: {},
+    shop: {},
+    "stage-won": { pausesBelow: { input: true, update: true } },
+    "game-over": {},
+  };
+  return roomSceneNames.map((kind) => ({
+    id: roomSceneId(roomId, kind),
+    traits: {
+      screen: { kind },
+      ...sceneTraits[kind],
+    },
+  }));
+}
+
+export function roomSceneId(roomId: string, scene: RoomSceneName): string {
+  return `${roomId}/${scene}`;
+}
 
 /** The passive rack: shown in the room, holding at most `capacity` passives. */
 export type PassiveRackTrait = {
@@ -57,12 +100,18 @@ export type RoomTraits = {
   skipTitle?: { resume: boolean };
   /** Start a fresh run in the shop with this many coins, for shop development. */
   shopPreview?: { coins: number };
-  /** The music starts wound down (silent until something winds it up). */
-  quiet?: Record<string, never>;
 };
 
 export type Room = {
   id: string;
+  /** Temporary music policy until this becomes a composed music trait (#34). */
+  musicMode: RoomMusicMode;
+  /** Console-visible room name and URL value; omitted for the default game. */
+  consoleName?: string;
+  /** The scenes this mode can enter without reloading the page. */
+  scenes: readonly RoomScene[];
+  /** Scene entered when this mode starts. */
+  startScene: RoomSceneName;
   /** Other names that open this room (old links). */
   aliases?: readonly string[];
   /** A developer room: listed by the console's `reset`. */
@@ -85,6 +134,9 @@ export const roomRegistry = new Registry<Room>("room");
 const rooms: Room[] = [
   {
     id: "game",
+    musicMode: "ordinary",
+    scenes: scenesForRoom("game"),
+    startScene: "title",
     dev: false,
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
@@ -96,6 +148,10 @@ const rooms: Room[] = [
   },
   {
     id: "dev0",
+    musicMode: "ordinary",
+    consoleName: "dev0",
+    scenes: scenesForRoom("dev0"),
+    startScene: "title",
     aliases: ["dev"],
     dev: true,
     traits: {
@@ -106,6 +162,10 @@ const rooms: Room[] = [
   },
   {
     id: "dev1",
+    musicMode: "quiet",
+    consoleName: "dev1",
+    scenes: scenesForRoom("dev1"),
+    startScene: "stage-1",
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev1-run" },
@@ -114,11 +174,14 @@ const rooms: Room[] = [
       materialDeck: { reshuffle: "each-run" },
       materialSample: {},
       skipTitle: { resume: false },
-      quiet: {},
     },
   },
   {
     id: "dev2",
+    musicMode: "quiet",
+    consoleName: "dev2",
+    scenes: scenesForRoom("dev2"),
+    startScene: "stage-1",
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev2-run" },
@@ -127,11 +190,14 @@ const rooms: Room[] = [
       materialDeck: { reshuffle: "new-game" },
       passiveRack: { ...defaultPassiveRack, startWith: 2 },
       skipTitle: { resume: true },
-      quiet: {},
     },
   },
   {
     id: "dev3",
+    musicMode: "quiet",
+    consoleName: "dev3",
+    scenes: scenesForRoom("dev3"),
+    startScene: "shop",
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev3-run" },
@@ -140,7 +206,6 @@ const rooms: Room[] = [
       shop: { ...defaultShop },
       shopPreview: { coins: 5 },
       skipTitle: { resume: true },
-      quiet: {},
     },
   },
 ];

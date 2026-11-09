@@ -5,13 +5,15 @@ import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
 import type { MotionSetting, Settings, ShadowSetting } from "./settings";
 
+export type Screen = "title" | "settings" | "game" | "over";
+
 export type MenuCallbacks = {
   hasSave(): boolean;
   onContinue(): void;
   onNewGame(): void;
   onSettingsChange(settings: Settings): void;
   /** Which screen is now in front, for music and similar screen-level effects. */
-  onScreen?(screen: "title" | "settings" | "game" | "over"): void;
+  onScreen?(screen: Screen): void;
 };
 
 export type Menus = {
