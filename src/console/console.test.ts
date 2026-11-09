@@ -18,9 +18,10 @@ function fakeHost() {
     newGame: () => void calls.push("new"),
     home: () => void calls.push("home"),
     room: () => null,
-    rooms: () => ["dev0", "dev1", "dev2"],
+    rooms: () => ["dev0", "dev1", "dev2", "dev3"],
     resetRoom: (room: string | null) => void calls.push(`reset ${room}`),
     forceOutcome: (outcome: "won" | "lost") => game.forceOutcome(outcome),
+    adjustCoins: (delta) => game.adjustCoins(delta),
     musicTracks: () => ["style-noir", "solitaire-boss"],
     musicNow: () => now,
     playMusic: (id) => void (now = id),
@@ -80,6 +81,16 @@ describe("the commands", () => {
     expect(lost.game.state.round.movesLeft).toBe(0);
     expect(lost.calls).toContain("next");
     expect(calls).not.toContain("next");
+  });
+
+  it("adds and removes coins without allowing a negative balance", () => {
+    const { text, game } = fakeHost();
+    expect(text("coins")).toEqual(["0 coins"]);
+    expect(text("coins +5")).toEqual(["5 coins"]);
+    expect(text("coins -2")).toEqual(["3 coins"]);
+    expect(text("coins -8")).toEqual(["0 coins"]);
+    expect(text("coins 4")[0]).toMatch(/use \+N or -N/);
+    expect(game.state.coins).toBe(0);
   });
 
   it("resets a dev room by name, or the current game", () => {

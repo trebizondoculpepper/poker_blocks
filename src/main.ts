@@ -382,7 +382,8 @@ function updateCamera(now: number): void {
 const storage = browserStorage();
 /**
  * Rooms (?room=...) are composed from room traits; see src/rooms.ts. dev0 is the normal game
- * with a material on every card, dev1 samples materials, dev2 has the passive rack.
+ * with a material on every card, dev1 samples materials, dev2 has the passive rack,
+ * and dev3 opens the shop with five coins.
  */
 const roomParams = new URLSearchParams(window.location.search);
 /** This page's room: the normal game, or a dev room. Its traits say how it behaves. */
@@ -1480,6 +1481,21 @@ function autosave(): void {
 function newSession(): GameSession {
   cards = roomDeck(true);
   const session = new GameSession(dealerRegistry, sessionConfig, cards);
+  if (roomTraits.shopPreview) {
+    const snapshot = session.snapshot();
+    const { state } = snapshot;
+    return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
+      ...snapshot,
+      phase: "shop",
+      state: {
+        ...state,
+        hand: [],
+        field: [],
+        deck: [...state.deck, ...state.hand],
+        coins: roomTraits.shopPreview.coins,
+      },
+    });
+  }
   if (!roomTraits.materialSample) return session;
   const { state } = session;
   const sample = sampleMaterials(state.deck);
@@ -1511,7 +1527,7 @@ function startRun(session: GameSession): void {
   updateHud();
   showSelection();
   autosave();
-  playSfx("round.start");
+  playSfx(game.phase === "shop" ? "shop.open" : "round.start");
   if (game.inStage) musicForNewStage();
 }
 
@@ -1599,6 +1615,12 @@ createConsole({
     // A won stage shows its pop-up, as if the win had been scored.
     if (outcome === "won") stageWonAt = performance.now();
     return true;
+  },
+  adjustCoins(delta) {
+    const balance = game.adjustCoins(delta);
+    updateHud();
+    autosave();
+    return balance;
   },
   musicTracks: () => music.tracks,
   musicNow: () => music.current,

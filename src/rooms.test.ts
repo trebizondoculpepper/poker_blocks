@@ -8,7 +8,7 @@ describe("rooms composed from traits", () => {
     expect(roomFor("dev2").id).toBe("dev2");
     expect(roomFor("dev").id).toBe("dev0");
     expect(roomFor("nonsense").id).toBe("game");
-    expect(devRooms()).toEqual(["dev0", "dev1", "dev2"]);
+    expect(devRooms()).toEqual(["dev0", "dev1", "dev2", "dev3"]);
   });
 
   it("keeps each room's behaviour in its traits", () => {
@@ -19,6 +19,8 @@ describe("rooms composed from traits", () => {
     expect(roomFor("dev2").traits.passiveRack).toEqual({ capacity: 5, startWith: 2 });
     expect(roomFor("dev1").traits.materialSample).toEqual({});
     expect(roomFor("dev0").traits.sandbox).toBeUndefined();
+    expect(roomFor("dev3").traits.shopPreview).toEqual({ coins: 5 });
+    expect(roomFor("dev3").traits.skipTitle).toEqual({ resume: true });
   });
 });
 

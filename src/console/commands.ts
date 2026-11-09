@@ -27,6 +27,8 @@ export type ConsoleHost = {
   resetRoom(room: string | null): void;
   /** Decide the current stage now (a developer shortcut); false outside a stage. */
   forceOutcome(outcome: "won" | "lost"): boolean;
+  /** Adjust persistent coins; negative values remove them. */
+  adjustCoins(delta: number): number;
   musicTracks(): readonly string[];
   musicNow(): string | null;
   playMusic(id: string): void;
@@ -97,11 +99,11 @@ export const COMMANDS: readonly ConsoleCommand[] = [
     help: "the screen, phase, score and what is left",
     run(host) {
       const game = host.game();
-      const { round, hand, deck, field, discardPile } = game.state;
+      const { round, hand, deck, field, discardPile, coins } = game.state;
       return [
         `screen ${host.screen()}  round ${game.round}  phase ${game.phase}  dealer ${game.dealer.name}`,
         `score ${round.score} / ${round.targetScore}  moves ${round.movesLeft}  discards ${round.discardsLeft}`,
-        `hand ${hand.length}  deck ${deck.length}  field ${field.length}  discarded ${discardPile.length}`,
+        `hand ${hand.length}  deck ${deck.length}  field ${field.length}  discarded ${discardPile.length}  coins ${coins}`,
         `music ${host.musicNow() ?? "(silent)"}`,
       ];
     },
@@ -130,6 +132,18 @@ export const COMMANDS: readonly ConsoleCommand[] = [
     usage: "",
     help: "the cards left in the deck, in draw order",
     run: (host) => cards(host.game().state.deck),
+  },
+  {
+    name: "coins",
+    usage: "[+N|-N]",
+    help: "show coins, add coins (+N), or remove coins (-N)",
+    run(host, [amount]) {
+      if (amount === undefined) return `${host.game().state.coins} coins`;
+      if (!/^[+-]\d+$/.test(amount)) return fail("coins: use +N or -N, for example coins +5");
+      const delta = Number(amount);
+      if (!Number.isSafeInteger(delta)) return fail("coins: amount is too large");
+      return `${host.adjustCoins(delta)} coins`;
+    },
   },
   {
     name: "next",

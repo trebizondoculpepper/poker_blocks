@@ -177,9 +177,13 @@ The rack is separate from the hand and field. Passives are not discardable. **Bu
 
 **Rooms are composed from room traits** (`src/rooms.ts`): each room (the normal game, or a dev room opened with `?room=`) is data, an id plus traits such as `passiveRack { capacity, startWith }`, `sandbox`, `materialDeck`, `materialSample`, `skipTitle` and `quiet`, and the game reads the traits rather than asking which room it is. The passive rack is composed into the normal game (five slots, starting empty) and into dev2 (five slots, two passives dealt). The rack's capacity is enforced by the session: a full rack takes no more.
 
-The separate `?room=dev2` sandbox reuses the endless-play session configuration from `dev1`. It deals two distinct passives from the roster below and gives standard cards a mix of gameplay materials. The rack and current run survive a reload. Each passive has configured rule, appearance, rack-residency, and inspection traits. Shop acquisition, selling, rack capacity rules, and one-use passives remain future work. `dev0` and `dev1` keep their existing purposes.
+The separate `?room=dev2` sandbox reuses the endless-play session configuration from `dev1`. It deals two distinct passives from the roster below and gives standard cards a mix of gameplay materials. The rack and current run survive a reload. Each passive has configured rule, appearance, rack-residency, and inspection traits. Shop acquisition and one-use passives remain future work. `dev0` and `dev1` keep their existing purposes.
 
 Enter `reset` in the developer console to restart the current dev room in place. In `dev2`, this draws two new, distinct passives. Add `&restart=true` to a dev-room URL for the same fresh start on load; the parameter is then removed so later reloads resume normally. An older `dev2` save with the retired Do Nothing block replaces it with active passives while retaining the card run.
+
+### Dev3 shop sandbox
+
+`?room=dev3` skips the title screen and opens directly in the shop with five coins. It has its own saved run; `reset` in the developer console or `&restart=true` in the URL starts the shop again with five coins. The shop still has placeholder interactions until [shop gameplay issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18) is built. In any room, the console command `coins` shows the balance, `coins +5` adds five, and `coins -2` removes two (stopping at zero). Changes update the HUD and saved run.
 
 ### First dev2 passive set
 

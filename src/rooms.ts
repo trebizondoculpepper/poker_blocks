@@ -34,6 +34,8 @@ export type RoomTraits = {
   materialSample?: Record<string, never>;
   /** Skip the title screen and go straight into play; `resume` continues the saved run. */
   skipTitle?: { resume: boolean };
+  /** Start a fresh run in the shop with this many coins, for shop development. */
+  shopPreview?: { coins: number };
   /** The music starts wound down (silent until something winds it up). */
   quiet?: Record<string, never>;
 };
@@ -82,6 +84,17 @@ const rooms: Room[] = [
       sandbox: {},
       materialDeck: { reshuffle: "new-game" },
       passiveRack: { ...defaultPassiveRack, startWith: 2 },
+      skipTitle: { resume: true },
+      quiet: {},
+    },
+  },
+  {
+    id: "dev3",
+    dev: true,
+    traits: {
+      save: { key: "poker-blocks.dev3-run" },
+      passiveRack: { ...defaultPassiveRack },
+      shopPreview: { coins: 5 },
       skipTitle: { resume: true },
       quiet: {},
     },

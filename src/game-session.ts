@@ -99,6 +99,14 @@ export class GameSession {
     return this.currentState;
   }
 
+  /** Developer console adjustment; never lets the persistent balance go below zero. */
+  adjustCoins(delta: number): number {
+    if (!Number.isSafeInteger(delta)) throw new Error("coin adjustment must be an integer");
+    const coins = Math.max(0, this.currentState.coins + delta);
+    this.currentState = { ...this.currentState, coins };
+    return coins;
+  }
+
   get round(): number {
     return this.currentRound;
   }
