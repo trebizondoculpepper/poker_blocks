@@ -1,25 +1,19 @@
 import type { CardBlock } from "./cards";
 import type { PlacedBlock } from "./game-state";
 import { materialOf } from "./materials";
-import type { PassiveBlock, PassiveRule } from "./passives";
+import type { EventRule, RuleCommand } from "./event-rules";
+import type { GameEvent, PassiveBlock, PassiveRule } from "./passives";
+import { ruleHandlers } from "./rule-handlers";
 import type { StageKind } from "./run-rules";
 import { evaluateLine, findScoringLines, type Line, type ScoredLine } from "./scoring";
 import { cellKey } from "./traits/attachable";
 import { scorableValue } from "./traits/scorable";
 
-function rulesFor(rack: readonly PassiveBlock[], on: PassiveRule["on"]): PassiveRule[] {
-  return rack.flatMap((block) =>
-    (block.traits.passive.rules ?? []).filter((rule) => rule.on === on),
-  );
-}
-
-/** The same configured predicates are shared by scoring and discard events. */
+/** Legacy predicates for discard and stage-won rules, until they move to event rules (#63 slice 3). */
 function matches(
   rule: PassiveRule,
   context: {
     block?: CardBlock;
-    line?: Line;
-    intersections?: number;
     discarded?: readonly CardBlock[];
     stage?: StageKind;
   },
@@ -34,12 +28,6 @@ function matches(
         !!context.block &&
         condition.values.includes(context.block.traits.identity.suit.name as "hearts" | "diamonds")
       );
-    case "line-length": {
-      const length = context.line?.blocks.length ?? 0;
-      return length >= (condition.minimum ?? 0) && length <= (condition.maximum ?? Infinity);
-    }
-    case "intersection":
-      return (context.intersections ?? 0) > 0;
     case "rank-count":
       return (
         (context.discarded?.filter((block) => block.traits.identity.rank === condition.rank)
@@ -50,50 +38,114 @@ function matches(
   }
 }
 
-/** Pure calculation. Candidate five-card hands can call this without consuming any passive. */
+/** A passive's rule that fired for a scored line, reported so presentation can show it. */
+export type PassiveActivation = {
+  passiveId: string;
+  on: string;
+  /** On `score.beforeBlockValue`: the contributing block the rule changed. */
+  blockId?: string;
+  /** Commands the rule's effects collected, committed with the line. */
+  commands: readonly RuleCommand[];
+};
+
+export type PassiveScoredLine = ScoredLine & { activations: readonly PassiveActivation[] };
+
+/** Each installed passive's event rules subscribed to `on`, in rack order then listed order. */
+function subscribedRules(
+  rack: readonly PassiveBlock[],
+  on: string,
+): { passive: PassiveBlock; rule: EventRule }[] {
+  return rack.flatMap((passive) =>
+    (passive.traits.passive.eventRules ?? [])
+      .filter((rule) => rule.on === on)
+      .map((rule) => ({ passive, rule })),
+  );
+}
+
+/**
+ * Run the subscribed rules over a working value, left to right, each seeing the value the
+ * previous one left. Pure: it returns the result and the rules that fired, applying nothing.
+ */
+function evaluateRules(
+  rules: readonly { passive: PassiveBlock; rule: EventRule }[],
+  event: GameEvent,
+  start: number,
+): { value: number; activations: PassiveActivation[] } {
+  const activations: PassiveActivation[] = [];
+  let value = start;
+  for (const { passive, rule } of rules) {
+    const frame = ruleHandlers.evaluate(rule, { event, workingValue: value, commands: [] });
+    value = frame.workingValue ?? value;
+    if (frame.fired)
+      activations.push({
+        passiveId: passive.id,
+        on: rule.on,
+        blockId: event.score?.block?.id,
+        commands: frame.commands,
+      });
+  }
+  return { value, activations };
+}
+
+/**
+ * Score every line with the rack's scoring rules (#139). Pure: candidate hands in a long line
+ * evaluate block values without committing anything; only the chosen hand's contributing blocks
+ * and the line's own rules report activations, once.
+ */
 export function scoreFieldWithPassives(
   field: readonly PlacedBlock[],
   rack: readonly PassiveBlock[],
-): ScoredLine[] {
+): PassiveScoredLine[] {
   const lines = findScoringLines(field);
-  const blockRules = rulesFor(rack, "score.beforeBlockValue");
-  const lineRules = rulesFor(rack, "score.beforeLineFinalized");
+  const blockRules = subscribedRules(rack, "score.beforeBlockValue");
+  const lineRules = subscribedRules(rack, "score.beforeLineFinalized");
   return lines.map((line) => {
-    const valueOf = (block: CardBlock): number => {
-      let value = scorableValue(block);
-      for (const rule of blockRules) {
-        if (!matches(rule, { block, line })) continue;
-        if (rule.effect.kind === "multiply-value") value *= rule.effect.factor;
-        if (rule.effect.kind === "add-value") value += rule.effect.amount;
-      }
-      return value;
-    };
-    const result = evaluateLine(line.blocks, valueOf);
-    const ownCells = new Set(line.cells.map(cellKey));
-    const intersections = line.cells.filter((cell) =>
-      lines.some(
-        (other) =>
-          other !== line &&
-          other.axis !== line.axis &&
-          other.cells.some(
-            (crossing) => ownCells.has(cellKey(crossing)) && cellKey(crossing) === cellKey(cell),
-          ),
-      ),
-    ).length;
-    let points = result.points;
-    for (const rule of lineRules) {
-      if (!matches(rule, { line, intersections })) continue;
-      if (rule.effect.kind === "multiply-line") points *= rule.effect.factor;
-      if (rule.effect.kind === "add-line")
-        points += rule.effect.amount * (rule.effect.perIntersection ? intersections : 1);
-    }
+    const intersections = crossingCells(line, lines);
+    // Evaluate: a block's value is the same in every candidate, so each is worked out once.
+    const evaluated = new Map(
+      line.blocks.map((block) => [
+        block.id,
+        evaluateRules(
+          blockRules,
+          { type: "score.beforeBlockValue", score: { line, intersections, block } },
+          scorableValue(block),
+        ),
+      ]),
+    );
+    const result = evaluateLine(line.blocks, (block) => evaluated.get(block.id)!.value);
+    const finalized = evaluateRules(
+      lineRules,
+      { type: "score.beforeLineFinalized", score: { line, intersections } },
+      result.points,
+    );
+    // Commit: only the chosen hand's contributing blocks, then the line's rules.
+    const activations = [
+      ...result.contributingIds.flatMap((id) => evaluated.get(id)!.activations),
+      ...finalized.activations,
+    ];
     return {
       line,
       blockIds: line.blocks.map(({ id }) => id),
       ...result,
-      points: Math.max(0, points),
+      points: Math.max(0, finalized.value),
+      activations,
     };
   });
+}
+
+/** How many of a line's cells another line on a different axis also passes through. */
+function crossingCells(line: Line, lines: readonly Line[]): number {
+  const ownCells = new Set(line.cells.map(cellKey));
+  return line.cells.filter((cell) =>
+    lines.some(
+      (other) =>
+        other !== line &&
+        other.axis !== line.axis &&
+        other.cells.some(
+          (crossing) => ownCells.has(cellKey(crossing)) && cellKey(crossing) === cellKey(cell),
+        ),
+    ),
+  ).length;
 }
 
 /**

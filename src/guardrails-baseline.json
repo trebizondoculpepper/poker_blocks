@@ -12,10 +12,6 @@
   ],
   "src/passive-effects.ts": [
     "switch (condition.kind) {",
-    "if (rule.effect.kind === \"multiply-value\") value *= rule.effect.factor;",
-    "if (rule.effect.kind === \"add-value\") value += rule.effect.amount;",
-    "if (rule.effect.kind === \"multiply-line\") points *= rule.effect.factor;",
-    "if (rule.effect.kind === \"add-line\")",
     "if (rule.on !== \"stage.won\" || rule.effect.kind !== \"add-coins\") continue;",
     "if (rule.condition?.kind === \"stage\") {",
     "if (rule.effect.kind === \"grant-unowned-passive\") {",
