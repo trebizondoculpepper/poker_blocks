@@ -5,6 +5,9 @@ import { boardPitchRock, boardYawRock, rockAngle } from "./motion";
 import { boardBaseFov, fovForZoom, pinchZoom, wheelZoom } from "./view-zoom";
 import type { Cell } from "./traits/attachable";
 
+/** Minimum horizontal hand framing; accommodates six cubes, including their rotation. */
+export const handCameraPortraitHalfWidth = 3.7;
+
 type CameraMove = {
   startAt: number;
   fromDistance: number;
@@ -146,8 +149,8 @@ export function createCameraViewService(options: {
     const { width, height } = host.getBoundingClientRect();
     if (!width || !height) return;
     const aspect = width / height;
-    const halfWidth = 3.3 * Math.max(1, aspect);
-    const halfHeight = 3.3 * Math.max(1, 1 / aspect);
+    const halfWidth = handCameraPortraitHalfWidth * Math.max(1, aspect);
+    const halfHeight = handCameraPortraitHalfWidth * Math.max(1, 1 / aspect);
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
     handCamera.left = -halfWidth;

@@ -131,7 +131,7 @@ describe("GameRun progression", () => {
     session.advance();
     session.leaveShop();
     expect(session.state.field).toHaveLength(0);
-    expect(session.state.hand).toHaveLength(5);
+    expect(session.state.hand).toHaveLength(6);
     expect(session.state.round).toEqual({
       score: 0,
       targetScore: 20,

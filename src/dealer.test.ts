@@ -16,8 +16,8 @@ describe("dealer", () => {
   it("starts with an empty field, a full hand and the rest in the deck", () => {
     const state = baseDealer.startGame(standardDeck, () => 0);
     expect(state.field).toHaveLength(0);
-    expect(state.hand).toHaveLength(5);
-    expect(state.deck).toHaveLength(47);
+    expect(state.hand).toHaveLength(6);
+    expect(state.deck).toHaveLength(46);
     expect(state.discardPile).toHaveLength(0);
     expect(new Set(allCards(state)).size).toBe(52);
   });
@@ -52,9 +52,9 @@ describe("dealer", () => {
     expect(played.field[1].cell).toEqual({ x: 1, y: 0, z: 0 });
     expect(played.field[1].block.id).toBe(state.hand[0].id);
     expect(played.field[1].block.traits.selectable).toBeUndefined();
-    expect(played.hand).toHaveLength(4);
+    expect(played.hand).toHaveLength(5);
     expect(played.round.movesLeft).toBe(4);
-    expect(state.hand).toHaveLength(5);
+    expect(state.hand).toHaveLength(6);
     expect(
       baseDealer.play(played, { cardId: played.hand[0].id, targetId, face: "east" }),
     ).toBeNull();
@@ -74,12 +74,12 @@ describe("dealer", () => {
     const state = baseDealer.startGame(standardDeck, () => 0);
     const discarded = baseDealer.discard(state, state.hand[0].id)!;
     expect(discarded.discardPile).toEqual([state.hand[0]]);
-    expect(discarded.hand).toHaveLength(4);
+    expect(discarded.hand).toHaveLength(5);
     expect(discarded.round.discardsLeft).toBe(3);
     const { state: refilled, drawn } = baseDealer.refillHand(discarded, () => 0);
     expect(drawn).toHaveLength(1);
-    expect(refilled.hand).toHaveLength(5);
-    expect(refilled.deck).toHaveLength(46);
+    expect(refilled.hand).toHaveLength(6);
+    expect(refilled.deck).toHaveLength(45);
     expect(new Set(allCards(refilled)).size).toBe(52);
     expect(baseDealer.refillHand({ ...discarded, deck: [] }).drawn).toHaveLength(0);
   });
@@ -103,6 +103,6 @@ describe("dealer", () => {
     expect(game.discard(stateBefore.hand[0].id)).toBeNull();
     expect(game.state).toBe(stateBefore);
     expect(game.refillHand()).toHaveLength(0);
-    expect(game.state.hand).toHaveLength(5);
+    expect(game.state.hand).toHaveLength(6);
   });
 });

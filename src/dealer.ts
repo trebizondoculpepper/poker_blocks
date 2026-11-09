@@ -1,4 +1,5 @@
 import type { CardBlock } from "./cards";
+import { gameTuning } from "./balance";
 import { blockAttachmentCell } from "./block-trait-behaviours";
 import { Registry } from "./core/registry";
 import { drawCards } from "./deal";
@@ -49,7 +50,7 @@ export interface Dealer {
 
 export const baseDealer: Dealer = {
   name: "base",
-  handSize: 5,
+  handSize: gameTuning.baseHandSize,
 
   startGame(cards, random: () => number = Math.random) {
     const empty: GameState = {
