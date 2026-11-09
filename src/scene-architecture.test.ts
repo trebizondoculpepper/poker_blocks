@@ -42,4 +42,46 @@ describe("scene architecture guardrails", () => {
     expect(main).not.toMatch(/data-stat=|round-hud|deck-hud|coin-hud|shop-exit/);
     expect(main).not.toMatch(/Continue \/ Skip shop|"End game"|"BOSS STAGE"/);
   });
+
+  it("keeps the console's room switching and music commands in the console host service", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+    const host = readFileSync(new URL("./console-host.ts", import.meta.url), "utf8");
+
+    expect(main).toContain("createConsoleHost(");
+    expect(main).not.toMatch(/\bcreateConsole\(|roomLink\(nextRoom|audio\.music\./);
+    expect(host).toContain("window.history.replaceState");
+    expect(host).not.toMatch(/window\.location\.(assign|reload)\s*\(/);
+  });
+
+  it("keeps menus, screen-to-scene changes, the tooltip and refused flashes in the overlays service", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/services:\s*\{[^}]*\boverlays:\s*Overlays\b/);
+    expect(main).not.toMatch(/\bcreateMenus\(|inspect-tooltip|refused-flash|\bmenus\./);
+    expect(main).not.toMatch(/\bonScreen\(/);
+  });
+
+  it("keeps hand layout, draw-ins and rocking in the hand service, and cube building in rendered-blocks", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/\bhand:\s*HandView\b/);
+    expect(main).not.toMatch(/\bhandBlocks\b|\bappearing\b|\bstepRock\(|\brandomRock\(/);
+    expect(main).not.toMatch(/createBlockAppearance\(|new THREE\.EdgesGeometry\(geometry\)/);
+    expect(main).not.toMatch(
+      /function (glideHand|handSlotX|visibleHandSlots|createCube|disposeCube)\s*\(/,
+    );
+  });
+
+  it("keeps placed blocks, drop previews, the first-play prompt and row tints in the field service", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/\bfield:\s*FieldView\b/);
+    expect(main).not.toMatch(
+      /\bplaced\b\.|(?<!\.)\bmassCenter\b|\bghost\b|faceHighlight|\btints\b/,
+    );
+    expect(main).not.toMatch(/\bfaceFromDirection\(|new THREE\.PlaneGeometry\(/);
+    expect(main).not.toMatch(
+      /function (addToBoard|landing|showCandidate|tintRow|updateRotationCenter)\s*\(/,
+    );
+  });
 });
