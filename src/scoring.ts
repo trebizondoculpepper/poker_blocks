@@ -187,6 +187,6 @@ export function scoreField(field: readonly PlacedBlock[]): ScoredLine[] {
 }
 
 /** Positive-scoring lines, lowest first so the strongest plays last; ties keep discovery order. */
-export function presentationOrder(lines: readonly ScoredLine[]): ScoredLine[] {
+export function presentationOrder<Scored extends ScoredLine>(lines: readonly Scored[]): Scored[] {
   return lines.filter(({ points }) => points > 0).sort((a, b) => a.points - b.points);
 }

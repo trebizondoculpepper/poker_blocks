@@ -118,6 +118,24 @@ For Ace Exchange, “owned” includes installed passives and any future passive
 
 A rule with `on: "stage.won"` pays coins when a stage is won, judged on the blocks still in the hand, and appears as its own row in the stage-won ledger (rack order). **Gold Standard** (`gold-standard`) is the first: `{ on: "stage.won", condition: { kind: "material", value: "gold" }, effect: { kind: "add-coins", amount: 1, perMatch: true } }`, one coin per gold block left in the hand. A `{ kind: "stage", kinds: ["boss"] }` condition instead tests the won stage itself, so a rule can pay for boss wins only (one flat amount, not per hand block).
 
+### Activation feedback (#81)
+
+When a passive's rule fires, its rack token plays its category's activation. The category's `activation` config names a registered **token effect** (`src/passive-activation-effects.ts`) with a colour, plus a registered sound:
+
+| Category  | Effect  | Colour      | Sound                        |
+| --------- | ------- | ----------- | ---------------------------- |
+| Scoring   | `pulse` | white       | `passive.activate.scoring`   |
+| Economy   | `pulse` | green glint | `passive.activate.economy`   |
+| Effect    | `pulse` | dusk violet | `passive.activate.effect`    |
+| Retrigger | `echo`  | orange      | `passive.activate.retrigger` |
+
+- **Scoring activations** play as each line's score is shown, once per passive per line, from the line's committed `activations`.
+- **Discard activations** play when the discard resolves (`GameRun.lastDiscardActivations`).
+- **Reduced motion** keeps the glow and drops the swell.
+- **Ignored sources:** the rack ignores sources it doesn't hold, such as a card's own material rule, whose cue is still open on #8.
+
+This is presentation only: it shows outcomes the rules already decided, and no gameplay code reads a category.
+
 ## Dev mode and verification
 
 On a **fresh** `dev2` run, choose two different definitions from this roster and install one instance of each, in chosen rack order. Reloading a saved run preserves its rack and coin balance rather than drawing again. Give card blocks randomized gameplay materials so Carnivore and Woodworker can actually be tried. A new-game action redraws the pair.

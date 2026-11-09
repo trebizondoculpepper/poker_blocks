@@ -9,6 +9,7 @@ import {
   passiveCategoryTraitNames,
 } from "./passive-categories";
 import { createPassiveBlock, passiveDefinitions, passivePalette } from "./passives";
+import { tokenEffects } from "./passive-activation-effects";
 
 /** Gameplay rule evaluation: none of it may read a category trait (#81). */
 const gameplaySources = import.meta.glob<string>(
@@ -59,11 +60,12 @@ describe("the passive category facet", () => {
     expect(blendColours(["#000000", "#ffffff"])).toBe("#808080");
   });
 
-  it("gives every category a registered activation sound and a visual", () => {
+  it("gives every category a registered activation sound and a registered effect", () => {
     const ids = new Set(soundEffects.map(({ id }) => id));
     for (const { activation } of Object.values(passiveCategoryFacet)) {
       expect(ids.has(activation.sfx)).toBe(true);
-      expect(activation.visual.length).toBeGreaterThan(0);
+      expect(tokenEffects.has(activation.effect.id), activation.effect.id).toBe(true);
+      expect(activation.description.length).toBeGreaterThan(0);
     }
   });
 

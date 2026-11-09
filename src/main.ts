@@ -214,6 +214,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   changed: () => run.updateHud(),
   moved: () => run.showSelection(),
   rackChanged: () => run.rackChanged(),
+  activated: (sourceIds) => sourceIds.forEach((id) => passiveRackView.activate(id)),
   refill: () => run.refillHand(),
   save: () => run.autosave(),
   decided: (outcome, now) => run.decided(outcome, now),
