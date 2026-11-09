@@ -1,0 +1,72 @@
+name: Release
+
+# A release (#128) is a merged `Release vX.Y.Z` PR, opened by `npm run release`. On every push to
+# main, this checks whether package.json's version has a release yet. If it doesn't (and isn't
+# the starting 0.0.0), it runs the checks, builds the game at exactly that version, zips the web
+# build (index.html at the archive root) and publishes the GitHub release vX.Y.Z on this commit.
+# To publish a failed release again: gh workflow run release.yml
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One release run at a time, never cancelling one under way, so draft recovery below only ever
+# sees a draft left by an interrupted run.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          node-version: "26"
+          cache: true
+      - name: Is this version released yet?
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          # A draft left by an interrupted publish isn't a release: remove it and publish again.
+          draft="$(gh release view "v${version}" --json isDraft -q .isDraft 2>/dev/null || echo none)"
+          if [ "$draft" = "true" ]; then
+            gh release delete "v${version}" --yes --cleanup-tag
+            draft=none
+          fi
+          if [ "$version" = "0.0.0" ] || [ "$draft" = "false" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.version.outputs.publish == 'true'
+        run: vp check
+      - if: steps.version.outputs.publish == 'true'
+        run: vp test run --passWithNoTests
+      - name: Build at the release version
+        if: steps.version.outputs.publish == 'true'
+        env:
+          POKER_BLOCKS_VERSION: ${{ steps.version.outputs.version }}
+        run: vp build
+      - name: Publish the GitHub release with the web build
+        if: steps.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          zip_name="poker-blocks-v${VERSION}-web.zip"
+          (cd dist && zip -qr "../${zip_name}" .)
+          gh release create "v${VERSION}" "${zip_name}" \
+            --target "${GITHUB_SHA}" \
+            --title "Poker Blocks v${VERSION}" \
+            --generate-notes

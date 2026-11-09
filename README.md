@@ -85,3 +85,7 @@ With a global Vite+ CLI, use `vp dev`, `vp check`, `vp test`, and `vp build`; `v
 ## References
 
 Sibling projects live one directory up. `../shrew_farmer` and `../no_touch` are the closest Vite+/Three.js game references; `../simulation_of_boring_things` has a larger game architecture. Use them for patterns when useful, while keeping this game's requirements independent.
+
+## Versions and releases
+
+Each merged PR moves the build's patch version on; `npm run release` opens the PR for the next minor release, and merging it publishes a GitHub release with the web build. See [doc/releasing.md](doc/releasing.md).
