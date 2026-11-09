@@ -26,6 +26,8 @@ export type ConsoleApp = {
   newRun(): void;
   /** Go to the title screen. */
   home(): void;
+  /** Discard the open mode's saved run; the console's `hard reset`. */
+  hardReset(): void;
   /** The mode playing now. */
   mode(): GameMode;
   /** Make `mode` active and start a fresh run there, without reloading the page. */
@@ -54,6 +56,7 @@ export function consoleHostFor(
     next: () => app.next(),
     newGame: () => app.newRun(),
     home: () => app.home(),
+    hardReset: () => app.hardReset(),
     mode: modeName,
     modes: () => developerModes(),
     resetMode(mode) {
