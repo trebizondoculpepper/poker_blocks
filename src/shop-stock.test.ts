@@ -34,6 +34,31 @@ describe("shop preview", () => {
     expect(game.buyShopOffer(card.id, "hand")).toBeNull();
   });
 
+  it("buys a third passive in a later shop without reusing an owned passive's id", () => {
+    // Two passives bought in an earlier shop: the next shop must not offer the same ids.
+    const first = shop();
+    for (const offer of first.state.shopStock!.filter(({ kind }) => kind === "passive"))
+      expect(first.buyShopOffer(offer.block.id, "passive-rack")).not.toBeNull();
+    expect(first.state.passiveRack).toHaveLength(2);
+    // Like leaving the shop: unbought (borrowed) cards go back to the deck before restocking.
+    const unsold = first.state.shopStock!.flatMap((offer) =>
+      offer.kind === "card" ? [offer.block] : [],
+    );
+    const restock = { ...first.state, deck: [...first.state.deck, ...unsold], shopStock: undefined };
+    const game = GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, standardDeck, {
+      ...first.snapshot(),
+      state: shopPreviewState(restock, 5, () => 0.25),
+    });
+    const offer = game.state.shopStock!.find(({ kind }) => kind === "passive")!;
+    expect(game.buyShopOffer(offer.block.id, "passive-rack")?.block).toBe(offer.block);
+    const ids = game.state.passiveRack.map(({ id }) => id);
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(3);
+    // The run must still save and load (duplicate passive ids make a save unloadable).
+    const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)?.state.passiveRack).toHaveLength(3);
+  });
+
   it("restores the same stock and purchases after saving", () => {
     const game = shop();
     const card = game.state.shopStock!.find(({ kind }) => kind === "card")!;

@@ -20,10 +20,21 @@ export function shopPreviewState(
     const [block] = deck.splice(Math.floor(random() * deck.length), 1);
     cardOffers.push({ kind: "card", block });
   }
+  // Offer ids must not repeat a passive already in the rack (bought in an earlier shop):
+  // a duplicate id would make the rack, selling, and saves treat two passives as one.
+  const usedIds = new Set(state.passiveRack.map(({ id }) => id));
+  let serial = 0;
+  const nextOfferId = () => {
+    let id: string;
+    do id = `shop.passive.${++serial}`;
+    while (usedIds.has(id));
+    usedIds.add(id);
+    return id;
+  };
   const passiveOffers: ShopOffer[] = randomPassiveDefinitions(stock.passiveOffers, random).map(
-    (definition, index) => ({
+    (definition) => ({
       kind: "passive",
-      block: createPassiveBlock(definition.id, `shop.passive.${index + 1}`),
+      block: createPassiveBlock(definition.id, nextOfferId()),
     }),
   );
   return {

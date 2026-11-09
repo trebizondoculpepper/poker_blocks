@@ -236,7 +236,8 @@ export class GameSession {
     if (offer.kind === "passive") {
       if (
         destination !== "passive-rack" ||
-        this.currentState.passiveRack.length >= this.rackCapacity
+        this.currentState.passiveRack.length >= this.rackCapacity ||
+        this.currentState.passiveRack.some(({ id: owned }) => owned === id)
       )
         return null;
       this.currentState = {
