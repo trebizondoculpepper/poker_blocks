@@ -7,6 +7,40 @@
  */
 import { Registry } from "./core/registry";
 import { saveKey } from "./save";
+import type { Scene } from "./scenes";
+
+export const roomSceneNames = [
+  "title",
+  "settings",
+  "stage-1",
+  "stage-2",
+  "boss",
+  "shop",
+  "stage-won",
+  "game-over",
+] as const;
+export type RoomSceneName = (typeof roomSceneNames)[number];
+export type RoomSceneTraits = {
+  screen: { kind: RoomSceneName };
+  pausesBelow: { input: boolean; update: boolean };
+};
+export type RoomScene = Scene<RoomSceneTraits>;
+
+function scenesForRoom(roomId: string): readonly RoomScene[] {
+  return roomSceneNames.map((kind) => ({
+    id: roomSceneId(roomId, kind),
+    traits: {
+      screen: { kind },
+      ...(kind === "settings" || kind === "stage-won"
+        ? { pausesBelow: { input: true, update: true } }
+        : {}),
+    },
+  }));
+}
+
+export function roomSceneId(roomId: string, scene: RoomSceneName): string {
+  return `${roomId}/${scene}`;
+}
 
 /** The passive rack: shown in the room, holding at most `capacity` passives. */
 export type PassiveRackTrait = {
@@ -63,6 +97,10 @@ export type RoomTraits = {
 
 export type Room = {
   id: string;
+  /** The scenes this mode can enter without reloading the page. */
+  scenes: readonly RoomScene[];
+  /** Scene entered when this mode starts. */
+  startScene: RoomSceneName;
   /** Other names that open this room (old links). */
   aliases?: readonly string[];
   /** A developer room: listed by the console's `reset`. */
@@ -85,6 +123,8 @@ export const roomRegistry = new Registry<Room>("room");
 const rooms: Room[] = [
   {
     id: "game",
+    scenes: scenesForRoom("game"),
+    startScene: "title",
     dev: false,
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
@@ -96,6 +136,8 @@ const rooms: Room[] = [
   },
   {
     id: "dev0",
+    scenes: scenesForRoom("dev0"),
+    startScene: "title",
     aliases: ["dev"],
     dev: true,
     traits: {
@@ -106,6 +148,8 @@ const rooms: Room[] = [
   },
   {
     id: "dev1",
+    scenes: scenesForRoom("dev1"),
+    startScene: "stage-1",
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev1-run" },
@@ -119,6 +163,8 @@ const rooms: Room[] = [
   },
   {
     id: "dev2",
+    scenes: scenesForRoom("dev2"),
+    startScene: "stage-1",
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev2-run" },
@@ -132,6 +178,8 @@ const rooms: Room[] = [
   },
   {
     id: "dev3",
+    scenes: scenesForRoom("dev3"),
+    startScene: "shop",
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev3-run" },
