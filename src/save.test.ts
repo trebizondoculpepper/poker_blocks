@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
+import { makeDevDeck, materialOf } from "./materials";
 import { dealerRegistry } from "./dealer";
 import { GameSession } from "./game-session";
 import {
@@ -144,6 +145,19 @@ describe("run storage", () => {
     expect(loadRun(storage, standardDeck, dealerRegistry)).toEqual(session.snapshot());
     clearRun(storage);
     expect(loadRun(storage, standardDeck, dealerRegistry)).toBeNull();
+  });
+
+  it("restores the seeded material deck even when Continue receives another deck", () => {
+    const storage = memoryStorage();
+    const seed = 4201;
+    const original = new GameSession(dealerRegistry, demoSessionConfig, makeDevDeck(seed), () => 0);
+    const snapshot = { ...original.snapshot(), runSeed: seed };
+    expect(saveRun(storage, snapshot)).toBe(true);
+
+    const restored = loadRun(storage, (savedSeed) => makeDevDeck(savedSeed ?? 1), dealerRegistry);
+    expect(restored?.runSeed).toBe(seed);
+    expect(restored?.state.hand.map(materialOf)).toEqual(snapshot.state.hand.map(materialOf));
+    expect(restored?.state.deck.map(materialOf)).toEqual(snapshot.state.deck.map(materialOf));
   });
 
   it("clears the save when the run is lost", () => {

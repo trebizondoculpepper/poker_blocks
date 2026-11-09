@@ -26,11 +26,16 @@ describe("rooms composed from traits", () => {
 
   it("keeps each room's behaviour in its traits", () => {
     expect(roomFor(null).traits).toEqual({
+      music: { mode: "ordinary" },
       stage: { fieldPlacement: {}, overlays: { round: {}, deck: {} } },
       passiveRack: { capacity: 5 },
       shop: { passiveOffers: 2, cardOffers: 3, overlays: { coins: {}, shopExit: {} } },
     });
-    expect(roomFor(null).runConfig).toEqual({ saveKey: "poker-blocks.run", transformers: [] });
+    expect(roomFor(null).runConfig).toEqual({
+      saveKey: "poker-blocks.run",
+      resumeSavedRun: true,
+      transformers: [],
+    });
     expect(roomFor("dev2").traits.passiveRack).toEqual({ capacity: 5, startWith: 2 });
     expect(roomFor("dev1").runConfig.transformers).toEqual([
       { type: "sandbox" },
@@ -47,9 +52,9 @@ describe("rooms composed from traits", () => {
       cardOffers: 3,
       overlays: { coins: {}, shopExit: {} },
     });
-    expect(roomFor("dev3").traits.skipTitle).toEqual({ resume: true });
-    expect(roomFor("dev1").musicMode).toBe("quiet");
-    expect(roomFor(null).musicMode).toBe("ordinary");
+    expect(roomFor("dev3").runConfig.resumeSavedRun).toBe(true);
+    expect(roomFor("dev1").traits.music.mode).toBe("quiet");
+    expect(roomFor(null).traits.music.mode).toBe("ordinary");
     expect(fieldPlacementActive(roomFor("dev3").traits, "stage")).toBe(true);
     expect(fieldPlacementActive(roomFor("dev3").traits, "shop")).toBe(false);
     expect(overlaysForPhase(roomFor(null).traits, "stage-1")).toEqual({ round: {}, deck: {} });
@@ -78,14 +83,19 @@ describe("room music lifecycle", () => {
     const behaviours = createRoomMusicBehaviours({
       windDown: () => calls.push("windDown"),
       resumeStage: () => calls.push("resumeStage"),
+      playBoss: () => calls.push("boss"),
+      playRandomStage: () => calls.push("random"),
     });
 
     behaviours.quiet.settle();
     behaviours.quiet.resume();
+    behaviours.quiet.playStage(true);
     behaviours.ordinary.settle();
     behaviours.ordinary.resume();
+    behaviours.ordinary.playStage(true);
+    behaviours.ordinary.playStage(false);
 
-    expect(calls).toEqual(["windDown", "windDown", "resumeStage"]);
+    expect(calls).toEqual(["windDown", "windDown", "windDown", "resumeStage", "boss", "random"]);
   });
 });
 

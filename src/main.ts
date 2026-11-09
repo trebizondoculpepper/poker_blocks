@@ -8,7 +8,7 @@ import { dealerRegistry, roundOutcome } from "./dealer";
 import { presentationOrder, type ScoredLine } from "./scoring";
 import { magnitudeSfxFor } from "./score-presentation";
 
-import { GameSession, type Phase, type SessionSnapshot } from "./game-session";
+import { GameSession, type Phase } from "./game-session";
 import {
   demoSessionConfig,
   sandboxSessionConfig,
@@ -36,6 +36,7 @@ import { createCameraViewService, type CameraViewService } from "./camera-view";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createPassiveRack } from "./passive-rack";
 import { shopPreviewState } from "./shop-stock";
+import { RunTransformerRegistry, type RunPrepareContext } from "./run-config";
 import { createShopView } from "./shop-view";
 import { moveItem } from "./zones";
 import {
@@ -44,7 +45,6 @@ import {
   fieldPlacementActive,
   overlaysForPhase,
   roomFor,
-  type RunTransformer,
   roomRegistry,
   roomLink,
   roomSceneId,
@@ -314,22 +314,67 @@ const roomParams = new URLSearchParams(window.location.search);
 let thisRoom = roomFor(roomParams.get("room"));
 let roomTraits = thisRoom.traits;
 let restartRoom = wantsRestart(thisRoom, roomParams);
-/** The room's session rules: endless sandboxes, and the passive rack's capacity. */
-function sessionConfigFor(
-  traits: typeof roomTraits,
-  transformers: readonly RunTransformer[],
-): SessionConfig {
-  let config = demoSessionConfig;
-  for (const transformer of transformers) {
-    if (transformer.type === "sandbox") config = sandboxSessionConfig(config);
-  }
-  return {
-    ...config,
-    ...(traits.passiveRack ? { rackCapacity: traits.passiveRack.capacity } : {}),
-  };
-}
-let sessionConfig = sessionConfigFor(roomTraits, thisRoom.runConfig.transformers);
 const devSeedKey = "poker-blocks.dev-material-seed";
+type RunServices = { room: Room; newGame: boolean };
+const runTransformerBehaviours = new RunTransformerRegistry<RunServices>();
+runTransformerBehaviours.register("sandbox", {
+  prepare: (context) => ({ ...context, config: sandboxSessionConfig(context.config) }),
+});
+runTransformerBehaviours.register("materialDeck", {
+  prepare(context, { reshuffle }) {
+    const seed = reshuffle === "each-run" ? newMaterialSeed() : devSeed(context.services.newGame);
+    return { ...context, deck: makeDevDeck(seed), runSeed: seed };
+  },
+  start(context) {
+    return { ...context, snapshot: { ...context.snapshot, runSeed: context.runSeed } };
+  },
+});
+runTransformerBehaviours.register("materialSample", {
+  start(context) {
+    const sample = sampleMaterials(context.snapshot.state.deck);
+    return {
+      ...context,
+      snapshot: {
+        ...context.snapshot,
+        state: { ...context.snapshot.state, field: sample.field, deck: sample.deck },
+      },
+    };
+  },
+});
+runTransformerBehaviours.register("shopPreview", {
+  start(context, { coins }) {
+    return {
+      ...context,
+      snapshot: {
+        ...context.snapshot,
+        phase: "shop",
+        state: shopPreviewState(
+          context.snapshot.state,
+          coins,
+          Math.random,
+          context.services.room.traits.shop,
+        ),
+      },
+    };
+  },
+});
+
+function prepareRoomRun(room: Room, newGame: boolean): RunPrepareContext<RunServices> {
+  const baseConfig: SessionConfig = {
+    ...demoSessionConfig,
+    ...(room.traits.passiveRack ? { rackCapacity: room.traits.passiveRack.capacity } : {}),
+  };
+  return runTransformerBehaviours.prepare(room.runConfig.transformers, {
+    config: baseConfig,
+    deck: standardDeck,
+    services: { room, newGame },
+  });
+}
+/** Run-config transforms compose in list order before a fresh session is dealt. */
+function sessionConfigFor(room: Room, newGame = false): SessionConfig {
+  return prepareRoomRun(room, newGame).config;
+}
+let sessionConfig = sessionConfigFor(thisRoom);
 let runSaveKey = thisRoom.runConfig.saveKey;
 const passiveRackView = createPassiveRack(host, {
   capacity: roomTraits.passiveRack?.capacity,
@@ -365,16 +410,13 @@ function devSeed(fresh = false): number {
 }
 /** A deck for a run in this room: plain, or with materials (fresh, or kept by seed). */
 function roomDeck(newGame: boolean): readonly CardBlock[] {
-  let deck = standardDeck;
-  for (const transformer of thisRoom.runConfig.transformers) {
-    if (transformer.type === "materialDeck")
-      deck = makeDevDeck(
-        transformer.reshuffle === "each-run" ? newMaterialSeed() : devSeed(newGame),
-      );
-  }
-  return deck;
+  return prepareRoomRun(thisRoom, newGame).deck;
 }
 let cards: readonly CardBlock[] = roomDeck(false);
+/** Rebuild a saved run's card traits from its seed, even if another tab changed devSeedKey. */
+function cardsForSavedRun(runSeed?: number): readonly CardBlock[] {
+  return runSeed === undefined ? cards : makeDevDeck(runSeed);
+}
 type TraitContext = {
   host: HTMLElement;
   services: { cameraView: CameraViewService };
@@ -1029,17 +1071,19 @@ const music = createMusicController(
 const roomMusicBehaviours = createRoomMusicBehaviours({
   windDown: () => music.windDown(),
   resumeStage: () => music.resumeStage(),
+  playBoss: () => music.switchToBossTrack(),
+  playRandomStage: () => music.switchToRandomStageTrack(),
 });
-let roomMusic = roomMusicBehaviours.ordinary;
+let roomMusic = roomMusicBehaviours[roomTraits.music.mode];
 function enterRoom(room: Room, createDeck = true): void {
   thisRoom = room;
   roomTraits = room.traits;
-  sessionConfig = sessionConfigFor(roomTraits, room.runConfig.transformers);
+  sessionConfig = sessionConfigFor(room);
   runSaveKey = room.runConfig.saveKey;
   if (createDeck) cards = roomDeck(false);
   passiveRackView.setCapacity(roomTraits.passiveRack?.capacity ?? 0);
   passiveRackView.element.hidden = !roomTraits.passiveRack;
-  roomMusic = roomMusicBehaviours[room.musicMode];
+  roomMusic = roomMusicBehaviours[roomTraits.music.mode];
 }
 // Configure the initial mode through the same path used by the developer room switcher.
 enterRoom(thisRoom, false);
@@ -1424,10 +1468,9 @@ function dealHand(): void {
 // ----- Music: the controller decides transitions; the game just says what is happening -----
 let screen: "title" | "settings" | "game" | "over" = "title";
 
-/** A stage has just started: boss stages get the boss loop, others a random vibe. */
+/** The active room's music trait chooses the track for a new stage. */
 function musicForNewStage(): void {
-  if (game.phase === "boss") music.switchToBossTrack();
-  else music.switchToRandomStageTrack();
+  roomMusic.playStage(game.phase === "boss");
 }
 
 /** Browsers keep audio silent until the player interacts; start music on the first gesture. */
@@ -1530,37 +1573,18 @@ function autosave(): void {
 
 /** A new run: material samples in dev0/1; dev2 rack is filled in startRun. */
 function newSession(): GameSession {
-  cards = roomDeck(true);
+  const prepared = prepareRoomRun(thisRoom, true);
+  sessionConfig = prepared.config;
+  cards = prepared.deck;
   const session = new GameSession(dealerRegistry, sessionConfig, cards);
-  let snapshot = session.snapshot();
-  for (const transformer of thisRoom.runConfig.transformers) {
-    snapshot = applyRunTransformer(transformer, snapshot);
-  }
-  return snapshot === session.snapshot()
+  const snapshot = session.snapshot();
+  const started = runTransformerBehaviours.start(thisRoom.runConfig.transformers, {
+    ...prepared,
+    snapshot,
+  });
+  return started.snapshot === snapshot
     ? session
-    : GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, snapshot);
-}
-
-/** Apply the post-deal part of one ordered run transformer. */
-function applyRunTransformer(
-  transformer: RunTransformer,
-  snapshot: SessionSnapshot,
-): SessionSnapshot {
-  switch (transformer.type) {
-    case "sandbox":
-    case "materialDeck":
-      return snapshot;
-    case "shopPreview":
-      return {
-        ...snapshot,
-        phase: "shop",
-        state: shopPreviewState(snapshot.state, transformer.coins, Math.random, roomTraits.shop),
-      };
-    case "materialSample": {
-      const sample = sampleMaterials(snapshot.state.deck);
-      return { ...snapshot, state: { ...snapshot.state, field: sample.field, deck: sample.deck } };
-    }
-  }
+    : GameSession.fromSnapshot(dealerRegistry, started.config, started.deck, started.snapshot);
 }
 
 /** The shop trait supplies stock when entering, including saves from before offers existed. */
@@ -1643,9 +1667,9 @@ const screenMusicActions: Record<Screen, () => void> = {
   },
 };
 const menus = createMenus(host, settings, {
-  hasSave: () => loadRun(storage, cards, dealerRegistry, runSaveKey) !== null,
+  hasSave: () => loadRun(storage, cardsForSavedRun, dealerRegistry, runSaveKey) !== null,
   onContinue() {
-    const snapshot = loadRun(storage, cards, dealerRegistry, runSaveKey);
+    const snapshot = loadRun(storage, cardsForSavedRun, dealerRegistry, runSaveKey);
     if (snapshot) {
       startRun(GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, snapshot));
     }
@@ -1664,11 +1688,12 @@ const menus = createMenus(host, settings, {
     screenMusicActions[next]();
   },
 });
-// Rooms that skip the title start straight in play (resuming their run if they keep one).
-const skipTitle = roomTraits.skipTitle;
-if (skipTitle) {
+// Modes whose start scene is not the title enter play directly.
+if (thisRoom.startScene !== "title") {
   const saved =
-    skipTitle.resume && !restartRoom ? loadRun(storage, cards, dealerRegistry, runSaveKey) : null;
+    thisRoom.runConfig.resumeSavedRun && !restartRoom
+      ? loadRun(storage, cardsForSavedRun, dealerRegistry, runSaveKey)
+      : null;
   startRun(
     saved ? GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, saved) : newSession(),
     !saved,

@@ -43,6 +43,8 @@ export type SaveRecord = {
   stats?: RunStats;
   /** The last stage paid out and its ledger, so a reload never pays it twice. */
   rewarded?: SessionSnapshot["rewarded"];
+  /** Optional so existing saves without a run-specific deck seed remain readable. */
+  runSeed?: number;
 };
 
 const phases: readonly Phase[] = ["stage-1", "stage-2", "boss", "shop", "over"];
@@ -80,6 +82,7 @@ export function toSaveRecord(snapshot: SessionSnapshot): SaveRecord {
     },
     ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
     ...(snapshot.rewarded ? { rewarded: snapshot.rewarded } : {}),
+    ...(snapshot.runSeed === undefined ? {} : { runSeed: snapshot.runSeed }),
   };
 }
 
@@ -155,6 +158,7 @@ export function fromSaveRecord(
       state: restored,
       stats: parseRunStats(record.stats),
       ...parseRewarded(record.rewarded),
+      ...(record.runSeed === undefined ? {} : { runSeed: parseRunSeed(record.runSeed) }),
     };
   } catch {
     return null;
@@ -194,6 +198,12 @@ function nonnegativeInteger(value: unknown): number {
   return parsed;
 }
 
+function parseRunSeed(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value >= 4294967296)
+    throw new Error("bad run seed");
+  return value;
+}
+
 /** Storage that may be missing or throw (private mode, blocked site data). */
 export type SaveStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -223,14 +233,21 @@ export function saveRun(
 
 export function loadRun(
   storage: SaveStorage | null,
-  cards: readonly CardBlock[],
+  cards: readonly CardBlock[] | ((runSeed?: number) => readonly CardBlock[]),
   dealers: Registry<Dealer>,
   key = saveKey,
 ): SessionSnapshot | null {
   if (!storage) return null;
   try {
     const raw = storage.getItem(key);
-    return raw ? fromSaveRecord(JSON.parse(raw), cards, dealers) : null;
+    if (!raw) return null;
+    const record = JSON.parse(raw) as SaveRecord;
+    const runSeed =
+      typeof record.runSeed === "number" && Number.isSafeInteger(record.runSeed)
+        ? record.runSeed
+        : undefined;
+    const deck = typeof cards === "function" ? cards(runSeed) : cards;
+    return fromSaveRecord(record, deck, dealers);
   } catch {
     return null;
   }
