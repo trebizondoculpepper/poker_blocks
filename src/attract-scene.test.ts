@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import * as THREE from "three";
 import {
   defaultAttractTuning,
   depthOpacity,
@@ -7,6 +8,8 @@ import {
   lensClearance,
   pathPoint,
   pickMaterial,
+  separate,
+  separationDistance,
   spawnZ,
   type MaterialWeight,
 } from "./attract-scene";
@@ -99,5 +102,37 @@ describe("material trails (#203)", () => {
     expect(
       getMaterialDefinition("prismatic").appearance.trails?.map(({ effect }) => effect),
     ).toEqual(["rainbowStars"]);
+  });
+});
+
+describe("attract cards keep out of each other (#203)", () => {
+  it("pushes two close cards apart sideways, harder the closer they are", () => {
+    const a = new THREE.Vector3(4, 0, -10);
+    const b = new THREE.Vector3(5, 0, -10.5);
+    const gap = () => a.distanceTo(b);
+    const before = gap();
+    for (let frame = 0; frame < 120; frame++) separate([a, b], 1 / 60);
+    expect(gap()).toBeGreaterThan(before);
+    // Neither card's depth changes: the push is sideways only.
+    expect([a.z, b.z]).toEqual([-10, -10.5]);
+  });
+
+  it("leaves cards further apart than two cube widths alone", () => {
+    const a = new THREE.Vector3(4, 0, 0);
+    const b = new THREE.Vector3(4, 0, -separationDistance - 0.1);
+    separate([a, b], 1);
+    expect(a.toArray()).toEqual([4, 0, 0]);
+  });
+
+  it("never pushes a card inside the lens clearance", () => {
+    // Two cards just outside the lane, one on each side of the axis... and a third pushing in.
+    const cards = [
+      new THREE.Vector3(lensClearance, 0.1, 0),
+      new THREE.Vector3(lensClearance + 0.5, 0.1, 0),
+      new THREE.Vector3(lensClearance + 1, 0.1, 0),
+    ];
+    for (let frame = 0; frame < 300; frame++) separate(cards, 1 / 60);
+    for (const card of cards)
+      expect(Math.hypot(card.x, card.y)).toBeGreaterThanOrEqual(lensClearance - 1e-9);
   });
 });
