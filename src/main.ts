@@ -15,9 +15,7 @@ import { isTransparent } from "./traits/transparent";
 import { createCardRoom } from "./visual/card-room";
 import { setReflectionEnvironment } from "./visual/block-appearance";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { cellKey, type Cell } from "./traits/attachable";
-import { toggleBlockSelection, type Selection } from "./traits/selectable";
-import { inspectBlock } from "./traits/inspectable";
+import type { Cell } from "./traits/attachable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createAudioService, type AudioService } from "./audio-service";
 import { createHudPanels, type HudPanels } from "./hud-panels";
@@ -26,6 +24,7 @@ import { createOverlays, type Overlays } from "./overlays";
 import { createBlockViews, type BlockViews, type RenderedBlock } from "./rendered-blocks";
 import { createHandView, type HandView } from "./hand-view";
 import { createFieldView, tintSeconds, type Candidate, type FieldView } from "./field-view";
+import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
@@ -35,7 +34,6 @@ import { bindScreenshotShortcut } from "./screenshot";
 import { createPassiveRack } from "./passive-rack";
 import { shopPreviewState } from "./shop-stock";
 import { createShopView } from "./shop-view";
-import { moveItem } from "./zones";
 import {
   fieldPlacementActive,
   overlaysForPhase,
@@ -49,7 +47,6 @@ import {
   type Room,
 } from "./rooms";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
-import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
   prefersReducedMotion,
@@ -64,25 +61,7 @@ app.innerHTML = '<main class="scene" role="application" aria-label="Poker Blocks
 
 const host = app.querySelector<HTMLDivElement>(".scene")!;
 const hud: HudPanels = createHudPanels(host);
-const discardArea = document.createElement("div");
-discardArea.className = "discard-area";
-discardArea.setAttribute("aria-label", "Discard area");
-discardArea.setAttribute("role", "button");
-discardArea.innerHTML = `
-  <svg class="discard-icon" viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges">
-    <path d="M6 1h4v2H6zM3 3h10v2H3zM4 6h8v7h-1v2H5v-2H4z" />
-    <path class="discard-icon-cutout" d="M6 8h1v5H6zM9 8h1v5H9z" />
-  </svg>
-  <svg class="sell-icon" viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges">
-    <path d="M5 2h6v1h2v2h1v6h-1v2h-2v1H5v-1H3v-2H2V5h1V3h2z" />
-    <path class="sell-icon-mark" d="M7 4h2v1h2v2H8v1h3v4H9v1H7v-1H5V9h3V8H5V5h2z" />
-  </svg>
-  <span class="discard-label">DISCARD</span>
-  <b class="discard-count" hidden></b>
-  <i class="refused-mark" aria-hidden="true"></i>
-`;
-host.append(discardArea);
-const discardCount = discardArea.querySelector<HTMLElement>(".discard-count")!;
+const discardArea = createDiscardTarget(host);
 
 const scene = new THREE.Scene();
 const handScene = new THREE.Scene();
@@ -130,8 +109,6 @@ function render(): void {
   cameraView.handCamera.layers.set(0);
 }
 
-/** Selected block ids (hand and field). Declared early: the first HUD update reads it. */
-let selected: Selection = new Set();
 const cubeSize = 2.4;
 cameraView = createCameraViewService({
   host,
@@ -175,7 +152,7 @@ const devSeedKey = "poker-blocks.dev-material-seed";
 let runSaveKey = roomTraits.save.key;
 const passiveRackView = createPassiveRack(host, {
   capacity: roomTraits.passiveRack?.capacity,
-  onPickUp: (block, event) => pickUpPassive(block, event),
+  onPickUp: (block, event) => input.pickUpPassive(block, event),
 });
 passiveRackView.element.hidden = !roomTraits.passiveRack;
 function newMaterialSeed(): number {
@@ -231,6 +208,7 @@ type TraitContext = {
     overlays: Overlays;
     hand: HandView;
     field: FieldView;
+    input: TableInput;
   };
 };
 const traitContext: TraitContext = {
@@ -248,6 +226,9 @@ const traitContext: TraitContext = {
     },
     get field() {
       return field;
+    },
+    get input() {
+      return input;
     },
   },
 };
@@ -300,7 +281,7 @@ const hand: HandView = createHandView({
   baseY: () => cameraView.handBaseY,
   handSize: () => game.dealer.handSize,
   reducedMotion: () => reducedMotion,
-  drag: () => (drag?.active ? drag : null),
+  drag: () => input.handDrag(),
   onLayout: () => showSelection(),
 });
 game.state.hand.forEach((block, slot) => (hand.add(block).handSlot = slot));
@@ -389,67 +370,60 @@ function updateHud(): void {
     coins,
     deckSize: deck.length,
   });
-  discardArea.classList.toggle("is-exhausted", !game.dealer.canDiscard(game.state));
-  updateDiscardCount();
+  input.refreshDiscardTarget();
 }
 
-/** Hand blocks currently selected, in hand order. */
-function selectedHandBlocks(): RenderedBlock[] {
-  return hand.selected(selected);
-}
-
-/** The bin's badge: how many selected hand blocks a click would discard. */
-function updateDiscardCount(): void {
-  const count =
-    game.inStage && game.dealer.canDiscard(game.state) ? selectedHandBlocks().length : 0;
-  discardCount.hidden = count === 0;
-  discardCount.textContent = String(count);
-  discardArea.classList.toggle("is-armed", count > 0);
-}
+const input: TableInput = createTableInput({
+  host,
+  canvas: renderer.domElement,
+  discardArea,
+  cameraView,
+  hand,
+  field,
+  overlays: () => overlays,
+  audio,
+  rack: passiveRackView,
+  cubeSize,
+  setDragLayer,
+  onSelectionChange: () => showSelection(),
+  routeToScenes: (event) => sceneManager.dispatch(event),
+  rules: {
+    busy: () => pendingAction !== null,
+    fieldActive: () => fieldPlacementActive(roomTraits, game.phase),
+    inStage: () => game.inStage,
+    canPlay: () => game.dealer.canPlay(game.state),
+    canDiscard: () => game.dealer.canDiscard(game.state),
+    linePlacement: (count, targetId, face) =>
+      game.dealer.linePlacementFor(game.state, count, targetId, face),
+    hand: () => game.state.hand,
+    play: startPlacement,
+    discard: startDiscard,
+    reorderHand(from, to) {
+      game.reorderHand(from, to);
+      autosave();
+    },
+    passiveRack: () => game.state.passiveRack,
+    // Not once the run is over, mid-play, or while a won stage's rewards are unpaid.
+    canSellPassives: () => game.phase !== "over" && !pendingAction && !game.stageRewardsPending,
+    reorderPassive(from, to) {
+      if (!game.reorderPassive(from, to)) return false;
+      passiveRackView.render(game.state.passiveRack);
+      autosave();
+      return true;
+    },
+    sellPassive(id) {
+      if (game.sellPassive(id) === null) return false;
+      passiveRackView.render(game.state.passiveRack);
+      updateHud();
+      autosave();
+      return true;
+    },
+  },
+});
 updateHud();
 
-type Drag = {
-  source: RenderedBlock;
-  grabOffset: THREE.Vector3;
-  pointerId: number;
-  startX: number;
-  startY: number;
-  active: boolean;
-  candidate: Candidate | null;
-  discardTarget: boolean;
-  /** Over the bin while discarding is not allowed: the red X shows. */
-  refused: boolean;
-  /** Other selected hand blocks carried with the dragged one (a group discard). */
-  group: RenderedBlock[];
-  /** Hand position the dragged card would move to if dropped inside the hand. */
-  reorderSlot: number | null;
-  lastX: number;
-  lastY: number;
-};
-let drag: Drag | null = null;
-type BoardDrag = {
-  pointerId: number;
-  startX: number;
-  startY: number;
-  lastX: number;
-  lastY: number;
-  active: boolean;
-};
-let boardDrag: BoardDrag | null = null;
-let suppressClickUntil = 0;
-const touches = new Map<number, { x: number; y: number }>();
-let pinch: { zoom: number; distance: number } | null = null;
-
-function touchSpread(): number {
-  const [first, second] = [...touches.values()];
-  return first && second ? Math.hypot(second.x - first.x, second.y - first.y) : 0;
-}
-
-function showInspection(block: CardBlock | undefined, clientX: number, clientY: number): void {
-  overlays.inspect((block && inspectBlock(block)) || null, clientX, clientY);
-}
-
 function showSelection(): void {
+  const selected = input.selection;
   blockViews.highlight(selected);
   const selectedNames = blockViews.all
     .filter(({ block }) => block.traits.selectable && selected.has(block.id))
@@ -470,178 +444,6 @@ function syncHandSlots(): void {
   hand.sync(game.state.hand);
 }
 
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-function pointRay(
-  clientX: number,
-  clientY: number,
-  viewCamera: THREE.Camera = cameraView.camera,
-): void {
-  const bounds = renderer.domElement.getBoundingClientRect();
-  pointer.set(
-    ((clientX - bounds.left) / bounds.width) * 2 - 1,
-    -((clientY - bounds.top) / bounds.height) * 2 + 1,
-  );
-  raycaster.setFromCamera(pointer, viewCamera);
-}
-
-// ----- Selling a passive (issue #16): drag it from the rack to the shared drop target -----
-
-/** A passive picked up from the rack; it becomes a drag once the pointer moves a little. */
-let passiveDrag: {
-  block: PassiveBlock;
-  pointerId: number;
-  startX: number;
-  startY: number;
-  floating: HTMLElement | null;
-  /** The rack slot a drop would move it to, while the pointer is over the rack. */
-  slot: number | null;
-} | null = null;
-
-/** The shared lower-screen target reads Sell while a passive is dragged, else Discard. */
-function showSellTarget(selling: boolean): void {
-  discardArea.classList.toggle("is-sell", selling);
-  discardArea.setAttribute("aria-label", selling ? "Sell area" : "Discard area");
-  discardArea.querySelector(".discard-label")!.textContent = selling ? "SELL" : "DISCARD";
-  if (!selling) discardArea.classList.remove("is-target", "is-refused");
-}
-
-/** Whether a dropped passive could be sold now (not once the run is over). */
-const canSellPassives = () => game.phase !== "over" && !pendingAction && !game.stageRewardsPending;
-
-function pickUpPassive(block: PassiveBlock, event: PointerEvent): void {
-  // Only the primary pointer's main button picks a passive up.
-  if (passiveDrag || drag || !event.isPrimary || event.button !== 0) return;
-  passiveDrag = {
-    block,
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    floating: null,
-    slot: null,
-  };
-  (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
-}
-
-function movePassive(event: PointerEvent): void {
-  if (!passiveDrag || event.pointerId !== passiveDrag.pointerId) return;
-  if (!passiveDrag.floating) {
-    if (Math.hypot(event.clientX - passiveDrag.startX, event.clientY - passiveDrag.startY) < 6)
-      return;
-    // A real drag: lift the cube out of the rack and show a token under the pointer.
-    const appearance =
-      passiveDrag.block.traits.appearance ?? passiveDefinitions.get(passiveDrag.block.definitionId);
-    const floating = document.createElement("div");
-    floating.className = "passive-floating";
-    floating.textContent = appearance.symbol;
-    floating.style.background = appearance.palette.face;
-    floating.style.color = appearance.palette.ink;
-    floating.style.borderColor = appearance.palette.edge;
-    document.body.append(floating);
-    passiveDrag.floating = floating;
-    passiveRackView?.lift(passiveDrag.block.id);
-    showSellTarget(true);
-    playSfx("card.pickup");
-  }
-  passiveDrag.floating.style.left = `${event.clientX}px`;
-  passiveDrag.floating.style.top = `${event.clientY}px`;
-  // Over the rack, preview the reorder: neighbours glide aside to open the drop slot.
-  const slot = passiveRackView?.slotAt(event.clientX, event.clientY) ?? null;
-  if (slot !== passiveDrag.slot) {
-    passiveDrag.slot = slot;
-    const ids = game.state.passiveRack.map(({ id }) => id);
-    const from = ids.indexOf(passiveDrag.block.id);
-    passiveRackView?.preview(slot === null || from < 0 ? null : moveItem(ids, from, slot));
-  }
-  const over = overDiscardArea(event.clientX, event.clientY);
-  const wasTarget = discardArea.classList.contains("is-target");
-  discardArea.classList.toggle("is-target", over && canSellPassives());
-  discardArea.classList.toggle("is-refused", over && !canSellPassives());
-  if (over && canSellPassives() && !wasTarget) playSfx("discard.hover");
-}
-
-function dropPassive(event: PointerEvent, cancelled: boolean): void {
-  if (!passiveDrag || event.pointerId !== passiveDrag.pointerId) return;
-  const { block, floating, slot } = passiveDrag;
-  passiveDrag = null;
-  if (!floating) return; // a click, not a drag: the rack's tooltip handles that
-  floating.remove();
-  showSellTarget(false);
-  passiveRackView?.lift(null);
-  passiveRackView?.preview(null);
-  // A drop inside the rack reorders it: not a sale, and nothing else changes.
-  const from = game.state.passiveRack.findIndex(({ id }) => id === block.id);
-  if (!cancelled && slot !== null && from >= 0) {
-    if (slot !== from && game.reorderPassive(from, slot)) {
-      playSfx("hand.reorder");
-      passiveRackView?.render(game.state.passiveRack);
-      autosave();
-    } else playSfx("card.drag.return");
-    return;
-  }
-  if (cancelled || !overDiscardArea(event.clientX, event.clientY)) {
-    playSfx("card.drag.return");
-    return;
-  }
-  const sold = canSellPassives() ? game.sellPassive(block.id) : null;
-  if (sold === null) {
-    overlays.flashRefused(discardArea);
-    playSfx("action.denied");
-    return;
-  }
-  playSfx("reward.coin");
-  passiveRackView?.render(game.state.passiveRack);
-  updateHud();
-  autosave();
-}
-window.addEventListener("pointermove", movePassive);
-window.addEventListener("pointerup", (event) => dropPassive(event, false));
-window.addEventListener("pointercancel", (event) => dropPassive(event, true));
-
-function overDiscardArea(clientX: number, clientY: number): boolean {
-  const bounds = discardArea.getBoundingClientRect();
-  return (
-    clientX >= bounds.left &&
-    clientX <= bounds.right &&
-    clientY >= bounds.top &&
-    clientY <= bounds.bottom
-  );
-}
-
-function pickBlock(
-  clientX: number,
-  clientY: number,
-  candidates: readonly RenderedBlock[] = blockViews.all,
-): RenderedBlock | undefined {
-  pointRay(
-    clientX,
-    clientY,
-    candidates === hand.blocks ? cameraView.handCamera : cameraView.camera,
-  );
-  const hit = raycaster.intersectObjects(
-    candidates.map(({ cube }) => cube),
-    false,
-  )[0];
-  return candidates.find(({ cube }) => cube === hit?.object);
-}
-
-function pickAttachment(clientX: number, clientY: number, count = 1): Candidate | null {
-  if (field.cells().length === 0) {
-    // The first play of a stage goes to the centre: drop anywhere above the hand.
-    const bounds = host.getBoundingClientRect();
-    const aboveHand = clientY < bounds.top + bounds.height * 0.72;
-    const cells = game.dealer.linePlacementFor(game.state, count);
-    return aboveHand && cells ? { target: null, face: null, cell: cells[0], cells } : null;
-  }
-  pointRay(clientX, clientY);
-  const hit = field.faceAt(raycaster);
-  if (!hit) return null;
-  const { target, face } = hit;
-  // A line runs out from the face; it is refused whole if it would reach a block.
-  const cells = game.dealer.linePlacementFor(game.state, count, target.block.id, face);
-  return cells ? { target, face, cell: cells[0], cells } : null;
-}
-
 /** Invite the first play using the same outline as a valid attachment preview. */
 function updateEmptyFieldPrompt(time: number): void {
   const cell =
@@ -653,68 +455,10 @@ function updateEmptyFieldPrompt(time: number): void {
     roundOutcome(game.state) === "playing"
       ? game.dealer.placementFor(game.state)
       : null;
-  const idle = Boolean(cell) && !drag?.active && !pendingAction;
+  const idle = Boolean(cell) && !input.dragging && !pendingAction;
   field.showPrompt(idle ? cell : null, time, reducedMotion);
 }
 
-/** The hand position under the pointer, or null when the pointer is not over the hand. */
-function handReorderSlot(clientX: number, clientY: number): number | null {
-  const bounds = host.getBoundingClientRect();
-  if (clientY < bounds.top + bounds.height * 0.72 || hand.blocks.length < 2) return null;
-  pointRay(clientX, clientY, cameraView.handCamera);
-  if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return null;
-  return hand.slotAt(dragPoint.x);
-}
-
-function updateCandidate(): void {
-  if (!drag?.active) return;
-  const wasDiscardTarget = drag.discardTarget;
-  const previousCell = drag.candidate ? cellKey(drag.candidate.cell) : null;
-  const overBin = overDiscardArea(drag.lastX, drag.lastY);
-  const canDiscard = game.dealer.canDiscard(game.state);
-  drag.discardTarget = canDiscard && overBin;
-  drag.refused = !canDiscard && overBin;
-  discardArea.classList.toggle("is-target", drag.discardTarget);
-  discardArea.classList.toggle("is-refused", drag.refused);
-  // A group plays as a line (one play) or is discarded; it is not reordered as one.
-  const single = drag.group.length === 0;
-  drag.candidate =
-    fieldPlacementActive(roomTraits, game.phase) && !overBin && game.dealer.canPlay(game.state)
-      ? pickAttachment(drag.lastX, drag.lastY, drag.group.length + 1)
-      : null;
-  field.showCandidate(drag.candidate);
-  const previousSlot = drag.reorderSlot;
-  drag.reorderSlot =
-    single && !overBin && !drag.candidate ? handReorderSlot(drag.lastX, drag.lastY) : null;
-  if (drag.reorderSlot !== previousSlot) layoutHand();
-  if (drag.discardTarget && !wasDiscardTarget) playSfx("discard.hover");
-  if (drag.candidate && cellKey(drag.candidate.cell) !== previousCell) playSfx("card.drag.snap");
-}
-
-const awayFromCamera = new THREE.Vector3();
-const fanOffset = new THREE.Vector3();
-const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-const dragPoint = new THREE.Vector3();
-function moveDraggedBlock(): void {
-  if (!drag?.active) return;
-  pointRay(drag.lastX, drag.lastY, cameraView.handCamera);
-  if (raycaster.ray.intersectPlane(dragPlane, dragPoint)) {
-    drag.source.cube.position.copy(dragPoint).add(drag.grabOffset);
-    // Carried blocks trail the dragged one in a small fanned stack behind it.
-    // Each is pushed a whole block further from the camera (straight back along its view,
-    // so the fan on screen is unchanged) and never intersects the one in front.
-    cameraView.handCamera.getWorldDirection(awayFromCamera);
-    drag.group.forEach((rendered, index) => {
-      const step = index + 1;
-      rendered.cube.position
-        .copy(drag!.source.cube.position)
-        .add(fanOffset.set(0.28 * step, 0.22 * step, 0))
-        .addScaledVector(awayFromCamera, cubeSize * step);
-    });
-  }
-}
-
-const normalMotionRate = 1;
 const systemMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
 let settings = loadSettings(storage);
@@ -773,7 +517,7 @@ function startPlacement(sources: readonly RenderedBlock[], candidate: Candidate)
   hand.settle(sources);
   const landed = next.field.slice(-sources.length);
   const played = new Set(ids);
-  selected = new Set([...selected].filter((id) => !played.has(id)));
+  input.deselect(played);
   hand.remove(sources);
   syncHandSlots();
   // The cameras use different projections. Match each hand cube's screen position and
@@ -831,8 +575,7 @@ function startDiscard(sources: readonly RenderedBlock[]): boolean {
   passiveRackView?.render(game.state.passiveRack);
   hand.remove(sources);
   syncHandSlots();
-  const gone = new Set(sources.map(({ block }) => block.id));
-  selected = new Set([...selected].filter((id) => !gone.has(id)));
+  input.deselect(sources.map(({ block }) => block.id));
   const effects = sources.map((source) => {
     source.cube.children.forEach((edge) => (edge.visible = false));
     source.cube.updateWorldMatrix(true, true);
@@ -972,7 +715,7 @@ function resetTable(): void {
   blockViews.disposeAll();
   field.clear();
   hand.clear();
-  selected = new Set();
+  input.clearSelection();
   cameraView.reset();
   shownScore = game.state.round.score;
 }
@@ -1003,7 +746,7 @@ function showStageWon(): void {
 
 /** The HUD button: move to the next stage, the shop, the next round, or a new game. */
 function takeNextAction(): void {
-  if (pendingAction || drag?.active) return;
+  if (pendingAction || input.dragging) return;
   playSfx("ui.click");
   if (game.phase === "over") {
     overlays.showGameOver(game.stats);
@@ -1020,7 +763,7 @@ function takeNextAction(): void {
 /** Leave the current stage or the shop: the next stage, the shop, or game over. */
 let shopExitPending = false;
 async function advanceFromStage(): Promise<void> {
-  if (shopExitPending || pendingAction || drag?.active) return;
+  if (shopExitPending || pendingAction || input.dragging) return;
   const leavingShop = game.phase === "shop";
   if (leavingShop) shopExitPending = true;
   try {
@@ -1233,299 +976,6 @@ const devConsole = createConsoleHost(
   audio,
 );
 
-/** The blocks a drag plays, in the order they were selected (the dragged one alone if none). */
-function playOrder(activeDrag: Drag): RenderedBlock[] {
-  if (!activeDrag.group.length) return [activeDrag.source];
-  const carried = [activeDrag.source, ...activeDrag.group];
-  return [...selected]
-    .map((id) => carried.find(({ block }) => block.id === id))
-    .filter((rendered): rendered is RenderedBlock => Boolean(rendered));
-}
-
-function finishDrag(drop: boolean): void {
-  if (!drag) return;
-  const activeDrag = drag;
-  if (activeDrag.active) {
-    if (drop) updateCandidate();
-    const candidate = drop ? activeDrag.candidate : null;
-    const discard = drop && activeDrag.discardTarget;
-    const refusedAtBin = drop && activeDrag.refused;
-    const reorderSlot = drop ? activeDrag.reorderSlot : null;
-    drag = null;
-    for (const rendered of [activeDrag.source, ...activeDrag.group])
-      setDragLayer(rendered.cube, false);
-    field.showCandidate(null);
-    discardArea.classList.remove("is-target", "is-refused");
-    if (refusedAtBin) overlays.flashRefused(discardArea);
-    const accepted = discard
-      ? startDiscard([activeDrag.source, ...activeDrag.group])
-      : candidate
-        ? startPlacement(playOrder(activeDrag), candidate)
-        : false;
-    const from = game.state.hand.indexOf(activeDrag.source.block);
-    if (!accepted && reorderSlot !== null && reorderSlot !== from) {
-      // A drop inside the hand reorders it: not a play or discard, and nothing refills.
-      game.reorderHand(from, reorderSlot);
-      hand.putBack([activeDrag.source]);
-      syncHandSlots();
-      playSfx("hand.reorder");
-      autosave();
-    } else if (!accepted) {
-      // A drop the rules refuse (or any drop with no plays left) is denied; a drop on
-      // empty space just returns the block to the hand.
-      const refused =
-        drop &&
-        (discard ||
-          candidate ||
-          !game.dealer.canPlay(game.state) ||
-          overDiscardArea(activeDrag.lastX, activeDrag.lastY));
-      playSfx(refused ? "action.denied" : "card.drag.return");
-      hand.putBack([activeDrag.source, ...activeDrag.group]);
-      layoutHand();
-    }
-    cameraView.changeMotionRate(normalMotionRate);
-    suppressClickUntil = performance.now() + 250;
-    if (renderer.domElement.hasPointerCapture(activeDrag.pointerId)) {
-      renderer.domElement.releasePointerCapture(activeDrag.pointerId);
-    }
-  } else {
-    drag = null;
-  }
-}
-
-function finishBoardDrag(): void {
-  if (!boardDrag) return;
-  const finished = boardDrag;
-  boardDrag = null;
-  if (!finished.active) return;
-  cameraView.changeMotionRate(normalMotionRate);
-  suppressClickUntil = performance.now() + 250;
-  if (renderer.domElement.hasPointerCapture(finished.pointerId)) {
-    renderer.domElement.releasePointerCapture(finished.pointerId);
-  }
-}
-
-const onPointerDown = (event: PointerEvent) => {
-  if (pendingAction) return;
-  if (event.pointerType === "touch") {
-    touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (touches.size >= 2) {
-      // A second finger changes the gesture, never places or discards a card.
-      if (drag) finishDrag(false);
-      if (boardDrag) finishBoardDrag();
-      pinch = { zoom: cameraView.zoom, distance: touchSpread() };
-      for (const id of touches.keys()) renderer.domElement.setPointerCapture(id);
-      suppressClickUntil = performance.now() + 400;
-      audio.zoomed();
-      return;
-    }
-    if (pinch) return;
-  }
-  overlays.hideTooltip();
-  const source = pickBlock(event.clientX, event.clientY, hand.blocks);
-  if (fieldPlacementActive(roomTraits, game.phase) && source?.block.traits.attachable) {
-    pointRay(event.clientX, event.clientY, cameraView.handCamera);
-    const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
-      ? source.cube.position.clone().sub(dragPoint)
-      : new THREE.Vector3();
-    drag = {
-      source,
-      grabOffset,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      lastX: event.clientX,
-      lastY: event.clientY,
-      active: false,
-      candidate: null,
-      discardTarget: false,
-      refused: false,
-      group: [],
-      reorderSlot: null,
-    };
-    return;
-  }
-  if (!pickBlock(event.clientX, event.clientY, field.blocks())) return;
-  boardDrag = {
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    lastX: event.clientX,
-    lastY: event.clientY,
-    active: false,
-  };
-};
-const onPointerMove = (event: PointerEvent) => {
-  const finger = touches.get(event.pointerId);
-  if (finger) {
-    finger.x = event.clientX;
-    finger.y = event.clientY;
-    if (pinch) {
-      if (touches.size >= 2) cameraView.zoomWithPinch(pinch.zoom, pinch.distance, touchSpread());
-      return;
-    }
-  }
-  if (drag?.pointerId === event.pointerId) {
-    drag.lastX = event.clientX;
-    drag.lastY = event.clientY;
-    if (!drag.active && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) {
-      drag.active = true;
-      // Dragging a selected block carries the rest of the hand selection with it.
-      if (selected.has(drag.source.block.id)) {
-        const source = drag.source;
-        drag.group = selectedHandBlocks().filter((rendered) => rendered !== source);
-      }
-      for (const rendered of [drag.source, ...drag.group]) setDragLayer(rendered.cube, true);
-      renderer.domElement.setPointerCapture(event.pointerId);
-      cameraView.changeMotionRate(normalMotionRate / 10);
-      playSfx("card.pickup");
-    }
-    if (drag.active) {
-      overlays.hideTooltip();
-      moveDraggedBlock();
-      updateCandidate();
-      renderer.domElement.style.cursor = "grabbing";
-      return;
-    }
-  }
-  if (boardDrag?.pointerId === event.pointerId) {
-    const dx = event.clientX - boardDrag.lastX;
-    const dy = event.clientY - boardDrag.lastY;
-    boardDrag.lastX = event.clientX;
-    boardDrag.lastY = event.clientY;
-    if (
-      !boardDrag.active &&
-      Math.hypot(event.clientX - boardDrag.startX, event.clientY - boardDrag.startY) > 8
-    ) {
-      boardDrag.active = true;
-      renderer.domElement.setPointerCapture(event.pointerId);
-      cameraView.changeMotionRate(0);
-    }
-    if (boardDrag.active) {
-      overlays.hideTooltip();
-      cameraView.rotateBy(dx, dy);
-      renderer.domElement.style.cursor = "grabbing";
-      return;
-    }
-  }
-  const hovered =
-    pickBlock(event.clientX, event.clientY, hand.blocks) ??
-    pickBlock(event.clientX, event.clientY, field.blocks());
-  renderer.domElement.style.cursor = hovered?.block.traits.selectable ? "pointer" : "default";
-  showInspection(
-    event.pointerType === "touch" ? undefined : hovered?.block,
-    event.clientX,
-    event.clientY,
-  );
-};
-const onPointerLeave = () => {
-  overlays.hideTooltip();
-  renderer.domElement.style.cursor = "default";
-};
-const onPointerUp = (event: PointerEvent) => {
-  if (event.pointerType === "touch") {
-    touches.delete(event.pointerId);
-    if (pinch) {
-      suppressClickUntil = performance.now() + 400;
-      if (touches.size === 0) pinch = null;
-      return;
-    }
-  }
-  const wasDragging = Boolean(drag?.active || boardDrag?.active);
-  if (drag?.pointerId === event.pointerId) {
-    drag.lastX = event.clientX;
-    drag.lastY = event.clientY;
-    moveDraggedBlock();
-    finishDrag(true);
-  }
-  if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
-  renderer.domElement.style.cursor = "default";
-  const hovered =
-    pickBlock(event.clientX, event.clientY, hand.blocks) ??
-    pickBlock(event.clientX, event.clientY, field.blocks());
-  showInspection(
-    wasDragging || event.pointerType === "touch" ? undefined : hovered?.block,
-    event.clientX,
-    event.clientY,
-  );
-};
-const onPointerCancel = (event: PointerEvent) => {
-  if (event.pointerType === "touch") {
-    touches.delete(event.pointerId);
-    if (pinch) {
-      suppressClickUntil = performance.now() + 400;
-      if (touches.size === 0) pinch = null;
-      return;
-    }
-  }
-  if (drag?.pointerId === event.pointerId) finishDrag(false);
-  if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
-  overlays.hideTooltip();
-  renderer.domElement.style.cursor = "default";
-};
-const onClick = (event: MouseEvent) => {
-  if (performance.now() < suppressClickUntil) return;
-  const target =
-    pickBlock(event.clientX, event.clientY, hand.blocks) ??
-    pickBlock(event.clientX, event.clientY, field.blocks());
-  if (!target) return;
-  const wasSelected = selected.has(target.block.id);
-  selected = toggleBlockSelection(selected, target.block);
-  const isSelected = selected.has(target.block.id);
-  if (isSelected !== wasSelected) playSfx(isSelected ? "card.select" : "card.deselect");
-  showSelection();
-  updateDiscardCount();
-};
-/** Click or tap the bin: discard the selected hand blocks as one discard. */
-discardArea.addEventListener("click", () => {
-  // While it reads Sell (a passive is being dragged) the target never discards.
-  if (passiveDrag || discardArea.classList.contains("is-sell")) return;
-  if (pendingAction || drag?.active || !game.inStage) return;
-  const chosen = selectedHandBlocks();
-  if (!chosen.length) return;
-  if (!game.dealer.canDiscard(game.state) || !startDiscard(chosen)) {
-    overlays.flashRefused(discardArea);
-    playSfx("action.denied");
-  }
-});
-const onWheel = (event: WheelEvent) => {
-  if (overlays.isOpen) return;
-  event.preventDefault();
-  cameraView.zoomWithWheel(event.deltaY, event.deltaMode);
-  audio.zoomed();
-};
-const onBlur = () => {
-  if (drag) finishDrag(false);
-  if (boardDrag) finishBoardDrag();
-  touches.clear();
-  pinch = null;
-};
-const routeSceneInput = (event: Event) => {
-  if (!sceneManager.dispatch(event)) return;
-  event.preventDefault();
-  event.stopImmediatePropagation();
-};
-// This host capture route is scaffolding: current key handlers on window still receive events
-// outside the host, and no registered scene trait consumes input yet.
-const sceneInputEvents = [
-  "keydown",
-  "keyup",
-  "pointerdown",
-  "pointerup",
-  "pointercancel",
-  "click",
-  "wheel",
-];
-for (const type of sceneInputEvents) host.addEventListener(type, routeSceneInput, true);
-renderer.domElement.addEventListener("pointerdown", onPointerDown);
-renderer.domElement.addEventListener("pointermove", onPointerMove);
-renderer.domElement.addEventListener("pointerleave", onPointerLeave);
-renderer.domElement.addEventListener("pointerup", onPointerUp);
-renderer.domElement.addEventListener("pointercancel", onPointerCancel);
-renderer.domElement.addEventListener("click", onClick);
-renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
-window.addEventListener("blur", onBlur);
-
 cameraView.start();
 
 let frame = 0;
@@ -1537,9 +987,9 @@ const animate = (time: number) => {
   updateAction(time, delta);
   updateScoring(time);
   sceneManager.update(delta);
-  hand.animate(time, delta, selected);
+  hand.animate(time, delta, input.selection);
   cardRoom.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
-  if (drag?.active) updateCandidate();
+  input.frame();
   updateEmptyFieldPrompt(time);
   passiveRackView?.frame(time, reducedMotion);
   shopView.frame();
@@ -1553,15 +1003,7 @@ if (import.meta.hot) {
     unbindScreenshot();
     cancelAnimationFrame(frame);
     cameraView.dispose();
-    renderer.domElement.removeEventListener("pointerdown", onPointerDown);
-    renderer.domElement.removeEventListener("pointermove", onPointerMove);
-    renderer.domElement.removeEventListener("pointerleave", onPointerLeave);
-    renderer.domElement.removeEventListener("pointerup", onPointerUp);
-    renderer.domElement.removeEventListener("pointercancel", onPointerCancel);
-    renderer.domElement.removeEventListener("click", onClick);
-    renderer.domElement.removeEventListener("wheel", onWheel);
-    for (const type of sceneInputEvents) host.removeEventListener(type, routeSceneInput, true);
-    window.removeEventListener("blur", onBlur);
+    input.dispose();
     audio.dispose();
     hud.dispose();
     devConsole.dispose();
