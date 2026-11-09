@@ -76,10 +76,33 @@ function markedTexture(
   return texture;
 }
 
-function polyhedronGeometry(shape: PassiveShape): THREE.BufferGeometry {
-  if (shape === "cube") return new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
-  if (shape === "octahedron") return new THREE.OctahedronGeometry(0.72, 0).toNonIndexed();
-  if (shape === "icosahedron") return new THREE.IcosahedronGeometry(0.76, 0).toNonIndexed();
+/**
+ * Each token shape's own facts, so the visual factory never asks which shape it has: its
+ * geometry, how many vertices make one numbered face, and (for a box) the order Three.js gives
+ * its six faces, used to place standard pip faces so opposite pairs total seven.
+ */
+const shapeSpecs: Record<
+  PassiveShape,
+  { geometry: () => THREE.BufferGeometry; verticesPerFace: number; boxFaceOrder?: number[] }
+> = {
+  cube: {
+    geometry: () => new THREE.BoxGeometry(1, 1, 1).toNonIndexed(),
+    verticesPerFace: 6,
+    boxFaceOrder: [0, 5, 1, 4, 2, 3],
+  },
+  octahedron: {
+    geometry: () => new THREE.OctahedronGeometry(0.72, 0).toNonIndexed(),
+    verticesPerFace: 3,
+  },
+  icosahedron: {
+    geometry: () => new THREE.IcosahedronGeometry(0.76, 0).toNonIndexed(),
+    verticesPerFace: 3,
+  },
+  d10: { geometry: () => trapezohedronGeometry(), verticesPerFace: 6 },
+};
+
+/** A ten-faced die. */
+function trapezohedronGeometry(): THREE.BufferGeometry {
   // A ten-faced, non-cubic die: two pentagonal pyramids joined at their bases.
   // The shared pentagonal equator gives ten individually addressable numbered faces.
   const primal: THREE.Vector3[] = [];
@@ -166,24 +189,18 @@ export function createPassiveVisual(
   textures: THREE.CanvasTexture[];
   edges: THREE.EdgesGeometry;
 } {
-  const shape = appearance.shape ?? "cube";
-  const geometry = polyhedronGeometry(shape);
+  const spec = shapeSpecs[appearance.shape ?? "cube"];
+  const geometry = spec.geometry();
   geometry.clearGroups();
-  const faceCount =
-    shape === "cube" ? 6 : shape === "d10" ? 10 : geometry.getAttribute("position").count / 3;
-  const verticesPerFace = shape === "cube" || shape === "d10" ? 6 : 3;
+  const { verticesPerFace } = spec;
+  const faceCount = geometry.getAttribute("position").count / verticesPerFace;
   let designs =
     appearance.faces ?? Array.from({ length: faceCount }, (_i) => ({ label: appearance.symbol }));
-  if (shape === "cube" && appearance.faces?.some(({ pips }) => pips !== undefined))
-    designs = [
-      appearance.faces[0]!,
-      appearance.faces[5]!,
-      appearance.faces[1]!,
-      appearance.faces[4]!,
-      appearance.faces[2]!,
-      appearance.faces[3]!,
-    ];
-  else if (shape !== "cube" && designs.length === faceCount) {
+  const pipFaces = appearance.faces?.some(({ pips }) => pips !== undefined)
+    ? appearance.faces
+    : null;
+  if (spec.boxFaceOrder && pipFaces) designs = spec.boxFaceOrder.map((index) => pipFaces[index]!);
+  else if (!spec.boxFaceOrder && designs.length === faceCount) {
     const positions = geometry.getAttribute("position");
     const stride = verticesPerFace;
     const centers = Array.from({ length: faceCount }, (_, face) => {
@@ -212,7 +229,8 @@ export function createPassiveVisual(
     }
     designs = paired;
   }
-  if (shape !== "cube" && shape !== "d10") {
+  // Triangular faces get one triangle of the texture each; quad faces keep their own UVs.
+  if (verticesPerFace === 3) {
     const uvs = Array.from({ length: faceCount }, () => [0, 0, 1, 0, 0.5, 1]).flat();
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   }
