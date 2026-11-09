@@ -225,6 +225,8 @@ Composition is the same at both levels: a block is to its traits what a scene is
 
 `src/audio-service.ts` is the second. It owns the music controller and player settings, the room's music policy (quiet rooms stay wound down), stage and screen music, unlocking audio on the first gesture, and the rate-limited zoom sound. `main.ts` constructs it and reports events (`stageStarted`, `runStarted`, `showScreen`, `zoomed`); it no longer calls the music controller directly. Game-action sound effects still call `playSfx` where the action happens. `TraitContext.services.audio` exposes the service, and the architecture test keeps music transitions and volume handling out of `main.ts`.
 
+`src/hud-panels.ts` is the third. It builds the round panel, deck counter, shop coin counter and shop exit button, and turns a `HudView` snapshot (round, phase, the scene's overlays, whether a play is still presenting, the outcome and the counters) into what they show, including the stage heading and the next-action label. `hudDisplay` is the pure part, tested without a DOM. `main.ts` builds the snapshot in `updateHud` and binds the next action with `hud.onAction`; `TraitContext.services.hud` exposes the service.
+
 The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameSession`. Developer rooms are no longer a kind of room: a room the console lists has a `console: { name }` trait, and one that honours `&restart=true` has a `restartable: { param }` trait (#38).
 
 ## Architecture to discuss

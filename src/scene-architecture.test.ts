@@ -34,4 +34,12 @@ describe("scene architecture guardrails", () => {
     );
     expect(main).not.toMatch(/musicPlayer\.set(Volume|Muted)\(/);
   });
+
+  it("keeps the HUD panels' markup and labels in the HUD service", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/services:\s*\{[^}]*\bhud:\s*HudPanels\b/);
+    expect(main).not.toMatch(/data-stat=|round-hud|deck-hud|coin-hud|shop-exit/);
+    expect(main).not.toMatch(/Continue \/ Skip shop|"End game"|"BOSS STAGE"/);
+  });
 });
