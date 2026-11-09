@@ -104,7 +104,10 @@ const fragmentShader = /* glsl */ `
       vec2 flameAt = flame(p / halfSize);
       colour += fireColour(clamp(flameAt.y, 0.0, 1.0)) * flameAt.x * stepLength / halfSize;
     }
-    gl_FragColor = vec4(colour * intensity, 1.0);
+    // Premultiplied light: the glow's own brightness is its coverage, so the transparent front
+    // canvas (#116, #190) holds a valid colour wherever the flame is, and nothing where it isn't.
+    vec3 light = min(colour * intensity, vec3(1.0));
+    gl_FragColor = vec4(light, max(light.r, max(light.g, light.b)));
   }
 `;
 

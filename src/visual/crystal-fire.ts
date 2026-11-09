@@ -53,7 +53,10 @@ const fragmentShader = /* glsl */ `
     // Sparkle: a very tight glint off the facet.
     vec3 glint = reflect(view, normal);
     float sparkle = pow(max(dot(glint, normalize(vec3(0.3, 0.9, 0.3))), 0.0), 300.0) * 4.0;
-    gl_FragColor = vec4((fire + sparkle) * intensity, 1.0);
+    // Premultiplied light: the glow's own brightness is its coverage, so the transparent front
+    // canvas (#116, #190) holds a valid colour wherever the flame is, and nothing where it isn't.
+    vec3 light = min((fire + sparkle) * intensity, vec3(1.0));
+    gl_FragColor = vec4(light, max(light.r, max(light.g, light.b)));
   }
 `;
 
