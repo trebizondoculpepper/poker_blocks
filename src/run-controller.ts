@@ -50,6 +50,7 @@ import {
   type Settings,
 } from "./settings";
 import { shopPreviewState, type ShopOffer } from "./shop-stock";
+import { offerKind } from "./offer-kinds";
 import type { createShopView } from "./shop-view";
 import type { TableInput, TableRules } from "./table-input";
 import type { TableRenderer } from "./table-renderer";
@@ -347,8 +348,8 @@ export function createRunController<Context>(options: {
   /** Leave the current stage or the shop: the next stage, the shop, or game over. */
   async function advanceFromStage(): Promise<void> {
     if (shopExitPending || services.presenter.busy || services.input.dragging) return;
-    const { shop, cameraView } = services;
-    const leavingShop = game.phase === "shop";
+    const { shop } = services;
+    const leavingShop = game.inShop;
     if (leavingShop) shopExitPending = true;
     try {
       if (leavingShop) {
@@ -366,15 +367,11 @@ export function createRunController<Context>(options: {
         return;
       }
       game = stockShopIfNeeded(game);
-      followRunPosition();
+      // The table is cleared first, so the scene that comes in front (its sound, the shop's
+      // camera entrance) starts on a clean table rather than being reset straight after.
       resetTable();
-      if (game.inStage) {
-        services.hand.deal(game.state.hand);
-        playSfx("round.start");
-      } else if (game.inShop) {
-        playSfx("shop.open");
-      }
-      if (game.inShop && !reducedMotion) cameraView.beginShopEntrance();
+      if (game.inStage) services.hand.deal(game.state.hand);
+      followRunPosition();
       showSelection();
       updateHud();
       autosave();
@@ -436,7 +433,7 @@ export function createRunController<Context>(options: {
   }
 
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
-  function startRun(session: GameRun, fresh = false): void {
+  function startRun(session: GameRun): void {
     const { rack, cameraView, audio } = services;
     game = stockShopIfNeeded(session);
     const rackTrait = modeTraits.passiveRack;
@@ -459,12 +456,9 @@ export function createRunController<Context>(options: {
     const inFront = scenes.current;
     followRunPosition();
     if (scenes.current === inFront) refreshScene();
-    const enterShop = game.phase === "shop" && fresh && !reducedMotion;
-    if (enterShop) cameraView.beginShopEntrance();
     updateHud();
     showSelection();
     autosave();
-    playSfx(game.phase === "shop" ? "shop.open" : "round.start");
     audio.runStarted();
   }
 
@@ -493,16 +487,16 @@ export function createRunController<Context>(options: {
         showScene("title");
         return;
       }
-      startRun(newRun(), true);
+      startRun(newRun());
       services.overlays.closeAll();
     },
     newRun() {
-      startRun(newRun(), true);
+      startRun(newRun());
       services.overlays.closeAll();
     },
     resume() {
       const saved = restartMode ? null : loadSaved();
-      startRun(saved ? resume(saved) : newRun(), !saved);
+      startRun(saved ? resume(saved) : newRun());
       services.overlays.closeAll();
     },
   };
@@ -540,12 +534,24 @@ export function createRunController<Context>(options: {
     },
   };
 
+  /**
+   * Show what a purchase changed, read from the run's state rather than from the offer: any
+   * new hand cards join the hand, and the rack is redrawn. A kind that adds neither (one that
+   * pays coins, say) needs nothing here (#67).
+   */
+  function showPurchase(): void {
+    const shown = new Set(services.hand.blocks.map(({ block }) => block.id));
+    for (const block of game.state.hand) if (!shown.has(block.id)) services.hand.add(block);
+    services.hand.sync(game.state.hand);
+    services.rack.render(game.state.passiveRack);
+  }
+
   /** The game actions a menu can dispatch; navigation is the mode's data, not code. */
   const gameActions: Record<string, () => void> = {
     // From the game over screen: leave it and begin a fresh run.
     newRun() {
       services.overlays.closeAll();
-      startRun(newRun(), true);
+      startRun(newRun());
     },
     // The run is already saved at its last safe point; saving here could record a play
     // whose animation (and hand refill) hasn't finished, so just show the title.
@@ -581,7 +587,7 @@ export function createRunController<Context>(options: {
       if (snapshot) startRun(resume(snapshot));
     },
     onNewGame() {
-      startRun(newRun(), true);
+      startRun(newRun());
     },
     onSettingsChange(next) {
       applySettings(next);
@@ -619,9 +625,9 @@ export function createRunController<Context>(options: {
     mode: () => currentMode,
     openMode(mode) {
       enterMode(mode);
-      // startScene is declarative until game flow drives run progression (#37).
-      switchScene(mode.startScene);
-      startRun(newRun(), true);
+      // The new run's flow puts its scene in front, so the scene's arrival (its sound, the
+      // shop's entrance) happens once, with the run ready.
+      startRun(newRun());
       services.overlays.closeAll();
     },
     forceOutcome(outcome) {
@@ -683,7 +689,8 @@ export function createRunController<Context>(options: {
       services.audio.start();
     },
     open() {
-      switchScene(currentMode.startScene);
+      // Each load handler puts its own scene in front (the title, or the run's scene through
+      // the flow), so the first scene enters once, with its run ready.
       onLoadHandlers[currentMode.traits.onLoad]();
       if (restartMode) {
         window.history.replaceState(
@@ -709,8 +716,7 @@ export function createRunController<Context>(options: {
       }
     },
     takeNextAction,
-    offerPrice: (offer) =>
-      offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),
+    offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),
     shopStock: () => game.state.shopStock ?? [],
     runStats: () => game.stats,
     hasSave,
@@ -722,10 +728,7 @@ export function createRunController<Context>(options: {
         playSfx("action.denied");
         return false;
       }
-      if (bought.kind === "card") {
-        services.hand.add(bought.block);
-        services.hand.sync(game.state.hand);
-      } else services.rack.render(game.state.passiveRack);
+      showPurchase();
       services.shop.render(game.state.shopStock ?? [], true);
       updateHud();
       autosave();

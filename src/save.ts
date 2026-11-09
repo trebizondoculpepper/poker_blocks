@@ -8,6 +8,7 @@ import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
 import { parseRunStats, type RunStats } from "./run-stats";
 import { createPassiveBlock, passiveDefinitions } from "./passives";
+import { isOfferKind, offerKind, type OfferRestore, type SavedOffer } from "./offer-kinds";
 import { stageKinds, type StageKind } from "./run-rules";
 import type { GameFlow, FlowTransition } from "./game-flow";
 import type { SceneName } from "./game-modes";
@@ -45,10 +46,8 @@ export type SaveRecord = {
     discardPile: string[];
     /** Optional to keep previously saved runs readable. */
     passiveRack?: { id: string; definitionId: string }[];
-    shopStock?: (
-      | { kind: "card"; cardId: string }
-      | { kind: "passive"; id: string; definitionId: string }
-    )[];
+    /** Each offer as its kind saves it (src/offer-kinds.ts). */
+    shopStock?: SavedOffer[];
     /** Optional so runs saved before the economy was added begin with zero coins. */
     coins?: number;
     round: GameState["round"];
@@ -126,15 +125,7 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
       passiveRack: state.passiveRack.map(({ id, definitionId }) => ({ id, definitionId })),
       ...(state.shopStock
         ? {
-            shopStock: state.shopStock.map((offer) =>
-              offer.kind === "card"
-                ? { kind: "card" as const, cardId: offer.block.id }
-                : {
-                    kind: "passive" as const,
-                    id: offer.block.id,
-                    definitionId: offer.block.definitionId,
-                  },
-            ),
+            shopStock: state.shopStock.map((offer) => offerKind(offer).save(offer.block)),
           }
         : {}),
       coins: state.coins,
@@ -184,15 +175,18 @@ export function fromSaveRecord(
         ? []
         : [createPassiveBlock(definitionId, id)];
     });
-    const shopStock = (state.shopStock ?? []).map((offer) => {
-      if (offer.kind === "card") return { kind: "card" as const, block: resolve(offer.cardId) };
-      if (offer.kind !== "passive" || typeof offer.id !== "string" || passiveIds.has(offer.id))
-        throw new Error("bad shop offer");
-      passiveIds.add(offer.id);
-      return {
-        kind: "passive" as const,
-        block: createPassiveBlock(offer.definitionId, offer.id),
-      };
+    // Each offer is rebuilt by its own kind; an unknown kind makes the save invalid.
+    const restoreOffer: OfferRestore = {
+      card: resolve,
+      takePassiveId(id) {
+        if (typeof id !== "string" || passiveIds.has(id)) throw new Error("bad passive id");
+        passiveIds.add(id);
+        return id;
+      },
+    };
+    const shopStock = (state.shopStock ?? []).map((saved) => {
+      if (!isOfferKind(saved?.kind)) throw new Error("bad shop offer");
+      return { kind: saved.kind, block: offerKind(saved).restore(saved, restoreOffer) };
     });
     const field = state.field.map(({ cardId, cell }) => {
       if (![cell?.x, cell?.y, cell?.z].every(Number.isInteger)) throw new Error("bad cell");

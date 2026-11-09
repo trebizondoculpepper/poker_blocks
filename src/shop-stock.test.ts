@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import type { CardBlock } from "./cards";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
 import { GameRun } from "./game-run";
@@ -42,7 +43,7 @@ describe("shop preview", () => {
     expect(first.state.passiveRack).toHaveLength(2);
     // Like leaving the shop: unbought (borrowed) cards go back to the deck before restocking.
     const unsold = first.state.shopStock!.flatMap((offer) =>
-      offer.kind === "card" ? [offer.block] : [],
+      offer.kind === "card" ? [offer.block as CardBlock] : [],
     );
     const restock = {
       ...first.state,

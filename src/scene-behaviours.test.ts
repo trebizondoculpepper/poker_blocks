@@ -39,6 +39,7 @@ function recordingHost() {
         seed: () => 4242,
         shopStock: () => [{ kind: "card", block: {} as never }],
         dispatch: (action) => void calls.push(`action:${action}`),
+        reducedMotion: false,
         runStats: () => ({
           roundsCompleted: 2,
           totalScore: 900,
@@ -65,6 +66,7 @@ function recordingHost() {
           void calls.push(`footer:${version}:${links.map(({ label }) => label).join(",")}`),
         hidePanelFooter: () => void calls.push("footer:hide"),
       },
+      cameraView: { beginShopEntrance: () => void calls.push("camera:shopEntrance") },
       audio: {
         setMusicFilter: (kind) => void calls.push(`filter:${kind}`),
         playStageMusic: (pool) => void calls.push(`stageMusic:${pool}`),
@@ -272,6 +274,7 @@ describe("the pause menu's scene traits (#87)", () => {
   it("routes Escape to the scene in front: open the menu, resume, or go back", () => {
     const { scenes, calls } = stack();
     scenes.switchTo(stage.id);
+    calls.length = 0;
     expect(scenes.dispatch(escape)).toBe(true);
     scenes.push(pause.id);
     scenes.dispatch(escape);
@@ -369,5 +372,31 @@ describe("play scenes start their own music (#92)", () => {
     scenes.push(scenesOf("pause").id);
     scenes.pop();
     expect(calls.filter((call) => call.startsWith("stageMusic:"))).toEqual([]);
+  });
+});
+
+describe("the shop scene's own arrival (#93)", () => {
+  const scenesOf = (name: string) =>
+    gameModeFor("game").scenes.find(({ id }) => id === `game/${name}`)!;
+
+  it("plays its sound and camera entrance as it comes in front; a stage plays its start", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    for (const name of ["stage-1", "shop"]) scenes.register(scenesOf(name));
+    scenes.switchTo(scenesOf("stage-1").id);
+    expect(calls).toContain("sound:round.start");
+    calls.length = 0;
+    scenes.switchTo(scenesOf("shop").id);
+    expect(calls).toContain("sound:shop.open");
+    expect(calls).toContain("camera:shopEntrance");
+  });
+
+  it("keeps the camera still when motion is reduced", () => {
+    const { host, calls } = recordingHost();
+    (host.services.run as { reducedMotion: boolean }).reducedMotion = true;
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scenesOf("shop"));
+    scenes.switchTo(scenesOf("shop").id);
+    expect(calls).not.toContain("camera:shopEntrance");
   });
 });

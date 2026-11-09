@@ -6,11 +6,14 @@ import { getMaterialDefinition, materialOf } from "./materials";
 import { createPassiveVisual } from "./passive-visual";
 import { passiveAppearance, passiveDefinitions } from "./passives";
 import type { ShopOffer } from "./shop-stock";
+import { offerKind, type OfferBlock, type OfferDestination } from "./offer-kinds";
+import { Registry } from "./core/registry";
+import type { CardBlock } from "./cards";
+import type { PassiveBlock } from "./passives";
 import { createBlockAppearance } from "./visual/block-appearance";
 import { createMaterialise } from "./visual/materialise";
 import "./shop-view.css";
 
-type Destination = "hand" | "passive-rack";
 type DisplayedOffer = {
   item: HTMLElement;
   slot: HTMLElement;
@@ -27,12 +30,108 @@ export type ShopView = {
   dispose(): void;
 };
 
+type OfferCube = { cube: THREE.Object3D; dispose(): void };
+
+/** How the shop draws and names one kind of offer (#67); the rules are in src/offer-kinds.ts. */
+export type OfferView<Block extends OfferBlock> = {
+  cube(block: Block): OfferCube;
+  name(block: Block): string;
+  /** Its inspection text, shown on hover and read out. */
+  describe(block: Block): string;
+  /** A class for the offer's button. */
+  className: string;
+};
+
+const offerViews = new Registry<OfferView<OfferBlock>>("offer view");
+
+/** Register how a kind of offer looks in the shop. */
+export function registerOfferView<Block extends OfferBlock>(
+  name: string,
+  view: OfferView<Block>,
+): void {
+  offerViews.register(name, view as unknown as OfferView<OfferBlock>);
+}
+
+/** What each destination is called in an offer's description. */
+const destinationLabels: Record<OfferDestination, string> = {
+  hand: "hand",
+  "passive-rack": "passive rack",
+};
+
+/** A passive offer's token: its own shape and faces (src/passive-visual.ts). */
+function passiveCube(block: PassiveBlock): OfferCube {
+  const appearance = passiveAppearance(block);
+  const visual = createPassiveVisual(appearance, 1.35);
+  const mesh = new THREE.Mesh(visual.geometry, visual.materials);
+  const edgeMaterial = new THREE.LineBasicMaterial({ color: appearance.palette.edge });
+  mesh.add(new THREE.LineSegments(visual.edges, edgeMaterial));
+  return {
+    cube: mesh,
+    dispose: () => {
+      visual.dispose();
+      edgeMaterial.dispose();
+    },
+  };
+}
+
+/** A card offer's cube: the same appearance as a card on the table. */
+function cardCube(block: CardBlock): OfferCube {
+  const appearance = createBlockAppearance(
+    block.traits.identity,
+    getMaterialDefinition(materialOf(block)),
+    1.35,
+  );
+  const mesh = new THREE.Mesh(appearance.geometry, appearance.materials);
+  const edgeGeometry = new THREE.EdgesGeometry(appearance.geometry);
+  const edgeMaterial = new THREE.LineBasicMaterial({
+    color: appearance.edgeColor,
+    transparent: appearance.edgeOpacity < 1,
+    opacity: appearance.edgeOpacity,
+  });
+  mesh.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
+  for (const extra of appearance.extras ?? []) mesh.add(extra);
+  return {
+    cube: mesh,
+    dispose: () => {
+      appearance.geometry.dispose();
+      for (const texture of appearance.textures) texture.dispose();
+      for (const material of new Set([
+        ...appearance.materials,
+        ...(appearance.boardMaterials ?? []),
+      ]))
+        material.dispose();
+      for (const extra of appearance.extras ?? []) {
+        for (const material of ([] as THREE.Material[]).concat(extra.material)) {
+          (material as THREE.MeshStandardMaterial).map?.dispose();
+          material.dispose();
+        }
+      }
+      edgeGeometry.dispose();
+      edgeMaterial.dispose();
+    },
+  };
+}
+
+registerOfferView<CardBlock>("card", {
+  cube: cardCube,
+  name: (block) => cardName(block.traits.identity),
+  describe: (block) => block.traits.inspectable?.inspect() ?? cardName(block.traits.identity),
+  className: "is-card",
+});
+
+registerOfferView<PassiveBlock>("passive", {
+  cube: passiveCube,
+  name: (block) => passiveDefinitions.get(block.definitionId).name,
+  describe: (block) => block.traits.inspectable.inspect(),
+  className: "is-passive",
+});
+
 /** Shop stock is drawn with the same real cube appearances as cards and installed passives. */
 export function createShopView(
   host: HTMLElement,
   rack: HTMLElement | null,
   price: (offer: ShopOffer) => number,
-  buy: (id: string, destination: Destination) => boolean,
+  buy: (id: string, destination: OfferDestination) => boolean,
   onEntranceDone: () => void,
 ): ShopView {
   const stock = document.createElement("section");
@@ -117,54 +216,7 @@ export function createShopView(
   }
 
   function makeCube(offer: ShopOffer): { cube: THREE.Object3D; dispose(): void } {
-    if (offer.kind === "passive") {
-      const appearance = passiveAppearance(offer.block);
-      const visual = createPassiveVisual(appearance, 1.35);
-      const mesh = new THREE.Mesh(visual.geometry, visual.materials);
-      const edgeMaterial = new THREE.LineBasicMaterial({ color: appearance.palette.edge });
-      mesh.add(new THREE.LineSegments(visual.edges, edgeMaterial));
-      return {
-        cube: mesh,
-        dispose: () => {
-          visual.dispose();
-          edgeMaterial.dispose();
-        },
-      };
-    }
-    const appearance = createBlockAppearance(
-      offer.block.traits.identity,
-      getMaterialDefinition(materialOf(offer.block)),
-      1.35,
-    );
-    const mesh = new THREE.Mesh(appearance.geometry, appearance.materials);
-    const edgeGeometry = new THREE.EdgesGeometry(appearance.geometry);
-    const edgeMaterial = new THREE.LineBasicMaterial({
-      color: appearance.edgeColor,
-      transparent: appearance.edgeOpacity < 1,
-      opacity: appearance.edgeOpacity,
-    });
-    mesh.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
-    for (const extra of appearance.extras ?? []) mesh.add(extra);
-    return {
-      cube: mesh,
-      dispose: () => {
-        appearance.geometry.dispose();
-        for (const texture of appearance.textures) texture.dispose();
-        for (const material of new Set([
-          ...appearance.materials,
-          ...(appearance.boardMaterials ?? []),
-        ]))
-          material.dispose();
-        for (const extra of appearance.extras ?? []) {
-          for (const material of ([] as THREE.Material[]).concat(extra.material)) {
-            (material as THREE.MeshStandardMaterial).map?.dispose();
-            material.dispose();
-          }
-        }
-        edgeGeometry.dispose();
-        edgeMaterial.dispose();
-      },
-    };
+    return offerViews.get(offer.kind).cube(offer.block);
   }
 
   const contains = (element: HTMLElement | null, x: number, y: number) => {
@@ -180,16 +232,16 @@ export function createShopView(
     stock.classList.remove("is-burning");
     if (!visible) return;
     for (const offer of offers) {
-      const passive = offer.kind === "passive";
-      const definition = passive ? passiveDefinitions.get(offer.block.definitionId) : null;
-      const name = passive ? definition!.name : cardName(offer.block.traits.identity);
-      const description = offer.block.traits.inspectable?.inspect() ?? name;
+      const view = offerViews.get(offer.kind);
+      const name = view.name(offer.block);
+      const description = view.describe(offer.block);
+      const destination = destinationLabels[offerKind(offer).destination];
       const item = document.createElement("button");
       item.type = "button";
-      item.className = `shop-offer ${passive ? "is-passive" : "is-card"}`;
+      item.className = `shop-offer ${view.className}`;
       item.setAttribute(
         "aria-label",
-        `${description}, ${price(offer)} coin, drag to ${passive ? "passive rack" : "hand"}`,
+        `${description}, ${price(offer)} coin, drag to ${destination}`,
       );
       const slot = document.createElement("span");
       slot.className = "shop-cube-slot";
