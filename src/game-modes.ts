@@ -1,3 +1,4 @@
+import type { DevHudStyleAuditionConfig, HudStyleConfig } from "./scene-traits/hud-style";
 /**
  * A game mode defines the available scenes and start scene, plus mode-wide traits for a run.
  * `?mode=...` selects a developer mode; `?room=...` remains a backwards-compatible alias.
@@ -51,6 +52,10 @@ export type SceneTraits = {
   tableBackground: Record<never, never>;
   /** Testing only: live sliders for the attract sequence's velocity, spin and spawn rate. */
   devAttractTuning: Record<never, never>;
+  /** The HUD wears this registered style (src/hud-styles.ts) while the scene is on the stack. */
+  hudStyle: HudStyleConfig;
+  /** Testing only: a selector that switches the HUD between these styles (#121). */
+  devHudStyleAudition: DevHudStyleAuditionConfig;
   /** Testing only: double-click a block to destroy it with this cause. */
   devManualBlockDestroyer: { cause: DestroyCause };
   /**
@@ -513,6 +518,31 @@ const gameModes: GameMode[] = [
       save: { key: "poker-blocks.dev4-run" },
       console: { name: "dev4" },
       restartable: { param: "restart" },
+      music: { style: "quiet" },
+    },
+  },
+  {
+    // HUD style audition (#121): the shop, then sandbox play, with a selector that switches the
+    // gameplay and shop overlays between the candidate styles. Continue leaves the shop for play.
+    id: "dev-style",
+    scenes: composeScenes("dev-style", [
+      rackScenes,
+      {
+        scenes: [...playScenes, "shop"],
+        traits: { devHudStyleAudition: { styles: ["artDeco", "preCad"] } },
+      },
+    ]),
+    startScene: "shop",
+    flow: standardGameFlow,
+    navigation: standardNavigation,
+    runSetup: [{ step: "sandbox" }, { step: "materialDeck" }, { step: "shopPreview", coins: 30 }],
+    traits: {
+      onLoad: "resume",
+      save: { key: "poker-blocks.dev-style-run" },
+      console: { name: "dev-style" },
+      restartable: { param: "restart" },
+      passiveRack: { ...defaultPassiveRack },
+      shop: { ...defaultShop },
       music: { style: "quiet" },
     },
   },
