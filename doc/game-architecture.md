@@ -239,6 +239,8 @@ Composition is the same at both levels: a block is to its traits what a scene is
 
 `src/table-renderer.ts` is the ninth. It owns the WebGL renderer, the board scene in the card room and the hand scene in its studio light, the reflection environment, the drag layer and drawing a frame (board, then hand, then dragged blocks on a fresh depth buffer). `TraitContext.services.renderer` exposes it.
 
+`src/play-presenter.ts` is the tenth. It shows a play or discard the rules have accepted: played blocks fly to their cells one after another (a transparent block dissolves into its table version as it lands), discarded blocks dissolve away, and then the scoring lines are presented lowest first, each tinting its row and adding its points, before the outcome is announced. It keeps a play and a discard as separate states rather than one kind-tagged value. `main.ts` reacts to the announced outcome (the stage-won pop-up or game over follows) and exposes the service as `TraitContext.services.presenter`.
+
 The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameSession`. Developer rooms are no longer a kind of room: a room the console lists has a `console: { name }` trait, and one that honours `&restart=true` has a `restartable: { param }` trait (#38).
 
 ## Architecture to discuss
