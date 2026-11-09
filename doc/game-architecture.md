@@ -227,6 +227,8 @@ Composition is the same at both levels: a block is to its traits what a scene is
 
 `src/hud-panels.ts` is the third. It builds the round panel, deck counter, shop coin counter and shop exit button, and turns a `HudView` snapshot (round, phase, the scene's overlays, whether a play is still presenting, the outcome and the counters) into what they show, including the stage heading and the next-action label. `hudDisplay` is the pure part, tested without a DOM. `main.ts` builds the snapshot in `updateHud` and binds the next action with `hud.onAction`; `TraitContext.services.hud` exposes the service.
 
+`src/console-host.ts` is the fourth. It adapts the game to the developer console's `ConsoleHost`: dev-room names, resetting the current room, opening another room in place (it rewrites the URL with the History API, then asks the game to `openRoom`), and the music commands, which go through the audio service. `main.ts` supplies a narrow `ConsoleApp` (new run, open a room, force an outcome, adjust coins) and no longer builds the console host itself.
+
 The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameSession`. Developer rooms are no longer a kind of room: a room the console lists has a `console: { name }` trait, and one that honours `&restart=true` has a `restartable: { param }` trait (#38).
 
 ## Architecture to discuss

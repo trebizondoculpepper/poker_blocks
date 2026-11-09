@@ -23,8 +23,8 @@ import { inspectBlock } from "./traits/inspectable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createAudioService, type AudioService } from "./audio-service";
 import { createHudPanels, type HudPanels } from "./hud-panels";
+import { createConsoleHost } from "./console-host";
 import { createMenus } from "./menus";
-import { createConsole } from "./console/console-view";
 import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
@@ -36,8 +36,6 @@ import { shopPreviewState } from "./shop-stock";
 import { createShopView } from "./shop-view";
 import { moveItem } from "./zones";
 import {
-  consoleNames,
-  devRooms,
   fieldPlacementActive,
   overlaysForPhase,
   roomFor,
@@ -1565,57 +1563,44 @@ const unbindScreenshot = bindScreenshotShortcut(host, renderer, render);
 hud.onAction(takeNextAction);
 
 // ----- Developer console: ~ (or `) drops it down -----
-createConsole({
-  game: () => game,
-  screen: () => screen,
-  next: takeNextAction,
-  newGame() {
-    startRun(newSession());
-    menus.closeAll();
-  },
-  home: () => menus.showTitle(),
-  room: () => consoleNames(thisRoom)[0] ?? null,
-  rooms: () => devRooms(),
-  resetRoom(room) {
-    const currentRoom = consoleNames(thisRoom)[0] ?? null;
-    if (!room || room === currentRoom) {
+const devConsole = createConsoleHost(
+  {
+    game: () => game,
+    screen: () => screen,
+    next: takeNextAction,
+    newRun() {
       startRun(newSession());
       menus.closeAll();
-      return;
-    }
-    const nextRoom = roomRegistry.get(room);
-    enterRoom(nextRoom);
-    window.history.replaceState(window.history.state, "", roomLink(nextRoom, window.location.href));
-    // startScene is declarative until the scene graph drives session progression (#37).
-    switchScene(nextRoom.startScene);
-    startRun(newSession(), true);
-    menus.closeAll();
+    },
+    home: () => menus.showTitle(),
+    room: () => thisRoom,
+    openRoom(room) {
+      enterRoom(room);
+      // startScene is declarative until the scene graph drives session progression (#37).
+      switchScene(room.startScene);
+      startRun(newSession(), true);
+      menus.closeAll();
+    },
+    forceOutcome(outcome) {
+      if (pendingAction || !game.forceOutcome(outcome)) return false;
+      shownScore = game.state.round.score;
+      scoreSteps = [];
+      outcomeAt = null;
+      updateHud();
+      autosave();
+      // A won stage shows its pop-up, as if the win had been scored.
+      if (outcome === "won") stageWonAt = performance.now();
+      return true;
+    },
+    adjustCoins(delta) {
+      const balance = game.adjustCoins(delta);
+      updateHud();
+      autosave();
+      return balance;
+    },
   },
-  forceOutcome(outcome) {
-    if (pendingAction || !game.forceOutcome(outcome)) return false;
-    shownScore = game.state.round.score;
-    scoreSteps = [];
-    outcomeAt = null;
-    updateHud();
-    autosave();
-    // A won stage shows its pop-up, as if the win had been scored.
-    if (outcome === "won") stageWonAt = performance.now();
-    return true;
-  },
-  adjustCoins(delta) {
-    const balance = game.adjustCoins(delta);
-    updateHud();
-    autosave();
-    return balance;
-  },
-  musicTracks: () => audio.music.tracks,
-  musicNow: () => audio.music.current,
-  playMusic(id) {
-    audio.music.unlock();
-    audio.music.play(id);
-  },
-  stopMusic: () => audio.music.stop(),
-});
+  audio,
+);
 
 /** The blocks a drag plays, in the order they were selected (the dragged one alone if none). */
 function playOrder(activeDrag: Drag): RenderedBlock[] {
@@ -1964,6 +1949,7 @@ if (import.meta.hot) {
     window.removeEventListener("blur", onBlur);
     audio.dispose();
     hud.dispose();
+    devConsole.dispose();
     pendingAction?.effects.forEach((e) => e.finish());
     appearing.forEach(({ effect }) => effect.finish());
     renderedBlocks.slice().forEach(disposeCube);
