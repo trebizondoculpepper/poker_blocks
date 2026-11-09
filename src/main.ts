@@ -59,6 +59,7 @@ import {
 } from "./rooms";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
 import type { Screen } from "./menus";
+import { createRoomMusicBehaviours } from "./room-music";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
@@ -1161,17 +1162,23 @@ const music = createMusicController(
   musicPlayer,
   musicTracks.map(({ id }) => id),
 );
-function enterRoom(room: Room): void {
+const roomMusicBehaviours = createRoomMusicBehaviours({
+  windDown: () => music.windDown(),
+  resumeStage: () => music.resumeStage(),
+});
+let roomMusic = roomMusicBehaviours.ordinary;
+function enterRoom(room: Room, createDeck = true): void {
   thisRoom = room;
   roomTraits = room.traits;
   sessionConfig = sessionConfigFor(roomTraits);
   runSaveKey = roomTraits.save.key;
-  cards = roomDeck(false);
+  if (createDeck) cards = roomDeck(false);
   passiveRackView.setCapacity(roomTraits.passiveRack?.capacity ?? 0);
   passiveRackView.element.hidden = !roomTraits.passiveRack;
+  roomMusic = roomMusicBehaviours[room.musicMode];
 }
 // Configure the initial mode through the same path used by the developer room switcher.
-enterRoom(thisRoom);
+enterRoom(thisRoom, false);
 function applySettings(next: Settings): void {
   settings = next;
   setSfxVolume(next.volume);
@@ -1726,7 +1733,7 @@ function startRun(session: GameSession, fresh = false): void {
   autosave();
   playSfx(game.phase === "shop" ? "shop.open" : "round.start");
   if (game.inStage) musicForNewStage();
-  if (roomTraits.quiet) music.windDown();
+  roomMusic.settle();
 }
 
 const screenSceneTransitions: Record<
@@ -1760,7 +1767,7 @@ const screenMusicActions: Record<Screen, () => void> = {
   },
   game() {
     music.unmuffle();
-    music.resumeStage();
+    roomMusic.resume();
   },
   over() {
     music.unmuffle();
