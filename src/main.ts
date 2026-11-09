@@ -238,7 +238,6 @@ const input: TableInput = createTableInput({
 run.begin();
 const overlays: Overlays = createOverlays(host, {
   settings: run.settings,
-  audio,
   reducedMotion: () => run.reducedMotion,
   scenes: run.screenScenes,
   menus: run.menus,

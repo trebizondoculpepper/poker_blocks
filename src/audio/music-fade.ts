@@ -14,24 +14,25 @@ export const fadeKinds: Record<FadeKind, string> = {
   exponential: "Exponential (square law)",
 };
 
+/**
+ * Each fade curve's shape: the rising track's gain (0 to 1) at progress t, strictly inside
+ * 0..1. A curve is a handler named by the fade's config, so `fadeGain` never asks which it is.
+ */
+const fadeCurves: Record<FadeKind, (t: number) => number> = {
+  // Moves evenly in decibels, which the ear hears as a steady change.
+  logarithmic: (t) => 10 ** ((fadeFloorDb * (1 - t)) / 20),
+  linear: (t) => t,
+  // sin^2 + cos^2 = 1: the combined power of both tracks stays constant.
+  "equal-power": (t) => Math.sin((t * Math.PI) / 2),
+  "s-curve": (t) => easeInOutCubic(t),
+  exponential: (t) => t * t,
+};
+
 /** Gain (0 to 1) of the rising track at progress t (0 to 1). The falling track mirrors it. */
-export function fadeGain(kind: FadeKind, t: number): number {
+export function fadeGain(curve: FadeKind, t: number): number {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
-  switch (kind) {
-    case "logarithmic":
-      // Moves evenly in decibels, which the ear hears as a steady change.
-      return 10 ** ((fadeFloorDb * (1 - t)) / 20);
-    case "linear":
-      return t;
-    case "equal-power":
-      // sin^2 + cos^2 = 1: the combined power of both tracks stays constant.
-      return Math.sin((t * Math.PI) / 2);
-    case "s-curve":
-      return easeInOutCubic(t);
-    case "exponential":
-      return t * t;
-  }
+  return fadeCurves[curve](t);
 }
 
 /**

@@ -1,6 +1,4 @@
 {
-  "src/audio-service.ts": ["screenMusic[screen]();"],
-  "src/audio/music-fade.ts": ["switch (kind) {"],
   "src/hud-panels.ts": [
     "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
     "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
