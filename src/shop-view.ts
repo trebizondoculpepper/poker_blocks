@@ -5,6 +5,7 @@ import { passiveFaceTexture } from "./passive-rack";
 import { passiveDefinitions } from "./passives";
 import type { ShopOffer } from "./shop-stock";
 import { createBlockAppearance } from "./visual/block-appearance";
+import { createMaterialise } from "./visual/materialise";
 import "./shop-view.css";
 
 type Destination = "hand" | "passive-rack";
@@ -48,11 +49,28 @@ export function createShopView(
   renderer.domElement.setAttribute("aria-hidden", "true");
   host.append(renderer.domElement);
   const displayed: DisplayedOffer[] = [];
+  let burn: {
+    startedAt: number;
+    seconds: number;
+    reduced: boolean;
+    jobs: {
+      entry: DisplayedOffer;
+      delay: number;
+      lastAt: number;
+      effect?: ReturnType<typeof createMaterialise>;
+    }[];
+    resolve(): void;
+  } | null = null;
+  let burnPromise: Promise<void> | null = null;
   const pixelsPerUnit = 50;
   let canvasWidth = 0;
   let canvasHeight = 0;
 
   function clear(): void {
+    for (const job of burn?.jobs ?? []) job.effect?.finish();
+    burn?.resolve();
+    burn = null;
+    burnPromise = null;
     for (const entry of displayed) {
       scene.remove(entry.cube);
       entry.dispose();
@@ -132,6 +150,7 @@ export function createShopView(
     stock.hidden = handTarget.hidden = renderer.domElement.hidden = !visible;
     clear();
     stock.replaceChildren();
+    stock.classList.remove("is-burning");
     if (!visible) return;
     for (const offer of offers) {
       const passive = offer.kind === "passive";
@@ -178,6 +197,10 @@ export function createShopView(
           item.removeEventListener("pointermove", move);
           item.removeEventListener("pointerup", finish);
           item.removeEventListener("pointercancel", cancel);
+          if (burn) {
+            cancel();
+            return;
+          }
           const destination = contains(rack, end.clientX, end.clientY)
             ? "passive-rack"
             : contains(handTarget, end.clientX, end.clientY)
@@ -194,8 +217,59 @@ export function createShopView(
     frame();
   }
 
+  /** Stagger the unsold offers' Perlin burn-out across roughly 1.5 seconds. */
+  function burnUnsold(reducedMotion: boolean): Promise<void> {
+    if (burnPromise) return burnPromise;
+    if (displayed.length === 0) {
+      render([], false);
+      return Promise.resolve();
+    }
+    stock.classList.add("is-burning");
+    handTarget.hidden = true;
+    const seconds = reducedMotion ? 0.4 : displayed.length === 1 ? 1.5 : 1.05;
+    const stagger = reducedMotion || displayed.length === 1 ? 0 : 0.45 / (displayed.length - 1);
+    burnPromise = new Promise((resolve) => {
+      burn = {
+        startedAt: performance.now(),
+        seconds,
+        reduced: reducedMotion,
+        jobs: displayed.map((entry, index) => ({
+          entry,
+          delay: index * stagger * 1000,
+          lastAt: 0,
+        })),
+        resolve,
+      };
+    });
+    return burnPromise;
+  }
+
   function frame(): void {
     if (renderer.domElement.hidden) return;
+    if (burn) {
+      const now = performance.now();
+      for (const job of burn.jobs) {
+        if (now < burn.startedAt + job.delay) continue;
+        if (!job.effect) {
+          job.entry.item.classList.add("is-burning");
+          job.entry.cube.traverse((part) => {
+            if (part instanceof THREE.LineSegments) part.visible = false;
+          });
+          job.effect = createMaterialise(job.entry.cube, {
+            seconds: burn.seconds,
+            reduced: burn.reduced,
+            out: true,
+          });
+          job.lastAt = now;
+        }
+        job.effect.update((now - job.lastAt) / 1000);
+        job.lastAt = now;
+      }
+      if (burn.jobs.every(({ effect }) => effect && !effect.running)) {
+        render([], false);
+        return;
+      }
+    }
     const bounds = host.getBoundingClientRect();
     const width = Math.max(1, Math.round(bounds.width));
     const height = Math.max(1, Math.round(bounds.height));
@@ -222,6 +296,7 @@ export function createShopView(
 
   return {
     render,
+    burnUnsold,
     frame,
     dispose: () => {
       clear();

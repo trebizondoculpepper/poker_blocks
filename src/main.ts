@@ -1443,7 +1443,7 @@ function showStageWon(): void {
   if (!reward) return;
   updateHud();
   autosave();
-  menus.showStageWon(reward, "Visit shop", () => advanceFromStage());
+  menus.showStageWon(reward, "Visit shop", () => void advanceFromStage());
 }
 
 /** The HUD button: move to the next stage, the shop, the next round, or a new game. */
@@ -1459,32 +1459,46 @@ function takeNextAction(): void {
     showStageWon();
     return;
   }
-  advanceFromStage();
+  void advanceFromStage();
 }
 
 /** Leave the current stage or the shop: the next stage, the shop, or game over. */
-function advanceFromStage(): void {
-  if (pendingAction || drag?.active) return;
-  const moved = game.phase === "shop" ? game.leaveShop() : game.advance();
-  if (!moved) return;
-  // advance() may have ended the run (TypeScript still has the pre-call narrowing).
-  if ((game.phase as Phase) === "over") {
-    endRun();
-    return;
+let shopExitPending = false;
+async function advanceFromStage(): Promise<void> {
+  if (shopExitPending || pendingAction || drag?.active) return;
+  const leavingShop = game.phase === "shop";
+  if (leavingShop) shopExitPending = true;
+  try {
+    if (leavingShop) {
+      const session = game;
+      if (session.state.shopStock?.length) playSfx("shop.stock.burn");
+      await shopView?.burnUnsold(reducedMotion);
+      // A different run may have been started while the old shop was dissolving.
+      if (game !== session) return;
+    }
+    const moved = leavingShop ? game.leaveShop() : game.advance();
+    if (!moved) return;
+    // advance() may have ended the run (TypeScript still has the pre-call narrowing).
+    if ((game.phase as Phase) === "over") {
+      endRun();
+      return;
+    }
+    game = stockShopIfNeeded(game);
+    resetTable();
+    if (game.inStage) {
+      musicForNewStage();
+      dealHand();
+      playSfx("round.start");
+    } else if (game.phase === "shop") {
+      playSfx("shop.open");
+    }
+    shopView?.render(game.state.shopStock ?? [], game.phase === "shop");
+    showSelection();
+    updateHud();
+    autosave();
+  } finally {
+    if (leavingShop) shopExitPending = false;
   }
-  game = stockShopIfNeeded(game);
-  resetTable();
-  if (game.inStage) {
-    musicForNewStage();
-    dealHand();
-    playSfx("round.start");
-  } else if (game.phase === "shop") {
-    playSfx("shop.open");
-  }
-  shopView?.render(game.state.shopStock ?? [], game.phase === "shop");
-  showSelection();
-  updateHud();
-  autosave();
 }
 
 /** The run is lost: the table stays behind the game over screen, which shows the totals. */

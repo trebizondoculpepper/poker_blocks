@@ -43,6 +43,16 @@
   cursor: grabbing;
 }
 
+.shop-stock.is-burning {
+  pointer-events: none;
+}
+
+.shop-offer.is-burning .shop-offer-label,
+.shop-offer.is-burning .shop-offer-description {
+  opacity: 0;
+  visibility: hidden;
+}
+
 .shop-cube-slot {
   display: block;
   width: 90px;

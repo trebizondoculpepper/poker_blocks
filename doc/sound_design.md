@@ -69,15 +69,16 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 ## Coins and shop
 
-| Id                   | Plays when                                          | Status    |
-| -------------------- | --------------------------------------------------- | --------- |
-| `coin.earn`          | Coins are earned, from a stage win or a block       | planned   |
-| `coin.spend`         | Coins are spent                                     | planned   |
-| `shop.open`          | The shop opens after a boss stage                   | generated |
-| `shop.buy`           | A block is bought                                   | planned   |
-| `shop.cannot_afford` | The player tries to buy something they can't afford | planned   |
-| `deck.add_block`     | A bought block joins the deck                       | planned   |
-| `shop.leave`         | The player leaves the shop for the next round       | planned   |
+| Id                   | Plays when                                          | Status     |
+| -------------------- | --------------------------------------------------- | ---------- |
+| `coin.earn`          | Coins are earned, from a stage win or a block       | planned    |
+| `coin.spend`         | Coins are spent                                     | planned    |
+| `shop.open`          | The shop opens after a boss stage                   | generated  |
+| `shop.buy`           | A block is bought                                   | planned    |
+| `shop.stock.burn`    | Unbought stock burns away when leaving the shop     | registered |
+| `shop.cannot_afford` | The player tries to buy something they can't afford | planned    |
+| `deck.add_block`     | A bought block joins the deck                       | planned    |
+| `shop.leave`         | The player leaves the shop for the next round       | planned    |
 
 ## Bosses and the run
 

@@ -233,6 +233,10 @@ const entries = [
     trigger: "A player buys one shop block and it joins the hand or passive rack",
   },
   {
+    id: "shop.stock.burn",
+    trigger: "Unbought shop stock burns away when the player leaves the shop",
+  },
+  {
     id: "run.lost",
     trigger: "A stage is lost and the game ends (bigger than round.failed)",
     prompt: "A slow descending set of soft muted bell tones fading to silence, final but gentle",
