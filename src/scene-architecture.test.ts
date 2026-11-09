@@ -15,12 +15,23 @@ describe("scene architecture guardrails", () => {
     const cameraView = readFileSync(new URL("./camera-view.ts", import.meta.url), "utf8");
 
     expect(main).toContain("createCameraViewService");
-    expect(main).toContain("services: { cameraView: CameraViewService }");
-    expect(main).toMatch(/services:\s*\{\s*cameraView\s*\}/);
+    expect(main).toMatch(/services:\s*\{[^}]*\bcameraView:\s*CameraViewService\b/);
+    expect(main).toMatch(/services:\s*\{[^}]*\bcameraView\b[^}]*\}/);
     expect(main).not.toMatch(/new THREE\.(PerspectiveCamera|OrthographicCamera)/);
     expect(main).not.toMatch(/new ResizeObserver/);
     expect(main).not.toMatch(/function (desiredCamera|minimumCameraDistance|applyCamera)\s*\(/);
     expect(cameraView).toContain("new THREE.PerspectiveCamera");
     expect(cameraView).toContain("new ResizeObserver");
+  });
+
+  it("keeps music, volume and the view sounds in the audio service", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/services:\s*\{[^}]*\baudio:\s*AudioService\b/);
+    expect(main).not.toMatch(/\bsilencedAudio\b|createRoomMusicBehaviours|"view\.zoom"/);
+    expect(main).not.toMatch(
+      /\.(switchToBossTrack|switchToRandomStageTrack|muffle|unmuffle|windDown|playTitle)\(/,
+    );
+    expect(main).not.toMatch(/musicPlayer\.set(Volume|Muted)\(/);
   });
 });
