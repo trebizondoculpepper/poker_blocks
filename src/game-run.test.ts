@@ -1,3 +1,4 @@
+import { offerKind } from "./offer-kinds";
 import { describe, expect, it } from "vite-plus/test";
 import type { PassiveBlock } from "./passives";
 import { standardDeck, type CardBlock } from "./cards";
@@ -302,8 +303,11 @@ describe("GameRun progression", () => {
     const card = stocked.state.shopStock!.find(({ kind }) => kind === "card")!;
     expect(stocked.buyShopOffer(passive.block.id, "passive-rack")).not.toBeNull();
     expect(stocked.buyShopOffer(card.block.id, "hand")).not.toBeNull();
-    // The passive cost its base price (#144); the card 1 coin.
-    const left = 30 - (passive.block as PassiveBlock).traits.priced!.basePrice - 1;
+    // The passive cost its base price (#144); the card its material's price and rank surcharge.
+    const left =
+      30 -
+      (passive.block as PassiveBlock).traits.priced!.basePrice -
+      offerKind(card).price(card.block, stocked.offerRun);
     expect(stocked.state.coins).toBe(left);
     stocked.leaveShop();
     expect(stocked.phase).toBe("stage-2");
@@ -312,6 +316,7 @@ describe("GameRun progression", () => {
     expect(
       [...stocked.state.hand, ...stocked.state.deck].some(({ id }) => id === card.block.id),
     ).toBe(true);
-    expect(new Set(allCards(stocked.state).map(({ id }) => id)).size).toBe(52);
+    // A bought card is a new card: the run now has 53 (#143).
+    expect(new Set(allCards(stocked.state).map(({ id }) => id)).size).toBe(53);
   });
 });

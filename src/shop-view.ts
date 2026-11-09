@@ -57,7 +57,7 @@ const coins = (amount: number) => `${amount} coin${amount === 1 ? "" : "s"}`;
 
 /** What each destination is called in an offer's description. */
 const destinationLabels: Record<OfferDestination, string> = {
-  hand: "hand",
+  hand: "the deck",
   "passive-rack": "passive rack",
 };
 
@@ -142,7 +142,7 @@ export function createShopView(
   stock.setAttribute("aria-label", "Shop stock");
   const handTarget = document.createElement("div");
   handTarget.className = "shop-hand-target";
-  handTarget.textContent = "DROP PLAYABLE BLOCKS INTO HAND";
+  handTarget.textContent = "DROP PLAYABLE BLOCKS HERE TO ADD THEM TO YOUR DECK";
   host.append(stock, handTarget);
   const sign = document.createElement("div");
   sign.className = "shop-open-sign";

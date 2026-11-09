@@ -35,17 +35,22 @@ export type CardBlock = {
   };
 };
 
-export const standardDeck: readonly CardBlock[] = suits.flatMap((suit) =>
-  ranks.map((rank) => ({
-    id: `${rank}-${suit.name}`,
+/** A plain playable card with this identity. */
+export function createCard(identity: IdentityTrait, id: string): CardBlock {
+  return {
+    id,
     traits: {
-      identity: { rank, suit },
+      identity,
       selectable: {},
       attachable: { faces },
-      inspectable: inspectable(cardName({ rank, suit })),
-      scorable: scorable(rankValue(rank)),
+      inspectable: inspectable(cardName(identity)),
+      scorable: scorable(rankValue(identity.rank)),
     },
-  })),
+  };
+}
+
+export const standardDeck: readonly CardBlock[] = suits.flatMap((suit) =>
+  ranks.map((rank) => createCard({ rank, suit }, `${rank}-${suit.name}`)),
 );
 
 export function cardName(identity: IdentityTrait): string {

@@ -7,6 +7,9 @@ import { GameRun } from "./game-run";
 import { fromSaveRecord, toSaveRecord } from "./save";
 import { demoRunRules } from "./run-rules";
 import { shopPreviewState } from "./shop-stock";
+import { offerKind } from "./offer-kinds";
+import { getMaterialDefinition, materialOf, type BlockMaterial } from "./materials";
+import { cardOfferPrice } from "./balance";
 
 function shop() {
   const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
@@ -29,14 +32,17 @@ describe("shop preview", () => {
     expect(new Set(stock.map(({ block }) => block.id)).size).toBe(5);
     expect(game.state.coins).toBe(30);
     const passive = stock[0].block;
-    const card = stock[2].block;
+    const card = stock[2].block as CardBlock;
+    const cardPrice = offerKind(stock[2]).price(card, game.offerRun);
     expect(game.buyShopOffer(passive.id, "hand")).toBeNull();
     expect(game.buyShopOffer(passive.id, "passive-rack")?.block).toBe(passive);
     expect(game.buyShopOffer(card.id, "hand")?.block).toBe(card);
-    // The passive cost its base price; the card the first-version 1 coin.
-    expect(game.state.coins).toBe(30 - priceOf(passive) - 1);
+    // The passive cost its base price; the card its material's price plus its rank's (#143).
+    expect(game.state.coins).toBe(30 - priceOf(passive) - cardPrice);
     expect(game.state.passiveRack[0]).toBe(passive);
-    expect(game.state.hand[0]).toBe(card);
+    // A bought card joins the deck, and the run's ledger of bought cards (#143).
+    expect(game.state.deck.at(-1)).toBe(card);
+    expect(game.state.boughtCards).toEqual([card]);
     expect(game.state.shopStock).toHaveLength(3);
     expect(game.buyShopOffer(card.id, "hand")).toBeNull();
   });
@@ -47,15 +53,8 @@ describe("shop preview", () => {
     for (const offer of first.state.shopStock!.filter(({ kind }) => kind === "passive"))
       expect(first.buyShopOffer(offer.block.id, "passive-rack")).not.toBeNull();
     expect(first.state.passiveRack).toHaveLength(2);
-    // Like leaving the shop: unbought (borrowed) cards go back to the deck before restocking.
-    const unsold = first.state.shopStock!.flatMap((offer) =>
-      offer.kind === "card" ? [offer.block as CardBlock] : [],
-    );
-    const restock = {
-      ...first.state,
-      deck: [...first.state.deck, ...unsold],
-      shopStock: undefined,
-    };
+    // Like leaving the shop: unbought cards simply go before restocking.
+    const restock = { ...first.state, shopStock: undefined };
     const game = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, {
       ...first.snapshot(),
       state: shopPreviewState(restock, 5, () => 0.25),
@@ -77,11 +76,16 @@ describe("shop preview", () => {
     const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
     const restored = fromSaveRecord(record, standardDeck, dealerRegistry);
     expect(restored?.phase).toBe("shop");
-    expect(restored?.state.coins).toBe(29);
+    expect(restored?.state.coins).toBe(game.state.coins);
     expect(restored?.state.shopStock?.map(({ block }) => block.id)).toEqual(
       game.state.shopStock?.map(({ block }) => block.id),
     );
-    expect(restored?.state.hand[0].id).toBe(card.block.id);
+    // The bought card is rebuilt in full: same id, identity and material (#143).
+    const back = restored?.state.deck.at(-1);
+    expect(back?.id).toBe(card.block.id);
+    expect(back && materialOf(back)).toBe(materialOf(card.block as CardBlock));
+    expect(back?.traits.identity).toEqual((card.block as CardBlock).traits.identity);
+    expect(restored?.state.boughtCards?.map(({ id }) => id)).toEqual([card.block.id]);
   });
 });
 
@@ -101,5 +105,36 @@ describe("passive prices (#144)", () => {
     });
     expect(exact.buyShopOffer(offer.block.id, "passive-rack")).not.toBeNull();
     expect(exact.state.coins).toBe(0);
+  });
+});
+
+describe("card offers (#143)", () => {
+  it("are new cards of a priced material, not cards borrowed from the deck", () => {
+    const game = shop();
+    const cards = game.state.shopStock!.filter(({ kind }) => kind === "card");
+    expect(cards).toHaveLength(3);
+    const deckIds = new Set(game.state.deck.map(({ id }) => id));
+    for (const { block } of cards) {
+      expect(deckIds.has(block.id)).toBe(false);
+      expect(getMaterialDefinition(materialOf(block as CardBlock)).shop).toBeDefined();
+    }
+    // The whole deck stays: nothing was borrowed out of it.
+    expect(game.state.deck).toHaveLength(52);
+  });
+
+  it("price a card at its material's base price plus its rank's surcharge", () => {
+    const wood = { shop: { basePrice: 3 } };
+    expect(cardOfferPrice("7", wood)).toBe(3);
+    expect(cardOfferPrice("10", wood)).toBe(3);
+    expect(cardOfferPrice("J", wood)).toBe(4);
+    expect(cardOfferPrice("K", wood)).toBe(4);
+    expect(cardOfferPrice("A", wood)).toBe(5);
+  });
+
+  it("records the agreed material prices", () => {
+    const price = (id: string) => getMaterialDefinition(id as BlockMaterial).shop?.basePrice;
+    expect(
+      ["paper", "wood", "steel", "meat", "ice", "fire", "gold", "prismatic"].map(price),
+    ).toEqual([1, 3, 4, 6, 2, 4, 8, 12]);
   });
 });
