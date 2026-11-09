@@ -23,6 +23,10 @@ Instead, give the behaviour a home: a trait with `enter`/`exit`/`update`/`handle
 
 **This is enforced.** `src/guardrails.test.ts` fails CI when a file gains a forbidden branch. Legacy branches are listed in `src/guardrails-baseline.json`, whose counts may only go down: when you remove one, lower the count; never raise it. A line ending in `// branch-ok: #<issue>` is exempt only when that issue records why the exception is justified and the user agreed to it. CodeRabbit (`.coderabbit.yaml`) also requests changes on any PR that adds such a branch, and the PR template asks you to confirm it.
 
+## Dev traits
+
+A trait that exists only for testing (a game feature no player should meet) has a name beginning with **Dev**: `devManualBlockDestroyer`, `devDestructibleMix`. Compose dev traits only into dev rooms, never into the normal game. A dev trait follows every other rule here; being for testing is not a licence for special cases.
+
 ## Code Review Rules
 
 The primary review question is whether this PR moves the code toward the **target architecture** in [doc/game-architecture.md](doc/game-architecture.md), even where current code is still transitional. Review the changed behavior against that target, not merely against neighboring legacy code. Report a concrete inconsistency with the changed lines and the relevant rule or design decision; do not request speculative features or a complete migration in an unrelated PR.

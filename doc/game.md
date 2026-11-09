@@ -200,6 +200,12 @@ Enter `reset` in the developer console to restart the current dev mode in place.
 
 `?mode=dev3` skips the title screen and opens directly in the shop scene with five coins, two passive offers, and three playable card offers. Drag an offer to the passive rack or hand to buy it for one coin. It has its own saved run; `reset` in the developer console or `&restart=true` in the URL starts the shop again with five coins and fresh offers. This is a shop sandbox; the full shop flow remains [issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18). In any mode, the console command `coins` shows the balance, `coins +5` adds five, and `coins -2` removes two (stopping at zero). Changes update the HUD and saved run.
 
+### Destructible blocks and the Dev4 destruction sandbox
+
+A block can be **destructible**: its `destructible { by }` trait names what may destroy it. Destroying a block removes it from the field. It costs no play or discard and does not change the score. Nothing settles into the gap, so blocks it held up stay where they are, even floating; settling will be a separate trait. The destroyed card goes to the discard pile, out of play like a discard, and returns to the deck whenever the discard pile does. Destruction emits `block.destroyed`, not a discard event. The only cause today is `manual`; later causes such as melting (#21) or bombs (#24) name their own.
+
+`?room=dev4` is a destruction sandbox. It opens on a mixed-material structure in sandbox mode (unlimited plays and discards, no win or loss). About half the cards are destructible (always the same cards), and their hover description ends in "Destructible". Double-click a block on the table to destroy it; a block that isn't destructible is refused with the denied sound. The double-click comes from the `devManualBlockDestroyer` scene trait, and the half-and-half mix from the `devDestructibleMix` run trait. Both are testing-only dev traits. The room keeps its own saved run; `reset` or `&restart=true` starts it fresh.
+
 ### First dev2 passive set
 
 On a fresh `dev2` run, two **distinct** passive definitions are chosen at random from this set and installed in the rack. A saved run keeps its chosen passives on reload. The dev mode mixes card materials so the material effects can be exercised.

@@ -3,6 +3,7 @@
  * wires them to each other, opens the start screen and runs the frame loop. Behaviour lives
  * in the services (see doc/game-architecture.md, "Where the code is today").
  */
+import type { BlockDestroyerBoard } from "./scene-traits/dev-manual-block-destroyer";
 import "./style.css";
 import { createAudioService, type AudioService } from "./audio-service";
 import { musicTracks } from "./audio/music-catalog";
@@ -86,6 +87,7 @@ type TraitContext = {
     presenter: PlayPresenter;
     input: TableInput;
     run: RunController;
+    board: BlockDestroyerBoard;
   };
 };
 const traitContext: TraitContext = {
@@ -111,6 +113,10 @@ const traitContext: TraitContext = {
     },
     get run() {
       return run;
+    },
+    board: {
+      blockAt: (clientX, clientY) => input.fieldBlockAt(clientX, clientY),
+      destroy: (blockId, cause) => run.destroyBlock(blockId, cause),
     },
   },
 };

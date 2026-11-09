@@ -201,6 +201,8 @@ Loading rebuilds the blocks from the standard deck and `GameRun.fromSnapshot` re
 - **Trait**: reusable behavior plus plain data, attached at a declared scope. A mode trait is not automatically copied onto each scene; composition between scopes must be explicit.
 - **Services**: camera, input, hand, field, HUD, audio, overlays and console, exposed through narrow interfaces to behaviors.
 
+- **Dev trait**: a trait that exists only for testing. Its name begins with `dev` (`devManualBlockDestroyer`), and only dev rooms compose it.
+
 ### How they fit together
 
 ```text

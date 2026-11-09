@@ -114,6 +114,12 @@ const entries = [
     variants: 1,
   },
   {
+    id: "block.destroyed",
+    trigger: "A block on the table is destroyed and vanishes, leaving a gap",
+    prompt: "Short crumbling crack of a small wooden block breaking apart, dry and light",
+    durationSeconds: 0.6,
+  },
+  {
     id: "action.denied",
     trigger: "An action is refused: no plays or discards left, or an invalid drop",
     prompt: "Short soft muted double thud, a gentle no, not harsh",

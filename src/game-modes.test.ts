@@ -15,7 +15,7 @@ describe("game modes composed from traits", () => {
     expect(gameModeFor("dev2").id).toBe("dev2");
     expect(gameModeFor("dev").id).toBe("dev0");
     expect(gameModeFor("nonsense").id).toBe("game");
-    expect(developerModes()).toEqual(["dev0", "dev1", "dev2", "dev3"]);
+    expect(developerModes()).toEqual(["dev0", "dev1", "dev2", "dev3", "dev4"]);
   });
 
   it("lists, links and restarts modes through their console and restartable traits", async () => {
@@ -69,6 +69,10 @@ describe("game modes composed from traits", () => {
     }
     expect(gameModeFor("dev3").startScene).toBe("shop");
     expect(gameModeFor("dev1").startScene).toBe("stage-1");
+    expect(gameModeFor("dev4").scenes.find(({ id }) => id === "dev4/stage-1")?.traits).toEqual({
+      screen: { kind: "stage-1" },
+      devManualBlockDestroyer: { cause: "manual" },
+    });
   });
 });
 

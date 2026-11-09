@@ -71,6 +71,8 @@ export type TableInput = {
   pickUpPassive(block: PassiveBlock, event: PointerEvent): void;
   /** Refresh the discard target: exhausted when no discards are left, armed with a count. */
   refreshDiscardTarget(): void;
+  /** The id of the table block under a screen point, if any. */
+  fieldBlockAt(clientX: number, clientY: number): string | undefined;
   /** Per frame: keep a dragged card's drop target current as the board moves under it. */
   frame(): void;
   dispose(): void;
@@ -685,6 +687,7 @@ export function createTableInput(options: {
     "pointerup",
     "pointercancel",
     "click",
+    "dblclick",
     "wheel",
   ];
   const canvasListeners: [string, (event: never) => void, AddEventListenerOptions?][] = [
@@ -706,6 +709,7 @@ export function createTableInput(options: {
   window.addEventListener("blur", onBlur);
 
   return {
+    fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
     get selection() {
       return selected;
     },
