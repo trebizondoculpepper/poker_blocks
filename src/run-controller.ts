@@ -9,6 +9,7 @@
  */
 import type { DestroyCause } from "./traits/destructible";
 import type { AudioService } from "./audio-service";
+import { menuScreenScenes } from "./overlays";
 import { playSfx } from "./audio/sfx";
 import type { CameraViewService } from "./camera-view";
 import { cardName, standardDeck, type CardBlock } from "./cards";
@@ -507,13 +508,13 @@ export function createRunController<Context>(options: {
     },
   };
 
-  const screenScenes: ScreenScenes = {
-    push: (name) => scenes.pushIfNotCurrent(modeSceneId(currentMode.id, name)),
-    replace: switchScene,
-    resumeGame() {
-      scenes.pop();
-    },
-  };
+  const screenScenes: ScreenScenes = menuScreenScenes({
+    current: () => scenes.current?.id,
+    push: (id) => scenes.push(id),
+    pop: () => scenes.pop(),
+    replace: (name) => switchScene(name),
+    idFor: (name) => modeSceneId(currentMode.id, name),
+  });
 
   const consoleApp: ConsoleApp = {
     game: () => game,
