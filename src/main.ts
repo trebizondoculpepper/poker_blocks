@@ -31,6 +31,7 @@ import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView, type ShopView } from "./shop-view";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
+import { appVersion } from "./version";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -92,6 +93,7 @@ type TraitContext = {
     run: RunController;
     board: BlockDestroyerBoard;
     shop: ShopView;
+    version: string;
     sound: (id: SoundEffectId) => void;
   };
 };
@@ -127,6 +129,7 @@ const traitContext: TraitContext = {
       return shopView;
     },
     sound: (id) => playSfx(id),
+    version: appVersion,
   },
 };
 const sceneManager = new SceneManager(sceneBehaviours<TraitContext>(), traitContext);

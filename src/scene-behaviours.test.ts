@@ -47,8 +47,12 @@ function recordingHost() {
         hideSettings: () => void calls.push("settings:hide"),
         showTitle: (items) => void calls.push(`title:${items.map(({ id }) => id).join(",")}`),
         hideTitle: () => void calls.push("title:hide"),
+        showPanelFooter: (links, version) =>
+          void calls.push(`footer:${version}:${links.map(({ label }) => label).join(",")}`),
+        hidePanelFooter: () => void calls.push("footer:hide"),
       },
       audio: { setMusicFilter: (kind) => void calls.push(`filter:${kind}`) },
+      version: "1.2.3",
       sound: (id) => void calls.push(`sound:${id}`),
     },
   };
@@ -195,12 +199,13 @@ describe("the pause menu's scene traits (#87)", () => {
     // Opening it also ends any drag under way on the table (#124).
     expect(calls).toEqual([
       "menu:Paused:resume,openSettings,quitToTitle",
+      "footer:1.2.3:Get source code,Report a bug",
       "gestures:cancel",
       "filter:lowpass",
     ]);
     calls.length = 0;
     scenes.pop();
-    expect(calls).toEqual(["filter:null", "menu:hide"]);
+    expect(calls).toEqual(["filter:null", "footer:hide", "menu:hide"]);
   });
 
   it("leaves out Quit to title over the title screen", () => {

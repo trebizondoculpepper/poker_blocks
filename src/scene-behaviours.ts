@@ -35,8 +35,17 @@ export type SceneHost = {
     run: Pick<RunController, "shopStock" | "dispatch" | "hasSave">;
     overlays: Pick<
       Overlays,
-      "showMenu" | "hideMenu" | "showSettings" | "hideSettings" | "showTitle" | "hideTitle"
+      | "showMenu"
+      | "hideMenu"
+      | "showSettings"
+      | "hideSettings"
+      | "showTitle"
+      | "hideTitle"
+      | "showPanelFooter"
+      | "hidePanelFooter"
     >;
+    /** The build's version, shown in a panel's footer (`src/version.ts`). */
+    version: string;
     audio: Pick<AudioService, "setMusicFilter">;
     /** Play a registered sound effect (src/audio/sfx.ts). */
     sound(id: SoundEffectId): void;
@@ -127,6 +136,11 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       behaviours.get("titleScreen").enter?.(context, config);
     },
     exit: (context) => context.services.overlays.hideTitle(),
+  });
+  behaviours.register("panelFooter", {
+    enter: (context, { links }) =>
+      context.services.overlays.showPanelFooter(links, context.services.version),
+    exit: (context) => context.services.overlays.hidePanelFooter(),
   });
   behaviours.register("settingsPanel", {
     enter: (context) => context.services.overlays.showSettings(),
