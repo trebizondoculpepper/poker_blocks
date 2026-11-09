@@ -212,6 +212,24 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     callbacks.onScreen?.("title");
   }
 
+  /**
+   * Panels left showing under one opened over them are made inert, so keyboard focus can't
+   * reach a covered control (Quit to title behind Settings, say). Each cover remembers what
+   * it covered and gives it back.
+   */
+  const covered = new Map<HTMLElement, HTMLElement[]>();
+  function cover(top: HTMLElement): void {
+    const below = [title.root, pauseMenu.root, gameOver.root, stageWon.root].filter(
+      (root) => root !== top && !root.hidden && !root.inert,
+    );
+    below.forEach((root) => (root.inert = true));
+    covered.set(top, below);
+  }
+  function uncover(top: HTMLElement): void {
+    (covered.get(top) ?? []).forEach((root) => (root.inert = false));
+    covered.delete(top);
+  }
+
   /** Settings is a panel over whatever is in front (the title or the pause menu). */
   function showSettings(): void {
     volume.value = String(Math.round(settings.volume * 100));
@@ -221,6 +239,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     sfx.disabled = music.disabled = settings.muted;
     motionInputs.forEach((input) => (input.checked = input.value === settings.motion));
     shadowInputs.forEach((input) => (input.checked = input.value === settings.shadows));
+    cover(settingsScreen.root);
     settingsScreen.root.hidden = false;
     settingsButton.hidden = true;
     settingsScreen.panel.querySelector<HTMLElement>("input")?.focus();
@@ -228,6 +247,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   function hideSettings(): void {
     settingsScreen.root.hidden = true;
+    uncover(settingsScreen.root);
   }
 
   /** The pause menu: one button per choice, each dispatching its id as an action. */
@@ -247,6 +267,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
         return button;
       }),
     );
+    if (pauseMenu.root.hidden) cover(pauseMenu.root);
     pauseMenu.root.hidden = false;
     settingsButton.hidden = true;
     choices.querySelector<HTMLElement>("button")?.focus();
@@ -254,6 +275,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   function hideMenu(): void {
     pauseMenu.root.hidden = true;
+    uncover(pauseMenu.root);
     settingsButton.hidden = !title.root.hidden || !gameOver.root.hidden || !stageWon.root.hidden;
   }
 
