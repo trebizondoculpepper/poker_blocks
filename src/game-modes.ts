@@ -5,6 +5,7 @@
 import { Registry } from "./core/registry";
 import type { GameFlow } from "./game-flow";
 import type { MusicFilter } from "./audio/music-controller";
+import type { MusicCue } from "./audio-service";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { RunPositionOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
@@ -35,6 +36,13 @@ export type SceneTraits = {
    */
   menu: { label: string; items: readonly MenuItem[] };
   /**
+   * The game over screen is shown while this scene is in front: the run's totals, and one
+   * button per item, each dispatching its id as a named action (#90).
+   */
+  gameOverScreen: { items: readonly MenuItem[] };
+  /** Entering this scene plays a music cue (src/audio-service.ts, `musicCues`). */
+  musicCue: { cue: MusicCue };
+  /**
    * The title screen is shown while this scene is in front: its panel, and its items whose
    * conditions hold (Continue needs a save). Choosing an item dispatches its action.
    */
@@ -49,8 +57,11 @@ export type SceneTraits = {
   runInPlay: Record<never, never>;
 };
 
-/** One menu item: its action id, its label, and an optional condition it needs. */
-export type MenuItem = { id: string; label: string; when?: MenuCondition };
+/**
+ * One menu item: its action id, its label, an optional condition it needs, and the sound
+ * choosing it plays (`ui.click` when left out).
+ */
+export type MenuItem = { id: string; label: string; when?: MenuCondition; sfx?: SoundEffectId };
 /** A condition a menu item can require; its test lives in the menu traits' registry. */
 export type MenuCondition = "inRun" | "hasSave";
 export type ModeScene = Scene<SceneTraits>;
@@ -134,7 +145,18 @@ export const sceneDefinitions = [
     traits: { coinsPanel: {}, shopExit: {}, shopStock: {}, runInPlay: {}, ...escapeOpensPause },
   },
   { name: "stage-won", traits: { pausesBelow: { input: true, update: true } } },
-  { name: "game-over", traits: {} },
+  {
+    name: "game-over",
+    traits: {
+      gameOverScreen: {
+        items: [
+          { id: "newRun", label: "New Run" },
+          { id: "quitToTitle", label: "Main menu", sfx: "ui.back" },
+        ],
+      },
+      musicCue: { cue: "windDown" },
+    },
+  },
 ] as const satisfies readonly SceneDefinition[];
 
 export type SceneName = (typeof sceneDefinitions)[number]["name"];

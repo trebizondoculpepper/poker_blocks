@@ -3,7 +3,8 @@
  * `screen` marks the host with the scene in front, for styling and tests; `pausesBelow`
  * stops the scenes underneath a pop-up or menu taking input or updates; the HUD panel traits
  * show and hide one panel each; `fieldPlacement` lets the input place blocks onto the field;
- * `shopStock` shows and hides the shop's stock; `devManualBlockDestroyer` (testing only)
+ * `shopStock` shows and hides the shop's stock; `gameOverScreen` shows the run's totals and
+ * choices; `musicCue` plays a music cue on entering; `devManualBlockDestroyer` (testing only)
  * destroys a double-clicked table block.
  *
  * Each trait brings its own behaviour, so a scene composes the panels and permissions it
@@ -32,12 +33,19 @@ export type SceneHost = {
     input: Pick<TableInput, "setFieldActive" | "cancelGestures">;
     shop: ShopView;
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
-    run: Pick<RunController, "shopStock" | "dispatch" | "hasSave">;
+    run: Pick<RunController, "shopStock" | "dispatch" | "hasSave" | "runStats">;
     overlays: Pick<
       Overlays,
-      "showMenu" | "hideMenu" | "showSettings" | "hideSettings" | "showTitle" | "hideTitle"
+      | "showMenu"
+      | "hideMenu"
+      | "showSettings"
+      | "hideSettings"
+      | "showTitle"
+      | "hideTitle"
+      | "showGameOver"
+      | "hideGameOver"
     >;
-    audio: Pick<AudioService, "setMusicFilter">;
+    audio: Pick<AudioService, "setMusicFilter" | "playCue">;
     /** Play a registered sound effect (src/audio/sfx.ts). */
     sound(id: SoundEffectId): void;
   };
@@ -117,6 +125,15 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit(context) {
       context.services.overlays.hideMenu();
     },
+  });
+  behaviours.register("gameOverScreen", {
+    enter({ services }, { items }) {
+      services.overlays.showGameOver(services.run.runStats(), items);
+    },
+    exit: ({ services }) => services.overlays.hideGameOver(),
+  });
+  behaviours.register("musicCue", {
+    enter: ({ services }, { cue }) => services.audio.playCue(cue),
   });
   behaviours.register("titleScreen", {
     enter(context, { items }) {

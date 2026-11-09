@@ -1,6 +1,7 @@
 // Title, settings and game over screens: plain DOM overlays above the scene. They only call back
 // into the game; progression rules stay in the run controller.
 import { playSfx } from "./audio/sfx";
+import type { SoundEffectId } from "./audio/sfx-registry";
 import type { MenuItem } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
@@ -10,10 +11,10 @@ import { createSettingsPanel } from "./settings-panel";
 /** Why Continue is greyed out on the title screen. */
 export const noGameInProgress = "There is no game in progress.";
 
-export type Screen = "title" | "game" | "over";
+export type Screen = "title" | "game";
 
 /** One menu item as a menu shows it: choosing it dispatches `id` as a named action. */
-export type MenuChoice = { id: string; label: string };
+export type MenuChoice = { id: string; label: string; sfx?: SoundEffectId };
 
 export type MenuCallbacks = {
   hasSave(): boolean;
@@ -38,8 +39,9 @@ export type Menus = {
   hideSettings(): void;
   /** Close the title and settings screens, back to the game. */
   closeAll(): void;
-  /** The run is lost: show how it went, with New Run and Main menu. */
-  showGameOver(stats: RunStats): void;
+  /** The run is lost: show how it went, with a button for each choice (#90). */
+  showGameOver(stats: RunStats, choices: readonly MenuChoice[]): void;
+  hideGameOver(): void;
   /**
    * A stage is won: show "Stage Won" and count the reward rows in one by one, then offer
    * `action` (Visit shop), which calls `onContinue`. The music is
@@ -88,10 +90,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
        <div><dt>Highest scoring round</dt><dd data-run="bestRoundScore"></dd></div>
        <div><dt>Blocks played</dt><dd data-run="blocksPlayed"></dd></div>
      </dl>
-     <div class="menu-buttons">
-       <button type="button" data-menu="new-run">New Run</button>
-       <button type="button" data-menu="main-menu">Main menu</button>
-     </div>`,
+     <div class="menu-buttons" data-menu="game-over-choices"></div>`,
   );
 
   const stageWon = overlay("stage-won-screen", "Stage won");
@@ -228,23 +227,24 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     uncover(settingsScreen.root);
   }
 
+  /** A menu button: choosing it plays its sound and dispatches its id as an action. */
+  function choiceButton({ id, label, sfx }: MenuChoice): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.menu = id;
+    button.textContent = label;
+    button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
+    button.addEventListener("click", () => {
+      playSfx(sfx ?? "ui.click");
+      callbacks.onAction(id);
+    });
+    return button;
+  }
+
   /** The pause menu: one button per choice, each dispatching its id as an action. */
   function showMenu(label: string, menuChoices: readonly MenuChoice[]): void {
     pauseMenu.root.setAttribute("aria-label", label);
-    choices.replaceChildren(
-      ...menuChoices.map(({ id, label: text }) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.dataset.menu = id;
-        button.textContent = text;
-        button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
-        button.addEventListener("click", () => {
-          playSfx("ui.click");
-          callbacks.onAction(id);
-        });
-        return button;
-      }),
-    );
+    choices.replaceChildren(...menuChoices.map(choiceButton));
     if (pauseMenu.root.hidden) cover(pauseMenu.root);
     pauseMenu.root.hidden = false;
     settingsButton.hidden = true;
@@ -275,22 +275,20 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   for (const button of host.querySelectorAll<HTMLButtonElement>(".menu-panel button")) {
     button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
   }
-  find(gameOver.panel, "new-run").addEventListener("click", () => {
-    playSfx("ui.click");
-    closeAll();
-    callbacks.onNewGame();
-  });
-  find(gameOver.panel, "main-menu").addEventListener("click", () => {
-    playSfx("ui.back");
-    callbacks.onAction("quitToTitle");
-  });
+  const gameOverChoices = find<HTMLDivElement>(gameOver.panel, "game-over-choices");
 
-  function showGameOver(stats: RunStats): void {
+  /** The game over screen: the run's totals, and one button per choice. */
+  function showGameOver(stats: RunStats, gameOverItems: readonly MenuChoice[]): void {
     for (const cell of gameOver.panel.querySelectorAll<HTMLElement>("[data-run]")) {
       cell.textContent = String(stats[cell.dataset.run as keyof RunStats]);
     }
+    gameOverChoices.replaceChildren(...gameOverItems.map(choiceButton));
     open(gameOver.root);
-    callbacks.onScreen?.("over");
+  }
+
+  function hideGameOver(): void {
+    gameOver.root.hidden = true;
+    settingsButton.hidden = !title.root.hidden || !stageWon.root.hidden;
   }
 
   /** Seconds between reward rows as they count in. */
@@ -372,6 +370,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     hideTitle,
     closeAll,
     showGameOver,
+    hideGameOver,
     showStageWon,
     showMenu,
     hideMenu,

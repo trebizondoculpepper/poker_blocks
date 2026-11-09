@@ -49,8 +49,10 @@ describe("audio service", () => {
     const { audio, calls } = setup();
     audio.showScreen("title");
     audio.showScreen("game");
-    audio.showScreen("over");
-    expect(calls).toEqual(["playTitle", "resumeStage", "windDown"]);
+    expect(calls).toEqual(["playTitle", "resumeStage"]);
+    calls.length = 0;
+    audio.playCue("windDown");
+    expect(calls).toEqual(["windDown"]);
     calls.length = 0;
     audio.setMusicFilter("lowpass");
     audio.setMusicFilter(null);

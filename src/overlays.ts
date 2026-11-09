@@ -38,7 +38,9 @@ export type Overlays = {
   hideMenu(): void;
   showSettings(): void;
   hideSettings(): void;
-  showGameOver(stats: RunStats): void;
+  /** The game over screen, shown by the game over scene's `gameOverScreen` trait. */
+  showGameOver(stats: RunStats, choices: readonly MenuChoice[]): void;
+  hideGameOver(): void;
   /** The stage-won pop-up, pushed over the stage; its button runs `onContinue`. */
   showStageWon(reward: StageReward, action: string, onContinue: () => void): void;
   /** Show the inspection tooltip near a pointer, or hide it with a null label. */
@@ -87,9 +89,6 @@ export const screenScenes: Record<Screen, (scenes: ScreenScenes) => void> = {
   // move the stack.
   title: () => undefined,
   game: (scenes) => scenes.resumeGame(),
-  // The game over screen is presentation only: the mode's game flow has already placed the
-  // scene for a lost run (`run.position.over`), so this screen must not move the stack.
-  over: () => undefined,
 };
 
 export function createOverlays(
@@ -135,7 +134,8 @@ export function createOverlays(
     hideMenu: () => menus.hideMenu(),
     showSettings: () => menus.showSettings(),
     hideSettings: () => menus.hideSettings(),
-    showGameOver: (stats) => menus.showGameOver(stats),
+    showGameOver: (stats, choices) => menus.showGameOver(stats, choices),
+    hideGameOver: () => menus.hideGameOver(),
     showStageWon(reward, action, onContinue) {
       scenes.push("stage-won");
       menus.showStageWon(reward, action, onContinue);
