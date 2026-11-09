@@ -166,6 +166,11 @@ export class GameRun {
     return (stageKinds as readonly string[]).includes(this.currentPhase);
   }
 
+  /** The run has moved on to a shop between stages. */
+  get inShop(): boolean {
+    return this.shopAfter !== null;
+  }
+
   /**
    * The stage lifecycle events refer to: the current stage, or in a shop the stage that
    * opened it. Null after the run is over.

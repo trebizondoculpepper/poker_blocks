@@ -10,27 +10,28 @@ export type ModeMusicBehaviour = {
   settle(): void;
   /** The game screen came back to the front. */
   resume(): void;
-  /** A stage has just started, and asks for the boss loop or an ordinary stage track. */
-  playStage(track: "boss" | "stage"): void;
+  /**
+   * Whether this style lets a stage choose its own music. A quiet mode keeps the music wound
+   * down instead, so the audio service's stage tracks are never started.
+   */
+  playsStages(): boolean;
 };
 
 /** Music actions a mode uses after a run starts, when its game screen resumes, and per stage. */
 export function createModeMusicBehaviours(actions: {
   windDown(): void;
   resumeStage(): void;
-  playBoss(): void;
-  playRandomStage(): void;
 }): Record<ModeMusicStyle, ModeMusicBehaviour> {
   return {
     quiet: {
       settle: () => actions.windDown(),
       resume: () => actions.windDown(),
-      playStage: () => actions.windDown(),
+      playsStages: () => false,
     },
     ordinary: {
       settle() {},
       resume: () => actions.resumeStage(),
-      playStage: (track) => (track === "boss" ? actions.playBoss() : actions.playRandomStage()),
+      playsStages: () => true,
     },
   };
 }

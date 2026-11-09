@@ -135,19 +135,17 @@ describe("mode music lifecycle", () => {
     const behaviours = createModeMusicBehaviours({
       windDown: () => calls.push("windDown"),
       resumeStage: () => calls.push("resumeStage"),
-      playBoss: () => calls.push("boss"),
-      playRandomStage: () => calls.push("random"),
     });
 
     behaviours.quiet.settle();
     behaviours.quiet.resume();
-    behaviours.quiet.playStage("boss");
     behaviours.ordinary.settle();
     behaviours.ordinary.resume();
-    behaviours.ordinary.playStage("boss");
-    behaviours.ordinary.playStage("stage");
 
-    expect(calls).toEqual(["windDown", "windDown", "windDown", "resumeStage", "boss", "random"]);
+    expect(calls).toEqual(["windDown", "windDown", "resumeStage"]);
+    // Ordinary modes let a stage choose its music; quiet modes keep it wound down.
+    expect(behaviours.ordinary.playsStages()).toBe(true);
+    expect(behaviours.quiet.playsStages()).toBe(false);
   });
 });
 

@@ -212,13 +212,12 @@ export function createRunController<Context>(options: {
   }
 
   /**
-   * A new run began in the scene already in front, so no scene transition happens. Ask that
-   * scene to re-read the run, which is how its traits show the new stock or counters.
+   * Ask the scene in front to re-read the run. A new run can begin without any scene
+   * transition, and `refresh` exits and re-enters the same top scene, so it is a no-op after
+   * a switch and the work after a same-scene start.
    */
   function refreshScene(): void {
-    if (scenes.current?.id === modeSceneId(currentMode.id, sceneForPhase[game.phase])) {
-      scenes.refresh();
-    }
+    scenes.refresh();
   }
 
   function enterMode(mode: GameMode, createDeck = true): void {
@@ -350,12 +349,10 @@ export function createRunController<Context>(options: {
         services.audio.stageStarted(game.phase);
         services.hand.deal(game.state.hand);
         playSfx("round.start");
-      } else if (game.phase === "shop") {
+      } else if (game.inShop) {
         playSfx("shop.open");
       }
-      const enterShop = game.phase === "shop" && !reducedMotion;
-      shop.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
-      if (enterShop) cameraView.beginShopEntrance();
+      if (game.inShop && !reducedMotion) cameraView.beginShopEntrance();
       showSelection();
       updateHud();
       autosave();

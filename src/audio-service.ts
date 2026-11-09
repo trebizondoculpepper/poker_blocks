@@ -7,10 +7,10 @@
  * with `playSfx` where the action happens (see AGENTS.md, "Every action has a sound").
  */
 import type { MusicController } from "./audio/music-controller";
-import type { RunPhase } from "./game-run";
 import type { Screen } from "./menus";
 import { createModeMusicBehaviours, type ModeMusicBehaviour } from "./mode-music";
 import type { ModeMusicStyle } from "./game-modes";
+import type { RunPhase } from "./game-run";
 import { silencedAudio, type Settings } from "./settings";
 
 /** The parts of the music player the service drives. */
@@ -46,18 +46,18 @@ export type AudioService = {
   dispose(): void;
 };
 
+/** A boss stage gets the boss loop; every other start gets a random stage vibe. */
+const stageMusic: Record<RunPhase, (music: MusicController) => void> = {
+  "stage-1": (music) => music.switchToRandomStageTrack(),
+  "stage-2": (music) => music.switchToRandomStageTrack(),
+  boss: (music) => music.switchToBossTrack(),
+  shop: (music) => music.switchToRandomStageTrack(),
+  over: (music) => music.switchToRandomStageTrack(),
+};
+
 /** Music sits a little under the sound effects at the same volume setting. */
 const musicVolumeShare = 0.75;
 const zoomSoundGapMs = 350;
-
-/** Which track a run's phase asks for, as a lookup rather than a branch on the phase. */
-const stageTrack: Record<RunPhase, "boss" | "stage"> = {
-  "stage-1": "stage",
-  "stage-2": "stage",
-  boss: "boss",
-  shop: "stage",
-  over: "stage",
-};
 
 export function createAudioService(options: {
   player: MusicOutput;
@@ -72,8 +72,6 @@ export function createAudioService(options: {
   const modeMusicBehaviours = createModeMusicBehaviours({
     windDown: () => music.windDown(),
     resumeStage: () => music.resumeStage(),
-    playBoss: () => music.switchToBossTrack(),
-    playRandomStage: () => music.switchToRandomStageTrack(),
   });
   let modeMusic: ModeMusicBehaviour = modeMusicBehaviours.ordinary;
   let lastZoomSoundAt = -Infinity;
@@ -113,8 +111,8 @@ export function createAudioService(options: {
       modeMusic = modeMusicBehaviours[style];
     },
     stageStarted(phase) {
-      // A run stands in the shop before any stage; the shop's music is the stage vibe.
-      modeMusic.playStage(stageTrack[phase]);
+      if (!modeMusic.playsStages()) return;
+      stageMusic[phase](music);
     },
     runStarted() {
       modeMusic.settle();
