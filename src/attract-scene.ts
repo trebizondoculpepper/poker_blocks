@@ -2,9 +2,10 @@
  * The title screen's attract sequence (#147): a slow field of card cubes drifting toward the
  * camera on a black background, with no table under them.
  *
- * It is deliberately its own scene, its own camera and its own small resolution: the title
- * renders this to a low-resolution target and blurs it, so the menu drawn over it stays sharp
- * and the cards read as a background rather than as playable pieces.
+ * It is deliberately its own scene and camera. It first drew at quarter resolution behind a
+ * Gaussian blur, so the cards read as a soft backdrop and the menu over them stayed sharp; that
+ * pass is off while their appearance is being tuned, because a blur hides exactly what is being
+ * judged.
  *
  * The cards it picks are **cosmetic**. Their randomness comes from a source given at
  * construction — never the session's seeded stream — so decorating the title cannot change a
@@ -383,7 +384,7 @@ export type AttractRenderer = Pick<
   "render" | "setSize" | "getSize" | "dispose"
 >;
 
-/** The attract sequence's canvas and renderer: quarter resolution, blurred by CSS (#147). */
+/** The attract sequence's canvas and renderer (#147). */
 function createAttractCanvas(): { canvas: HTMLCanvasElement; renderer: AttractRenderer } {
   const canvas = document.createElement("canvas");
   canvas.className = "attract-canvas";
@@ -451,9 +452,11 @@ export function createAttractBackground(
     frame(delta) {
       if (!mount.mounted || !layer) return;
       scene.update(delta);
-      // Quarter resolution: the blur hides the detail, and the cards are a backdrop.
-      const width = Math.max(1, Math.floor((backgrounds.clientWidth || 1) / 4));
-      const height = Math.max(1, Math.floor((backgrounds.clientHeight || 1) / 4));
+      // Full resolution, no blur: the cards are being judged on their own appearance, so
+      // nothing may hide or soften them. Restore the quarter-resolution pass to make them a
+      // deliberately soft backdrop again.
+      const width = Math.max(1, Math.floor(backgrounds.clientWidth || 1));
+      const height = Math.max(1, Math.floor(backgrounds.clientHeight || 1));
       const size = layer.renderer.getSize(new THREE.Vector2());
       if (size.x !== width || size.y !== height) {
         layer.renderer.setSize(width, height, false);
