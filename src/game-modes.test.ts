@@ -120,7 +120,12 @@ describe("game modes composed from traits", () => {
       screen: { kind: "title" },
       titleScreen: {
         items: [
-          { id: "continue", label: "Continue", when: "hasSave" },
+          {
+            id: "continue",
+            label: "Continue",
+            enabledWhen: "hasSave",
+            disabledHint: "There is no game in progress.",
+          },
           { id: "new", label: "New game" },
           { id: "openSettings", label: "Settings" },
         ],

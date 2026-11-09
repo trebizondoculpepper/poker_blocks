@@ -8,7 +8,7 @@
  */
 import type { AudioService } from "./audio-service";
 import { createMenus, type MenuCallbacks, type MenuChoice, type Menus, type Screen } from "./menus";
-import type { MenuItem, SceneName } from "./game-modes";
+import type { SceneName } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { Settings } from "./settings";
 import type { StageReward } from "./stage-rewards";
@@ -29,7 +29,7 @@ export type Overlays = {
   /** Whether a menu screen covers the game. */
   readonly isOpen: boolean;
   /** Show the title screen with these items (its scene trait decided which apply). */
-  showTitle(items: readonly MenuItem[]): void;
+  showTitle(items: readonly MenuChoice[]): void;
   /** The title scene was exited. */
   hideTitle(): void;
   closeAll(): void;
