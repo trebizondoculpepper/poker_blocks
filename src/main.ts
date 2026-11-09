@@ -3,7 +3,6 @@ import * as THREE from "three";
 import { cardName, standardDeck, type CardBlock } from "./cards";
 import { makeDevDeck } from "./materials";
 import { sampleMaterials } from "./material-sampler";
-import { addCell, centerOfGravity, type MassCenter } from "./center-of-gravity";
 import { dealerRegistry, roundOutcome } from "./dealer";
 import { presentationOrder, type ScoredLine } from "./scoring";
 import { magnitudeSfxFor } from "./score-presentation";
@@ -16,7 +15,7 @@ import { isTransparent } from "./traits/transparent";
 import { createCardRoom } from "./visual/card-room";
 import { setReflectionEnvironment } from "./visual/block-appearance";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { cellKey, faceFromDirection, faceNormal, type Cell, type Face } from "./traits/attachable";
+import { cellKey, type Cell } from "./traits/attachable";
 import { toggleBlockSelection, type Selection } from "./traits/selectable";
 import { inspectBlock } from "./traits/inspectable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
@@ -26,6 +25,7 @@ import { createConsoleHost } from "./console-host";
 import { createOverlays, type Overlays } from "./overlays";
 import { createBlockViews, type BlockViews, type RenderedBlock } from "./rendered-blocks";
 import { createHandView, type HandView } from "./hand-view";
+import { createFieldView, tintSeconds, type Candidate, type FieldView } from "./field-view";
 import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
@@ -130,37 +130,27 @@ function render(): void {
   cameraView.handCamera.layers.set(0);
 }
 
-const placed = new Map<string, RenderedBlock>();
 /** Selected block ids (hand and field). Declared early: the first HUD update reads it. */
 let selected: Selection = new Set();
 const cubeSize = 2.4;
-let massCenter: MassCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
 cameraView = createCameraViewService({
   host,
   renderer,
   scene,
   cubeSize,
-  getCells: () => [...placed.values()].map(({ cell }) => cell!),
-  getMassCenter: () => massCenter,
+  getCells: () => field.cells(),
+  getMassCenter: () => field.massCenter,
   layoutHand,
   render,
 });
 const { assembly } = cameraView;
 const blockViews: BlockViews = createBlockViews({ board: assembly, hand: handScene });
-
-function updateRotationCenter(cell: Cell): void {
-  massCenter = addCell(massCenter, cell);
-  cameraView.updateRotationCenter(centerOfGravity(massCenter));
-}
-function addToBoard(block: CardBlock, cell: Cell): RenderedBlock {
-  const rendered = blockViews.create(block, cubeSize, "board");
-  rendered.cell = cell;
-  rendered.baseY = cell.y * cubeSize - 0.45;
-  rendered.cube.position.set(cell.x * cubeSize, rendered.baseY, cell.z * cubeSize);
-  placed.set(cellKey(cell), rendered);
-  updateRotationCenter(cell);
-  return rendered;
-}
+const field: FieldView = createFieldView({
+  views: blockViews,
+  assembly,
+  cubeSize,
+  onCenter: (center) => cameraView.updateRotationCenter(center),
+});
 
 const storage = browserStorage();
 /**
@@ -240,6 +230,7 @@ type TraitContext = {
     hud: HudPanels;
     overlays: Overlays;
     hand: HandView;
+    field: FieldView;
   };
 };
 const traitContext: TraitContext = {
@@ -254,6 +245,9 @@ const traitContext: TraitContext = {
     },
     get hand() {
       return hand;
+    },
+    get field() {
+      return field;
     },
   },
 };
@@ -298,7 +292,7 @@ function syncSceneToGame(): void {
 }
 // A fresh run sits behind the title screen until the player chooses Continue or New game.
 let game = new GameSession(dealerRegistry, sessionConfig, cards);
-for (const { block, cell } of game.state.field) addToBoard(block, cell);
+for (const { block, cell } of game.state.field) field.add(block, cell);
 const hand: HandView = createHandView({
   views: blockViews,
   scene: handScene,
@@ -339,8 +333,6 @@ let shownScore = game.state.round.score;
 /** One scoring line waiting to be shown: tint its row, play its sound, add its points. */
 type ScoreStep = { at: number; line: ScoredLine };
 const lineStepMs = 320;
-const tintSeconds = 0.6;
-const tintColor = new THREE.Color(0xffd36b);
 let scoreSteps: ScoreStep[] = [];
 let outcomeAt: number | null = null;
 type PendingAction =
@@ -378,7 +370,6 @@ type Flight = {
 };
 /** Seconds between the blocks of a line setting off. */
 const lineStagger = 0.12;
-const tints: { blocks: RenderedBlock[]; startedAt: number }[] = [];
 function updateHud(): void {
   // The game state updates as soon as a placement is accepted, but the card still
   // has to land before its scoring presentation begins. Keep outcomes hidden across
@@ -417,54 +408,6 @@ function updateDiscardCount(): void {
 }
 updateHud();
 
-const ghostGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-const ghostMaterial = new THREE.MeshBasicMaterial({
-  color: 0x65f4dd,
-  transparent: true,
-  opacity: 0.18,
-  depthWrite: false,
-});
-const ghost = new THREE.Mesh(ghostGeometry, ghostMaterial);
-ghost.visible = false;
-assembly.add(ghost);
-const ghostEdgeGeometry = new THREE.EdgesGeometry(ghostGeometry);
-const ghostEdgeMaterial = new THREE.LineBasicMaterial({
-  color: 0x65f4dd,
-  transparent: true,
-});
-ghost.add(new THREE.LineSegments(ghostEdgeGeometry, ghostEdgeMaterial));
-/** Extra outlines for the rest of a line being placed (the first cell uses `ghost`). */
-const lineGhosts: THREE.Mesh[] = [];
-function showLineGhosts(cells: readonly Cell[]): void {
-  while (lineGhosts.length < cells.length) {
-    const extra = ghost.clone();
-    assembly.add(extra);
-    lineGhosts.push(extra);
-  }
-  lineGhosts.forEach((extra, index) => {
-    const cell = cells[index];
-    extra.visible = Boolean(cell);
-    if (cell) extra.position.set(cell.x * cubeSize, cell.y * cubeSize - 0.45, cell.z * cubeSize);
-  });
-}
-let ghostIsDropPreview = false;
-
-const faceGeometry = new THREE.PlaneGeometry(cubeSize * 0.94, cubeSize * 0.94);
-const faceMaterial = new THREE.MeshBasicMaterial({
-  color: 0x65f4dd,
-  transparent: true,
-  opacity: 0.28,
-  side: THREE.DoubleSide,
-  depthWrite: false,
-});
-const faceHighlight = new THREE.Mesh(faceGeometry, faceMaterial);
-faceHighlight.visible = false;
-faceHighlight.renderOrder = 10;
-assembly.add(faceHighlight);
-
-/** Where a drop would play: a face of a placed block, or the centre of an empty field. */
-/** Where a drop would play: a face (or the empty centre), and the cells it would fill. */
-type Candidate = { target: RenderedBlock | null; face: Face | null; cell: Cell; cells: Cell[] };
 type Drag = {
   source: RenderedBlock;
   grabOffset: THREE.Vector3;
@@ -683,51 +626,20 @@ function pickBlock(
 }
 
 function pickAttachment(clientX: number, clientY: number, count = 1): Candidate | null {
-  if (placed.size === 0) {
+  if (field.cells().length === 0) {
     // The first play of a stage goes to the centre: drop anywhere above the hand.
     const bounds = host.getBoundingClientRect();
     const aboveHand = clientY < bounds.top + bounds.height * 0.72;
     const cells = game.dealer.linePlacementFor(game.state, count);
     return aboveHand && cells ? { target: null, face: null, cell: cells[0], cells } : null;
   }
-  const boardBlocks = [...placed.values()];
   pointRay(clientX, clientY);
-  const hit = raycaster.intersectObjects(
-    boardBlocks.map(({ cube }) => cube),
-    false,
-  )[0];
-  if (!hit?.face) return null;
-  const target = boardBlocks.find(({ cube }) => cube === hit.object);
-  if (!target?.cell) return null;
-  // The strongest axis, so a hit on a bevel or rounded edge still picks a face.
-  const face = faceFromDirection(hit.face.normal);
+  const hit = field.faceAt(raycaster);
+  if (!hit) return null;
+  const { target, face } = hit;
   // A line runs out from the face; it is refused whole if it would reach a block.
   const cells = game.dealer.linePlacementFor(game.state, count, target.block.id, face);
   return cells ? { target, face, cell: cells[0], cells } : null;
-}
-
-function showCandidate(candidate: Candidate | null): void {
-  ghostIsDropPreview = Boolean(candidate);
-  ghost.visible = Boolean(candidate);
-  faceHighlight.visible = Boolean(candidate?.target);
-  showLineGhosts(candidate?.cells.slice(1) ?? []);
-  if (!candidate) return;
-  ghost.position.set(
-    candidate.cell.x * cubeSize,
-    candidate.cell.y * cubeSize - 0.45,
-    candidate.cell.z * cubeSize,
-  );
-  if (!candidate.target?.cell || !candidate.face) return;
-  const normal = faceNormal(candidate.face);
-  faceHighlight.position.set(
-    (candidate.target.cell.x + normal.x * 0.505) * cubeSize,
-    (candidate.target.cell.y + normal.y * 0.505) * cubeSize - 0.45,
-    (candidate.target.cell.z + normal.z * 0.505) * cubeSize,
-  );
-  faceHighlight.quaternion.setFromUnitVectors(
-    new THREE.Vector3(0, 0, 1),
-    new THREE.Vector3(normal.x, normal.y, normal.z),
-  );
 }
 
 /** Invite the first play using the same outline as a valid attachment preview. */
@@ -742,17 +654,7 @@ function updateEmptyFieldPrompt(time: number): void {
       ? game.dealer.placementFor(game.state)
       : null;
   const idle = Boolean(cell) && !drag?.active && !pendingAction;
-  ghost.visible = ghostIsDropPreview || idle;
-  if (!ghost.visible) return;
-  if (ghostIsDropPreview) {
-    ghostMaterial.opacity = 0.18;
-    ghostEdgeMaterial.opacity = 1;
-    return;
-  }
-  ghost.position.set(cell!.x * cubeSize, cell!.y * cubeSize - 0.45, cell!.z * cubeSize);
-  const pulse = reducedMotion ? 0.8 : (1 + Math.cos((time * Math.PI * 2) / 1800)) / 2;
-  ghostMaterial.opacity = 0.18 * pulse;
-  ghostEdgeMaterial.opacity = pulse;
+  field.showPrompt(idle ? cell : null, time, reducedMotion);
 }
 
 /** The hand position under the pointer, or null when the pointer is not over the hand. */
@@ -780,7 +682,7 @@ function updateCandidate(): void {
     fieldPlacementActive(roomTraits, game.phase) && !overBin && game.dealer.canPlay(game.state)
       ? pickAttachment(drag.lastX, drag.lastY, drag.group.length + 1)
       : null;
-  showCandidate(drag.candidate);
+  field.showCandidate(drag.candidate);
   const previousSlot = drag.reorderSlot;
   drag.reorderSlot =
     single && !overBin && !drag.candidate ? handReorderSlot(drag.lastX, drag.lastY) : null;
@@ -855,16 +757,6 @@ function needsHandover(rendered: RenderedBlock): boolean {
   return isTransparent(rendered.block);
 }
 
-/** The table's version of a block, in its cell but not yet visible (it dissolves in). */
-function landing(block: CardBlock, cell: Cell): RenderedBlock {
-  const target = blockViews.create(block, cubeSize, "board");
-  target.cell = cell;
-  target.baseY = cell.y * cubeSize - 0.45;
-  target.cube.position.set(cell.x * cubeSize, target.baseY, cell.z * cubeSize);
-  target.cube.visible = false;
-  return target;
-}
-
 /**
  * Play one block, or a line of several (in selection order) as one play: each flies from
  * the hand to its cell, setting off one after another.
@@ -918,7 +810,7 @@ function startPlacement(sources: readonly RenderedBlock[], candidate: Candidate)
       fromPosition: source.cube.position.clone(),
       fromRotation: source.cube.quaternion.clone(),
       fromScale: source.cube.scale.x,
-      target: needsHandover(source) ? landing(block, cell) : null,
+      target: needsHandover(source) ? field.landing(block, cell) : null,
       handedOver: false,
     };
   });
@@ -968,11 +860,7 @@ function updateAction(now: number, delta: number): void {
     for (const flight of action.flights) {
       const flying = elapsed - flight.delay;
       const progress = tweenValue(0, 1, Math.max(0, flying), 1);
-      placementTarget.set(
-        flight.cell.x * cubeSize,
-        flight.cell.y * cubeSize - 0.45,
-        flight.cell.z * cubeSize,
-      );
+      field.cellPosition(flight.cell, placementTarget);
       flight.source.cube.position.lerpVectors(flight.fromPosition, placementTarget, progress);
       flight.source.cube.quaternion.copy(flight.fromRotation).slerp(placementRotation, progress);
       flight.source.cube.scale.setScalar(THREE.MathUtils.lerp(flight.fromScale, 3, progress));
@@ -1019,18 +907,11 @@ function updateAction(now: number, delta: number): void {
         blockViews.dispose(flight.source);
         flight.target.cube.visible = true;
         flight.target.cube.children.forEach((edge) => (edge.visible = true));
-        placed.set(cellKey(flight.cell), flight.target);
+        field.adopt(flight.target, flight.cell);
       } else {
         // Same look in hand and on the table: the flying block simply stays.
-        const { source, cell } = flight;
-        source.location = "board";
-        source.cell = cell;
-        source.baseY = cell.y * cubeSize - 0.45;
-        source.rock = null;
-        source.handSlot = null;
-        placed.set(cellKey(cell), source);
+        field.adopt(flight.source, flight.cell);
       }
-      updateRotationCenter(flight.cell);
     }
     showSelection();
     playSfx("card.attach");
@@ -1052,16 +933,10 @@ function announceScore(now: number): void {
   outcomeAt = lines.length > 0 ? now + (lines.length - 1) * lineStepMs + tintSeconds * 1000 : now;
 }
 
-/** Reusable effect: briefly tint a row of placed blocks toward gold. */
-function tintRow(blocks: readonly CardBlock[], now: number): void {
-  const ids = new Set(blocks.map(({ id }) => id));
-  tints.push({ blocks: blockViews.all.filter(({ block }) => ids.has(block.id)), startedAt: now });
-}
-
 function updateScoring(now: number): void {
   while (scoreSteps.length > 0 && scoreSteps[0].at <= now) {
     const { line } = scoreSteps.shift()!;
-    tintRow(line.line.blocks, now);
+    field.tint(line.line.blocks, now);
     const sound = magnitudeSfxFor(line.points);
     if (sound) playSfx(sound, { jitter: 0 });
     shownScore += line.points;
@@ -1089,27 +964,15 @@ function updateScoring(now: number): void {
     gameOverAt = null;
     if (game.advance()) endRun();
   }
-  for (let index = tints.length - 1; index >= 0; index--) {
-    const tint = tints[index];
-    const progress = Math.min(1, (now - tint.startedAt) / 1000 / tintSeconds);
-    const strength = Math.sin(progress * Math.PI) * 0.7;
-    tint.blocks.forEach(({ materials }) => {
-      new Set(materials).forEach((material) =>
-        material.color.setRGB(1, 1, 1).lerp(tintColor, strength),
-      );
-    });
-    if (progress === 1) tints.splice(index, 1);
-  }
+  field.update(now);
 }
 
 /** Remove every block from the scene and put the board and camera back at the start. */
 function resetTable(): void {
   blockViews.disposeAll();
-  placed.clear();
+  field.clear();
   hand.clear();
-  tints.length = 0;
   selected = new Set();
-  massCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
   cameraView.reset();
   shownScore = game.state.round.score;
 }
@@ -1266,7 +1129,7 @@ function startRun(session: GameSession, fresh = false): void {
   scoreSteps = [];
   outcomeAt = null;
   resetTable();
-  for (const { block, cell } of game.state.field) addToBoard(block, cell);
+  for (const { block, cell } of game.state.field) field.add(block, cell);
   cameraView.frameToStructure();
   if (game.inStage) dealHand();
   const enterShop = game.phase === "shop" && fresh && !reducedMotion;
@@ -1391,7 +1254,7 @@ function finishDrag(drop: boolean): void {
     drag = null;
     for (const rendered of [activeDrag.source, ...activeDrag.group])
       setDragLayer(rendered.cube, false);
-    showCandidate(null);
+    field.showCandidate(null);
     discardArea.classList.remove("is-target", "is-refused");
     if (refusedAtBin) overlays.flashRefused(discardArea);
     const accepted = discard
@@ -1482,7 +1345,7 @@ const onPointerDown = (event: PointerEvent) => {
     };
     return;
   }
-  if (!pickBlock(event.clientX, event.clientY, [...placed.values()])) return;
+  if (!pickBlock(event.clientX, event.clientY, field.blocks())) return;
   boardDrag = {
     pointerId: event.pointerId,
     startX: event.clientX,
@@ -1547,7 +1410,7 @@ const onPointerMove = (event: PointerEvent) => {
   }
   const hovered =
     pickBlock(event.clientX, event.clientY, hand.blocks) ??
-    pickBlock(event.clientX, event.clientY, [...placed.values()]);
+    pickBlock(event.clientX, event.clientY, field.blocks());
   renderer.domElement.style.cursor = hovered?.block.traits.selectable ? "pointer" : "default";
   showInspection(
     event.pointerType === "touch" ? undefined : hovered?.block,
@@ -1579,7 +1442,7 @@ const onPointerUp = (event: PointerEvent) => {
   renderer.domElement.style.cursor = "default";
   const hovered =
     pickBlock(event.clientX, event.clientY, hand.blocks) ??
-    pickBlock(event.clientX, event.clientY, [...placed.values()]);
+    pickBlock(event.clientX, event.clientY, field.blocks());
   showInspection(
     wasDragging || event.pointerType === "touch" ? undefined : hovered?.block,
     event.clientX,
@@ -1604,7 +1467,7 @@ const onClick = (event: MouseEvent) => {
   if (performance.now() < suppressClickUntil) return;
   const target =
     pickBlock(event.clientX, event.clientY, hand.blocks) ??
-    pickBlock(event.clientX, event.clientY, [...placed.values()]);
+    pickBlock(event.clientX, event.clientY, field.blocks());
   if (!target) return;
   const wasSelected = selected.has(target.block.id);
   selected = toggleBlockSelection(selected, target.block);
@@ -1706,12 +1569,7 @@ if (import.meta.hot) {
     pendingAction?.effects.forEach((e) => e.finish());
     hand.dispose();
     blockViews.disposeAll();
-    ghostGeometry.dispose();
-    ghostMaterial.dispose();
-    ghostEdgeGeometry.dispose();
-    ghostEdgeMaterial.dispose();
-    faceGeometry.dispose();
-    faceMaterial.dispose();
+    field.dispose();
     passiveRackView.dispose();
     shopView.dispose();
     renderer.dispose();

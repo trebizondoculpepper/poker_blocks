@@ -71,4 +71,17 @@ describe("scene architecture guardrails", () => {
       /function (glideHand|handSlotX|visibleHandSlots|createCube|disposeCube)\s*\(/,
     );
   });
+
+  it("keeps placed blocks, drop previews, the first-play prompt and row tints in the field service", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toMatch(/\bfield:\s*FieldView\b/);
+    expect(main).not.toMatch(
+      /\bplaced\b\.|(?<!\.)\bmassCenter\b|\bghost\b|faceHighlight|\btints\b/,
+    );
+    expect(main).not.toMatch(/\bfaceFromDirection\(|new THREE\.PlaneGeometry\(/);
+    expect(main).not.toMatch(
+      /function (addToBoard|landing|showCandidate|tintRow|updateRotationCenter)\s*\(/,
+    );
+  });
 });
