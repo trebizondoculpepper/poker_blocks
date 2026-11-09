@@ -308,6 +308,7 @@ export function createRunController<Context>(options: {
     if (services.presenter.busy || services.input.dragging) return;
     playSfx("ui.click");
     if (game.phase === "over") {
+      followRunPosition();
       services.overlays.showGameOver(game.stats);
       return;
     }

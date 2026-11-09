@@ -46,7 +46,9 @@ export const screenScenes: Record<Screen, (scenes: ScreenScenes) => void> = {
   title: (scenes) => scenes.replace("title"),
   settings: (scenes) => scenes.push("settings"),
   game: (scenes) => scenes.resumeGame(),
-  over: (scenes) => scenes.replace("game-over"),
+  // The game over screen is presentation only: the mode's game flow has already placed the
+  // scene for a lost run (`run.position.over`), so this screen must not move the stack.
+  over: () => undefined,
 };
 
 export function createOverlays(

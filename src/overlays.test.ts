@@ -3,7 +3,7 @@ import { screenScenes, type ScreenScenes } from "./overlays";
 import type { Screen } from "./menus";
 
 describe("overlays: which scene each menu screen puts in front", () => {
-  it("pushes settings, replaces for title and game over, and resumes the game", () => {
+  it("pushes settings, replaces for title, resumes the game, and leaves game over to the flow", () => {
     const calls: string[] = [];
     const scenes: ScreenScenes = {
       push: (scene) => calls.push(`push ${scene}`),
@@ -13,6 +13,6 @@ describe("overlays: which scene each menu screen puts in front", () => {
     for (const screen of ["title", "settings", "game", "over"] satisfies Screen[]) {
       screenScenes[screen](scenes);
     }
-    expect(calls).toEqual(["replace title", "push settings", "resume", "replace game-over"]);
+    expect(calls).toEqual(["replace title", "push settings", "resume"]);
   });
 });
