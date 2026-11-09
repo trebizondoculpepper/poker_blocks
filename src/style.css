@@ -484,8 +484,12 @@ body,
   font-family: system-ui, sans-serif;
 }
 
-/* The title sits over the attract sequence, whose cards should read sharply: no blur (#203). */
+/*
+ * The title sits over the attract sequence, whose cards should read sharp and bright: no blur
+ * and no dark wash behind the menu (#203). The menu panel keeps its own background.
+ */
 .menu-overlay.title-screen {
+  background: transparent;
   backdrop-filter: none;
 }
 
