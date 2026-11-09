@@ -7,7 +7,7 @@ import type { GameFlow } from "./game-flow";
 import type { MusicFilter } from "./audio/music-controller";
 import type { MusicCue, StageMusicPool } from "./audio-service";
 import type { SoundEffectId } from "./audio/sfx-registry";
-import type { RunPositionOutcome } from "./game-run";
+import type { RunFlowOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
 import { saveKey } from "./save";
 import type { Scene } from "./scenes";
@@ -56,6 +56,11 @@ export type SceneTraits = {
    * conditions hold (Continue needs a save). Choosing an item dispatches its action.
    */
   titleScreen: { items: readonly MenuItem[] };
+  /**
+   * The stage-won pop-up is shown while this scene is in front: the won stage's reward rows
+   * counting in, then a button for `next`, which dispatches its id as a named action (#91).
+   */
+  stageWonScreen: { next: MenuItem };
   /**
    * Small text lines in the corner of the panel: the build version and links out to the
    * project. The scene shows them while it is in front.
@@ -221,7 +226,13 @@ export const sceneDefinitions = [
       ...escapeOpensPause,
     },
   },
-  { name: "stage-won", traits: { pausesBelow: { input: true, update: true } } },
+  {
+    name: "stage-won",
+    traits: {
+      stageWonScreen: { next: { id: "leaveStage", label: "Visit shop" } },
+      pausesBelow: { input: true, update: true },
+    },
+  },
   {
     name: "game-over",
     traits: {
@@ -321,7 +332,7 @@ export type GameMode = {
    */
   startScene: SceneName;
   /** Outcome-keyed scene transitions; scene names are never inferred from run phases. */
-  flow: GameFlow<RunPositionOutcome, SceneName>;
+  flow: GameFlow<RunFlowOutcome, SceneName>;
   /** Menu navigation: each navigation action's stack operation (open a menu, go back). */
   navigation: GameFlow<NavigationAction, SceneName>;
   /** Other names that open this mode (old links). */
