@@ -1,18 +1,26 @@
 // Title, settings and game over screens: plain DOM overlays above the scene. They only call back
 // into the game; progression rules stay in the run controller.
 import { playSfx } from "./audio/sfx";
-import type { MenuItem, PanelLink } from "./game-modes";
+import type { SoundEffectId } from "./audio/sfx-registry";
+import type { PanelLink } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
-import type { MotionSetting, Settings, ShadowSetting } from "./settings";
+import type { Settings } from "./settings";
+import { createSettingsPanel } from "./settings-panel";
 
-/** Why Continue is greyed out on the title screen. */
-export const noGameInProgress = "There is no game in progress.";
-
-export type Screen = "title" | "game" | "over";
+export type Screen = "title" | "game";
 
 /** One menu item as a menu shows it: choosing it dispatches `id` as a named action. */
-export type MenuChoice = { id: string; label: string };
+/** A menu button: its action id, label and sound, and whether it can be chosen now. */
+export type MenuChoice = {
+  id: string;
+  label: string;
+  sfx?: SoundEffectId;
+  /** Shown greyed out; choosing it plays the denied sound. */
+  disabled?: boolean;
+  /** Why it's disabled, on hover and for screen readers. */
+  disabledHint?: string;
+};
 
 export type MenuCallbacks = {
   hasSave(): boolean;
@@ -27,7 +35,7 @@ export type MenuCallbacks = {
 
 export type Menus = {
   /** The title's items are the title scene trait's decision, so they are passed in. */
-  showTitle(items: readonly MenuItem[]): void;
+  showTitle(items: readonly MenuChoice[]): void;
   hideTitle(): void;
   /** The footer of the panel in front: the version, then links out (#129). */
   showPanelFooter(links: readonly PanelLink[], version: string): void;
@@ -40,8 +48,9 @@ export type Menus = {
   hideSettings(): void;
   /** Close the title and settings screens, back to the game. */
   closeAll(): void;
-  /** The run is lost: show how it went, with New Run and Main menu. */
-  showGameOver(stats: RunStats): void;
+  /** The run is lost: show how it went, with a button for each choice (#90). */
+  showGameOver(stats: RunStats, choices: readonly MenuChoice[]): void;
+  hideGameOver(): void;
   /**
    * A stage is won: show "Stage Won" and count the reward rows in one by one, then offer
    * `action` (Visit shop), which calls `onContinue`. The music is
@@ -51,22 +60,7 @@ export type Menus = {
   readonly isOpen: boolean;
 };
 
-const shadowLabels: Record<ShadowSetting, string> = {
-  auto: "Automatic",
-  high: "High",
-  low: "Low",
-  off: "Off",
-};
-
-const motionLabels: Record<MotionSetting, string> = {
-  system: "Follow system",
-  reduced: "Reduced",
-  full: "Full",
-};
-
 export function createMenus(host: HTMLElement, initial: Settings, callbacks: MenuCallbacks): Menus {
-  let settings = { ...initial };
-
   const title = overlay("title-screen", "Poker Blocks");
   title.panel.insertAdjacentHTML(
     "beforeend",
@@ -90,45 +84,10 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   );
 
   const settingsScreen = overlay("settings-screen", "Settings");
-  settingsScreen.panel.insertAdjacentHTML(
-    "beforeend",
-    `<h2 class="menu-heading">SETTINGS</h2>
-     <label class="menu-field">
-       <span>Sound volume</span>
-       <input type="range" min="0" max="100" step="5" data-menu="volume" />
-     </label>
-     <label class="menu-field menu-check">
-       <input type="checkbox" data-menu="muted" />
-       <span>Mute sound</span>
-     </label>
-     <label class="menu-field menu-check">
-       <input type="checkbox" data-menu="sfx" />
-       <span>Sound effects</span>
-     </label>
-     <label class="menu-field menu-check">
-       <input type="checkbox" data-menu="music" />
-       <span>Music</span>
-     </label>
-     <fieldset class="menu-field">
-       <legend>Motion</legend>
-       ${(Object.keys(motionLabels) as MotionSetting[])
-         .map(
-           (value) =>
-             `<label class="menu-check"><input type="radio" name="motion" value="${value}" /> <span>${motionLabels[value]}</span></label>`,
-         )
-         .join("")}
-     </fieldset>
-     <fieldset class="menu-field">
-       <legend>Shadows</legend>
-       ${(Object.keys(shadowLabels) as ShadowSetting[])
-         .map(
-           (value) =>
-             `<label class="menu-check"><input type="radio" name="shadows" value="${value}" /> <span>${shadowLabels[value]}</span></label>`,
-         )
-         .join("")}
-     </fieldset>
-     <div class="menu-buttons"><button type="button" data-menu="back">Back</button></div>`,
-  );
+  const settingsPanel = createSettingsPanel(settingsScreen.panel, initial, {
+    onChange: (next) => callbacks.onSettingsChange(next),
+    onBack: () => callbacks.onAction("back"),
+  });
 
   const gameOver = overlay("game-over-screen", "Game over");
   gameOver.panel.insertAdjacentHTML(
@@ -140,10 +99,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
        <div><dt>Highest scoring round</dt><dd data-run="bestRoundScore"></dd></div>
        <div><dt>Blocks played</dt><dd data-run="blocksPlayed"></dd></div>
      </dl>
-     <div class="menu-buttons">
-       <button type="button" data-menu="new-run">New Run</button>
-       <button type="button" data-menu="main-menu">Main menu</button>
-     </div>`,
+     <div class="menu-buttons" data-menu="game-over-choices"></div>`,
   );
 
   const stageWon = overlay("stage-won-screen", "Stage won");
@@ -172,16 +128,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const titleItems = find<HTMLDivElement>(title.panel, "items");
   const confirm = find<HTMLDivElement>(title.panel, "confirm");
   const choices = find<HTMLDivElement>(pauseMenu.panel, "choices");
-  const volume = find<HTMLInputElement>(settingsScreen.panel, "volume");
-  const muted = find<HTMLInputElement>(settingsScreen.panel, "muted");
-  const sfx = find<HTMLInputElement>(settingsScreen.panel, "sfx");
-  const music = find<HTMLInputElement>(settingsScreen.panel, "music");
-  const motionInputs = [
-    ...settingsScreen.panel.querySelectorAll<HTMLInputElement>('input[name="motion"]'),
-  ];
-  const shadowInputs = [
-    ...settingsScreen.panel.querySelectorAll<HTMLInputElement>('input[name="shadows"]'),
-  ];
 
   function open(screen: HTMLElement): void {
     title.root.hidden = screen !== title.root;
@@ -204,7 +150,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     callbacks.onScreen?.("game");
   }
 
-  function showTitle(items: readonly MenuItem[]): void {
+  function showTitle(items: readonly MenuChoice[]): void {
     confirm.hidden = true;
     fillTitleItems(items);
     open(title.root);
@@ -266,14 +212,17 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
    * The title's buttons come from the scene's `titleScreen` trait, so which ones appear (and
    * whether Continue is offered at all) is configuration, not this file's decision.
    */
-  function fillTitleItems(items: readonly MenuItem[]): void {
+  function fillTitleItems(items: readonly MenuChoice[]): void {
     titleItems.replaceChildren();
     for (const item of items) {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = item.label;
       button.dataset.menu = item.id;
-      button.addEventListener("click", () => chooseTitleItem(item.id));
+      disableWithHint(button, item);
+      button.addEventListener("click", () =>
+        item.disabled ? playSfx("action.denied") : chooseTitleItem(item.id),
+      );
       titleItems.append(button);
     }
   }
@@ -327,17 +276,11 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   /** Settings is a panel over whatever is in front (the title or the pause menu). */
   function showSettings(): void {
-    volume.value = String(Math.round(settings.volume * 100));
-    muted.checked = settings.muted;
-    sfx.checked = settings.sfx;
-    music.checked = settings.music;
-    sfx.disabled = music.disabled = settings.muted;
-    motionInputs.forEach((input) => (input.checked = input.value === settings.motion));
-    shadowInputs.forEach((input) => (input.checked = input.value === settings.shadows));
+    settingsPanel.refresh();
     cover(settingsScreen.root);
     settingsScreen.root.hidden = false;
     settingsButton.hidden = true;
-    settingsScreen.panel.querySelector<HTMLElement>("input")?.focus();
+    settingsPanel.focus();
   }
 
   function hideSettings(): void {
@@ -345,23 +288,39 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     uncover(settingsScreen.root);
   }
 
+  /** A menu button: choosing it plays its sound and dispatches its id as an action. */
+  function choiceButton(choice: MenuChoice): HTMLButtonElement {
+    const { id, label, sfx, disabled } = choice;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.menu = id;
+    button.textContent = label;
+    disableWithHint(button, choice);
+    button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
+    button.addEventListener("click", () => {
+      if (disabled) return playSfx("action.denied");
+      playSfx(sfx ?? "ui.click");
+      callbacks.onAction(id);
+    });
+    return button;
+  }
+
+  /**
+   * A disabled item stays visible and focusable, greyed out, with its hint on hover and for
+   * screen readers (`aria-disabled`, not `disabled`, so the hint still shows).
+   */
+  function disableWithHint(
+    button: HTMLButtonElement,
+    { disabled, disabledHint }: Pick<MenuChoice, "disabled" | "disabledHint">,
+  ): void {
+    button.setAttribute("aria-disabled", String(Boolean(disabled)));
+    button.title = disabled ? (disabledHint ?? "") : "";
+  }
+
   /** The pause menu: one button per choice, each dispatching its id as an action. */
   function showMenu(label: string, menuChoices: readonly MenuChoice[]): void {
     pauseMenu.root.setAttribute("aria-label", label);
-    choices.replaceChildren(
-      ...menuChoices.map(({ id, label: text }) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.dataset.menu = id;
-        button.textContent = text;
-        button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
-        button.addEventListener("click", () => {
-          playSfx("ui.click");
-          callbacks.onAction(id);
-        });
-        return button;
-      }),
-    );
+    choices.replaceChildren(...menuChoices.map(choiceButton));
     if (pauseMenu.root.hidden) cover(pauseMenu.root);
     pauseMenu.root.hidden = false;
     settingsButton.hidden = true;
@@ -372,11 +331,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     pauseMenu.root.hidden = true;
     uncover(pauseMenu.root);
     settingsButton.hidden = !title.root.hidden || !gameOver.root.hidden || !stageWon.root.hidden;
-  }
-
-  function change(next: Partial<Settings>): void {
-    settings = { ...settings, ...next };
-    callbacks.onSettingsChange(settings);
   }
 
   find(confirm, "confirm-yes").addEventListener("click", () => {
@@ -394,58 +348,23 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     playSfx("ui.click");
     callbacks.onAction("openPause");
   });
-  find(settingsScreen.panel, "back").addEventListener("click", () => {
-    playSfx("ui.back");
-    callbacks.onAction("back");
-  });
-  // Preview the new volume once the slider is released, so dragging is not noisy.
-  volume.addEventListener("input", () => change({ volume: Number(volume.value) / 100 }));
-  volume.addEventListener("change", () => playSfx("ui.click"));
-  muted.addEventListener("change", () => {
-    change({ muted: muted.checked });
-    // The channel toggles sit under the master mute, so they read as off while it is on.
-    sfx.disabled = music.disabled = muted.checked;
-    playSfx("ui.click");
-  });
-  sfx.addEventListener("change", () => {
-    change({ sfx: sfx.checked });
-    playSfx("ui.click");
-  });
-  music.addEventListener("change", () => {
-    change({ music: music.checked });
-    playSfx("ui.click");
-  });
-  motionInputs.forEach((input) =>
-    input.addEventListener("change", () => {
-      change({ motion: input.value as MotionSetting });
-      playSfx("ui.click");
-    }),
-  );
-  shadowInputs.forEach((input) =>
-    input.addEventListener("change", () => {
-      change({ shadows: input.value as ShadowSetting });
-      playSfx("ui.click");
-    }),
-  );
   for (const button of host.querySelectorAll<HTMLButtonElement>(".menu-panel button")) {
     button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
   }
-  find(gameOver.panel, "new-run").addEventListener("click", () => {
-    playSfx("ui.click");
-    closeAll();
-    callbacks.onNewGame();
-  });
-  find(gameOver.panel, "main-menu").addEventListener("click", () => {
-    playSfx("ui.back");
-    callbacks.onAction("quitToTitle");
-  });
+  const gameOverChoices = find<HTMLDivElement>(gameOver.panel, "game-over-choices");
 
-  function showGameOver(stats: RunStats): void {
+  /** The game over screen: the run's totals, and one button per choice. */
+  function showGameOver(stats: RunStats, gameOverItems: readonly MenuChoice[]): void {
     for (const cell of gameOver.panel.querySelectorAll<HTMLElement>("[data-run]")) {
       cell.textContent = String(stats[cell.dataset.run as keyof RunStats]);
     }
+    gameOverChoices.replaceChildren(...gameOverItems.map(choiceButton));
     open(gameOver.root);
-    callbacks.onScreen?.("over");
+  }
+
+  function hideGameOver(): void {
+    gameOver.root.hidden = true;
+    settingsButton.hidden = !title.root.hidden || !stageWon.root.hidden;
   }
 
   /** Seconds between reward rows as they count in. */
@@ -529,6 +448,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     hidePanelFooter,
     closeAll,
     showGameOver,
+    hideGameOver,
     showStageWon,
     showMenu,
     hideMenu,

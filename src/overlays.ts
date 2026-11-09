@@ -8,7 +8,7 @@
  */
 import type { AudioService } from "./audio-service";
 import { createMenus, type MenuCallbacks, type MenuChoice, type Menus, type Screen } from "./menus";
-import type { MenuItem, PanelLink, SceneName } from "./game-modes";
+import type { PanelLink, SceneName } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { Settings } from "./settings";
 import type { StageReward } from "./stage-rewards";
@@ -29,7 +29,7 @@ export type Overlays = {
   /** Whether a menu screen covers the game. */
   readonly isOpen: boolean;
   /** Show the title screen with these items (its scene trait decided which apply). */
-  showTitle(items: readonly MenuItem[]): void;
+  showTitle(items: readonly MenuChoice[]): void;
   /** The title scene was exited. */
   hideTitle(): void;
   /** The panel's footer: the build version and links out, shown by a `panelFooter` trait. */
@@ -41,7 +41,9 @@ export type Overlays = {
   hideMenu(): void;
   showSettings(): void;
   hideSettings(): void;
-  showGameOver(stats: RunStats): void;
+  /** The game over screen, shown by the game over scene's `gameOverScreen` trait. */
+  showGameOver(stats: RunStats, choices: readonly MenuChoice[]): void;
+  hideGameOver(): void;
   /** The stage-won pop-up, pushed over the stage; its button runs `onContinue`. */
   showStageWon(reward: StageReward, action: string, onContinue: () => void): void;
   /** Show the inspection tooltip near a pointer, or hide it with a null label. */
@@ -90,9 +92,6 @@ export const screenScenes: Record<Screen, (scenes: ScreenScenes) => void> = {
   // move the stack.
   title: () => undefined,
   game: (scenes) => scenes.resumeGame(),
-  // The game over screen is presentation only: the mode's game flow has already placed the
-  // scene for a lost run (`run.position.over`), so this screen must not move the stack.
-  over: () => undefined,
 };
 
 export function createOverlays(
@@ -140,7 +139,8 @@ export function createOverlays(
     hideMenu: () => menus.hideMenu(),
     showSettings: () => menus.showSettings(),
     hideSettings: () => menus.hideSettings(),
-    showGameOver: (stats) => menus.showGameOver(stats),
+    showGameOver: (stats, choices) => menus.showGameOver(stats, choices),
+    hideGameOver: () => menus.hideGameOver(),
     showStageWon(reward, action, onContinue) {
       scenes.push("stage-won");
       menus.showStageWon(reward, action, onContinue);

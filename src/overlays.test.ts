@@ -10,7 +10,7 @@ describe("overlays: which scene each menu screen puts in front", () => {
       replace: (scene) => calls.push(`replace ${scene}`),
       resumeGame: () => calls.push("resume"),
     };
-    for (const screen of ["title", "game", "over"] satisfies Screen[]) {
+    for (const screen of ["title", "game"] satisfies Screen[]) {
       screenScenes[screen](scenes);
     }
     // Title and game over are placed by their scenes; only leaving a menu resumes the game.

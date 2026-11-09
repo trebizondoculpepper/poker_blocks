@@ -5,6 +5,7 @@
 import { Registry } from "./core/registry";
 import type { GameFlow } from "./game-flow";
 import type { MusicFilter } from "./audio/music-controller";
+import type { MusicCue } from "./audio-service";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { RunPositionOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
@@ -35,6 +36,13 @@ export type SceneTraits = {
    */
   menu: { label: string; items: readonly MenuItem[] };
   /**
+   * The game over screen is shown while this scene is in front: the run's totals, and one
+   * button per item, each dispatching its id as a named action (#90).
+   */
+  gameOverScreen: { items: readonly MenuItem[] };
+  /** Entering this scene plays a music cue (src/audio-service.ts, `musicCues`). */
+  musicCue: { cue: MusicCue };
+  /**
    * The title screen is shown while this scene is in front: its panel, and its items whose
    * conditions hold (Continue needs a save). Choosing an item dispatches its action.
    */
@@ -54,8 +62,22 @@ export type SceneTraits = {
   runInPlay: Record<never, never>;
 };
 
-/** One menu item: its action id, its label, and an optional condition it needs. */
-export type MenuItem = { id: string; label: string; when?: MenuCondition };
+/**
+ * One menu item: its action id, its label, an optional condition it needs, and the sound
+ * choosing it plays (`ui.click` when left out).
+ */
+export type MenuItem = {
+  id: string;
+  label: string;
+  when?: MenuCondition;
+  sfx?: SoundEffectId;
+  /**
+   * Shown but disabled unless this condition holds, with `disabledHint` explaining why (on hover
+   * and to screen readers); choosing it while disabled plays the denied sound (#10, #148).
+   */
+  enabledWhen?: MenuCondition;
+  disabledHint?: string;
+};
 
 /**
  * A link shown in a panel's footer. `href` is the destination; a link without one shows the
@@ -120,7 +142,12 @@ export const sceneDefinitions = [
     traits: {
       titleScreen: {
         items: [
-          { id: "continue", label: "Continue", when: "hasSave" },
+          {
+            id: "continue",
+            label: "Continue",
+            enabledWhen: "hasSave",
+            disabledHint: "There is no game in progress.",
+          },
           { id: "new", label: "New game" },
           { id: "openSettings", label: "Settings" },
         ],
@@ -157,7 +184,18 @@ export const sceneDefinitions = [
     traits: { coinsPanel: {}, shopExit: {}, shopStock: {}, runInPlay: {}, ...escapeOpensPause },
   },
   { name: "stage-won", traits: { pausesBelow: { input: true, update: true } } },
-  { name: "game-over", traits: {} },
+  {
+    name: "game-over",
+    traits: {
+      gameOverScreen: {
+        items: [
+          { id: "newRun", label: "New Run" },
+          { id: "quitToTitle", label: "Main menu", sfx: "ui.back" },
+        ],
+      },
+      musicCue: { cue: "windDown" },
+    },
+  },
 ] as const satisfies readonly SceneDefinition[];
 
 export type SceneName = (typeof sceneDefinitions)[number]["name"];

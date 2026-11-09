@@ -39,6 +39,8 @@ export type AudioService = {
   runStarted(): void;
   /** A menu screen came to the front. */
   showScreen(screen: Screen): void;
+  /** Play a music cue, for a scene's `musicCue` trait. */
+  playCue(cue: MusicCue): void;
   /**
    * Filter the music for the scene in front (its `musicFilter` trait), or clear it: low-pass
    * for the pause menu, high-pass for Settings. The track does not change.
@@ -50,6 +52,9 @@ export type AudioService = {
   start(): void;
   dispose(): void;
 };
+
+/** A music cue a scene can play as it enters (its `musicCue` trait). */
+export type MusicCue = "windDown";
 
 /** A boss stage gets the boss loop; every other start gets a random stage vibe. */
 const stageMusic: Record<RunPhase, (music: MusicController) => void> = {
@@ -90,9 +95,10 @@ export function createAudioService(options: {
     game() {
       modeMusic.resume();
     },
-    over() {
-      music.windDown();
-    },
+  };
+  /** What each music cue does; a scene names one through its `musicCue` trait. */
+  const musicCues: Record<MusicCue, () => void> = {
+    windDown: () => music.windDown(),
   };
 
   const unlock = () => music.unlock();
@@ -116,6 +122,9 @@ export function createAudioService(options: {
     },
     runStarted() {
       modeMusic.settle();
+    },
+    playCue(cue) {
+      musicCues[cue]();
     },
     showScreen(screen) {
       screenMusic[screen]();

@@ -132,14 +132,29 @@ describe("game modes composed from traits", () => {
       },
       titleScreen: {
         items: [
-          { id: "continue", label: "Continue", when: "hasSave" },
+          {
+            id: "continue",
+            label: "Continue",
+            enabledWhen: "hasSave",
+            disabledHint: "There is no game in progress.",
+          },
           { id: "new", label: "New game" },
           { id: "openSettings", label: "Settings" },
         ],
       },
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
     });
-    expect(traitsOf("game", "game-over")).toEqual({ screen: { kind: "game-over" } });
+    // The game over scene owns its screen and music cue, with no HUD panels or field input (#90).
+    expect(traitsOf("game", "game-over")).toEqual({
+      screen: { kind: "game-over" },
+      gameOverScreen: {
+        items: [
+          { id: "newRun", label: "New Run" },
+          { id: "quitToTitle", label: "Main menu", sfx: "ui.back" },
+        ],
+      },
+      musicCue: { cue: "windDown" },
+    });
   });
 
   it("lets a mode add a play-scene trait without disturbing the rest", () => {

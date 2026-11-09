@@ -48,10 +48,10 @@ describe("music controller", () => {
   it("waits for the first gesture, then plays the last request", () => {
     const { music, log } = setup();
     music.playTitle();
-    music.playSettings();
+    music.switchToBossTrack();
     expect(log).toEqual([]);
     music.unlock();
-    expect(log).toEqual(["unlock", "play style-ambient-lounge"]);
+    expect(log).toEqual(["unlock", "play solitaire-boss"]);
   });
 
   it("plays horns or sleaze on the title, and keeps one already playing", () => {
@@ -76,12 +76,12 @@ describe("music controller", () => {
     expect(plays[2]).toBe("solitaire-boss");
   });
 
-  it("resumes the same stage track after settings", () => {
+  it("resumes the same stage track after the title", () => {
     const { music, log } = setup();
     music.unlock();
     music.switchToRandomStageTrack();
     const stage = log.at(-1);
-    music.playSettings();
+    music.playTitle();
     music.resumeStage();
     expect(log.at(-1)).toBe(stage);
   });
@@ -104,8 +104,8 @@ describe("music controller", () => {
     music.playTitle();
     expect(log.at(-1)).toBe("windUp blaxploitation-horns");
     expect(music.woundDown).toBe(false);
-    music.playSettings();
-    expect(log.at(-1)).toBe("play style-ambient-lounge");
+    music.switchToBossTrack();
+    expect(log.at(-1)).toBe("play solitaire-boss");
   });
 
   it("winds back up what was playing before", () => {
