@@ -13,14 +13,10 @@
   ],
   "src/hud-panels.ts": [
     "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
-    "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
+    "heading: `ROUND ${view.round} \u00b7 ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
   ],
   "src/listening-room/main.ts": [
     "const entry = entries.find((_, index) => soundEffects[index].id === \"score.line\");"
-  ],
-  "src/materials.ts": [
-    "...(transparentMaterials.has(kind) ? { transparent: {} } : {}),",
-    "inspectable: inspectable(`${cardName(card.traits.identity)} · ${materialNames[kind]}`),"
   ],
   "src/passive-effects.ts": [
     "switch (condition.kind) {",
@@ -57,32 +53,5 @@
   "src/shop-view.ts": [
     "if (offer.kind === \"passive\") {",
     "const passive = offer.kind === \"passive\";"
-  ],
-  "src/visual/block-appearance.ts": [
-    "const ink = printInk[kind];",
-    "switch (kind) {",
-    "ior: kind === \"prismatic\" ? 2.33 : 1.5,",
-    "envMapIntensity: kind === \"prismatic\" ? 1.6 : 1.1,",
-    "...(kind === \"prismatic\" ? prismaticFire : {}),",
-    "const prismatic = kind === \"prismatic\";",
-    "const relief = { bumpMap: height ?? texture, bumpScale: patternRelief[kind] };",
-    "if (kind === \"ice\") {",
-    "if (kind === \"gold\") {",
-    "if (kind === \"paper\") {",
-    "kind === \"meat\"",
-    ": kind === \"prismatic\"",
-    ": kind === \"gold\"",
-    "if ([\"prismatic\", \"fire\", \"paper\", \"ice\"].includes(kind)) geometry.scale(0.985, 0.985, 0.985);",
-    "const edgeColor = edgeColors[kind];",
-    "const edgeOpacity = edgeOpacities[kind];",
-    "if (kind === \"prismatic\") {",
-    "if (kind === \"fire\") {",
-    "if (kind === \"ice\") {",
-    "if (kind === \"steel\") {",
-    "kind === \"gold\"",
-    ": kind === \"paper\"",
-    ": kind === \"wood\"",
-    ": kind === \"terracotta\"",
-    "const endTexture = kind === \"wood\" ? faceTexture(identity, kind, true) : null;"
   ]
 }
