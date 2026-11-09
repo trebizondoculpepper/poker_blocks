@@ -4,6 +4,7 @@
 import "./style.css";
 import { createBeatClock } from "../audio/beat-clock";
 import { fadeCurve, fadeKinds, type FadeKind } from "../audio/music-fade";
+import { muffledCutoff, muffleSeconds } from "../audio/music-controller";
 import { defaultWind, scheduleWindDown, standstill, type WindShape } from "../audio/music-wind";
 import { fitTaps, snapToLoop, type LoopTempo } from "./tap-tempo";
 
@@ -88,15 +89,40 @@ let context: AudioContext | null = null;
 let master: GainNode | null = null;
 const buffers = new Map<string, Promise<AudioBuffer>>();
 
+/** Low-pass on the output, as the game uses when its menu is open (wide open by default). */
+let lowPass: BiquadFilterNode | null = null;
+const openCutoff = 20000;
+
 function audio(): { context: AudioContext; master: GainNode } {
   if (!context || !master) {
     context = new AudioContext();
     master = context.createGain();
     master.gain.value = Number(volume.value);
-    master.connect(context.destination);
+    lowPass = context.createBiquadFilter();
+    lowPass.type = "lowpass";
+    lowPass.Q.value = 0.7;
+    lowPass.frequency.value = openCutoff;
+    master.connect(lowPass).connect(context.destination);
   }
   return { context, master };
 }
+
+const muffleButton = element<HTMLButtonElement>("muffle");
+const unmuffleButton = element<HTMLButtonElement>("unmuffle");
+
+/** Sweep the low-pass to `hz` over the game's muffle time, exactly as the game does. */
+function sweepLowPass(hz: number): void {
+  const { context } = audio();
+  const frequency = lowPass!.frequency;
+  const now = context.currentTime;
+  frequency.cancelScheduledValues(now);
+  frequency.setValueAtTime(frequency.value, now);
+  frequency.exponentialRampToValueAtTime(hz, now + muffleSeconds);
+  muffleButton.disabled = hz !== openCutoff;
+  unmuffleButton.disabled = hz === openCutoff;
+}
+muffleButton.addEventListener("click", () => sweepLowPass(muffledCutoff));
+unmuffleButton.addEventListener("click", () => sweepLowPass(openCutoff));
 
 function load(track: Track): Promise<AudioBuffer> {
   let pending = buffers.get(track.id);

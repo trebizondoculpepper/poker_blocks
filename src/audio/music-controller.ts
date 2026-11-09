@@ -44,9 +44,9 @@ export type MusicController = {
 };
 
 /** The muffled cut-off, in hertz: the music as if through a wall. */
-const muffledCutoff = 550;
+export const muffledCutoff = 550;
 /** Seconds the muffle takes to come on or go off. */
-const muffleSeconds = 2;
+export const muffleSeconds = 2;
 
 export function createMusicController(
   player: Pick<
