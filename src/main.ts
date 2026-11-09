@@ -447,28 +447,30 @@ const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
   rendered.handSlot = slot;
   return rendered;
 });
-const shopView = createShopView(
-  host,
-  passiveRackView?.element ?? null,
-  (offer) =>
-    offer.kind === "passive" ? game.passivePrices.buy : (sessionConfig.cardPurchasePrice ?? 1),
-  (id, destination) => {
-    const bought = game.buyShopOffer(id, destination);
-    if (!bought) {
-      playSfx("action.denied");
-      return false;
-    }
-    if (bought.kind === "card") {
-      handBlocks.push(createCube(bought.block, cubeSize / 3, "hand"));
-      syncHandSlots();
-    } else passiveRackView?.render(game.state.passiveRack);
-    shopView.render(game.state.shopStock ?? [], true);
-    updateHud();
-    autosave();
-    playSfx("shop.buy");
-    return true;
-  },
-);
+const shopView = roomTraits.shop
+  ? createShopView(
+      host,
+      passiveRackView?.element ?? null,
+      (offer) =>
+        offer.kind === "passive" ? game.passivePrices.buy : (sessionConfig.cardPurchasePrice ?? 1),
+      (id, destination) => {
+        const bought = game.buyShopOffer(id, destination);
+        if (!bought) {
+          playSfx("action.denied");
+          return false;
+        }
+        if (bought.kind === "card") {
+          handBlocks.push(createCube(bought.block, cubeSize / 3, "hand"));
+          syncHandSlots();
+        } else passiveRackView?.render(game.state.passiveRack);
+        shopView?.render(game.state.shopStock ?? [], true);
+        updateHud();
+        autosave();
+        playSfx("shop.buy");
+        return true;
+      },
+    )
+  : null;
 // The score shown lags the state until the placed card lands.
 let shownScore = game.state.round.score;
 /** One scoring line waiting to be shown: tint its row, play its sound, add its points. */
@@ -1471,6 +1473,7 @@ function advanceFromStage(): void {
     endRun();
     return;
   }
+  game = stockShopIfNeeded(game);
   resetTable();
   if (game.inStage) {
     musicForNewStage();
@@ -1479,7 +1482,7 @@ function advanceFromStage(): void {
   } else if (game.phase === "shop") {
     playSfx("shop.open");
   }
-  shopView.render(game.state.shopStock ?? [], game.phase === "shop");
+  shopView?.render(game.state.shopStock ?? [], game.phase === "shop");
   updateHud();
   autosave();
 }
@@ -1511,7 +1514,12 @@ function newSession(): GameSession {
     return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
       ...snapshot,
       phase: "shop",
-      state: shopPreviewState(snapshot.state, roomTraits.shopPreview.coins),
+      state: shopPreviewState(
+        snapshot.state,
+        roomTraits.shopPreview.coins,
+        Math.random,
+        roomTraits.shop,
+      ),
     });
   }
   if (!roomTraits.materialSample) return session;
@@ -1523,17 +1531,20 @@ function newSession(): GameSession {
   });
 }
 
+/** The shop trait supplies stock when entering, including saves from before offers existed. */
+function stockShopIfNeeded(session: GameSession): GameSession {
+  if (!roomTraits.shop || session.phase !== "shop" || session.state.shopStock !== undefined)
+    return session;
+  const snapshot = session.snapshot();
+  return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
+    ...snapshot,
+    state: shopPreviewState(snapshot.state, snapshot.state.coins, Math.random, roomTraits.shop),
+  });
+}
+
 /** Swap in a session (new or resumed) and rebuild the scene from its state. */
 function startRun(session: GameSession): void {
-  // Older Dev 3 saves reached the shop before stock existed. Fill them once; an empty
-  // shopStock array means the player bought everything and must stay empty on reload.
-  if (roomTraits.shopPreview && session.phase === "shop" && session.state.shopStock === undefined) {
-    const snapshot = session.snapshot();
-    session = GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
-      ...snapshot,
-      state: shopPreviewState(snapshot.state, snapshot.state.coins),
-    });
-  }
+  session = stockShopIfNeeded(session);
   game = session;
   const rack = roomTraits.passiveRack;
   if (rack?.startWith) game.fillPassiveRack(Math.min(rack.startWith, rack.capacity));
@@ -1551,7 +1562,7 @@ function startRun(session: GameSession): void {
   cameraTarget.copy(desired.target);
   applyCamera();
   if (game.inStage) dealHand();
-  shopView.render(game.state.shopStock ?? [], game.phase === "shop");
+  shopView?.render(game.state.shopStock ?? [], game.phase === "shop");
   updateHud();
   showSelection();
   autosave();
@@ -2026,7 +2037,7 @@ if (import.meta.hot) {
     faceGeometry.dispose();
     faceMaterial.dispose();
     passiveRackView?.dispose();
-    shopView.dispose();
+    shopView?.dispose();
     renderer.dispose();
   });
 }

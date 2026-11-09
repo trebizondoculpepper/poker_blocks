@@ -15,11 +15,13 @@ describe("rooms composed from traits", () => {
     expect(roomFor(null).traits).toEqual({
       save: { key: saveKey },
       passiveRack: { capacity: 5 },
+      shop: { passiveOffers: 2, cardOffers: 3 },
     });
     expect(roomFor("dev2").traits.passiveRack).toEqual({ capacity: 5, startWith: 2 });
     expect(roomFor("dev1").traits.materialSample).toEqual({});
     expect(roomFor("dev0").traits.sandbox).toBeUndefined();
     expect(roomFor("dev3").traits.shopPreview).toEqual({ coins: 5 });
+    expect(roomFor("dev3").traits.shop).toEqual({ passiveOffers: 2, cardOffers: 3 });
     expect(roomFor("dev3").traits.skipTitle).toEqual({ resume: true });
   });
 });

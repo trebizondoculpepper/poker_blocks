@@ -225,6 +225,8 @@ The demo uses these placeholders. They live in `src/session-config.ts` so they c
 
 ### Shop
 
+The shop is an optional **room trait**. Its configuration supplies the number of passive and playable-card offers, while the room composes that trait with the table, hand, passive rack, and session rules. Dev3 starts directly in this composed shop; the normal game activates it after a boss stage. The shop presentation can independently move the camera to frame the offers where they land on the table.
+
 The planned default shop opens after the boss stage with five objects at rest on the table: **two passive blocks** and **three playable blocks**. For the first version, every item costs **one coin**; prices will be tuned later. Buying requires enough coins. The player drags a passive to the passive rack or a playable block to the hand. Bought playable blocks become part of the player's collection and carry into later stages. Future shop stock may include special cards and modifier blocks.
 
 The shop entrance is a separate presentation sequence: a deliberately theatrical **SHOP OPEN** sign descends, blocks appear to be thrown onto the table by an unseen hand, and the camera moves to frame them. The items are at rest before the player interacts with them; the animation does not change stock or purchase rules.

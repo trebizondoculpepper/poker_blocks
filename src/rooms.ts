@@ -19,10 +19,15 @@ export type PassiveRackTrait = {
 /** The default rack: room for five passives, starting empty. */
 export const defaultPassiveRack: PassiveRackTrait = { capacity: 5 };
 
+/** A shop scene contributes stock, purchase targets, and its table presentation. */
+export type ShopTrait = { passiveOffers: number; cardOffers: number };
+export const defaultShop: ShopTrait = { passiveOffers: 2, cardOffers: 3 };
+
 export type RoomTraits = {
   /** Where the room keeps its saved run. */
   save: { key: string };
   passiveRack?: PassiveRackTrait;
+  shop?: ShopTrait;
   /** Endless play: unlimited plays and discards, a stage cannot be won or lost by itself. */
   sandbox?: Record<string, never>;
   /**
@@ -56,7 +61,11 @@ const rooms: Room[] = [
     id: "game",
     dev: false,
     // The real game has the passive rack, starting empty (passives come from the shop).
-    traits: { save: { key: saveKey }, passiveRack: { ...defaultPassiveRack } },
+    traits: {
+      save: { key: saveKey },
+      passiveRack: { ...defaultPassiveRack },
+      shop: { ...defaultShop },
+    },
   },
   {
     id: "dev0",
@@ -94,6 +103,7 @@ const rooms: Room[] = [
     traits: {
       save: { key: "poker-blocks.dev3-run" },
       passiveRack: { ...defaultPassiveRack },
+      shop: { ...defaultShop },
       shopPreview: { coins: 5 },
       skipTitle: { resume: true },
       quiet: {},
