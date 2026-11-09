@@ -30,7 +30,9 @@ describe("no committed credentials (#130)", () => {
   });
 
   it("recognises an assignment, but not a secrets reference", () => {
-    expect(assigned("BUTLER_API_KEY").test("BUTLER_API_KEY=abcdefghij0123456789")).toBe(true);
+    // Built at run time, so this file never holds an assignment itself.
+    const sample = ["BUTLER_API_KEY", "abcdefghij0123456789"].join("=");
+    expect(assigned("BUTLER_API_KEY").test(sample)).toBe(true);
     expect(assigned("BUTLER_API_KEY").test("BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}")).toBe(
       false,
     );
