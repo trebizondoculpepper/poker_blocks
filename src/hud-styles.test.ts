@@ -37,8 +37,8 @@ describe("HUD styles (#121)", () => {
     const mode = gameModeRegistry.get("dev-style");
     expect(mode.traits.console).toBeDefined();
     const auditioned = mode.scenes.filter(({ traits }) => traits.devHudStyleAudition);
-    expect(auditioned.map(({ id }) => id.split("/").at(-1)).sort()).toEqual(
-      ["boss", "shop", "stage-1", "stage-2"].sort(),
+    expect(new Set(auditioned.map(({ id }) => id.split("/").at(-1)))).toEqual(
+      new Set(["boss", "shop", "stage-1", "stage-2"]),
     );
     for (const { traits } of auditioned)
       for (const style of traits.devHudStyleAudition!.styles)

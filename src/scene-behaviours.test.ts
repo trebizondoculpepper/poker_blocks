@@ -78,7 +78,11 @@ function recordingHost() {
         showGameOver: (stats, choices) =>
           void calls.push(`gameOver:${stats.totalScore}:${choices.map(({ id }) => id).join(",")}`),
         hideGameOver: () => void calls.push("gameOver:hide"),
-        showStageWon: (reward, next) => void calls.push(`stageWon:${reward.balance}:${next.id}`),
+        // Two arguments only: a stage result never carries the seed (#164).
+        showStageWon: (...args: unknown[]) => {
+          const [reward, next] = args as [{ balance: number }, { id: string }];
+          calls.push(`stageWon:${reward.balance}:${next.id}${args.length > 2 ? ":seed" : ""}`);
+        },
         hideStageWon: () => void calls.push("stageWon:hide"),
         showTitle: (items) =>
           void calls.push(

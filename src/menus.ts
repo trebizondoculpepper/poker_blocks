@@ -59,7 +59,7 @@ export type Menus = {
    * left alone.
    */
   /** Show the pop-up, with the session seed so a run can be replayed (#134). */
-  showStageWon(reward: StageReward, next: MenuChoice, seed: number | null): void;
+  showStageWon(reward: StageReward, next: MenuChoice): void;
   /** Close the stage-won pop-up, cancelling any rows still counting in. */
   hideStageWon(): void;
   readonly isOpen: boolean;
@@ -118,7 +118,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
        <div><dt>Coins</dt><dd data-menu="balance"></dd></div>
      </dl>
      <div class="menu-buttons"><button type="button" data-menu="stage-next" hidden></button></div>
-     <div class="menu-seed" data-menu="stage-won-seed" hidden></div>`,
+`,
   );
 
   const settingsButton = document.createElement("button");
@@ -360,7 +360,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   }
   const gameOverChoices = find<HTMLDivElement>(gameOver.panel, "game-over-choices");
   const gameOverSeed = find<HTMLDivElement>(gameOver.panel, "game-over-seed");
-  const stageWonSeed = find<HTMLDivElement>(stageWon.panel, "stage-won-seed");
 
   /** The game over screen: the run's totals, and one button per choice. */
   /**
@@ -427,14 +426,13 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     settingsButton.hidden = false;
   }
 
-  function showStageWon(reward: StageReward, next: MenuChoice, seed: number | null): void {
+  function showStageWon(reward: StageReward, next: MenuChoice): void {
     rowTimers.forEach((timer) => window.clearTimeout(timer));
     ledger.replaceChildren();
     totals.hidden = true;
     stageNext.hidden = true;
     stageNext.textContent = next.label;
     stageNextChoice = next;
-    showSeed(stageWonSeed, seed);
     // Not open(): the game screen (and its music) stays as it is behind the pop-up.
     title.root.hidden = settingsScreen.root.hidden = gameOver.root.hidden = true;
     // A pause menu left open under it can't be reached until the dialog closes.
