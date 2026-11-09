@@ -4,10 +4,12 @@ import { describe, expect, it } from "vite-plus/test";
 
 describe("scene architecture guardrails", () => {
   it("switches rooms without navigating or reloading the document", () => {
-    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
-
-    expect(main).toContain("window.history.replaceState");
-    expect(main).not.toMatch(/window\.location\.(assign|reload)\s*\(/);
+    for (const file of ["./main.ts", "./run-controller.ts", "./console-host.ts"]) {
+      const source = readFileSync(new URL(file, import.meta.url), "utf8");
+      expect(source).not.toMatch(/window\.location\.(assign|reload)\s*\(/);
+    }
+    const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
+    expect(run).toContain("window.history.replaceState");
   });
 
   it("keeps camera construction, framing, and resizing in the camera-view service", () => {
@@ -113,5 +115,16 @@ describe("scene architecture guardrails", () => {
     expect(main).not.toMatch(
       /function (startPlacement|startDiscard|updateAction|announceScore)\s*\(/,
     );
+  });
+
+  it("leaves main.ts only constructing services, the scene manager and the start scene", () => {
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+
+    expect(main).toContain("new SceneManager(");
+    expect(main).toContain("run.open()");
+    // No behaviour of its own: no named functions, no game state, no decisions beyond setup.
+    expect(main).not.toMatch(/^(async )?function /m);
+    expect(main).not.toMatch(/\bGameSession\b|\bgame\.(state|phase|play|advance)\b/);
+    expect(main.match(/\bif \(/g) ?? []).toHaveLength(2);
   });
 });
