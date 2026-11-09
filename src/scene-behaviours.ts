@@ -21,6 +21,7 @@ import {
   type BlockDestroyerBoard,
 } from "./scene-traits/dev-manual-block-destroyer";
 import { SceneTraitRegistry } from "./scenes";
+import type { SoundEffectId } from "./audio/sfx-registry";
 
 /** What a scene trait's behaviour may touch. */
 export type SceneHost = {
@@ -34,6 +35,8 @@ export type SceneHost = {
     run: Pick<RunController, "shopStock" | "dispatch">;
     overlays: Pick<Overlays, "showMenu" | "hideMenu" | "showSettings" | "hideSettings">;
     audio: Pick<AudioService, "setMusicFilter">;
+    /** Play a registered sound effect (src/audio/sfx.ts). */
+    sound(id: SoundEffectId): void;
   };
 };
 
@@ -121,9 +124,11 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: (context) => context.services.audio.setMusicFilter(null),
   });
   behaviours.register("keyAction", {
-    handles(context, { key, action }, event) {
+    handles(context, { key, action, sfx }, event) {
       const matches = keyEvents[(event as Event).type];
       if (!matches?.(event as KeyboardEvent, key)) return false;
+      // The same sound the matching button plays, so the keyboard isn't silent.
+      for (const id of [sfx ?? []].flat()) context.services.sound(id);
       context.services.run.dispatch(action);
       return true;
     },

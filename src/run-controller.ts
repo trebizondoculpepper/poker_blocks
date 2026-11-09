@@ -502,9 +502,9 @@ export function createRunController<Context>(options: {
 
   /** The game actions a menu can dispatch; navigation is the mode's data, not code. */
   const gameActions: Record<string, () => void> = {
-    // The run is autosaved at every safe point; save once more, then show the title.
+    // The run is already saved at its last safe point; saving here could record a play
+    // whose animation (and hand refill) hasn't finished, so just show the title.
     quitToTitle() {
-      autosave();
       services.overlays.showTitle();
     },
   };

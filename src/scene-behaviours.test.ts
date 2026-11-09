@@ -45,6 +45,7 @@ function recordingHost() {
         hideSettings: () => void calls.push("settings:hide"),
       },
       audio: { setMusicFilter: (kind) => void calls.push(`filter:${kind}`) },
+      sound: (id) => void calls.push(`sound:${id}`),
     },
   };
   return { host, calls, shown };
@@ -225,9 +226,12 @@ describe("the pause menu's scene traits (#87)", () => {
     scenes.dispatch(escape);
     scenes.push(settings.id);
     scenes.dispatch(escape);
-    expect(calls.filter((call) => call.startsWith("action:"))).toEqual([
+    expect(calls.filter((call) => /^(action|sound):/.test(call))).toEqual([
+      "sound:ui.click",
       "action:openPause",
+      "sound:ui.back",
       "action:resume",
+      "sound:ui.back",
       "action:back",
     ]);
     // Other keys, and a held key's auto-repeat, pass through untouched.
@@ -242,6 +246,6 @@ describe("the pause menu's scene traits (#87)", () => {
     calls.length = 0;
     scenes.dispatch(escape);
     // Only the pause menu's own key action ran; the stage's never did.
-    expect(calls).toEqual(["action:resume"]);
+    expect(calls).toEqual(["sound:ui.back", "action:resume"]);
   });
 });

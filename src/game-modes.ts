@@ -5,6 +5,7 @@
 import { Registry } from "./core/registry";
 import type { GameFlow } from "./game-flow";
 import type { MusicFilter } from "./audio/music-controller";
+import type { SoundEffectId } from "./audio/sfx-registry";
 import type { RunPositionOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
 import { saveKey } from "./save";
@@ -37,8 +38,8 @@ export type SceneTraits = {
   settingsPanel: Record<never, never>;
   /** The music is filtered while this scene is in front (low-pass muffles, high-pass thins). */
   musicFilter: { kind: MusicFilter };
-  /** Pressing `key` dispatches the named action. */
-  keyAction: { key: string; action: string };
+  /** Pressing `key` dispatches the named action, with the sound a button for it would play. */
+  keyAction: { key: string; action: string; sfx?: SoundEffectId };
   /** A run is being played while this scene is on the stack (the `inRun` menu condition). */
   runInPlay: Record<never, never>;
 };
@@ -61,7 +62,7 @@ export type SceneDefinition = {
 
 /** Escape opens the pause menu from the title and from play (#87). */
 const escapeOpensPause: Partial<SceneTraits> = {
-  keyAction: { key: "Escape", action: "openPause" },
+  keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
 };
 
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
@@ -96,7 +97,7 @@ export const sceneDefinitions = [
       menu: pauseMenu,
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "lowpass" },
-      keyAction: { key: "Escape", action: "resume" },
+      keyAction: { key: "Escape", action: "resume", sfx: "ui.back" },
     },
   },
   {
@@ -105,7 +106,7 @@ export const sceneDefinitions = [
       settingsPanel: {},
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "highpass" },
-      keyAction: { key: "Escape", action: "back" },
+      keyAction: { key: "Escape", action: "back", sfx: "ui.back" },
     },
   },
   { name: "stage-1", traits: playSceneTraits },
