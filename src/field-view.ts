@@ -13,9 +13,12 @@ import { addCell, centerOfGravity, removeCell, type MassCenter } from "./center-
 import type { BlockViews, RenderedBlock } from "./rendered-blocks";
 import { cellKey, faceFromDirection, faceNormal, type Cell, type Face } from "./traits/attachable";
 
+/** A block a drop can attach to: one on the table, or one played and still flying in. */
+export type DropTarget = { block: CardBlock; cell?: Cell | null };
+
 /** Where a drop would play: a face (or the empty centre), and the cells it would fill. */
 export type Candidate = {
-  target: RenderedBlock | null;
+  target: DropTarget | null;
   face: Face | null;
   cell: Cell;
   cells: Cell[];
@@ -24,19 +27,30 @@ export type Candidate = {
 export type FieldView = {
   /** The placed cubes. */
   blocks(): RenderedBlock[];
-  /** The placed cells. */
+  /** The placed cells: blocks that have landed. */
   cells(): Cell[];
+  /**
+   * The cells a drop is tested against: placed blocks and blocks played but still flying in
+   * (#167), so input follows the game state, not the animation.
+   */
+  occupiedCells(): Cell[];
   readonly massCenter: MassCenter;
   /** Put a block straight into its cell (a run being rebuilt). */
   add(block: CardBlock, cell: Cell): RenderedBlock;
   /** The table's version of a block, in its cell but hidden (it dissolves in on landing). */
   landing(block: CardBlock, cell: Cell): RenderedBlock;
+  /**
+   * A block has been played into this cell and is about to fly there (#167). Until it lands it
+   * is an invisible, hit-testable stand-in, so a drop straight after a play can attach to it
+   * or find the face it now covers taken.
+   */
+  expect(block: CardBlock, cell: Cell): void;
   /** A cube that has arrived in its cell becomes part of the structure. */
   adopt(rendered: RenderedBlock, cell: Cell): void;
   /** A cell's centre in the board assembly. */
   cellPosition(cell: Cell, target: THREE.Vector3): THREE.Vector3;
   /** The placed block and face under a ray, if any. */
-  faceAt(raycaster: THREE.Raycaster): { target: RenderedBlock; face: Face } | null;
+  faceAt(raycaster: THREE.Raycaster): { target: DropTarget; face: Face } | null;
   /** Preview a drop, or clear the preview with null. */
   showCandidate(candidate: Candidate | null): void;
   /** Pulse the outline of the first play's cell, or hide it with null. */
@@ -71,6 +85,12 @@ export function createFieldView(options: {
 }): FieldView {
   const { views, assembly, cubeSize } = options;
   const placed = new Map<string, RenderedBlock>();
+  /** Blocks played and still flying in, by cell: invisible stand-ins for hit-testing (#167). */
+  const expected = new Map<string, { block: CardBlock; cell: Cell; cube: THREE.Mesh }>();
+  const forget = (key: string, standIn: { cube: THREE.Mesh }) => {
+    assembly.remove(standIn.cube);
+    expected.delete(key);
+  };
   let massCenter: MassCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
   const tints: { blocks: RenderedBlock[]; startedAt: number }[] = [];
 
@@ -136,10 +156,21 @@ export function createFieldView(options: {
   return {
     blocks: () => [...placed.values()],
     cells: () => [...placed.values()].map(({ cell }) => cell!),
+    occupiedCells: () => [...placed.values(), ...expected.values()].map(({ cell }) => cell!),
+    expect(block, cell) {
+      // Invisible meshes are still hit by a raycaster; they are never drawn.
+      const cube = new THREE.Mesh(ghostGeometry, ghostMaterial);
+      cube.visible = false;
+      placeAt(cube, cell);
+      assembly.add(cube);
+      expected.set(cellKey(cell), { block, cell, cube });
+    },
     get massCenter() {
       return massCenter;
     },
     remove(blockId) {
+      for (const [key, standIn] of [...expected].filter(([, { block }]) => block.id === blockId))
+        forget(key, standIn);
       for (const [key, rendered] of [...placed].filter(([, { block }]) => block.id === blockId)) {
         placed.delete(key);
         massCenter = removeCell(massCenter, rendered.cell!);
@@ -165,12 +196,14 @@ export function createFieldView(options: {
       rendered.rock = null;
       rendered.handSlot = null;
       join(rendered, cell);
+      const standIn = expected.get(cellKey(cell));
+      if (standIn) forget(cellKey(cell), standIn);
     },
     cellPosition(cell, target) {
       return target.set(cell.x * cubeSize, cell.y * cubeSize - sink, cell.z * cubeSize);
     },
     faceAt(raycaster) {
-      const blocks = [...placed.values()];
+      const blocks = [...placed.values(), ...expected.values()];
       const hit = raycaster.intersectObjects(
         blocks.map(({ cube }) => cube),
         false,
@@ -232,6 +265,8 @@ export function createFieldView(options: {
     },
     clear() {
       placed.clear();
+      for (const { cube } of expected.values()) assembly.remove(cube);
+      expected.clear();
       tints.length = 0;
       massCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
     },
