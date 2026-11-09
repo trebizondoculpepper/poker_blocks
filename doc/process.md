@@ -25,12 +25,13 @@ Design decisions belong to the user. An agent never settles an open question by 
 
 When you have questions about a ticket:
 
-1. **Check first.** Read the whole issue, its comments and the linked docs; the question may already be answered. Only ask what is still open.
-2. **Ask on the ticket.** Post the remaining questions as one numbered comment on the issue.
-3. **Label it.** Add `status:incomplete` and `question`, and remove `status:ready` and your `agent:` label. Say in the comment what, if anything, you already built.
-4. **Move on** to the next ticket. Don't wait for an answer.
+1. **Check first.** Read the whole issue, its comments and the linked docs; the question may already be answered. If every question is answered, carry on with the ticket as normal.
+2. **Ask on the ticket.** Post the questions that are still open as one numbered comment on the issue.
+3. **Keep any partial work.** If you built part of it, push your branch (or open the PR), link it from the comment, and say what is done and what remains.
+4. **Label it and release it.** Add `question`, and set exactly one readiness label: `status:needs-design` if nothing can go ahead until the answers come, or `status:incomplete` if part is built and only the answered remainder is left. Remove `status:ready` and your `agent:` label.
+5. **Move on** to the next ticket. Don't wait for an answer.
 
-If only some details are unresolved, build what you can first, then do the steps above for the rest. The user answers questions in a regular Q&A round. Whoever takes the ticket next removes `question` once its answers are recorded.
+The user answers questions in a regular Q&A round. **Whoever records the answers** removes `question` once none remain open, and moves the ticket to `status:ready` if nothing else blocks it.
 
 ## Labels
 
