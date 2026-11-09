@@ -61,6 +61,11 @@ type RackDragTarget = {
 };
 
 export type TableInput = {
+  /**
+   * A scene composing `discardBin` came to the front, or left (#183). The bin, which is also
+   * the passives' sell target, is shown while any such scene is on the stack.
+   */
+  discardBinEntered(entered: boolean): void;
   /** The selected block ids (hand and field). */
   readonly selection: Selection;
   /** Forget these blocks from the selection (they were played or discarded). */
@@ -143,6 +148,8 @@ export function createDiscardTarget(host: HTMLElement): HTMLElement {
   <b class="discard-count" hidden></b>
   <i class="refused-mark" aria-hidden="true"></i>
 `;
+  // Hidden until a scene composing `discardBin` comes to the front (#183).
+  discardArea.hidden = true;
   host.append(discardArea);
   return discardArea;
 }
@@ -760,7 +767,14 @@ export function createTableInput(options: {
   window.addEventListener("blur", onBlur);
   document.addEventListener("visibilitychange", onVisibilityChange);
 
+  /** How many scenes in front compose `discardBin`; the bin is shown while any does. */
+  let discardBinScenes = 0;
+
   return {
+    discardBinEntered(entered) {
+      discardBinScenes = Math.max(0, discardBinScenes + (entered ? 1 : -1));
+      discardArea.hidden = discardBinScenes === 0;
+    },
     fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
     get selection() {
       return selected;
