@@ -88,10 +88,10 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
   scene.traverse((object) => {
     const mesh = object as THREE.Mesh;
     if (!mesh.isMesh || !mesh.layers.isEnabled(backgroundLayer)) return;
-    mesh.onBeforeRender = (drawing, _scene, _camera, _geometry, material) => {
+    mesh.onBeforeRender = (drawing, _scene, _camera, _geometry, drawn) => {
       const intoRefraction = drawing === front && drawing.getRenderTarget() !== null;
       const visible = drawing !== front || intoRefraction;
-      for (const item of [material].flat()) {
+      for (const item of [drawn].flat()) {
         item.colorWrite = visible;
         item.depthWrite = visible;
       }
