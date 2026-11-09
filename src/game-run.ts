@@ -128,6 +128,7 @@ export class GameRun {
     // A stage saved after it was decided already announced its outcome.
     session.decidedStage =
       session.inStage && roundOutcome(snapshot.state) !== "playing" ? session.stageKey : null;
+    session.stockEmptyShop();
     return session;
   }
 
@@ -307,6 +308,24 @@ export class GameRun {
     return this.rewarded?.stage === this.stageKey ? this.rewarded.reward : null;
   }
 
+  /**
+   * Whether a passive may be sold now: not once the run is over, and not while a won stage's
+   * rewards are unpaid (selling a passive that pays on a stage win before the payout would
+   * quietly lose its row).
+   */
+  get canSellPassives(): boolean {
+    return this.currentPhase !== "over" && !this.stageRewardsPending;
+  }
+
+  /** In a shop with no stock: stock it under the run's rules (none when they don't say how). */
+  private stockEmptyShop(): void {
+    if (!this.inShop || this.currentState.shopStock !== undefined) return;
+    this.currentState = (this.config.stockShop ?? ((state) => state))(
+      this.currentState,
+      this.random,
+    );
+  }
+
   /** A stage is won but its rewards are not yet paid (see claimStageRewards). */
   get stageRewardsPending(): boolean {
     if (!this.inStage || roundOutcome(this.currentState) !== "won") return false;
@@ -320,10 +339,7 @@ export class GameRun {
    * when nothing was sold (unknown block, or the run is over).
    */
   sellPassive(passiveId: string): number | null {
-    if (this.currentPhase === "over") return null;
-    // A won stage's rewards are fixed first: selling a passive that pays on a stage win
-    // before the payout would quietly lose its row.
-    if (this.stageRewardsPending) return null;
+    if (!this.canSellPassives) return null;
     const rack = this.currentState.passiveRack;
     const passive = rack.find(({ id }) => id === passiveId);
     if (!passive) return null;
@@ -540,6 +556,7 @@ export class GameRun {
     // The round's last stage completes the round; no stage is named for it.
     if (!nextStage(this.shopAfter)) this.runStats = recordRoundComplete(this.runStats);
     this.lifecycle("shop.entered");
+    this.stockEmptyShop();
     return true;
   }
 
