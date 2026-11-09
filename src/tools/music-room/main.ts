@@ -89,10 +89,12 @@ let context: AudioContext | null = null;
 let master: GainNode | null = null;
 const buffers = new Map<string, Promise<AudioBuffer>>();
 
-/** Switchable pause/settings filter on the output (wide open by default). */
-let filter: BiquadFilterNode | null = null;
-type FilterMode = "open" | "lowpass" | "highpass";
-let filterMode: FilterMode = "open";
+/**
+ * The game's two menu filters, in series on the output as in src/audio/music-player.ts: a
+ * low-pass (the pause menu) and a high-pass (Settings), both wide open by default.
+ */
+let lowPass: BiquadFilterNode | null = null;
+let highPass: BiquadFilterNode | null = null;
 const openCutoff = 20000;
 const openHighPassCutoff = 10;
 
@@ -101,48 +103,45 @@ function audio(): { context: AudioContext; master: GainNode } {
     context = new AudioContext();
     master = context.createGain();
     master.gain.value = Number(volume.value);
-    filter = context.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.Q.value = 0.7;
-    filter.frequency.value = openCutoff;
-    master.connect(filter).connect(context.destination);
+    lowPass = context.createBiquadFilter();
+    lowPass.type = "lowpass";
+    lowPass.Q.value = 0.7;
+    lowPass.frequency.value = openCutoff;
+    highPass = context.createBiquadFilter();
+    highPass.type = "highpass";
+    highPass.Q.value = 0.7;
+    highPass.frequency.value = openHighPassCutoff;
+    master.connect(lowPass).connect(highPass).connect(context.destination);
   }
   return { context, master };
 }
 
-const muffleButton = element<HTMLButtonElement>("muffle");
-const highPassButton = element<HTMLButtonElement>("high-pass");
-const unmuffleButton = element<HTMLButtonElement>("unmuffle");
+/**
+ * Each filter button and the cut-offs it sets: the filter it names comes on and the other
+ * stays open, as the game's menus do.
+ */
+const filterSettings = [
+  { button: element<HTMLButtonElement>("muffle"), low: muffledCutoff, high: openHighPassCutoff },
+  { button: element<HTMLButtonElement>("high-pass"), low: openCutoff, high: muffledCutoff },
+  { button: element<HTMLButtonElement>("unmuffle"), low: openCutoff, high: openHighPassCutoff },
+];
 
-/** Sweep the selected pause/settings filter over the same two seconds used in game. */
-function sweepFilter(mode: FilterMode): void {
-  const { context } = audio();
-  const frequency = filter!.frequency;
+/** Ease one filter's cut-off over the same two seconds used in game. */
+function sweep(context: AudioContext, node: BiquadFilterNode, hz: number): void {
   const now = context.currentTime;
-  frequency.cancelScheduledValues(now);
-  frequency.setValueAtTime(frequency.value, now);
-  if (mode === "open") {
-    const clearTo = filterMode === "highpass" ? openHighPassCutoff : openCutoff;
-    frequency.exponentialRampToValueAtTime(clearTo, now + muffleSeconds);
-    if (filterMode === "highpass") {
-      window.setTimeout(() => {
-        if (filterMode !== "open") return;
-        filter!.type = "lowpass";
-        filter!.frequency.setValueAtTime(openCutoff, context.currentTime);
-      }, muffleSeconds * 1000);
-    }
-  } else {
-    filter!.type = mode;
-    frequency.exponentialRampToValueAtTime(muffledCutoff, now + muffleSeconds);
-  }
-  filterMode = mode;
-  muffleButton.disabled = mode === "lowpass";
-  highPassButton.disabled = mode === "highpass";
-  unmuffleButton.disabled = mode === "open";
+  node.frequency.cancelScheduledValues(now);
+  node.frequency.setValueAtTime(node.frequency.value, now);
+  node.frequency.exponentialRampToValueAtTime(hz, now + muffleSeconds);
 }
-muffleButton.addEventListener("click", () => sweepFilter("lowpass"));
-highPassButton.addEventListener("click", () => sweepFilter("highpass"));
-unmuffleButton.addEventListener("click", () => sweepFilter("open"));
+
+for (const chosen of filterSettings) {
+  chosen.button.addEventListener("click", () => {
+    const { context } = audio();
+    sweep(context, lowPass!, chosen.low);
+    sweep(context, highPass!, chosen.high);
+    for (const { button } of filterSettings) button.disabled = button === chosen.button;
+  });
+}
 
 function load(track: Track): Promise<AudioBuffer> {
   let pending = buffers.get(track.id);
