@@ -13,6 +13,7 @@
  */
 import { createSceneLayer } from "./scene-layer";
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { standardDeck, type CardBlock, type IdentityTrait } from "./cards";
 import { getMaterialDefinition, materialOf } from "./materials";
 import { createAttractTuningPanel } from "./attract-tuning-panel";
@@ -152,49 +153,6 @@ function fakeBackdrop(): THREE.Texture {
   return texture;
 }
 
-/**
- * A stand-in studio for the cards to reflect, faked rather than rendered (#147). A real
- * environment means a second PMREM pass and a scene to render into it; a card only needs
- * something bright above it and something dark below, which a vertical gradient gives, and it
- * costs one small texture. This is what makes the card faces read as glossy rather than flat.
- */
-function fakeStudioReflection(renderer: THREE.WebGLRenderer): THREE.Texture {
-  const source = document.createElement("canvas");
-  source.width = 64;
-  source.height = 32;
-  const context = source.getContext("2d")!;
-  const gradient = context.createLinearGradient(0, 0, 0, source.height);
-  // Overhead: a broad bright band, as if lit by a softbox.
-  gradient.addColorStop(0, "#ffffff");
-  gradient.addColorStop(0.35, "#cfd9ea");
-  // The horizon: the warm bounce off a floor.
-  gradient.addColorStop(0.55, "#8e7f6b");
-  gradient.addColorStop(0.8, "#2a2f3a");
-  gradient.addColorStop(1, "#0a0d12");
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, source.width, source.height);
-  // Two hot spots, so a tumbling card catches a highlight rather than a flat wash.
-  for (const [x, y, r] of [
-    [18, 8, 7],
-    [46, 5, 5],
-  ] as const) {
-    const spot = context.createRadialGradient(x, y, 0, x, y, r);
-    spot.addColorStop(0, "#ffffff");
-    spot.addColorStop(1, "#ffffff00");
-    context.fillStyle = spot;
-    context.fillRect(x - r, y - r, r * 2, r * 2);
-  }
-  const texture = new THREE.CanvasTexture(source);
-  texture.mapping = THREE.EquirectangularReflectionMapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  // Prefiltered once, so roughness in the material has something to blur.
-  const generator = new THREE.PMREMGenerator(renderer);
-  const prefiltered = generator.fromEquirectangular(texture).texture;
-  generator.dispose();
-  texture.dispose();
-  return prefiltered;
-}
-
 /** A value drawn from a mean and spread, never negative. Box-Muller, so it is symmetric. */
 function sample({ mean, deviation }: MeanSpread, random: () => number): number {
   if (deviation <= 0) return Math.max(0, mean);
@@ -225,6 +183,9 @@ export function createAttractScene(
   // cards sit in something and an edge separates from the dark. Faked as a texture, because a
   // real vignette would be a second render pass for a background nobody looks at directly.
   scene.background = fakeBackdrop();
+
+  /** What the cards reflect, once this scene's renderer exists (see `setEnvironment`). */
+  let environment: THREE.Texture | null = null;
 
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 120);
   camera.position.set(0, 0, cameraZ);
@@ -258,6 +219,7 @@ export function createAttractScene(
     // A card fades up from nothing over `fadeInSeconds`, so it does not pop into being at the
     // start of its travel. The material starts fully transparent; `update` raises it.
     for (const material of appearance.materials) material.opacity = 0;
+    reflect(appearance.materials);
 
     return {
       cube,
@@ -318,19 +280,31 @@ export function createAttractScene(
   /** Seconds until the next replacement, from the tuned spawn interval. */
   let sinceSpawn = 0;
 
-  let environment: THREE.Texture | null = null;
+  /**
+   * Point a card's materials at the attract renderer's own environment (#203). The materials
+   * are built with the game's `reflectionEnvironment`, which the game's renderer prefiltered in
+   * its own WebGL context; a texture cannot cross contexts, so in this renderer it is empty,
+   * and a near-mirror card reflecting nothing reads as dull grey whatever the lights do.
+   */
+  function reflect(materials: readonly THREE.MeshStandardMaterial[]): void {
+    for (const material of materials) {
+      material.envMap = environment;
+      material.needsUpdate = true;
+    }
+  }
 
   return {
     scene,
     camera,
     setEnvironment(renderer) {
       if (environment) return;
-      environment = fakeStudioReflection(renderer);
-      // The cards carry their own `envMap`, so this is what they reflect; the scene environment
-      // is a promise the material does not listen to. Set both anyway, for any material that
-      // arrives without one.
-      scene.environment = environment;
-      scene.environmentIntensity = 1.6;
+      // The game's own environment, a prefiltered RoomEnvironment as `createTableRenderer`
+      // makes for the hand, but built by this renderer so it exists in this WebGL context.
+      environment = new THREE.PMREMGenerator(renderer).fromScene(
+        new RoomEnvironment(),
+        0.04,
+      ).texture;
+      for (const card of cards) reflect(card.materials);
     },
     /** Change the tuning live: later cards use it, cards in flight keep theirs. */
     retune(next) {
