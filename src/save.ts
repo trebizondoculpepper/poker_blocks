@@ -11,8 +11,8 @@ import { stageKinds, type StageKind } from "./session-config";
 
 /**
  * Saved runs store card ids, not CardBlock objects: some traits hold functions, and the
- * deck definition is the source of truth for what a card is. Bump the version when the
- * shape changes; older records are then ignored rather than misread.
+ * deck definition is the source of truth for what a card is. New optional fields remain
+ * backward-compatible; bump the version for an incompatible shape change.
  */
 export const saveVersion = 1;
 export const saveKey = "poker-blocks.run";
