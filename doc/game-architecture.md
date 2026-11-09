@@ -398,6 +398,8 @@ The cards' randomness is cosmetic and comes from `Math.random`, never the sessio
 
 `src/scene-behaviours.ts` registers each scene trait against its own config type, and a scene composes whichever subset it needs. Behaviour therefore comes from the scene in front, and a scene that gains or loses a trait leaves the others alone.
 
+**Background traits bring their own layer (#189).** `tableBackground` and `attractBackground` each mount the canvas they draw on into the background layers (`src/scene-layer.ts`) while a scene composing them is on the stack, and remove it when the last such scene leaves. The canvas is created once and reused. A scene without a background trait has no background canvas in the page, so nothing has to be hidden, made transparent or covered.
+
 **Every game feature is a trait.** What a scene offers is exactly the traits it composes, so its definition lists its features. A scene without `handView` has no hand: it is neither drawn nor reachable. A scene without `discardBin` has no bin. Nothing appears by default, and nothing has to be hidden by a special case (#183).
 
 | Scene trait               | What it does while its scene is in front                                                                                                                                                    | Composed by                                 |

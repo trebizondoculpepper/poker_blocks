@@ -10,6 +10,7 @@
  *
  * Input stays on the back canvas: the front one passes pointer events through.
  */
+import { createSceneLayer } from "./scene-layer";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { setReflectionEnvironment } from "./visual/block-appearance";
@@ -27,11 +28,6 @@ export type TableRenderer = {
   /** Draw a cube (and its edges) above everything else while it is dragged. */
   setDragLayer(cube: THREE.Object3D, dragging: boolean): void;
   render(boardCamera: THREE.Camera, handCamera: THREE.Camera): void;
-  /**
-   * Draw the title's attract sequence instead of the table (#147), at quarter resolution into
-   * its own canvas; CSS blurs it. Pass null to stop drawing it.
-   */
-  attract(scene: THREE.Scene | null, camera: THREE.Camera | null, delta: number): void;
   /**
    * A scene composing `tableBackground` came to the front, or left (#147). The room and table
    * are drawn while any such scene is on the stack, so the title shows none of it.
@@ -56,21 +52,9 @@ export const backgroundLayer = 2;
 /** Stands in for a block in the back pass: casts its shadow, draws nothing itself. */
 const shadowOnly = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
 
-export function createTableRenderer(host: HTMLElement): TableRenderer {
-  /** How many scenes in front compose `tableBackground`; the table is drawn while any does. */
-  let tableScenes = 0;
+export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement): TableRenderer {
   /** How many scenes in front compose `handView`; the hand is drawn while any does. */
   let handScenes = 0;
-  // The attract sequence has its own renderer and canvas, so it can run at quarter resolution
-  // without disturbing the table's drawing.
-  const attractCanvas = document.createElement("canvas");
-  attractCanvas.className = "attract-canvas";
-  attractCanvas.setAttribute("aria-hidden", "true");
-  attractCanvas.hidden = true;
-  const attractRenderer = new THREE.WebGLRenderer({ canvas: attractCanvas, antialias: false });
-  attractRenderer.setPixelRatio(1);
-  attractRenderer.outputColorSpace = THREE.SRGBColorSpace;
-  host.append(attractCanvas);
 
   const scene = new THREE.Scene();
   const handScene = new THREE.Scene();
@@ -89,9 +73,14 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
   renderer.domElement.classList.add("table-canvas", "table-canvas-back");
   front.domElement.classList.add("table-canvas", "table-canvas-front");
   front.domElement.setAttribute("aria-hidden", "true");
-  // The front canvas follows the back one at once, so HUD panels added later sit above the
-  // back canvas, and the front canvas's z-index lifts it over them (src/style.css).
-  host.append(renderer.domElement, front.domElement);
+  // The back canvas is the `tableBackground` trait's layer (#189): in the page only while a
+  // scene composing it is on the stack, so a scene without a table has no table canvas at all.
+  const backLayer = createSceneLayer(
+    () => backgrounds.append(renderer.domElement),
+    () => renderer.domElement.remove(),
+  );
+  // The front canvas's z-index lifts it over the HUD panels (src/style.css).
+  host.append(front.domElement);
 
   // The hand keeps its neutral studio light; the board sits in the warmer card room,
   // whose overhead lamp (see createCardRoom) adds the shadows.
@@ -154,10 +143,8 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
       cube.traverse((object) => (dragging ? object.layers.set(dragLayer) : object.layers.set(0)));
     },
     render(boardCamera, handCamera) {
-      // The back canvas is cleared even when the table is off, so a scene leaving the table
-      // behind does not leave its last frame on screen.
-      if (tableScenes > 0) renderBack(boardCamera);
-      else renderer.clear();
+      // Drawn only while the table's layer is in the page.
+      if (backLayer.mounted) renderBack(boardCamera);
       // The front canvas: the board's blocks (the default layer only), then the hand over
       // them, then dragged blocks on a fresh depth buffer, so nothing can clip into them.
       front.clear();
@@ -170,36 +157,14 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
       boardCamera.layers.mask = layers;
       if (handScenes > 0) renderHand(handCamera);
     },
-    tableEntered(entered) {
-      tableScenes = Math.max(0, tableScenes + (entered ? 1 : -1));
-    },
+    tableEntered: (entered) => backLayer.entered(entered),
     handEntered(entered) {
       handScenes = Math.max(0, handScenes + (entered ? 1 : -1));
-    },
-    attract(attractScene, attractCamera, delta) {
-      if (!attractScene || !attractCamera) {
-        attractCanvas.hidden = true;
-        return;
-      }
-      attractCanvas.hidden = false;
-      // Quarter resolution: the blur hides the detail, and the cards are a backdrop.
-      const width = Math.max(1, Math.floor((host.clientWidth || 1) / 4));
-      const height = Math.max(1, Math.floor((host.clientHeight || 1) / 4));
-      const size = attractRenderer.getSize(new THREE.Vector2());
-      if (size.x !== width || size.y !== height) {
-        attractRenderer.setSize(width, height, false);
-        (attractCamera as THREE.PerspectiveCamera).aspect = width / height;
-        (attractCamera as THREE.PerspectiveCamera).updateProjectionMatrix();
-      }
-      attractRenderer.render(attractScene, attractCamera);
-      void delta;
     },
     setShadowQuality: (quality) => cardRoom.setShadowQuality(quality),
     frame: (center, radius, delta) => cardRoom.frame(center, radius, delta),
     dispose() {
       renderer.dispose();
-      attractRenderer.dispose();
-      attractCanvas.remove();
       front.dispose();
     },
   };
