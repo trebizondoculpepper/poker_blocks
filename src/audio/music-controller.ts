@@ -13,13 +13,11 @@ import type { MusicPlayer } from "./music-player";
 export type MusicController = {
   /** Horns or sleaze; keeps playing if a title track already is. */
   playTitle(): void;
-  /** The mellow loop reserved for the settings screen. */
-  playSettings(): void;
   /** A new normal stage: switch to a random stage vibe (never the same one twice running). */
   switchToRandomStageTrack(): void;
   /** A boss stage: switch to the boss loop. */
   switchToBossTrack(): void;
-  /** Back to the table (closing settings): the current stage's track. */
+  /** Back to the table (from the title or a lost run's screen): the current stage's track. */
   resumeStage(): void;
   /**
    * Filter whatever is playing, easing over about 2 s; the track does not change. `lowpass`
@@ -111,7 +109,6 @@ export function createMusicController(
         if (woundDown || !plan.title.includes(player.current ?? ""))
           start(pickTrack("title", tracks, random));
       }),
-    playSettings: () => request(() => start(pickTrack("settings", tracks, random))),
     switchToRandomStageTrack() {
       stageTrack = pickTrack("stage", tracks, random, stageTrack);
       request(playStage);

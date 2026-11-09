@@ -11,7 +11,6 @@ function setup() {
       void calls.push(args.length ? `${name} ${args.join(" ")}` : name);
   const music = {
     playTitle: log("playTitle"),
-    playSettings: log("playSettings"),
     switchToRandomStageTrack: log("randomStage"),
     switchToBossTrack: log("boss"),
     resumeStage: log("resumeStage"),

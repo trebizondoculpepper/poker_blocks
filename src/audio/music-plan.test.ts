@@ -17,11 +17,10 @@ describe("music plan", () => {
     expect(pickTrack("title", all, () => 0.99)).toBe("stripped-sleaze");
   });
 
-  it("reserves the boss and settings tracks", () => {
+  it("keeps the boss loop and the reserved loops out of the stage pool", () => {
     expect(pickTrack("boss", all)).toBe(defaultMusicPlan.boss);
-    expect(pickTrack("settings", all)).toBe(defaultMusicPlan.settings);
     expect(stagePool(all)).not.toContain(defaultMusicPlan.boss);
-    expect(stagePool(all)).not.toContain(defaultMusicPlan.settings);
+    expect(stagePool(all)).not.toContain(defaultMusicPlan.reserved[0]);
   });
 
   it("gives stages a random vibe from the pool, avoiding an immediate repeat", () => {

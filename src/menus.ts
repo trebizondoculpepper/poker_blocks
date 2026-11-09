@@ -3,7 +3,8 @@
 import { playSfx } from "./audio/sfx";
 import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
-import type { MotionSetting, Settings, ShadowSetting } from "./settings";
+import type { Settings } from "./settings";
+import { createSettingsPanel } from "./settings-panel";
 
 /** Why Continue is greyed out on the title screen. */
 export const noGameInProgress = "There is no game in progress.";
@@ -45,22 +46,7 @@ export type Menus = {
   readonly isOpen: boolean;
 };
 
-const shadowLabels: Record<ShadowSetting, string> = {
-  auto: "Automatic",
-  high: "High",
-  low: "Low",
-  off: "Off",
-};
-
-const motionLabels: Record<MotionSetting, string> = {
-  system: "Follow system",
-  reduced: "Reduced",
-  full: "Full",
-};
-
 export function createMenus(host: HTMLElement, initial: Settings, callbacks: MenuCallbacks): Menus {
-  let settings = { ...initial };
-
   const title = overlay("title-screen", "Poker Blocks");
   title.panel.insertAdjacentHTML(
     "beforeend",
@@ -88,45 +74,10 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   );
 
   const settingsScreen = overlay("settings-screen", "Settings");
-  settingsScreen.panel.insertAdjacentHTML(
-    "beforeend",
-    `<h2 class="menu-heading">SETTINGS</h2>
-     <label class="menu-field">
-       <span>Sound volume</span>
-       <input type="range" min="0" max="100" step="5" data-menu="volume" />
-     </label>
-     <label class="menu-field menu-check">
-       <input type="checkbox" data-menu="muted" />
-       <span>Mute sound</span>
-     </label>
-     <label class="menu-field menu-check">
-       <input type="checkbox" data-menu="sfx" />
-       <span>Sound effects</span>
-     </label>
-     <label class="menu-field menu-check">
-       <input type="checkbox" data-menu="music" />
-       <span>Music</span>
-     </label>
-     <fieldset class="menu-field">
-       <legend>Motion</legend>
-       ${(Object.keys(motionLabels) as MotionSetting[])
-         .map(
-           (value) =>
-             `<label class="menu-check"><input type="radio" name="motion" value="${value}" /> <span>${motionLabels[value]}</span></label>`,
-         )
-         .join("")}
-     </fieldset>
-     <fieldset class="menu-field">
-       <legend>Shadows</legend>
-       ${(Object.keys(shadowLabels) as ShadowSetting[])
-         .map(
-           (value) =>
-             `<label class="menu-check"><input type="radio" name="shadows" value="${value}" /> <span>${shadowLabels[value]}</span></label>`,
-         )
-         .join("")}
-     </fieldset>
-     <div class="menu-buttons"><button type="button" data-menu="back">Back</button></div>`,
-  );
+  const settingsPanel = createSettingsPanel(settingsScreen.panel, initial, {
+    onChange: (next) => callbacks.onSettingsChange(next),
+    onBack: () => callbacks.onAction("back"),
+  });
 
   const gameOver = overlay("game-over-screen", "Game over");
   gameOver.panel.insertAdjacentHTML(
@@ -169,16 +120,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const newButton = find<HTMLButtonElement>(title.panel, "new");
   const confirm = find<HTMLDivElement>(title.panel, "confirm");
   const choices = find<HTMLDivElement>(pauseMenu.panel, "choices");
-  const volume = find<HTMLInputElement>(settingsScreen.panel, "volume");
-  const muted = find<HTMLInputElement>(settingsScreen.panel, "muted");
-  const sfx = find<HTMLInputElement>(settingsScreen.panel, "sfx");
-  const music = find<HTMLInputElement>(settingsScreen.panel, "music");
-  const motionInputs = [
-    ...settingsScreen.panel.querySelectorAll<HTMLInputElement>('input[name="motion"]'),
-  ];
-  const shadowInputs = [
-    ...settingsScreen.panel.querySelectorAll<HTMLInputElement>('input[name="shadows"]'),
-  ];
 
   function open(screen: HTMLElement): void {
     title.root.hidden = screen !== title.root;
@@ -232,17 +173,11 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   /** Settings is a panel over whatever is in front (the title or the pause menu). */
   function showSettings(): void {
-    volume.value = String(Math.round(settings.volume * 100));
-    muted.checked = settings.muted;
-    sfx.checked = settings.sfx;
-    music.checked = settings.music;
-    sfx.disabled = music.disabled = settings.muted;
-    motionInputs.forEach((input) => (input.checked = input.value === settings.motion));
-    shadowInputs.forEach((input) => (input.checked = input.value === settings.shadows));
+    settingsPanel.refresh();
     cover(settingsScreen.root);
     settingsScreen.root.hidden = false;
     settingsButton.hidden = true;
-    settingsScreen.panel.querySelector<HTMLElement>("input")?.focus();
+    settingsPanel.focus();
   }
 
   function hideSettings(): void {
@@ -277,11 +212,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     pauseMenu.root.hidden = true;
     uncover(pauseMenu.root);
     settingsButton.hidden = !title.root.hidden || !gameOver.root.hidden || !stageWon.root.hidden;
-  }
-
-  function change(next: Partial<Settings>): void {
-    settings = { ...settings, ...next };
-    callbacks.onSettingsChange(settings);
   }
 
   continueButton.addEventListener("click", () => {
@@ -324,39 +254,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     playSfx("ui.click");
     callbacks.onAction("openPause");
   });
-  find(settingsScreen.panel, "back").addEventListener("click", () => {
-    playSfx("ui.back");
-    callbacks.onAction("back");
-  });
-  // Preview the new volume once the slider is released, so dragging is not noisy.
-  volume.addEventListener("input", () => change({ volume: Number(volume.value) / 100 }));
-  volume.addEventListener("change", () => playSfx("ui.click"));
-  muted.addEventListener("change", () => {
-    change({ muted: muted.checked });
-    // The channel toggles sit under the master mute, so they read as off while it is on.
-    sfx.disabled = music.disabled = muted.checked;
-    playSfx("ui.click");
-  });
-  sfx.addEventListener("change", () => {
-    change({ sfx: sfx.checked });
-    playSfx("ui.click");
-  });
-  music.addEventListener("change", () => {
-    change({ music: music.checked });
-    playSfx("ui.click");
-  });
-  motionInputs.forEach((input) =>
-    input.addEventListener("change", () => {
-      change({ motion: input.value as MotionSetting });
-      playSfx("ui.click");
-    }),
-  );
-  shadowInputs.forEach((input) =>
-    input.addEventListener("change", () => {
-      change({ shadows: input.value as ShadowSetting });
-      playSfx("ui.click");
-    }),
-  );
   for (const button of host.querySelectorAll<HTMLButtonElement>(".menu-panel button")) {
     button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
   }
