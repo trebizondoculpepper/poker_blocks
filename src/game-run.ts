@@ -25,6 +25,7 @@ import {
   type StageContext,
 } from "./passives";
 import { discardPassiveEffects, scoreFieldWithPassives } from "./passive-effects";
+import type { RandomCursor } from "./random";
 import type { ScoredLine } from "./scoring";
 import type { ShopOffer } from "./shop-stock";
 
@@ -47,6 +48,11 @@ export type RunSnapshot = {
   rewarded?: { stage: string; reward: StageReward };
   /** The seed a run setup step dealt this run's deck from, so Continue rebuilds the same deck. */
   seed?: number;
+  /**
+   * The session's random seed and how far its sequence had reached, so Continue resumes the
+   * same sequence rather than replaying it (#134).
+   */
+  random?: RandomCursor;
 };
 
 /**
@@ -66,6 +72,7 @@ export class GameRun {
   private readonly passiveEvents = new PassiveEventQueue();
   private scoredLines: ScoredLine[] = [];
   private rewarded: { stage: string; reward: StageReward } | null = null;
+  private randomCursor: RandomCursor | undefined;
   private runSeed: number | undefined;
   /** The stage (round:phase) whose final stage.won or stage.lost has been emitted. */
   private decidedStage: string | null = null;
@@ -106,6 +113,7 @@ export class GameRun {
     session.runStats = snapshot.stats ?? emptyRunStats;
     session.rewarded = snapshot.rewarded ?? null;
     session.runSeed = snapshot.seed;
+    session.randomCursor = snapshot.random;
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
     // A stage saved after it was decided already announced its outcome.
     session.decidedStage =
@@ -210,6 +218,11 @@ export class GameRun {
     this.lifecycle(outcome === "won" ? "stage.won" : "stage.lost");
   }
 
+  /** Where the session's random sequence has reached, recorded with the run (#134). */
+  setRandomCursor(cursor: RandomCursor): void {
+    this.randomCursor = cursor;
+  }
+
   snapshot(): RunSnapshot {
     return {
       round: this.currentRound,
@@ -220,6 +233,7 @@ export class GameRun {
       stats: this.runStats,
       ...(this.rewarded ? { rewarded: this.rewarded } : {}),
       ...(this.runSeed === undefined ? {} : { seed: this.runSeed }),
+      ...(this.randomCursor === undefined ? {} : { random: this.randomCursor }),
     };
   }
 

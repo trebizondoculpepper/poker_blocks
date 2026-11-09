@@ -42,10 +42,15 @@ export type Overlays = {
   showSettings(): void;
   hideSettings(): void;
   /** The game over screen, shown by the game over scene's `gameOverScreen` trait. */
-  showGameOver(stats: RunStats, choices: readonly MenuChoice[]): void;
+  showGameOver(stats: RunStats, choices: readonly MenuChoice[], seed: number | null): void;
   hideGameOver(): void;
   /** The stage-won pop-up, pushed over the stage; its button runs `onContinue`. */
-  showStageWon(reward: StageReward, action: string, onContinue: () => void): void;
+  showStageWon(
+    reward: StageReward,
+    action: string,
+    onContinue: () => void,
+    seed: number | null,
+  ): void;
   /** Show the inspection tooltip near a pointer, or hide it with a null label. */
   inspect(label: string | null, clientX?: number, clientY?: number): void;
   hideTooltip(): void;
@@ -139,11 +144,11 @@ export function createOverlays(
     hideMenu: () => menus.hideMenu(),
     showSettings: () => menus.showSettings(),
     hideSettings: () => menus.hideSettings(),
-    showGameOver: (stats, choices) => menus.showGameOver(stats, choices),
+    showGameOver: (stats, choices, seed) => menus.showGameOver(stats, choices, seed),
     hideGameOver: () => menus.hideGameOver(),
-    showStageWon(reward, action, onContinue) {
+    showStageWon(reward, action, onContinue, seed) {
       scenes.push("stage-won");
-      menus.showStageWon(reward, action, onContinue);
+      menus.showStageWon(reward, action, onContinue, seed);
     },
     inspect(label, clientX = 0, clientY = 0) {
       if (!label) {

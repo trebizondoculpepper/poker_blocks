@@ -36,6 +36,7 @@ function recordingHost() {
       },
       run: {
         hasSave: () => false,
+        seed: () => 4242,
         shopStock: () => [{ kind: "card", block: {} as never }],
         dispatch: (action) => void calls.push(`action:${action}`),
         runStats: () => ({

@@ -38,6 +38,7 @@ import {
 } from "./game-modes";
 import { clearRun, loadRun, saveRun, type SaveStorage } from "./save";
 import type { SceneManager } from "./scenes";
+import { Randomizer, newSeed } from "./random";
 import { demoRunRules, type RunRules } from "./run-rules";
 import { createRunSetupRegistry } from "./run-setup-behaviours";
 import type { RunSetupServices, RunSetupStep } from "./run-setup";
@@ -121,6 +122,8 @@ export type RunController = {
   runStats(): RunStats;
   /** Whether a saved run this mode can continue exists (the title's `hasSave` condition). */
   hasSave(): boolean;
+  /** The session's random seed, shown on the win and lose screens so a run can be replayed. */
+  seed(): number;
   /**
    * Carry out a named action from a menu item or key (#87): a navigation action follows the
    * mode's navigation data; a game action (such as `quitToTitle`) runs its handler.
@@ -170,7 +173,10 @@ export function createRunController<Context>(options: {
   let runSaveKey = modeTraits.save.key;
   let cards: readonly CardBlock[] = standardDeck;
   // A fresh run sits behind the title screen until the player chooses Continue or New game.
-  let game = new GameRun(dealerRegistry, runRules, cards);
+  // One reproducible sequence for the session (#134). A new run reseeds it; Continue restores
+  // the saved seed and position, so the same requests replay.
+  let randomizer = new Randomizer(newSeed());
+  let game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
   let settings = loadSettings(storage);
   let reducedMotion = false;
   let stageWonAt: number | null = null;
@@ -184,8 +190,8 @@ export function createRunController<Context>(options: {
   function setupServices(): RunSetupServices {
     return {
       standardDeck,
-      newSeed: () => Math.floor(Math.random() * 4294967296),
-      random: Math.random,
+      newSeed: () => randomizer.int("run.setup.seed", 0, 4294967295),
+      random: () => randomizer.next(),
     };
   }
 
@@ -286,6 +292,7 @@ export function createRunController<Context>(options: {
 
   /** Save at a safe point: never while a placement, discard or score presentation is running. */
   function autosave(): void {
+    game.setRandomCursor({ seed: randomizer.seed, position: randomizer.cursor });
     saveRun(storage, game.snapshot(), runSaveKey, currentMode.flow);
   }
 
@@ -314,7 +321,12 @@ export function createRunController<Context>(options: {
     if (!reward) return;
     updateHud();
     autosave();
-    services.overlays.showStageWon(reward, "Visit shop", () => void advanceFromStage());
+    services.overlays.showStageWon(
+      reward,
+      "Visit shop",
+      () => void advanceFromStage(),
+      randomizer.seed,
+    );
   }
 
   function takeNextAction(): void {
@@ -390,11 +402,15 @@ export function createRunController<Context>(options: {
     runRules = runSetup.policy(steps, baseRunRules(currentMode), services);
     const dealt = runSetup.deck(steps, { deck: standardDeck }, services);
     cards = dealt.deck;
-    const opening = new GameRun(dealerRegistry, runRules, cards).snapshot();
+    const opening = new GameRun(dealerRegistry, runRules, cards, () =>
+      randomizer.next(),
+    ).snapshot();
     // The run records the seed of the deck it was dealt, so Continue rebuilds the same one.
     const snapshot = { ...opening, ...(dealt.seed === undefined ? {} : { seed: dealt.seed }) };
     const started = runSetup.start(steps, { rules: runRules, deck: dealt, snapshot }, services);
-    return GameRun.fromSnapshot(dealerRegistry, runRules, cards, started.snapshot);
+    return GameRun.fromSnapshot(dealerRegistry, runRules, cards, started.snapshot, () =>
+      randomizer.next(),
+    );
   }
 
   /** The shop trait supplies stock when entering, including saves from before offers existed. */
@@ -402,10 +418,21 @@ export function createRunController<Context>(options: {
     if (!modeTraits.shop || session.phase !== "shop" || session.state.shopStock !== undefined)
       return session;
     const snapshot = session.snapshot();
-    return GameRun.fromSnapshot(dealerRegistry, runRules, cards, {
-      ...snapshot,
-      state: shopPreviewState(snapshot.state, snapshot.state.coins, Math.random, modeTraits.shop),
-    });
+    return GameRun.fromSnapshot(
+      dealerRegistry,
+      runRules,
+      cards,
+      {
+        ...snapshot,
+        state: shopPreviewState(
+          snapshot.state,
+          snapshot.state.coins,
+          () => randomizer.next(),
+          modeTraits.shop,
+        ),
+      },
+      () => randomizer.next(),
+    );
   }
 
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
@@ -449,7 +476,11 @@ export function createRunController<Context>(options: {
     loadRun(storage, cardsForSavedRun, dealerRegistry, runSaveKey, currentMode.flow);
   const resume = (snapshot: NonNullable<ReturnType<typeof loadSaved>>) => {
     cards = cardsForSavedRun(snapshot.seed);
-    return GameRun.fromSnapshot(dealerRegistry, runRules, cards, snapshot);
+    // Continue resumes the session's random sequence where it left off, so the run replays
+    // rather than drawing fresh (#134). A save without a cursor keeps the seeded default.
+    if (snapshot.random)
+      randomizer = new Randomizer(snapshot.random.seed, snapshot.random.position);
+    return GameRun.fromSnapshot(dealerRegistry, runRules, cards, snapshot, () => randomizer.next());
   };
 
   /**
@@ -579,7 +610,7 @@ export function createRunController<Context>(options: {
       // The active mode's own save slot, never a named mode.
       clearRun(storage, runSaveKey);
       // The run on screen is gone too, so the table returns to its empty start.
-      game = new GameRun(dealerRegistry, runRules, cards);
+      game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
       stageWonAt = gameOverAt = null;
       services.presenter.reset();
       resetTable();
@@ -683,6 +714,7 @@ export function createRunController<Context>(options: {
     shopStock: () => game.state.shopStock ?? [],
     runStats: () => game.stats,
     hasSave,
+    seed: () => randomizer.seed,
     dispatch,
     buy(id, destination) {
       const bought = game.buyShopOffer(id, destination);

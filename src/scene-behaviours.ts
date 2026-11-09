@@ -33,7 +33,7 @@ export type SceneHost = {
     input: Pick<TableInput, "setFieldActive" | "cancelGestures">;
     shop: ShopView;
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
-    run: Pick<RunController, "shopStock" | "dispatch" | "hasSave" | "runStats">;
+    run: Pick<RunController, "shopStock" | "dispatch" | "hasSave" | "runStats" | "seed">;
     overlays: Pick<
       Overlays,
       | "showMenu"
@@ -143,7 +143,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   behaviours.register("gameOverScreen", {
     enter({ services }, { items }) {
-      services.overlays.showGameOver(services.run.runStats(), items);
+      services.overlays.showGameOver(services.run.runStats(), items, services.run.seed());
     },
     exit: ({ services }) => services.overlays.hideGameOver(),
   });
