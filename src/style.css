@@ -347,7 +347,8 @@ body,
   position: absolute;
   z-index: 4;
   top: 22px;
-  right: 22px;
+  /* Left of the settings gear (44px wide, 22px from the edge). */
+  right: calc(max(22px, env(safe-area-inset-right)) + 54px);
   width: auto;
   margin: 0;
 }
@@ -355,7 +356,13 @@ body,
 @media (max-width: 700px) {
   .shop-exit {
     top: 12px;
-    right: 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  /* The gear moves below the deck panel here, so the corner is free. */
+  .shop-exit {
+    right: max(12px, env(safe-area-inset-right));
   }
 }
 
