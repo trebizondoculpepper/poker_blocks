@@ -12,6 +12,7 @@
  */
 import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
 import type { AudioService } from "./audio-service";
+import type { CameraViewService } from "./camera-view";
 import type { Overlays } from "./overlays";
 import type { HudPanels } from "./hud-panels";
 import type { RunController } from "./run-controller";
@@ -33,7 +34,11 @@ export type SceneHost = {
     input: Pick<TableInput, "setFieldActive" | "cancelGestures">;
     shop: ShopView;
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
-    run: Pick<RunController, "shopStock" | "dispatch" | "hasSave" | "runStats" | "stageReward">;
+    run: Pick<
+      RunController,
+      "shopStock" | "dispatch" | "hasSave" | "runStats" | "reducedMotion" | "stageReward"
+    >;
+    cameraView: Pick<CameraViewService, "beginShopEntrance">;
     overlays: Pick<
       Overlays,
       | "showMenu"
@@ -161,6 +166,16 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   // A play scene starts its own music as it comes in front; covering and uncovering it (the
   // pause menu) neither restarts nor changes it.
+  behaviours.register("enterSound", {
+    enter: ({ services }, { sfx }) => services.sound(sfx),
+  });
+  // The theatrical arrival (#19): the camera rises to frame the stock as the shop comes in
+  // front. Reduced motion keeps the camera still.
+  behaviours.register("shopEntrance", {
+    enter({ services }) {
+      if (!services.run.reducedMotion) services.cameraView.beginShopEntrance();
+    },
+  });
   behaviours.register("musicTrack", {
     enter: ({ services }, { pool }) => services.audio.playStageMusic(pool),
   });

@@ -47,6 +47,10 @@ export type SceneTraits = {
    * boss loop (#92). Quiet modes keep their stages silent.
    */
   musicTrack: { pool: StageMusicPool };
+  /** Entering this scene plays a sound: a stage's start, the shop opening (#93). */
+  enterSound: { sfx: SoundEffectId };
+  /** Entering the shop runs its camera entrance, unless motion is reduced (#93). */
+  shopEntrance: Record<never, never>;
   /**
    * The title screen is shown while this scene is in front: its panel, and its items whose
    * conditions hold (Continue needs a save). Choosing an item dispatches its action.
@@ -186,12 +190,41 @@ export const sceneDefinitions = [
       keyAction: { key: "Escape", action: "back", sfx: "ui.back" },
     },
   },
-  { name: "stage-1", traits: { ...playSceneTraits, musicTrack: { pool: "stage" } } },
-  { name: "stage-2", traits: { ...playSceneTraits, musicTrack: { pool: "stage" } } },
-  { name: "boss", traits: { ...playSceneTraits, musicTrack: { pool: "boss" } } },
+  {
+    name: "stage-1",
+    traits: {
+      ...playSceneTraits,
+      musicTrack: { pool: "stage" },
+      enterSound: { sfx: "round.start" },
+    },
+  },
+  {
+    name: "stage-2",
+    traits: {
+      ...playSceneTraits,
+      musicTrack: { pool: "stage" },
+      enterSound: { sfx: "round.start" },
+    },
+  },
+  {
+    name: "boss",
+    traits: {
+      ...playSceneTraits,
+      musicTrack: { pool: "boss" },
+      enterSound: { sfx: "round.start" },
+    },
+  },
   {
     name: "shop",
-    traits: { coinsPanel: {}, shopExit: {}, shopStock: {}, runInPlay: {}, ...escapeOpensPause },
+    traits: {
+      coinsPanel: {},
+      shopExit: {},
+      shopStock: {},
+      runInPlay: {},
+      enterSound: { sfx: "shop.open" },
+      shopEntrance: {},
+      ...escapeOpensPause,
+    },
   },
   {
     name: "stage-won",
