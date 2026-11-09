@@ -29,11 +29,15 @@
             <input id="jitter" type="checkbox" />
             Random pitch ±8%
           </label>
-          <button type="button" id="chain">Line chain ×5</button>
+          <label>
+            Chain
+            <select id="chain-sound" aria-label="Sound to preview as a rising chain"></select>
+          </label>
+          <button type="button" id="chain">Chain ×5</button>
         </div>
       </header>
       <ol id="sounds" class="sounds"></ol>
     </main>
-    <script type="module" src="/src/listening-room/main.ts"></script>
+    <script type="module" src="/src/tools/listening-room/main.ts"></script>
   </body>
 </html>

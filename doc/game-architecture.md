@@ -141,7 +141,11 @@ The proposed hand and passive rack are ordered zones in `GameState`. A generic r
 
 ## Passive categories
 
-Each passive category is a trait, and the **category facet** (`src/passive-categories.ts`) is the set of them. A **facet** is a group of traits of which a block composes exactly one. Every passive composes exactly one category trait, and a test enforces it. A category trait brings presentation defaults (block colours and an appearance finish) and no behaviour: gameplay rule evaluation never reads it, and a test enforces that too. A definition's own `palette` overrides the default.
+Each passive category is a trait, and the **category facet** (`src/passive-categories.ts`) is the set of them. A **facet** is a group of traits of which a block composes exactly one. Every passive composes exactly one category trait, and a test enforces it. A category trait brings presentation defaults (block colours, an appearance finish, an activation visual and sound, and for Scoring an accent tint from its operations) and no behaviour: gameplay rule evaluation never reads it, and a test enforces that too. A definition's own `palette` overrides the default.
+
+## Balance config and resale
+
+Tuning numbers live on the definition they belong to, never in a side table keyed by identity: a passive's `shop` balance (base price, unlock round) is on its definition (#7), and its block carries the base price as a `priced` trait. `validatePassiveBalance` (`src/balance.ts`) checks every definition's balance in one place, and a test requires one for every passive the shop can stock. Prices are fixed data; anything that changes a price is a modifier applied on top. Selling uses `resaleValue` (`src/resale.ts`): the default policy (half the `priced` base price, rounded down, at least 1), then `RunRules.resaleModifiers` in order. That list is the extension seam for future sale-modifying passives. The sale transaction (`GameRun.sellPassive`) asks the policy; the drop target and the run controller never compute a payout, and a test checks they don't.
 
 ## Line scoring
 

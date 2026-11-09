@@ -889,3 +889,9 @@ body,
     height: 30px;
   }
 }
+
+/* Continue with no saved run: shown, greyed out, and explained on hover (#10). */
+[data-menu="continue"][aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

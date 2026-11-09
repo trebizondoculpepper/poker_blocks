@@ -1,5 +1,5 @@
 import { Registry } from "./core/registry";
-import { categoryDefaults, type PassiveCategoryTraits } from "./passive-categories";
+import { categoryPalette, type PassiveCategoryTraits } from "./passive-categories";
 import type { EventRule } from "./event-rules";
 import type { BlockMaterial } from "./materials";
 import type { StageKind } from "./run-rules";
@@ -33,6 +33,8 @@ export type PassiveBlock = {
     appearance?: { symbol: string; palette: PassivePalette };
     passive: { traitId: string; rules?: readonly PassiveRule[]; eventRules?: readonly EventRule[] };
     inspectable: InspectableTrait;
+    /** What it cost in the shop, before modifiers; the resale policy reads it (#103). */
+    priced?: { basePrice: number };
   };
 };
 
@@ -57,6 +59,9 @@ export type PassiveTraitDefinition = {
 
 export type PassivePalette = { face: string; ink: string; edge: string };
 
+/** A passive's shop balance: fixed data; price modifiers apply on top, never here. */
+export type PassiveShopBalance = { basePrice: number; unlockRound: number };
+
 export type PassiveDefinition = {
   id: string;
   name: string;
@@ -68,9 +73,14 @@ export type PassiveDefinition = {
    * presentation defaults only and is never read by gameplay rules.
    */
   categoryTrait: Partial<PassiveCategoryTraits>;
-  /** Overrides the category's default colours for this passive. */
+  /** Overrides the category's default colours; only where an explicit design calls for it. */
   palette?: PassivePalette;
   rules: readonly PassiveRule[];
+  /**
+   * Its shop balance (doc/game.md, "Shop rules"): base purchase price in coins and the first
+   * round it can be stocked. Absent only on a retired passive.
+   */
+  shop?: PassiveShopBalance;
   /** Excluded from new draws; kept so a save that names it still resolves. */
   retired?: boolean;
 };
@@ -83,47 +93,45 @@ passiveTraits.register("passive.event-rules", {
   listensTo: [],
 });
 
-const palette = (face: string, ink: string, edge: string) => ({ face, ink, edge });
 const definitions: PassiveDefinition[] = [
   {
     id: "do-nothing",
-    categoryTrait: { utilityCategory: {} },
+    categoryTrait: { effectCategory: {} },
     name: "Do Nothing",
     symbol: "∅",
     description: "Has no effect. Unlimited use.",
     traitId: "passive.event-rules",
-    palette: palette("#f4f0e8", "#28313a", "#4c5158"),
     rules: [],
     retired: true,
   },
   {
     id: "double-line",
-    categoryTrait: { scoringCategory: {} },
+    shop: { basePrice: 4, unlockRound: 1 },
+    categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "×2",
     symbol: "×2",
     description: "Doubles every scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    palette: palette("#172b50", "#e4e9f1", "#9baec9"),
     rules: [{ on: "score.beforeLineFinalized", effect: { kind: "multiply-line", factor: 2 } }],
   },
   {
     id: "quad-line",
-    categoryTrait: { scoringCategory: {} },
+    shop: { basePrice: 9, unlockRound: 2 },
+    categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "×4",
     symbol: "×4",
     description: "Quadruples every scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    palette: palette("#34205c", "#f4d87f", "#b892e6"),
     rules: [{ on: "score.beforeLineFinalized", effect: { kind: "multiply-line", factor: 4 } }],
   },
   {
     id: "gold-standard",
+    shop: { basePrice: 5, unlockRound: 4 },
     categoryTrait: { economyCategory: {} },
     name: "Gold Standard",
     symbol: "$",
     description: "When you win a stage, +1 coin for each gold block still in your hand.",
     traitId: "passive.event-rules",
-    palette: palette("#6b4a10", "#ffe9a3", "#d9ad3c"),
     rules: [
       {
         on: "stage.won",
@@ -134,12 +142,12 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "carnivore",
-    categoryTrait: { scoringCategory: {} },
+    shop: { basePrice: 3, unlockRound: 3 },
+    categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "Carnivore",
     symbol: "◈",
     description: "Doubles the base value of each meat block in a scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    palette: palette("#65242a", "#ffe8dc", "#ac6260"),
     rules: [
       {
         on: "score.beforeBlockValue",
@@ -150,12 +158,12 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "woodworker",
-    categoryTrait: { scoringCategory: {} },
+    shop: { basePrice: 4, unlockRound: 1 },
+    categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Woodworker",
     symbol: "✥",
     description: "Adds 3 to the base value of each wood block in a scored line. Unlimited use.",
     traitId: "passive.event-rules",
-    palette: palette("#ac7440", "#37231b", "#e0b879"),
     rules: [
       {
         on: "score.beforeBlockValue",
@@ -166,13 +174,13 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "crossroads",
-    categoryTrait: { scoringCategory: {} },
+    shop: { basePrice: 2, unlockRound: 1 },
+    categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Crossroads",
     symbol: "✳",
     description:
       "Adds 3 points for each block in a scored line that crosses another line. Unlimited use.",
     traitId: "passive.event-rules",
-    palette: palette("#354951", "#e9f3f2", "#8ba8ae"),
     rules: [
       {
         on: "score.beforeLineFinalized",
@@ -183,13 +191,13 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "long-haul",
-    categoryTrait: { scoringCategory: {} },
+    shop: { basePrice: 4, unlockRound: 1 },
+    categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Long Haul",
     symbol: "↗",
     description:
       "Subtracts 5 from two-block lines; adds 5 to lines of three or more. Final scores cannot go below zero. Unlimited use.",
     traitId: "passive.event-rules",
-    palette: palette("#292b2d", "#f1e8d4", "#b7aa94"),
     rules: [
       {
         on: "score.beforeLineFinalized",
@@ -205,22 +213,22 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "scrapper",
+    shop: { basePrice: 8, unlockRound: 2 },
     categoryTrait: { economyCategory: {} },
     name: "Scrapper",
     symbol: "⚙",
     description: "Earns 1 coin for each block discarded. Unlimited use.",
     traitId: "passive.event-rules",
-    palette: palette("#5c6267", "#f4cd70", "#b4a28b"),
     rules: [{ on: "discard.completed", effect: { kind: "add-coins", amount: 1, perMatch: true } }],
   },
   {
     id: "seeing-red",
+    shop: { basePrice: 6, unlockRound: 1 },
     categoryTrait: { economyCategory: {} },
     name: "Seeing Red",
     symbol: "♥♦",
     description: "Earns 1 coin for each Heart or Diamond discarded. Unlimited use.",
     traitId: "passive.event-rules",
-    palette: palette("#eee2d0", "#b8293b", "#d17a7c"),
     rules: [
       {
         on: "discard.completed",
@@ -231,13 +239,13 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "ace-exchange",
-    categoryTrait: { utilityCategory: {} },
+    shop: { basePrice: 5, unlockRound: 2 },
+    categoryTrait: { effectCategory: {} },
     name: "Ace Exchange",
     symbol: "AA",
     description:
       "Discard at least two Aces together to gain one random passive you do not own. Triggers once per qualifying discard; unlimited use.",
     traitId: "passive.event-rules",
-    palette: palette("#5a397b", "#f0dafa", "#b88cd3"),
     rules: [
       {
         on: "discard.completed",
@@ -251,7 +259,7 @@ for (const definition of definitions) passiveDefinitions.register(definition.id,
 
 /** A passive's colours: its own override, or its category's default. */
 export function passivePalette(definition: PassiveDefinition): PassivePalette {
-  return definition.palette ?? categoryDefaults(definition.categoryTrait).palette;
+  return definition.palette ?? categoryPalette(definition.categoryTrait);
 }
 
 /** The look a passive block is drawn with: its own appearance trait, or its definition's. */
@@ -280,6 +288,7 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
       appearance: { symbol: definition.symbol, palette: passivePalette(definition) },
       passive: { traitId: definition.traitId, rules: definition.rules },
       inspectable: inspectable(`${definition.name} — ${definition.description}`),
+      ...(definition.shop ? { priced: { basePrice: definition.shop.basePrice } } : {}),
     },
   };
 }

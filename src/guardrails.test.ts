@@ -221,6 +221,10 @@ describe("the guardrail's patterns", () => {
 });
 
 describe("no special-case branching (AGENTS.md)", () => {
+  it("covers developer tools under src/tools like game code, with no exemption (#71)", () => {
+    expect(sources.some(([file]) => file.startsWith("src/tools/"))).toBe(true);
+  });
+
   const allowed = baseline as Record<string, string[]>;
   it("adds no new special cases: every offending line is a recorded legacy line", () => {
     const report = [...scan()].flatMap(([file, hits]) =>
