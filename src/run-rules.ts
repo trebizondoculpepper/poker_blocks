@@ -31,7 +31,7 @@ export type RunRules = {
    * included. The mode's `shop` trait supplies it (src/mode-trait-rules.ts); left out, a
    * shop has no stock.
    */
-  stockShop?: (state: GameState, random: () => number) => GameState;
+  stockShop?: (state: GameState, random: () => number, round: number) => GameState;
 };
 
 /** A stage in the round, in order, with the data that is its own. */

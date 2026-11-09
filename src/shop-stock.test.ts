@@ -6,7 +6,12 @@ import { dealerRegistry } from "./dealer";
 import { GameRun } from "./game-run";
 import { fromSaveRecord, toSaveRecord } from "./save";
 import { demoRunRules } from "./run-rules";
-import { shopPreviewState } from "./shop-stock";
+import { passiveWeight, shopPreviewState } from "./shop-stock";
+import { defaultShop } from "./game-modes";
+import { passiveFrequencies, validateWeightCurve, weightAt } from "./offer-weights";
+import { createPassiveBlock, passiveDefinitions } from "./passives";
+import { materialDefinitions } from "./materials";
+import { validateMaterialBalance, validatePassiveBalance } from "./balance";
 import { offerKind } from "./offer-kinds";
 import { getMaterialDefinition, materialOf, type BlockMaterial } from "./materials";
 import { cardOfferPrice } from "./balance";
@@ -25,15 +30,21 @@ function shop() {
 const priceOf = (block: object) => (block as PassiveBlock).traits.priced!.basePrice;
 
 describe("shop preview", () => {
-  it("offers two passives and three unique cards, and buys into the right zones", () => {
+  it("offers 5–9 unique offers, passives first, and buys into the right zones (#145)", () => {
     const game = shop();
     const stock = game.state.shopStock!;
-    expect(stock.map(({ kind }) => kind)).toEqual(["passive", "passive", "card", "card", "card"]);
-    expect(new Set(stock.map(({ block }) => block.id)).size).toBe(5);
+    expect(stock.length).toBeGreaterThanOrEqual(5);
+    expect(stock.length).toBeLessThanOrEqual(9);
+    const kinds = stock.map(({ kind }) => kind);
+    expect(kinds).toContain("passive");
+    expect(kinds).toContain("card");
+    expect(kinds.lastIndexOf("passive")).toBeLessThan(kinds.indexOf("card"));
+    expect(new Set(stock.map(({ block }) => block.id)).size).toBe(stock.length);
     expect(game.state.coins).toBe(30);
     const passive = stock[0].block;
-    const card = stock[2].block as CardBlock;
-    const cardPrice = offerKind(stock[2]).price(card, game.offerRun);
+    const cardOffer = stock.find(({ kind }) => kind === "card")!;
+    const card = cardOffer.block as CardBlock;
+    const cardPrice = offerKind(cardOffer).price(card, game.offerRun);
     expect(game.buyShopOffer(passive.id, "hand")).toBeNull();
     expect(game.buyShopOffer(passive.id, "passive-rack")?.block).toBe(passive);
     expect(game.buyShopOffer(card.id, "hand")?.block).toBe(card);
@@ -43,7 +54,7 @@ describe("shop preview", () => {
     // A bought card joins the deck, and the run's ledger of bought cards (#143).
     expect(game.state.deck.at(-1)).toBe(card);
     expect(game.state.boughtCards).toEqual([card]);
-    expect(game.state.shopStock).toHaveLength(3);
+    expect(game.state.shopStock).toHaveLength(stock.length - 2);
     expect(game.buyShopOffer(card.id, "hand")).toBeNull();
   });
 
@@ -52,7 +63,8 @@ describe("shop preview", () => {
     const first = shop();
     for (const offer of first.state.shopStock!.filter(({ kind }) => kind === "passive"))
       expect(first.buyShopOffer(offer.block.id, "passive-rack")).not.toBeNull();
-    expect(first.state.passiveRack).toHaveLength(2);
+    const owned = first.state.passiveRack.length;
+    expect(owned).toBeGreaterThan(0);
     // Like leaving the shop: unbought cards simply go before restocking.
     const restock = { ...first.state, shopStock: undefined };
     const game = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, {
@@ -62,11 +74,13 @@ describe("shop preview", () => {
     const offer = game.state.shopStock!.find(({ kind }) => kind === "passive")!;
     expect(game.buyShopOffer(offer.block.id, "passive-rack")?.block).toBe(offer.block);
     const ids = game.state.passiveRack.map(({ id }) => id);
-    expect(ids).toHaveLength(3);
-    expect(new Set(ids).size).toBe(3);
+    expect(ids).toHaveLength(owned + 1);
+    expect(new Set(ids).size).toBe(owned + 1);
     // The run must still save and load (duplicate passive ids make a save unloadable).
     const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
-    expect(fromSaveRecord(record, standardDeck, dealerRegistry)?.state.passiveRack).toHaveLength(3);
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)?.state.passiveRack).toHaveLength(
+      owned + 1,
+    );
   });
 
   it("restores the same stock and purchases after saving", () => {
@@ -112,7 +126,7 @@ describe("card offers (#143)", () => {
   it("are new cards of a priced material, not cards borrowed from the deck", () => {
     const game = shop();
     const cards = game.state.shopStock!.filter(({ kind }) => kind === "card");
-    expect(cards).toHaveLength(3);
+    expect(cards.length).toBeGreaterThan(0);
     const deckIds = new Set(game.state.deck.map(({ id }) => id));
     for (const { block } of cards) {
       expect(deckIds.has(block.id)).toBe(false);
@@ -153,5 +167,93 @@ describe("saves from before #143", () => {
     expect(restored).not.toBeNull();
     expect(restored?.state.deck.map(({ id }) => id)).toContain(lent);
     expect(restored?.state.shopStock?.every(({ kind }) => kind === "passive")).toBe(true);
+  });
+});
+
+describe("stock by round and weight (#145)", () => {
+  const random = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  const stockAt = (round: number, seed: number, rack: GameRun["state"]["passiveRack"] = []) => {
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    return shopPreviewState(
+      { ...game.state, passiveRack: rack },
+      0,
+      random(seed),
+      defaultShop,
+      round,
+    ).shopStock!;
+  };
+  const materials = (offers: readonly { kind: string; block: object }[]) =>
+    offers.flatMap(({ kind, block }) => (kind === "card" ? [materialOf(block as CardBlock)] : []));
+
+  it("always holds 5–9 offers with at least one passive and one card", () => {
+    for (let round = 1; round <= 10; round++)
+      for (let seed = 1; seed <= 25; seed++) {
+        const offers = stockAt(round, seed);
+        expect(offers.length).toBeGreaterThanOrEqual(5);
+        expect(offers.length).toBeLessThanOrEqual(9);
+        expect(offers.some(({ kind }) => kind === "passive")).toBe(true);
+        expect(offers.some(({ kind }) => kind === "card")).toBe(true);
+      }
+  });
+
+  it("offers only unlocked materials, and no paper from round 8", () => {
+    const seen = (round: number) =>
+      new Set(Array.from({ length: 60 }, (_, seed) => materials(stockAt(round, seed + 1))).flat());
+    expect([...seen(1)].sort()).toEqual(["paper", "wood"]);
+    expect(seen(2).has("steel")).toBe(true);
+    expect(seen(2).has("meat")).toBe(false);
+    expect(seen(4).has("gold")).toBe(true);
+    expect(seen(4).has("prismatic")).toBe(false);
+    expect(seen(8).has("paper")).toBe(false);
+    expect(seen(8).has("wood")).toBe(true);
+  });
+
+  it("follows the agreed weight curves", () => {
+    const curve = (id: string) => getMaterialDefinition(id as BlockMaterial).shop!.weights;
+    expect([1, 4, 8].map((round) => weightAt(curve("paper"), round))).toEqual([4, 4 - 12 / 7, 0]);
+    expect([1, 2, 3, 8, 12].map((round) => weightAt(curve("wood"), round))).toEqual([
+      1, 2, 2, 0.25, 0.25,
+    ]);
+    expect([1, 2, 3, 4].map((round) => weightAt(curve("steel"), round))).toEqual([0, 0.5, 0.75, 1]);
+    expect([2, 3, 4].map((round) => weightAt(curve("fire"), round))).toEqual([0, 0.75, 1]);
+    expect([5, 6].map((round) => weightAt(curve("prismatic"), round))).toEqual([0.25, 0.5]);
+    const passive = (name: string) => passiveFrequencies.get(name);
+    expect([1, 3, 5, 7].map((r) => weightAt(passive("additiveScoring"), r))).toEqual([4, 1, 2, 2]);
+    expect([1, 3, 5, 7].map((r) => weightAt(passive("multiplicativeScoring"), r))).toEqual([
+      1, 4, 4, 4,
+    ]);
+    expect([1, 3, 5, 7].map((r) => weightAt(passive("exponentialScoring"), r))).toEqual([
+      0, 1, 2, 4,
+    ]);
+  });
+
+  it("never offers a passive before its unlock round, or one the run owns", () => {
+    for (let seed = 1; seed <= 40; seed++)
+      for (const { kind, block } of stockAt(1, seed))
+        if (kind === "passive")
+          expect((block as PassiveBlock).traits.priced!.basePrice).toBeDefined();
+    const early = passiveDefinitions.names().map((name) => passiveDefinitions.get(name));
+    for (const definition of early.filter(({ shop }) => shop && shop.unlockRound > 1))
+      expect(passiveWeight(definition, 1)).toBe(0);
+    const rack = [createPassiveBlock("double-line", "owned.1")];
+    for (let seed = 1; seed <= 40; seed++)
+      expect(
+        stockAt(1, seed, rack).some(
+          ({ block }) => (block as PassiveBlock).definitionId === "double-line",
+        ),
+      ).toBe(false);
+  });
+
+  it("has valid curves, and something of each kind to offer from round 1", () => {
+    expect(validateMaterialBalance(materialDefinitions)).toEqual([]);
+    expect(
+      validatePassiveBalance(passiveDefinitions.names().map((n) => passiveDefinitions.get(n))),
+    ).toEqual([]);
+    expect(
+      validateWeightCurve("bad", [
+        [2, 1],
+        [2, -1],
+      ]),
+    ).toHaveLength(2);
   });
 });

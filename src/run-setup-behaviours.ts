@@ -15,7 +15,7 @@ import { shopPreviewState } from "./shop-stock";
 import { withDevDestructibleMix } from "./traits/destructible";
 
 export function createRunSetupRegistry(
-  shopOffers: () => Pick<ShopTrait, "passiveOffers" | "cardOffers"> | undefined = () => undefined,
+  shopOffers: () => ShopTrait | undefined = () => undefined,
 ): RunSetupRegistry {
   const registry = new RunSetupRegistry();
 
@@ -61,7 +61,13 @@ export function createRunSetupRegistry(
       snapshot: {
         ...context.snapshot,
         phase: "shop",
-        state: shopPreviewState(context.snapshot.state, coins, services.random, shopOffers()),
+        state: shopPreviewState(
+          context.snapshot.state,
+          coins,
+          services.random,
+          shopOffers(),
+          context.snapshot.round,
+        ),
       },
     }),
   });

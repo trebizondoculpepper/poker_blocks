@@ -1,26 +1,26 @@
 import { createCard, ranks, suits } from "./cards";
 import type { GameState } from "./game-state";
 import { materialDefinitions, withMaterial, type MaterialDefinition } from "./materials";
-import { createPassiveBlock, randomPassiveDefinitions } from "./passives";
-import type { ShopTrait } from "./game-modes";
+import { createPassiveBlock, passiveDefinitions, type PassiveDefinition } from "./passives";
+import { defaultShop, type ShopTrait } from "./game-modes";
+import { drawWeighted, passiveFrequencies, weightAt } from "./offer-weights";
 import type { ShopOffer } from "./offer-kinds";
 
 export type { ShopOffer } from "./offer-kinds";
 
-/** Materials a shop can make a new card from: those with a shop price (#143). */
-const pricedMaterials = (): MaterialDefinition[] =>
-  (materialDefinitions as readonly MaterialDefinition[]).filter(({ shop }) => shop !== undefined);
-
 /**
- * A shop's stock: new cards of a priced material (#143), which may repeat cards already in the
- * deck, and passives the run doesn't own. Which materials and how many of each come with #145;
- * until then a card's rank, suit and material are drawn evenly.
+ * A shop's stock (#143, #145): `minOffers` to `maxOffers` offers, at least one passive and one
+ * playable card when any is eligible, the rest drawn by normalised weight from everything
+ * eligible this round. A card offer is a new card of a material drawn by its weight curve
+ * (any rank and suit, and it may repeat a card the deck holds); a passive offer is a passive
+ * the run doesn't own, drawn by its frequency curve from its unlock round, at most once a shop.
  */
 export function shopPreviewState(
   state: GameState,
   coins: number,
   random: () => number = Math.random,
-  stock: Pick<ShopTrait, "passiveOffers" | "cardOffers"> = { passiveOffers: 2, cardOffers: 3 },
+  stock: ShopTrait = defaultShop,
+  round = 1,
 ): GameState {
   const deck = [...state.deck, ...state.hand, ...state.field.map(({ block }) => block)];
   const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!;
@@ -38,26 +38,73 @@ export function shopPreviewState(
     usedIds.add(id);
     return id;
   };
-  const materials = pricedMaterials();
-  const cardOffers: ShopOffer[] = Array.from({ length: stock.cardOffers }, () => ({
-    kind: "card",
-    block: withMaterial(
-      createCard({ rank: pick(ranks), suit: pick(suits) }, nextOfferId("shop.card")),
-      pick(materials),
-    ),
-  }));
-  const passiveOffers: ShopOffer[] = randomPassiveDefinitions(stock.passiveOffers, random).map(
-    (definition) => ({
-      kind: "passive",
-      block: createPassiveBlock(definition.id, nextOfferId("shop.passive")),
+
+  const owned = new Set(state.passiveRack.map(({ definitionId }) => definitionId));
+  const passives: Candidate[] = passiveDefinitions
+    .names()
+    .map((name) => passiveDefinitions.get(name))
+    .filter((definition) => !definition.retired && !owned.has(definition.id))
+    .map((definition) => ({
+      weight: passiveWeight(definition, round),
+      once: true,
+      shelf: 0,
+      offer: () => ({
+        kind: "passive",
+        block: createPassiveBlock(definition.id, nextOfferId("shop.passive")),
+      }),
+    }));
+  const cards: Candidate[] = (materialDefinitions as readonly MaterialDefinition[]).map(
+    (material) => ({
+      weight: material.shop ? weightAt(material.shop.weights, round) : 0,
+      once: false,
+      shelf: 1,
+      offer: () => ({
+        kind: "card",
+        block: withMaterial(
+          createCard({ rank: pick(ranks), suit: pick(suits) }, nextOfferId("shop.card")),
+          material,
+        ),
+      }),
     }),
   );
+
+  const count = stock.minOffers + Math.floor(random() * (stock.maxOffers - stock.minOffers + 1));
+  const chosen: Candidate[] = [];
+  const draw = (pool: Candidate[]) => {
+    const candidate = drawWeighted(pool, ({ weight }) => weight, random);
+    if (!candidate) return;
+    chosen.push(candidate);
+    if (candidate.once) candidate.weight = 0;
+  };
+  // The minimums first: one passive and one playable card, then anything by weight.
+  draw(passives);
+  draw(cards);
+  while (chosen.length < count && [...passives, ...cards].some(({ weight }) => weight > 0))
+    draw([...passives, ...cards]);
+  // Laid out passives first, then cards.
+  const offers = chosen.toSorted((a, b) => a.shelf - b.shelf).map(({ offer }) => offer());
   return {
     ...state,
     field: [],
     hand: [],
     deck,
     coins,
-    shopStock: [...passiveOffers, ...cardOffers],
+    shopStock: offers,
   };
+}
+
+/** Something a shop could stock, and how likely it is this round. */
+type Candidate = {
+  weight: number;
+  /** Drawn at most once a shop (a passive), or as often as the weights say (a material). */
+  once: boolean;
+  /** Where it is laid out: lower shelves first. */
+  shelf: number;
+  offer: () => ShopOffer;
+};
+
+/** A passive's weight this round: none before it unlocks, then its frequency curve. */
+export function passiveWeight(definition: PassiveDefinition, round: number): number {
+  if (!definition.shop || round < definition.shop.unlockRound) return 0;
+  return weightAt(passiveFrequencies.get(definition.shop.frequency), round);
 }

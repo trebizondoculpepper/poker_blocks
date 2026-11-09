@@ -345,9 +345,12 @@ export type PassiveRackTrait = {
 /** The default rack: capacity for five passives, starting empty. */
 export const defaultPassiveRack: PassiveRackTrait = { capacity: 5 };
 
-/** How much a shop offers. What it actually stocks is game-run state, chosen by run setup. */
-export type ShopTrait = { passiveOffers: number; cardOffers: number };
-export const defaultShop: ShopTrait = { passiveOffers: 2, cardOffers: 3 };
+/**
+ * How many offers a shop holds: a number from `minOffers` to `maxOffers`, drawn each visit
+ * (#145). What it actually stocks is game-run state, chosen by run setup.
+ */
+export type ShopTrait = { minOffers: number; maxOffers: number };
+export const defaultShop: ShopTrait = { minOffers: 5, maxOffers: 9 };
 
 export type ModeTraits = {
   /** Save slot used by runs in this mode. */

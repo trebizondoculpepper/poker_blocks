@@ -54,7 +54,12 @@ export type PassiveTraitDefinition = {
 export type PassivePalette = { face: string; ink: string; edge: string };
 
 /** A passive's shop balance: fixed data; price modifiers apply on top, never here. */
-export type PassiveShopBalance = { basePrice: number; unlockRound: number };
+export type PassiveShopBalance = {
+  basePrice: number;
+  unlockRound: number;
+  /** The named curve (src/offer-weights.ts) its offers are drawn by from its unlock round (#145). */
+  frequency: string;
+};
 
 export type PassiveDefinition = {
   id: string;
@@ -128,7 +133,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "double-line",
-    shop: { basePrice: 4, unlockRound: 1 },
+    shop: { basePrice: 4, unlockRound: 1, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "×2",
     symbol: "×2",
@@ -140,7 +145,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "quad-line",
-    shop: { basePrice: 9, unlockRound: 2 },
+    shop: { basePrice: 9, unlockRound: 2, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "×4",
     symbol: "×4",
@@ -152,7 +157,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "gold-standard",
-    shop: { basePrice: 5, unlockRound: 4 },
+    shop: { basePrice: 5, unlockRound: 4, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Gold Standard",
     symbol: "$",
@@ -164,7 +169,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "carnivore",
-    shop: { basePrice: 3, unlockRound: 3 },
+    shop: { basePrice: 3, unlockRound: 3, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "Carnivore",
     symbol: "◈",
@@ -179,7 +184,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "woodworker",
-    shop: { basePrice: 4, unlockRound: 1 },
+    shop: { basePrice: 4, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Woodworker",
     symbol: "✥",
@@ -194,7 +199,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "crossroads",
-    shop: { basePrice: 2, unlockRound: 1 },
+    shop: { basePrice: 2, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Crossroads",
     symbol: "✳",
@@ -210,7 +215,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "long-haul",
-    shop: { basePrice: 4, unlockRound: 1 },
+    shop: { basePrice: 4, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Long Haul",
     symbol: "↗",
@@ -230,7 +235,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "scrapper",
-    shop: { basePrice: 8, unlockRound: 2 },
+    shop: { basePrice: 8, unlockRound: 2, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Scrapper",
     symbol: "⚙",
@@ -240,7 +245,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "seeing-red",
-    shop: { basePrice: 6, unlockRound: 1 },
+    shop: { basePrice: 6, unlockRound: 1, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Seeing Red",
     symbol: "♥♦",
@@ -256,7 +261,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "ace-exchange",
-    shop: { basePrice: 5, unlockRound: 2 },
+    shop: { basePrice: 5, unlockRound: 2, frequency: "even" },
     categoryTrait: { effectCategory: {} },
     name: "Ace Exchange",
     symbol: "AA",
