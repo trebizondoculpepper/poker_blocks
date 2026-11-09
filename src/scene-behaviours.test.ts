@@ -12,6 +12,11 @@ function recordingHost() {
   const host: SceneHost = {
     host: { dataset: {} } as HTMLElement,
     services: {
+      attract: {
+        start: () => void calls.push("attract:start"),
+        stop: () => void calls.push("attract:stop"),
+        showTuning: () => void calls.push("attract:tuning"),
+      },
       board: {
         blockAt: () => {
           calls.push("blockAt");
