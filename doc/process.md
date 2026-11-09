@@ -14,7 +14,7 @@ The user and several coding agents work on this project at once. This page descr
 
 How an agent works through tickets. Several agents work at once, so each takes **one ticket at a time** and leaves the rest for others.
 
-1. **Choose the next ticket.** Take an unclaimed `status:ready` ticket, preferring ones that unblock others or that the user has put in an order. Skip tickets with someone else's `agent:` label.
+1. **Choose the next ticket.** Re-check the issues board each time (`gh issue list --label status:ready`); don't work from an earlier list, because another agent may have unblocked, claimed or finished something since. Take an unclaimed `status:ready` ticket, preferring ones that unblock others or that the user has put in an order. Skip tickets with someone else's `agent:` label.
 2. **Claim only that one.** Add `agent:<your name>`, remove `status:ready`, and comment with your branch. Never claim a queue of tickets ahead of time.
 3. **Intake check** (below): read it, check whether it's partly done, and check it fits the plan. If it isn't ready, ask on the ticket, relabel it, release it and go back to step 1.
 4. **Build it** on a branch named after the issue, with tests and doc updates. Open one PR that closes the issue.
