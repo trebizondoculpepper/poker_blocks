@@ -45,6 +45,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit(context, { kind }) {
       if (context.host.dataset.scene === kind) delete context.host.dataset.scene;
     },
+    // Back in front after a pushed scene popped, whose exit cleared the marker.
+    resume(context, { kind }) {
+      context.host.dataset.scene = kind;
+    },
   });
   behaviours.register("roundPanel", panel<Context>("round"));
   behaviours.register("deckPanel", panel<Context>("deck"));

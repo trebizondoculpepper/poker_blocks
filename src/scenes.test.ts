@@ -13,6 +13,7 @@ function setup() {
   behaviours.register("trace", {
     enter: (context, { name }) => context.push(`enter ${name}`),
     exit: (context, { name }) => context.push(`exit ${name}`),
+    resume: (context, { name }) => context.push(`resume ${name}`),
     update: (context, { name }, dt) => context.push(`update ${name} ${dt}`),
     handles: (context, { name }, event) => {
       context.push(`handle ${name} ${String(event)}`);
@@ -69,7 +70,7 @@ describe("scene manager", () => {
     expect(manager.pop()).toBe(true);
     expect(manager.pop()).toBe(false);
 
-    expect(calls).toEqual(["enter base", "enter settings", "exit settings"]);
+    expect(calls).toEqual(["enter base", "enter settings", "exit settings", "resume base"]);
     expect(manager.current?.id).toBe("base");
   });
 
