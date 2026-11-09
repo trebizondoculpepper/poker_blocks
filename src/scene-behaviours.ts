@@ -14,7 +14,7 @@ import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
 import type { AudioService } from "./audio-service";
 import type { CameraViewService } from "./camera-view";
 import type { Overlays } from "./overlays";
-import type { HudPanels } from "./hud-panels";
+import type { HudPanel, HudPanelConfigs, HudPanels } from "./hud-panels";
 import type { RunController } from "./run-controller";
 import type { ShopView } from "./shop-view";
 import type { TableInput } from "./table-input";
@@ -120,10 +120,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       context.host.dataset.scene = kind;
     },
   });
-  behaviours.register("roundPanel", panel<Context>("round"));
-  behaviours.register("deckPanel", panel<Context>("deck"));
-  behaviours.register("coinsPanel", panel<Context>("coins"));
-  behaviours.register("shopExit", panel<Context>("shopExit"));
+  behaviours.register("roundPanel", panel<Context, "round">("round"));
+  behaviours.register("deckPanel", panel<Context, "deck">("deck"));
+  behaviours.register("coinsPanel", panel<Context, "coins">("coins"));
+  behaviours.register("shopExit", panel<Context, "shopExit">("shopExit"));
   behaviours.register("fieldPlacement", {
     enter(context) {
       context.services.input.setFieldActive(true);
@@ -255,16 +255,16 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   return behaviours;
 }
 
-/** A HUD panel trait: the scene shows its panel while it is in front. */
-function panel<Context extends SceneHost>(
-  name: Parameters<SceneHost["services"]["hud"]["show"]>[0],
+/** A HUD panel trait: the scene shows its panel, with the trait's config, while in front. */
+function panel<Context extends SceneHost, Panel extends HudPanel>(
+  name: Panel,
 ): {
-  enter(context: Context): void;
+  enter(context: Context, config: HudPanelConfigs[Panel]): void;
   exit(context: Context): void;
 } {
   return {
-    enter(context) {
-      context.services.hud.show(name);
+    enter(context, config) {
+      context.services.hud.show(name, config);
     },
     exit(context) {
       context.services.hud.hide(name);

@@ -112,7 +112,7 @@ describe("game modes composed from traits", () => {
       screen: { kind: "shop" },
       tableBackground: {},
       coinsPanel: {},
-      shopExit: {},
+      shopExit: { label: "Continue / Skip shop" },
       shopStock: {},
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
@@ -169,7 +169,7 @@ describe("game modes composed from traits", () => {
     const boss = gameModeFor("dev4").scenes.find(({ id }) => id === "dev4/stage-1")!;
     expect(boss.traits).toEqual({
       screen: { kind: "stage-1" },
-      roundPanel: {},
+      roundPanel: { stage: "STAGE 1", actions: { lost: "End game" } },
       tableBackground: {},
       deckPanel: {},
       fieldPlacement: {},
@@ -189,7 +189,9 @@ describe("game modes composed from traits", () => {
       expect(names).toEqual(sceneDefinitions.map(({ name }) => name));
     }
     // A mode's additions land on its own scenes and never on the shared definition.
-    const scenes = composeScenes("probe", [{ scenes: ["shop"], traits: { roundPanel: {} } }]);
+    const scenes = composeScenes("probe", [
+      { scenes: ["shop"], traits: { roundPanel: { stage: "PROBE" } } },
+    ]);
     expect(scenes.find(({ id }) => id === "probe/shop")!.traits).toHaveProperty("roundPanel");
     expect(sceneDefinitions.find(({ name }) => name === "shop")!.traits).not.toHaveProperty(
       "roundPanel",

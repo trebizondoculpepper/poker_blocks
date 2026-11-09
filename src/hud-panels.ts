@@ -4,16 +4,36 @@
  * game hands it a snapshot of the numbers, which are the same whatever is on show.
  */
 import type { RoundOutcome } from "./dealer";
-import type { RunPhase } from "./game-run";
 import { unlimited } from "./run-rules";
 
 /** The independent panels a scene may show. */
 export type HudPanel = "round" | "deck" | "coins" | "shopExit";
 
+/**
+ * The round panel's config, from the scene that shows it (#180): the stage's name in the
+ * heading, and the next-action button's label for each stage outcome (none: no button).
+ */
+export type RoundPanelConfig = {
+  stage: string;
+  actions?: Readonly<Partial<Record<RoundOutcome, string>>>;
+};
+/** The shop exit button's config: its label. */
+export type ShopExitConfig = { label: string };
+
+/** What each panel is configured with by the scene showing it. */
+export type HudPanelConfigs = {
+  round: RoundPanelConfig;
+  deck: Record<never, never>;
+  coins: Record<never, never>;
+  shopExit: ShopExitConfig;
+};
+
+/** Each panel's config while a scene in front composes it; null while none does. */
+export type ComposedPanels = { [Panel in HudPanel]: HudPanelConfigs[Panel] | null };
+
 /** What the HUD shows at one moment. */
 export type HudView = {
   round: number;
-  phase: RunPhase;
   /** A play is still landing or being scored: hide outcomes and the next-action button. */
   presenting: boolean;
   /** The stage outcome to announce ("playing" while undecided or outside a stage). */
@@ -28,8 +48,8 @@ export type HudView = {
 };
 
 export type HudPanels = {
-  /** A scene composing this panel came to the front. */
-  show(panel: HudPanel): void;
+  /** A scene composing this panel, with this config, came to the front. */
+  show<Panel extends HudPanel>(panel: Panel, config: HudPanelConfigs[Panel]): void;
   /** The scene showing this panel was exited. */
   hide(panel: HudPanel): void;
   render(view: HudView): void;
@@ -38,34 +58,10 @@ export type HudPanels = {
   dispose(): void;
 };
 
-const phaseNames: Record<RunPhase, string> = {
-  "stage-1": "STAGE 1",
-  "stage-2": "STAGE 2",
-  boss: "BOSS STAGE",
-  shop: "SHOP",
-  over: "GAME OVER",
-};
-
 const outcomeSuffixes: Record<RoundOutcome, string> = {
   playing: "",
   won: " · WON",
   lost: " · LOST",
-};
-
-/** A lost stage can be ended from the HUD; a won one moves on from its Stage Won pop-up. */
-const stageActionLabels: Record<RoundOutcome, string | null> = {
-  playing: null,
-  won: null,
-  lost: "End game",
-};
-
-/** The HUD button's label for the current moment, or null when there is nothing to do. */
-const nextActionLabels: Record<RunPhase, (outcome: RoundOutcome) => string | null> = {
-  "stage-1": (outcome) => stageActionLabels[outcome],
-  "stage-2": (outcome) => stageActionLabels[outcome],
-  boss: (outcome) => stageActionLabels[outcome],
-  shop: () => "Continue / Skip shop",
-  over: () => "New game",
 };
 
 const count = (n: number) => (n >= unlimited / 2 ? "∞" : String(n));
@@ -74,30 +70,33 @@ const count = (n: number) => (n >= unlimited / 2 ? "∞" : String(n));
 export type HudDisplay = {
   /** Which panels are on show, as composed by the scene in front. */
   visible: Record<HudPanel, boolean>;
-  /** The next-action button's label, or null to hide it. */
+  /** The round panel's next-action button label, or null to hide it. */
   action: string | null;
+  /** The shop exit button's label, or null to hide it. */
+  exit: string | null;
   stats: Record<
     "heading" | "score" | "target" | "moves" | "discards" | "coins" | "shop-coins" | "deck",
     string
   >;
 };
 
-export function hudDisplay(
-  view: HudView,
-  composed: Readonly<Record<HudPanel, boolean>>,
-): HudDisplay {
+export function hudDisplay(view: HudView, composed: Readonly<ComposedPanels>): HudDisplay {
   const outcome = view.presenting ? "playing" : view.outcome;
-  const action = view.presenting ? null : nextActionLabels[view.phase](outcome);
+  // Nothing to press while a play is still landing or being scored.
+  const action = view.presenting ? null : (composed.round?.actions?.[outcome] ?? null);
+  const exit = view.presenting ? null : (composed.shopExit?.label ?? null);
+  const heading = [`ROUND ${view.round}`, composed.round?.stage].filter(Boolean).join(" · ");
   return {
     visible: {
-      round: composed.round,
-      deck: composed.deck,
-      coins: composed.coins,
-      shopExit: composed.shopExit && action !== null,
+      round: composed.round !== null,
+      deck: composed.deck !== null,
+      coins: composed.coins !== null,
+      shopExit: exit !== null,
     },
     action,
+    exit,
     stats: {
-      heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,
+      heading: `${heading}${outcomeSuffixes[outcome]}`,
       score: String(view.score),
       target: count(view.targetScore),
       moves: count(view.movesLeft),
@@ -144,12 +143,7 @@ export function createHudPanels(host: HTMLElement): HudPanels {
 
   const panels = [roundHud, deckHud, coinHud];
   /** Which panels the scene in front composes; `render` applies it to the DOM. */
-  const composed: Record<HudPanel, boolean> = {
-    round: false,
-    deck: false,
-    coins: false,
-    shopExit: false,
-  };
+  const composed: ComposedPanels = { round: null, deck: null, coins: null, shopExit: null };
   const elements: Record<HudPanel, HTMLElement> = {
     round: roundHud,
     deck: deckHud,
@@ -167,13 +161,13 @@ export function createHudPanels(host: HTMLElement): HudPanels {
   shopExitButton.addEventListener("click", runAction);
 
   return {
-    show(panel) {
-      composed[panel] = true;
+    show(panel, config) {
+      (composed as Record<HudPanel, unknown>)[panel] = config;
       // A panel can arrive before its numbers do; reveal it now so it is not blank.
       elements[panel].hidden = false;
     },
     hide(panel) {
-      composed[panel] = false;
+      composed[panel] = null;
       elements[panel].hidden = true;
     },
     render(view) {
@@ -184,7 +178,7 @@ export function createHudPanels(host: HTMLElement): HudPanels {
       actionButton.hidden = display.action === null;
       actionButton.textContent = display.action ?? "";
       shopExitButton.hidden = !display.visible.shopExit;
-      shopExitButton.textContent = display.action ?? "";
+      shopExitButton.textContent = display.exit ?? "";
       for (const [name, text] of Object.entries(display.stats)) stat(name).textContent = text;
     },
     onAction(handler) {

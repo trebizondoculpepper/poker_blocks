@@ -145,8 +145,8 @@ describe("scene traits own their behaviour", () => {
   it("shows and hides each HUD panel on the scene that composes it", () => {
     const { host, calls, shown } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
-    scenes.register(scene("stage", { roundPanel: {}, deckPanel: {} }));
-    scenes.register(scene("shop", { coinsPanel: {}, shopExit: {} }));
+    scenes.register(scene("stage", { roundPanel: { stage: "S" }, deckPanel: {} }));
+    scenes.register(scene("shop", { coinsPanel: {}, shopExit: { label: "Leave" } }));
 
     scenes.switchTo("stage");
     expect([...shown].sort()).toEqual(["deck", "round"]);
@@ -165,8 +165,8 @@ describe("scene traits own their behaviour", () => {
   it("composes any subset of panels, leaving the others unchanged", () => {
     const { host, shown } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
-    scenes.register(scene("a", { roundPanel: {} }));
-    scenes.register(scene("b", { roundPanel: {}, coinsPanel: {} }));
+    scenes.register(scene("a", { roundPanel: { stage: "S" } }));
+    scenes.register(scene("b", { roundPanel: { stage: "S" }, coinsPanel: {} }));
     scenes.register(scene("c", { deckPanel: {} }));
 
     scenes.switchTo("b");
@@ -191,7 +191,7 @@ describe("scene traits own their behaviour", () => {
   it("shows the shop's stock on entering the shop and hides it on leaving", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
-    scenes.register(scene("stage", { roundPanel: {} }));
+    scenes.register(scene("stage", { roundPanel: { stage: "S" } }));
     scenes.register(scene("shop", { shopStock: {} }));
 
     scenes.switchTo("shop");

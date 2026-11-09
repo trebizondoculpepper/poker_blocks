@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
-import { hudDisplay, type HudPanel, type HudView } from "./hud-panels";
+import { hudDisplay, type ComposedPanels, type HudPanel, type HudView } from "./hud-panels";
 import { unlimited } from "./run-rules";
 
 const stageView: HudView = {
   round: 2,
-  phase: "boss",
   presenting: false,
   outcome: "playing",
   score: 40,
@@ -15,11 +14,18 @@ const stageView: HudView = {
   deckSize: 31,
 };
 
-const composed = (...panels: HudPanel[]): Record<HudPanel, boolean> => ({
-  round: panels.includes("round"),
-  deck: panels.includes("deck"),
-  coins: panels.includes("coins"),
-  shopExit: panels.includes("shopExit"),
+/** The configs the scene in front gives its panels: as the boss and shop scenes do. */
+const configs: { [Panel in HudPanel]: NonNullable<ComposedPanels[Panel]> } = {
+  round: { stage: "BOSS STAGE", actions: { lost: "End game" } },
+  deck: {},
+  coins: {},
+  shopExit: { label: "Continue / Skip shop" },
+};
+const composed = (...panels: HudPanel[]): ComposedPanels => ({
+  round: panels.includes("round") ? configs.round : null,
+  deck: panels.includes("deck") ? configs.deck : null,
+  coins: panels.includes("coins") ? configs.coins : null,
+  shopExit: panels.includes("shopExit") ? configs.shopExit : null,
 });
 
 describe("HUD panels", () => {
@@ -58,18 +64,27 @@ describe("HUD panels", () => {
     expect(won.action).toBeNull();
   });
 
-  it("shows only the panels the scene composes, and the shop exit when the shop has one", () => {
-    const shop = hudDisplay({ ...stageView, phase: "shop" }, composed("coins", "shopExit"));
+  it("shows only the panels the scene composes, and the shop exit with its own label", () => {
+    const shop = hudDisplay(stageView, composed("coins", "shopExit"));
     expect(shop.visible).toEqual({ round: false, deck: false, coins: true, shopExit: true });
-    expect(shop.action).toBe("Continue / Skip shop");
-    expect(shop.stats.heading).toBe("ROUND 2 · SHOP");
+    expect(shop.exit).toBe("Continue / Skip shop");
+    expect(shop.action).toBeNull();
   });
 
-  it("offers a new game when the run is over, without a shop exit", () => {
-    const over = hudDisplay({ ...stageView, phase: "over" }, composed());
-    expect(over.action).toBe("New game");
-    expect(over.visible.shopExit).toBe(false);
-    expect(over.stats.heading).toBe("ROUND 2 · GAME OVER");
+  it("offers nothing when no scene in front composes a panel (game over)", () => {
+    const over = hudDisplay(stageView, composed());
+    expect(over.action).toBeNull();
+    expect(over.exit).toBeNull();
+    expect(over.visible).toEqual({ round: false, deck: false, coins: false, shopExit: false });
+  });
+
+  it("shows whatever a scene configures, with no change here (#180)", () => {
+    const display = hudDisplay(
+      { ...stageView, outcome: "won" },
+      { ...composed("round"), round: { stage: "TEST STAGE", actions: { won: "Onward" } } },
+    );
+    expect(display.stats.heading).toBe("ROUND 2 · TEST STAGE · WON");
+    expect(display.action).toBe("Onward");
   });
 
   it("shows each panel independently of the others", () => {

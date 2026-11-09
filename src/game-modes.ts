@@ -3,6 +3,7 @@
  * `?mode=...` selects a developer mode; `?room=...` remains a backwards-compatible alias.
  */
 import { Registry } from "./core/registry";
+import type { RoundPanelConfig, ShopExitConfig } from "./hud-panels";
 import type { GameFlow } from "./game-flow";
 import type { MusicFilter } from "./audio/music-controller";
 import type { MusicCue, StageMusicPool } from "./audio-service";
@@ -19,11 +20,15 @@ export { standardGameFlow };
 export type SceneTraits = {
   screen: { kind: string };
   pausesBelow: { input: boolean; update: boolean };
-  /** A HUD panel this scene shows while it is in front (see src/hud-panels.ts). */
-  roundPanel: Record<never, never>;
+  /**
+   * A HUD panel this scene shows while it is in front, with its config (see
+   * src/hud-panels.ts): the round panel names the stage and its next-action labels; the shop
+   * exit names its button.
+   */
+  roundPanel: RoundPanelConfig;
   deckPanel: Record<never, never>;
   coinsPanel: Record<never, never>;
-  shopExit: Record<never, never>;
+  shopExit: ShopExitConfig;
   /** Blocks may be played onto the field while this scene is in front. */
   fieldPlacement: Record<never, never>;
   /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
@@ -132,12 +137,14 @@ const escapeOpensPause: Partial<SceneTraits> = {
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
 const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
-  roundPanel: {},
   deckPanel: {},
   fieldPlacement: {},
   runInPlay: {},
   ...escapeOpensPause,
 };
+
+/** A lost stage can be ended from the HUD; a won one moves on from its Stage Won pop-up. */
+const stageActions: RoundPanelConfig["actions"] = { lost: "End game" };
 
 /** The pause menu: the same menu from the title and from play (#87). */
 const pauseMenu: SceneTraits["menu"] = {
@@ -211,6 +218,7 @@ export const sceneDefinitions = [
     name: "stage-1",
     traits: {
       ...playSceneTraits,
+      roundPanel: { stage: "STAGE 1", actions: stageActions },
       musicTrack: { pool: "stage" },
       enterSound: { sfx: "round.start" },
     },
@@ -219,6 +227,7 @@ export const sceneDefinitions = [
     name: "stage-2",
     traits: {
       ...playSceneTraits,
+      roundPanel: { stage: "STAGE 2", actions: stageActions },
       musicTrack: { pool: "stage" },
       enterSound: { sfx: "round.start" },
     },
@@ -227,6 +236,7 @@ export const sceneDefinitions = [
     name: "boss",
     traits: {
       ...playSceneTraits,
+      roundPanel: { stage: "BOSS STAGE", actions: stageActions },
       musicTrack: { pool: "boss" },
       enterSound: { sfx: "round.start" },
     },
@@ -236,7 +246,7 @@ export const sceneDefinitions = [
     traits: {
       tableBackground: {},
       coinsPanel: {},
-      shopExit: {},
+      shopExit: { label: "Continue / Skip shop" },
       shopStock: {},
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
