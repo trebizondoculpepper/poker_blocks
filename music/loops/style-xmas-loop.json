@@ -1,0 +1,14 @@
+{
+  "source": "xmas.ogg",
+  "tempo_bpm": 87.3425,
+  "beats_per_bar": 4,
+  "loop_start_seconds": 16.6827,
+  "loop_end_seconds": 184.2987,
+  "loop_seconds": 167.616,
+  "bars": 61,
+  "match_score": 1.0104,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beats": 244,
+  "first_beat_seconds": 0.9192
+}

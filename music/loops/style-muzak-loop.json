@@ -1,0 +1,14 @@
+{
+  "source": "muzak.ogg",
+  "tempo_bpm": 132.2054,
+  "beats_per_bar": 4,
+  "loop_start_seconds": 62.208,
+  "loop_end_seconds": 167.4987,
+  "loop_seconds": 105.2907,
+  "bars": 58,
+  "match_score": 0.9851,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beats": 232,
+  "first_beat_seconds": 0.9066
+}

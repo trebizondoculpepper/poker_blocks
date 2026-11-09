@@ -1,0 +1,14 @@
+{
+  "source": "halloween.ogg",
+  "tempo_bpm": 83.7496,
+  "beats_per_bar": 4,
+  "loop_start_seconds": 22.752,
+  "loop_end_seconds": 131.648,
+  "loop_seconds": 108.896,
+  "bars": 38,
+  "match_score": 0.7054,
+  "crossfade_seconds": 0.05,
+  "sample_rate": 48000,
+  "beats": 152,
+  "first_beat_seconds": 0.3947
+}
