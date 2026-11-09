@@ -63,7 +63,8 @@ body,
 .deck-hud,
 .coin-hud {
   position: absolute;
-  z-index: 1;
+  /* Above the front canvas (z-index 2), so panel text is never under the blocks. */
+  z-index: 3;
   border: 1px solid #8191a777;
   border-radius: 10px;
   background: #1c2739d9;
@@ -1030,8 +1031,9 @@ body,
 
 /*
  * The title's attract background (#147): quarter resolution, stretched to fill and blurred, so
- * the cards read as a soft backdrop and every word of the menu stays sharp above it. It sits
- * behind both table layers, because on the title there is no table to show.
+ * the cards read as a soft backdrop and every word of the menu stays sharp above it. It needs no
+ * z-index trickery to hide the table: a scene that wants a table composes `tableBackground`, and
+ * the title does not, so none is drawn while this is on screen.
  */
 .scene canvas.attract-canvas {
   position: absolute;

@@ -18,6 +18,7 @@ import type { HudPanels } from "./hud-panels";
 import type { RunController } from "./run-controller";
 import type { ShopView } from "./shop-view";
 import type { TableInput } from "./table-input";
+import type { TableRenderer } from "./table-renderer";
 import {
   devManualBlockDestroyer,
   type BlockDestroyerBoard,
@@ -31,7 +32,9 @@ export type SceneHost = {
   services: {
     board: BlockDestroyerBoard;
     /** The title's attract sequence: started and stopped by a scene trait (#147). */
-    attract: { start(): void; stop(): void; showTuning(): void };
+    attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
+    /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
+    renderer: Pick<TableRenderer, "tableEntered">;
     hud: Pick<HudPanels, "show" | "hide">;
     input: Pick<TableInput, "setFieldActive" | "cancelGestures">;
     shop: ShopView;
@@ -143,12 +146,17 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     enter: ({ services }) => services.attract.start(),
     exit: ({ services }) => services.attract.stop(),
   });
+  behaviours.register("tableBackground", {
+    // The room and table are drawn while any scene composing this is on the stack, so the
+    // title (#147) and anything else that does not want a table simply omits it.
+    enter: ({ services }) => services.renderer.tableEntered(true),
+    exit: ({ services }) => services.renderer.tableEntered(false),
+  });
   behaviours.register("devAttractTuning", {
     // Testing only: the panel drives the attract background's live tuning (#166).
     enter: ({ services }) => services.attract.showTuning(),
-    exit: () => {
-      /* The panel is owned by the service, which hides it when the attract scene stops. */
-    },
+    // The panel belongs to this scene, so leaving it takes the panel with it (#166).
+    exit: ({ services }) => services.attract.hideTuning(),
   });
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
   behaviours.register("menu", {

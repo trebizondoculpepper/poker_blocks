@@ -32,6 +32,11 @@ export type TableRenderer = {
    * its own canvas; CSS blurs it. Pass null to stop drawing it.
    */
   attract(scene: THREE.Scene | null, camera: THREE.Camera | null, delta: number): void;
+  /**
+   * A scene composing `tableBackground` came to the front, or left (#147). The room and table
+   * are drawn while any such scene is on the stack, so the title shows none of it.
+   */
+  tableEntered(entered: boolean): void;
   setShadowQuality(quality: ShadowQuality): void;
   /** Per frame: the card room's lamp follows the structure. */
   frame(center: THREE.Vector3, radius: number, delta: number): void;
@@ -47,6 +52,8 @@ export const backgroundLayer = 2;
 const shadowOnly = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
 
 export function createTableRenderer(host: HTMLElement): TableRenderer {
+  /** How many scenes in front compose `tableBackground`; the table is drawn while any does. */
+  let tableScenes = 0;
   // The attract sequence has its own renderer and canvas, so it can run at quarter resolution
   // without disturbing the table's drawing.
   const attractCanvas = document.createElement("canvas");
@@ -129,7 +136,10 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
       cube.traverse((object) => (dragging ? object.layers.set(dragLayer) : object.layers.set(0)));
     },
     render(boardCamera, handCamera) {
-      renderBack(boardCamera);
+      // The back canvas is cleared even when the table is off, so a scene leaving the table
+      // behind does not leave its last frame on screen.
+      if (tableScenes > 0) renderBack(boardCamera);
+      else renderer.clear();
       // The front canvas: the board's blocks (the default layer only), then the hand over
       // them, then dragged blocks on a fresh depth buffer, so nothing can clip into them.
       front.clear();
@@ -147,6 +157,9 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
       handCamera.layers.set(dragLayer);
       front.render(handScene, handCamera);
       handCamera.layers.set(0);
+    },
+    tableEntered(entered) {
+      tableScenes = Math.max(0, tableScenes + (entered ? 1 : -1));
     },
     attract(attractScene, attractCamera, delta) {
       if (!attractScene || !attractCamera) {

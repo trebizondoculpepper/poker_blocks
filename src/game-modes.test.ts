@@ -100,6 +100,7 @@ describe("game modes composed from traits", () => {
       gameModeFor(mode).scenes.find(({ id }) => id === modeSceneId(mode, scene))!.traits;
     for (const stage of ["stage-1", "stage-2", "boss"] as const) {
       expect(traitsOf("game", stage)).toMatchObject({
+        tableBackground: {},
         roundPanel: {},
         deckPanel: {},
         fieldPlacement: {},
@@ -109,6 +110,7 @@ describe("game modes composed from traits", () => {
     }
     expect(traitsOf("game", "shop")).toEqual({
       screen: { kind: "shop" },
+      tableBackground: {},
       coinsPanel: {},
       shopExit: {},
       shopStock: {},
@@ -150,6 +152,7 @@ describe("game modes composed from traits", () => {
     // The game over scene owns its screen and music cue, with no HUD panels or field input (#90).
     expect(traitsOf("game", "game-over")).toEqual({
       screen: { kind: "game-over" },
+      tableBackground: {},
       gameOverScreen: {
         items: [
           { id: "newRun", label: "New Run" },
@@ -165,6 +168,7 @@ describe("game modes composed from traits", () => {
     expect(boss.traits).toEqual({
       screen: { kind: "stage-1" },
       roundPanel: {},
+      tableBackground: {},
       deckPanel: {},
       fieldPlacement: {},
       runInPlay: {},

@@ -33,6 +33,11 @@ export type SceneTraits = {
    * It is cosmetic: it draws no game state and its randomness is not the session's.
    */
   attractBackground: Record<never, never>;
+  /**
+   * The room and table are drawn while this scene is in front. The title does not compose it,
+   * so no table appears there (#147); every scene played on the table does.
+   */
+  tableBackground: Record<never, never>;
   /** Testing only: live sliders for the attract sequence's velocity, spin and spawn rate. */
   devAttractTuning: Record<never, never>;
   /** Testing only: double-click a block to destroy it with this cause. */
@@ -126,6 +131,7 @@ const escapeOpensPause: Partial<SceneTraits> = {
 
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
 const playSceneTraits: Partial<SceneTraits> = {
+  tableBackground: {},
   roundPanel: {},
   deckPanel: {},
   fieldPlacement: {},
@@ -182,6 +188,7 @@ export const sceneDefinitions = [
   {
     name: "pause",
     traits: {
+      tableBackground: {},
       menu: pauseMenu,
       panelFooter: { links: projectLinks },
       pausesBelow: { input: true, update: true },
@@ -192,6 +199,7 @@ export const sceneDefinitions = [
   {
     name: "settings",
     traits: {
+      tableBackground: {},
       settingsPanel: {},
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "highpass" },
@@ -225,6 +233,7 @@ export const sceneDefinitions = [
   {
     name: "shop",
     traits: {
+      tableBackground: {},
       coinsPanel: {},
       shopExit: {},
       shopStock: {},
@@ -237,6 +246,7 @@ export const sceneDefinitions = [
   {
     name: "stage-won",
     traits: {
+      tableBackground: {},
       stageWonScreen: { next: { id: "leaveStage", label: "Visit shop" } },
       pausesBelow: { input: true, update: true },
     },
@@ -244,6 +254,7 @@ export const sceneDefinitions = [
   {
     name: "game-over",
     traits: {
+      tableBackground: {},
       gameOverScreen: {
         items: [
           { id: "newRun", label: "New Run" },

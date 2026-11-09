@@ -227,6 +227,8 @@ export type AttractBackground = {
   retune(next: AttractTuning): void;
   /** Testing only: show the live tuning panel, which drives `retune` (#166). */
   showTuning(): void;
+  /** Testing only: remove the tuning panel, when its scene leaves. */
+  hideTuning(): void;
   dispose(): void;
 };
 
@@ -253,9 +255,13 @@ export function createAttractBackground(
       scene.retune(next);
     },
     showTuning() {
-      // Created unless a focused element already exists, so a re-entry does not stack panels.
+      // Created unless one already exists, so a re-entry does not stack panels.
       if (panel) return;
       panel = createAttractTuningPanel({ tuning, onChange: (next) => scope.retune(next) });
+    },
+    hideTuning() {
+      panel?.dispose();
+      panel = null;
     },
     dispose() {
       panel?.dispose();
