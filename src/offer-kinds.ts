@@ -11,7 +11,8 @@ import { createCard, ranks, suits, type CardBlock } from "./cards";
 import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
 import { Registry } from "./core/registry";
 import type { GameState } from "./game-state";
-import { createPassiveBlock, type PassiveBlock } from "./passives";
+import { createPassiveBlock, passiveDefinitions, type PassiveBlock } from "./passives";
+import { passiveUnlockRound } from "./offer-eligibility";
 
 /** Anything a shop can offer: a block with an id. */
 export type OfferBlock = { readonly id: string };
@@ -24,6 +25,8 @@ export type OfferDestination = "hand" | "passive-rack";
 
 /** What a kind's purchase may read from the run. */
 export type OfferRun = {
+  /** The run's round, for eligibility (#165). */
+  round: number;
   rackCapacity: number;
   handSize: number;
 };
@@ -116,8 +119,11 @@ registerOfferKind<CardBlock>("card", {
 registerOfferKind<PassiveBlock>("passive", {
   destination: "passive-rack",
   price: (block) => block.traits.priced?.basePrice ?? Number.NaN,
-  receive: (state, block, { rackCapacity }) =>
-    state.passiveRack.length >= rackCapacity || state.passiveRack.some(({ id }) => id === block.id)
+  // Refused before the passive is available (#165), even from a stale or early offer.
+  receive: (state, block, { rackCapacity, round }) =>
+    round < passiveUnlockRound(passiveDefinitions.get(block.definitionId)) ||
+    state.passiveRack.length >= rackCapacity ||
+    state.passiveRack.some(({ id }) => id === block.id)
       ? null
       : { ...state, passiveRack: [...state.passiveRack, block] },
   unbought: (state) => state,

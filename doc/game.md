@@ -343,7 +343,7 @@ This section is the agreed target design. It replaces the first-version placehol
 | Ace Exchange                                                                     |          5 |              2 |
 | Le Chef ([#104](https://github.com/trebizondoculpepper/poker_blocks/issues/104)) |          5 |       3 (meat) |
 
-A passive whose effect names a material is never eligible before that material unlocks.
+A passive whose effect names a material is never eligible before that material unlocks. The shop derives this from the passive's own rules (any material its rule configuration names) and the material's weight curve, and applies the same rule when stocking and when buying, so a stale or early offer is refused ([#165](https://github.com/trebizondoculpepper/poker_blocks/issues/165)). Balance validation fails a passive whose unlock round is earlier than a material it names.
 
 #### Unlocks and stock weights
 

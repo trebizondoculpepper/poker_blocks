@@ -10,6 +10,7 @@ import type { MaterialDefinition } from "./materials";
 import type { PassiveDefinition } from "./passives";
 import { validateScoringModifier } from "./scoring-modifier";
 import { passiveFrequencies, validateWeightCurve } from "./offer-weights";
+import { materialUnlockRound, materialsNamedBy } from "./offer-eligibility";
 
 /** Shared defaults for the base game; a different dealer may override its hand size. */
 export const gameTuning = {
@@ -28,7 +29,8 @@ export function cardOfferPrice(rank: string, material: { shop?: { basePrice: num
 
 /** Everything wrong with these passives' shop balance; retired passives need none. */
 export function validatePassiveBalance(definitions: readonly PassiveDefinition[]): string[] {
-  return definitions.flatMap(({ id, shop, retired }) => {
+  return definitions.flatMap((definition) => {
+    const { id, shop, retired } = definition;
     if (retired) return [];
     if (!shop) return [`${id}: no shop balance`];
     return [
@@ -38,6 +40,9 @@ export function validatePassiveBalance(definitions: readonly PassiveDefinition[]
       ...(Number.isSafeInteger(shop.unlockRound) && shop.unlockRound >= 1
         ? []
         : [`${id}: unlock round must be a positive whole number`]),
+      ...materialsNamedBy(definition)
+        .filter((material) => shop.unlockRound < materialUnlockRound(material))
+        .map((material) => `${id}: unlocks before ${material.id}, which it names`),
       ...(passiveFrequencies.has(shop.frequency)
         ? validateWeightCurve(id, passiveFrequencies.get(shop.frequency))
         : [`${id}: no frequency curve named ${shop.frequency}`]),
