@@ -140,6 +140,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("panelFooter", {
     enter: (context, { links }) =>
       context.services.overlays.showPanelFooter(links, context.services.version),
+    // Back in front after a panel opened over it: its footer was removed with that panel,
+    // because a footer belongs to the panel in front, so re-add it here.
+    resume: (context, { links }) =>
+      context.services.overlays.showPanelFooter(links, context.services.version),
     exit: (context) => context.services.overlays.hidePanelFooter(),
   });
   behaviours.register("settingsPanel", {

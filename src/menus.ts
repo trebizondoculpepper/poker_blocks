@@ -167,6 +167,8 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   const find = <T extends HTMLElement>(root: HTMLElement, name: string) =>
     root.querySelector<T>(`[data-menu="${name}"]`)!;
+  /** The footer currently shown, so hiding removes exactly that one. */
+  let shownFooter: HTMLElement | null = null;
   const titleItems = find<HTMLDivElement>(title.panel, "items");
   const confirm = find<HTMLDivElement>(title.panel, "confirm");
   const choices = find<HTMLDivElement>(pauseMenu.panel, "choices");
@@ -238,11 +240,18 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
       anchor.addEventListener("click", () => playSfx("ui.click"));
       footer.append(anchor);
     }
+    hidePanelFooter();
     panel.append(footer);
+    shownFooter = footer;
   }
 
+  /**
+   * Remove the footer this service added. It is not a document-wide query, because a covering
+   * scene's exit must not take the footer of the scene it uncovers with it.
+   */
   function hidePanelFooter(): void {
-    for (const footer of document.querySelectorAll('[data-menu="footer"]')) footer.remove();
+    shownFooter?.remove();
+    shownFooter = null;
   }
 
   /** The panel belonging to the overlay in front, for a footer the scene asked for there. */
