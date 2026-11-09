@@ -1,3 +1,1 @@
-{
-  "src/save.ts": ["if (!dealers.has(record.dealer)) return null;"]
-}
+{}
