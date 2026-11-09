@@ -39,14 +39,17 @@ import { shopPreviewState } from "./shop-stock";
 import { createShopView } from "./shop-view";
 import { moveItem } from "./zones";
 import {
+  consoleNames,
   devRooms,
   fieldPlacementActive,
   overlaysForPhase,
   roomFor,
   roomRegistry,
+  roomLink,
   roomSceneId,
   type RoomSceneName,
   type RoomSceneTraits,
+  wantsRestart,
   type Room,
 } from "./rooms";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
@@ -309,7 +312,7 @@ const roomParams = new URLSearchParams(window.location.search);
 /** This page's room: the normal game, or a dev room. Its traits say how it behaves. */
 let thisRoom = roomFor(roomParams.get("room"));
 let roomTraits = thisRoom.traits;
-let restartRoom = thisRoom.dev && roomParams.get("restart") === "true";
+let restartRoom = wantsRestart(thisRoom, roomParams);
 /** The room's session rules: endless sandboxes, and the passive rack's capacity. */
 function sessionConfigFor(traits: typeof roomTraits): SessionConfig {
   return {
@@ -1654,9 +1657,7 @@ if (skipTitle) {
   menus.closeAll();
 } else menus.showTitle();
 if (restartRoom) {
-  const cleanUrl = new URL(window.location.href);
-  cleanUrl.searchParams.delete("restart");
-  window.history.replaceState(window.history.state, "", cleanUrl);
+  window.history.replaceState(window.history.state, "", roomLink(thisRoom, window.location.href));
 }
 const unbindScreenshot = bindScreenshotShortcut(host, renderer, render);
 stat("action").addEventListener("click", takeNextAction);
@@ -1672,10 +1673,10 @@ createConsole({
     menus.closeAll();
   },
   home: () => menus.showTitle(),
-  room: () => thisRoom.consoleName ?? null,
+  room: () => consoleNames(thisRoom)[0] ?? null,
   rooms: () => devRooms(),
   resetRoom(room) {
-    const currentRoom = thisRoom.consoleName ?? null;
+    const currentRoom = consoleNames(thisRoom)[0] ?? null;
     if (!room || room === currentRoom) {
       startRun(newSession());
       menus.closeAll();
@@ -1683,11 +1684,7 @@ createConsole({
     }
     const nextRoom = roomRegistry.get(room);
     enterRoom(nextRoom);
-    const url = new URL(window.location.href);
-    url.searchParams.delete("room");
-    if (nextRoom.consoleName) url.searchParams.set("room", nextRoom.consoleName);
-    url.searchParams.delete("restart");
-    window.history.replaceState(window.history.state, "", url);
+    window.history.replaceState(window.history.state, "", roomLink(nextRoom, window.location.href));
     // startScene is declarative until the scene graph drives session progression (#37).
     switchScene(nextRoom.startScene);
     startRun(newSession(), true);

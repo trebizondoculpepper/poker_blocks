@@ -223,7 +223,7 @@ Composition is the same at both levels: a block is to its traits what a scene is
 
 `src/camera-view.ts` is the first extracted service. It owns board and hand cameras, the board pivot and assembly, framing, zoom, rotation, camera motion, and viewport resize handling. `main.ts` still detects input gestures and uses the service cameras for block picking and placement, while `TraitContext.services.cameraView` exposes the service to scene traits. The architecture test guards against moving camera creation, framing, or resize behavior back into `main.ts`. Further services are extracted one per PR under #33.
 
-The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, moving sequencing out of `GameSession`, and replacing `Room.dev` with traits.
+The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameSession`. Developer rooms are no longer a kind of room: a room the console lists has a `console: { name }` trait, and one that honours `&restart=true` has a `restartable: { param }` trait (#38).
 
 ## Architecture to discuss
 
