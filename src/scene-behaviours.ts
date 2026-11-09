@@ -11,6 +11,7 @@
  */
 import type { SceneTraits } from "./game-modes";
 import type { HudPanels } from "./hud-panels";
+import type { RunController } from "./run-controller";
 import type { ShopView } from "./shop-view";
 import type { TableInput } from "./table-input";
 import {
@@ -27,8 +28,8 @@ export type SceneHost = {
     hud: Pick<HudPanels, "show" | "hide">;
     input: Pick<TableInput, "setFieldActive">;
     shop: ShopView;
-    /** The stock the shop scene shows while it is in front. */
-    shopStock: () => Parameters<ShopView["render"]>[0];
+    /** The run, for the game state a scene trait presents. */
+    run: Pick<RunController, "shopStock">;
   };
 };
 
@@ -59,7 +60,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   behaviours.register("shopStock", {
     enter({ services }) {
-      services.shop.render(services.shopStock(), true);
+      services.shop.render(services.run.shopStock(), true);
     },
     exit({ services }) {
       services.shop.render([], false);

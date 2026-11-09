@@ -10,6 +10,7 @@ import { createPassiveBlock, randomPassiveDefinitions, type PassiveBlock } from 
 import { sandboxRunRules } from "./run-rules";
 import { RunSetupRegistry, type RunSetupServices } from "./run-setup";
 import { shopPreviewState } from "./shop-stock";
+import { withDevDestructibleMix } from "./traits/destructible";
 
 /**
  * Every run setup step, registered against its own config type. `shopOffers` is read when a
@@ -37,6 +38,12 @@ export function createRunSetupRegistry(
     }),
   });
 
+  registry.register("destructibleMix", {
+    // Testing only. Choosing the deck is run setup, so this belongs with the other deck
+    // steps: after the deck exists, and before the sample is taken from it.
+    prepare: (context, mix) => ({ ...context, deck: withDevDestructibleMix(context.deck, mix) }),
+  });
+
   registry.register("materialSample", {
     start: (context, _config, services) => {
       const { state } = context.snapshot;
@@ -62,17 +69,23 @@ export function createRunSetupRegistry(
     }),
   });
 
-  registry.register("passiveRack", {
+  registry.register("startingPassives", {
     // The rack belongs to the run, so the passives it starts with are part of its snapshot.
-    start: (context, { startWith }, services) => {
+    start: (context, { count }, services) => {
       const { state } = context.snapshot;
+      // A mode cannot overfill its own rack, whatever it declares.
+      const capacity = context.prepare.rules.rackCapacity ?? Infinity;
+      const room = Math.max(0, capacity - state.passiveRack.length);
       return {
         ...context,
         snapshot: {
           ...context.snapshot,
           state: {
             ...state,
-            passiveRack: [...state.passiveRack, ...openingPassives(startWith, state, services)],
+            passiveRack: [
+              ...state.passiveRack,
+              ...openingPassives(Math.min(count, room), state, services),
+            ],
           },
         },
       };

@@ -33,7 +33,7 @@ function recordingHost() {
         frame: () => undefined,
         dispose: () => undefined,
       },
-      shopStock: () => [{ kind: "card", block: {} as never }],
+      run: { shopStock: () => [{ kind: "card", block: {} as never }] },
     },
   };
   return { host, calls, shown };

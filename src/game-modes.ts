@@ -6,7 +6,7 @@ import { Registry } from "./core/registry";
 import type { RunSetupStep } from "./run-setup";
 import { saveKey } from "./save";
 import type { Scene } from "./scenes";
-import type { DestroyCause, DevDestructibleMix } from "./traits/destructible";
+import type { DestroyCause } from "./traits/destructible";
 
 export const sceneNames = [
   "title",
@@ -103,8 +103,6 @@ export type ModeTraits = {
   console?: { name: string };
   /** A fresh run is started on load when this URL parameter is "true"; it is then removed. */
   restartable?: { param: string };
-  /** Testing only: about `share` of the deck is destructible by the given causes. */
-  devDestructibleMix?: DevDestructibleMix;
   /** The music this mode plays, through the behaviour in src/mode-music.ts. */
   music: { style: ModeMusicStyle };
 };
@@ -115,9 +113,19 @@ export type GameMode = {
   scenes: readonly ModeScene[];
   /**
    * The scene a fresh page opens on. `title` shows the title screen; any other scene starts
-   * play straight away, resuming the saved run where the mode keeps one.
+   * play straight away.
    */
   startScene: SceneName;
+  /**
+   * A page that opens straight in play continues this mode's saved run. Without it the mode
+   * always deals a new run on load, deliberately discarding the save (dev1's sandbox).
+   */
+  resumeSavedRun?: Record<never, never>;
+  /**
+   * A fresh page opens straight into play instead of on the title screen. Whether that play
+   * continues a saved run is the separate `resumeSavedRun` decision.
+   */
+  opensInPlay?: Record<never, never>;
   /** Other names that open this mode (old links). */
   aliases?: readonly string[];
   /** Ordered steps applied when a new game run is created; never applied on Continue. */
@@ -145,6 +153,7 @@ const gameModes: GameMode[] = [
     id: "dev0",
     scenes: scenesForMode("dev0"),
     startScene: "title",
+    resumeSavedRun: {},
     aliases: ["dev"],
     runSetup: [{ step: "materialDeck", reshuffle: "new-game" }],
     traits: {
@@ -158,6 +167,7 @@ const gameModes: GameMode[] = [
     id: "dev1",
     scenes: scenesForMode("dev1"),
     startScene: "stage-1",
+    opensInPlay: {},
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck", reshuffle: "each-run" },
@@ -174,10 +184,12 @@ const gameModes: GameMode[] = [
     id: "dev2",
     scenes: scenesForMode("dev2"),
     startScene: "stage-1",
+    opensInPlay: {},
+    resumeSavedRun: {},
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck", reshuffle: "new-game" },
-      { step: "passiveRack", startWith: 2 },
+      { step: "startingPassives", count: 2 },
     ],
     traits: {
       save: { key: "poker-blocks.dev2-run" },
@@ -191,6 +203,8 @@ const gameModes: GameMode[] = [
     id: "dev3",
     scenes: scenesForMode("dev3"),
     startScene: "shop",
+    opensInPlay: {},
+    resumeSavedRun: {},
     runSetup: [{ step: "shopPreview", coins: 5 }],
     traits: {
       save: { key: "poker-blocks.dev3-run" },
@@ -207,16 +221,18 @@ const gameModes: GameMode[] = [
     id: "dev4",
     scenes: scenesForMode("dev4", { devManualBlockDestroyer: { cause: "manual" } }),
     startScene: "stage-1",
+    opensInPlay: {},
+    resumeSavedRun: {},
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck", reshuffle: "new-game" },
+      { step: "destructibleMix", share: 0.5, by: ["manual"] },
       { step: "materialSample" },
     ],
     traits: {
       save: { key: "poker-blocks.dev4-run" },
       console: { name: "dev4" },
       restartable: { param: "restart" },
-      devDestructibleMix: { share: 0.5, by: ["manual"] },
       music: { style: "quiet" },
     },
   },

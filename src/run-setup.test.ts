@@ -7,6 +7,7 @@ import { demoRunRules } from "./run-rules";
 import { createRunSetupRegistry } from "./run-setup-behaviours";
 import {
   RunSetupRegistry,
+  rulesForRun,
   type RunPrepareContext,
   type RunSetupServices,
   type RunSetupStep,
@@ -128,11 +129,38 @@ describe("run setup steps", () => {
     expect(run.state.field.length).toBeLessThan(run.state.deck.length);
   });
 
-  it("passiveRack fills the rack the run starts with, with distinct passives", () => {
+  it("startingPassives fills the rack the run starts with, with distinct passives", () => {
     const run = freshRun("dev2");
     expect(run.state.passiveRack).toHaveLength(2);
     expect(new Set(run.state.passiveRack.map(({ id }) => id)).size).toBe(2);
     expect(new Set(run.state.passiveRack.map(({ definitionId }) => definitionId)).size).toBe(2);
+  });
+
+  it("never fills the rack past the mode's own capacity, whatever a step declares", () => {
+    const mode = gameModeFor("dev2");
+    const registry = createRunSetupRegistry(() => mode.traits.shop);
+    const steps: readonly RunSetupStep[] = [{ step: "startingPassives", count: 9 }];
+    const rules = { ...demoRunRules, rackCapacity: 3 };
+    const prep = registry.prepare(steps, { rules, deck: standardDeck }, services);
+    const opening = new GameRun(dealerRegistry, rules, prep.deck).snapshot();
+    const started = registry.start(
+      steps,
+      { prepare: { ...prep, rules }, snapshot: opening },
+      services,
+    );
+    expect(started.snapshot.state.passiveRack).toHaveLength(3);
+  });
+
+  it("destructibleMix marks its share of the deck without changing which cards exist", () => {
+    const mixed = prepared([
+      { step: "materialDeck", reshuffle: "new-game" },
+      { step: "destructibleMix", share: 1, by: ["manual"] },
+    ]);
+    expect(mixed.deck.map(({ id }) => id)).toEqual(standardDeck.map(({ id }) => id));
+    expect(mixed.deck.every(({ traits }) => traits.destructible?.by.includes("manual"))).toBe(true);
+    // A share of 0 leaves every card alone.
+    const plain = prepared([{ step: "destructibleMix", share: 0, by: [] }]);
+    expect(plain.deck.every(({ traits }) => traits.destructible === undefined)).toBe(true);
   });
 
   it("shopPreview opens the run in a stocked shop with the step's coins", () => {
@@ -152,6 +180,27 @@ describe("run setup steps", () => {
 });
 
 describe("Continue never re-applies run setup", () => {
+  it("keeps a sandbox in force after a reload, in every later stage of the resumed run", () => {
+    // A sandbox is a rule policy the mode always plays under, not only while a run is dealt.
+    const rules = rulesForRun(gameModeFor("dev1").runSetup, demoRunRules);
+    expect(rules.stage(2, "stage-1")).toMatchObject({
+      targetScore: 1_000_000,
+      plays: 1_000_000,
+      discards: 1_000_000,
+    });
+    // A mode that does not sandbox is unaffected.
+    expect(rulesForRun(gameModeFor("dev3").runSetup, demoRunRules).stage(2, "stage-1").plays).toBe(
+      6,
+    );
+    // It still applies to a resumed run: the saved stage keeps its own counters.
+    const run = freshRun("dev1");
+    const saved = run.snapshot();
+    const record = JSON.parse(JSON.stringify(toSaveRecord(saved)));
+    const restored = fromSaveRecord(record, makeDevDeck(saved.seed!), dealerRegistry)!;
+    const resumed = GameRun.fromSnapshot(dealerRegistry, rules, makeDevDeck(saved.seed!), restored);
+    expect(resumed.state.round.movesLeft).toBe(saved.state.round.movesLeft);
+  });
+
   it("rebuilds a kept material deck from the seed saved in the run", () => {
     const run = freshRun("dev2");
     const saved = run.snapshot();

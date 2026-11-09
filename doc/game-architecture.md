@@ -192,7 +192,7 @@ Loading rebuilds the blocks from the standard deck and `GameRun.fromSnapshot` re
 
 ### Concepts
 
-- **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, supplies mode-wide configuration such as save identity and optional game features, and declares its **run setup** as ordered steps in `runSetup`. Music is a behaved configuration (`traits.music`), not a bare property. The scene list is a catalogue of definitions, not a scene graph.
+- **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, supplies mode-wide configuration such as save identity and optional game features, and declares its **run setup** as ordered steps in `runSetup`. Music is a mode trait (`traits.music`) whose behaviour lives in `src/mode-music.ts`. The scene list is a catalogue of definitions, not a scene graph.
 - **Scene** (`Scene`): a presentation context such as title, stage, shop, settings, stage-won or game-over. Scene data composes traits. `SceneManager` calls trait lifecycle hooks when scenes enter and exit.
 - **Scene stack**: the runtime layers currently active. Settings and stage-won are pushed over gameplay and popped to resume it. Title and game-over replace the stack.
 - **Game flow**: decisions about which scene follows an action or run outcome. Today `run-controller.ts` coordinates this using `GameRun.phase` and outcomes. The mode's `startScene` is not yet the authoritative transition graph.
@@ -270,18 +270,22 @@ For each stack operation, the manager invokes `enter` on the newly active scene'
 
 `src/scenes.ts` defines the scene-trait behavior registry and scene-stack manager. A switch exits the stack top-to-bottom and enters the replacement; push enters only the new top; pop exits only the top and resumes what is underneath. Updates run bottom-to-top unless blocked, and input dispatch runs top-to-bottom. DOM input routing is scaffolding: no current scene trait handles real input, so `pausesBelow.input` does not yet pause legacy DOM listeners.
 
-`src/game-modes.ts` defines each mode's scene catalogue, start scene, run setup and mode traits. A mode's `startScene` is authoritative for the scene a fresh page opens on: `title` shows the title screen, and any other scene starts play straight away, resuming that mode's saved run. `?mode=` is canonical; `?room=` remains accepted as a legacy URL alias. Developer-console mode changes update the URL and switch in memory without reloading. The scene manager tracks screen transitions, while `run-controller.ts` still coordinates stage/shop progression from run phase and outcomes. This is an interim arrangement, not a mode-owned flow graph.
+`src/game-modes.ts` defines each mode's scene catalogue, start scene, run setup and mode traits. A mode's `startScene` is authoritative for the scene a fresh page opens on: `title` shows the title screen, and any other scene starts play straight away. Whether that start continues the mode's saved run is a separate trait, `resumeSavedRun`: a mode composing it picks up where it left off, and a mode without it always deals a new run, which is what makes dev1's sandbox a sandbox. The two are independent, so a mode can open in play on a fresh run. `?mode=` is canonical; `?room=` remains accepted as a legacy URL alias. Developer-console mode changes update the URL and switch in memory without reloading. The scene manager tracks screen transitions, while `run-controller.ts` still coordinates stage/shop progression from run phase and outcomes. This is an interim arrangement, not a mode-owned flow graph.
 
 ### Run setup
 
 Run setup is what a game mode does to a **new** game run, and nothing else. It is ordered data on the mode (`runSetup: RunSetupStep[]`), not flags: a step is `{ step: "sandbox" }` or `{ step: "materialDeck", reshuffle: "new-game" }`. `src/run-setup.ts` holds the typed `RunSetupRegistry`, which pairs each step name with its own config type the same way `SceneTraitRegistry` pairs scene traits, and `src/run-setup-behaviours.ts` holds the behaviour. The steps compose in declared order in two passes:
 
-- `prepare`, before the run is dealt: the `RunRules` it will be judged by, and the deck it is dealt from. `sandbox` widens the rules; `materialDeck` replaces the deck and records the seed it used.
-- `start`, once the opening snapshot exists: what the run begins holding. `materialSample` puts a block of every material on the field, `passiveRack` fills the rack, and `shopPreview` opens the run in a stocked shop.
+- `prepare`, before the run is dealt: the `RunRules` it will be judged by, and the deck it is dealt from. `sandbox` widens the rules; `materialDeck` replaces the deck and records the seed it used; `destructibleMix` (testing only) marks its share of the deck.
+- `start`, once the opening snapshot exists: what the run begins holding. `materialSample` puts a block of every material on the field, `startingPassives` fills the rack (never past its capacity), and `shopPreview` opens the run in a stocked shop.
 
-Continue never applies a step. A saved run is restored exactly as saved, and the deck it was dealt from is rebuilt from the `seed` recorded in its snapshot, so a mix kept until a new game matches after a reload. Saves written before run setup have no seed; they still load, against the mode's plain deck. Save-format changes go through explicit migration in `src/save.ts`.
+Choosing the deck is run setup, so every deck decision is one of these steps rather than a mode trait the controller applies afterwards.
 
-The controller therefore calls the registry instead of branching on the mode. `modeTraits` keeps only mode-wide configuration: the save key, the console and restartable traits, the rack and shop configuration, the music style, and the testing-only destructible mix.
+Continue never applies a step. A saved run is restored exactly as saved, and the deck it was dealt from is rebuilt from the `seed` recorded in its snapshot, so a mix kept until a new game matches after a reload. Saves written before run setup have no seed; a material mode falls back to the seed kept for it in browser storage, which is what dealt that run. Only card ids are saved, so a testing-only deck step is re-derived from the mode's own run setup. Save-format changes go through explicit migration in `src/save.ts`; retired passives are dropped there rather than carried as dead slots.
+
+A sandbox is a rule policy rather than a starting state, so `rulesForRun` applies it to every run in the mode, including a resumed one. Without that, a reloaded sandbox would lose its endless plays as soon as the next stage began.
+
+The controller therefore calls the registry instead of branching on the mode. `modeTraits` keeps only mode-wide configuration: the save key, the console and restartable traits, the rack and shop configuration, and the music.
 
 The extracted services own presentation and interaction. `main.ts` constructs and connects them; it does not decide what the player may do or which scene follows an outcome.
 

@@ -10,7 +10,17 @@
  */
 import type { CardBlock } from "./cards";
 import type { RunSnapshot } from "./game-run";
-import type { RunRules } from "./run-rules";
+import { sandboxRunRules, type RunRules } from "./run-rules";
+import type { DevDestructibleMix } from "./traits/destructible";
+
+/**
+ * The rules a mode always plays under, from its baseline rules and the steps that describe a
+ * policy rather than a starting state. A sandbox lasts for the whole run, not just the deal, so
+ * a resumed run keeps it; a `prepare` step that only shapes the opening deck does not.
+ */
+export function rulesForRun(steps: readonly RunSetupStep[], base: RunRules): RunRules {
+  return steps.some((step) => step.step === "sandbox") ? sandboxRunRules(base) : base;
+}
 
 /** The configuration each run setup step takes. A step with no options takes `{}`. */
 export type RunSetupStepConfigs = {
@@ -23,10 +33,12 @@ export type RunSetupStepConfigs = {
   materialDeck: { reshuffle: "each-run" | "new-game" };
   /** The run begins on a structure holding one block of every material. */
   materialSample: Record<never, never>;
+  /** Testing only: about `share` of the deck is destructible by the given causes. */
+  destructibleMix: DevDestructibleMix;
   /** The run begins in the shop with this many coins, for shop development. */
   shopPreview: { coins: number };
-  /** The passive rack begins holding this many passives. */
-  passiveRack: { startWith: number };
+  /** The passive rack begins holding this many passives (clamped to the rack's capacity). */
+  startingPassives: { count: number };
 };
 
 /** One ordered run setup step, as a mode declares it. */

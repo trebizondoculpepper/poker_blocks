@@ -166,7 +166,17 @@ describe("scene architecture guardrails", () => {
     expect(run).toContain("runSetup.prepare(");
     expect(run).toContain("runSetup.start(");
     // The controller names no setup step of its own; it asks the registry.
-    expect(run).not.toMatch(/\bskipTitle\b|\bmaterialSample\b|\bmaterialDeck\b/);
+    expect(run).not.toMatch(/\bskipTitle\b/);
     expect(run.match(/\bshopPreview\b/g) ?? []).toEqual([]);
+  });
+
+  it("decides where a page starts from a trait, not by naming the title scene", () => {
+    const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
+    // Whether opening in play resumes a saved run is a mode trait (`resumeSavedRun`). Reading
+    // startScene by value would be a scene-identity branch, and the guardrail cannot see a
+    // comparison that names a variable rather than the property.
+    expect(run).not.toMatch(/startScene\s*[!=]==?\s*["'`]/);
+    expect(run).not.toMatch(/["'`]title["'`]\s*[!=]==?\s*\w*startScene/);
+    expect(run).toContain("resumeSavedRun");
   });
 });

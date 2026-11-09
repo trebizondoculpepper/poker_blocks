@@ -91,7 +91,6 @@ type TraitContext = {
     run: RunController;
     board: BlockDestroyerBoard;
     shop: ShopView;
-    shopStock: () => Parameters<ShopView["render"]>[0];
   };
 };
 const traitContext: TraitContext = {
@@ -125,7 +124,6 @@ const traitContext: TraitContext = {
     get shop() {
       return shopView;
     },
-    shopStock: () => run.shopStock(),
   },
 };
 const sceneManager = new SceneManager(sceneBehaviours<TraitContext>(), traitContext);

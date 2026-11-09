@@ -41,6 +41,20 @@ describe("game modes composed from traits", () => {
     expect(modeLink(gameModeFor(null), base).search).toBe("?restart=true&debug=1");
   });
 
+  it("decides from a trait whether a page opening in play resumes its saved run", () => {
+    // Opening in play and continuing are independent decisions. dev1 opens in play but always
+    // deals a new run; dev2-dev4 open in play and continue; the normal game opens on the title.
+    for (const id of ["dev1", "dev2", "dev3", "dev4"]) {
+      expect(gameModeFor(id).opensInPlay).toEqual({});
+    }
+    expect(gameModeFor("dev1").resumeSavedRun).toBeUndefined();
+    for (const id of ["dev0", "dev2", "dev3", "dev4"]) {
+      expect(gameModeFor(id).resumeSavedRun).toEqual({});
+    }
+    expect(gameModeFor(null).startScene).toBe("title");
+    expect(gameModeFor(null).opensInPlay).toBeUndefined();
+  });
+
   it("keeps mode-wide configuration in traits and run setup out of them", () => {
     expect(gameModeFor(null).traits).toEqual({
       save: { key: saveKey },
@@ -55,8 +69,13 @@ describe("game modes composed from traits", () => {
       { step: "materialSample" },
     ]);
     expect(gameModeFor("dev0").runSetup).not.toContainEqual({ step: "sandbox" });
-    expect(gameModeFor("dev2").runSetup).toContainEqual({ step: "passiveRack", startWith: 2 });
+    expect(gameModeFor("dev2").runSetup).toContainEqual({ step: "startingPassives", count: 2 });
     expect(gameModeFor("dev3").runSetup).toEqual([{ step: "shopPreview", coins: 5 }]);
+    expect(gameModeFor("dev4").runSetup).toContainEqual({
+      step: "destructibleMix",
+      share: 0.5,
+      by: ["manual"],
+    });
     expect(gameModeFor("dev1").traits.music.style).toBe("quiet");
     expect(gameModeFor(null).traits.music.style).toBe("ordinary");
   });

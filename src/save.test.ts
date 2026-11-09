@@ -12,7 +12,7 @@ import {
   type SaveStorage,
 } from "./save";
 import { demoRunRules } from "./run-rules";
-import { createPassiveBlock } from "./passives";
+import { createPassiveBlock, passiveDefinitions } from "./passives";
 
 function memoryStorage(): SaveStorage & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -107,17 +107,30 @@ describe("save records", () => {
 
   it("restores an ordered passive rack and still reads older saves without one", () => {
     const session = playedSession();
-    session.installPassive(createPassiveBlock("do-nothing", "passive.1"));
+    session.installPassive(createPassiveBlock("double-line", "passive.1"));
     const record = JSON.parse(JSON.stringify(toSaveRecord(session.snapshot())));
     const restored = fromSaveRecord(record, standardDeck, dealerRegistry)?.state.passiveRack;
     expect(restored?.map(({ id, definitionId }) => ({ id, definitionId }))).toEqual([
-      { id: "passive.1", definitionId: "do-nothing" },
+      { id: "passive.1", definitionId: "double-line" },
     ]);
-    expect(restored?.[0].traits.inspectable.inspect()).toBe(
-      "Do Nothing — Has no effect. Unlimited use.",
-    );
+    expect(restored?.[0].traits.inspectable.inspect()).toContain("×2");
     delete record.state.passiveRack;
     expect(fromSaveRecord(record, standardDeck, dealerRegistry)?.state.passiveRack).toEqual([]);
+  });
+
+  it("drops a retired passive from an older save instead of carrying a dead slot", () => {
+    // doc/game.md: an older dev2 save with the retired Do Nothing block replaces it while
+    // keeping the card run. A retired passive has no effect, so it simply does not come back.
+    const session = playedSession();
+    session.installPassive(createPassiveBlock("do-nothing", "passive.1"));
+    session.installPassive(createPassiveBlock("double-line", "passive.2"));
+    const record = JSON.parse(JSON.stringify(toSaveRecord(session.snapshot())));
+    const rack = fromSaveRecord(record, standardDeck, dealerRegistry)?.state.passiveRack;
+
+    expect(rack?.map(({ id }) => id)).toEqual(["passive.2"]);
+    expect(rack?.every(({ definitionId }) => !passiveDefinitions.get(definitionId).retired)).toBe(
+      true,
+    );
   });
 });
 

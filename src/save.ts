@@ -6,7 +6,7 @@ import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
 import { parseRunStats, type RunStats } from "./run-stats";
-import { createPassiveBlock } from "./passives";
+import { createPassiveBlock, passiveDefinitions } from "./passives";
 import { stageKinds, type StageKind } from "./run-rules";
 
 /**
@@ -113,12 +113,16 @@ export function fromSaveRecord(
     };
     const { state } = record;
     const passiveIds = new Set<string>();
-    const passiveRack = (state.passiveRack ?? []).map(({ id, definitionId }) => {
+    // A retired passive has no effect, so an older save that installed one drops it here
+    // rather than carrying a dead slot for the rest of the run (doc/game.md).
+    const passiveRack = (state.passiveRack ?? []).flatMap(({ id, definitionId }) => {
       if (typeof id !== "string" || passiveIds.has(id) || typeof definitionId !== "string") {
         throw new Error("bad passive");
       }
       passiveIds.add(id);
-      return createPassiveBlock(definitionId, id);
+      return passiveDefinitions.get(definitionId).retired
+        ? []
+        : [createPassiveBlock(definitionId, id)];
     });
     const shopStock = (state.shopStock ?? []).map((offer) => {
       if (offer.kind === "card") return { kind: "card" as const, block: resolve(offer.cardId) };
