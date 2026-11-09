@@ -174,7 +174,7 @@ Material interactions will be built one combination at a time from configured, r
 
 ### Material scoring (design, [issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8))
 
-This section is the target design and supersedes the table above where they differ. Rules marked **Agreed** are confirmed; **Proposed** rules answer an open question and need agreement before implementation.
+This section is the target design and supersedes the table above where they differ. It records only agreed rules; open questions are listed at the end and asked on the issue.
 
 #### Agreed model
 
@@ -195,7 +195,7 @@ This section is the target design and supersedes the table above where they diff
 1. Each contributing card's base value gets its material's **additive** value (summed if several apply), then passive `score.beforeBlockValue` effects, in rack order.
 2. The line's working score is computed from block values and the ordinary hand multiplier.
 3. **Multiplicative** material factors multiply the working score (all factors multiplied together).
-4. Passive `score.beforeLineFinalized` effects resolve in rack order. **Proposed:** material line effects resolve **before** passives in the same phase, so a passive always sees the material-adjusted score and the player can plan around a fixed order.
+4. Passive `score.beforeLineFinalized` effects resolve in rack order.
 5. **Exponential** effects apply last, one per contributing crystal, in sequence.
 6. Round to an integer once, after all effects; clamp at zero.
 
@@ -207,23 +207,7 @@ Values use the current hand table (a pair's base values summed, ×2 hand multipl
 - **Steel in a pair:** one steel 7 and one paper 7. 14 ×2 = 28; ×1.25 = **35**.
 - **Two steels:** both 7s steel. 28 × 1.25 × 1.25 = 43.75 → **44**.
 - **Crystal:** a crystal 7 and a paper 7. 28^1.1 = 39.07 → **39**.
-- **Everything with ×2 passive:** wood 7 + crystal 7. (8 + 7) ×2 = 30; no multiplicative material; ×2 passive = 60; ^1.1 = 90.36 → **90**.
 - **Non-contributor:** a steel 3 in a line whose best hand is a pair of 7s has no effect.
-
-#### Meat, flame, ice and gold (Proposed)
-
-In the first version they are **scoring-neutral** (0 / 1 / 1). Their roles come from their own missions: ice and fire react ([#21](https://github.com/trebizondoculpepper/poker_blocks/issues/21)), meat cooks ([#22](https://github.com/trebizondoculpepper/poker_blocks/issues/22)), and gold is economic (Gold Standard). They still unlock on schedule so those passives and missions have cards to work with.
-
-#### Presentation (Proposed)
-
-- Rank, suit, selection and the scoring tint stay readable on every material; a material changes surface and finish, never the glyph's position, size or contrast floor.
-- The scoring tint is drawn above the material, not blended into it.
-- Inspection text names the material and its effect, read from the balance config: "Steel · ×1.25 line score when it scores".
-- When a material effect applies during score presentation, the card pulses with its material's accent and the line's working score animates; presentation never decides the result.
-
-#### Saves (Proposed)
-
-A saved card records its material only when it differs from paper, as `{ id, material }`. A dev deck dealt from a seed may keep rebuilding from that seed, but any card whose material came from play (a purchase or future transformation) is recorded explicitly. Loading an unknown material invalidates the save rather than guessing.
 
 #### Balance config guardrails
 
@@ -231,10 +215,9 @@ A saved card records its material only when it differs from paper, as `{ id, mat
 - Validation (at load and in a test): `additive` is a finite number, `multiplicative` and `exponential` are positive, unlock rounds are positive integers, and keyframes are ordered (see the shop rules).
 - A guardrail test confirms the scorer and effect runner contain no material ids.
 
-#### Still open
+#### Open questions
 
-- Steel and crystal strengths are first tuning values.
-- Effects for meat, flame and ice beyond neutral, if any, belong to their own missions.
+Asked on [issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8): whether material line effects resolve before or after passives in the same phase; whether meat, flame, ice and gold have any scoring effect in the first version; material cues and inspection text; how a save records a card's material. Steel and crystal strengths are first tuning values.
 
 ## Passives (design)
 
