@@ -35,6 +35,31 @@ reviews:
           a save file, `typeof x === "string"`) and tests are not special cases.
           PASS otherwise. When failing, name each offending line and suggest the trait,
           registry entry or configuration that should own the behaviour instead.
+      - name: "Architecturally correct"
+        mode: error
+        instructions: |
+          Pass/fail criteria. Judge whether the change fits the architecture in
+          doc/game-architecture.md (especially "Agreed principles" and "Modes, scenes and
+          traits") and AGENTS.md. Do not only check the diff compiles; ask where the
+          behaviour lives and whether that is the right place. FAIL if any of:
+          1. Behaviour is put in the wrong layer: game rules outside GameSession or a trait;
+             rendering or DOM work inside GameSession or rules code; scene sequencing
+             hard-coded rather than expressed as scene-graph data.
+          2. A block, scene or mode gains behaviour code of its own instead of composing a
+             reusable, configured trait (definitions must stay plain, serialisable data).
+          3. A trait is used only as a flag that other code checks, rather than carrying its
+             behaviour through lifecycle hooks (enter/exit/update/handles) or a registry.
+          4. A new mechanism duplicates an existing one (a second registry, event channel,
+             settings store, save path or scene/overlay system) instead of extending it.
+          5. A module reaches into another's internals or shared mutable module state where
+             a service interface or event should be used; new coupling to src/main.ts.
+          6. The change contradicts the documented design without updating the docs in the
+             same PR, or adds a concept (new kind of scene, trait family, save field) that
+             the docs do not describe.
+          7. A save-format change lacks a version bump and an explicit migration.
+          PASS otherwise. When failing, explain which principle is broken, cite the doc
+          section, and propose the architecturally correct shape (which trait, service,
+          registry or scene should own it).
       - name: "Baseline only shrinks"
         mode: error
         instructions: |
@@ -49,6 +74,9 @@ reviews:
         that it move into a trait, a scene's traits, or a service.
     - path: "src/**/*.ts"
       instructions: |
+        Review for architectural correctness first, correctness second: say whether the
+        change puts behaviour in the right place according to doc/game-architecture.md,
+        and if not, what the right shape is.
         Enforce AGENTS.md "No special cases": behaviour comes from composed traits, never
         from branching on what kind of thing something is. Prefer registries keyed by id
         (lookup tables of handlers) over if/else or switch chains on kinds. Flag trait
