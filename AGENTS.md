@@ -25,6 +25,8 @@ This is the project's most important rule, and the one most often broken. The ga
 
 Instead, give the behaviour a home: a trait with `enter`/`exit`/`update`/`handles`, a **registry of handlers keyed by trait or step name** (never by a mode, scene or other identity), or configuration data on the definition that shared code reads uniformly. `src/main.ts` is wiring only: it builds services, the scene manager and the mode, and holds no game logic.
 
+**Developer tools follow the same rule.** Audition rooms and other tools live under `src/tools/` and are kept out of the production build, but they get no exemption from these rules or the guardrail. That way a prototype can move into the game without carrying a special case with it (#71).
+
 **If there is nowhere for the behaviour to live, stop.** Do not add the branch "for now". Ask the user, or open an issue for the missing trait or hook, and say so in your reply. Speed is never a reason to add a special case.
 
 **This is enforced.** `src/guardrails.test.ts` fails CI when a file gains a forbidden branch, identity check or kind-keyed table. Legacy offences are listed line by line in `src/guardrails-baseline.json`: a new offending line fails even if you removed an old one in the same change. When you remove a legacy line, delete its entry; never add one. (If you move legacy code verbatim to another file, move its entry with it.) A line ending in `// branch-ok: #<issue>` is exempt only when that issue records why the exception is justified and the user agreed to it. CodeRabbit (`.coderabbit.yaml`) also requests changes on any PR that adds such a branch, and the PR template asks you to confirm it.
