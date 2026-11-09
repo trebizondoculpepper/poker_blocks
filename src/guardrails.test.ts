@@ -51,7 +51,7 @@ export const forbidden: readonly { name: string; pattern: RegExp }[] = [
     ),
   },
   {
-    name: "asks whether a room is a dev mode",
+    name: "asks whether a mode is a dev mode",
     pattern: /\.dev\s*[?&)|]/,
   },
 ];

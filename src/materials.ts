@@ -1,7 +1,7 @@
 import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
 
-/** Visual prototypes for the materials room. Gameplay effects come later. */
+/** Visual prototypes for the materials mode (dev1). Gameplay effects come later. */
 export const blockMaterials = [
   "paper",
   "wood",

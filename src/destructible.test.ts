@@ -110,8 +110,8 @@ describe("DevManualBlockDestroyer", () => {
       dev4.scenes.find(({ id }) => id.endsWith(`/${name}`))!.traits;
     expect(traitsOf("stage-1").devManualBlockDestroyer).toEqual({ cause: "manual" });
     expect(traitsOf("shop").devManualBlockDestroyer).toBeUndefined();
-    for (const room of ["game", "dev0", "dev1", "dev2", "dev3"])
-      expect(gameModeFor(room).scenes.some(({ traits }) => traits.devManualBlockDestroyer)).toBe(
+    for (const mode of ["game", "dev0", "dev1", "dev2", "dev3"])
+      expect(gameModeFor(mode).scenes.some(({ traits }) => traits.devManualBlockDestroyer)).toBe(
         false,
       );
   });

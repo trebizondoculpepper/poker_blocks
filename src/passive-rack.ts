@@ -55,7 +55,7 @@ export function createPassiveRack(
   } = {},
 ): {
   element: HTMLElement;
-  /** Change the number of visible slots for the active room. */
+  /** Change the number of visible slots for the active mode. */
   setCapacity(capacity: number): void;
   render(rack: readonly PassiveBlock[]): void;
   /** Hide one passive's cube while it is being dragged (null shows them all). */

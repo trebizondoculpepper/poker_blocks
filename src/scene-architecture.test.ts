@@ -101,9 +101,7 @@ describe("scene architecture guardrails", () => {
 
     expect(main).toMatch(/\brenderer:\s*TableRenderer\b/);
     expect(main).not.toMatch(/new THREE\.(WebGLRenderer|Scene|HemisphereLight|DirectionalLight)\(/);
-    expect(main).not.toMatch(
-      /\bcreateCardGameMode\(|\bsetReflectionEnvironment\(|renderer\.render\(/,
-    );
+    expect(main).not.toMatch(/\bcreateCardRoom\(|\bsetReflectionEnvironment\(|renderer\.render\(/);
   });
 
   it("keeps play and discard animations and the scoring presentation in the play presenter", () => {

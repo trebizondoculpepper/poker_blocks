@@ -237,7 +237,7 @@ export class GameRun {
   /** Install a block in the ordered rack and update its event subscriptions. */
   installPassive(block: PassiveBlock): boolean {
     if (block.traits.rackResident?.zone !== "passive-rack") return false;
-    // A full rack takes no more (its capacity comes from the room's passive rack trait).
+    // A full rack takes no more (its capacity comes from the mode's passive rack trait).
     if (this.currentState.passiveRack.length >= this.rackCapacity) return false;
     if (this.currentState.passiveRack.some(({ id }) => id === block.id)) return false;
     this.currentState = {

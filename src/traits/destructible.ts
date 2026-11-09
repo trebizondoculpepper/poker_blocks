@@ -2,12 +2,12 @@
  * A block that can be destroyed, and by what. Destruction removes the block from the field
  * and leaves a gap: nothing settles into it (settling will be a trait of its own). The
  * rule lives in GameRun.destroyBlock; what causes a destruction (a double-click in a
- * test room, later melting or bombs) is a separate trait that names its cause.
+ * test mode, later melting or bombs) is a separate trait that names its cause.
  */
 import { cardName, type CardBlock } from "../cards";
 import { inspectBlock, inspectable } from "./inspectable";
 
-/** What can destroy a block. "manual" is the testing room's double-click. */
+/** What can destroy a block. "manual" is the testing mode's double-click. */
 export type DestroyCause = "manual";
 
 export type DestructibleTrait = { by: readonly DestroyCause[] };
@@ -17,7 +17,7 @@ export function canDestroy(block: CardBlock, cause: DestroyCause): boolean {
   return block.traits.destructible?.by.includes(cause) ?? false;
 }
 
-/** Dev room configuration (testing only): which share of a deck is destructible, and by what. */
+/** Dev mode configuration (testing only): which share of a deck is destructible, and by what. */
 export type DevDestructibleMix = { share: number; by: readonly DestroyCause[] };
 
 /** A stable number in [0, 1) for a card id, so the mix survives a reload without a seed. */

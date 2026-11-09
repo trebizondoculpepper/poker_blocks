@@ -192,7 +192,7 @@ Loading rebuilds the blocks from the standard deck and `GameRun.fromSnapshot` re
 
 ### Concepts
 
-- **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, and supplies mode-wide configuration such as save identity and optional game features. Music policy currently lives in its `musicStyle` property, pending a composed trait (#34). The scene list is a catalogue of definitions, not a scene graph.
+- **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, and supplies mode-wide configuration such as save identity and optional game features. Music policy currently lives in its `musicStyle` property, pending a composed trait (PR #44). The scene list is a catalogue of definitions, not a scene graph.
 - **Scene** (`Scene`): a presentation context such as title, stage, shop, settings, stage-won or game-over. Scene data composes traits. `SceneManager` calls trait lifecycle hooks when scenes enter and exit.
 - **Scene stack**: the runtime layers currently active. Settings and stage-won are pushed over gameplay and popped to resume it. Title and game-over replace the stack.
 - **Game flow**: decisions about which scene follows an action or run outcome. Today `run-controller.ts` coordinates this using `GameRun.phase` and outcomes. The mode's `startScene` is not yet the authoritative transition graph.

@@ -5,7 +5,7 @@ export type ModeMusicBehaviour = {
   resume(): void;
 };
 
-/** Music actions a room uses after a run starts and when its game screen resumes. */
+/** Music actions a mode uses after a run starts and when its game screen resumes. */
 export function createModeMusicBehaviours(actions: {
   windDown(): void;
   resumeStage(): void;

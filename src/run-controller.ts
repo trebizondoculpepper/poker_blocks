@@ -28,7 +28,7 @@ import type { BlockViews } from "./rendered-blocks";
 import {
   fieldPlacementActive,
   overlaysForPhase,
-  gameModeFor,
+  gameModeFromParams,
   modeLink,
   modeSceneId,
   wantsRestart,
@@ -162,7 +162,7 @@ export function createRunController<Context>(options: {
    * game with a material on every card, dev1 samples materials, dev2 has the passive rack,
    * and dev3 opens the shop with five coins.
    */
-  let currentMode = gameModeFor(options.params.get("mode") ?? options.params.get("room"));
+  let currentMode = gameModeFromParams(options.params);
   let modeTraits = currentMode.traits;
   const restartMode = wantsRestart(currentMode, options.params);
   let runRules = runRulesFor(modeTraits);

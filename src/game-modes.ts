@@ -120,7 +120,7 @@ export type ModeTraits = {
 
 export type GameMode = {
   id: string;
-  /** Temporary music policy until this becomes a composed music trait (#34). */
+  /** Temporary music policy until this becomes a composed music trait (PR #44). */
   musicStyle: ModeMusicStyle;
   /** The scenes this mode can enter without reloading the page. */
   scenes: readonly ModeScene[];
@@ -249,6 +249,11 @@ export function gameModeFor(name: string | null): GameMode {
     .names()
     .find((id) => gameModeRegistry.get(id).aliases?.includes(name));
   return gameModeRegistry.get(aliased ?? "game");
+}
+
+/** The mode a page URL opens: `?mode=`, or the legacy `?room=` alias when `mode` is absent. */
+export function gameModeFromParams(params: URLSearchParams): GameMode {
+  return gameModeFor(params.get("mode") ?? params.get("room"));
 }
 
 /** The console's name for a mode: none for a mode the console does not list. */

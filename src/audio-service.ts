@@ -1,5 +1,5 @@
 /**
- * Audio service: the music player and controller, the room's music policy, the volume and
+ * Audio service: the music player and controller, the mode's music policy, the volume and
  * mute settings, and the sounds that are about the view rather than a game action.
  *
  * The game says what is happening ("a stage started", "the settings screen is open"); this
@@ -31,8 +31,8 @@ export type AudioService = {
   readonly music: MusicController;
   /** Apply the volume, mute and per-channel toggles from the player's settings. */
   applySettings(settings: Settings): void;
-  /** Use a room's music policy (quiet modes stay wound down). */
-  enterMode(mode: ModeMusicStyle): void;
+  /** Use a mode's music style (quiet modes stay wound down). */
+  enterMode(style: ModeMusicStyle): void;
   /** A stage has just started: boss stages get the boss loop, others a random vibe. */
   stageStarted(phase: RunPhase): void;
   /** A run has just been set up; quiet modes wind the music down. */
@@ -107,8 +107,8 @@ export function createAudioService(options: {
       player.setVolume(settings.volume * musicVolumeShare);
       player.setMuted(silenced.music);
     },
-    enterMode(mode) {
-      modeMusic = modeMusicBehaviours[mode];
+    enterMode(style) {
+      modeMusic = modeMusicBehaviours[style];
     },
     stageStarted(phase) {
       stageMusic[phase](music);

@@ -1,16 +1,16 @@
 # Terms
 
-Use these names consistently in code, documentation and player facing language.
+Canonical names used in the rules, the code and the docs. Use these words and no others for the same idea, in code, documentation and player-facing text.
 
 | Term              | Meaning                                                                                                                                                                                                      |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Game mode**     | A named playable configuration: available scenes, initial scene, mode-wide rules and save identity. In code: `GameMode`. The developer variants are modes, not rooms.                                        |
 | **Scene**         | A presentation context such as title, stage, shop, settings, stage-won or game-over. A scene has an id and trait data. In code: `Scene`.                                                                     |
 | **Scene stack**   | The active scene layers managed at runtime. Push a temporary menu or result panel over the current scene, then pop it to resume what was underneath. Replace the stack when changing to an unrelated screen. |
-| **Scene graph**   | In common game engine usage, a hierarchy of scene objects/nodes. This project’s `GameMode.scenes` is a catalogue of scene definitions, not a scene graph.                                                    |
-| **Game flow**     | The rules that choose the next scene after actions or outcomes. The run controller currently coordinates this flow; the mode’s scene list and `startScene` do not yet define all transitions.                |
+| **Scene graph**   | In common game engine usage, a hierarchy of scene objects/nodes. This project's `GameMode.scenes` is a catalogue of scene definitions, not a scene graph.                                                    |
+| **Game flow**     | The rules that choose the next scene after actions or outcomes. The run controller currently coordinates this flow; the mode's scene list and `startScene` do not yet define all transitions.                |
 | **Trait**         | Reusable behavior configured as data and attached to a scene, mode or block. Scene traits receive lifecycle hooks from the scene manager.                                                                    |
-| **Game run**      | One playthrough’s live rules state: deck, hand, field, score, coins, passives and phase. In code: `GameRun`. It survives scene changes and can produce a save snapshot.                                      |
+| **Game run**      | One playthrough's live rules state: deck, hand, field, score, coins, passives and phase. In code: `GameRun`. It survives scene changes and can produce a save snapshot.                                      |
 | **Run rules**     | The progression and economy rules used to create a game run. In code: `RunRules`.                                                                                                                            |
 | **Round**         | Three stages in order: stage 1, stage 2 and boss, each followed by a shop.                                                                                                                                   |
 | **Stage**         | One attempt at a score target, with its own plays and discards and an empty field at the start.                                                                                                              |

@@ -4,6 +4,7 @@ import {
   fieldPlacementActive,
   overlaysForPhase,
   gameModeFor,
+  gameModeFromParams,
   modeSceneId,
 } from "./game-modes";
 import { saveKey } from "./save";
@@ -16,6 +17,15 @@ describe("game modes composed from traits", () => {
     expect(gameModeFor("dev").id).toBe("dev0");
     expect(gameModeFor("nonsense").id).toBe("game");
     expect(developerModes()).toEqual(["dev0", "dev1", "dev2", "dev3", "dev4"]);
+  });
+
+  it("opens a mode from ?mode=, falling back to the legacy ?room= alias", () => {
+    const opened = (search: string) => gameModeFromParams(new URLSearchParams(search)).id;
+    expect(opened("mode=dev2")).toBe("dev2");
+    expect(opened("room=dev3")).toBe("dev3");
+    expect(opened("room=dev")).toBe("dev0");
+    expect(opened("mode=dev1&room=dev3")).toBe("dev1");
+    expect(opened("")).toBe("game");
   });
 
   it("lists, links and restarts modes through their console and restartable traits", async () => {
