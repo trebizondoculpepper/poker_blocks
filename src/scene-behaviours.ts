@@ -74,14 +74,16 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
    * The items a menu shows: those whose `when` holds right now. An item whose `enabledWhen`
    * fails stays, disabled, carrying its hint.
    */
-  const itemsToShow = (context: Context, items: readonly MenuItem[]): MenuItem[] =>
+  const itemsToShow = (
+    context: Context,
+    items: readonly MenuItem[],
+  ): (MenuItem & { disabled: boolean })[] =>
     items
       .filter(({ when }) => !when || menuConditions[when](context))
-      .map((item) =>
-        !item.enabledWhen || menuConditions[item.enabledWhen](context)
-          ? { ...item, disabledHint: undefined }
-          : item,
-      );
+      .map((item) => ({
+        ...item,
+        disabled: Boolean(item.enabledWhen) && !menuConditions[item.enabledWhen!](context),
+      }));
   behaviours.register("runInPlay", {
     enter() {
       runScenes++;

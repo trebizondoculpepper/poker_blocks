@@ -2,7 +2,6 @@
 // into the game; progression rules stay in the run controller.
 import { playSfx } from "./audio/sfx";
 import type { SoundEffectId } from "./audio/sfx-registry";
-import type { MenuItem } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
 import type { Settings } from "./settings";
@@ -11,8 +10,16 @@ import { createSettingsPanel } from "./settings-panel";
 export type Screen = "title" | "game";
 
 /** One menu item as a menu shows it: choosing it dispatches `id` as a named action. */
-/** A menu button: its action id, label and sound; a `disabledHint` shows it greyed out. */
-export type MenuChoice = { id: string; label: string; sfx?: SoundEffectId; disabledHint?: string };
+/** A menu button: its action id, label and sound, and whether it can be chosen now. */
+export type MenuChoice = {
+  id: string;
+  label: string;
+  sfx?: SoundEffectId;
+  /** Shown greyed out; choosing it plays the denied sound. */
+  disabled?: boolean;
+  /** Why it's disabled, on hover and for screen readers. */
+  disabledHint?: string;
+};
 
 export type MenuCallbacks = {
   hasSave(): boolean;
@@ -27,7 +34,7 @@ export type MenuCallbacks = {
 
 export type Menus = {
   /** The title's items are the title scene trait's decision, so they are passed in. */
-  showTitle(items: readonly MenuItem[]): void;
+  showTitle(items: readonly MenuChoice[]): void;
   hideTitle(): void;
   /** Show a menu of choices (the pause menu) over whatever is in front. */
   showMenu(label: string, choices: readonly MenuChoice[]): void;
@@ -137,7 +144,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     callbacks.onScreen?.("game");
   }
 
-  function showTitle(items: readonly MenuItem[]): void {
+  function showTitle(items: readonly MenuChoice[]): void {
     confirm.hidden = true;
     fillTitleItems(items);
     open(title.root);
@@ -152,16 +159,16 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
    * The title's buttons come from the scene's `titleScreen` trait, so which ones appear (and
    * whether Continue is offered at all) is configuration, not this file's decision.
    */
-  function fillTitleItems(items: readonly MenuItem[]): void {
+  function fillTitleItems(items: readonly MenuChoice[]): void {
     titleItems.replaceChildren();
     for (const item of items) {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = item.label;
       button.dataset.menu = item.id;
-      disableWithHint(button, item.disabledHint);
+      disableWithHint(button, item);
       button.addEventListener("click", () =>
-        item.disabledHint ? playSfx("action.denied") : chooseTitleItem(item.id),
+        item.disabled ? playSfx("action.denied") : chooseTitleItem(item.id),
       );
       titleItems.append(button);
     }
@@ -229,15 +236,16 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   }
 
   /** A menu button: choosing it plays its sound and dispatches its id as an action. */
-  function choiceButton({ id, label, sfx, disabledHint }: MenuChoice): HTMLButtonElement {
+  function choiceButton(choice: MenuChoice): HTMLButtonElement {
+    const { id, label, sfx, disabled } = choice;
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.menu = id;
     button.textContent = label;
-    disableWithHint(button, disabledHint);
+    disableWithHint(button, choice);
     button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
     button.addEventListener("click", () => {
-      if (disabledHint) return playSfx("action.denied");
+      if (disabled) return playSfx("action.denied");
       playSfx(sfx ?? "ui.click");
       callbacks.onAction(id);
     });
@@ -248,9 +256,12 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
    * A disabled item stays visible and focusable, greyed out, with its hint on hover and for
    * screen readers (`aria-disabled`, not `disabled`, so the hint still shows).
    */
-  function disableWithHint(button: HTMLButtonElement, hint: string | undefined): void {
-    button.setAttribute("aria-disabled", String(Boolean(hint)));
-    button.title = hint ?? "";
+  function disableWithHint(
+    button: HTMLButtonElement,
+    { disabled, disabledHint }: Pick<MenuChoice, "disabled" | "disabledHint">,
+  ): void {
+    button.setAttribute("aria-disabled", String(Boolean(disabled)));
+    button.title = disabled ? (disabledHint ?? "") : "";
   }
 
   /** The pause menu: one button per choice, each dispatching its id as an action. */

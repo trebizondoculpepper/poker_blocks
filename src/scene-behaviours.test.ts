@@ -57,7 +57,7 @@ function recordingHost() {
         hideGameOver: () => void calls.push("gameOver:hide"),
         showTitle: (items) =>
           void calls.push(
-            `title:${items.map(({ id, disabledHint }) => (disabledHint ? `${id}(disabled)` : id)).join(",")}`,
+            `title:${items.map((item) => ((item as { disabled?: boolean }).disabled ? `${item.id}(disabled)` : item.id)).join(",")}`,
           ),
         hideTitle: () => void calls.push("title:hide"),
       },
