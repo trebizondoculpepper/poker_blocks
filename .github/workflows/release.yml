@@ -32,7 +32,13 @@ jobs:
         run: |
           version="$(node -p "require('./package.json').version")"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
-          if [ "$version" = "0.0.0" ] || gh release view "v${version}" > /dev/null 2>&1; then
+          # A draft left by an interrupted publish isn't a release: remove it and publish again.
+          draft="$(gh release view "v${version}" --json isDraft -q .isDraft 2>/dev/null || echo none)"
+          if [ "$draft" = "true" ]; then
+            gh release delete "v${version}" --yes --cleanup-tag
+            draft=none
+          fi
+          if [ "$version" = "0.0.0" ] || [ "$draft" = "false" ]; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
           else
             echo "publish=true" >> "$GITHUB_OUTPUT"
