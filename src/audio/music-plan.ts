@@ -10,24 +10,21 @@ export type MusicPool = "title" | "stage" | "boss";
 export type MusicPlan = {
   /** One of these, chosen at random, plays on the title screen. */
   title: readonly string[];
-  /**
-   * Loops kept out of the stage rotation. The Settings screen once had its own track; it now
-   * filters whatever is playing (#87, #89), and its old loop stays out of the rotation.
-   */
-  reserved: readonly string[];
   /** Reserved for boss stages. */
   boss: string;
 };
 
 export const defaultMusicPlan: MusicPlan = {
   title: ["blaxploitation-horns", "stripped-sleaze"],
-  reserved: ["style-ambient-lounge"],
   boss: "solitaire-boss",
 };
 
-/** Tracks a normal stage may use: everything except the boss loop and the reserved loops. */
+/**
+ * Tracks a normal stage may use: everything except the boss loop. That includes the ambient
+ * lounge loop, once Settings' own track (#192).
+ */
 export function stagePool(all: readonly string[], plan: MusicPlan = defaultMusicPlan): string[] {
-  return all.filter((id) => id !== plan.boss && !plan.reserved.includes(id));
+  return all.filter((id) => id !== plan.boss);
 }
 
 /** The tracks each pool offers, from the plan and the loops available. */
