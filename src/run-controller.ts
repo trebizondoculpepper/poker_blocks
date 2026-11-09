@@ -571,8 +571,8 @@ export function createRunController<Context>(options: {
     mode: () => currentMode,
     openMode(mode) {
       enterMode(mode);
-      // startScene is declarative until game flow drives run progression (#37).
-      switchScene(mode.startScene);
+      // The new run's flow puts its scene in front, so the scene's arrival (its sound, the
+      // shop's entrance) happens once, with the run ready.
       startRun(newRun());
       services.overlays.closeAll();
     },
