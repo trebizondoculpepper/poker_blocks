@@ -2,10 +2,10 @@
 // /music.html. It lists every `*-loop.ogg` in music/loops/ with the tempo and beat count
 // from its sidecar. Clicking a loop fades it in on the next bar.
 import "./style.css";
-import { createBeatClock } from "../audio/beat-clock";
-import { fadeCurve, fadeKinds, type FadeKind } from "../audio/music-fade";
-import { muffledCutoff, muffleSeconds } from "../audio/music-controller";
-import { defaultWind, scheduleWindDown, standstill, type WindShape } from "../audio/music-wind";
+import { createBeatClock } from "../../audio/beat-clock";
+import { fadeCurve, fadeKinds, type FadeKind } from "../../audio/music-fade";
+import { muffledCutoff, muffleSeconds } from "../../audio/music-controller";
+import { defaultWind, scheduleWindDown, standstill, type WindShape } from "../../audio/music-wind";
 import { fitTaps, snapToLoop, type LoopTempo } from "./tap-tempo";
 
 type LoopInfo = {
@@ -25,12 +25,12 @@ type Track = {
   info: LoopInfo;
 };
 
-const audioUrls = import.meta.glob<string>("../../music/loops/*-loop.ogg", {
+const audioUrls = import.meta.glob<string>("../../../music/loops/*-loop.ogg", {
   eager: true,
   query: "?url",
   import: "default",
 });
-const infos = import.meta.glob<LoopInfo>("../../music/loops/*-loop.json", {
+const infos = import.meta.glob<LoopInfo>("../../../music/loops/*-loop.json", {
   eager: true,
   import: "default",
 });
