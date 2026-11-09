@@ -49,7 +49,7 @@ export type SceneHost = {
     >;
     /** The build's version, shown in a panel's footer (`src/version.ts`). */
     version: string;
-    audio: Pick<AudioService, "setMusicFilter" | "playCue">;
+    audio: Pick<AudioService, "setMusicFilter" | "playStageMusic" | "playCue">;
     /** Play a registered sound effect (src/audio/sfx.ts). */
     sound(id: SoundEffectId): void;
   };
@@ -149,6 +149,11 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   behaviours.register("musicCue", {
     enter: ({ services }, { cue }) => services.audio.playCue(cue),
+  });
+  // A play scene starts its own music as it comes in front; covering and uncovering it (the
+  // pause menu) neither restarts nor changes it.
+  behaviours.register("musicTrack", {
+    enter: ({ services }, { pool }) => services.audio.playStageMusic(pool),
   });
   behaviours.register("titleScreen", {
     enter(context, { items }) {

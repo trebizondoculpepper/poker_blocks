@@ -5,7 +5,7 @@
 import { Registry } from "./core/registry";
 import type { GameFlow } from "./game-flow";
 import type { MusicFilter } from "./audio/music-controller";
-import type { MusicCue } from "./audio-service";
+import type { MusicCue, StageMusicPool } from "./audio-service";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { RunPositionOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
@@ -42,6 +42,11 @@ export type SceneTraits = {
   gameOverScreen: { items: readonly MenuItem[] };
   /** Entering this scene plays a music cue (src/audio-service.ts, `musicCues`). */
   musicCue: { cue: MusicCue };
+  /**
+   * Entering this play scene starts a fresh track from its pool: a random stage vibe or the
+   * boss loop (#92). Quiet modes keep their stages silent.
+   */
+  musicTrack: { pool: StageMusicPool };
   /**
    * The title screen is shown while this scene is in front: its panel, and its items whose
    * conditions hold (Continue needs a save). Choosing an item dispatches its action.
@@ -176,9 +181,9 @@ export const sceneDefinitions = [
       keyAction: { key: "Escape", action: "back", sfx: "ui.back" },
     },
   },
-  { name: "stage-1", traits: playSceneTraits },
-  { name: "stage-2", traits: playSceneTraits },
-  { name: "boss", traits: playSceneTraits },
+  { name: "stage-1", traits: { ...playSceneTraits, musicTrack: { pool: "stage" } } },
+  { name: "stage-2", traits: { ...playSceneTraits, musicTrack: { pool: "stage" } } },
+  { name: "boss", traits: { ...playSceneTraits, musicTrack: { pool: "boss" } } },
   {
     name: "shop",
     traits: { coinsPanel: {}, shopExit: {}, shopStock: {}, runInPlay: {}, ...escapeOpensPause },
