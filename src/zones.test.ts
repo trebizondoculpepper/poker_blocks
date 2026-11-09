@@ -2,7 +2,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
 import { GameSession } from "./game-session";
-import { demoSessionConfig } from "./session-config";
+import { createPassiveBlock, passiveTraits, type PassiveBlock } from "./passives";
+import { demoSessionConfig, sandboxSessionConfig } from "./session-config";
+import { inspectable } from "./traits/inspectable";
 import { insertAt, moveItem } from "./zones";
 
 describe("moveItem", () => {
@@ -67,5 +69,80 @@ describe("hand reordering", () => {
     game.discard(a.id);
     const [next] = game.refillHand();
     expect(game.state.hand).toEqual([b, d, e, drawn, next]);
+  });
+});
+
+describe("passive rack reordering", () => {
+  const session = () =>
+    new GameSession(dealerRegistry, sandboxSessionConfig(demoSessionConfig), standardDeck, () => 0);
+  const withRack = (ids: string[]) => {
+    const game = session();
+    for (const [index, definition] of ["double-line", "quad-line", "double-line"].entries())
+      if (index < ids.length) game.installPassive(createPassiveBlock(definition, ids[index]));
+    return game;
+  };
+
+  it("moves first to last and back with the same instances and nothing lost or duplicated", () => {
+    const game = withRack(["a", "b", "c"]);
+    const [a, b, c] = game.state.passiveRack;
+    expect(game.reorderPassive(0, 2)).toBe(true);
+    expect(game.state.passiveRack).toEqual([b, c, a]);
+    expect(game.state.passiveRack[2]).toBe(a);
+    expect(game.reorderPassive(2, 0)).toBe(true);
+    expect(game.state.passiveRack).toEqual([a, b, c]);
+    expect(new Set(game.state.passiveRack.map(({ id }) => id)).size).toBe(3);
+  });
+
+  it("changes no counters, score, coins or other zones", () => {
+    const game = withRack(["a", "b"]);
+    const before = game.state;
+    expect(game.reorderPassive(1, 0)).toBe(true);
+    expect(game.state.round).toEqual(before.round);
+    expect(game.state.coins).toBe(before.coins);
+    expect(game.state.hand).toBe(before.hand);
+    expect(game.state.deck).toBe(before.deck);
+    expect(game.state.field).toBe(before.field);
+    expect(game.state.discardPile).toBe(before.discardPile);
+  });
+
+  it("treats a drop on its own slot as a no-op and refuses invalid moves untouched", () => {
+    const game = withRack(["a", "b"]);
+    const rack = game.state.passiveRack;
+    expect(game.reorderPassive(1, 1)).toBe(true);
+    expect(game.state.passiveRack).toEqual(rack);
+    const before = game.state;
+    expect(game.reorderPassive(0, 2)).toBe(false);
+    expect(game.reorderPassive(-1, 0)).toBe(false);
+    expect(game.state).toBe(before);
+  });
+
+  it("resolves passives in the rack order at the time of the event", () => {
+    const seen: string[] = [];
+    passiveTraits.register("test.reorder.listener", {
+      id: "test.reorder.listener",
+      listensTo: ["discard.completed"],
+      respond: (passive) => {
+        seen.push(passive.id);
+        return [];
+      },
+    });
+    const listener = (id: string): PassiveBlock => ({
+      id,
+      definitionId: "double-line",
+      traits: {
+        rackResident: { zone: "passive-rack" },
+        passive: { traitId: "test.reorder.listener" },
+        inspectable: inspectable(id),
+      },
+    });
+    const game = session();
+    game.installPassive(listener("left"));
+    game.installPassive(listener("right"));
+    expect(game.discard(game.state.hand[0].id)).not.toBeNull();
+    expect(seen).toEqual(["left", "right"]);
+    seen.length = 0;
+    expect(game.reorderPassive(1, 0)).toBe(true);
+    expect(game.discard(game.state.hand[0].id)).not.toBeNull();
+    expect(seen).toEqual(["right", "left"]);
   });
 });

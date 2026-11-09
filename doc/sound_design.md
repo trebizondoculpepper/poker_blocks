@@ -29,7 +29,7 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | `card.attach`      | A placed block lands and locks into its cell                        | generated |
 | `discard.hover`    | A dragged block moves over the discard bin                          | generated |
 | `card.discard`     | A block is dropped in the discard bin and dissolves                 | generated |
-| `hand.reorder`     | A hand card is dropped into a new position in the hand              | generated |
+| `hand.reorder`     | A hand card or passive is dropped into a new position in its rack   | generated |
 | `card.deal`        | A new block is drawn into the hand                                  | generated |
 | `action.denied`    | An action is refused: no plays or discards left, or an invalid drop | generated |
 | `board.rotate`     | The player drags to rotate the structure (quiet, optional)          | planned   |
