@@ -24,7 +24,6 @@ export type OfferDestination = "hand" | "passive-rack";
 /** What a kind's purchase may read from the run. */
 export type OfferRun = {
   rules: Pick<RunRules, "cardPurchasePrice">;
-  passiveBuyPrice: number;
   rackCapacity: number;
   handSize: number;
 };
@@ -83,10 +82,11 @@ registerOfferKind<CardBlock>("card", {
   restore: (saved, restore) => restore.card(saved.cardId),
 });
 
-// A passive: bought into a free rack slot; an unbought one simply goes.
+// A passive: costs its base price (its definition's shop balance, #7, #144), bought into a free
+// rack slot; an unbought one simply goes. A passive without a price can't be bought.
 registerOfferKind<PassiveBlock>("passive", {
   destination: "passive-rack",
-  price: (_block, { passiveBuyPrice }) => passiveBuyPrice,
+  price: (block) => block.traits.priced?.basePrice ?? Number.NaN,
   receive: (state, block, { rackCapacity }) =>
     state.passiveRack.length >= rackCapacity || state.passiveRack.some(({ id }) => id === block.id)
       ? null

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import type { PassiveBlock } from "./passives";
 import { standardDeck, type CardBlock } from "./cards";
 import { Registry } from "./core/registry";
 import { baseDealer, type Dealer } from "./dealer";
@@ -294,17 +295,19 @@ describe("GameRun progression", () => {
         discardPileAfterShop: "keep-out",
       },
       standardDeck,
-      { ...session.snapshot(), state: shopPreviewState(session.state, 5, () => 0) },
+      { ...session.snapshot(), state: shopPreviewState(session.state, 30, () => 0) },
       () => 0,
     );
     const passive = stocked.state.shopStock!.find(({ kind }) => kind === "passive")!;
     const card = stocked.state.shopStock!.find(({ kind }) => kind === "card")!;
     expect(stocked.buyShopOffer(passive.block.id, "passive-rack")).not.toBeNull();
     expect(stocked.buyShopOffer(card.block.id, "hand")).not.toBeNull();
-    expect(stocked.state.coins).toBe(3);
+    // The passive cost its base price (#144); the card 1 coin.
+    const left = 30 - (passive.block as PassiveBlock).traits.priced!.basePrice - 1;
+    expect(stocked.state.coins).toBe(left);
     stocked.leaveShop();
     expect(stocked.phase).toBe("stage-2");
-    expect(stocked.state.coins).toBe(3);
+    expect(stocked.state.coins).toBe(left);
     expect(stocked.state.passiveRack.some(({ id }) => id === passive.block.id)).toBe(true);
     expect(
       [...stocked.state.hand, ...stocked.state.deck].some(({ id }) => id === card.block.id),

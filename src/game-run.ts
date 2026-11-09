@@ -8,13 +8,7 @@ import type { DestroyCause } from "./traits/destructible";
 import { moveItem } from "./zones";
 import { ledgerTotal, stageRewardLedger, type StageReward } from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
-import {
-  defaultPassivePrices,
-  stageKinds,
-  type PassivePrices,
-  type RunRules,
-  type StageKind,
-} from "./run-rules";
+import { stageKinds, type RunRules, type StageKind } from "./run-rules";
 import {
   createPassiveBlock,
   PassiveEventQueue,
@@ -279,11 +273,6 @@ export class GameRun {
     return this.rewarded?.stage !== `${this.currentRound}:${this.currentPhase}`;
   }
 
-  /** What passives cost and sell for in this run. */
-  get passivePrices(): PassivePrices {
-    return this.config.passivePrices ?? defaultPassivePrices;
-  }
-
   /**
    * Sell an installed passive (issue #16): remove that exact block from the rack and add its
    * sell value to the coins. Not a discard: no discard pile, plays or discards are touched.
@@ -315,7 +304,6 @@ export class GameRun {
   get offerRun(): OfferRun {
     return {
       rules: this.config,
-      passiveBuyPrice: this.passivePrices.buy,
       rackCapacity: this.rackCapacity,
       handSize: this.activeDealer.handSize,
     };
