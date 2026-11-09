@@ -13,7 +13,7 @@
   ],
   "src/hud-panels.ts": [
     "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
-    "heading: `ROUND ${view.round} \u00b7 ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
+    "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
   ],
   "src/listening-room/main.ts": [
     "const entry = entries.find((_, index) => soundEffects[index].id === \"score.line\");"
@@ -42,12 +42,9 @@
   "src/run-rules.ts": ["targetScore: Math.round(baseTargets[kind] * (1 + (round - 1) / 2)),"],
   "src/save.ts": [
     "offer.kind === \"card\"",
-    "if (!phases.includes(record.phase) || record.phase === \"over\") return null;",
     "if (!dealers.has(record.dealer)) return null;",
     "if (offer.kind === \"card\") return { kind: \"card\" as const, block: resolve(offer.cardId) };",
-    "if (offer.kind !== \"passive\" || typeof offer.id !== \"string\" || passiveIds.has(offer.id))",
-    "...(record.phase === \"shop\" && record.shopAfter ? { shopAfter: record.shopAfter } : {}),",
-    "if (snapshot.phase === \"over\") storage.removeItem(key);"
+    "if (offer.kind !== \"passive\" || typeof offer.id !== \"string\" || passiveIds.has(offer.id))"
   ],
   "src/shop-view.ts": [
     "if (offer.kind === \"passive\") {",

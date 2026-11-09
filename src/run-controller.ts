@@ -274,7 +274,7 @@ export function createRunController<Context>(options: {
 
   /** Save at a safe point: never while a placement, discard or score presentation is running. */
   function autosave(): void {
-    saveRun(storage, game.snapshot(), runSaveKey);
+    saveRun(storage, game.snapshot(), runSaveKey, currentMode.flow);
   }
 
   function refillHand(): void {
@@ -433,7 +433,8 @@ export function createRunController<Context>(options: {
    * The saved run for this mode, if there is one. Its deck is rebuilt from the seed the run
    * itself was dealt from, so Continue matches even if browser storage has moved on.
    */
-  const loadSaved = () => loadRun(storage, cardsForSavedRun, dealerRegistry, runSaveKey);
+  const loadSaved = () =>
+    loadRun(storage, cardsForSavedRun, dealerRegistry, runSaveKey, currentMode.flow);
   const resume = (snapshot: NonNullable<ReturnType<typeof loadSaved>>) => {
     cards = cardsForSavedRun(snapshot.seed);
     return GameRun.fromSnapshot(dealerRegistry, runRules, cards, snapshot);
