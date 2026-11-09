@@ -12,9 +12,6 @@ import { demoSessionConfig, sandboxSessionConfig, type SessionConfig } from "./s
 import { tweenValue } from "./easing";
 import { createMaterialise } from "./visual/materialise";
 import { isTransparent } from "./traits/transparent";
-import { createCardRoom } from "./visual/card-room";
-import { setReflectionEnvironment } from "./visual/block-appearance";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import type { Cell } from "./traits/attachable";
 import { playSfx, setSfxMuted, setSfxVolume } from "./audio/sfx";
 import { createAudioService, type AudioService } from "./audio-service";
@@ -25,6 +22,7 @@ import { createBlockViews, type BlockViews, type RenderedBlock } from "./rendere
 import { createHandView, type HandView } from "./hand-view";
 import { createFieldView, tintSeconds, type Candidate, type FieldView } from "./field-view";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
+import { createTableRenderer, type TableRenderer } from "./table-renderer";
 import { musicTracks } from "./audio/music-catalog";
 import { createMusicController } from "./audio/music-controller";
 import { createMusicPlayer } from "./audio/music-player";
@@ -63,50 +61,13 @@ const host = app.querySelector<HTMLDivElement>(".scene")!;
 const hud: HudPanels = createHudPanels(host);
 const discardArea = createDiscardTarget(host);
 
-const scene = new THREE.Scene();
-const handScene = new THREE.Scene();
+const view: TableRenderer = createTableRenderer(host);
+const { renderer, scene, handScene } = view;
 let cameraView: CameraViewService;
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.autoClear = false;
-host.append(renderer.domElement);
-
-// The hand keeps its neutral studio light; the board sits in the warmer card room,
-// whose overhead lamp (see createCardRoom) adds the shadows.
-handScene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
-const handSun = new THREE.DirectionalLight(0xffffff, 2.4);
-handSun.position.set(-3, 6, 7);
-handScene.add(handSun);
-scene.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3226, 2));
-const boardFill = new THREE.DirectionalLight(0xffffff, 1.3);
-boardFill.position.set(-3, 6, 7);
-scene.add(boardFill);
-const cardRoom = createCardRoom(scene, renderer);
-// Something for crystal and metals to reflect: a soft studio room, prefiltered once.
-setReflectionEnvironment(
-  new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture,
-);
-
-/** Blocks being dragged sit on this layer and are drawn last, above everything else. */
-const dragLayer = 1;
-for (const light of handScene.children) light.layers.enable(dragLayer);
-
-function setDragLayer(cube: THREE.Object3D, dragging: boolean): void {
-  cube.traverse((object) => (dragging ? object.layers.set(dragLayer) : object.layers.set(0)));
-}
+const setDragLayer = (cube: THREE.Object3D, dragging: boolean) => view.setDragLayer(cube, dragging);
 
 function render(): void {
-  renderer.clear();
-  renderer.render(scene, cameraView.camera);
-  renderer.clearDepth();
-  cameraView.handCamera.layers.set(0);
-  renderer.render(handScene, cameraView.handCamera);
-  // Dragged blocks last, on a fresh depth buffer, so nothing can clip into them.
-  renderer.clearDepth();
-  cameraView.handCamera.layers.set(dragLayer);
-  renderer.render(handScene, cameraView.handCamera);
-  cameraView.handCamera.layers.set(0);
+  view.render(cameraView.camera, cameraView.handCamera);
 }
 
 const cubeSize = 2.4;
@@ -202,6 +163,7 @@ const audio: AudioService = createAudioService({
 type TraitContext = {
   host: HTMLElement;
   services: {
+    renderer: TableRenderer;
     cameraView: CameraViewService;
     audio: AudioService;
     hud: HudPanels;
@@ -214,6 +176,7 @@ type TraitContext = {
 const traitContext: TraitContext = {
   host,
   services: {
+    renderer: view,
     cameraView,
     audio,
     hud,
@@ -479,7 +442,7 @@ function applySettings(next: Settings): void {
   settings = next;
   audio.applySettings(next);
   reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
-  cardRoom.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
+  view.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
 }
 applySettings(settings);
 systemMotionQuery.addEventListener("change", () => applySettings(settings));
@@ -988,7 +951,7 @@ const animate = (time: number) => {
   updateScoring(time);
   sceneManager.update(delta);
   hand.animate(time, delta, input.selection);
-  cardRoom.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
+  view.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
   input.frame();
   updateEmptyFieldPrompt(time);
   passiveRackView?.frame(time, reducedMotion);
@@ -1014,6 +977,6 @@ if (import.meta.hot) {
     field.dispose();
     passiveRackView.dispose();
     shopView.dispose();
-    renderer.dispose();
+    view.dispose();
   });
 }

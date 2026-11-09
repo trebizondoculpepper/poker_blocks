@@ -237,6 +237,8 @@ Composition is the same at both levels: a block is to its traits what a scene is
 
 `src/table-input.ts` is the eighth. It turns pointer events into gestures: dragging a hand card (carrying the rest of the selection) to play, discard or reorder it, dragging the board to rotate it, pinch and wheel zoom, clicking to select, and dragging a passive to reorder or sell it. It also owns the selection and the shared Discard/Sell target. The rules come from a `TableRules` object `main.ts` supplies (whether the table is busy, what the dealer allows, and the play, discard, reorder and sell actions); each gesture plays its sound in the service. `TraitContext.services.input` exposes it.
 
+`src/table-renderer.ts` is the ninth. It owns the WebGL renderer, the board scene in the card room and the hand scene in its studio light, the reflection environment, the drag layer and drawing a frame (board, then hand, then dragged blocks on a fresh depth buffer). `TraitContext.services.renderer` exposes it.
+
 The migration order is set out in epic #30: scene manager, trait lifecycle, services split, run-config/scene-trait split, scene rollout (Esc menu as pilot), removal of phase branches, and moving sequencing out of `GameSession`. Developer rooms are no longer a kind of room: a room the console lists has a `console: { name }` trait, and one that honours `&restart=true` has a `restartable: { param }` trait (#38).
 
 ## Architecture to discuss
