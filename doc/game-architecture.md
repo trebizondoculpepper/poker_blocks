@@ -372,7 +372,12 @@ The extracted services own presentation and interaction. `main.ts` constructs an
 
 The title screen's background is a slow field of card cubes drifting toward the camera on black, with no table under them (#147). It is its own `THREE.Scene`, camera and canvas: the renderer draws it to a quarter-resolution buffer and CSS blurs it, so the menu over it stays sharp.
 
-It is a **scene trait** (`attractBackground`), so the title composes it and no generic code asks which scene is in front. The pause menu and gameplay do not compose it, so the table stays visible behind those.
+Two scene traits decide what a scene draws behind its content, and no generic code asks which scene is in front:
+
+- **`tableBackground`** draws the card room and the baize table. Every scene played on the table composes it, as do the menus opened over a game. **The title does not**, so on the title the table is not drawn at all — not covered up, simply never rendered. The renderer counts the scenes composing it, so a menu pushed over a game leaves the table on.
+- **`attractBackground`** draws the attract sequence described below. Only the title composes it.
+
+The two are independent: a scene showing cards drifting through space composes the first without the second, and a scene on the table composes the second without the first.
 
 Its motion is **configuration**, `AttractTuning` in `src/attract-scene.ts`: a mean and a deviation for velocity (units per second), spin (radians per second) and the interval between a card passing the camera and its replacement appearing. A card is dealt its values when it spawns, so changing a value changes what appears next rather than moving cards already in flight.
 
