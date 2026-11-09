@@ -19,15 +19,29 @@ export type PassiveRackTrait = {
 /** The default rack: room for five passives, starting empty. */
 export const defaultPassiveRack: PassiveRackTrait = { capacity: 5 };
 
+/** UI panels composed into a stage or shop scene. Omitted panels are not shown. */
+export type SceneOverlays = {
+  round?: Record<string, never>;
+  deck?: Record<string, never>;
+  coins?: Record<string, never>;
+  shopExit?: Record<string, never>;
+};
+
+const standardStageOverlays: SceneOverlays = { round: {}, deck: {} };
+
 /** A shop scene contributes stock, purchase targets, and its table presentation. */
-export type ShopTrait = { passiveOffers: number; cardOffers: number };
-export const defaultShop: ShopTrait = { passiveOffers: 2, cardOffers: 3 };
+export type ShopTrait = { passiveOffers: number; cardOffers: number; overlays: SceneOverlays };
+export const defaultShop: ShopTrait = {
+  passiveOffers: 2,
+  cardOffers: 3,
+  overlays: { coins: {}, shopExit: {} },
+};
 
 export type RoomTraits = {
   /** Where the room keeps its saved run. */
   save: { key: string };
   /** The stage scene's interactions. The shop scene does not compose these. */
-  stage: { fieldPlacement: Record<string, never> };
+  stage: { fieldPlacement: Record<string, never>; overlays: SceneOverlays };
   passiveRack?: PassiveRackTrait;
   shop?: ShopTrait;
   /** Endless play: unlimited plays and discards, a stage cannot be won or lost by itself. */
@@ -61,6 +75,11 @@ export function fieldPlacementActive(traits: RoomTraits, phase: string): boolean
   return phase !== "shop" && phase !== "over" && Boolean(traits.stage.fieldPlacement);
 }
 
+/** The active scene decides which independent HUD panels are composed. */
+export function overlaysForPhase(traits: RoomTraits, phase: string): SceneOverlays {
+  return phase === "shop" ? (traits.shop?.overlays ?? {}) : traits.stage.overlays;
+}
+
 export const roomRegistry = new Registry<Room>("room");
 
 const rooms: Room[] = [
@@ -70,7 +89,7 @@ const rooms: Room[] = [
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
       save: { key: saveKey },
-      stage: { fieldPlacement: {} },
+      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
     },
@@ -81,7 +100,7 @@ const rooms: Room[] = [
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev-run" },
-      stage: { fieldPlacement: {} },
+      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       materialDeck: { reshuffle: "new-game" },
     },
   },
@@ -90,7 +109,7 @@ const rooms: Room[] = [
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev1-run" },
-      stage: { fieldPlacement: {} },
+      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       sandbox: {},
       materialDeck: { reshuffle: "each-run" },
       materialSample: {},
@@ -103,7 +122,7 @@ const rooms: Room[] = [
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev2-run" },
-      stage: { fieldPlacement: {} },
+      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       sandbox: {},
       materialDeck: { reshuffle: "new-game" },
       passiveRack: { ...defaultPassiveRack, startWith: 2 },
@@ -116,7 +135,7 @@ const rooms: Room[] = [
     dev: true,
     traits: {
       save: { key: "poker-blocks.dev3-run" },
-      stage: { fieldPlacement: {} },
+      stage: { fieldPlacement: {}, overlays: { ...standardStageOverlays } },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
       shopPreview: { coins: 5 },

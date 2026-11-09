@@ -45,7 +45,7 @@ import { bindScreenshotShortcut } from "./screenshot";
 import { createPassiveRack } from "./passive-rack";
 import { shopPreviewState } from "./shop-stock";
 import { createShopView } from "./shop-view";
-import { devRooms, fieldPlacementActive, roomFor } from "./rooms";
+import { devRooms, fieldPlacementActive, overlaysForPhase, roomFor } from "./rooms";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   loadSettings,
@@ -79,6 +79,17 @@ const deckHud = document.createElement("aside");
 deckHud.className = "deck-hud";
 deckHud.innerHTML = '<span>DECK</span><strong data-stat="deck"></strong><small>cards left</small>';
 host.append(deckHud);
+const coinHud = document.createElement("aside");
+coinHud.className = "coin-hud";
+coinHud.setAttribute("aria-label", "Coins");
+coinHud.innerHTML = '<span>COINS</span><strong data-stat="shop-coins"></strong>';
+coinHud.hidden = true;
+host.append(coinHud);
+const shopExitButton = document.createElement("button");
+shopExitButton.className = "hud-action shop-exit";
+shopExitButton.type = "button";
+shopExitButton.hidden = true;
+host.append(shopExitButton);
 const discardArea = document.createElement("div");
 discardArea.className = "discard-area";
 discardArea.setAttribute("aria-label", "Discard area");
@@ -535,6 +546,10 @@ function nextActionLabel(outcome: ReturnType<typeof roundOutcome>): string | nul
 
 function updateHud(): void {
   const { round, deck } = game.state;
+  const overlays = overlaysForPhase(roomTraits, game.phase);
+  roundHud.hidden = !overlays?.round;
+  deckHud.hidden = !overlays?.deck;
+  coinHud.hidden = !overlays?.coins;
   // The game state updates as soon as a placement is accepted, but the card still
   // has to land before its scoring presentation begins. Keep outcomes hidden across
   // both parts of that sequence.
@@ -546,12 +561,15 @@ function updateHud(): void {
   const action = stat("action") as HTMLButtonElement;
   action.hidden = label === null;
   action.textContent = label ?? "";
+  shopExitButton.hidden = !overlays?.shopExit || label === null;
+  shopExitButton.textContent = label ?? "";
   stat("score").textContent = String(shownScore);
   const count = (n: number) => (n >= unlimited / 2 ? "∞" : String(n));
   stat("target").textContent = count(round.targetScore);
   stat("moves").textContent = count(round.movesLeft);
   stat("discards").textContent = count(round.discardsLeft);
   stat("coins").textContent = String(game.state.coins);
+  stat("shop-coins").textContent = String(game.state.coins);
   stat("deck").textContent = String(deck.length);
   discardArea.classList.toggle("is-exhausted", !game.dealer.canDiscard(game.state));
   updateDiscardCount();
@@ -1632,6 +1650,7 @@ if (restartRoom) {
 }
 const unbindScreenshot = bindScreenshotShortcut(host, renderer, render);
 stat("action").addEventListener("click", takeNextAction);
+shopExitButton.addEventListener("click", takeNextAction);
 
 // ----- Developer console: ~ (or `) drops it down -----
 createConsole({

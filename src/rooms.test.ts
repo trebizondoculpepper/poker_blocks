@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { devRooms, fieldPlacementActive, roomFor } from "./rooms";
+import { devRooms, fieldPlacementActive, overlaysForPhase, roomFor } from "./rooms";
 import { saveKey } from "./save";
 
 describe("rooms composed from traits", () => {
@@ -14,18 +14,27 @@ describe("rooms composed from traits", () => {
   it("keeps each room's behaviour in its traits", () => {
     expect(roomFor(null).traits).toEqual({
       save: { key: saveKey },
-      stage: { fieldPlacement: {} },
+      stage: { fieldPlacement: {}, overlays: { round: {}, deck: {} } },
       passiveRack: { capacity: 5 },
-      shop: { passiveOffers: 2, cardOffers: 3 },
+      shop: { passiveOffers: 2, cardOffers: 3, overlays: { coins: {}, shopExit: {} } },
     });
     expect(roomFor("dev2").traits.passiveRack).toEqual({ capacity: 5, startWith: 2 });
     expect(roomFor("dev1").traits.materialSample).toEqual({});
     expect(roomFor("dev0").traits.sandbox).toBeUndefined();
     expect(roomFor("dev3").traits.shopPreview).toEqual({ coins: 5 });
-    expect(roomFor("dev3").traits.shop).toEqual({ passiveOffers: 2, cardOffers: 3 });
+    expect(roomFor("dev3").traits.shop).toEqual({
+      passiveOffers: 2,
+      cardOffers: 3,
+      overlays: { coins: {}, shopExit: {} },
+    });
     expect(roomFor("dev3").traits.skipTitle).toEqual({ resume: true });
     expect(fieldPlacementActive(roomFor("dev3").traits, "stage")).toBe(true);
     expect(fieldPlacementActive(roomFor("dev3").traits, "shop")).toBe(false);
+    expect(overlaysForPhase(roomFor(null).traits, "stage-1")).toEqual({ round: {}, deck: {} });
+    expect(overlaysForPhase(roomFor(null).traits, "shop")).toEqual({
+      coins: {},
+      shopExit: {},
+    });
   });
 });
 
