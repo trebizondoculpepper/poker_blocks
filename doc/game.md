@@ -142,7 +142,7 @@ Later this formula will be extended in three ways:
 
 ## Materials (design)
 
-The default card material is **paper**. **Wood** is the next material under discussion: it should resemble a softwood block with grain running along one axis. Four side faces show lengthwise grain; the two opposite end faces have a distinct end-grain texture. Rank and suit remain readable on every face. Wood's gameplay effect is still to be decided; its position after paper does not yet imply a numerical bonus.
+The default card material is **paper**. **Wood** resembles a softwood block with grain running along one axis. Four side faces show lengthwise grain; the two opposite end faces have a distinct end-grain texture. Rank and suit remain readable on every face.
 
 The playable `?room=dev0` experiment (formerly `?room=dev`) assigns a random visual material to each of the 52 cards at the start of a new game. Its own save preserves those assignments without affecting a normal run. The `?room=dev1` materials room opens on a structure with one block of every material, attached at random, for judging the substances next to each other. The current visual prototypes are:
 
@@ -156,6 +156,19 @@ The playable `?room=dev0` experiment (formerly `?room=dev`) assigns a random vis
 - **Meat:** marbled flesh tones and gently rounded corners.
 
 These prototypes have no material-specific rules yet. **Jelly** is excluded until its motion and attachment behavior are designed.
+
+### Basic scoring materials (planned)
+
+The shop's material pool expands by **round number**, through configured unlocks and stock weights rather than branches for named materials. Round 1 is the first round; its first shop can offer wood. Steel becomes eligible in round 2. Prismatic crystal becomes eligible in **round 4, after round 3 is complete**. Unlocking makes a material possible in stock, not guaranteed. Gold is reserved for an economic role and is not part of this played-material scoring progression.
+
+| Material          | Earliest shop round | Effect when its block contributes to a scored hand                                                                                                                                                                                         |
+| ----------------- | ------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Paper             |       Starting deck | No material bonus.                                                                                                                                                                                                                         |
+| Wood              |                   1 | Add a small configured amount to that block's base value; **+1** is the first tuning value.                                                                                                                                                |
+| Steel             |                   2 | Multiply the line's working score by a configured factor; the factor is still to be tuned. Conductive and resilient are possible later traits, not part of this initial effect.                                                            |
+| Prismatic crystal |                   4 | After ordinary scoring changes, raise the line's working score to a configured power; **1.1** is the first tuning value. Each contributing prismatic applies its power in sequence, and the result is rounded only after all such effects. |
+
+Only blocks that **contribute to the selected scoring hand** activate these material effects. A block present in a longer line but excluded from its best scoring hand has no material effect, unless a separate modifier explicitly extends eligibility. Material behavior belongs in configured traits; the line scorer supplies contributor IDs and the effect runner applies each eligible operation at its defined scoring phase. Exact steel strength, prismatic balance, and ordering with future passive effects remain tuning/design questions. This progression is not implemented yet; [material design issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8) tracks it.
 
 Material interactions will be built one combination at a time from configured, reusable traits, without material-name branches in the controller. The first mission is [ice beside fire](https://github.com/trebizondoculpepper/poker_blocks/issues/21): a timed destructible reaction removes melted ice, then face-connected groups settle toward the field's center of gravity before scoring. When numeric ice melts above another number card, the lower card permanently gains the ice's printed number before the field settles: 5 above 9 of Hearts makes **14 of Hearts**. Such nonstandard numeric ranks are valid in this game and must stay distinct from named Ace identity. The next mission is [meat beside fire](https://github.com/trebizondoculpepper/poker_blocks/issues/22): a `cookable` trait advances doneness over turns and a French themed passive rewards steak that is cooked but not overcooked. `Cookable` must support other ingredient progressions, such as salmon becoming opaque, flaky, then dry, through configuration. Flammable, brittle, corrodible, and conductive are possible later traits; their exact rules remain open.
 
