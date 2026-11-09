@@ -23,9 +23,14 @@ Before writing any code:
 
 Design decisions belong to the user. An agent never settles an open question by writing its own answer into the docs or the code.
 
-- **Blocked:** if the open questions block implementation, ask them as a numbered comment on the issue. Add the `question` label and move on to other work.
-- **Partly blocked:** if only some details are unresolved, implement what you can and ask the rest as questions on the issue. Add the `status:incomplete` label (and `question`), and say in a comment what remains.
-- The user answers questions in a regular Q&A round. Whoever takes the ticket next removes `question` once its answers are recorded.
+When you have questions about a ticket:
+
+1. **Check first.** Read the whole issue, its comments and the linked docs; the question may already be answered. Only ask what is still open.
+2. **Ask on the ticket.** Post the remaining questions as one numbered comment on the issue.
+3. **Label it.** Add `status:incomplete` and `question`, and remove `status:ready` and your `agent:` label. Say in the comment what, if anything, you already built.
+4. **Move on** to the next ticket. Don't wait for an answer.
+
+If only some details are unresolved, build what you can first, then do the steps above for the rest. The user answers questions in a regular Q&A round. Whoever takes the ticket next removes `question` once its answers are recorded.
 
 ## Labels
 
