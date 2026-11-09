@@ -9,6 +9,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      itch_only:
+        description: "Push the current version's build to itch.io again, leaving the GitHub release alone"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -49,17 +55,23 @@ jobs:
           else
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
-      - if: steps.version.outputs.publish == 'true'
+          # itch.io follows a new release, or a manual itch_only retry of the current one.
+          if [ "$version" != "0.0.0" ] && { [ "$draft" != "false" ] || [ "${{ inputs.itch_only }}" = "true" ]; }; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.version.outputs.build == 'true'
         run: vp check
-      - if: steps.version.outputs.publish == 'true'
+      - if: steps.version.outputs.build == 'true'
         run: vp test run --passWithNoTests
       - name: Build at the release version
-        if: steps.version.outputs.publish == 'true'
+        if: steps.version.outputs.build == 'true'
         env:
           POKER_BLOCKS_VERSION: ${{ steps.version.outputs.version }}
         run: vp build
       - name: Publish the GitHub release with the web build
-        if: steps.version.outputs.publish == 'true'
+        if: steps.version.outputs.publish == 'true' && !inputs.itch_only
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -76,7 +88,7 @@ jobs:
       # An upload never changes the page's visibility or settings (fullscreen launch, public or
       # not); the owner sets those on itch.io.
       - name: Push the release to itch.io
-        if: steps.version.outputs.publish == 'true'
+        if: steps.version.outputs.build == 'true'
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
           VERSION: ${{ steps.version.outputs.version }}

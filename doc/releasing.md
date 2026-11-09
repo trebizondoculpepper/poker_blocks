@@ -23,6 +23,7 @@ The same release also goes to itch.io: `release.yml` pushes the web build with b
 
 - **The secret:** butler logs in with the **`BUTLER_API_KEY`** GitHub Actions secret, which the owner adds in the repository's settings (Settings → Secrets and variables → Actions) from itch.io's Account → API keys. Until it exists, the itch.io step is skipped with a warning and the GitHub release still publishes. Never commit the key; a test fails if a file in the repository assigns one.
 - **Only releases publish:** the step runs only when a new release is being published, never on ordinary pushes.
+- **Retrying itch.io alone:** if the upload fails after the GitHub release published, run `gh workflow run release.yml -f itch_only=true`. It rebuilds the current version and pushes it to itch.io without touching the GitHub release.
 - **Page settings stay manual:** an upload doesn't change the page. The owner sets the HTML5 project to launch in fullscreen, and makes the page public when ready, on itch.io.
 
 ## Guardrail
