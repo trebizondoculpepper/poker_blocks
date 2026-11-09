@@ -66,3 +66,26 @@ describe("mode-owned game flow", () => {
     expect(stack).toEqual(["new-stage-name"]);
   });
 });
+
+describe("the round ends after its last stage's shop (#94)", () => {
+  function finishRound(rules: typeof demoRunRules) {
+    const run = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    run.discard(run.state.hand.slice(0, 2).map(({ id }) => id));
+    for (let stage = 0; stage < 3; stage++) {
+      run.forceOutcome("won");
+      run.advance();
+      run.leaveShop();
+    }
+    return run;
+  }
+
+  it("starts the next round and recycles the discard pile under the run's policy", () => {
+    const recycled = finishRound(demoRunRules);
+    expect(recycled.round).toBe(2);
+    expect(recycled.phase).toBe("stage-1");
+    expect(recycled.state.discardPile).toEqual([]);
+    const kept = finishRound({ ...demoRunRules, discardPileAfterShop: "keep-out" });
+    expect(kept.round).toBe(2);
+    expect(kept.state.discardPile).toHaveLength(2);
+  });
+});

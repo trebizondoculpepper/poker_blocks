@@ -3,7 +3,6 @@
   "src/audio/music-fade.ts": ["switch (kind) {"],
   "src/audio/music-plan.ts": ["switch (scene) {"],
   "src/game-run.ts": [
-    "session.shopAfter = snapshot.phase === \"shop\" ? (snapshot.shopAfter ?? \"boss\") : null;",
     "offer.kind === \"passive\" ? this.passivePrices.buy : (this.config.cardPurchasePrice ?? 1);",
     "if (offer.kind === \"passive\") {",
     "while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;",
@@ -39,7 +38,6 @@
     "offer.kind === \"passive\" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),",
     "if (bought.kind === \"card\") {"
   ],
-  "src/run-rules.ts": ["targetScore: Math.round(baseTargets[kind] * (1 + (round - 1) / 2)),"],
   "src/save.ts": [
     "offer.kind === \"card\"",
     "if (!dealers.has(record.dealer)) return null;",

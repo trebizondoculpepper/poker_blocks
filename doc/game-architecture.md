@@ -277,6 +277,10 @@ sequenceDiagram
 
 For each stack operation, the manager invokes `enter` on the newly active scene's composed traits and `exit` on traits of scenes removed from the stack. A push does not exit the scene underneath; a pop does not re-enter it, but calls its traits' `resume` hooks so they can restore what the popped scene changed (the `screen` trait puts back `host.dataset.scene`). A replace exits the old stack and enters the replacement. Trait hooks can start or stop scene-owned behavior such as music, input handling or animation. In this code these hooks are named `enter` and `exit` (often called `onEnter` and `onExit` in engine APIs), and they belong to each trait attached to the scene rather than to a special callback on the stack item.
 
+### Run rules and the game flow (#94)
+
+`GameRun` holds the rules state and reports the run's position (`positionOutcome`); the mode's flow decides which scene that shows. No stage is special in `GameRun`: the round is the ordered `stageKinds`, its last stage is simply the last one, and a round ends when play leaves that stage's shop. What happens to the hand when a stage ends and to the discard pile when a round ends are handler tables keyed by the run rules' options (`handAtStageEnd`, `discardPileAfterShop`). Each stage's own numbers live on its **stage definition** (`demoStages` in `src/run-rules.ts`), such as its base target. `GameRun` still has run phases, including the shop position, until #36 removes them.
+
 ### Scene definitions
 
 A scene is defined **once**, in `sceneDefinitions` (`src/game-modes.ts`): a name and the traits every copy of it composes. A mode does not keep its own catalogue. `composeScenes(modeId, additions)` gives the mode every shared definition under its own scene ids, each with a `screen` trait first, and a mode adds traits to the scenes it names (dev4 adds `devManualBlockDestroyer` to `playScenes`). Additions never change the shared definition. A new scene is a new entry in `sceneDefinitions`; no code is keyed by scene name.
