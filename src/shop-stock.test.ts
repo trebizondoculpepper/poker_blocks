@@ -44,7 +44,11 @@ describe("shop preview", () => {
     const unsold = first.state.shopStock!.flatMap((offer) =>
       offer.kind === "card" ? [offer.block] : [],
     );
-    const restock = { ...first.state, deck: [...first.state.deck, ...unsold], shopStock: undefined };
+    const restock = {
+      ...first.state,
+      deck: [...first.state.deck, ...unsold],
+      shopStock: undefined,
+    };
     const game = GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, standardDeck, {
       ...first.snapshot(),
       state: shopPreviewState(restock, 5, () => 0.25),
