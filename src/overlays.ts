@@ -8,7 +8,7 @@
  */
 import type { AudioService } from "./audio-service";
 import { createMenus, type MenuCallbacks, type MenuChoice, type Menus, type Screen } from "./menus";
-import type { SceneName } from "./game-modes";
+import type { PanelLink, SceneName } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { Settings } from "./settings";
 import type { StageReward } from "./stage-rewards";
@@ -32,6 +32,9 @@ export type Overlays = {
   showTitle(items: readonly MenuChoice[]): void;
   /** The title scene was exited. */
   hideTitle(): void;
+  /** The panel's footer: the build version and links out, shown by a `panelFooter` trait. */
+  showPanelFooter(links: readonly PanelLink[], version: string): void;
+  hidePanelFooter(): void;
   closeAll(): void;
   /** The pause menu's panel and the Settings panel, shown by their scenes' traits. */
   showMenu(label: string, choices: readonly MenuChoice[]): void;
@@ -130,6 +133,8 @@ export function createOverlays(
     },
     showTitle: (items) => menus.showTitle(items),
     hideTitle: () => menus.hideTitle(),
+    showPanelFooter: (links, version) => menus.showPanelFooter(links, version),
+    hidePanelFooter: () => menus.hidePanelFooter(),
     closeAll: () => menus.closeAll(),
     showMenu: (label, choices) => menus.showMenu(label, choices),
     hideMenu: () => menus.hideMenu(),

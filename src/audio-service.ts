@@ -10,7 +10,6 @@ import type { MusicController, MusicFilter } from "./audio/music-controller";
 import type { Screen } from "./menus";
 import { createModeMusicBehaviours, type ModeMusicBehaviour } from "./mode-music";
 import type { ModeMusicStyle } from "./game-modes";
-import type { RunPhase } from "./game-run";
 import { silencedAudio, type Settings } from "./settings";
 
 /** The parts of the music player the service drives. */
@@ -33,8 +32,11 @@ export type AudioService = {
   applySettings(settings: Settings): void;
   /** Use a mode's music style (quiet modes stay wound down). */
   enterMode(style: ModeMusicStyle): void;
-  /** A stage has just started: boss stages get the boss loop, others a random vibe. */
-  stageStarted(phase: RunPhase): void;
+  /**
+   * A play scene came in front (its `musicTrack` trait): a fresh track from its pool, a random
+   * vibe for a stage or the boss loop, unless the mode keeps its stages quiet.
+   */
+  playStageMusic(pool: StageMusicPool): void;
   /** A run has just been set up; quiet modes wind the music down. */
   runStarted(): void;
   /** A menu screen came to the front. */
@@ -56,13 +58,13 @@ export type AudioService = {
 /** A music cue a scene can play as it enters (its `musicCue` trait). */
 export type MusicCue = "windDown";
 
-/** A boss stage gets the boss loop; every other start gets a random stage vibe. */
-const stageMusic: Record<RunPhase, (music: MusicController) => void> = {
-  "stage-1": (music) => music.switchToRandomStageTrack(),
-  "stage-2": (music) => music.switchToRandomStageTrack(),
+/** The pools a play scene's `musicTrack` trait can ask for. */
+export type StageMusicPool = "stage" | "boss";
+
+/** How each pool starts its music: a fresh random vibe, or the boss loop. */
+const stagePools: Record<StageMusicPool, (music: MusicController) => void> = {
+  stage: (music) => music.switchToRandomStageTrack(),
   boss: (music) => music.switchToBossTrack(),
-  shop: (music) => music.switchToRandomStageTrack(),
-  over: (music) => music.switchToRandomStageTrack(),
 };
 
 /** Music sits a little under the sound effects at the same volume setting. */
@@ -116,9 +118,9 @@ export function createAudioService(options: {
     enterMode(style) {
       modeMusic = modeMusicBehaviours[style];
     },
-    stageStarted(phase) {
+    playStageMusic(pool) {
       if (!modeMusic.playsStages()) return;
-      stageMusic[phase](music);
+      stagePools[pool](music);
     },
     runStarted() {
       modeMusic.settle();

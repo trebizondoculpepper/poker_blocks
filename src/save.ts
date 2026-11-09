@@ -337,9 +337,10 @@ function seedOf(record: SaveRecord): number | undefined {
   return typeof record?.seed === "number" ? record.seed : undefined;
 }
 
-export function clearRun(storage: SaveStorage | null): void {
+/** Discard a saved run. The key is the active mode's, so a dev mode clears its own slot. */
+export function clearRun(storage: SaveStorage | null, key = saveKey): void {
   try {
-    storage?.removeItem(saveKey);
+    storage?.removeItem(key);
   } catch {
     // Nothing to clear if storage is unavailable.
   }

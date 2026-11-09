@@ -46,8 +46,12 @@ export type SceneHost = {
       | "hideGameOver"
       | "showStageWon"
       | "hideStageWon"
+      | "showPanelFooter"
+      | "hidePanelFooter"
     >;
-    audio: Pick<AudioService, "setMusicFilter" | "playCue">;
+    /** The build's version, shown in a panel's footer (`src/version.ts`). */
+    version: string;
+    audio: Pick<AudioService, "setMusicFilter" | "playStageMusic" | "playCue">;
     /** Play a registered sound effect (src/audio/sfx.ts). */
     sound(id: SoundEffectId): void;
   };
@@ -155,6 +159,11 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("musicCue", {
     enter: ({ services }, { cue }) => services.audio.playCue(cue),
   });
+  // A play scene starts its own music as it comes in front; covering and uncovering it (the
+  // pause menu) neither restarts nor changes it.
+  behaviours.register("musicTrack", {
+    enter: ({ services }, { pool }) => services.audio.playStageMusic(pool),
+  });
   behaviours.register("titleScreen", {
     enter(context, { items }) {
       context.services.overlays.showTitle(itemsToShow(context, items));
@@ -164,6 +173,15 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       behaviours.get("titleScreen").enter?.(context, config);
     },
     exit: (context) => context.services.overlays.hideTitle(),
+  });
+  behaviours.register("panelFooter", {
+    enter: (context, { links }) =>
+      context.services.overlays.showPanelFooter(links, context.services.version),
+    // Back in front after a panel opened over it: its footer was removed with that panel,
+    // because a footer belongs to the panel in front, so re-add it here.
+    resume: (context, { links }) =>
+      context.services.overlays.showPanelFooter(links, context.services.version),
+    exit: (context) => context.services.overlays.hidePanelFooter(),
   });
   behaviours.register("settingsPanel", {
     enter: (context) => context.services.overlays.showSettings(),

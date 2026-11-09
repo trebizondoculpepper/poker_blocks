@@ -494,6 +494,34 @@ body,
   margin-top: 8px;
 }
 
+/* The panel's footer: the build version and links out, aligned to the bottom-right (#129). */
+.menu-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 18px;
+  font-size: 12px;
+}
+
+.menu-version {
+  color: #8b93a3;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-link {
+  color: #9ce6d7;
+  text-decoration: none;
+  border-bottom: 1px dotted #9ce6d766;
+}
+
+.menu-link:hover,
+.menu-link:focus-visible {
+  color: #f6f0e3;
+  border-bottom-color: #f6f0e3;
+}
+
 .menu-buttons button,
 .menu-row button {
   min-height: 44px;

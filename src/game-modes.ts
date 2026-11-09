@@ -5,7 +5,7 @@
 import { Registry } from "./core/registry";
 import type { GameFlow } from "./game-flow";
 import type { MusicFilter } from "./audio/music-controller";
-import type { MusicCue } from "./audio-service";
+import type { MusicCue, StageMusicPool } from "./audio-service";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { RunFlowOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
@@ -43,6 +43,11 @@ export type SceneTraits = {
   /** Entering this scene plays a music cue (src/audio-service.ts, `musicCues`). */
   musicCue: { cue: MusicCue };
   /**
+   * Entering this play scene starts a fresh track from its pool: a random stage vibe or the
+   * boss loop (#92). Quiet modes keep their stages silent.
+   */
+  musicTrack: { pool: StageMusicPool };
+  /**
    * The title screen is shown while this scene is in front: its panel, and its items whose
    * conditions hold (Continue needs a save). Choosing an item dispatches its action.
    */
@@ -52,6 +57,11 @@ export type SceneTraits = {
    * counting in, then a button for `next`, which dispatches its id as a named action (#91).
    */
   stageWonScreen: { next: MenuItem };
+  /**
+   * Small text lines in the corner of the panel: the build version and links out to the
+   * project. The scene shows them while it is in front.
+   */
+  panelFooter: { links: readonly PanelLink[] };
   /** The Settings panel is shown while this scene is in front. */
   settingsPanel: Record<never, never>;
   /** The music is filtered while this scene is in front (low-pass muffles, high-pass thins). */
@@ -78,6 +88,12 @@ export type MenuItem = {
   enabledWhen?: MenuCondition;
   disabledHint?: string;
 };
+
+/**
+ * A link shown in a panel's footer. `href` is the destination; a link without one shows the
+ * build version, which is data rather than a destination.
+ */
+export type PanelLink = { label: string; href?: string };
 /** A condition a menu item can require; its test lives in the menu traits' registry. */
 export type MenuCondition = "inRun" | "hasSave";
 export type ModeScene = Scene<SceneTraits>;
@@ -116,6 +132,15 @@ const pauseMenu: SceneTraits["menu"] = {
   ],
 };
 
+/** Where the project lives. Links to it come from here, so the URL is configured once. */
+export const projectHome = "https://github.com/trebizondoculpepper/poker_blocks";
+
+/** The footer links: where the version comes from, the source, and where to report a bug (#129). */
+export const projectLinks: readonly PanelLink[] = [
+  { label: "Get source code", href: projectHome },
+  { label: "Report a bug", href: `${projectHome}/issues/new` },
+];
+
 /**
  * The scene definitions every mode composes by reference (see doc/game-architecture.md,
  * "Scene definitions"). A scene is configured here once; a mode adds traits to the scenes it
@@ -137,6 +162,8 @@ export const sceneDefinitions = [
           { id: "openSettings", label: "Settings" },
         ],
       },
+      // After `titleScreen`, so the panel is already showing when the footer is added to it.
+      panelFooter: { links: projectLinks },
       ...escapeOpensPause,
     },
   },
@@ -144,6 +171,7 @@ export const sceneDefinitions = [
     name: "pause",
     traits: {
       menu: pauseMenu,
+      panelFooter: { links: projectLinks },
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "lowpass" },
       keyAction: { key: "Escape", action: "resume", sfx: "ui.back" },
@@ -158,9 +186,9 @@ export const sceneDefinitions = [
       keyAction: { key: "Escape", action: "back", sfx: "ui.back" },
     },
   },
-  { name: "stage-1", traits: playSceneTraits },
-  { name: "stage-2", traits: playSceneTraits },
-  { name: "boss", traits: playSceneTraits },
+  { name: "stage-1", traits: { ...playSceneTraits, musicTrack: { pool: "stage" } } },
+  { name: "stage-2", traits: { ...playSceneTraits, musicTrack: { pool: "stage" } } },
+  { name: "boss", traits: { ...playSceneTraits, musicTrack: { pool: "boss" } } },
   {
     name: "shop",
     traits: { coinsPanel: {}, shopExit: {}, shopStock: {}, runInPlay: {}, ...escapeOpensPause },

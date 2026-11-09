@@ -67,11 +67,16 @@ function recordingHost() {
             `title:${items.map((item) => ((item as { disabled?: boolean }).disabled ? `${item.id}(disabled)` : item.id)).join(",")}`,
           ),
         hideTitle: () => void calls.push("title:hide"),
+        showPanelFooter: (links, version) =>
+          void calls.push(`footer:${version}:${links.map(({ label }) => label).join(",")}`),
+        hidePanelFooter: () => void calls.push("footer:hide"),
       },
       audio: {
         setMusicFilter: (kind) => void calls.push(`filter:${kind}`),
+        playStageMusic: (pool) => void calls.push(`stageMusic:${pool}`),
         playCue: (cue) => void calls.push(`cue:${cue}`),
       },
+      version: "1.2.3",
       sound: (id) => void calls.push(`sound:${id}`),
     },
   };
@@ -251,12 +256,13 @@ describe("the pause menu's scene traits (#87)", () => {
     // Opening it also ends any drag under way on the table (#124).
     expect(calls).toEqual([
       "menu:Paused:resume,openSettings,quitToTitle",
+      "footer:1.2.3:Get source code,Report a bug",
       "gestures:cancel",
       "filter:lowpass",
     ]);
     calls.length = 0;
     scenes.pop();
-    expect(calls).toEqual(["filter:null", "menu:hide"]);
+    expect(calls).toEqual(["filter:null", "footer:hide", "menu:hide"]);
   });
 
   it("leaves out Quit to title over the title screen", () => {
@@ -279,6 +285,8 @@ describe("the pause menu's scene traits (#87)", () => {
       "filter:null",
       "settings:hide",
       "menu:Paused:resume,openSettings,quitToTitle",
+      // The pause panel's footer comes back with the panel it belongs to.
+      "footer:1.2.3:Get source code,Report a bug",
       "filter:lowpass",
     ]);
   });
@@ -355,5 +363,33 @@ describe("the title screen's scene trait (#88)", () => {
     scenes.pop();
     // Coming back in front re-reads the conditions, so Continue is enabled once a save exists.
     expect(calls).toContain("title:continue(disabled),new,openSettings");
+  });
+});
+
+describe("play scenes start their own music (#92)", () => {
+  const scenesOf = (name: string) =>
+    gameModeFor("game").scenes.find(({ id }) => id === `game/${name}`)!;
+
+  it("a stage starts a random vibe and the boss its loop, as each comes in front", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    for (const name of ["stage-1", "stage-2", "boss", "pause"]) scenes.register(scenesOf(name));
+    scenes.switchTo(scenesOf("stage-1").id);
+    scenes.switchTo(scenesOf("boss").id);
+    expect(calls.filter((call) => call.startsWith("stageMusic:"))).toEqual([
+      "stageMusic:stage",
+      "stageMusic:boss",
+    ]);
+  });
+
+  it("doesn't restart the music when the pause menu closes over a stage", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    for (const name of ["stage-1", "pause"]) scenes.register(scenesOf(name));
+    scenes.switchTo(scenesOf("stage-1").id);
+    calls.length = 0;
+    scenes.push(scenesOf("pause").id);
+    scenes.pop();
+    expect(calls.filter((call) => call.startsWith("stageMusic:"))).toEqual([]);
   });
 });

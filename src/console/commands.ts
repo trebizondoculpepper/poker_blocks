@@ -19,6 +19,11 @@ export type ConsoleHost = {
   newGame(): void;
   /** Go to the main menu (the title screen). */
   home(): void;
+  /**
+   * Discard the open mode's saved run, then go to the title screen. Player settings are kept.
+   * Continue is disabled afterwards, because there is no longer a game in progress.
+   */
+  hardReset(): void;
   /** The dev mode open now ("dev0", "dev1", ...), or null in the normal game. */
   mode(): string | null;
   /** The dev modes available. */
@@ -63,7 +68,9 @@ export const COMMANDS: readonly ConsoleCommand[] = [
     usage: "[command]",
     help: "list the commands, or say what one does",
     complete: () => COMMANDS.map((c) => c.name),
-    run(_host, [name]) {
+    run(_host, args) {
+      // A command's name may be several words (`hard reset`), so the whole tail is the name.
+      const name = args.join(" ");
       if (name) {
         const c = COMMAND_BY_NAME.get(name.toLowerCase());
         if (!c) return fail(`help: no command "${name}"`);
@@ -196,6 +203,15 @@ export const COMMANDS: readonly ConsoleCommand[] = [
     },
   },
   {
+    name: "hard reset",
+    usage: "",
+    help: "discard the saved run and go to the title screen (settings are kept)",
+    run(host) {
+      host.hardReset();
+      return "run discarded";
+    },
+  },
+  {
     name: "newgame",
     usage: "",
     help: "start a new run",
@@ -229,6 +245,29 @@ export const COMMANDS: readonly ConsoleCommand[] = [
 
 const COMMAND_BY_NAME = new Map(COMMANDS.map((c) => [c.name, c]));
 
+/**
+ * The command a statement runs: the longest command name whose words the statement starts
+ * with. Names are data, so a multi-word command (`hard reset`) needs no special case, and a
+ * word that happens to be a command's only start (`reset` in "reset dev2") still matches.
+ */
+export function commandFor(statement: string): { command: ConsoleCommand; args: string[] } | null {
+  try {
+    const words = tokenise(statement);
+    for (let count = words.length; count > 0; count--) {
+      const command = COMMAND_BY_NAME.get(words.slice(0, count).join(" ").toLowerCase());
+      if (command) return { command, args: words.slice(count) };
+    }
+  } catch {
+    // Not a command line: an unquoted unterminated string is the evaluator's to report.
+  }
+  return null;
+}
+
+/** Whether a line starts with a command, without treating a tokenising failure as one. */
+function matchesCommand(statement: string): boolean {
+  return commandFor(statement) !== null;
+}
+
 /** What the word being completed may become, given the words before it. */
 export function candidates(host: ConsoleHost, before: readonly string[]): readonly string[] {
   if (!before.length) return COMMANDS.map((c) => c.name);
@@ -256,7 +295,10 @@ export function evaluate(
   print: (lines: string[]) => void,
 ): unknown {
   const scope: Record<string, unknown> = {};
-  for (const c of COMMANDS)
+  for (const c of COMMANDS) {
+    // Only a name that is a valid identifier can be a JavaScript binding; `hard reset` is a
+    // command line, not a callable in the scope.
+    if (!/^[\w$]+$/.test(c.name)) continue;
     scope[c.name] = (...args: unknown[]) => {
       const printed = c.run(
         host,
@@ -264,6 +306,7 @@ export function evaluate(
       );
       if (printed !== undefined) print(typeof printed === "string" ? [printed] : [...printed]);
     };
+  }
   scope.game = host.game();
   const names = Object.keys(scope);
   let fn: (...args: unknown[]) => unknown;
@@ -286,21 +329,22 @@ export function runLine(host: ConsoleHost, line: string): ConsoleLine[] {
   const print = (lines: string[], tone: ConsoleLine["tone"] = "output") =>
     out.push(...lines.map((text) => ({ text, tone })));
   const statements = splitStatements(line);
-  const first = tokenise(statements[0] ?? "")[0]?.toLowerCase();
-  const javascript = !first || !COMMAND_BY_NAME.has(first) || /^[\w$]+\s*\(/.test(line.trim());
+  // A command is only considered when the line is not a call expression, and tokenising is
+  // skipped entirely when it is: a broken JavaScript line must reach the evaluator to report
+  // its own error, not fail while deciding whether it is a command.
+  const javascript = /^[\w$]+\s*\(/.test(line.trim()) || !matchesCommand(statements[0] ?? "");
   try {
     if (javascript) {
       if (line.trim()) print(formatValue(evaluate(line, host, print)));
       return out;
     }
     for (const statement of statements) {
-      const [name, ...args] = tokenise(statement);
-      const c = COMMAND_BY_NAME.get(name.toLowerCase());
-      if (!c) {
-        print([`no command "${name}" (help lists them)`], "error");
+      const match = commandFor(statement);
+      if (!match) {
+        print([`no command "${tokenise(statement)[0] ?? ""}" (help lists them)`], "error");
         continue;
       }
-      const printed = c.run(host, args);
+      const printed = match.command.run(host, match.args);
       if (printed !== undefined) print(typeof printed === "string" ? [printed] : [...printed]);
     }
   } catch (e) {

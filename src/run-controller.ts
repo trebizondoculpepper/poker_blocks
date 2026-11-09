@@ -37,7 +37,7 @@ import {
   type SceneName,
   type SceneTraits,
 } from "./game-modes";
-import { loadRun, saveRun, type SaveStorage } from "./save";
+import { clearRun, loadRun, saveRun, type SaveStorage } from "./save";
 import type { SceneManager } from "./scenes";
 import { demoRunRules, type RunRules } from "./run-rules";
 import { createRunSetupRegistry } from "./run-setup-behaviours";
@@ -234,11 +234,7 @@ export function createRunController<Context>(options: {
     });
   }
 
-  /**
-   * Ask the scene in front to re-read the run. A new run can begin without any scene
-   * transition, and `refresh` exits and re-enters the same top scene, so it is a no-op after
-   * a switch and the work after a same-scene start.
-   */
+  /** Ask the scene in front to re-read the run, by exiting and re-entering it. */
   function refreshScene(): void {
     scenes.refresh();
   }
@@ -370,7 +366,6 @@ export function createRunController<Context>(options: {
       followRunPosition();
       resetTable();
       if (game.inStage) {
-        services.audio.stageStarted(game.phase);
         services.hand.deal(game.state.hand);
         playSfx("round.start");
       } else if (game.inShop) {
@@ -440,15 +435,18 @@ export function createRunController<Context>(options: {
     // The shop scene's own `shopStock` trait shows the stock. A new run begun in the shop
     // already in front causes no scene transition, so refresh that scene: its traits re-read
     // the run and show the new offers instead of the previous run's.
+    // A new run that changes the scene enters it fresh; one that begins in the scene already in
+    // front (a restart in the shop, say) refreshes it, so its traits re-read the run. Never
+    // both, so a scene's enter work (such as choosing a track) runs once (#92).
+    const inFront = scenes.current;
     followRunPosition();
-    refreshScene();
+    if (scenes.current === inFront) refreshScene();
     const enterShop = game.phase === "shop" && fresh && !reducedMotion;
     if (enterShop) cameraView.beginShopEntrance();
     updateHud();
     showSelection();
     autosave();
     playSfx(game.phase === "shop" ? "shop.open" : "round.start");
-    if (game.inStage) audio.stageStarted(game.phase);
     audio.runStarted();
   }
 
@@ -590,6 +588,16 @@ export function createRunController<Context>(options: {
       services.overlays.closeAll();
     },
     home: () => showScene("title"),
+    hardReset() {
+      // The active mode's own save slot, never a named mode.
+      clearRun(storage, runSaveKey);
+      // The run on screen is gone too, so the table returns to its empty start.
+      game = new GameRun(dealerRegistry, runRules, cards);
+      stageWonAt = gameOverAt = null;
+      services.presenter.reset();
+      resetTable();
+      showScene("title");
+    },
     mode: () => currentMode,
     openMode(mode) {
       enterMode(mode);
