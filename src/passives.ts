@@ -1,6 +1,7 @@
 import { Registry } from "./core/registry";
 import { categoryPalette, type PassiveCategoryTraits } from "./passive-categories";
 import type { EventRule } from "./event-rules";
+import type { PassiveFaceDesign, PassiveTokenAppearance } from "./passive-visual";
 import type { BlockMaterial } from "./materials";
 import type { StageKind } from "./run-rules";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
@@ -30,7 +31,7 @@ export type PassiveBlock = {
   definitionId: string;
   traits: Partial<PassiveCategoryTraits> & {
     rackResident?: { zone: "passive-rack" };
-    appearance?: { symbol: string; palette: PassivePalette };
+    appearance?: PassiveTokenAppearance;
     passive: { traitId: string; rules?: readonly PassiveRule[]; eventRules?: readonly EventRule[] };
     inspectable: InspectableTrait;
     /** What it cost in the shop, before modifiers; the resale policy reads it (#103). */
@@ -75,6 +76,10 @@ export type PassiveDefinition = {
   categoryTrait: Partial<PassiveCategoryTraits>;
   /** Overrides the category's default colours; only where an explicit design calls for it. */
   palette?: PassivePalette;
+  /** The token's registered shape (`src/passive-visual.ts`); a cube when absent. */
+  shape?: string;
+  /** Artwork per face in logical order: face `i` sits opposite face `count - 1 - i`. */
+  faces?: readonly PassiveFaceDesign[];
   rules: readonly PassiveRule[];
   /**
    * Its shop balance (doc/game.md, "Shop rules"): base purchase price in coins and the first
@@ -263,15 +268,14 @@ export function passivePalette(definition: PassiveDefinition): PassivePalette {
 }
 
 /** The look a passive block is drawn with: its own appearance trait, or its definition's. */
-export function passiveAppearance(block: PassiveBlock): {
-  symbol: string;
-  palette: PassivePalette;
-} {
+export function passiveAppearance(block: PassiveBlock): PassiveTokenAppearance {
   const definition = () => passiveDefinitions.get(block.definitionId);
   return (
     block.traits.appearance ?? {
       symbol: definition().symbol,
       palette: passivePalette(definition()),
+      shape: definition().shape,
+      faces: definition().faces,
     }
   );
 }
@@ -285,7 +289,12 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
     traits: {
       ...definition.categoryTrait,
       rackResident: { zone: "passive-rack" },
-      appearance: { symbol: definition.symbol, palette: passivePalette(definition) },
+      appearance: {
+        symbol: definition.symbol,
+        palette: passivePalette(definition),
+        shape: definition.shape,
+        faces: definition.faces,
+      },
       passive: { traitId: definition.traitId, rules: definition.rules },
       inspectable: inspectable(`${definition.name} — ${definition.description}`),
       ...(definition.shop ? { priced: { basePrice: definition.shop.basePrice } } : {}),
