@@ -25,8 +25,8 @@ export function createRunSetupRegistry(
 
   registry.register("materialDeck", {
     // A fresh seed per deal, recorded in the run so Continue rebuilds the same mix.
-    deck: (_context, _config, services) => {
-      const seed = services.newSeed();
+    deck: (context, _config, services) => {
+      const seed = context.seed ?? services.newSeed();
       return { deck: makeDevDeck(seed), seed };
     },
   });

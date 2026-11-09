@@ -222,18 +222,37 @@ describe("Continue never re-applies run setup", () => {
     expect(toSaveRecord(resumed.snapshot())).toEqual(toSaveRecord(saved));
   });
 
-  it("stays identical when the deck pass is asked for a saved run's seed", () => {
-    // The same steps rebuild the same deck from a seed, which is what Continue relies on.
-    const steps = gameModeFor("dev4").runSetup;
-    const dealt = newDeck(steps);
-    const rebuilt = createRunSetupRegistry(noOffers).deck(
-      steps,
-      { deck: standardDeck, seed: dealt.seed },
-      services,
-    );
-    expect(rebuilt.deck.map(({ id }) => id)).toEqual(dealt.deck.map(({ id }) => id));
-    expect(rebuilt.seed).toBe(dealt.seed);
-  });
+  for (const modeId of ["dev2", "dev4"]) {
+    it(`rebuilds ${modeId}'s saved material and destructible mix without a new seed`, () => {
+      const steps = gameModeFor(modeId).runSetup;
+      const dealt = newDeck(steps);
+      let newSeedCalls = 0;
+      const rebuilt = createRunSetupRegistry(noOffers).deck(
+        steps,
+        { deck: standardDeck, seed: dealt.seed },
+        { ...services, newSeed: () => (newSeedCalls++, 90210) },
+      );
+      const traits = (deck: typeof dealt.deck) =>
+        deck.map(({ id, traits }) => ({
+          id,
+          material: traits.material,
+          destructible: traits.destructible,
+        }));
+      expect(newSeedCalls).toBe(0);
+      expect(rebuilt.seed).toBe(dealt.seed);
+      expect(traits(rebuilt.deck)).toEqual(traits(dealt.deck));
+      const saved = freshRun(modeId).snapshot();
+      const record = JSON.parse(JSON.stringify(toSaveRecord(saved)));
+      const restored = fromSaveRecord(record, rebuilt.deck, dealerRegistry)!;
+      const inZones = (state: typeof saved.state) => [
+        ...state.field.map(({ block }) => block),
+        ...state.hand,
+        ...state.deck,
+        ...state.discardPile,
+      ];
+      expect(traits(inZones(restored.state))).toEqual(traits(inZones(saved.state)));
+    });
+  }
 
   it("resolves a save with no seed against the plain deck rather than the last dealt", () => {
     // Old saves are not supported: nothing about a deck lives outside the run, so a save
