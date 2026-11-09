@@ -119,6 +119,8 @@ export type RunController = {
   takeNextAction(): void;
   /** A shop offer's price. */
   offerPrice(offer: ShopOffer): number;
+  /** How many slots the rack shows: the run's rack capacity (#187). */
+  rackCapacity(): number;
   /** What the shop is showing while its scene is in front. */
   shopStock(): readonly ShopOffer[];
   /** The won stage's paid rewards, which the stage-won pop-up shows; null before payment. */
@@ -246,8 +248,6 @@ export function createRunController<Context>(options: {
     runRules = persistentRules(mode);
     runSaveKey = modeTraits.save.key;
     if (createDeck) cards = deckForRun(undefined);
-    services.rack.setCapacity(modeTraits.passiveRack?.capacity ?? 0);
-    services.rack.element.hidden = !modeTraits.passiveRack;
     services.audio.enterMode(mode.traits.music.style);
   }
 
@@ -410,8 +410,6 @@ export function createRunController<Context>(options: {
   function startRun(session: GameRun): void {
     const { rack, cameraView, audio } = services;
     game = session;
-    const rackTrait = modeTraits.passiveRack;
-    rack.element.hidden = !rackTrait;
     rack.render(game.state.passiveRack);
     gameOverAt = null;
     // A run resumed on a won stage moves on from its pop-up (paid once; see the run).
@@ -696,6 +694,9 @@ export function createRunController<Context>(options: {
     offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),
     shopStock: () => game.state.shopStock ?? [],
     runStats: () => game.stats,
+    // A run with no rack limit shows exactly the passives it holds.
+    rackCapacity: () =>
+      Number.isFinite(game.rackCapacity) ? game.rackCapacity : game.state.passiveRack.length,
     stageReward: () => game.stageReward,
     hasSave,
     seed: () => randomizer.seed,

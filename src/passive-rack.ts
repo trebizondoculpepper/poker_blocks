@@ -42,15 +42,16 @@ function activationFrame(entry: RenderedPassive, time: number, reducedMotion: bo
 export function createPassiveRack(
   host: HTMLElement,
   options: {
-    /** How many slots the rack shows; empty ones are drawn as outlines. */
-    capacity?: number;
     /** A pointer went down on an installed passive (the start of a possible drag). */
     onPickUp?(block: PassiveBlock, event: PointerEvent): void;
   } = {},
 ): {
   element: HTMLElement;
-  /** Change the number of visible slots for the active mode. */
-  setCapacity(capacity: number): void;
+  /**
+   * A scene composing `passiveRackView` came to the front, or left (#187). The rack is shown,
+   * with `capacity` slots, while any such scene is on the stack.
+   */
+  viewEntered(entered: boolean, capacity: number): void;
   render(rack: readonly PassiveBlock[]): void;
   /** Hide one passive's cube while it is being dragged (null shows them all). */
   lift(id: string | null): void;
@@ -71,6 +72,8 @@ export function createPassiveRack(
   element.setAttribute("aria-label", "Passive rack");
   element.innerHTML =
     '<span class="passive-rack-title">PASSIVES</span><div class="passive-rack-slots"></div>';
+  // Hidden until a scene composing `passiveRackView` comes to the front (#187).
+  element.hidden = true;
   host.append(element);
   const slots = element.querySelector<HTMLElement>(".passive-rack-slots")!;
 
@@ -96,7 +99,11 @@ export function createPassiveRack(
   let liftedId: string | null = null;
   let order: string[] = [];
   let slotCount = 1;
-  let capacity = options.capacity ?? 1;
+  let capacity = 1;
+  /** How many scenes in front compose `passiveRackView`. */
+  let viewScenes = 0;
+  /** The rack last rendered, so a change of slots redraws it. */
+  let shown: readonly PassiveBlock[] = [];
   const slotX = (index: number) =>
     (index - (slotCount - 1) / 2) * ((2.3 * (slotWidth + slotGap)) / canvasHeight);
   const place = (ids: readonly string[]) => {
@@ -118,10 +125,14 @@ export function createPassiveRack(
 
   return {
     element,
-    setCapacity(nextCapacity) {
+    viewEntered(entered, nextCapacity) {
+      viewScenes = Math.max(0, viewScenes + (entered ? 1 : -1));
+      element.hidden = viewScenes === 0;
       capacity = Math.max(1, nextCapacity);
+      this.render(shown);
     },
     render(rack) {
+      shown = rack;
       const ids = new Set(rack.map(({ id }) => id));
       for (const [id, entry] of rendered) {
         if (ids.has(id)) continue;

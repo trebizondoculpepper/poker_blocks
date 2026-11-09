@@ -96,6 +96,7 @@ type TraitContext = {
     board: BlockDestroyerBoard;
     attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
     shop: ShopView;
+    rack: { viewEntered(entered: boolean, capacity: number): void };
     version: string;
     sound: (id: SoundEffectId) => void;
   };
@@ -132,6 +133,9 @@ const traitContext: TraitContext = {
     attract,
     get shop() {
       return shopView;
+    },
+    get rack() {
+      return passiveRackView;
     },
     sound: (id) => playSfx(id),
     version: appVersion,
@@ -178,10 +182,8 @@ const run: RunController = createRunController({
   },
 });
 const passiveRackView = createPassiveRack(host, {
-  capacity: run.mode.traits.passiveRack?.capacity,
   onPickUp: (block, event) => input.pickUpPassive(block, event),
 });
-passiveRackView.element.hidden = !run.mode.traits.passiveRack;
 const hand: HandView = createHandView({
   views: blockViews,
   scene: view.handScene,
