@@ -23,7 +23,7 @@ export type ConsoleHost = {
   mode(): string | null;
   /** The dev modes available. */
   modes(): readonly string[];
-  /** Open a dev mode with a fresh run (null: the normal game, new run). */
+  /** Open a dev mode with a fresh run; null (or the current mode) restarts the current mode. */
   resetMode(mode: string | null): void;
   /** Decide the current stage now (a developer shortcut); false outside a stage. */
   forceOutcome(outcome: "won" | "lost"): boolean;

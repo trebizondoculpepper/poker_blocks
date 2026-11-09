@@ -221,7 +221,8 @@ Flow answers **what happens next?** The run controller currently follows game ev
 
 ```mermaid
 flowchart TD
-  Title[Title scene] -->|New game / Continue| Stage1[Stage 1 scene]
+  Title[Title scene] -->|New game| Stage1[Stage 1 scene]
+  Title -->|Continue| Saved[Scene for the saved phase: a stage or the shop]
   Stage1 -->|stage won| Won[Stage-won scene]
   Won -->|continue| Shop1[Shop scene]
   Shop1 -->|leave shop| Stage2[Stage 2 scene]

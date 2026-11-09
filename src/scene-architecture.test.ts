@@ -10,6 +10,8 @@ describe("scene architecture guardrails", () => {
     }
     const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
     expect(run).toContain("window.history.replaceState");
+    // The page's mode comes from ?mode= with the ?room= alias (tested in game-modes.test.ts).
+    expect(run).toContain("gameModeFromParams(options.params)");
   });
 
   it("keeps camera construction, framing, and resizing in the camera-view service", () => {
