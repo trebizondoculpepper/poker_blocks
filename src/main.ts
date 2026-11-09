@@ -392,6 +392,30 @@ function updateCamera(now: number): void {
   if (progress === 1) cameraMove = null;
 }
 
+/** Pan the table under the fixed overlays while shop cubes land. */
+function beginShopCameraEntrance(): void {
+  const desired = desiredCamera();
+  cameraTarget.copy(desired.target).add(new THREE.Vector3(0, 2.3, 0));
+  cameraDistance = desired.distance * 1.22;
+  applyCamera();
+  cameraMove = {
+    startAt: performance.now() - 300,
+    fromDistance: cameraDistance,
+    toDistance: desired.distance,
+    fromTarget: cameraTarget.clone(),
+    toTarget: desired.target,
+  };
+}
+
+function finishShopCameraEntrance(): void {
+  if (!cameraMove) return;
+  const desired = desiredCamera();
+  cameraMove = null;
+  cameraDistance = desired.distance;
+  cameraTarget.copy(desired.target);
+  applyCamera();
+}
+
 const storage = browserStorage();
 /**
  * Rooms (?room=...) are composed from room traits; see src/rooms.ts. dev0 is the normal game
@@ -480,6 +504,7 @@ const shopView = roomTraits.shop
         playSfx("shop.buy");
         return true;
       },
+      finishShopCameraEntrance,
     )
   : null;
 // The score shown lags the state until the placed card lands.
@@ -1510,7 +1535,9 @@ async function advanceFromStage(): Promise<void> {
     } else if (game.phase === "shop") {
       playSfx("shop.open");
     }
-    shopView?.render(game.state.shopStock ?? [], game.phase === "shop");
+    const enterShop = game.phase === "shop" && !reducedMotion;
+    shopView?.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
+    if (enterShop) beginShopCameraEntrance();
     showSelection();
     updateHud();
     autosave();
@@ -1575,7 +1602,7 @@ function stockShopIfNeeded(session: GameSession): GameSession {
 }
 
 /** Swap in a session (new or resumed) and rebuild the scene from its state. */
-function startRun(session: GameSession): void {
+function startRun(session: GameSession, fresh = false): void {
   session = stockShopIfNeeded(session);
   game = session;
   const rack = roomTraits.passiveRack;
@@ -1594,7 +1621,9 @@ function startRun(session: GameSession): void {
   cameraTarget.copy(desired.target);
   applyCamera();
   if (game.inStage) dealHand();
-  shopView?.render(game.state.shopStock ?? [], game.phase === "shop");
+  const enterShop = game.phase === "shop" && fresh && !reducedMotion;
+  shopView?.render(game.state.shopStock ?? [], game.phase === "shop", enterShop);
+  if (enterShop) beginShopCameraEntrance();
   updateHud();
   showSelection();
   autosave();
@@ -1611,7 +1640,7 @@ const menus = createMenus(host, settings, {
     }
   },
   onNewGame() {
-    startRun(newSession());
+    startRun(newSession(), true);
   },
   onSettingsChange(next) {
     applySettings(next);
@@ -1635,10 +1664,11 @@ if (skipTitle) {
     skipTitle.resume && !restartRoom ? loadRun(storage, cards, dealerRegistry, runSaveKey) : null;
   startRun(
     saved ? GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, saved) : newSession(),
+    !saved,
   );
   menus.closeAll();
 } else if (restartRoom) {
-  startRun(newSession());
+  startRun(newSession(), true);
   menus.closeAll();
 } else menus.showTitle();
 // Quiet rooms: the record player starts wound down.
