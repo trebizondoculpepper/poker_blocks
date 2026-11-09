@@ -216,7 +216,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("stageWonScreen", {
     enter({ services }, { next }) {
       const reward = services.run.stageReward();
-      if (reward) services.overlays.showStageWon(reward, next, services.run.seed());
+      if (reward) services.overlays.showStageWon(reward, next);
     },
     exit: ({ services }) => services.overlays.hideStageWon(),
   });
