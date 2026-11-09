@@ -43,7 +43,7 @@ describe("scoring passives run as event rules (#139)", () => {
     // A pair of 3s: each 3 counts as 10, times the pair multiplier of 2.
     const [line] = scoreFieldWithPassives(row(card("3", "hearts"), card("3", "clubs")), [tens]);
     expect(line.points).toBe((10 + 10) * 2);
-    expect(line.activations.map(({ passiveId, blockId }) => [passiveId, blockId])).toEqual([
+    expect(line.activations.map(({ sourceId, blockId }) => [sourceId, blockId])).toEqual([
       ["passive.1", line.contributingIds[0]],
       ["passive.1", line.contributingIds[1]],
     ]);
@@ -63,13 +63,15 @@ describe("scoring passives run as event rules (#139)", () => {
     const [line] = scoreFieldWithPassives(field, rack);
     expect(line.hand).toBe("straight");
     const woodSix = field[2]!.block.id;
-    expect(line.activations.map(({ passiveId, on, blockId }) => [passiveId, on, blockId])).toEqual([
+    expect(line.activations.map(({ sourceId, on, blockId }) => [sourceId, on, blockId])).toEqual([
+      // The wood card's own +1 (its material, #141), then Woodworker's +3.
+      [woodSix, "score.beforeBlockValue", woodSix],
       ["passive.1", "score.beforeBlockValue", woodSix],
       ["passive.2", "score.beforeLineFinalized", undefined],
       // Long Haul fires its three-or-more rule only, not the two-block penalty.
       ["passive.3", "score.beforeLineFinalized", undefined],
     ]);
-    expect(line.points).toBe((5 + 9 + 7 + 8 + 9) * 3 * 2 + 5);
+    expect(line.points).toBe((5 + (6 + 1 + 3) + 7 + 8 + 9) * 3 * 2 + 5);
   });
 
   it("reports nothing when no rule matches", () => {

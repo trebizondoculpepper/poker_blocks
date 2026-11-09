@@ -7,7 +7,9 @@
  * Base prices are fixed data. Anything that changes a price later (a passive that raises a sale
  * payout, say) is a modifier applied on top, never an edit to the definition.
  */
+import type { MaterialDefinition } from "./materials";
 import type { PassiveDefinition } from "./passives";
+import { validateScoringModifier } from "./scoring-modifier";
 
 /** Everything wrong with these passives' shop balance; retired passives need none. */
 export function validatePassiveBalance(definitions: readonly PassiveDefinition[]): string[] {
@@ -23,4 +25,11 @@ export function validatePassiveBalance(definitions: readonly PassiveDefinition[]
         : [`${id}: unlock round must be a positive whole number`]),
     ];
   });
+}
+
+/** Everything wrong with these materials' scoring modifiers (#141); a neutral one needs none. */
+export function validateMaterialBalance(definitions: readonly MaterialDefinition[]): string[] {
+  return definitions.flatMap(({ id, scoringModifier }) =>
+    validateScoringModifier(id, scoringModifier),
+  );
 }

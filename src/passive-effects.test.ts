@@ -29,13 +29,14 @@ describe("configured passive effects", () => {
     };
     const field = [placed(wood, 0), placed(meat, 1)];
     const rack = [passive("woodworker", 1), passive("carnivore", 2), passive("double-line", 3)];
-    expect(scoreFieldWithPassives(field, rack)[0].points).toBe((7 + 3 + 7 * 2) * 2 * 2);
+    // The wood card's own +1 (its material, #141) comes before Woodworker's +3.
+    expect(scoreFieldWithPassives(field, rack)[0].points).toBe((7 + 1 + 3 + 7 * 2) * 2 * 2);
     expect(
       scoreFieldWithPassives(field, [passive("long-haul", 4), passive("double-line", 5)])[0].points,
-    ).toBe((28 - 5) * 2);
+    ).toBe(((7 + 1 + 7) * 2 - 5) * 2);
     expect(
       scoreFieldWithPassives(field, [passive("double-line", 5), passive("long-haul", 4)])[0].points,
-    ).toBe(28 * 2 - 5);
+    ).toBe((7 + 1 + 7) * 2 * 2 - 5);
   });
 
   it("counts each perpendicular intersection once per line", () => {
