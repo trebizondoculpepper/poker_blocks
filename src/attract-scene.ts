@@ -17,17 +17,40 @@ import { getMaterialDefinition, materialOf } from "./materials";
 import { createAttractTuningPanel } from "./attract-tuning-panel";
 import { createBlockAppearance } from "./visual/block-appearance";
 
-/** How many cards are in flight at once. The ticket caps this at four. */
-const cardsInFlight = 4;
+/**
+ * How many cards are in flight at once. The ticket allows three or four in view; the travel is
+ * deep enough that a card is only visibly near the camera for part of it, so a few more than
+ * four keep the field populated without ever showing more than four at once.
+ */
+const cardsInFlight = 9;
 /** Each card's cube size, matching the table's so the cards read as the same objects. */
 const cubeSize = 1.5;
-/** A card is replaced once it is close enough to fill the view. */
-const despawnZ = 4;
-/** Where a replacement starts: deep in the scene, behind the title menu's panel. */
-const spawnZ = -46;
-/** Fractions of the view the cards spread across, kept narrow so they pass near the centre. */
+/** The camera's distance from the origin, looking down -z. */
+const cameraZ = 8;
+/**
+ * How far past the camera a card travels before it is replaced. A card is a cube of `cubeSize`
+ * that tumbles, so its half-diagonal (about 1.3) is how far its furthest corner reaches; this
+ * clears that, so a card is gone only once no part of it can be on screen. Replacing it any
+ * earlier made cards vanish in full view.
+ */
+const despawnMargin = cubeSize;
+const despawnZ = cameraZ + despawnMargin;
+/**
+ * Where a replacement starts. Far enough back to read as distance, but not so far that most of
+ * the field is spent as an invisible speck: the travel is what a card is seen over, so a deep
+ * spawn with few cards leaves the screen nearly empty.
+ */
+const spawnZ = -30;
+/** How far beyond the clearance ring a card's path may sit, so the field is not all one ring. */
 const spread = 5.5;
-const verticalSpread = 3.2;
+/**
+ * How far off the camera's axis a card's path must stay. A path straight through the origin
+ * would pass through the lens and fill the screen with one card; this is a lane the cards
+ * orbit rather than cross. It is also what keeps a card on screen for most of its travel: the
+ * frustum is narrower the closer a card gets, so a large clearance leaves the frame early and
+ * spends the rest of its journey invisible.
+ */
+export const lensClearance = 2.8;
 
 /**
  * One tunable value: a mean and the spread around it. A card is dealt a value from this
@@ -52,8 +75,15 @@ export const defaultAttractTuning: AttractTuning = {
   spawnInterval: { mean: 0, deviation: 0 },
 };
 
+/** How long a newly spawned card takes to fade up from nothing. */
+const fadeInSeconds = 0.5;
+
 type AttractCard = {
   cube: THREE.Mesh;
+  /** Seconds since this card spawned; drives its fade-in. */
+  age: number;
+  /** The materials to fade, so the geometry and textures are not touched. */
+  materials: THREE.MeshStandardMaterial[];
   /** The spin axis, tilting each card's tumble slightly differently. */
   axis: THREE.Vector3;
   spin: number;
@@ -67,8 +97,102 @@ export type AttractScene = {
   readonly camera: THREE.PerspectiveCamera;
   /** Per frame: drift the cards, replacing any that have passed the camera. */
   update(delta: number): void;
+  /**
+   * Install the environment the cards reflect. A card's material is nearly a mirror, so this is
+   * most of what makes it look bright and glossy; it needs the renderer that will draw the
+   * scene, which exists only once the background has mounted.
+   */
+  setEnvironment(renderer: THREE.WebGLRenderer): void;
   dispose(): void;
 };
+
+/**
+ * Where a card's path sits around the camera's axis, and how far from it. Exported so the rule
+ * that no card passes through the lens can be tested directly, rather than by copying the
+ * arithmetic into a test and hoping both stay right.
+ */
+export function pathPoint(random: () => number): { x: number; y: number; radius: number } {
+  // A true circle, not an ellipse. Squashing the ring vertically to match the view's
+  // proportions looks natural but shortens the distance to the axis on mostly vertical paths,
+  // which is exactly where a card would drift through the lens.
+  const angle = random() * Math.PI * 2;
+  const radius = lensClearance + random() * spread;
+  return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, radius };
+}
+
+/**
+ * The attract scene's backdrop: near-black with a soft pool of light low and centre, so the
+ * drifting cards read against something rather than floating in a void. A canvas texture costs
+ * nothing per frame; a real lit backdrop would be a second pass.
+ */
+function fakeBackdrop(): THREE.Texture {
+  const source = document.createElement("canvas");
+  source.width = 128;
+  source.height = 80;
+  const context = source.getContext("2d")!;
+  context.fillStyle = "#05070b";
+  context.fillRect(0, 0, source.width, source.height);
+  // A wide, dim pool low in the frame, hinting at a light source off-camera.
+  const pool = context.createRadialGradient(
+    source.width * 0.5,
+    source.height * 0.82,
+    0,
+    source.width * 0.5,
+    source.height * 0.82,
+    source.width * 0.6,
+  );
+  pool.addColorStop(0, "#1b2a44");
+  pool.addColorStop(0.5, "#101828");
+  pool.addColorStop(1, "#05070b00");
+  context.fillStyle = pool;
+  context.fillRect(0, 0, source.width, source.height);
+  const texture = new THREE.CanvasTexture(source);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * A stand-in studio for the cards to reflect, faked rather than rendered (#147). A real
+ * environment means a second PMREM pass and a scene to render into it; a card only needs
+ * something bright above it and something dark below, which a vertical gradient gives, and it
+ * costs one small texture. This is what makes the card faces read as glossy rather than flat.
+ */
+function fakeStudioReflection(renderer: THREE.WebGLRenderer): THREE.Texture {
+  const source = document.createElement("canvas");
+  source.width = 64;
+  source.height = 32;
+  const context = source.getContext("2d")!;
+  const gradient = context.createLinearGradient(0, 0, 0, source.height);
+  // Overhead: a broad bright band, as if lit by a softbox.
+  gradient.addColorStop(0, "#ffffff");
+  gradient.addColorStop(0.35, "#cfd9ea");
+  // The horizon: the warm bounce off a floor.
+  gradient.addColorStop(0.55, "#8e7f6b");
+  gradient.addColorStop(0.8, "#2a2f3a");
+  gradient.addColorStop(1, "#0a0d12");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, source.width, source.height);
+  // Two hot spots, so a tumbling card catches a highlight rather than a flat wash.
+  for (const [x, y, r] of [
+    [18, 8, 7],
+    [46, 5, 5],
+  ] as const) {
+    const spot = context.createRadialGradient(x, y, 0, x, y, r);
+    spot.addColorStop(0, "#ffffff");
+    spot.addColorStop(1, "#ffffff00");
+    context.fillStyle = spot;
+    context.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  const texture = new THREE.CanvasTexture(source);
+  texture.mapping = THREE.EquirectangularReflectionMapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  // Prefiltered once, so roughness in the material has something to blur.
+  const generator = new THREE.PMREMGenerator(renderer);
+  const prefiltered = generator.fromEquirectangular(texture).texture;
+  generator.dispose();
+  texture.dispose();
+  return prefiltered;
+}
 
 /** A value drawn from a mean and spread, never negative. Box-Muller, so it is symmetric. */
 function sample({ mean, deviation }: MeanSpread, random: () => number): number {
@@ -96,22 +220,34 @@ export function createAttractScene(
 ): AttractScene & { retune(next: AttractTuning): void } {
   let tuning = initialTuning;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000000);
+  // A faked backdrop rather than a flat black: a faint pool of light behind the field, so the
+  // cards sit in something and an edge separates from the dark. Faked as a texture, because a
+  // real vignette would be a second render pass for a background nobody looks at directly.
+  scene.background = fakeBackdrop();
 
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 120);
-  camera.position.set(0, 0, 8);
+  camera.position.set(0, 0, cameraZ);
   camera.lookAt(0, 0, 0);
 
-  // The same neutral studio light the hand uses, so a card looks like itself.
-  // The table's room light is far dimmer than a black backdrop needs, and a card face is mostly
-  // a dark pattern, so the attract scene lights them from both sides quite strongly.
-  const key = new THREE.DirectionalLight(0xffffff, 6);
-  key.position.set(3, 5, 10);
+  // A card's material is almost a mirror: roughness 0.05 with full clearcoat. Brightness
+  // therefore comes from what it *reflects*, not from how many lights are pointed at it. The
+  // table gets that from the card room's environment; this scene has no room, so it needs a
+  // studio of its own — without one the cards reflect black and read as grey lumps, however
+  // strong the lights around them.
+  // The cards' materials bind `reflectionEnvironment` explicitly, which wins over
+  // `scene.environment`, so the scene reflects whatever the table gave them — a dim room meant
+  // for a green baize. A faked gradient stands in for a studio instead: bright above, dark
+  // below, which is what makes a glossy card read as glossy against black.
+
+  // Direct light still shapes the faces: a soft top key for form, and a cool rim so an edge
+  // separates from the black behind it.
+  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x1b2233, 0.9));
+  const key = new THREE.DirectionalLight(0xfff4e2, 2.4);
+  key.position.set(4, 7, 9);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0xcfe0ff, 3.5);
-  fill.position.set(-4, -2, 4);
-  scene.add(fill);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x202838, 2.5));
+  const rim = new THREE.DirectionalLight(0x9fd8ff, 2.0);
+  rim.position.set(-7, 3, -8);
+  scene.add(rim);
 
   /** One card cube, built once per replacement so materials are disposed with it. */
   function makeCard(): AttractCard {
@@ -129,8 +265,14 @@ export function createAttractScene(
     );
     for (const extra of appearance.extras ?? []) cube.add(extra);
     scene.add(cube);
+    // A card fades up from nothing over `fadeInSeconds`, so it does not pop into being at the
+    // start of its travel. The material starts fully transparent; `update` raises it.
+    for (const material of appearance.materials) material.opacity = 0;
+
     return {
       cube,
+      age: 0,
+      materials: appearance.materials,
       // A different axis per card: mostly y, tilted a little, so the tumbling varies.
       axis: new THREE.Vector3(random() - 0.5, 1, random() - 0.5).normalize(),
       // Dealt from the tuned distributions, so changing a mean changes what appears next
@@ -154,9 +296,21 @@ export function createAttractScene(
    * vertically, so they do not all pass through the middle.
    */
   function placeAlongPath(card: AttractCard): void {
+    // A path is a point on a ring around the camera's axis, carried toward the viewer. Picking
+    // the point on the ring keeps every path `lensClearance` from the axis, so no card ever
+    // passes through the lens; picking the angle rather than an x/y pair means the field still
+    // looks scattered rather than arranged.
+    // A true circle, not an ellipse. Squashing the ring vertically to match the view looks
+    // natural but shortens the distance to the axis on the vertical paths, which is exactly
+    // where a card would drift through the lens. A circle keeps the closest approach at
+    // `lensClearance` whichever way a card is placed.
+    const angle = random() * Math.PI * 2;
+    const radius = lensClearance + random() * spread;
     card.cube.position.set(
-      (random() - 0.5) * spread,
-      (random() - 0.5) * verticalSpread,
+      Math.cos(angle) * radius,
+      Math.sin(angle) * radius,
+      // Somewhere along the whole travel, so the field stays evenly populated after the first
+      // cycle instead of bunching deep in the scene.
       despawnZ - random() * (despawnZ - spawnZ),
     );
   }
@@ -174,9 +328,20 @@ export function createAttractScene(
   /** Seconds until the next replacement, from the tuned spawn interval. */
   let sinceSpawn = 0;
 
+  let environment: THREE.Texture | null = null;
+
   return {
     scene,
     camera,
+    setEnvironment(renderer) {
+      if (environment) return;
+      environment = fakeStudioReflection(renderer);
+      // The cards carry their own `envMap`, so this is what they reflect; the scene environment
+      // is a promise the material does not listen to. Set both anyway, for any material that
+      // arrives without one.
+      scene.environment = environment;
+      scene.environmentIntensity = 1.6;
+    },
     /** Change the tuning live: later cards use it, cards in flight keep theirs. */
     retune(next) {
       tuning = next;
@@ -184,8 +349,15 @@ export function createAttractScene(
     update(delta) {
       sinceSpawn -= delta;
       for (const card of cards) {
-        card.cube.position.z += card.speed * delta * 2.4;
+        card.cube.position.z += card.speed * delta * 1.2;
         card.cube.rotateOnAxis(card.axis, card.spin * delta);
+        // Ease the fade in, so a card appears softly rather than switching on.
+        if (card.age < fadeInSeconds) {
+          card.age = Math.min(fadeInSeconds, card.age + delta);
+          const progress = card.age / fadeInSeconds;
+          const eased = progress * progress * (3 - 2 * progress);
+          for (const material of card.materials) material.opacity = eased;
+        }
         // A card is replaced once it has passed the camera, and never sooner than the tuned
         // interval allows, so the field can be made busier or calmer without changing depth.
         if (card.cube.position.z <= despawnZ || sinceSpawn > 0) continue;
@@ -199,6 +371,8 @@ export function createAttractScene(
     dispose() {
       for (const card of cards) card.dispose();
       cards.length = 0;
+      environment?.dispose();
+      environment = null;
     },
   };
 }
@@ -262,6 +436,7 @@ export function createAttractBackground(
   const mount = createSceneLayer(
     () => {
       layer ??= createLayer();
+      scene.setEnvironment(layer.renderer as THREE.WebGLRenderer);
       backgrounds.append(layer.canvas as HTMLCanvasElement);
     },
     () => layer?.canvas.remove(),
