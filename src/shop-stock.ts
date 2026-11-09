@@ -4,6 +4,7 @@ import { materialDefinitions, withMaterial, type MaterialDefinition } from "./ma
 import { createPassiveBlock, passiveDefinitions, type PassiveDefinition } from "./passives";
 import { defaultShop, type ShopTrait } from "./game-modes";
 import { drawWeighted, passiveFrequencies, weightAt } from "./offer-weights";
+import { passiveUnlockRound } from "./offer-eligibility";
 import type { ShopOffer } from "./offer-kinds";
 
 export type { ShopOffer } from "./offer-kinds";
@@ -105,6 +106,6 @@ type Candidate = {
 
 /** A passive's weight this round: none before it unlocks, then its frequency curve. */
 export function passiveWeight(definition: PassiveDefinition, round: number): number {
-  if (!definition.shop || round < definition.shop.unlockRound) return 0;
+  if (!definition.shop || round < passiveUnlockRound(definition)) return 0;
   return weightAt(passiveFrequencies.get(definition.shop.frequency), round);
 }

@@ -7,6 +7,8 @@ import { GameRun } from "./game-run";
 import { fromSaveRecord, toSaveRecord } from "./save";
 import { demoRunRules } from "./run-rules";
 import { passiveWeight, shopPreviewState } from "./shop-stock";
+import { materialUnlockRound, materialsNamedBy, passiveUnlockRound } from "./offer-eligibility";
+import type { PassiveDefinition } from "./passives";
 import { defaultShop } from "./game-modes";
 import { passiveFrequencies, validateWeightCurve, weightAt } from "./offer-weights";
 import { createPassiveBlock, passiveDefinitions } from "./passives";
@@ -255,5 +257,40 @@ describe("stock by round and weight (#145)", () => {
         [2, -1],
       ]),
     ).toHaveLength(2);
+  });
+});
+
+describe("material-bound passives (#165)", () => {
+  const definition = (id: string) => passiveDefinitions.get(id);
+
+  it("never unlock before a material their rules name", () => {
+    expect(materialsNamedBy(definition("woodworker")).map(({ id }) => id)).toEqual(["wood"]);
+    for (const name of passiveDefinitions.names()) {
+      const passive = definition(name);
+      for (const material of materialsNamedBy(passive))
+        expect(passiveUnlockRound(passive)).toBeGreaterThanOrEqual(materialUnlockRound(material));
+    }
+    // A passive naming meat (round 3) can't come earlier even if its data says round 1.
+    const early = {
+      ...definition("woodworker"),
+      shop: { ...definition("woodworker").shop!, unlockRound: 1 },
+      eventRules: [{ when: { id: "material-is", config: { material: "meat" } } }],
+    } as unknown as PassiveDefinition;
+    expect(passiveUnlockRound(early)).toBe(3);
+    expect(passiveWeight(early, 2)).toBe(0);
+    expect(validatePassiveBalance([early])).toContain(
+      "woodworker: unlocks before meat, which it names",
+    );
+  });
+
+  it("refuse a purchase before the passive is available, even from a stale offer", () => {
+    const game = shop();
+    const block = createPassiveBlock("carnivore", "stale.1");
+    const stale = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, {
+      ...game.snapshot(),
+      state: { ...game.state, shopStock: [{ kind: "passive", block }] },
+    });
+    expect(stale.round).toBeLessThan(passiveUnlockRound(definition("carnivore")));
+    expect(stale.buyShopOffer(block.id, "passive-rack")).toBeNull();
   });
 });
