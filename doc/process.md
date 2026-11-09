@@ -10,6 +10,19 @@ The user and several coding agents work on this project at once. This page descr
 - **Taking over another agent's ticket.** Do it only when the user asks or the owner agrees. Message the owner through Agent Inbox, then move the label and say so in a comment.
 - **Keep as much work in play as possible.** Don't let one ticket stall progress.
 
+## The implementer's loop
+
+How an agent works through tickets. Several agents work at once, so each takes **one ticket at a time** and leaves the rest for others.
+
+1. **Choose the next ticket.** Take an unclaimed `status:ready` ticket, preferring ones that unblock others or that the user has put in an order. Skip tickets with someone else's `agent:` label.
+2. **Claim only that one.** Add `agent:<your name>`, remove `status:ready`, and comment with your branch. Never claim a queue of tickets ahead of time.
+3. **Intake check** (below): read it, check whether it's partly done, and check it fits the plan. If it isn't ready, ask on the ticket, relabel it, release it and go back to step 1.
+4. **Build it** on a branch named after the issue, with tests and doc updates. Open one PR that closes the issue.
+5. **Get it through review.** Fix Codex findings and real problems CodeRabbit raises (advisory). Reply to and resolve each thread, then merge once `verify` passes (see "Branches and pull requests").
+6. **If you get stuck partway** (a missing API key, a question nobody knew to ask): push what you have, comment on the ticket saying why it's blocked and what unblocks it, set `status:incomplete` or `status:blocked` (plus `question` if you asked one), and remove your `agent:` label. Then go back to step 1. **Don't stop and wait.**
+7. **After merging:** remove your `agent:` label and check that the issue closed. Then look at the tickets that waited on it: move each one now free to `status:ready`, with a comment saying what unblocked it.
+8. **Repeat** until no ready tickets are left. Then review the blocked and needs-design tickets: check each says why it's blocked and what unblocks it, and look for any labelled wrongly (marked blocked but actually free, or ready but waiting on something).
+
 ## Picking up a ticket
 
 Before writing any code:
