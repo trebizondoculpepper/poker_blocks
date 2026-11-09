@@ -52,6 +52,11 @@ export type SceneTraits = {
    * conditions hold (Continue needs a save). Choosing an item dispatches its action.
    */
   titleScreen: { items: readonly MenuItem[] };
+  /**
+   * Small text lines in the corner of the panel: the build version and links out to the
+   * project. The scene shows them while it is in front.
+   */
+  panelFooter: { links: readonly PanelLink[] };
   /** The Settings panel is shown while this scene is in front. */
   settingsPanel: Record<never, never>;
   /** The music is filtered while this scene is in front (low-pass muffles, high-pass thins). */
@@ -78,6 +83,12 @@ export type MenuItem = {
   enabledWhen?: MenuCondition;
   disabledHint?: string;
 };
+
+/**
+ * A link shown in a panel's footer. `href` is the destination; a link without one shows the
+ * build version, which is data rather than a destination.
+ */
+export type PanelLink = { label: string; href?: string };
 /** A condition a menu item can require; its test lives in the menu traits' registry. */
 export type MenuCondition = "inRun" | "hasSave";
 export type ModeScene = Scene<SceneTraits>;
@@ -116,6 +127,15 @@ const pauseMenu: SceneTraits["menu"] = {
   ],
 };
 
+/** Where the project lives. Links to it come from here, so the URL is configured once. */
+export const projectHome = "https://github.com/trebizondoculpepper/poker_blocks";
+
+/** The footer links: where the version comes from, the source, and where to report a bug (#129). */
+export const projectLinks: readonly PanelLink[] = [
+  { label: "Get source code", href: projectHome },
+  { label: "Report a bug", href: `${projectHome}/issues/new` },
+];
+
 /**
  * The scene definitions every mode composes by reference (see doc/game-architecture.md,
  * "Scene definitions"). A scene is configured here once; a mode adds traits to the scenes it
@@ -137,6 +157,8 @@ export const sceneDefinitions = [
           { id: "openSettings", label: "Settings" },
         ],
       },
+      // After `titleScreen`, so the panel is already showing when the footer is added to it.
+      panelFooter: { links: projectLinks },
       ...escapeOpensPause,
     },
   },
@@ -144,6 +166,7 @@ export const sceneDefinitions = [
     name: "pause",
     traits: {
       menu: pauseMenu,
+      panelFooter: { links: projectLinks },
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "lowpass" },
       keyAction: { key: "Escape", action: "resume", sfx: "ui.back" },

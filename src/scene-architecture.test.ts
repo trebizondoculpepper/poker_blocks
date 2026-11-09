@@ -172,6 +172,16 @@ describe("scene architecture guardrails", () => {
     expect(run.match(/\bshopPreview\b/g) ?? []).toEqual([]);
   });
 
+  it("configures outbound links in one place, not in the menu code (#129)", () => {
+    const menus = readFileSync(new URL("./menus.ts", import.meta.url), "utf8");
+    const modes = readFileSync(new URL("./game-modes.ts", import.meta.url), "utf8");
+    // A footer's destinations are configuration in game-modes, not literals in the renderer.
+    expect(menus).not.toMatch(/https?:\/\//);
+    expect(modes).toContain("projectLinks");
+    // Nor does the menu decide which panels show a footer: the `panelFooter` trait does.
+    expect(menus).not.toMatch(/panelFooter/);
+  });
+
   it("dispatches a page load through configuration, not a scene or mode check", () => {
     const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
     // `onLoad` is one configured value looked up in a handler table. Reading startScene by
