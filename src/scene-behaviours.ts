@@ -14,6 +14,7 @@ import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
 import type { AudioService } from "./audio-service";
 import type { CameraViewService } from "./camera-view";
 import type { Overlays } from "./overlays";
+import type { FieldView } from "./field-view";
 import type { HudPanel, HudPanelConfigs, HudPanels } from "./hud-panels";
 import type { RunController } from "./run-controller";
 import type { ShopView } from "./shop-view";
@@ -32,6 +33,8 @@ export type SceneHost = {
   host: HTMLElement;
   services: {
     board: BlockDestroyerBoard;
+    /** The field, for the first-play prompt a play scene shows. */
+    field: Pick<FieldView, "promptEntered">;
     /** The title's attract sequence: started and stopped by a scene trait (#147). */
     attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
     /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
@@ -177,6 +180,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       services.renderer.handEntered(false);
       services.input.handEntered(false);
     },
+  });
+  behaviours.register("firstPlayPrompt", {
+    enter: ({ services }) => services.field.promptEntered(true),
+    exit: ({ services }) => services.field.promptEntered(false),
   });
   behaviours.register("passiveRackView", {
     enter: ({ services }) => services.rack.viewEntered(true, services.run.rackCapacity()),

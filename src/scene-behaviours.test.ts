@@ -22,6 +22,7 @@ function recordingHost() {
         showTuning: () => void calls.push("attract:tuning"),
         hideTuning: () => void calls.push("attract:tuning-hide"),
       },
+      field: { promptEntered: (entered) => void calls.push(`prompt:${entered}`) },
       board: {
         blockAt: () => {
           calls.push("blockAt");

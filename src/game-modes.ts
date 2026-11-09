@@ -34,6 +34,8 @@ export type SceneTraits = {
   handView: Record<never, never>;
   /** The discard bin (also the passives' sell target) is shown while this scene is on the stack. */
   discardBin: Record<never, never>;
+  /** The pulsing outline inviting a stage's first play is shown while this scene is on the stack. */
+  firstPlayPrompt: Record<never, never>;
   /** The passive rack is shown while this scene is on the stack (#187). */
   passiveRackView: Record<never, never>;
   /** Blocks may be played onto the field while this scene is in front. */
@@ -148,6 +150,7 @@ const escapeOpensPause: Partial<SceneTraits> = {
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
 const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
+  firstPlayPrompt: {},
   handView: {},
   discardBin: {},
   deckPanel: {},
