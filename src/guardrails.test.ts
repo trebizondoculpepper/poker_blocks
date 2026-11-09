@@ -25,9 +25,9 @@ const sources = Object.entries(
     eager: true,
   }),
 ).map(([path, text]) => [`src/${path.slice(2)}`, text] as const);
-const kindWords = "phase|scene|room|kind|type|material|id|name|mode|screen|dealer";
+const kindWords = "phase|scene|room|kind|type|material|id|name|mode|screen|dealer|step|trait";
 /** What kind of thing something is (ids and names of individual items are data, not kinds). */
-const kindKeys = "phase|scene|room|kind|type|material|mode|screen|dealer";
+const kindKeys = "phase|scene|room|kind|type|material|mode|screen|dealer|step|trait";
 /** Every developer mode's console name and alias: naming one outside its definition is a special case. */
 const devModeNames = gameModeRegistry
   .names()
@@ -177,6 +177,7 @@ describe("the guardrail's patterns", () => {
     'if (a.b.next === "aa" || a.b.next === "bb") go();',
     'if ($next === "aa" || $next === "bb") go();',
     "if (room.dev) list();",
+    'const mix = steps.find((step) => step.step === "destructibleMix");',
     'if (["dev3"].includes(currentMode.id)) go();',
     "const bonus = { dev3: 2 }[currentMode.id] ?? 0;",
     "const bonus = bonuses[currentMode.id];",
