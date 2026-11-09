@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { hudDisplay, type HudView } from "./hud-panels";
-import { unlimited } from "./session-config";
+import { unlimited } from "./run-rules";
 
 const stageView: HudView = {
   round: 2,

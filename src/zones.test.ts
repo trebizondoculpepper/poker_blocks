@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import { createPassiveBlock, passiveTraits, type PassiveBlock } from "./passives";
-import { demoSessionConfig, sandboxSessionConfig } from "./session-config";
+import { demoRunRules, sandboxRunRules } from "./run-rules";
 import { inspectable } from "./traits/inspectable";
 import { insertAt, moveItem } from "./zones";
 
@@ -39,7 +39,7 @@ describe("insertAt", () => {
 });
 
 describe("hand reordering", () => {
-  const session = () => new GameSession(dealerRegistry, demoSessionConfig, standardDeck, () => 0);
+  const session = () => new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0);
 
   it("reorders the hand without touching counters, score, deck or other zones", () => {
     const game = session();
@@ -74,7 +74,7 @@ describe("hand reordering", () => {
 
 describe("passive rack reordering", () => {
   const session = () =>
-    new GameSession(dealerRegistry, sandboxSessionConfig(demoSessionConfig), standardDeck, () => 0);
+    new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
   const withRack = (ids: string[]) => {
     const game = session();
     for (const [index, definition] of ["double-line", "quad-line", "double-line"].entries())

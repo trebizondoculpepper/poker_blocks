@@ -10,7 +10,7 @@ export type StageSetup = StageRules & { dealer: string };
  * Everything about progression that is still a design decision lives here, so a
  * placeholder can be swapped without touching the controller. See doc/game.md.
  */
-export type SessionConfig = {
+export type RunRules = {
   stage(round: number, kind: StageKind): StageSetup;
   /** Cards still in hand when a stage ends. Open rule; only one option exists so far. */
   handAtStageEnd: "return-to-deck";
@@ -22,12 +22,12 @@ export type SessionConfig = {
   rackCapacity?: number;
   /** What passives cost and fetch, in coins; `defaultPassivePrices` when left out. */
   passivePrices?: PassivePrices;
-  /** First playable-card shop price; one coin unless a session changes it. */
+  /** First playable-card shop price; one coin unless a run changes it. */
   cardPurchasePrice?: number;
 };
 
 /**
- * The passive price policy (issue #16). Owned by the session so another session can set a
+ * The passive price policy (issue #16). Owned by the run so another session can set a
  * different spread; selling may later fetch less than buying.
  */
 export type PassivePrices = { buy: number; sell: number };
@@ -41,7 +41,7 @@ const baseTargets: Record<StageKind, number> = { "stage-1": 100, "stage-2": 150,
  * Placeholder demo progression: targets grow by half the base each round, every stage
  * has six plays and four discards, and the boss uses the base dealer until boss rules exist.
  */
-export const demoSessionConfig: SessionConfig = {
+export const demoRunRules: RunRules = {
   stage(round, kind) {
     return {
       dealer: "base",
@@ -58,11 +58,11 @@ export const demoSessionConfig: SessionConfig = {
 export const unlimited = 1_000_000;
 
 /**
- * The dev-room sandbox for endless play: the same dealers as `base`, but a stage can be
+ * The dev-mode sandbox for endless play: the same dealers as `base`, but a stage can be
  * neither won nor lost on its own. Plays and discards never run out, and the target score
  * is out of reach. (The console's win and lose still decide a stage on demand.)
  */
-export function sandboxSessionConfig(base: SessionConfig): SessionConfig {
+export function sandboxRunRules(base: RunRules): RunRules {
   return {
     ...base,
     stage: (round, kind) => ({

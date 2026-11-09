@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import { emptyRunStats, parseRunStats, recordPlay, recordRoundComplete } from "./run-stats";
 import { fromSaveRecord, toSaveRecord } from "./save";
-import { demoSessionConfig } from "./session-config";
+import { demoRunRules } from "./run-rules";
 
 describe("run stats", () => {
   it("counts plays and points, and keeps the best round", () => {
@@ -33,8 +33,8 @@ describe("run stats", () => {
     });
   });
 
-  it("is kept by the session through plays, a completed round and a save", () => {
-    const game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck, () => 0);
+  it("is kept by the run through plays, a completed round and a save", () => {
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0);
     game.play({ cardId: game.state.hand[0].id });
     expect(game.stats.blocksPlayed).toBe(1);
     for (let stage = 0; stage < 3; stage++) {
@@ -51,9 +51,9 @@ describe("run stats", () => {
 
 describe("the dev1 sandbox config", () => {
   it("gives every stage unlimited plays and discards, and no way to win or lose", async () => {
-    const { unlimited, sandboxSessionConfig } = await import("./session-config");
-    const config = sandboxSessionConfig(demoSessionConfig);
-    const game = new GameSession(dealerRegistry, config, standardDeck, () => 0);
+    const { unlimited, sandboxRunRules } = await import("./run-rules");
+    const config = sandboxRunRules(demoRunRules);
+    const game = new GameRun(dealerRegistry, config, standardDeck, () => 0);
     expect(game.state.round.movesLeft).toBe(unlimited);
     expect(game.state.round.discardsLeft).toBe(unlimited);
     expect(game.state.round.targetScore).toBe(unlimited);

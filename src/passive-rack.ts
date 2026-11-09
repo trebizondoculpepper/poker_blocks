@@ -55,7 +55,7 @@ export function createPassiveRack(
   } = {},
 ): {
   element: HTMLElement;
-  /** Change the number of visible slots for the active room. */
+  /** Change the number of visible slots for the active mode. */
   setCapacity(capacity: number): void;
   render(rack: readonly PassiveBlock[]): void;
   /** Hide one passive's cube while it is being dragged (null shows them all). */
@@ -134,7 +134,7 @@ export function createPassiveRack(
         entry.texture.dispose();
         rendered.delete(id);
       }
-      // Room for every slot the rack has, filled or not.
+      // GameMode for every slot the rack has, filled or not.
       slotCount = Math.max(rack.length, capacity, 1);
       order = rack.map(({ id }) => id);
       const width = slotCount * slotWidth + (slotCount - 1) * slotGap;

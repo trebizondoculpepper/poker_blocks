@@ -2,7 +2,7 @@ import type { CardBlock } from "./cards";
 import type { PlacedBlock } from "./game-state";
 import { materialOf } from "./materials";
 import type { PassiveBlock, PassiveRule } from "./passives";
-import type { StageKind } from "./session-config";
+import type { StageKind } from "./run-rules";
 import { evaluateLine, findScoringLines, type Line, type ScoredLine } from "./scoring";
 import { cellKey } from "./traits/attachable";
 import { scorableValue } from "./traits/scorable";

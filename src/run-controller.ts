@@ -1,6 +1,6 @@
 /**
- * Run controller: the run being played and the mode (room) it is played in. It owns the
- * `GameSession`, starts, resumes and saves runs, moves between stages and the shop, follows
+ * Run controller: the run being played and the game mode it is played in. It owns the
+ * `GameRun`, starts, resumes and saves runs, moves between stages and the shop, follows
  * an announced outcome with the stage-won pop-up or game over, applies the player's
  * settings, and answers the other services' questions about the run (`rules` for the
  * input, `menus` for the overlays, `consoleApp` for the developer console).
@@ -15,7 +15,7 @@ import { cardName, standardDeck, type CardBlock } from "./cards";
 import type { ConsoleApp } from "./console-host";
 import { dealerRegistry, roundOutcome, type RoundOutcome } from "./dealer";
 import type { FieldView } from "./field-view";
-import { GameSession, type Phase } from "./game-session";
+import { GameRun, type RunPhase } from "./game-run";
 import type { HandView } from "./hand-view";
 import type { HudPanels } from "./hud-panels";
 import { sampleMaterials } from "./material-sampler";
@@ -28,18 +28,18 @@ import type { BlockViews } from "./rendered-blocks";
 import {
   fieldPlacementActive,
   overlaysForPhase,
-  roomFor,
-  roomLink,
-  roomSceneId,
+  gameModeFromParams,
+  modeLink,
+  modeSceneId,
   wantsRestart,
-  type Room,
-  type RoomSceneName,
-  type RoomSceneTraits,
-  type RoomTraits,
-} from "./rooms";
+  type GameMode,
+  type SceneName,
+  type SceneTraits,
+  type ModeTraits,
+} from "./game-modes";
 import { loadRun, saveRun, type SaveStorage } from "./save";
 import type { SceneManager } from "./scenes";
-import { demoSessionConfig, sandboxSessionConfig, type SessionConfig } from "./session-config";
+import { demoRunRules, sandboxRunRules, type RunRules } from "./run-rules";
 import {
   loadSettings,
   prefersReducedMotion,
@@ -72,9 +72,9 @@ export type RunServices = {
 };
 
 export type RunController = {
-  readonly game: GameSession;
+  readonly game: GameRun;
   /** The mode being played. */
-  readonly room: Room;
+  readonly mode: GameMode;
   readonly settings: Settings;
   readonly reducedMotion: boolean;
   /** What the input may do to the run. */
@@ -95,7 +95,7 @@ export type RunController = {
   /** Configure the services for the current mode and settings, and start listening. */
   begin(): void;
   /**
-   * The start screen: rooms that skip the title start straight in play (resuming their run
+   * The start screen: modes that skip the title start straight in play (resuming their run
    * if they keep one); a restart link starts a fresh run; otherwise the title screen.
    */
   open(): void;
@@ -114,7 +114,7 @@ export type RunController = {
   /** A shop offer's price. */
   offerPrice(offer: ShopOffer): number;
   /** Buy a shop offer into the hand or the rack; false when refused. */
-  buy(id: string, destination: Parameters<GameSession["buyShopOffer"]>[1]): boolean;
+  buy(id: string, destination: Parameters<GameRun["buyShopOffer"]>[1]): boolean;
   /** Per frame: once an announced outcome's delay has passed, the pop-up or game over follows. */
   followOutcomes(time: number): void;
   /** Per frame: invite a stage's first play with the pulsing outline of its cell. */
@@ -128,7 +128,7 @@ const stageWonDelayMs = 900;
 /** When a lost stage's outcome has been announced, the game over screen follows. */
 const gameOverDelayMs = 1400;
 
-const sceneForPhase: Record<Phase, RoomSceneName> = {
+const sceneForPhase: Record<RunPhase, SceneName> = {
   "stage-1": "stage-1",
   "stage-2": "stage-2",
   boss: "boss",
@@ -136,10 +136,10 @@ const sceneForPhase: Record<Phase, RoomSceneName> = {
   over: "game-over",
 };
 
-/** The room's session rules: endless sandboxes, and the passive rack's capacity. */
-function sessionConfigFor(traits: RoomTraits): SessionConfig {
+/** The mode's run rules: endless sandboxes, and the passive rack's capacity. */
+function runRulesFor(traits: ModeTraits): RunRules {
   return {
-    ...(traits.sandbox ? sandboxSessionConfig(demoSessionConfig) : demoSessionConfig),
+    ...(traits.sandbox ? sandboxRunRules(demoRunRules) : demoRunRules),
     ...(traits.passiveRack ? { rackCapacity: traits.passiveRack.capacity } : {}),
   };
 }
@@ -151,25 +151,25 @@ function newMaterialSeed(): number {
 export function createRunController<Context>(options: {
   host: HTMLElement;
   storage: SaveStorage | null;
-  /** The page's URL parameters (`?room=`, `&restart=true`). */
+  /** The page's URL parameters (`?mode=`, `&restart=true`). */
   params: URLSearchParams;
-  scenes: SceneManager<RoomSceneTraits, Context>;
+  scenes: SceneManager<SceneTraits, Context>;
   services: RunServices;
 }): RunController {
   const { host, storage, scenes, services } = options;
   /**
-   * Rooms (?room=...) are composed from room traits; see src/rooms.ts. dev0 is the normal
+   * Game modes are composed from mode traits; see src/game-modes.ts. dev0 is the normal
    * game with a material on every card, dev1 samples materials, dev2 has the passive rack,
    * and dev3 opens the shop with five coins.
    */
-  let thisRoom = roomFor(options.params.get("room"));
-  let roomTraits = thisRoom.traits;
-  const restartRoom = wantsRestart(thisRoom, options.params);
-  let sessionConfig = sessionConfigFor(roomTraits);
-  let runSaveKey = roomTraits.save.key;
-  let cards: readonly CardBlock[] = roomDeck(false);
+  let currentMode = gameModeFromParams(options.params);
+  let modeTraits = currentMode.traits;
+  const restartMode = wantsRestart(currentMode, options.params);
+  let runRules = runRulesFor(modeTraits);
+  let runSaveKey = modeTraits.save.key;
+  let cards: readonly CardBlock[] = modeDeck(false);
   // A fresh run sits behind the title screen until the player chooses Continue or New game.
-  let game = new GameSession(dealerRegistry, sessionConfig, cards);
+  let game = new GameRun(dealerRegistry, runRules, cards);
   let settings = loadSettings(storage);
   let reducedMotion = false;
   let stageWonAt: number | null = null;
@@ -204,36 +204,36 @@ export function createRunController<Context>(options: {
     return seed;
   }
 
-  /** A deck for a run in this room: plain, or with materials (fresh, or kept by seed). */
-  function roomDeck(newGame: boolean): readonly CardBlock[] {
-    return withDevDestructibleMix(materialDeck(newGame), roomTraits.devDestructibleMix);
+  /** A deck for a run in this mode: plain, or with materials (fresh, or kept by seed). */
+  function modeDeck(newGame: boolean): readonly CardBlock[] {
+    return withDevDestructibleMix(materialDeck(newGame), modeTraits.devDestructibleMix);
   }
 
   function materialDeck(newGame: boolean): readonly CardBlock[] {
-    const materials = roomTraits.materialDeck;
+    const materials = modeTraits.materialDeck;
     if (!materials) return standardDeck;
     return makeDevDeck(materials.reshuffle === "each-run" ? newMaterialSeed() : devSeed(newGame));
   }
 
-  function switchScene(name: RoomSceneName): void {
-    const id = roomSceneId(thisRoom.id, name);
+  function switchScene(name: SceneName): void {
+    const id = modeSceneId(currentMode.id, name);
     if (scenes.current?.id !== id) scenes.switchTo(id);
   }
 
   function syncSceneToGame(): void {
-    // Temporary bridge until scene transitions drive GameSession progression (#37).
+    // Temporary bridge until scene transitions drive GameRun progression (#37).
     switchScene(sceneForPhase[game.phase]);
   }
 
-  function enterRoom(room: Room, createDeck = true): void {
-    thisRoom = room;
-    roomTraits = room.traits;
-    sessionConfig = sessionConfigFor(roomTraits);
-    runSaveKey = roomTraits.save.key;
-    if (createDeck) cards = roomDeck(false);
-    services.rack.setCapacity(roomTraits.passiveRack?.capacity ?? 0);
-    services.rack.element.hidden = !roomTraits.passiveRack;
-    services.audio.enterRoom(room.musicMode);
+  function enterMode(mode: GameMode, createDeck = true): void {
+    currentMode = mode;
+    modeTraits = mode.traits;
+    runRules = runRulesFor(modeTraits);
+    runSaveKey = modeTraits.save.key;
+    if (createDeck) cards = modeDeck(false);
+    services.rack.setCapacity(modeTraits.passiveRack?.capacity ?? 0);
+    services.rack.element.hidden = !modeTraits.passiveRack;
+    services.audio.enterMode(mode.musicStyle);
   }
 
   function applySettings(next: Settings): void {
@@ -253,7 +253,7 @@ export function createRunController<Context>(options: {
     services.hud.render({
       round: game.round,
       phase: game.phase,
-      overlays: overlaysForPhase(roomTraits, game.phase),
+      overlays: overlaysForPhase(modeTraits, game.phase),
       presenting,
       outcome: presenting || !game.inStage ? "playing" : roundOutcome(game.state),
       score: presenter.shownScore,
@@ -344,7 +344,7 @@ export function createRunController<Context>(options: {
       const moved = leavingShop ? game.leaveShop() : game.advance();
       if (!moved) return;
       // advance() may have ended the run (TypeScript still has the pre-call narrowing).
-      if ((game.phase as Phase) === "over") {
+      if ((game.phase as RunPhase) === "over") {
         endRun();
         return;
       }
@@ -379,54 +379,54 @@ export function createRunController<Context>(options: {
   }
 
   /** A new run: material samples in dev0/1; dev2 rack is filled in startRun. */
-  function newSession(): GameSession {
-    cards = roomDeck(true);
-    const session = new GameSession(dealerRegistry, sessionConfig, cards);
-    if (roomTraits.shopPreview) {
+  function newRun(): GameRun {
+    cards = modeDeck(true);
+    const session = new GameRun(dealerRegistry, runRules, cards);
+    if (modeTraits.shopPreview) {
       const snapshot = session.snapshot();
-      return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
+      return GameRun.fromSnapshot(dealerRegistry, runRules, cards, {
         ...snapshot,
         phase: "shop",
         state: shopPreviewState(
           snapshot.state,
-          roomTraits.shopPreview.coins,
+          modeTraits.shopPreview.coins,
           Math.random,
-          roomTraits.shop,
+          modeTraits.shop,
         ),
       });
     }
-    if (!roomTraits.materialSample) return session;
+    if (!modeTraits.materialSample) return session;
     const { state } = session;
     const sample = sampleMaterials(state.deck);
-    return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
+    return GameRun.fromSnapshot(dealerRegistry, runRules, cards, {
       ...session.snapshot(),
       state: { ...state, field: sample.field, deck: sample.deck },
     });
   }
 
   /** The shop trait supplies stock when entering, including saves from before offers existed. */
-  function stockShopIfNeeded(session: GameSession): GameSession {
-    if (!roomTraits.shop || session.phase !== "shop" || session.state.shopStock !== undefined)
+  function stockShopIfNeeded(session: GameRun): GameRun {
+    if (!modeTraits.shop || session.phase !== "shop" || session.state.shopStock !== undefined)
       return session;
     const snapshot = session.snapshot();
-    return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
+    return GameRun.fromSnapshot(dealerRegistry, runRules, cards, {
       ...snapshot,
-      state: shopPreviewState(snapshot.state, snapshot.state.coins, Math.random, roomTraits.shop),
+      state: shopPreviewState(snapshot.state, snapshot.state.coins, Math.random, modeTraits.shop),
     });
   }
 
-  /** Swap in a session (new or resumed) and rebuild the scene from its state. */
-  function startRun(session: GameSession, fresh = false): void {
+  /** Swap in a run (new or resumed) and rebuild the scene from its state. */
+  function startRun(session: GameRun, fresh = false): void {
     const { rack, shop, cameraView, audio } = services;
     session = stockShopIfNeeded(session);
     game = session;
-    const rackTrait = roomTraits.passiveRack;
+    const rackTrait = modeTraits.passiveRack;
     rack.element.hidden = !rackTrait;
     if (rackTrait?.startWith)
       game.fillPassiveRack(Math.min(rackTrait.startWith, rackTrait.capacity));
     rack.render(game.state.passiveRack);
     gameOverAt = null;
-    // A run resumed on a won stage moves on from its pop-up (paid once; see the session).
+    // A run resumed on a won stage moves on from its pop-up (paid once; see the run).
     stageWonAt =
       game.inStage && roundOutcome(game.state) === "won" ? performance.now() + 400 : null;
     resetTable();
@@ -447,11 +447,11 @@ export function createRunController<Context>(options: {
 
   const loadSaved = () => loadRun(storage, cards, dealerRegistry, runSaveKey);
   const resume = (snapshot: NonNullable<ReturnType<typeof loadSaved>>) =>
-    GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, snapshot);
+    GameRun.fromSnapshot(dealerRegistry, runRules, cards, snapshot);
 
   const rules: TableRules = {
     busy: () => services.presenter.busy,
-    fieldActive: () => fieldPlacementActive(roomTraits, game.phase),
+    fieldActive: () => fieldPlacementActive(modeTraits, game.phase),
     inStage: () => game.inStage,
     canPlay: () => game.dealer.canPlay(game.state),
     canDiscard: () => game.dealer.canDiscard(game.state),
@@ -490,7 +490,7 @@ export function createRunController<Context>(options: {
       if (snapshot) startRun(resume(snapshot));
     },
     onNewGame() {
-      startRun(newSession(), true);
+      startRun(newRun(), true);
     },
     onSettingsChange(next) {
       applySettings(next);
@@ -499,7 +499,7 @@ export function createRunController<Context>(options: {
   };
 
   const screenScenes: ScreenScenes = {
-    push: (name) => scenes.pushIfNotCurrent(roomSceneId(thisRoom.id, name)),
+    push: (name) => scenes.pushIfNotCurrent(modeSceneId(currentMode.id, name)),
     replace: switchScene,
     resumeGame() {
       scenes.pop();
@@ -512,16 +512,16 @@ export function createRunController<Context>(options: {
     screen: () => services.overlays.screen,
     next: takeNextAction,
     newRun() {
-      startRun(newSession());
+      startRun(newRun());
       services.overlays.closeAll();
     },
     home: () => services.overlays.showTitle(),
-    room: () => thisRoom,
-    openRoom(room) {
-      enterRoom(room);
-      // startScene is declarative until the scene graph drives session progression (#37).
-      switchScene(room.startScene);
-      startRun(newSession(), true);
+    mode: () => currentMode,
+    openMode(mode) {
+      enterMode(mode);
+      // startScene is declarative until game flow drives run progression (#37).
+      switchScene(mode.startScene);
+      startRun(newRun(), true);
       services.overlays.closeAll();
     },
     forceOutcome(outcome) {
@@ -545,8 +545,8 @@ export function createRunController<Context>(options: {
     get game() {
       return game;
     },
-    get room() {
-      return thisRoom;
+    get mode() {
+      return currentMode;
     },
     get settings() {
       return settings;
@@ -575,28 +575,28 @@ export function createRunController<Context>(options: {
     },
     begin() {
       updateHud();
-      // Configure the initial mode through the same path used by the developer room switcher.
-      enterRoom(thisRoom, false);
+      // Configure the initial mode through the same path used by the developer mode switcher.
+      enterMode(currentMode, false);
       applySettings(settings);
       systemMotionQuery.addEventListener("change", onSystemMotion);
       // Browsers keep audio silent until the player interacts; start music on the first gesture.
       services.audio.start();
     },
     open() {
-      const skipTitle = roomTraits.skipTitle;
+      const skipTitle = modeTraits.skipTitle;
       if (skipTitle) {
-        const saved = skipTitle.resume && !restartRoom ? loadSaved() : null;
-        startRun(saved ? resume(saved) : newSession(), !saved);
+        const saved = skipTitle.resume && !restartMode ? loadSaved() : null;
+        startRun(saved ? resume(saved) : newRun(), !saved);
         services.overlays.closeAll();
-      } else if (restartRoom) {
-        startRun(newSession(), true);
+      } else if (restartMode) {
+        startRun(newRun(), true);
         services.overlays.closeAll();
       } else services.overlays.showTitle();
-      if (restartRoom) {
+      if (restartMode) {
         window.history.replaceState(
           window.history.state,
           "",
-          roomLink(thisRoom, window.location.href),
+          modeLink(currentMode, window.location.href),
         );
       }
     },
@@ -617,7 +617,7 @@ export function createRunController<Context>(options: {
     },
     takeNextAction,
     offerPrice: (offer) =>
-      offer.kind === "passive" ? game.passivePrices.buy : (sessionConfig.cardPurchasePrice ?? 1),
+      offer.kind === "passive" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),
     buy(id, destination) {
       const bought = game.buyShopOffer(id, destination);
       if (!bought) {
@@ -648,7 +648,7 @@ export function createRunController<Context>(options: {
     promptFirstPlay(time) {
       // The same outline as a valid attachment preview.
       const cell =
-        fieldPlacementActive(roomTraits, game.phase) &&
+        fieldPlacementActive(modeTraits, game.phase) &&
         game.inStage &&
         game.state.field.length === 0 &&
         game.state.hand.length > 0 &&

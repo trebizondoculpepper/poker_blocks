@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import { createPassiveBlock } from "./passives";
 import { fromSaveRecord, toSaveRecord } from "./save";
-import { demoSessionConfig } from "./session-config";
+import { demoRunRules } from "./run-rules";
 
-function withRack(config = demoSessionConfig) {
-  const game = new GameSession(dealerRegistry, config, standardDeck, () => 0);
+function withRack(config = demoRunRules) {
+  const game = new GameRun(dealerRegistry, config, standardDeck, () => 0);
   game.installPassive(createPassiveBlock("scrapper", "passive.1"));
   game.installPassive(createPassiveBlock("double-line", "passive.2"));
   return game;
@@ -38,8 +38,8 @@ describe("selling a passive (issue #16)", () => {
     expect(game.state.coins).toBe(coins);
   });
 
-  it("takes its price from the session's policy", () => {
-    const game = withRack({ ...demoSessionConfig, passivePrices: { buy: 5, sell: 2 } });
+  it("takes its price from the run's policy", () => {
+    const game = withRack({ ...demoRunRules, passivePrices: { buy: 5, sell: 2 } });
     expect(game.passivePrices).toEqual({ buy: 5, sell: 2 });
     expect(game.sellPassive("passive.2")).toBe(2);
   });
@@ -68,7 +68,7 @@ describe("selling a passive (issue #16)", () => {
 
   it("refuses a bad price policy without changing anything", () => {
     for (const sell of [-1, 0.5, Number.NaN]) {
-      const game = withRack({ ...demoSessionConfig, passivePrices: { buy: 1, sell } });
+      const game = withRack({ ...demoRunRules, passivePrices: { buy: 1, sell } });
       const before = game.state;
       expect(game.sellPassive("passive.1")).toBeNull();
       expect(game.state).toBe(before);

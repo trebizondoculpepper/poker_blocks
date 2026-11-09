@@ -2,16 +2,16 @@ import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { Registry } from "./core/registry";
 import { baseDealer, dealerRegistry, type Dealer } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import { fromSaveRecord, toSaveRecord } from "./save";
-import { demoSessionConfig } from "./session-config";
+import { demoRunRules } from "./run-rules";
 import { fillSlots } from "./zones";
 
 function session(handSize = 5) {
   const dealer: Dealer = { ...baseDealer, name: "base", handSize };
   const dealers = new Registry<Dealer>("dealer");
   dealers.register(dealer.name, dealer);
-  return new GameSession(
+  return new GameRun(
     dealers,
     {
       stage: () => ({ dealer: "base", targetScore: 100, plays: 3, discards: 2 }),
@@ -67,18 +67,13 @@ describe("discarding several blocks at once", () => {
   });
 
   it("survives a save and Continue", () => {
-    const game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck, () => 0);
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0);
     const discards = game.state.round.discardsLeft;
     game.discard(game.state.hand.slice(0, 2).map(({ id }) => id));
     game.refillHand();
     const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
     const snapshot = fromSaveRecord(record, standardDeck, dealerRegistry)!;
-    const restored = GameSession.fromSnapshot(
-      dealerRegistry,
-      demoSessionConfig,
-      standardDeck,
-      snapshot,
-    );
+    const restored = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, snapshot);
     expect(restored.snapshot()).toEqual(game.snapshot());
     expect(restored.state.discardPile).toHaveLength(2);
     expect(restored.state.round.discardsLeft).toBe(discards - 1);

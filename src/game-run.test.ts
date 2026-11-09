@@ -2,20 +2,20 @@ import { describe, expect, it } from "vite-plus/test";
 import { standardDeck, type CardBlock } from "./cards";
 import { Registry } from "./core/registry";
 import { baseDealer, type Dealer } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import type { GameState } from "./game-state";
-import type { SessionConfig, StageKind } from "./session-config";
+import type { RunRules, StageKind } from "./run-rules";
 import { fromSaveRecord, toSaveRecord } from "./save";
 import { shopPreviewState } from "./shop-stock";
 
 const targets: Record<StageKind, number> = { "stage-1": 10, "stage-2": 20, boss: 30 };
 const bossDealer: Dealer = { ...baseDealer, name: "boss" };
 
-function makeSession(config: Partial<SessionConfig> = {}) {
+function makeSession(config: Partial<RunRules> = {}) {
   const dealers = new Registry<Dealer>("dealer");
   dealers.register(baseDealer.name, baseDealer);
   dealers.register(bossDealer.name, bossDealer);
-  const full: SessionConfig = {
+  const full: RunRules = {
     stage: (round, kind) => ({
       dealer: kind === "boss" ? "boss" : "base",
       targetScore: targets[kind] * round,
@@ -26,7 +26,7 @@ function makeSession(config: Partial<SessionConfig> = {}) {
     discardPileAfterShop: "keep-out",
     ...config,
   };
-  return new GameSession(dealers, full, standardDeck, () => 0);
+  return new GameRun(dealers, full, standardDeck, () => 0);
 }
 
 const allCards = (state: GameState): CardBlock[] => [
@@ -37,7 +37,7 @@ const allCards = (state: GameState): CardBlock[] => [
 ];
 
 /** Make the current stage won or lost without depending on which cards were dealt. */
-function decide(session: GameSession, outcome: "won" | "lost"): void {
+function decide(session: GameRun, outcome: "won" | "lost"): void {
   const state = session.state as { round: GameState["round"] };
   const round = state.round;
   (session as unknown as { currentState: GameState }).currentState = {
@@ -49,7 +49,7 @@ function decide(session: GameSession, outcome: "won" | "lost"): void {
   };
 }
 
-describe("GameSession progression", () => {
+describe("GameRun progression", () => {
   it("keeps coins across stages and the shop while stage score resets", () => {
     const session = makeSession();
     (session as unknown as { currentState: GameState }).currentState = {
@@ -108,7 +108,7 @@ describe("GameSession progression", () => {
     expect([session.round, session.phase]).toEqual([2, "stage-2"]);
   });
 
-  it("does not advance an undecided stage, and ends the session on a loss", () => {
+  it("does not advance an undecided stage, and ends the run on a loss", () => {
     const session = makeSession();
     expect(session.advance()).toBe(false);
     expect(session.leaveShop()).toBe(false);
@@ -194,7 +194,7 @@ describe("GameSession progression", () => {
       expect(saved.shopAfter).toBe(completed);
       const restored = fromSaveRecord(saved, standardDeck, dealers);
       expect(restored?.shopAfter).toBe(completed);
-      const resumed = GameSession.fromSnapshot(
+      const resumed = GameRun.fromSnapshot(
         dealers,
         {
           stage: (round, kind) => ({
@@ -221,7 +221,7 @@ describe("GameSession progression", () => {
     delete old.shopAfter;
     const oldSnapshot = fromSaveRecord(old, standardDeck, dealers);
     expect(oldSnapshot?.shopAfter).toBeUndefined();
-    const oldShop = GameSession.fromSnapshot(
+    const oldShop = GameRun.fromSnapshot(
       dealers,
       {
         stage: (round, kind) => ({
@@ -248,7 +248,7 @@ describe("GameSession progression", () => {
     session.advance();
     const dealers = new Registry<Dealer>("dealer");
     dealers.register(baseDealer.name, baseDealer);
-    const stocked = GameSession.fromSnapshot(
+    const stocked = GameRun.fromSnapshot(
       dealers,
       {
         stage: (round, kind) => ({
@@ -281,7 +281,7 @@ describe("GameSession progression", () => {
     session.advance();
     const dealers = new Registry<Dealer>("dealer");
     dealers.register(baseDealer.name, baseDealer);
-    const stocked = GameSession.fromSnapshot(
+    const stocked = GameRun.fromSnapshot(
       dealers,
       {
         stage: (round, kind) => ({

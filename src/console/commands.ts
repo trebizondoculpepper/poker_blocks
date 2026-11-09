@@ -6,12 +6,12 @@
  * host does.
  */
 import { cardName, type CardBlock } from "../cards";
-import type { GameSession } from "../game-session";
+import type { GameRun } from "../game-run";
 import { splitStatements, tokenise } from "./command-line";
 
 /** What the console may do to the app. */
 export type ConsoleHost = {
-  game(): GameSession;
+  game(): GameRun;
   /** The screen showing: title, settings or the game. */
   screen(): string;
   /** Press the HUD's next-action button (next stage, shop, new round). */
@@ -19,12 +19,12 @@ export type ConsoleHost = {
   newGame(): void;
   /** Go to the main menu (the title screen). */
   home(): void;
-  /** The dev room open now ("dev0", "dev1", ...), or null in the normal game. */
-  room(): string | null;
-  /** The dev rooms there are. */
-  rooms(): readonly string[];
-  /** Open a dev room with a fresh run (null: the normal game, new run). */
-  resetRoom(room: string | null): void;
+  /** The dev mode open now ("dev0", "dev1", ...), or null in the normal game. */
+  mode(): string | null;
+  /** The dev modes available. */
+  modes(): readonly string[];
+  /** Open a dev mode with a fresh run; null (or the current mode) restarts the current mode. */
+  resetMode(mode: string | null): void;
   /** Decide the current stage now (a developer shortcut); false outside a stage. */
   forceOutcome(outcome: "won" | "lost"): boolean;
   /** Adjust persistent coins; negative values remove them. */
@@ -184,14 +184,14 @@ export const COMMANDS: readonly ConsoleCommand[] = [
   },
   {
     name: "reset",
-    usage: "[room]",
-    help: "restart the current room (rerolls dev2 passives), or open a fresh dev room: reset dev2",
-    complete: (host, args) => (args.length ? [] : host.rooms()),
-    run(host, [room]) {
-      const target = room ? room.toLowerCase() : host.room();
-      if (target && !host.rooms().includes(target))
-        return fail(`reset: no room "${room}" (rooms are ${host.rooms().join(", ")})`);
-      host.resetRoom(target);
+    usage: "[mode]",
+    help: "restart the current mode (rerolls dev2 passives), or open a fresh dev mode: reset dev2",
+    complete: (host, args) => (args.length ? [] : host.modes()),
+    run(host, [mode]) {
+      const target = mode ? mode.toLowerCase() : host.mode();
+      if (target && !host.modes().includes(target))
+        return fail(`reset: no mode "${mode}" (modes are ${host.modes().join(", ")})`);
+      host.resetMode(target);
       return target ? `resetting ${target}` : "new run";
     },
   },

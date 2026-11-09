@@ -1,6 +1,6 @@
 /**
  * Numbers about a whole run, shown on the game over screen and saved with the run.
- * Pure: the session calls these as plays land and stages end.
+ * Pure: the run calls these as plays land and stages end.
  */
 export type RunStats = {
   /** Rounds finished (all three stages won, reaching the shop). */

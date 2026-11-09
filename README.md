@@ -8,13 +8,13 @@ Press **Command-Shift-K** on Mac or **Control-Shift-K** elsewhere to capture the
 
 The rules of the game being designed are in [doc/game.md](doc/game.md), with canonical terms in [doc/terms.md](doc/terms.md). The agreed game principles and open architecture questions are recorded in [doc/game-architecture.md](doc/game-architecture.md). Sound effects are listed in [doc/sound_design.md](doc/sound_design.md). Keep future project documents in `doc/`.
 
-## Materials dev room
+## Materials dev mode
 
-Open [`?room=dev0`](https://trebizondoculpepper.github.io/poker_blocks/?room=dev0) (formerly `?room=dev`, which still works) to play the normal game with the deck randomized across paper, wood, steel, prismatic crystal, gold, terracotta, ice, meat, and fire. Wood has different end-grain faces; jelly is deferred. Each new dev game reshuffles the material assignments, while Continue restores the same assignments. The dev room has its own save, so it does not replace a normal run. Materials are visual experiments for now and have no gameplay effects.
+Open [`?mode=dev0`](https://trebizondoculpepper.github.io/poker_blocks/?mode=dev0) (`?mode=dev` and the older `?room=` links still work) to play the normal game with the deck randomized across paper, wood, steel, prismatic crystal, gold, terracotta, ice, meat, and fire. Wood has different end-grain faces; jelly is deferred. Each new dev game reshuffles the material assignments, while Continue restores the same assignments. The dev mode has its own save, so it does not replace a normal run. Materials are visual experiments for now and have no gameplay effects.
 
-Open [`?room=dev1`](https://trebizondoculpepper.github.io/poker_blocks/?room=dev1), the materials room, to judge the substances side by side: it skips the title and opens on a small structure with one block of every material, each attached to a random free face of the others. Rotate it by dragging the table and hover a block to name its material. Every reload (or New game) builds a new structure; the hand works as in dev0, so more blocks can be attached. dev1 is a sandbox for endless play: no win or lose, and unlimited plays and discards (shown as ∞). Music starts wound down.
+Open [`?mode=dev1`](https://trebizondoculpepper.github.io/poker_blocks/?mode=dev1), the materials mode, to judge the substances side by side: it skips the title and opens on a small structure with one block of every material, each attached to a random free face of the others. Rotate it by dragging the table and hover a block to name its material. Every reload (or New game) builds a new structure; the hand works as in dev0, so more blocks can be attached. dev1 is a sandbox for endless play: no win or lose, and unlimited plays and discards (shown as ∞). Music starts wound down.
 
-Open [`?room=dev2`](https://trebizondoculpepper.github.io/poker_blocks/?room=dev2) to try the first passive prototype. Its top rack holds a Do Nothing block. This room also has endless plays and discards, and it resumes its separate saved run on reload. The passive has no event subscriptions or gameplay effect yet.
+Open [`?mode=dev2`](https://trebizondoculpepper.github.io/poker_blocks/?mode=dev2) to try passives. A fresh run starts with two distinct active passives in the top rack, drawn at random (for example ×2, which doubles scored lines). This mode also has endless plays and discards, and it resumes its separate saved run on reload.
 
 ## Sound effects
 

@@ -3,13 +3,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vite-plus/test";
 
 describe("scene architecture guardrails", () => {
-  it("switches rooms without navigating or reloading the document", () => {
+  it("switches modes without navigating or reloading the document", () => {
     for (const file of ["./main.ts", "./run-controller.ts", "./console-host.ts"]) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
       expect(source).not.toMatch(/window\.location\.(assign|reload)\s*\(/);
     }
     const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
     expect(run).toContain("window.history.replaceState");
+    // The page's mode comes from ?mode= with the ?room= alias (tested in game-modes.test.ts).
+    expect(run).toContain("gameModeFromParams(options.params)");
   });
 
   it("keeps camera construction, framing, and resizing in the camera-view service", () => {
@@ -30,7 +32,7 @@ describe("scene architecture guardrails", () => {
     const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
 
     expect(main).toMatch(/services:\s*\{[^}]*\baudio:\s*AudioService\b/);
-    expect(main).not.toMatch(/\bsilencedAudio\b|createRoomMusicBehaviours|"view\.zoom"/);
+    expect(main).not.toMatch(/\bsilencedAudio\b|createModeMusicBehaviours|"view\.zoom"/);
     expect(main).not.toMatch(
       /\.(switchToBossTrack|switchToRandomStageTrack|muffle|unmuffle|windDown|playTitle)\(/,
     );
@@ -45,12 +47,12 @@ describe("scene architecture guardrails", () => {
     expect(main).not.toMatch(/Continue \/ Skip shop|"End game"|"BOSS STAGE"/);
   });
 
-  it("keeps the console's room switching and music commands in the console host service", () => {
+  it("keeps the console's mode switching and music commands in the console host service", () => {
     const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
     const host = readFileSync(new URL("./console-host.ts", import.meta.url), "utf8");
 
     expect(main).toContain("createConsoleHost(");
-    expect(main).not.toMatch(/\bcreateConsole\(|roomLink\(nextRoom|audio\.music\./);
+    expect(main).not.toMatch(/\bcreateConsole\(|modeLink\(nextGameMode|audio\.music\./);
     expect(host).toContain("window.history.replaceState");
     expect(host).not.toMatch(/window\.location\.(assign|reload)\s*\(/);
   });
@@ -124,7 +126,7 @@ describe("scene architecture guardrails", () => {
     expect(main).toContain("run.open()");
     // No behaviour of its own: no named functions, no game state, no decisions beyond setup.
     expect(main).not.toMatch(/^(async )?function /m);
-    expect(main).not.toMatch(/\bGameSession\b|\bgame\.(state|phase|play|advance)\b/);
+    expect(main).not.toMatch(/\bGameRun\b|\bgame\.(state|phase|play|advance)\b/);
     expect(main.match(/\bif \(/g) ?? []).toHaveLength(2);
   });
 });

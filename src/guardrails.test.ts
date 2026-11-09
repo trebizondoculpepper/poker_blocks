@@ -51,7 +51,7 @@ export const forbidden: readonly { name: string; pattern: RegExp }[] = [
     ),
   },
   {
-    name: "asks whether a room is a dev room",
+    name: "asks whether a mode is a dev mode",
     pattern: /\.dev\s*[?&)|]/,
   },
 ];
@@ -83,7 +83,7 @@ describe("the guardrail's patterns", () => {
     'if (game.phase === "shop") go();',
     'if (scene.id == "title") go();',
     "switch (room.kind) {",
-    "if (roomTraits.quiet) music.windDown();",
+    "if (modeTraits.quiet) music.windDown();",
     "const x = traits.sandbox ? a : b;",
     'if (next === "settings" || next === "title") go();',
     'if ((next === "settings") || (next === "title")) go();',

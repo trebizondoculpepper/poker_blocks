@@ -1,7 +1,7 @@
 import type { CardBlock } from "./cards";
 import type { GameState } from "./game-state";
 import { createPassiveBlock, randomPassiveDefinitions, type PassiveBlock } from "./passives";
-import type { ShopTrait } from "./rooms";
+import type { ShopTrait } from "./game-modes";
 
 export type ShopOffer =
   | { kind: "card"; block: CardBlock }

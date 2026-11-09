@@ -4,14 +4,14 @@
  * composes (its overlays) decide which ones are visible.
  */
 import type { RoundOutcome } from "./dealer";
-import type { Phase } from "./game-session";
-import type { SceneOverlays } from "./rooms";
-import { unlimited } from "./session-config";
+import type { RunPhase } from "./game-run";
+import type { SceneOverlays } from "./game-modes";
+import { unlimited } from "./run-rules";
 
 /** What the HUD shows at one moment. */
 export type HudView = {
   round: number;
-  phase: Phase;
+  phase: RunPhase;
   /** The panels the current scene composes. */
   overlays: SceneOverlays | undefined;
   /** A play is still landing or being scored: hide outcomes and the next-action button. */
@@ -34,7 +34,7 @@ export type HudPanels = {
   dispose(): void;
 };
 
-const phaseNames: Record<Phase, string> = {
+const phaseNames: Record<RunPhase, string> = {
   "stage-1": "STAGE 1",
   "stage-2": "STAGE 2",
   boss: "BOSS STAGE",
@@ -56,7 +56,7 @@ const stageActionLabels: Record<RoundOutcome, string | null> = {
 };
 
 /** The HUD button's label for the current moment, or null when there is nothing to do. */
-const nextActionLabels: Record<Phase, (outcome: RoundOutcome) => string | null> = {
+const nextActionLabels: Record<RunPhase, (outcome: RoundOutcome) => string | null> = {
   "stage-1": (outcome) => stageActionLabels[outcome],
   "stage-2": (outcome) => stageActionLabels[outcome],
   boss: (outcome) => stageActionLabels[outcome],

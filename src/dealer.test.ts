@@ -2,8 +2,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { Registry } from "./core/registry";
 import { baseDealer, dealerRegistry, type Dealer } from "./dealer";
-import { GameSession } from "./game-session";
-import { demoSessionConfig } from "./session-config";
+import { GameRun } from "./game-run";
+import { demoRunRules } from "./run-rules";
 
 const allCards = (state: ReturnType<Dealer["startGame"]>) => [
   ...state.field.map(({ block }) => block),
@@ -95,7 +95,7 @@ describe("dealer", () => {
     const registry = new Registry<Dealer>("dealer");
     registry.register(baseDealer.name, baseDealer);
     registry.register(boss.name, boss);
-    const game = new GameSession(registry, demoSessionConfig, standardDeck, () => 0);
+    const game = new GameRun(registry, demoRunRules, standardDeck, () => 0);
     const stateBefore = game.state;
     game.useDealer(boss.name);
     expect(game.state).toBe(stateBefore);

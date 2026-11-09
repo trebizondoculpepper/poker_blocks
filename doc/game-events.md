@@ -4,7 +4,7 @@ Status: initial contract for the scoring and passive implementation. The session
 
 ## Boundaries
 
-- `GameState` contains the facts of play. The dealer validates actions and defines stage rules. The session controller advances stages, rounds, and shops.
+- `GameState` contains the facts of play. The dealer validates actions and defines stage rules. The run controller coordinates stages, rounds, and shops with `GameRun`.
 - A gameplay coordinator emits named events at the points below. Installed passive blocks and other eligible blocks respond through their **trait definitions** and serializable trait settings. A block definition contains no callback code.
 - A reaction receives the event's context and a read-only view of the current game state. It returns **effect descriptions**, not direct state mutations. The effect runner applies those descriptions and records any resulting events. Visual and sound requests are separate presentation effects.
 - The base line finder, poker-hand evaluator, and `scoreLine` remain pure. The coordinator invokes them and applies any permitted effects around them.
@@ -23,9 +23,9 @@ An invalid play emits an action-denied presentation event only. It consumes noth
 
 `stage.started` fires after the dealer has prepared an empty field, allowances, and hand. It provides a separate hook for effects that should occur before any play or discard. Discarding has its own `discard.before` and `discard.completed` points and does not enter the scoring sequence.
 
-`block.destroyed` fires when a block on the field is destroyed (`GameSession.destroyBlock`), with the block's id and the stage context. It is outside the play sequence: it costs no play and triggers no scoring.
+`block.destroyed` fires when a block on the field is destroyed (`GameRun.destroyBlock`), with the block's id and the stage context. It is outside the play sequence: it costs no play and triggers no scoring.
 
-Stage lifecycle events include round number and stage kind (`stage-1`, `stage-2`, or `boss`), so a trait can match a particular stage without a separate hard-coded event name for every round. After a final `stage.won`, the session controller gathers reward entries: the default four-coin completion entry, followed by eligible trait effects in their defined order. It applies their sum to the persistent coin balance exactly once, emits a finalized reward result for the ledger, and waits for the player's next-stage or shop action. A passive that awards interest reads the coin balance at its documented point in this sequence. The stage score resets when the next stage starts; coins do not.
+Stage lifecycle events include round number and stage kind (`stage-1`, `stage-2`, or `boss`), so a trait can match a particular stage without a separate hard-coded event name for every round. After a final `stage.won`, the run controller gathers reward entries: the default four-coin completion entry, followed by eligible trait effects in their defined order. It applies their sum to the persistent coin balance exactly once, emits a finalized reward result for the ledger, and waits for the player's next-stage or shop action. A passive that awards interest reads the coin balance at its documented point in this sequence. The stage score resets when the next stage starts; coins do not.
 
 **Built in [issue #13](https://github.com/trebizondoculpepper/poker_blocks/issues/13):** each lifecycle event carries `stage: { round, kind, dealer }` (in a shop, the stage that opened it). In order, a stage emits:
 

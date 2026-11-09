@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
-import { roomFor } from "./rooms";
+import { GameRun } from "./game-run";
+import { gameModeFor } from "./game-modes";
 import { devManualBlockDestroyer } from "./scene-traits/dev-manual-block-destroyer";
-import { demoSessionConfig, sandboxSessionConfig } from "./session-config";
+import { demoRunRules, sandboxRunRules } from "./run-rules";
 import { inspectBlock } from "./traits/inspectable";
 import { canDestroy, withDevDestructibleMix } from "./traits/destructible";
 
@@ -35,18 +35,13 @@ describe("the destructible trait", () => {
   });
 });
 
-describe("GameSession.destroyBlock", () => {
+describe("GameRun.destroyBlock", () => {
   const session = () => {
     const deck = standardDeck.map((card) => ({
       ...card,
       traits: { ...card.traits, destructible: { by: ["manual" as const] } },
     }));
-    const game = new GameSession(
-      dealerRegistry,
-      sandboxSessionConfig(demoSessionConfig),
-      deck,
-      () => 0,
-    );
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), deck, () => 0);
     game.play({ cardId: game.state.hand[0].id });
     return game;
   };
@@ -62,7 +57,7 @@ describe("GameSession.destroyBlock", () => {
   });
 
   it("refuses blocks that are not on the field or not destructible", () => {
-    const game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck, () => 0);
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0);
     game.play({ cardId: game.state.hand[0].id });
     expect(game.destroyBlock(game.state.field[0].block.id, "manual")).toBeNull();
     expect(game.destroyBlock("no-such-block", "manual")).toBeNull();
@@ -77,12 +72,7 @@ describe("a run with a destroyed block", () => {
       ...card,
       traits: { ...card.traits, destructible: { by: ["manual" as const] } },
     }));
-    const game = new GameSession(
-      dealerRegistry,
-      sandboxSessionConfig(demoSessionConfig),
-      deck,
-      () => 0,
-    );
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), deck, () => 0);
     game.play({ cardId: game.state.hand[0].id });
     game.destroyBlock(game.state.field[0].block.id, "manual");
     const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
@@ -115,12 +105,14 @@ describe("DevManualBlockDestroyer", () => {
   });
 
   it("is composed only into dev4's play scenes", () => {
-    const dev4 = roomFor("dev4");
+    const dev4 = gameModeFor("dev4");
     const traitsOf = (name: string) =>
       dev4.scenes.find(({ id }) => id.endsWith(`/${name}`))!.traits;
     expect(traitsOf("stage-1").devManualBlockDestroyer).toEqual({ cause: "manual" });
     expect(traitsOf("shop").devManualBlockDestroyer).toBeUndefined();
-    for (const room of ["game", "dev0", "dev1", "dev2", "dev3"])
-      expect(roomFor(room).scenes.some(({ traits }) => traits.devManualBlockDestroyer)).toBe(false);
+    for (const mode of ["game", "dev0", "dev1", "dev2", "dev3"])
+      expect(gameModeFor(mode).scenes.some(({ traits }) => traits.devManualBlockDestroyer)).toBe(
+        false,
+      );
   });
 });

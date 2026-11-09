@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "../cards";
 import { dealerRegistry } from "../dealer";
-import { GameSession } from "../game-session";
-import { demoSessionConfig } from "../session-config";
+import { GameRun } from "../game-run";
+import { demoRunRules } from "../run-rules";
 import { completionsAt, remember, splitStatements, tokenise } from "./command-line";
 import { candidates, runLine, type ConsoleHost } from "./commands";
 import { isConsoleKey } from "./console-view";
 
 function fakeHost() {
-  const game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck);
+  const game = new GameRun(dealerRegistry, demoRunRules, standardDeck);
   const calls: string[] = [];
   let now: string | null = null;
   const host: ConsoleHost = {
@@ -17,9 +17,9 @@ function fakeHost() {
     next: () => void calls.push("next"),
     newGame: () => void calls.push("new"),
     home: () => void calls.push("home"),
-    room: () => null,
-    rooms: () => ["dev0", "dev1", "dev2", "dev3"],
-    resetRoom: (room: string | null) => void calls.push(`reset ${room}`),
+    mode: () => null,
+    modes: () => ["dev0", "dev1", "dev2", "dev3"],
+    resetMode: (mode: string | null) => void calls.push(`reset ${mode}`),
     forceOutcome: (outcome: "won" | "lost") => game.forceOutcome(outcome),
     adjustCoins: (delta) => game.adjustCoins(delta),
     musicTracks: () => ["style-noir", "solitaire-boss"],
@@ -93,11 +93,11 @@ describe("the commands", () => {
     expect(game.state.coins).toBe(0);
   });
 
-  it("resets a dev room by name, or the current game", () => {
+  it("resets a dev mode by name, or the current game", () => {
     const { text, calls } = fakeHost();
     expect(text("reset dev2")).toEqual(["resetting dev2"]);
     expect(text("reset")).toEqual(["new run"]);
-    expect(text("reset dev9")[0]).toMatch(/no room/);
+    expect(text("reset dev9")[0]).toMatch(/no mode/);
     expect(calls).toEqual(["reset dev2", "reset null"]);
   });
 

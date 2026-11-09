@@ -1,5 +1,5 @@
 /**
- * The dev1 materials room: one block of every material, attached at random to build a
+ * The dev1 materials mode: one block of every material, attached at random to build a
  * small structure on the table, so each substance can be judged next to the others.
  */
 import type { CardBlock } from "./cards";

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import {
   createPassiveBlock,
   PassiveEventQueue,
   passiveTraits,
   type PassiveBlock,
 } from "./passives";
-import { sandboxSessionConfig, demoSessionConfig } from "./session-config";
+import { sandboxRunRules, demoRunRules } from "./run-rules";
 import { standardDeck } from "./cards";
 import { inspectable } from "./traits/inspectable";
 
@@ -19,12 +19,7 @@ const block = (id: string, traitId: string): PassiveBlock => ({
 
 describe("passive rack and events", () => {
   it("keeps an installed passive in state across plays", () => {
-    const game = new GameSession(
-      dealerRegistry,
-      sandboxSessionConfig(demoSessionConfig),
-      standardDeck,
-      () => 0,
-    );
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
     const passive = createPassiveBlock("double-line", "passive.1");
     expect(game.installPassive(passive)).toBe(true);
     expect(game.installPassive(passive)).toBe(false);

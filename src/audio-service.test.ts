@@ -47,7 +47,7 @@ describe("audio service", () => {
     expect(calls).toEqual(["randomStage", "boss", "randomStage"]);
   });
 
-  it("muffles for settings and resumes the room's music for the game screen", () => {
+  it("muffles for settings and resumes the mode's music for the game screen", () => {
     const { audio, calls } = setup();
     audio.showScreen("title");
     audio.showScreen("settings");
@@ -64,15 +64,15 @@ describe("audio service", () => {
     ]);
   });
 
-  it("keeps a quiet room wound down after a run starts and when its game screen resumes", () => {
+  it("keeps a quiet mode wound down after a run starts and when its game screen resumes", () => {
     const { audio, calls } = setup();
-    audio.enterRoom("quiet");
+    audio.enterMode("quiet");
     audio.runStarted();
     audio.showScreen("game");
     expect(calls).toEqual(["windDown", "unmuffle", "windDown"]);
 
     calls.length = 0;
-    audio.enterRoom("ordinary");
+    audio.enterMode("ordinary");
     audio.runStarted();
     audio.showScreen("game");
     expect(calls).toEqual(["unmuffle", "resumeStage"]);

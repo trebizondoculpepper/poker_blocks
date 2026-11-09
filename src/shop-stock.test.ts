@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
-import { GameSession } from "./game-session";
+import { GameRun } from "./game-run";
 import { fromSaveRecord, toSaveRecord } from "./save";
-import { demoSessionConfig } from "./session-config";
+import { demoRunRules } from "./run-rules";
 import { shopPreviewState } from "./shop-stock";
 
 function shop() {
-  const game = new GameSession(dealerRegistry, demoSessionConfig, standardDeck, () => 0.25);
-  return GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, standardDeck, {
+  const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+  return GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, {
     ...game.snapshot(),
     phase: "shop",
     state: shopPreviewState(game.state, 5, () => 0.25),
@@ -49,7 +49,7 @@ describe("shop preview", () => {
       deck: [...first.state.deck, ...unsold],
       shopStock: undefined,
     };
-    const game = GameSession.fromSnapshot(dealerRegistry, demoSessionConfig, standardDeck, {
+    const game = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, {
       ...first.snapshot(),
       state: shopPreviewState(restock, 5, () => 0.25),
     });
