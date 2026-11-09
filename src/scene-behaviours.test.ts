@@ -62,7 +62,10 @@ function recordingHost() {
         hideGameOver: () => void calls.push("gameOver:hide"),
         showStageWon: (reward, next) => void calls.push(`stageWon:${reward.balance}:${next.id}`),
         hideStageWon: () => void calls.push("stageWon:hide"),
-        showTitle: (items) => void calls.push(`title:${items.map(({ id }) => id).join(",")}`),
+        showTitle: (items) =>
+          void calls.push(
+            `title:${items.map((item) => ((item as { disabled?: boolean }).disabled ? `${item.id}(disabled)` : item.id)).join(",")}`,
+          ),
         hideTitle: () => void calls.push("title:hide"),
       },
       audio: {
@@ -325,11 +328,11 @@ describe("the title screen's scene trait (#88)", () => {
     return { ...recorded, scenes };
   }
 
-  it("shows the items its scene declares, leaving out one whose condition fails", () => {
-    // Continue needs a save, so with none the scene shows New game and Settings only.
+  it("shows the items its scene declares, greying out Continue with no save (#10, #148)", () => {
+    // Continue needs a save to be chosen, but stays on the title, disabled, without one.
     const without = stack(false);
     without.scenes.switchTo(title.id);
-    expect(without.calls).toContain("title:new,openSettings");
+    expect(without.calls).toContain("title:continue(disabled),new,openSettings");
 
     const withSave = stack(true);
     withSave.scenes.switchTo(title.id);
@@ -350,7 +353,7 @@ describe("the title screen's scene trait (#88)", () => {
     scenes.push(stage.id);
     calls.length = 0;
     scenes.pop();
-    // Coming back in front re-reads the conditions, so Continue appears once a save exists.
-    expect(calls).toContain("title:new,openSettings");
+    // Coming back in front re-reads the conditions, so Continue is enabled once a save exists.
+    expect(calls).toContain("title:continue(disabled),new,openSettings");
   });
 });
