@@ -7,11 +7,7 @@
  *
  * It decides what happens; the other services show it.
  */
-import {
-  withDevDestructibleMix,
-  type DestroyCause,
-  type DevDestructibleMix,
-} from "./traits/destructible";
+import type { DestroyCause } from "./traits/destructible";
 import type { AudioService } from "./audio-service";
 import { playSfx } from "./audio/sfx";
 import type { CameraViewService } from "./camera-view";
@@ -22,7 +18,6 @@ import type { FieldView } from "./field-view";
 import { GameRun, type RunPhase } from "./game-run";
 import type { HandView } from "./hand-view";
 import type { HudPanels } from "./hud-panels";
-import { makeDevDeck } from "./materials";
 import type { MenuCallbacks } from "./menus";
 import type { Overlays, ScreenScenes } from "./overlays";
 import type { createPassiveRack } from "./passive-rack";
@@ -34,6 +29,7 @@ import {
   modeSceneId,
   wantsRestart,
   type GameMode,
+  type OnLoad,
   type SceneName,
   type SceneTraits,
 } from "./game-modes";
@@ -41,7 +37,7 @@ import { loadRun, saveRun, type SaveStorage } from "./save";
 import type { SceneManager } from "./scenes";
 import { demoRunRules, type RunRules } from "./run-rules";
 import { createRunSetupRegistry } from "./run-setup-behaviours";
-import { rulesForRun, type RunSetupServices, type RunSetupStep } from "./run-setup";
+import type { RunSetupServices, RunSetupStep } from "./run-setup";
 import {
   loadSettings,
   prefersReducedMotion,
@@ -163,6 +159,8 @@ export function createRunController<Context>(options: {
   let currentMode = gameModeFromParams(options.params);
   let modeTraits = currentMode.traits;
   const restartMode = wantsRestart(currentMode, options.params);
+  // Built before anything asks a pass of it; `persistentRules` and `deckForRun` read it.
+  const runSetup = createRunSetupRegistry(() => currentMode.traits.shop);
   let runRules = persistentRules(currentMode);
   let runSaveKey = modeTraits.save.key;
   let cards: readonly CardBlock[] = standardDeck;
@@ -177,40 +175,31 @@ export function createRunController<Context>(options: {
   const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const onSystemMotion = () => applySettings(settings);
 
-  const runSetup = createRunSetupRegistry(() => currentMode.traits.shop);
-  const setupServices = (): RunSetupServices => ({
-    standardDeck,
-    newSeed: () => Math.floor(Math.random() * 4294967296),
-    random: Math.random,
-  });
-
-  /** The mode's plain deck, with the testing-only mix its run setup declares, if any. */
-  function plainDeck(): readonly CardBlock[] {
-    return withDevDestructibleMix(
+  /** Declared, not assigned, so anything above it may call it without an ordering trap. */
+  function setupServices(): RunSetupServices {
+    return {
       standardDeck,
-      declaredMix(currentMode.runSetup) ?? { share: 0, by: [] },
-    );
+      newSeed: () => Math.floor(Math.random() * 4294967296),
+      random: Math.random,
+    };
   }
 
-  /** The rules this mode always plays under, including a sandbox, on a new or resumed run. */
+  /** The rules this mode plays under, new run or resumed: the registry decides, not us. */
   function persistentRules(mode: GameMode): RunRules {
-    return rulesForRun(mode.runSetup, baseRunRules(mode));
-  }
-
-  /** The `destructibleMix` this mode's run setup declares, if it declares one. */
-  function declaredMix(steps: readonly RunSetupStep[]): DevDestructibleMix | undefined {
-    return steps.flatMap((step) => (step.step === "destructibleMix" ? [step] : []))[0];
+    return runSetup.policy(mode.runSetup, baseRunRules(mode), setupServices());
   }
 
   /**
-   * The cards a saved run's deck is rebuilt from: the seed that run was dealt from, which a
-   * `materialDeck` step records in the run itself. Only card ids are saved, so the testing-only
-   * mix is re-applied from the mode's own run setup rather than persisted.
+   * The deck a run is played with. A saved run passes the seed it was dealt from, so the same
+   * steps rebuild the same deck; a new run passes none and the steps that deal a deck choose a
+   * fresh seed. Only card ids are saved, so this is also how the testing-only mix returns.
    */
-  function cardsForSavedRun(seed: number | undefined): readonly CardBlock[] {
-    const deck = seed === undefined ? standardDeck : makeDevDeck(seed);
-    return withDevDestructibleMix(deck, declaredMix(currentMode.runSetup) ?? { share: 0, by: [] });
+  function deckForRun(seed: number | undefined): readonly CardBlock[] {
+    return runSetup.deck(currentMode.runSetup, { deck: standardDeck, seed }, setupServices()).deck;
   }
+
+  /** The cards a saved run's deck is rebuilt from. */
+  const cardsForSavedRun = (seed: number | undefined) => deckForRun(seed);
 
   function switchScene(name: SceneName): void {
     const id = modeSceneId(currentMode.id, name);
@@ -237,7 +226,7 @@ export function createRunController<Context>(options: {
     modeTraits = mode.traits;
     runRules = persistentRules(mode);
     runSaveKey = modeTraits.save.key;
-    if (createDeck) cards = plainDeck();
+    if (createDeck) cards = deckForRun(undefined);
     services.rack.setCapacity(modeTraits.passiveRack?.capacity ?? 0);
     services.rack.element.hidden = !modeTraits.passiveRack;
     services.audio.enterMode(mode.traits.music.style);
@@ -385,22 +374,19 @@ export function createRunController<Context>(options: {
   }
 
   /**
-   * A new game run, with the mode's run setup applied: `prepare` decides the rules and the
-   * deck before the deal, `start` adjusts the opening snapshot after it. Continue never
-   * comes through here; see `resume`.
+   * A new game run, with the mode's run setup applied: `policy` decides the rules, `deck` the
+   * deck, and `start` the opening snapshot. Continue never comes through here; see `resume`.
    */
   function newRun(): GameRun {
     const steps: readonly RunSetupStep[] = currentMode.runSetup;
     const services = setupServices();
-    const prepared = runSetup.prepare(
-      steps,
-      { rules: baseRunRules(currentMode), deck: standardDeck },
-      services,
-    );
-    runRules = prepared.rules;
-    cards = prepared.deck;
+    runRules = runSetup.policy(steps, baseRunRules(currentMode), services);
+    const dealt = runSetup.deck(steps, { deck: standardDeck }, services);
+    cards = dealt.deck;
     const opening = new GameRun(dealerRegistry, runRules, cards).snapshot();
-    const started = runSetup.start(steps, { prepare: prepared, snapshot: opening }, services);
+    // The run records the seed of the deck it was dealt, so Continue rebuilds the same one.
+    const snapshot = { ...opening, ...(dealt.seed === undefined ? {} : { seed: dealt.seed }) };
+    const started = runSetup.start(steps, { rules: runRules, deck: dealt, snapshot }, services);
     return GameRun.fromSnapshot(dealerRegistry, runRules, cards, started.snapshot);
   }
 
@@ -455,19 +441,26 @@ export function createRunController<Context>(options: {
     return GameRun.fromSnapshot(dealerRegistry, runRules, cards, snapshot);
   };
 
-  /** Straight into play: continue the saved run, or deal a new one (a restart always deals). */
-  function openInPlay(): void {
-    const saved = !restartMode && currentMode.resumeSavedRun ? loadSaved() : null;
-    startRun(saved ? resume(saved) : newRun(), !saved);
-    services.overlays.closeAll();
-  }
-
-  /** The title screen, or a fresh run when the page asked to restart. */
-  function openOnTitle(): void {
-    if (!restartMode) return services.overlays.showTitle();
-    startRun(newRun(), true);
-    services.overlays.closeAll();
-  }
+  /**
+   * What a fresh page load does, keyed by the mode's `onLoad` configuration. The controller
+   * reads one value and looks up the handler; it never asks which mode is open.
+   */
+  const onLoadHandlers: Record<OnLoad, () => void> = {
+    title() {
+      if (!restartMode) return services.overlays.showTitle();
+      startRun(newRun(), true);
+      services.overlays.closeAll();
+    },
+    newRun() {
+      startRun(newRun(), true);
+      services.overlays.closeAll();
+    },
+    resume() {
+      const saved = restartMode ? null : loadSaved();
+      startRun(saved ? resume(saved) : newRun(), !saved);
+      services.overlays.closeAll();
+    },
+  };
 
   const rules: TableRules = {
     busy: () => services.presenter.busy,
@@ -602,10 +595,7 @@ export function createRunController<Context>(options: {
       services.audio.start();
     },
     open() {
-      // A mode that composes `opensInPlay` skips the title screen. Whether that play continues
-      // a saved run is the separate `resumeSavedRun` trait, decided in openInPlay.
-      if (currentMode.opensInPlay) openInPlay();
-      else openOnTitle();
+      onLoadHandlers[currentMode.traits.onLoad]();
       if (restartMode) {
         window.history.replaceState(
           window.history.state,

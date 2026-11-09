@@ -7,8 +7,7 @@ import { demoRunRules } from "./run-rules";
 import { createRunSetupRegistry } from "./run-setup-behaviours";
 import {
   RunSetupRegistry,
-  rulesForRun,
-  type RunPrepareContext,
+  type RunDeck,
   type RunSetupServices,
   type RunSetupStep,
 } from "./run-setup";
@@ -21,27 +20,29 @@ const services: RunSetupServices = {
   random: () => 0,
 };
 
-function prepared(steps: readonly RunSetupStep[]): RunPrepareContext {
-  return createRunSetupRegistry(() => gameModeFor(null).traits.shop).prepare(
-    steps,
-    { rules: demoRunRules, deck: standardDeck },
-    services,
-  );
+const noOffers = () => undefined;
+
+/** The deck this mode's run setup deals for a new run. */
+function newDeck(steps: readonly RunSetupStep[]): RunDeck {
+  return createRunSetupRegistry(noOffers).deck(steps, { deck: standardDeck }, services);
+}
+
+/** The rules this mode plays under, new run or resumed. */
+function policy(steps: readonly RunSetupStep[]): ReturnType<RunSetupRegistry["policy"]> {
+  return createRunSetupRegistry(noOffers).policy(steps, demoRunRules, services);
 }
 
 /** A fresh run, exactly as the run controller creates one. */
 function freshRun(modeId: string): GameRun {
   const mode = gameModeFor(modeId);
   const registry = createRunSetupRegistry(() => mode.traits.shop);
-  const prep = registry.prepare(
-    mode.runSetup,
-    { rules: demoRunRules, deck: standardDeck },
-    services,
-  );
-  const rules = prep.rules;
-  const opening = new GameRun(dealerRegistry, rules, prep.deck).snapshot();
-  const started = registry.start(mode.runSetup, { prepare: prep, snapshot: opening }, services);
-  return GameRun.fromSnapshot(dealerRegistry, rules, prep.deck, started.snapshot);
+  const rules = registry.policy(mode.runSetup, demoRunRules, services);
+  const dealt = registry.deck(mode.runSetup, { deck: standardDeck }, services);
+  const opening = new GameRun(dealerRegistry, rules, dealt.deck).snapshot();
+  // As the run controller does: the new run records the seed of the deck it was dealt.
+  const snapshot = { ...opening, ...(dealt.seed === undefined ? {} : { seed: dealt.seed }) };
+  const started = registry.start(mode.runSetup, { rules, deck: dealt, snapshot }, services);
+  return GameRun.fromSnapshot(dealerRegistry, rules, dealt.deck, started.snapshot);
 }
 
 describe("run setup registry", () => {
@@ -63,50 +64,44 @@ describe("run setup registry", () => {
     expect(registry.has("shopPreview")).toBe(true);
   });
 
-  it("composes prepare steps in declared order, then start steps in the same order", () => {
+  it("composes each pass in declared order", () => {
     const registry = new RunSetupRegistry();
     const calls: string[] = [];
     registry.register("sandbox", {
-      prepare: (context) => {
-        calls.push("sandbox.prepare");
-        return context;
-      },
-      start: (context) => {
-        calls.push("sandbox.start");
-        return context;
-      },
+      policy: (rules) => (calls.push("sandbox.policy"), rules),
+      start: (context) => (calls.push("sandbox.start"), context),
     });
     registry.register("materialSample", {
-      prepare: (context) => {
-        calls.push("sample.prepare");
-        return context;
-      },
-      start: (context) => {
-        calls.push("sample.start");
-        return context;
-      },
+      policy: (rules) => (calls.push("sample.policy"), rules),
+      deck: (context) => (calls.push("sample.deck"), context),
+      start: (context) => (calls.push("sample.start"), context),
     });
     const steps: readonly RunSetupStep[] = [{ step: "sandbox" }, { step: "materialSample" }];
-    const prep = registry.prepare(steps, { rules: demoRunRules, deck: standardDeck }, services);
-    const opening = new GameRun(dealerRegistry, prep.rules, prep.deck).snapshot();
-    registry.start(steps, { prepare: prep, snapshot: opening }, services);
+    const rules = registry.policy(steps, demoRunRules, services);
+    const dealt = registry.deck(steps, { deck: standardDeck }, services);
+    const opening = new GameRun(dealerRegistry, rules, dealt.deck).snapshot();
+    registry.start(steps, { rules, deck: dealt, snapshot: opening }, services);
 
-    expect(calls).toEqual(["sandbox.prepare", "sample.prepare", "sandbox.start", "sample.start"]);
+    expect(calls).toEqual([
+      "sandbox.policy",
+      "sample.policy",
+      "sample.deck",
+      "sandbox.start",
+      "sample.start",
+    ]);
   });
 
   it("applies only the steps a mode declares, so an empty list changes nothing", () => {
-    const bare = prepared([]);
-    expect(bare.rules).toEqual(demoRunRules);
-    expect(bare.deck).toBe(standardDeck);
-    expect(bare.seed).toBeUndefined();
+    expect(policy([])).toEqual(demoRunRules);
+    expect(newDeck([])).toEqual({ deck: standardDeck });
   });
 
   it("rejects a step that was never registered", () => {
     const registry = new RunSetupRegistry();
     const unknown = { step: "sandbox" } as RunSetupStep;
-    expect(() =>
-      registry.prepare([unknown], { rules: demoRunRules, deck: standardDeck }, services),
-    ).toThrow(/Unknown run setup step/);
+    expect(() => registry.policy([unknown], demoRunRules, services)).toThrow(
+      /Unknown run setup step/,
+    );
   });
 
   it("refuses to register the same step twice", () => {
@@ -118,20 +113,21 @@ describe("run setup registry", () => {
 
 describe("run setup steps", () => {
   it("sandbox makes the run endless without touching the deck", () => {
-    const sandboxed = prepared([{ step: "sandbox" }]);
-    expect(sandboxed.rules.stage(1, "stage-1")).toMatchObject({ targetScore: 1_000_000 });
-    expect(sandboxed.deck).toBe(standardDeck);
+    expect(policy([{ step: "sandbox" }]).stage(1, "stage-1")).toMatchObject({
+      targetScore: 1_000_000,
+    });
+    expect(newDeck([{ step: "sandbox" }])).toEqual({ deck: standardDeck });
   });
 
   it("materialDeck deals a material mix and records the seed in the run", () => {
-    const dealt = prepared([{ step: "materialDeck" }]);
+    const dealt = newDeck([{ step: "materialDeck" }]);
     expect(dealt.seed).toBe(4201);
     expect(dealt.deck.map(materialOf)).not.toEqual(standardDeck.map(materialOf));
 
-    // The seed is offered by the service, so the next run deals a different mix.
-    const other = createRunSetupRegistry(() => undefined).prepare(
+    // The seed is offered by the service, so another run deals a different mix.
+    const other = createRunSetupRegistry(noOffers).deck(
       [{ step: "materialDeck" }],
-      { rules: demoRunRules, deck: standardDeck },
+      { deck: standardDeck },
       { ...services, newSeed: () => 90210 },
     );
     expect(other.seed).toBe(90210);
@@ -152,29 +148,24 @@ describe("run setup steps", () => {
   });
 
   it("never fills the rack past the mode's own capacity, whatever a step declares", () => {
-    const mode = gameModeFor("dev2");
-    const registry = createRunSetupRegistry(() => mode.traits.shop);
+    const registry = createRunSetupRegistry(noOffers);
     const steps: readonly RunSetupStep[] = [{ step: "startingPassives", count: 9 }];
     const rules = { ...demoRunRules, rackCapacity: 3 };
-    const prep = registry.prepare(steps, { rules, deck: standardDeck }, services);
-    const opening = new GameRun(dealerRegistry, rules, prep.deck).snapshot();
-    const started = registry.start(
-      steps,
-      { prepare: { ...prep, rules }, snapshot: opening },
-      services,
-    );
+    const dealt = registry.deck(steps, { deck: standardDeck }, services);
+    const opening = new GameRun(dealerRegistry, rules, dealt.deck).snapshot();
+    const started = registry.start(steps, { rules, deck: dealt, snapshot: opening }, services);
     expect(started.snapshot.state.passiveRack).toHaveLength(3);
   });
 
   it("destructibleMix marks its share of the deck without changing which cards exist", () => {
-    const mixed = prepared([
+    const mixed = newDeck([
       { step: "materialDeck" },
       { step: "destructibleMix", share: 1, by: ["manual"] },
     ]);
     expect(mixed.deck.map(({ id }) => id)).toEqual(standardDeck.map(({ id }) => id));
     expect(mixed.deck.every(({ traits }) => traits.destructible?.by.includes("manual"))).toBe(true);
     // A share of 0 leaves every card alone.
-    const plain = prepared([{ step: "destructibleMix", share: 0, by: [] }]);
+    const plain = newDeck([{ step: "destructibleMix", share: 0, by: [] }]);
     expect(plain.deck.every(({ traits }) => traits.destructible === undefined)).toBe(true);
   });
 
@@ -197,16 +188,14 @@ describe("run setup steps", () => {
 describe("Continue never re-applies run setup", () => {
   it("keeps a sandbox in force after a reload, in every later stage of the resumed run", () => {
     // A sandbox is a rule policy the mode always plays under, not only while a run is dealt.
-    const rules = rulesForRun(gameModeFor("dev1").runSetup, demoRunRules);
+    const rules = policy(gameModeFor("dev1").runSetup);
     expect(rules.stage(2, "stage-1")).toMatchObject({
       targetScore: 1_000_000,
       plays: 1_000_000,
       discards: 1_000_000,
     });
     // A mode that does not sandbox is unaffected.
-    expect(rulesForRun(gameModeFor("dev3").runSetup, demoRunRules).stage(2, "stage-1").plays).toBe(
-      6,
-    );
+    expect(policy(gameModeFor("dev3").runSetup).stage(2, "stage-1").plays).toBe(6);
     // It still applies to a resumed run: the saved stage keeps its own counters.
     const run = freshRun("dev1");
     const saved = run.snapshot();
@@ -231,6 +220,19 @@ describe("Continue never re-applies run setup", () => {
     const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, makeDevDeck(4201), restored);
     // The cards are rebuilt from the seed, so compare what is persisted, not object identity.
     expect(toSaveRecord(resumed.snapshot())).toEqual(toSaveRecord(saved));
+  });
+
+  it("stays identical when the deck pass is asked for a saved run's seed", () => {
+    // The same steps rebuild the same deck from a seed, which is what Continue relies on.
+    const steps = gameModeFor("dev4").runSetup;
+    const dealt = newDeck(steps);
+    const rebuilt = createRunSetupRegistry(noOffers).deck(
+      steps,
+      { deck: standardDeck, seed: dealt.seed },
+      services,
+    );
+    expect(rebuilt.deck.map(({ id }) => id)).toEqual(dealt.deck.map(({ id }) => id));
+    expect(rebuilt.seed).toBe(dealt.seed);
   });
 
   it("resolves a save with no seed against the plain deck rather than the last dealt", () => {

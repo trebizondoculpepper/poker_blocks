@@ -163,20 +163,24 @@ describe("scene architecture guardrails", () => {
       }
     }
     // Continue restores the saved run; only a new run goes through the setup registry.
-    expect(run).toContain("runSetup.prepare(");
+    expect(run).toContain("runSetup.policy(");
+    expect(run).toContain("runSetup.deck(");
     expect(run).toContain("runSetup.start(");
-    // The controller names no setup step of its own; it asks the registry.
+    // The controller names no setup step of its own; it asks the registry for a pass.
     expect(run).not.toMatch(/\bskipTitle\b/);
+    expect(run).not.toMatch(/step\.step\s*===/);
     expect(run.match(/\bshopPreview\b/g) ?? []).toEqual([]);
   });
 
-  it("decides where a page starts from a trait, not by naming the title scene", () => {
+  it("dispatches a page load through configuration, not a scene or mode check", () => {
     const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
-    // Whether opening in play resumes a saved run is a mode trait (`resumeSavedRun`). Reading
-    // startScene by value would be a scene-identity branch, and the guardrail cannot see a
-    // comparison that names a variable rather than the property.
+    // `onLoad` is one configured value looked up in a handler table. Reading startScene by
+    // value would be a scene-identity branch, and a presence check on a marker trait would be
+    // a trait read as a flag; the guardrail sees neither when they sit on the mode.
     expect(run).not.toMatch(/startScene\s*[!=]==?\s*["'`]/);
     expect(run).not.toMatch(/["'`]title["'`]\s*[!=]==?\s*\w*startScene/);
-    expect(run).toContain("resumeSavedRun");
+    expect(run).toContain("onLoadHandlers[currentMode.traits.onLoad]");
+    // No mode marker is checked for presence.
+    expect(run).not.toMatch(/currentMode\.(opensInPlay|resumeSavedRun)/);
   });
 });

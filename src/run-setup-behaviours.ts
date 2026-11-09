@@ -1,6 +1,8 @@
 /**
  * The behaviour of each run setup step (see src/run-setup.ts and doc/game-architecture.md,
- * "Run setup"). Modes declare steps as data; this is the only place a step's meaning lives.
+ * "Run setup"). Modes declare steps as data; this is the only place a step's meaning lives, so
+ * no shared code has to name one. `shopOffers` is read when a `shopPreview` step stocks the
+ * shop; it is a getter because the developer console can switch modes while the game runs.
  */
 import type { ShopTrait } from "./game-modes";
 import type { GameState } from "./game-state";
@@ -8,40 +10,34 @@ import { sampleMaterials } from "./material-sampler";
 import { makeDevDeck } from "./materials";
 import { createPassiveBlock, randomPassiveDefinitions, type PassiveBlock } from "./passives";
 import { sandboxRunRules } from "./run-rules";
-import { RunSetupRegistry, type RunSetupServices } from "./run-setup";
+import { RunSetupRegistry } from "./run-setup";
 import { shopPreviewState } from "./shop-stock";
 import { withDevDestructibleMix } from "./traits/destructible";
 
-/**
- * Every run setup step, registered against its own config type. `shopOffers` is read when a
- * `shopPreview` step stocks the shop. It is a getter because the developer console can
- * switch modes while the game is running, so the offers are the current mode's, not the
- * ones the registry was built with. A run whose mode has no shop trait offers nothing.
- */
 export function createRunSetupRegistry(
   shopOffers: () => Pick<ShopTrait, "passiveOffers" | "cardOffers"> | undefined = () => undefined,
 ): RunSetupRegistry {
   const registry = new RunSetupRegistry();
 
   registry.register("sandbox", {
-    prepare: (context) => ({ ...context, rules: sandboxRunRules(context.rules) }),
+    policy: (rules) => sandboxRunRules(rules),
   });
 
   registry.register("materialDeck", {
-    prepare: (context, _config, services) => {
+    // A fresh seed per deal, recorded in the run so Continue rebuilds the same mix.
+    deck: (_context, _config, services) => {
       const seed = services.newSeed();
-      return { ...context, deck: makeDevDeck(seed), seed };
+      return { deck: makeDevDeck(seed), seed };
     },
-    start: (context) => ({
-      ...context,
-      snapshot: { ...context.snapshot, seed: context.prepare.seed },
-    }),
   });
 
   registry.register("destructibleMix", {
-    // Testing only. Choosing the deck is run setup, so this belongs with the other deck
-    // steps: after the deck exists, and before the sample is taken from it.
-    prepare: (context, mix) => ({ ...context, deck: withDevDestructibleMix(context.deck, mix) }),
+    // Testing only: a deck decision, so it contributes in the deck pass rather than the
+    // controller applying a mix to a deck behind the registry's back.
+    deck: (context, mix) => ({
+      deck: withDevDestructibleMix(context.deck, mix),
+      seed: context.seed,
+    }),
   });
 
   registry.register("materialSample", {
@@ -74,7 +70,7 @@ export function createRunSetupRegistry(
     start: (context, { count }, services) => {
       const { state } = context.snapshot;
       // A mode cannot overfill its own rack, whatever it declares.
-      const capacity = context.prepare.rules.rackCapacity ?? Infinity;
+      const capacity = context.rules.rackCapacity ?? Infinity;
       const room = Math.max(0, capacity - state.passiveRack.length);
       return {
         ...context,
@@ -99,7 +95,7 @@ export function createRunSetupRegistry(
 function openingPassives(
   count: number,
   state: GameState,
-  services: RunSetupServices,
+  services: { random: () => number },
 ): PassiveBlock[] {
   const owned = state.passiveRack.map(({ definitionId }) => definitionId);
   const used = new Set(state.passiveRack.map(({ id }) => id));

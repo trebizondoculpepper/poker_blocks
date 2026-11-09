@@ -37,6 +37,9 @@ export type SceneTraits = {
 export type ModeScene = Scene<SceneTraits>;
 export type ModeMusicStyle = "quiet" | "ordinary";
 
+/** What a fresh page load does in a mode (see ModeTraits.onLoad). */
+export type OnLoad = "title" | "newRun" | "resume";
+
 /**
  * A mode's scenes. Each scene composes only the traits whose behaviour it wants: the play
  * scenes take field placement and the round and deck panels, the shop takes the coin panel
@@ -103,6 +106,12 @@ export type ModeTraits = {
   console?: { name: string };
   /** A fresh run is started on load when this URL parameter is "true"; it is then removed. */
   restartable?: { param: string };
+  /**
+   * What a fresh page load does: show the `title` screen, deal a `newRun`, or `resume` the
+   * mode's saved run when it has one. Configuration, not a flag: `onLoadHandlers` in
+   * src/run-controller.ts dispatches it through a table, so no code asks which mode it is.
+   */
+  onLoad: OnLoad;
   /** The music this mode plays, through the behaviour in src/mode-music.ts. */
   music: { style: ModeMusicStyle };
 };
@@ -116,16 +125,6 @@ export type GameMode = {
    * play straight away.
    */
   startScene: SceneName;
-  /**
-   * A page that opens straight in play continues this mode's saved run. Without it the mode
-   * always deals a new run on load, deliberately discarding the save (dev1's sandbox).
-   */
-  resumeSavedRun?: Record<never, never>;
-  /**
-   * A fresh page opens straight into play instead of on the title screen. Whether that play
-   * continues a saved run is the separate `resumeSavedRun` decision.
-   */
-  opensInPlay?: Record<never, never>;
   /** Other names that open this mode (old links). */
   aliases?: readonly string[];
   /** Ordered steps applied when a new game run is created; never applied on Continue. */
@@ -143,6 +142,7 @@ const gameModes: GameMode[] = [
     runSetup: [],
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
+      onLoad: "title",
       save: { key: saveKey },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
@@ -153,10 +153,10 @@ const gameModes: GameMode[] = [
     id: "dev0",
     scenes: scenesForMode("dev0"),
     startScene: "title",
-    resumeSavedRun: {},
     aliases: ["dev"],
     runSetup: [{ step: "materialDeck" }],
     traits: {
+      onLoad: "title",
       save: { key: "poker-blocks.dev-run" },
       console: { name: "dev0" },
       restartable: { param: "restart" },
@@ -167,9 +167,9 @@ const gameModes: GameMode[] = [
     id: "dev1",
     scenes: scenesForMode("dev1"),
     startScene: "stage-1",
-    opensInPlay: {},
     runSetup: [{ step: "sandbox" }, { step: "materialDeck" }, { step: "materialSample" }],
     traits: {
+      onLoad: "newRun",
       save: { key: "poker-blocks.dev1-run" },
       console: { name: "dev1" },
       restartable: { param: "restart" },
@@ -180,14 +180,13 @@ const gameModes: GameMode[] = [
     id: "dev2",
     scenes: scenesForMode("dev2"),
     startScene: "stage-1",
-    opensInPlay: {},
-    resumeSavedRun: {},
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck" },
       { step: "startingPassives", count: 2 },
     ],
     traits: {
+      onLoad: "resume",
       save: { key: "poker-blocks.dev2-run" },
       console: { name: "dev2" },
       restartable: { param: "restart" },
@@ -199,10 +198,9 @@ const gameModes: GameMode[] = [
     id: "dev3",
     scenes: scenesForMode("dev3"),
     startScene: "shop",
-    opensInPlay: {},
-    resumeSavedRun: {},
     runSetup: [{ step: "shopPreview", coins: 5 }],
     traits: {
+      onLoad: "resume",
       save: { key: "poker-blocks.dev3-run" },
       console: { name: "dev3" },
       restartable: { param: "restart" },
@@ -217,8 +215,6 @@ const gameModes: GameMode[] = [
     id: "dev4",
     scenes: scenesForMode("dev4", { devManualBlockDestroyer: { cause: "manual" } }),
     startScene: "stage-1",
-    opensInPlay: {},
-    resumeSavedRun: {},
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck" },
@@ -226,6 +222,7 @@ const gameModes: GameMode[] = [
       { step: "materialSample" },
     ],
     traits: {
+      onLoad: "resume",
       save: { key: "poker-blocks.dev4-run" },
       console: { name: "dev4" },
       restartable: { param: "restart" },

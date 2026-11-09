@@ -1,26 +1,21 @@
 /**
- * Run setup: the ordered steps a game mode applies when a new game run is created.
+ * Run setup: the ordered steps a game mode applies when a game run is created.
  *
  * A step is plain data (`{ step: "sandbox" }`), and its behaviour lives in `RunSetupRegistry`,
- * type-checked against that step's own config. Steps compose in declaration order in two
- * passes: `prepare` before the run is dealt (run rules and the deck), then `start` once the
- * opening snapshot exists (what the run begins holding).
+ * type-checked against that step's own config. Steps compose in declaration order through four
+ * passes, and shared code asks for a pass rather than naming a step:
  *
- * Run setup applies to a new game run only. Continue restores the saved run as saved.
+ * - `policy` — rules the mode always plays under, on a new run and a resumed one alike.
+ * - `deck` — the deck a run is played with, dealt fresh or rebuilt from a saved seed.
+ * - `start` — what a new run begins holding, once its opening snapshot exists.
+ *
+ * Run setup applies to a new game run; Continue restores the saved run. The `policy` and `deck`
+ * passes are the exception, because those are properties of the run rather than of the deal.
  */
 import type { CardBlock } from "./cards";
 import type { RunSnapshot } from "./game-run";
-import { sandboxRunRules, type RunRules } from "./run-rules";
+import type { RunRules } from "./run-rules";
 import type { DevDestructibleMix } from "./traits/destructible";
-
-/**
- * The rules a mode always plays under, from its baseline rules and the steps that describe a
- * policy rather than a starting state. A sandbox lasts for the whole run, not just the deal, so
- * a resumed run keeps it; a `prepare` step that only shapes the opening deck does not.
- */
-export function rulesForRun(steps: readonly RunSetupStep[], base: RunRules): RunRules {
-  return steps.some((step) => step.step === "sandbox") ? sandboxRunRules(base) : base;
-}
 
 /** The configuration each run setup step takes. A step with no options takes `{}`. */
 export type RunSetupStepConfigs = {
@@ -46,17 +41,19 @@ export type RunSetupStep = {
   [Name in keyof RunSetupStepConfigs]: { step: Name } & RunSetupStepConfigs[Name];
 }[keyof RunSetupStepConfigs];
 
-/** What a `prepare` pass hands to the next step: the rules and deck a run is dealt from. */
-export type RunPrepareContext = {
-  rules: RunRules;
+/**
+ * A run's deck and the seed it was dealt from. `seed` is absent for a run whose deck does not
+ * depend on one; a `deck` pass that deals a deck sets it so the run can record it.
+ */
+export type RunDeck = {
   deck: readonly CardBlock[];
-  /** Recorded in the run, so Continue rebuilds the same deck. */
   seed?: number;
 };
 
-/** What a `start` pass hands to the next step: the opening snapshot of the new run. */
+/** What a `start` pass hands to the next step: the run's rules, its deck and its snapshot. */
 export type RunStartContext = {
-  prepare: RunPrepareContext;
+  rules: RunRules;
+  deck: RunDeck;
   snapshot: RunSnapshot;
 };
 
@@ -73,11 +70,8 @@ export type RunSetupServices = {
 };
 
 export type RunSetupBehaviour<Config extends object> = {
-  prepare?(
-    context: RunPrepareContext,
-    config: Config,
-    services: RunSetupServices,
-  ): RunPrepareContext;
+  policy?(rules: RunRules, config: Config, services: RunSetupServices): RunRules;
+  deck?(context: RunDeck, config: Config, services: RunSetupServices): RunDeck;
   start?(context: RunStartContext, config: Config, services: RunSetupServices): RunStartContext;
 };
 
@@ -98,28 +92,41 @@ export class RunSetupRegistry {
     return this.behaviours.has(name);
   }
 
-  /** The declared steps' `prepare` handlers, in declaration order. */
-  prepare(
-    steps: readonly RunSetupStep[],
-    context: RunPrepareContext,
-    services: RunSetupServices,
-  ): RunPrepareContext {
-    return steps.reduce((current, step) => {
-      const behaviour = this.get(step.step);
-      return behaviour.prepare?.(current, step, services) ?? current;
-    }, context);
+  /** The rules every run in this mode plays under, new or resumed. */
+  policy(steps: readonly RunSetupStep[], rules: RunRules, services: RunSetupServices): RunRules {
+    return this.pass("policy", steps, rules, services);
   }
 
-  /** The declared steps' `start` handlers, in declaration order. */
+  /**
+   * The deck a run is played with. Pass a `seed` to rebuild a saved run's deck; leave it out to
+   * deal a new one, and each step that deals a deck chooses a fresh seed and records it.
+   */
+  deck(steps: readonly RunSetupStep[], context: RunDeck, services: RunSetupServices): RunDeck {
+    return this.pass("deck", steps, context, services);
+  }
+
+  /** The opening snapshot of a new run, after its deck is decided. */
   start(
     steps: readonly RunSetupStep[],
     context: RunStartContext,
     services: RunSetupServices,
   ): RunStartContext {
+    return this.pass("start", steps, context, services);
+  }
+
+  /** Apply one pass over the declared steps, in declaration order. */
+  private pass<Value>(
+    name: "policy" | "deck" | "start",
+    steps: readonly RunSetupStep[],
+    value: Value,
+    services: RunSetupServices,
+  ): Value {
     return steps.reduce((current, step) => {
-      const behaviour = this.get(step.step);
-      return behaviour.start?.(current, step, services) ?? current;
-    }, context);
+      const behaviour = this.get(step.step) as RunSetupBehaviour<object> & {
+        [Key in typeof name]?: (current: Value, config: object, s: RunSetupServices) => Value;
+      };
+      return behaviour[name]?.(current, step, services) ?? current;
+    }, value);
   }
 
   private get<Name extends keyof RunSetupStepConfigs>(
