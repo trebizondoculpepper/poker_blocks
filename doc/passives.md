@@ -62,6 +62,15 @@ Every row below also carries rack residency, an inspectable name and effect desc
 | **Seeing Red** (`seeing-red`)                   | On `discard.completed`, count discarded blocks whose suit is Hearts or Diamonds; add **1 coin per matching block**. This stacks with Scrapper.                                                                                                            | Cream cube with paired red ♥ and ♦ marks, red edge stitching.                                     |
 | **Ace Exchange** (`ace-exchange`, working name) | On `discard.completed`, if the action contains **at least two Aces**, grant **one** random passive definition the player does not already own. Trigger once for the action, including a three- or four-Ace discard.                                       | Violet cube with two overlapping A marks and a small empty-slot sparkle.                          |
 
+### Token shapes and face artwork (#125)
+
+A passive's look is data on its definition: an optional `shape` and optional `faces`. `src/passive-visual.ts` builds every token, in the rack and in the shop, from that data:
+
+- **Shape:** the name of a registered shape (`cube`, `octahedron`, `d10` for a pentagonal trapezohedron, `icosahedron`). Each shape registers only its geometry in `passiveShapes`, and the builder never asks which shape it has. With no shape, the token is the original cube. A new shape is one registration, with no change to the rack or the shop.
+- **Faces:** artwork per face in **logical order**, each a label or a standard pip pattern. Every shape places them the same way: face `i` sits opposite face `count − 1 − i`. So faces labelled 1 to N give opposite pairs summing to N + 1 (a six-sided die's 1–6, 2–5 and 3–4) with no die-specific code. With no faces, every face shows the symbol, as before.
+
+Shapes apply to passive tokens only: cards on the field stay cubes. A token's visual finish is separate from a card's gameplay material.
+
 The appearance trait describes a passive's **look**. A wood-look Woodworker block in the rack is not itself a scoring wood card; Carnivore and Woodworker inspect the gameplay material of card blocks contributing to a line.
 
 For Crossroads, inspect the completed field's geometry before line scores are presented. A crossing line need only exist; its own points do not enter the condition. This prevents a scoring dependency cycle. If several lines cross the same block, each scored line receives its own bonus when it resolves.
