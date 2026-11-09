@@ -42,7 +42,19 @@ const despawnZ = cameraZ + despawnMargin;
  * the field is spent as an invisible speck: the travel is what a card is seen over, so a deep
  * spawn with few cards leaves the screen nearly empty.
  */
-const spawnZ = -30;
+export const spawnZ = -40;
+/**
+ * Where a card has fully faded in. A card's opacity follows its depth, not its age: it is
+ * invisible at `spawnZ` and eases up to fully opaque by here, so it emerges from the distance
+ * rather than switching on.
+ */
+export const fadedInZ = -35;
+
+/** A card's opacity at depth `z`: 0 at `spawnZ`, eased (smoothstep) up to 1 at `fadedInZ`. */
+export function depthOpacity(z: number): number {
+  const progress = Math.min(1, Math.max(0, (z - spawnZ) / (fadedInZ - spawnZ)));
+  return progress * progress * (3 - 2 * progress);
+}
 /** How far beyond the clearance ring a card's path may sit, so the field is not all one ring. */
 const spread = 5.5;
 /**
@@ -77,13 +89,8 @@ export const defaultAttractTuning: AttractTuning = {
   spawnInterval: { mean: 0, deviation: 0 },
 };
 
-/** How long a newly spawned card takes to fade up from nothing. */
-const fadeInSeconds = 0.5;
-
 type AttractCard = {
   cube: THREE.Mesh;
-  /** Seconds since this card spawned; drives its fade-in. */
-  age: number;
   /** The materials to fade, so the geometry and textures are not touched. */
   materials: THREE.MeshStandardMaterial[];
   /** The spin axis, tilting each card's tumble slightly differently. */
@@ -216,14 +223,13 @@ export function createAttractScene(
     );
     for (const extra of appearance.extras ?? []) cube.add(extra);
     scene.add(cube);
-    // A card fades up from nothing over `fadeInSeconds`, so it does not pop into being at the
-    // start of its travel. The material starts fully transparent; `update` raises it.
+    // A card's opacity follows its depth (`depthOpacity`); it starts transparent and `update`
+    // raises it as the card comes out of the distance.
     for (const material of appearance.materials) material.opacity = 0;
     reflect(appearance.materials);
 
     return {
       cube,
-      age: 0,
       materials: appearance.materials,
       // A different axis per card: mostly y, tilted a little, so the tumbling varies.
       axis: new THREE.Vector3(random() - 0.5, 1, random() - 0.5).normalize(),
@@ -242,12 +248,11 @@ export function createAttractScene(
 
   const cards: AttractCard[] = [];
   /**
-   * Place a card somewhere along the whole travel range, not at its far end. Spreading them
-   * means a replacement appears at a random depth, so the field stays evenly populated instead
-   * of all four bunching deep in the scene after the first cycle. Off-centre horizontally and
-   * vertically, so they do not all pass through the middle.
+   * Put a card on its path at depth `z`, off-centre horizontally and vertically so they do not
+   * all pass through the middle. A replacement starts at `spawnZ` and fades in as it nears;
+   * the opening field is spread along the whole travel so the title is never empty.
    */
-  function placeAlongPath(card: AttractCard): void {
+  function placeAlongPath(card: AttractCard, z: number): void {
     // A path is a point on a ring around the camera's axis, carried toward the viewer. Picking
     // the point on the ring keeps every path `lensClearance` from the axis, so no card ever
     // passes through the lens; picking the angle rather than an x/y pair means the field still
@@ -258,22 +263,16 @@ export function createAttractScene(
     // `lensClearance` whichever way a card is placed.
     const angle = random() * Math.PI * 2;
     const radius = lensClearance + random() * spread;
-    card.cube.position.set(
-      Math.cos(angle) * radius,
-      Math.sin(angle) * radius,
-      // Somewhere along the whole travel, so the field stays evenly populated after the first
-      // cycle instead of bunching deep in the scene.
-      despawnZ - random() * (despawnZ - spawnZ),
-    );
+    card.cube.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, z);
   }
 
   for (let index = 0; index < cardsInFlight; index++) {
     const card = makeCard();
-    placeAlongPath(card);
-    // Stagger the starting depths so they do not arrive together, with the nearest already
-    // in view so the title is never empty.
-    // Stagger across the visible depth so a card is in view from the first frame.
-    card.cube.position.z += index * 13;
+    // Evenly through the travel, jittered, so the opening field is populated at every depth
+    // and the cards do not arrive together.
+    const slot = (index + random()) / cardsInFlight;
+    placeAlongPath(card, spawnZ + slot * (despawnZ - spawnZ));
+    for (const material of card.materials) material.opacity = depthOpacity(card.cube.position.z);
     cards.push(card);
   }
 
@@ -315,19 +314,15 @@ export function createAttractScene(
       for (const card of cards) {
         card.cube.position.z += card.speed * delta * 1.2;
         card.cube.rotateOnAxis(card.axis, card.spin * delta);
-        // Ease the fade in, so a card appears softly rather than switching on.
-        if (card.age < fadeInSeconds) {
-          card.age = Math.min(fadeInSeconds, card.age + delta);
-          const progress = card.age / fadeInSeconds;
-          const eased = progress * progress * (3 - 2 * progress);
-          for (const material of card.materials) material.opacity = eased;
-        }
+        // Fade in with depth, eased, between `spawnZ` and `fadedInZ`; fully opaque after.
+        const opacity = depthOpacity(card.cube.position.z);
+        for (const material of card.materials) material.opacity = opacity;
         // A card is replaced once it has passed the camera, and never sooner than the tuned
         // interval allows, so the field can be made busier or calmer without changing depth.
         if (card.cube.position.z <= despawnZ || sinceSpawn > 0) continue;
         card.dispose();
         const replacement = makeCard();
-        placeAlongPath(replacement);
+        placeAlongPath(replacement, spawnZ);
         cards[cards.indexOf(card)] = replacement;
         sinceSpawn = sample(tuning.spawnInterval, random);
       }
