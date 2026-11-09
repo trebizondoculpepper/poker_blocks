@@ -59,6 +59,10 @@ The run controller owns the reward and transition sequence. Coins persist from o
 
 The field is cleared at the end of every stage. Placed blocks return to the deck, and the next stage starts with an empty field. The deck and the discard pile carry over between the stages of a round, so a block discarded in stage 1 cannot be drawn in stage 2 or the boss stage.
 
+### Screen layers
+
+From back to front: the card room and table, then the HUD (its panels and controls), then the blocks on the table, then the hand and passive rack, and a block being dragged above everything. Blocks may cover a HUD panel; turn or zoom the board to see what's underneath. Zooming moves the room and blocks together, never the HUD, hand or rack (#116).
+
 ## Scoring
 
 ### Running total

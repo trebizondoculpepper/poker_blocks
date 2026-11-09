@@ -59,41 +59,62 @@ function maxRenderDimension(renderer: THREE.WebGLRenderer): number {
   );
 }
 
+/**
+ * The table's layers, bottom to top, with the DOM overlay between them (#116): the back canvas
+ * (room and table), the HUD and menus, then the front canvas (blocks, hand, drag).
+ */
+export type ScreenshotLayers = {
+  back: THREE.WebGLRenderer;
+  front: THREE.WebGLRenderer;
+};
+
+/** A WebGL canvas copied to a 2D one, so it survives the next frame. */
+function copyCanvas(renderer: THREE.WebGLRenderer): HTMLCanvasElement {
+  renderer.getContext().finish();
+  const copy = document.createElement("canvas");
+  copy.width = renderer.domElement.width;
+  copy.height = renderer.domElement.height;
+  const context = copy.getContext("2d");
+  if (!context) throw new Error("Could not capture the game canvas.");
+  context.drawImage(renderer.domElement, 0, 0);
+  return copy;
+}
+
 async function capture(
   host: HTMLElement,
-  renderer: THREE.WebGLRenderer,
+  layers: ScreenshotLayers,
   render: () => void,
 ): Promise<Blob> {
+  const { back, front } = layers;
   const bounds = host.getBoundingClientRect();
   const width = Math.round(bounds.width);
   const height = Math.round(bounds.height);
-  const layout = screenshotLayout(width, height, maxRenderDimension(renderer));
+  const layout = screenshotLayout(
+    width,
+    height,
+    Math.min(maxRenderDimension(back), maxRenderDimension(front)),
+  );
   if (!layout) throw new Error("The game view has no drawable size.");
-  const oldRatio = renderer.getPixelRatio();
-  let sceneImage: HTMLCanvasElement;
+  const oldRatio = back.getPixelRatio();
+  let backImage: HTMLCanvasElement;
+  let frontImage: HTMLCanvasElement;
   let overlays: HTMLCanvasElement;
   try {
-    // Freeze the complete WebGL frame before the asynchronous DOM capture. The
-    // hand is a second scene rendered into the same canvas after the board.
-    renderer.setPixelRatio(layout.scale);
+    // Freeze both WebGL layers before the asynchronous DOM capture.
+    for (const renderer of [back, front]) renderer.setPixelRatio(layout.scale);
     render();
-    renderer.getContext().finish();
-    sceneImage = document.createElement("canvas");
-    sceneImage.width = renderer.domElement.width;
-    sceneImage.height = renderer.domElement.height;
-    const sceneContext = sceneImage.getContext("2d");
-    if (!sceneContext) throw new Error("Could not capture the game canvas.");
-    sceneContext.drawImage(renderer.domElement, 0, 0);
+    backImage = copyCanvas(back);
+    frontImage = copyCanvas(front);
     const { toCanvas } = await import("html-to-image");
     overlays = await toCanvas(host, {
-      filter: (node) => node !== renderer.domElement,
+      filter: (node) => node !== back.domElement && node !== front.domElement,
       pixelRatio: layout.scale,
       width,
       height,
       skipAutoScale: true,
     });
   } finally {
-    renderer.setPixelRatio(oldRatio);
+    for (const renderer of [back, front]) renderer.setPixelRatio(oldRatio);
     render();
   }
   const output = document.createElement("canvas");
@@ -103,8 +124,10 @@ async function capture(
   if (!context) throw new Error("Could not create a screenshot canvas.");
   context.fillStyle = "#111726";
   context.fillRect(0, 0, output.width, output.height);
-  context.drawImage(sceneImage, layout.x, layout.y, layout.width, layout.height);
-  context.drawImage(overlays, layout.x, layout.y, layout.width, layout.height);
+  // In the table's own order: the room, the HUD over it, the blocks over both. (Menus and the
+  // passive rack are in the DOM layer, so a block can cover them in a capture.)
+  for (const image of [backImage, overlays, frontImage])
+    context.drawImage(image, layout.x, layout.y, layout.width, layout.height);
   const blob = await new Promise<Blob | null>((resolve) => output.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("Could not encode the screenshot.");
   return blob;
@@ -130,7 +153,7 @@ function download(blob: Blob, name: string): void {
 /** Copy the whole game view, including DOM overlays, with a save fallback. */
 export function bindScreenshotShortcut(
   host: HTMLElement,
-  renderer: THREE.WebGLRenderer,
+  layers: ScreenshotLayers,
   render: () => void,
 ): () => void {
   const notice = document.createElement("div");
@@ -168,7 +191,7 @@ export function bindScreenshotShortcut(
     show("Capturing 4K screenshot…");
     const name = screenshotName();
     // Start clipboard.write in the key gesture; Safari requires this ordering.
-    const png = capture(host, renderer, render);
+    const png = capture(host, layers, render);
     png.catch(() => {});
     let copied: Promise<void>;
     try {

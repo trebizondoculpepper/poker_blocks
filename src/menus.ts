@@ -34,6 +34,8 @@ export type MenuCallbacks = {
 };
 
 export type Menus = {
+  /** The always-visible button that opens the pause menu, for the HUD frame to place. */
+  readonly menuButton: HTMLElement;
   /** The title's items are the title scene trait's decision, so they are passed in. */
   showTitle(items: readonly MenuChoice[]): void;
   hideTitle(): void;
@@ -483,6 +485,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   }
 
   return {
+    menuButton: settingsButton,
     showTitle,
     hideTitle,
     showPanelFooter,

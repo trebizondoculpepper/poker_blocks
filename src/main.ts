@@ -31,6 +31,7 @@ import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView, type ShopView } from "./shop-view";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
+import { createHudFrame } from "./hud-frame";
 import { appVersion } from "./version";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -47,7 +48,7 @@ const view: TableRenderer = createTableRenderer(host);
 const render = () => view.render(cameraView.camera, cameraView.handCamera);
 const cameraView: CameraViewService = createCameraViewService({
   host,
-  renderer: view.renderer,
+  renderers: [view.renderer, view.front],
   scene: view.scene,
   cubeSize,
   getCells: () => field.cells(),
@@ -237,11 +238,18 @@ const overlays: Overlays = createOverlays(host, {
   scenes: run.screenScenes,
   menus: run.menus,
 });
+// The shared HUD frame (#116): gameplay and the shop place their controls in its zones.
+const hudFrame = createHudFrame(host);
+hudFrame.place(overlays.menuButton, "top-right");
 
 // ----- The start scene -----
 
 run.open();
-const unbindScreenshot = bindScreenshotShortcut(host, view.renderer, render);
+const unbindScreenshot = bindScreenshotShortcut(
+  host,
+  { back: view.renderer, front: view.front },
+  render,
+);
 hud.onAction(() => run.takeNextAction());
 // Developer console: ~ (or `) drops it down.
 const devConsole = createConsoleHost(run.consoleApp, audio);

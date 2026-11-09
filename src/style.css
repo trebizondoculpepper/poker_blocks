@@ -19,9 +19,29 @@ body,
   touch-action: none;
 }
 
+/*
+ * The table's two layers (#116): the back canvas (room and table) under the HUD, and the front
+ * canvas (blocks, hand, drag) over it. The front one never takes input, so pointers reach the
+ * HUD's controls and, through it, the back canvas, which listens for the table.
+ */
+.scene .table-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.scene .table-canvas-back {
+  z-index: 0;
+}
+
+.scene .table-canvas-front {
+  z-index: 2;
+  pointer-events: none;
+}
+
 .inspect-tooltip {
   position: absolute;
-  z-index: 1;
+  /* Over the front canvas: the label must never sit under the blocks it describes. */
+  z-index: 6;
   padding: 7px 10px;
   border: 1px solid #7c8599;
   border-radius: 6px;
@@ -941,4 +961,69 @@ body,
 .menu-panel button[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/*
+ * The shared HUD frame (#116, src/hud-frame.ts): a full-screen grid of zones inside the safe
+ * area, at the HUD's layer (over the back canvas, under the front one). It takes no input
+ * itself; the controls placed in it do. Zones don't position themselves, so a panel that is
+ * still placed absolutely keeps its position; on landscape screens, controls placed in a zone
+ * flow into it.
+ */
+.hud-frame {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "top-left top-center top-right"
+    ". . ."
+    "bottom-left bottom-center bottom-right";
+  padding: max(18px, env(safe-area-inset-top)) max(22px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
+  pointer-events: none;
+}
+
+.hud-zone {
+  display: flex;
+  gap: 12px;
+}
+
+.hud-zone > * {
+  pointer-events: auto;
+}
+
+.hud-zone[data-zone="top-left"] {
+  grid-area: top-left;
+  align-items: flex-start;
+}
+.hud-zone[data-zone="top-center"] {
+  grid-area: top-center;
+  justify-content: center;
+}
+.hud-zone[data-zone="top-right"] {
+  grid-area: top-right;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+.hud-zone[data-zone="bottom-left"] {
+  grid-area: bottom-left;
+  align-items: flex-end;
+}
+.hud-zone[data-zone="bottom-center"] {
+  grid-area: bottom-center;
+  justify-content: center;
+}
+.hud-zone[data-zone="bottom-right"] {
+  grid-area: bottom-right;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+@media (orientation: landscape) {
+  .hud-frame[data-layout="landscape"] .hud-zone > .settings-button {
+    position: static;
+  }
 }

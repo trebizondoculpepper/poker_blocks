@@ -40,7 +40,8 @@ export type CameraViewService = {
 /** Camera, hand projection, board framing, zoom, and board-view motion. */
 export function createCameraViewService(options: {
   host: HTMLElement;
-  renderer: THREE.WebGLRenderer;
+  /** Every canvas the table draws on (the back and front layers, #116), sized together. */
+  renderers: readonly THREE.WebGLRenderer[];
   scene: THREE.Scene;
   cubeSize: number;
   getCells(): readonly Cell[];
@@ -48,7 +49,7 @@ export function createCameraViewService(options: {
   layoutHand(): void;
   render(): void;
 }): CameraViewService {
-  const { host, renderer, scene, cubeSize } = options;
+  const { host, renderers, scene, cubeSize } = options;
   const pivot = new THREE.Group();
   const assembly = new THREE.Group();
   pivot.rotation.order = "YXZ";
@@ -163,7 +164,7 @@ export function createCameraViewService(options: {
       applyCamera();
     }
     options.layoutHand();
-    renderer.setSize(width, height);
+    for (const renderer of renderers) renderer.setSize(width, height);
     options.render();
   }
 
