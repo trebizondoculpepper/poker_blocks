@@ -53,4 +53,11 @@ describe("the shared HUD frame (#116)", () => {
     const frame = styles.slice(styles.indexOf(".hud-frame {"));
     expect(frame.slice(0, frame.indexOf("}"))).toMatch(/pointer-events:\s*none/);
   });
+
+  it("passes pointers through information panels, taking them only on controls (#117)", () => {
+    expect(styles).not.toMatch(/\.hud-zone > \*\s*\{\s*pointer-events:\s*auto/);
+    expect(styles).toMatch(
+      /\.hud-zone :is\(button, \[data-interactive\]\)\s*\{\s*pointer-events:\s*auto/,
+    );
+  });
 });

@@ -1004,7 +1004,12 @@ body,
   gap: 12px;
 }
 
-.hud-zone > * {
+/*
+ * The frame passes pointers through, and so do the information panels placed in it (round,
+ * deck, coins), so a block drawn over a panel can still be picked, turned or zoomed. Only real
+ * controls take input: buttons, and anything marked as interactive (the Discard bin).
+ */
+.hud-zone :is(button, [data-interactive]) {
   pointer-events: auto;
 }
 
@@ -1036,8 +1041,15 @@ body,
 }
 
 @media (orientation: landscape) {
-  .hud-frame[data-layout="landscape"] .hud-zone > .settings-button {
-    position: static;
+  /*
+   * On landscape screens, every element placed in a zone flows into it (#117). Relative, not
+   * static, so a panel's own absolutely placed parts (the bin's count badge and refused X) stay
+   * anchored to it.
+   */
+  .scene .hud-frame[data-layout="landscape"] .hud-zone > * {
+    position: relative;
+    inset: auto;
+    margin: 0;
   }
 }
 
