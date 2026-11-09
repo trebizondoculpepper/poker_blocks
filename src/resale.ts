@@ -5,7 +5,6 @@
  * payout, in order. This is the extension seam for future passives that change sale payouts;
  * the sale transaction and its drop target never compute a price themselves.
  */
-import { passiveBalanceOf } from "./balance";
 import type { PassiveBlock } from "./passives";
 
 /** What a resale modifier knows about the sale. */
@@ -34,7 +33,9 @@ export function resaleValue(
   modifiers: readonly ResaleModifier[] = [],
 ): number | null {
   try {
-    const sale = { passive, basePrice: passiveBalanceOf(passive.definitionId).basePrice };
+    const basePrice = passive.traits.priced?.basePrice;
+    if (basePrice === undefined) return null;
+    const sale = { passive, basePrice };
     const payout = modifiers.reduce(
       (value, modify) => modify(value, sale),
       defaultResale(sale.basePrice),
