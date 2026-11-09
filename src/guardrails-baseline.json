@@ -3,6 +3,7 @@
   "src/audio/music-fade.ts": ["switch (kind) {"],
   "src/audio/music-plan.ts": ["switch (scene) {"],
   "src/game-modes.ts": [
+    "...sceneTraits[kind],",
     "return phase !== \"shop\" && phase !== \"over\" && Boolean(traits.stage.fieldPlacement);",
     "return phase === \"shop\" ? (traits.shop?.overlays ?? {}) : traits.stage.overlays;"
   ],
@@ -17,14 +18,14 @@
   ],
   "src/hud-panels.ts": [
     "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
-    "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
+    "heading: `ROUND ${view.round} \u00b7 ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
   ],
   "src/listening-room/main.ts": [
     "const entry = entries.find((_, index) => soundEffects[index].id === \"score.line\");"
   ],
   "src/materials.ts": [
     "...(transparentMaterials.has(kind) ? { transparent: {} } : {}),",
-    "inspectable: inspectable(`${cardName(card.traits.identity)} · ${materialNames[kind]}`),"
+    "inspectable: inspectable(`${cardName(card.traits.identity)} \u00b7 ${materialNames[kind]}`),"
   ],
   "src/passive-effects.ts": [
     "switch (condition.kind) {",

@@ -125,8 +125,11 @@ reviews:
         from branching on what kind of thing something is. A registry of handlers keyed by
         TRAIT or STEP NAME is the right shape; a table keyed by a mode, scene, phase or
         material id is a special case in disguise. Identity is opaque: flag any mode or
-        scene id used in a comparison, `includes`/`has`, a table index, or a helper that
-        hides such a check, and any mode named outside src/game-modes.ts. Flag trait
+        scene id used to SELECT BEHAVIOUR (a comparison, `includes`/`has`/`get` on a
+        hand-written list, set, map or object, a table index, or a helper that hides such
+        a check), and any mode named outside src/game-modes.ts. Resolving the handle
+        through its registry (`gameModeRegistry.get(id)`, `sceneRegistry.has(id)` to
+        validate) is the permitted use and is not a finding. Flag trait
         presence checks used as flags (`if`, `?:`, `&&`). Ask for tests for new traits.
     - path: "src/game-modes.ts"
       instructions: |
