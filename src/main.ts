@@ -43,6 +43,8 @@ import { browserStorage, loadRun, saveRun } from "./save";
 import { boardBaseFov, fovForZoom, pinchZoom, wheelZoom } from "./view-zoom";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createPassiveRack } from "./passive-rack";
+import { shopPreviewState } from "./shop-stock";
+import { createShopView } from "./shop-view";
 import { devRooms, roomFor } from "./rooms";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import {
@@ -445,6 +447,28 @@ const handBlocks: RenderedBlock[] = game.state.hand.map((block, slot) => {
   rendered.handSlot = slot;
   return rendered;
 });
+const shopView = createShopView(
+  host,
+  passiveRackView?.element ?? null,
+  (offer) =>
+    offer.kind === "passive" ? game.passivePrices.buy : (sessionConfig.cardPurchasePrice ?? 1),
+  (id, destination) => {
+    const bought = game.buyShopOffer(id, destination);
+    if (!bought) {
+      playSfx("action.denied");
+      return false;
+    }
+    if (bought.kind === "card") {
+      handBlocks.push(createCube(bought.block, cubeSize / 3, "hand"));
+      syncHandSlots();
+    } else passiveRackView?.render(game.state.passiveRack);
+    shopView.render(game.state.shopStock ?? [], true);
+    updateHud();
+    autosave();
+    playSfx("shop.buy");
+    return true;
+  },
+);
 // The score shown lags the state until the placed card lands.
 let shownScore = game.state.round.score;
 /** One scoring line waiting to be shown: tint its row, play its sound, add its points. */
@@ -1455,6 +1479,7 @@ function advanceFromStage(): void {
   } else if (game.phase === "shop") {
     playSfx("shop.open");
   }
+  shopView.render(game.state.shopStock ?? [], game.phase === "shop");
   updateHud();
   autosave();
 }
@@ -1483,17 +1508,10 @@ function newSession(): GameSession {
   const session = new GameSession(dealerRegistry, sessionConfig, cards);
   if (roomTraits.shopPreview) {
     const snapshot = session.snapshot();
-    const { state } = snapshot;
     return GameSession.fromSnapshot(dealerRegistry, sessionConfig, cards, {
       ...snapshot,
       phase: "shop",
-      state: {
-        ...state,
-        hand: [],
-        field: [],
-        deck: [...state.deck, ...state.hand],
-        coins: roomTraits.shopPreview.coins,
-      },
+      state: shopPreviewState(snapshot.state, roomTraits.shopPreview.coins),
     });
   }
   if (!roomTraits.materialSample) return session;
@@ -1524,6 +1542,7 @@ function startRun(session: GameSession): void {
   cameraTarget.copy(desired.target);
   applyCamera();
   if (game.inStage) dealHand();
+  shopView.render(game.state.shopStock ?? [], game.phase === "shop");
   updateHud();
   showSelection();
   autosave();
@@ -1998,6 +2017,7 @@ if (import.meta.hot) {
     faceGeometry.dispose();
     faceMaterial.dispose();
     passiveRackView?.dispose();
+    shopView.dispose();
     renderer.dispose();
   });
 }

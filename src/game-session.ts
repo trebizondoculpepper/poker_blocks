@@ -21,6 +21,7 @@ import {
 } from "./passives";
 import { discardPassiveEffects, scoreFieldWithPassives } from "./passive-effects";
 import type { ScoredLine } from "./scoring";
+import type { ShopOffer } from "./shop-stock";
 
 /** Where a session is: one of a round's three stages, the shop, or finished after a loss. */
 export type Phase = StageKind | "shop" | "over";
@@ -215,6 +216,40 @@ export class GameSession {
     return price;
   }
 
+  /** Buy an offer into the appropriate rack. A refused drop leaves the state untouched. */
+  buyShopOffer(id: string, destination: "hand" | "passive-rack"): ShopOffer | null {
+    if (this.currentPhase !== "shop") return null;
+    const offer = this.currentState.shopStock?.find(({ block }) => block.id === id);
+    if (!offer) return null;
+    const price =
+      offer.kind === "passive" ? this.passivePrices.buy : (this.config.cardPurchasePrice ?? 1);
+    if (!Number.isSafeInteger(price) || price < 0 || this.currentState.coins < price) return null;
+    if (offer.kind === "passive") {
+      if (
+        destination !== "passive-rack" ||
+        this.currentState.passiveRack.length >= this.rackCapacity
+      )
+        return null;
+      this.currentState = {
+        ...this.currentState,
+        passiveRack: [...this.currentState.passiveRack, offer.block],
+        shopStock: this.currentState.shopStock!.filter(({ block }) => block.id !== id),
+        coins: this.currentState.coins - price,
+      };
+      this.passiveEvents.syncRack(this.currentState.passiveRack);
+    } else {
+      if (destination !== "hand" || this.currentState.hand.length >= this.activeDealer.handSize)
+        return null;
+      this.currentState = {
+        ...this.currentState,
+        hand: [...this.currentState.hand, offer.block],
+        shopStock: this.currentState.shopStock!.filter(({ block }) => block.id !== id),
+        coins: this.currentState.coins - price,
+      };
+    }
+    return offer;
+  }
+
   /** Retire legacy definitions, then fill empty slots while keeping active blocks in order. */
   fillPassiveRack(targetSize: number): void {
     const active = this.currentState.passiveRack.filter(
@@ -355,6 +390,19 @@ export class GameSession {
   leaveShop(): boolean {
     if (this.currentPhase !== "shop") return false;
     this.currentRound++;
+    // The sandbox's unbought card offers were borrowed from the deck, so return them.
+    if (this.currentState.shopStock?.length) {
+      this.currentState = {
+        ...this.currentState,
+        deck: [
+          ...this.currentState.deck,
+          ...this.currentState.shopStock
+            .filter((offer): offer is Extract<ShopOffer, { kind: "card" }> => offer.kind === "card")
+            .map(({ block }) => block),
+        ],
+        shopStock: [],
+      };
+    }
     if (this.config.discardPileAfterShop === "return-to-deck") {
       const { deck, discardPile } = this.currentState;
       this.currentState = {

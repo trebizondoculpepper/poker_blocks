@@ -2,6 +2,7 @@ import type { CardBlock } from "./cards";
 import type { Round } from "./round";
 import type { PassiveBlock } from "./passives";
 import type { Cell, Face } from "./traits/attachable";
+import type { ShopOffer } from "./shop-stock";
 
 export type PlacedBlock = {
   block: CardBlock;
@@ -15,6 +16,8 @@ export type GameState = {
   deck: readonly CardBlock[];
   discardPile: readonly CardBlock[];
   passiveRack: readonly PassiveBlock[];
+  /** Offers at rest in the shop; absent in older runs. */
+  shopStock?: readonly ShopOffer[];
   /** Run currency; unlike stage score, this carries across stages and the shop. */
   coins: number;
   round: Readonly<Round>;

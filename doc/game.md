@@ -183,7 +183,7 @@ Enter `reset` in the developer console to restart the current dev room in place.
 
 ### Dev3 shop sandbox
 
-`?room=dev3` skips the title screen and opens directly in the shop with five coins. It has its own saved run; `reset` in the developer console or `&restart=true` in the URL starts the shop again with five coins. The shop still has placeholder interactions until [shop gameplay issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18) is built. In any room, the console command `coins` shows the balance, `coins +5` adds five, and `coins -2` removes two (stopping at zero). Changes update the HUD and saved run.
+`?room=dev3` skips the title screen and opens directly in a shop with five coins, two passive offers, and three playable card offers. Drag an offer to the passive rack or hand to buy it for one coin. It has its own saved run; `reset` in the developer console or `&restart=true` in the URL starts the shop again with five coins and fresh offers. This is a shop sandbox; the full shop flow remains [issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18). In any room, the console command `coins` shows the balance, `coins +5` adds five, and `coins -2` removes two (stopping at zero). Changes update the HUD and saved run.
 
 ### First dev2 passive set
 

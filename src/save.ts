@@ -28,6 +28,10 @@ export type SaveRecord = {
     discardPile: string[];
     /** Optional to keep previously saved runs readable. */
     passiveRack?: { id: string; definitionId: string }[];
+    shopStock?: (
+      | { kind: "card"; cardId: string }
+      | { kind: "passive"; id: string; definitionId: string }
+    )[];
     /** Optional so runs saved before the economy was added begin with zero coins. */
     coins?: number;
     round: GameState["round"];
@@ -54,6 +58,19 @@ export function toSaveRecord(snapshot: SessionSnapshot): SaveRecord {
       deck: ids(state.deck),
       discardPile: ids(state.discardPile),
       passiveRack: state.passiveRack.map(({ id, definitionId }) => ({ id, definitionId })),
+      ...(state.shopStock
+        ? {
+            shopStock: state.shopStock.map((offer) =>
+              offer.kind === "card"
+                ? { kind: "card" as const, cardId: offer.block.id }
+                : {
+                    kind: "passive" as const,
+                    id: offer.block.id,
+                    definitionId: offer.block.definitionId,
+                  },
+            ),
+          }
+        : {}),
       coins: state.coins,
       round: { ...state.round },
     },
@@ -92,6 +109,16 @@ export function fromSaveRecord(
       passiveIds.add(id);
       return createPassiveBlock(definitionId, id);
     });
+    const shopStock = (state.shopStock ?? []).map((offer) => {
+      if (offer.kind === "card") return { kind: "card" as const, block: resolve(offer.cardId) };
+      if (offer.kind !== "passive" || typeof offer.id !== "string" || passiveIds.has(offer.id))
+        throw new Error("bad shop offer");
+      passiveIds.add(offer.id);
+      return {
+        kind: "passive" as const,
+        block: createPassiveBlock(offer.definitionId, offer.id),
+      };
+    });
     const field = state.field.map(({ cardId, cell }) => {
       if (![cell?.x, cell?.y, cell?.z].every(Number.isInteger)) throw new Error("bad cell");
       return {
@@ -105,6 +132,7 @@ export function fromSaveRecord(
       deck: state.deck.map(resolve),
       discardPile: state.discardPile.map(resolve),
       passiveRack,
+      ...(state.shopStock ? { shopStock } : {}),
       coins: nonnegativeInteger(state.coins ?? 0),
       round: {
         score: number(state.round.score),

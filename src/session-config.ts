@@ -22,6 +22,8 @@ export type SessionConfig = {
   rackCapacity?: number;
   /** What passives cost and fetch, in coins; `defaultPassivePrices` when left out. */
   passivePrices?: PassivePrices;
+  /** First playable-card shop price; one coin unless a session changes it. */
+  cardPurchasePrice?: number;
 };
 
 /**
