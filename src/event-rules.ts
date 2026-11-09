@@ -58,6 +58,11 @@ export class EventRuleRegistry {
     register(this.effects, id, handler as Effect, "effect");
   }
 
+  /** Whether a configured condition holds for `selected`: for selectors that filter (#170). */
+  holds(where: HandlerConfig, selected: unknown, frame: Readonly<RuleFrame>): boolean {
+    return get(this.conditions, where.id, "condition")(where.config, selected, frame);
+  }
+
   /** The event queue chooses subscribed rules; this applies one rule in effect order. */
   evaluate(rule: EventRule, frame: Readonly<RuleFrame>): RuleFrame {
     const selected = get(this.selectors, rule.select.id, "selector")(rule.select.config, frame);

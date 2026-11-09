@@ -17,7 +17,7 @@ The first set uses these reusable trait types:
 
 `EventRule` uses named, reusable condition handlers (such as `material-is`, `suit-in`, `rank-count-at-least`, `line-length`, and `perpendicular-intersection`) and effect handlers (such as `add-block-value`, `multiply-block-value`, `add-line-score`, `multiply-line-score`, `add-coins`, and `grant-random-unowned-passive`). The handlers are trait/runtime code. Registry entries supply values and selectors, not new functions. New conditions and effects can extend this vocabulary without changing the block container.
 
-The first migration slice introduces serializable `EventRule({ on, select, where, effects[] })` data and an `EventRuleRegistry` that dispatches registered selectors, conditions, and ordered effects. The queue can subscribe from this new data. Scoring passives use it now (slice 2, #139; see "Scoring path" below). Discard and stage-won rules still use the legacy `PassiveRule` shape until slice 3. Each handler registration is typed against its own configuration. Unknown handler IDs fail during evaluation. The runner does not inspect those IDs to choose behavior.
+The first migration slice introduces serializable `EventRule({ on, select, where, effects[] })` data and an `EventRuleRegistry` that dispatches registered selectors, conditions, and ordered effects. The queue can subscribe from this new data. Every passive uses it now: scoring since slice 2 (#139) and discard and stage-won since slice 3 (#170). See "Scoring path" and "Discard and stage-won path" below. The legacy `PassiveRule` shape is gone. Each handler registration is typed against its own configuration. Unknown handler IDs fail during evaluation. The runner does not inspect those IDs to choose behavior.
 
 For example, Seeing Red is data shaped like `EventRule({ on: "discard.completed", select: "discarded-blocks", where: { suitIn: ["hearts", "diamonds"] }, effects: [{ addCoinsPerMatch: 1 }] })` alongside its rack, inspection, and appearance trait configurations. The same rule trait and `suitIn` predicate can serve another block with different suits or a different amount.
 
@@ -43,6 +43,22 @@ Scoring passives are `EventRule` data on their definitions (`eventRules`). Every
 4. **Evaluate, then commit:** evaluation is pure. Only the chosen hand's contributing blocks, and then the line's rules, are committed as the line's `activations` (which passive fired, on which event and block, and the commands its effects collected). Presentation can show them (#81).
 
 A new scoring behaviour is one handler registration. No scoring code changes; `src/scoring-rules.test.ts` registers a test-only effect to prove it.
+
+### Discard and stage-won path (#170)
+
+Discard and stage-won rules run through the same registry. Their effects never change the game. They **collect commands**, and the game run commits them.
+
+| Kind       | Handlers                                                                                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------- |
+| Selectors  | `event-blocks` (the event's blocks for which a configured condition holds), `won-stage`                    |
+| Conditions | `suit-in`, `rank-is`, `material-is` (per block); `count-at-least`, `stage-in`                              |
+| Effects    | `add-coins`, `add-coins-per-selected`, `grant-random-unowned-passive` (each adds a command)                |
+| Commands   | `add-coins`, `grant-unowned-passive` (`src/rule-commands.ts`, committed against the run's `CommandTarget`) |
+
+- **`discard.completed`:** the event carries the discarded blocks. The queue delivers it to subscribed passives left to right. Each passive's fired rules are committed as it resolves, so a later passive sees the earlier ones' coins. Follow-up events, such as `passive.installed`, go to the back of the queue.
+- **`stage.won`:** the stage reward ledger (`src/stage-rewards.ts`) evaluates each passive's rules on the hand still held and the stage won. It commits their commands to a copy of the state, so each row shows the coins that passive pays. Granting from a stage win installs nothing yet.
+
+A new discard or stage-won behaviour is a handler registration (an effect, plus a command if it changes something new). No discard or reward code changes; `src/discard-rules.test.ts` proves it.
 
 ## Categories
 
