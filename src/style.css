@@ -781,3 +781,100 @@ body,
 .discard-area.is-sell.is-exhausted {
   opacity: 1;
 }
+
+/* ----- Phone portrait: passives hard at the top, a slim status strip under them,
+   the hand hard at the bottom, and the table free in between. ----- */
+@media (max-width: 700px) and (orientation: portrait) {
+  .scene .passive-rack {
+    top: max(4px, env(safe-area-inset-top));
+    gap: 2px;
+    padding: 3px 8px 5px;
+  }
+
+  .scene .passive-rack-title {
+    font-size: 9px;
+  }
+
+  .scene .passive-rack-slots {
+    min-height: 44px;
+  }
+
+  .scene .passive-item {
+    width: 42px;
+    height: 44px;
+  }
+
+  .scene .round-hud {
+    top: 84px;
+    left: 8px;
+    display: grid;
+    grid-template-columns: auto auto auto;
+    column-gap: 12px;
+    row-gap: 1px;
+    min-width: 0;
+    padding: 5px 9px;
+    background: #1c273999;
+  }
+
+  .scene .round-hud .hud-heading {
+    grid-column: 1 / -1;
+    margin: 0 0 2px;
+    font-size: 9px;
+  }
+
+  .scene .round-hud .hud-divider {
+    display: none;
+  }
+
+  .scene .round-hud .hud-row {
+    gap: 5px;
+    margin: 0;
+    font-size: 11px;
+  }
+
+  .scene .deck-hud {
+    top: 84px;
+    right: 58px;
+    bottom: auto;
+    min-width: 0;
+    padding: 5px 9px;
+    background: #1c273999;
+  }
+
+  .scene .deck-hud > span,
+  .scene .deck-hud small {
+    font-size: 9px;
+  }
+
+  .scene .deck-hud strong {
+    font-size: 18px;
+  }
+
+  .scene .settings-button {
+    top: 86px;
+    right: 8px;
+    width: 40px;
+    height: 40px;
+    font-size: 19px;
+  }
+
+  .scene .discard-area,
+  .scene:has(.passive-rack:not([hidden])) .discard-area {
+    top: auto;
+    bottom: 104px;
+    left: 8px;
+    width: 58px;
+    height: 60px;
+    background: #1c273999;
+  }
+
+  .scene .discard-area > span {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .scene .discard-icon {
+    width: 30px;
+    height: 30px;
+  }
+}
