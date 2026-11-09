@@ -70,9 +70,7 @@ describe("music controller", () => {
     music.switchToBossTrack();
     const plays = log.filter((l) => l.startsWith("play")).map((l) => l.slice(5));
     expect(plays[0]).not.toBe(plays[1]);
-    expect(
-      plays.slice(0, 2).every((id) => !["solitaire-boss", "style-ambient-lounge"].includes(id)),
-    ).toBe(true);
+    expect(plays.slice(0, 2).every((id) => id !== "solitaire-boss")).toBe(true);
     expect(plays[2]).toBe("solitaire-boss");
   });
 
