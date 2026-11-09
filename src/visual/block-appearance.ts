@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { IdentityTrait } from "../cards";
-import type { BlockMaterial } from "../materials";
+import type { MaterialDefinition } from "../materials";
 import { createCrystalFire } from "./crystal-fire";
 import { createFireCore } from "./fire-core";
 
@@ -22,7 +22,7 @@ export type BlockAppearance = {
 
 const SIZE = 256;
 
-function randomFor(identity: IdentityTrait, kind: BlockMaterial, endGrain: boolean): () => number {
+function randomFor(identity: IdentityTrait, kind: string, endGrain: boolean): () => number {
   let seed = 2166136261;
   for (const char of `${identity.rank}-${identity.suit.name}-${kind}-${endGrain}`) {
     seed = Math.imul(seed ^ char.charCodeAt(0), 16777619);
@@ -460,13 +460,14 @@ function meltwaterSkin(
  */
 function cloudyIce(
   texture: THREE.CanvasTexture,
-  height: THREE.CanvasTexture,
+  height: THREE.CanvasTexture | undefined,
   size: number,
+  reliefScale: number,
 ): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
     map: texture,
-    bumpMap: height,
-    bumpScale: 3,
+    bumpMap: height ?? texture,
+    bumpScale: reliefScale,
     transmission: 0.7,
     roughness: 0.6,
     ior: 1.31,
@@ -499,29 +500,13 @@ function drawMeat(g: CanvasRenderingContext2D, random: () => number): void {
   border(g, "#722e3e", 6);
 }
 
-/**
- * Each material's print: the ink for red and black suits, and whether the face is dark
- * (which takes a dark shadow). Brushed steel is a light, bright grey, so it prints like paper.
- */
-const printInk: Record<BlockMaterial, { red: string; black: string; onDark: boolean }> = {
-  paper: { red: "#bd3651", black: "#182d4a", onDark: false },
-  wood: { red: "#a32536", black: "#422716", onDark: true },
-  steel: { red: "#a3202f", black: "#182d4a", onDark: false },
-  fire: { red: "#6e1a1a", black: "#24282c", onDark: false },
-  prismatic: { red: "#bd3651", black: "#182d4a", onDark: false },
-  gold: { red: "#bd3651", black: "#422716", onDark: true },
-  terracotta: { red: "#bd3651", black: "#422716", onDark: true },
-  ice: { red: "#bd3651", black: "#182d4a", onDark: false },
-  meat: { red: "#bd3651", black: "#f4e9db", onDark: true },
-};
-
 /** The rank and suit, in the colours that suit the material. */
 function drawPrint(
   g: CanvasRenderingContext2D,
   identity: IdentityTrait,
-  kind: BlockMaterial,
+  appearance: MaterialDefinition["appearance"],
 ): void {
-  const ink = printInk[kind];
+  const ink = appearance.ink;
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.shadowColor = ink.onDark ? "#28170caa" : "#ffffffbb";
@@ -540,14 +525,14 @@ function drawPrint(
  */
 function printSkin(
   identity: IdentityTrait,
-  kind: BlockMaterial,
+  appearance: MaterialDefinition["appearance"],
   geometry: THREE.BufferGeometry,
 ): { skin: THREE.Mesh; texture: THREE.CanvasTexture } {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = SIZE;
   const g = canvas.getContext("2d");
   if (!g) throw new Error("Canvas 2D is unavailable");
-  drawPrint(g, identity, kind);
+  drawPrint(g, identity, appearance);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
@@ -569,9 +554,29 @@ function printSkin(
   return { skin, texture };
 }
 
+type PatternHandler = (
+  g: CanvasRenderingContext2D,
+  random: () => number,
+  identity: IdentityTrait,
+  endGrain: boolean,
+  brushAngle: number,
+) => void;
+
+const patternRegistry = new Map<string, PatternHandler>([
+  ["cardSheet", (g) => drawPaper(g)],
+  ["timberGrain", (g, random, _identity, endGrain) => drawWood(g, random, endGrain)],
+  ["brushedRivets", (g, random, _identity, _endGrain, angle) => drawSteel(g, random, angle)],
+  ["ironFrame", (g) => drawFireFrame(g)],
+  ["rainbowCrystal", (g, random) => drawPrismatic(g, random)],
+  ["goldFoil", (g) => drawGold(g)],
+  ["crackedClay", (g, random, identity) => drawTerracotta(g, random, potteryCracks(identity))],
+  ["frostedIce", (g, random) => drawIce(g, random)],
+  ["marbledFlesh", (g, random) => drawMeat(g, random)],
+]);
+
 function faceTexture(
   identity: IdentityTrait,
-  kind: BlockMaterial,
+  definition: MaterialDefinition,
   endGrain: boolean,
   /** Brush direction for steel, in radians. */
   brushAngle = 0,
@@ -582,37 +587,10 @@ function faceTexture(
   canvas.width = canvas.height = SIZE;
   const g = canvas.getContext("2d");
   if (!g) throw new Error("Canvas 2D is unavailable");
-  const random = randomFor(identity, kind, endGrain);
-  switch (kind) {
-    case "paper":
-      drawPaper(g);
-      break;
-    case "wood":
-      drawWood(g, random, endGrain);
-      break;
-    case "steel":
-      drawSteel(g, random, brushAngle);
-      break;
-    case "fire":
-      drawFireFrame(g);
-      break;
-    case "prismatic":
-      drawPrismatic(g, random);
-      break;
-    case "gold":
-      drawGold(g);
-      break;
-    case "terracotta":
-      drawTerracotta(g, random, potteryCracks(identity));
-      break;
-    case "ice":
-      drawIce(g, random);
-      break;
-    case "meat":
-      drawMeat(g, random);
-      break;
-  }
-  if (print) drawPrint(g, identity, kind);
+  const pattern = patternRegistry.get(definition.appearance.pattern);
+  if (!pattern) throw new Error(`Unknown face pattern: ${definition.appearance.pattern}`);
+  pattern(g, randomFor(identity, definition.id, endGrain), identity, endGrain, brushAngle);
+  if (print) drawPrint(g, identity, definition.appearance);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
@@ -655,34 +633,23 @@ function clearMask(texture: THREE.CanvasTexture): THREE.CanvasTexture {
  */
 function clearInHand(
   texture: THREE.CanvasTexture,
-  kind: "glass" | "prismatic",
-  tint: number,
+  optics: NonNullable<MaterialDefinition["appearance"]["optics"]>,
 ): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
     map: texture,
-    color: tint,
+    color: optics.tint,
     roughness: 0.06,
     metalness: 0,
-    ior: kind === "prismatic" ? 2.33 : 1.5,
+    ior: optics.handIor,
     clearcoat: 1,
     clearcoatRoughness: 0.03,
     envMap: reflectionEnvironment,
-    envMapIntensity: kind === "prismatic" ? 1.6 : 1.1,
+    envMapIntensity: optics.handEnvironment,
     transparent: true,
     depthWrite: false,
-    ...(kind === "prismatic" ? prismaticFire : {}),
+    ...optics.iridescence,
   });
 }
-
-/** Thin-film colour play that shifts with the view angle: the crystal's fire. */
-const prismaticFire = {
-  // Every bevel shaded as its own flat facet: hard edges, like a cut gem.
-  flatShading: true,
-  iridescence: 1,
-  iridescenceIOR: 1.8,
-  iridescenceThicknessMinimum: 150,
-  iridescenceThicknessMaximum: 900,
-};
 
 /**
  * Glass and crystal on the table: physically based transmission, so what is behind them
@@ -694,31 +661,27 @@ const prismaticFire = {
 function clearOnTable(
   texture: THREE.CanvasTexture,
   mask: THREE.CanvasTexture,
-  kind: "glass" | "prismatic",
-  tint: number,
+  optics: NonNullable<MaterialDefinition["appearance"]["optics"]>,
   size: number,
 ): THREE.MeshPhysicalMaterial {
-  const prismatic = kind === "prismatic";
   return new THREE.MeshPhysicalMaterial({
     map: texture,
-    // Through a pane the tint is lighter than its face colour, so it still reads as clear.
-    color: prismatic ? tint : new THREE.Color(tint).lerp(new THREE.Color(0xffffff), 0.45),
-    roughness: prismatic ? 0.02 : 0.05,
+    color: optics.tint,
+    roughness: optics.tableRoughness,
     metalness: 0,
     transmission: 1,
     transmissionMap: mask,
-    ior: prismatic ? 2.33 : 1.52,
-    thickness: prismatic ? size * 0.9 : size * 0.12,
-    dispersion: prismatic ? 4 : 0.2,
-    // Crystal deepens in colour through its body; thin panes do not.
-    attenuationColor: new THREE.Color(tint),
-    attenuationDistance: prismatic ? size * 6 : Infinity,
+    ior: optics.tableIor,
+    thickness: size * optics.thickness,
+    dispersion: optics.dispersion,
+    attenuationColor: new THREE.Color(optics.tint),
+    attenuationDistance: size * optics.attenuationDistance,
     clearcoat: 1,
     clearcoatRoughness: 0.02,
     specularIntensity: 1,
     envMap: reflectionEnvironment,
-    envMapIntensity: prismatic ? 1.6 : 1.1,
-    ...(prismatic ? prismaticFire : {}),
+    envMapIntensity: optics.tableEnvironment,
+    ...optics.iridescence,
   });
 }
 
@@ -864,103 +827,114 @@ function terracottaHeight(
   return new THREE.CanvasTexture(canvas);
 }
 
-/**
- * How strongly each material's own pattern reads as relief, when it has no hand-made height
- * map: wood grain, terracotta pitting, meat marbling, ice cracks. 0 is flat.
- */
-const patternRelief: Record<BlockMaterial, number> = {
-  paper: 2,
-  wood: 2.5,
-  steel: 0,
-  prismatic: 0,
-  gold: 1.5,
-  terracotta: 3,
-  ice: 3,
-  meat: 2,
-  fire: 0,
-};
+type SurfaceHandler = (
+  texture: THREE.CanvasTexture,
+  relief: { bumpMap: THREE.CanvasTexture; bumpScale: number },
+  angle: number,
+  appearance: MaterialDefinition["appearance"],
+) => THREE.MeshStandardMaterial;
+
+const surfaceRegistry = new Map<string, SurfaceHandler>([
+  [
+    "clear",
+    (texture, _relief, _angle, appearance) => {
+      const optics = appearance.optics;
+      if (!optics) throw new Error("Clear surface needs optics");
+      return clearInHand(texture, optics);
+    },
+  ],
+  [
+    "iron",
+    (texture, relief) =>
+      new THREE.MeshStandardMaterial({
+        map: texture,
+        ...relief,
+        metalness: 0.75,
+        roughness: 0.5,
+        envMap: reflectionEnvironment,
+        envMapIntensity: 0.8,
+        alphaTest: 0.5,
+        side: THREE.DoubleSide,
+      }),
+  ],
+  [
+    "brushedMetal",
+    (texture, relief, angle) =>
+      new THREE.MeshPhysicalMaterial({
+        map: texture,
+        ...relief,
+        metalness: 1,
+        roughness: 0.42,
+        anisotropy: 0.85,
+        anisotropyRotation: angle,
+        envMap: reflectionEnvironment,
+        envMapIntensity: 0.7,
+        clearcoat: 0.15,
+        clearcoatRoughness: 0.3,
+      }),
+  ],
+  [
+    "frosted",
+    (texture, relief) =>
+      new THREE.MeshPhysicalMaterial({
+        map: texture,
+        roughness: 0.48,
+        metalness: 0.05,
+        clearcoat: 1,
+        clearcoatRoughness: 0.38,
+        transparent: true,
+        opacity: 0.94,
+        ...relief,
+      }),
+  ],
+  [
+    "polishedMetal",
+    (texture, relief) =>
+      new THREE.MeshPhysicalMaterial({
+        map: texture,
+        ...relief,
+        metalness: 1,
+        roughness: 0.1,
+        clearcoat: 0.6,
+        clearcoatRoughness: 0.05,
+        envMap: reflectionEnvironment,
+        envMapIntensity: 2.2,
+      }),
+  ],
+  [
+    "cardSheet",
+    (texture, relief) =>
+      new THREE.MeshStandardMaterial({
+        map: texture,
+        ...relief,
+        roughness: 0.8,
+        metalness: 0,
+        alphaTest: 0.5,
+        side: THREE.DoubleSide,
+      }),
+  ],
+  [
+    "matte",
+    (texture, relief) =>
+      new THREE.MeshStandardMaterial({ map: texture, ...relief, roughness: 0.75, metalness: 0 }),
+  ],
+]);
 
 function surface(
   texture: THREE.CanvasTexture,
-  kind: BlockMaterial,
-  /** A hand-made height map; otherwise the face pattern doubles as its own bump map. */
+  appearance: MaterialDefinition["appearance"],
   height?: THREE.CanvasTexture,
+  angle = 0,
 ): THREE.MeshStandardMaterial {
-  const relief = { bumpMap: height ?? texture, bumpScale: patternRelief[kind] };
-  if (kind === "ice") {
-    return new THREE.MeshPhysicalMaterial({
-      map: texture,
-      roughness: 0.48,
-      metalness: 0.05,
-      clearcoat: 1,
-      clearcoatRoughness: 0.38,
-      transparent: true,
-      opacity: 0.94,
-      ...relief,
-    });
-  }
-  if (kind === "gold") {
-    // Polished solid gold: fully metallic, low roughness, a light clearcoat for gloss.
-    return new THREE.MeshPhysicalMaterial({
-      map: texture,
-      ...relief,
-      metalness: 1,
-      roughness: 0.1,
-      clearcoat: 0.6,
-      clearcoatRoughness: 0.05,
-      envMap: reflectionEnvironment,
-      envMapIntensity: 2.2,
-    });
-  }
-  if (kind === "paper") {
-    // Six sheets around nothing: the rounded corners are cut out (alphaTest), and both
-    // sides of each sheet are drawn so the inside of the box shows through the gaps.
-    return new THREE.MeshStandardMaterial({
-      map: texture,
-      ...relief,
-      roughness: 0.8,
-      metalness: 0,
-      alphaTest: 0.5,
-      side: THREE.DoubleSide,
-    });
-  }
-  return new THREE.MeshStandardMaterial({
-    map: texture,
-    ...relief,
-    roughness: 0.75,
-    metalness: 0,
-  });
+  const handler = surfaceRegistry.get(appearance.surface);
+  if (!handler) throw new Error(`Unknown surface: ${appearance.surface}`);
+  return handler(
+    texture,
+    { bumpMap: height ?? texture, bumpScale: appearance.reliefScale },
+    angle,
+    appearance,
+  );
 }
-
-/**
- * How strongly each material's box edges are outlined. Rounded castings (meat, gold), the
- * cut-cornered cards (paper) and the lump of ice have no box edges to outline.
- */
-const edgeOpacities: Record<BlockMaterial, number> = {
-  paper: 0,
-  wood: 1,
-  steel: 1,
-  fire: 1,
-  prismatic: 0.55,
-  gold: 0,
-  terracotta: 1,
-  ice: 0,
-  meat: 0,
-};
-
-const edgeColors: Record<BlockMaterial, number> = {
-  paper: 0x6b6c73,
-  wood: 0x76502b,
-  steel: 0x303a40,
-  // The fire's iron frame.
-  fire: 0x2a2f34,
-  // Facet lines of the cut stone.
-  prismatic: 0xf2e8ff,
-  gold: 0x9c661e,
-  terracotta: 0x733d2b,
-  ice: 0xd3f7ff,
-  meat: 0x6b2538,
-};
 
 /** Directions a steel block's six faces are brushed in, varied per card. */
 function brushAngles(identity: IdentityTrait): number[] {
@@ -974,161 +948,186 @@ function brushAngles(identity: IdentityTrait): number[] {
  * direction (anisotropyRotation matches the face's scratches), so each face catches the
  * light differently as the block turns.
  */
-function brushedSteel(
+type AssemblyContext = {
+  identity: IdentityTrait;
+  definition: MaterialDefinition;
+  geometry: THREE.BufferGeometry;
+  size: number;
+};
+
+type AssemblyHandler = (context: AssemblyContext) => BlockAppearance;
+type HeightHandler = (
   texture: THREE.CanvasTexture,
-  height: THREE.CanvasTexture,
+  identity: IdentityTrait,
   angle: number,
-): THREE.MeshPhysicalMaterial {
-  return new THREE.MeshPhysicalMaterial({
-    map: texture,
-    bumpMap: height,
-    bumpScale: 3,
-    metalness: 1,
-    // Rough enough, and the reflections dim enough, that a face turned straight at the
-    // studio's lights glows rather than blowing out to white.
-    roughness: 0.42,
-    anisotropy: 0.85,
-    anisotropyRotation: angle,
-    envMap: reflectionEnvironment,
-    envMapIntensity: 0.7,
-    clearcoat: 0.15,
-    clearcoatRoughness: 0.3,
-  });
+) => THREE.CanvasTexture | undefined;
+
+const heightRegistry = new Map<string, HeightHandler>([
+  ["none", () => undefined],
+  ["cardRim", () => paperHeight()],
+  ["carvedTimber", (texture, identity) => woodHeight(texture, identity)],
+  ["engravedGold", (_texture, identity) => goldHeight(identity)],
+  ["clayRelief", (texture, identity) => terracottaHeight(texture, identity)],
+  ["steelRelief", (_texture, identity, angle) => steelHeight(identity, angle)],
+  ["iceRelief", (_texture, identity) => iceRoughHeight(identity)],
+  ["frameRelief", () => frameHeight()],
+]);
+
+function heightFor(
+  texture: THREE.CanvasTexture,
+  identity: IdentityTrait,
+  appearance: MaterialDefinition["appearance"],
+  angle = 0,
+): THREE.CanvasTexture | undefined {
+  const makeHeight = heightRegistry.get(appearance.height);
+  if (!makeHeight) throw new Error("Unknown relief handler: " + appearance.height);
+  return makeHeight(texture, identity, angle);
 }
+
+function appearanceBase(
+  context: AssemblyContext,
+  textures: THREE.CanvasTexture[],
+  materials: THREE.MeshStandardMaterial[],
+  extras?: THREE.Mesh[],
+  boardMaterials?: THREE.MeshStandardMaterial[],
+): BlockAppearance {
+  return {
+    geometry: context.geometry,
+    textures,
+    materials,
+    boardMaterials,
+    edgeColor: context.definition.appearance.edge.color,
+    edgeOpacity: context.definition.appearance.edge.opacity,
+    extras,
+  };
+}
+
+function sixFaces(context: AssemblyContext): BlockAppearance {
+  const { identity, definition } = context;
+  const appearance = definition.appearance;
+  const faceCache = new Map<
+    boolean,
+    {
+      texture: THREE.CanvasTexture;
+      height?: THREE.CanvasTexture;
+      material: THREE.MeshStandardMaterial;
+    }
+  >();
+  const materials = Array.from({ length: 6 }, (_, face) => {
+    const endGrain = appearance.endGrainFaces.includes(face);
+    let entry = faceCache.get(endGrain);
+    if (!entry) {
+      const texture = faceTexture(identity, definition, endGrain);
+      const height = heightFor(texture, identity, appearance);
+      entry = { texture, height, material: surface(texture, appearance, height) };
+      faceCache.set(endGrain, entry);
+    }
+    return entry.material;
+  });
+  const textures = [...faceCache.values()].flatMap(({ texture, height }) =>
+    height ? [texture, height] : [texture],
+  );
+  return appearanceBase(context, textures, materials);
+}
+
+function brushedFaces(context: AssemblyContext): BlockAppearance {
+  const { identity, definition } = context;
+  const angles = brushAngles(identity);
+  const textures = angles.map((angle) => faceTexture(identity, definition, false, angle));
+  const heights = textures.map((texture, face) =>
+    heightFor(texture, identity, definition.appearance, angles[face]),
+  );
+  const materials = textures.map((texture, face) =>
+    surface(texture, definition.appearance, heights[face], angles[face]),
+  );
+  return appearanceBase(
+    context,
+    [...textures, ...heights.filter((height) => height !== undefined)],
+    materials,
+  );
+}
+
+function refractiveCrystal(context: AssemblyContext): BlockAppearance {
+  const { identity, definition, geometry, size } = context;
+  const optics = definition.appearance.optics;
+  if (!optics) throw new Error("Refractive crystal needs optics");
+  const texture = faceTexture(identity, definition, false, 0, false);
+  const height = heightFor(texture, identity, definition.appearance);
+  const print = printSkin(identity, definition.appearance, geometry);
+  const mask = clearMask(texture);
+  const inHand = surface(texture, definition.appearance, height);
+  const onTable = clearOnTable(texture, mask, optics, size);
+  return appearanceBase(
+    context,
+    [texture, ...[height].filter((value) => value !== undefined), mask, print.texture],
+    Array.from({ length: 6 }, () => inHand),
+    [createCrystalFire(geometry), print.skin],
+    Array.from({ length: 6 }, () => onTable),
+  );
+}
+
+function flameFrame(context: AssemblyContext): BlockAppearance {
+  const { identity, definition, geometry, size } = context;
+  const texture = faceTexture(identity, definition, false, 0, false);
+  const print = printSkin(identity, definition.appearance, geometry);
+  const height = heightFor(texture, identity, definition.appearance);
+  const iron = surface(texture, definition.appearance, height);
+  return appearanceBase(
+    context,
+    [texture, ...[height].filter((value) => value !== undefined), print.texture],
+    Array.from({ length: 6 }, () => iron),
+    [createFireCore(size), print.skin],
+  );
+}
+
+function frostedBlock(context: AssemblyContext): BlockAppearance {
+  const { identity, definition, geometry, size } = context;
+  const texture = faceTexture(identity, definition, false, 0, false);
+  const height = heightFor(texture, identity, definition.appearance);
+  const print = printSkin(identity, definition.appearance, geometry);
+  const melt = meltwaterSkin(identity, geometry);
+  const inHand = surface(texture, definition.appearance, height);
+  const onTable = cloudyIce(texture, height, size, definition.appearance.reliefScale);
+  return appearanceBase(
+    context,
+    [texture, ...[height].filter((value) => value !== undefined), print.texture, melt.texture],
+    Array.from({ length: 6 }, () => inHand),
+    [melt.skin, print.skin],
+    Array.from({ length: 6 }, () => onTable),
+  );
+}
+
+const assemblyRegistry = new Map<string, AssemblyHandler>([
+  ["sixFaces", sixFaces],
+  ["brushedFaces", brushedFaces],
+  ["refractiveCrystal", refractiveCrystal],
+  ["flameFrame", flameFrame],
+  ["frostedBlock", frostedBlock],
+]);
+
+const geometryRegistry = new Map<
+  string,
+  (size: number, geometry: MaterialDefinition["appearance"]["geometry"]) => THREE.BufferGeometry
+>([
+  ["box", (size) => new THREE.BoxGeometry(size, size, size)],
+  [
+    "rounded",
+    (size, settings) =>
+      new RoundedBoxGeometry(size, size, size, settings.segments, size * settings.radius),
+  ],
+]);
 
 export function createBlockAppearance(
   identity: IdentityTrait,
-  kind: BlockMaterial,
+  definition: MaterialDefinition,
   size: number,
 ): BlockAppearance {
-  const geometry =
-    kind === "meat"
-      ? new RoundedBoxGeometry(size, size, size, 3, size * 0.09)
-      : kind === "prismatic"
-        ? // One segment makes the rounding a flat bevel: a chamfer, like a square cut. The
-          // materials shade each facet flat, so the bevels meet the faces at hard edges.
-          new RoundedBoxGeometry(size, size, size, 1, size * 0.14)
-        : kind === "gold"
-          ? // Softly rounded edges, as a casting comes out of the mould.
-            new RoundedBoxGeometry(size, size, size, 5, size * 0.06)
-          : new THREE.BoxGeometry(size, size, size);
-  // See-through blocks are a hair smaller than a cell, so where they touch a neighbour the
-  // two faces are not in the same plane and do not flicker (z-fight) through each other.
-  if (["prismatic", "fire", "paper", "ice"].includes(kind)) geometry.scale(0.985, 0.985, 0.985);
-  const edgeColor = edgeColors[kind];
-  const edgeOpacity = edgeOpacities[kind];
-
-  if (kind === "prismatic") {
-    // One clear stone: the same material on all six faces; the print rides on a skin.
-    const texture = faceTexture(identity, kind, false, 0, false);
-    const print = printSkin(identity, kind, geometry);
-    const mask = clearMask(texture);
-    const inHand = clearInHand(texture, kind, 0xffffff);
-    const onTable = clearOnTable(texture, mask, kind, 0xffffff, size);
-    return {
-      geometry,
-      textures: [texture, mask, print.texture],
-      materials: Array.from({ length: 6 }, () => inHand),
-      boardMaterials: Array.from({ length: 6 }, () => onTable),
-      edgeColor,
-      edgeOpacity,
-      extras: [createCrystalFire(geometry), print.skin],
-    };
-  }
-
-  if (kind === "fire") {
-    // An open iron frame with the fire burning inside: the openings are cut away
-    // (alphaTest) and both sides drawn, so the far bars show through.
-    const texture = faceTexture(identity, kind, false, 0, false);
-    const print = printSkin(identity, kind, geometry);
-    const height = frameHeight();
-    const iron = new THREE.MeshStandardMaterial({
-      map: texture,
-      bumpMap: height,
-      bumpScale: 2.5,
-      metalness: 0.75,
-      roughness: 0.5,
-      envMap: reflectionEnvironment,
-      envMapIntensity: 0.8,
-      alphaTest: 0.5,
-      side: THREE.DoubleSide,
-    });
-    return {
-      geometry,
-      textures: [texture, height, print.texture],
-      materials: Array.from({ length: 6 }, () => iron),
-      edgeColor,
-      edgeOpacity,
-      extras: [createFireCore(size), print.skin],
-    };
-  }
-
-  if (kind === "ice") {
-    const texture = faceTexture(identity, kind, false, 0, false);
-    const height = iceRoughHeight(identity);
-    const print = printSkin(identity, kind, geometry);
-    const melt = meltwaterSkin(identity, geometry);
-    // In the hand: frosted and translucent. On the table: cloudy refraction.
-    const inHand = surface(texture, kind, height);
-    const onTable = cloudyIce(texture, height, size);
-    return {
-      geometry,
-      textures: [texture, height, print.texture, melt.texture],
-      materials: Array.from({ length: 6 }, () => inHand),
-      boardMaterials: Array.from({ length: 6 }, () => onTable),
-      edgeColor,
-      edgeOpacity,
-      extras: [melt.skin, print.skin],
-    };
-  }
-
-  if (kind === "steel") {
-    const angles = brushAngles(identity);
-    const textures = angles.map((angle) => faceTexture(identity, kind, false, angle));
-    const heights = angles.map((angle) => steelHeight(identity, angle));
-    return {
-      geometry,
-      textures: [...textures, ...heights],
-      materials: textures.map((texture, face) =>
-        brushedSteel(texture, heights[face], angles[face]),
-      ),
-      edgeColor,
-      edgeOpacity,
-    };
-  }
-
-  const carvedHeight = (texture: THREE.CanvasTexture) =>
-    kind === "gold"
-      ? goldHeight(identity)
-      : kind === "paper"
-        ? paperHeight()
-        : kind === "wood"
-          ? woodHeight(texture, identity)
-          : kind === "terracotta"
-            ? terracottaHeight(texture, identity)
-            : undefined;
-  const sideTexture = faceTexture(identity, kind, false);
-  const sideHeight = carvedHeight(sideTexture);
-  const sideMaterial = surface(sideTexture, kind, sideHeight);
-  // BoxGeometry order is +X, -X, +Y, -Y, +Z, -Z. Wood reveals end grain on Y.
-  const endTexture = kind === "wood" ? faceTexture(identity, kind, true) : null;
-  const endHeight = endTexture ? carvedHeight(endTexture) : undefined;
-  const endMaterial = endTexture ? surface(endTexture, kind, endHeight) : sideMaterial;
-  const materials = [
-    sideMaterial,
-    sideMaterial,
-    endMaterial,
-    endMaterial,
-    sideMaterial,
-    sideMaterial,
-  ];
-  return {
-    geometry,
-    textures: [sideTexture, endTexture, sideHeight, endHeight].filter(
-      (texture): texture is THREE.CanvasTexture => texture !== null && texture !== undefined,
-    ),
-    materials,
-    edgeColor,
-    edgeOpacity,
-  };
+  const appearance = definition.appearance;
+  const makeGeometry = geometryRegistry.get(appearance.geometry.shape);
+  if (!makeGeometry) throw new Error("Unknown block geometry: " + appearance.geometry.shape);
+  const geometry = makeGeometry(size, appearance.geometry);
+  geometry.scale(appearance.geometry.scale, appearance.geometry.scale, appearance.geometry.scale);
+  const assemble = assemblyRegistry.get(appearance.assembly);
+  if (!assemble) throw new Error("Unknown appearance assembly: " + appearance.assembly);
+  return assemble({ identity, definition, geometry, size });
 }

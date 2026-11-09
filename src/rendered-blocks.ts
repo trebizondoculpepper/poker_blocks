@@ -6,7 +6,8 @@
  */
 import * as THREE from "three";
 import type { CardBlock } from "./cards";
-import { materialOf } from "./materials";
+import { blockHighlighted } from "./block-trait-behaviours";
+import { getMaterialDefinition, materialOf } from "./materials";
 import { randomRock, type Rock, type RockState } from "./motion";
 import type { Selection } from "./traits/selectable";
 import type { Cell } from "./traits/attachable";
@@ -74,7 +75,11 @@ export function createBlockViews(parents: {
   return {
     all,
     create(block, size, location) {
-      const appearance = createBlockAppearance(block.traits.identity, materialOf(block), size);
+      const appearance = createBlockAppearance(
+        block.traits.identity,
+        getMaterialDefinition(materialOf(block)),
+        size,
+      );
       const { geometry, textures, edgeColor, edgeOpacity } = appearance;
       const handMaterials = appearance.materials;
       const boardMaterials = appearance.boardMaterials ?? handMaterials;
@@ -118,7 +123,7 @@ export function createBlockViews(parents: {
     },
     highlight(selected) {
       all.forEach(({ block, materials }) => {
-        const active = Boolean(block.traits.selectable) && selected.has(block.id);
+        const active = blockHighlighted(block, selected);
         new Set(materials).forEach((material) => {
           material.emissive.setHex(0xffffff);
           material.emissiveIntensity = active ? 0.28 : 0;

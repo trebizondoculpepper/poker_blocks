@@ -17,9 +17,10 @@ describe("selling a passive (issue #16)", () => {
   it("removes exactly that passive and adds its sell value; no discard, play or discard used", () => {
     const game = withRack();
     const before = game.state;
-    expect(game.sellPassive("passive.1")).toBe(1);
+    // Scrapper's base price is 8, so it sells for 4 (#103).
+    expect(game.sellPassive("passive.1")).toBe(4);
     expect(game.state.passiveRack.map(({ id }) => id)).toEqual(["passive.2"]);
-    expect(game.state.coins).toBe(before.coins + 1);
+    expect(game.state.coins).toBe(before.coins + 4);
     expect(game.state.discardPile).toBe(before.discardPile);
     expect(game.state.round).toEqual(before.round);
     expect(game.state.hand).toBe(before.hand);
@@ -38,10 +39,11 @@ describe("selling a passive (issue #16)", () => {
     expect(game.state.coins).toBe(coins);
   });
 
-  it("takes its price from the run's policy", () => {
-    const game = withRack({ ...demoRunRules, passivePrices: { buy: 5, sell: 2 } });
-    expect(game.passivePrices).toEqual({ buy: 5, sell: 2 });
-    expect(game.sellPassive("passive.2")).toBe(2);
+  it("pays half the base price, rounded down, then the run's resale modifiers", () => {
+    // ×2 has base price 4: it sells for 2, and a modifier can change that.
+    expect(withRack().sellPassive("passive.2")).toBe(2);
+    const doubled = withRack({ ...demoRunRules, resaleModifiers: [(payout) => payout * 2] });
+    expect(doubled.sellPassive("passive.2")).toBe(4);
   });
 
   it("stops a sold passive from reacting to events", () => {
@@ -66,9 +68,9 @@ describe("selling a passive (issue #16)", () => {
     expect(snapshot.state.coins).toBe(game.state.coins);
   });
 
-  it("refuses a bad price policy without changing anything", () => {
+  it("refuses a bad payout from a modifier without changing anything", () => {
     for (const sell of [-1, 0.5, Number.NaN]) {
-      const game = withRack({ ...demoRunRules, passivePrices: { buy: 1, sell } });
+      const game = withRack({ ...demoRunRules, resaleModifiers: [() => sell] });
       const before = game.state;
       expect(game.sellPassive("passive.1")).toBeNull();
       expect(game.state).toBe(before);
@@ -82,6 +84,6 @@ describe("selling a passive (issue #16)", () => {
     expect(game.sellPassive("passive.1")).toBeNull();
     game.claimStageRewards();
     expect(game.stageRewardsPending).toBe(false);
-    expect(game.sellPassive("passive.1")).toBe(1);
+    expect(game.sellPassive("passive.1")).toBe(4);
   });
 });

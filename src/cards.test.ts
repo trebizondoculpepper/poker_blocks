@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { cardName, ranks, standardDeck, suits } from "./cards";
 import { drawCards } from "./deal";
 import { baseDealer } from "./dealer";
-import { toggleBlockSelection } from "./traits/selectable";
+import { toggleBlockSelection } from "./block-trait-behaviours";
 
 describe("standard deck", () => {
   it("contains each of the 52 rank and suit combinations once", () => {

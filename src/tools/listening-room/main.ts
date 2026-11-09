@@ -1,8 +1,8 @@
 // Development page for auditioning every registered sound effect. Served at /sfx.html.
 import "./style.css";
-import { sfxFileNames, soundEffects, withSfxDefaults } from "../audio/sfx-registry";
+import { sfxFileNames, soundEffects, withSfxDefaults } from "../../audio/sfx-registry";
 
-const urls = import.meta.glob<string>("../assets/sfx/*.mp3", {
+const urls = import.meta.glob<string>("../../assets/sfx/*.mp3", {
   eager: true,
   query: "?url",
   import: "default",
@@ -125,9 +125,21 @@ element("play-all").addEventListener("click", async () => {
 
 element("stop").addEventListener("click", stopAll);
 
-// Preview of a scoring chain: the same line sound at rising pitch, one semitone apart.
+// Preview of a chain: one registered sound repeated at rising pitch, two semitones apart. The
+// sound is chosen from the registry, and `?sound=<id>` in the URL preselects it (#71).
+const chainSound = element("chain-sound") as HTMLSelectElement;
+for (const effect of soundEffects) {
+  chainSound.append(new Option(`${effect.id} — ${effect.trigger}`, effect.id));
+}
+chainSound.value = new URLSearchParams(location.search).get("sound") ?? chainSound.value;
+chainSound.addEventListener("change", () => {
+  const url = new URL(location.href);
+  url.searchParams.set("sound", chainSound.value);
+  history.replaceState(null, "", url);
+});
+
 element("chain").addEventListener("click", async () => {
-  const entry = entries.find((_, index) => soundEffects[index].id === "score.line");
+  const entry = entries[soundEffects.findIndex(({ id }) => id === chainSound.value)];
   if (!entry || entry.takes.length === 0) return;
   stopAll();
   const run = sequence;

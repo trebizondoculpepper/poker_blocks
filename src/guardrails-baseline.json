@@ -2,9 +2,7 @@
   "src/audio-service.ts": ["screenMusic[screen]();", "stageMusic[phase](music);"],
   "src/audio/music-fade.ts": ["switch (kind) {"],
   "src/audio/music-plan.ts": ["switch (scene) {"],
-  "src/game-modes.ts": ["...sceneTraits[kind],"],
   "src/game-run.ts": [
-    "session.shopAfter = snapshot.phase === \"shop\" ? (snapshot.shopAfter ?? \"boss\") : null;",
     "offer.kind === \"passive\" ? this.passivePrices.buy : (this.config.cardPurchasePrice ?? 1);",
     "if (offer.kind === \"passive\") {",
     "while (this.currentState.passiveRack.some(({ id }) => id === `passive.${serial}`)) serial++;",
@@ -15,13 +13,6 @@
   "src/hud-panels.ts": [
     "const action = view.presenting ? null : nextActionLabels[view.phase](outcome);",
     "heading: `ROUND ${view.round} · ${phaseNames[view.phase]}${outcomeSuffixes[outcome]}`,"
-  ],
-  "src/listening-room/main.ts": [
-    "const entry = entries.find((_, index) => soundEffects[index].id === \"score.line\");"
-  ],
-  "src/materials.ts": [
-    "...(transparentMaterials.has(kind) ? { transparent: {} } : {}),",
-    "inspectable: inspectable(`${cardName(card.traits.identity)} · ${materialNames[kind]}`),"
   ],
   "src/passive-effects.ts": [
     "switch (condition.kind) {",
@@ -35,8 +26,6 @@
     "if (rule.effect.kind !== \"add-coins\") continue;"
   ],
   "src/run-controller.ts": [
-    "switchScene(sceneForPhase[game.phase]);",
-    ".filter(({ block }) => block.traits.selectable && selected.has(block.id))",
     "if (game.phase === \"over\") {",
     "const leavingShop = game.phase === \"shop\";",
     "if (!modeTraits.shop || session.phase !== \"shop\" || session.state.shopStock !== undefined)",
@@ -46,53 +35,14 @@
     "offer.kind === \"passive\" ? game.passivePrices.buy : (runRules.cardPurchasePrice ?? 1),",
     "if (bought.kind === \"card\") {"
   ],
-  "src/run-rules.ts": ["targetScore: Math.round(baseTargets[kind] * (1 + (round - 1) / 2)),"],
   "src/save.ts": [
     "offer.kind === \"card\"",
-    "if (!phases.includes(record.phase) || record.phase === \"over\") return null;",
     "if (!dealers.has(record.dealer)) return null;",
     "if (offer.kind === \"card\") return { kind: \"card\" as const, block: resolve(offer.cardId) };",
-    "if (offer.kind !== \"passive\" || typeof offer.id !== \"string\" || passiveIds.has(offer.id))",
-    "...(record.phase === \"shop\" && record.shopAfter ? { shopAfter: record.shopAfter } : {}),",
-    "if (snapshot.phase === \"over\") storage.removeItem(key);"
+    "if (offer.kind !== \"passive\" || typeof offer.id !== \"string\" || passiveIds.has(offer.id))"
   ],
   "src/shop-view.ts": [
     "if (offer.kind === \"passive\") {",
     "const passive = offer.kind === \"passive\";"
-  ],
-  "src/table-input.ts": [
-    "canvas.style.cursor = hovered?.block.traits.selectable ? \"pointer\" : \"default\";"
-  ],
-  "src/traits/selectable.ts": [
-    "if (!block.traits.selectable) return block;",
-    "if (block.traits.selectable) return block;",
-    "if (!block.traits.selectable) return current;"
-  ],
-  "src/visual/block-appearance.ts": [
-    "const ink = printInk[kind];",
-    "switch (kind) {",
-    "ior: kind === \"prismatic\" ? 2.33 : 1.5,",
-    "envMapIntensity: kind === \"prismatic\" ? 1.6 : 1.1,",
-    "...(kind === \"prismatic\" ? prismaticFire : {}),",
-    "const prismatic = kind === \"prismatic\";",
-    "const relief = { bumpMap: height ?? texture, bumpScale: patternRelief[kind] };",
-    "if (kind === \"ice\") {",
-    "if (kind === \"gold\") {",
-    "if (kind === \"paper\") {",
-    "kind === \"meat\"",
-    ": kind === \"prismatic\"",
-    ": kind === \"gold\"",
-    "if ([\"prismatic\", \"fire\", \"paper\", \"ice\"].includes(kind)) geometry.scale(0.985, 0.985, 0.985);",
-    "const edgeColor = edgeColors[kind];",
-    "const edgeOpacity = edgeOpacities[kind];",
-    "if (kind === \"prismatic\") {",
-    "if (kind === \"fire\") {",
-    "if (kind === \"ice\") {",
-    "if (kind === \"steel\") {",
-    "kind === \"gold\"",
-    ": kind === \"paper\"",
-    ": kind === \"wood\"",
-    ": kind === \"terracotta\"",
-    "const endTexture = kind === \"wood\" ? faceTexture(identity, kind, true) : null;"
   ]
 }

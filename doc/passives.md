@@ -17,11 +17,34 @@ The first set uses these reusable trait types:
 
 `EventRule` uses named, reusable condition handlers (such as `material-is`, `suit-in`, `rank-count-at-least`, `line-length`, and `perpendicular-intersection`) and effect handlers (such as `add-block-value`, `multiply-block-value`, `add-line-score`, `multiply-line-score`, `add-coins`, and `grant-random-unowned-passive`). The handlers are trait/runtime code. Registry entries supply values and selectors, not new functions. New conditions and effects can extend this vocabulary without changing the block container.
 
+The first migration slice introduces serializable `EventRule({ on, select, where, effects[] })` data and an `EventRuleRegistry` that dispatches registered selectors, conditions, and ordered effects. The queue can subscribe from this new data. Live passives still use the legacy `PassiveRule` shape and calculation path until the scoring and action migrations land; this slice does not change their results. Each handler registration is typed against its own configuration. Unknown handler IDs fail during evaluation. The runner does not inspect those IDs to choose behavior.
+
 For example, Seeing Red is data shaped like `EventRule({ on: "discard.completed", select: "discarded-blocks", where: { suitIn: ["hearts", "diamonds"] }, effects: [{ addCoinsPerMatch: 1 }] })` alongside its rack, inspection, and appearance trait configurations. The same rule trait and `suitIn` predicate can serve another block with different suits or a different amount.
 
 At stage start, register the installed blocks' subscriptions; update registrations when a block is installed, sold, or destroyed. For one event, take a snapshot of rack order and resolve subscribed blocks **left to right**. Resolve a block's configured rules and effects in their listed order. Apply an effect before moving to the next passive, so later passives see the updated working value. Events caused by effects go to the back of the FIFO queue; a newly installed passive does not retroactively respond to the event that installed it. Keep the queue's loop limit and error reporting.
 
 Only the relevant phase may change a working value. `score.beforeBlockValue` can adjust one contributing block's value; `score.beforeLineFinalized` can adjust the line's working score; `discard.completed` can award coins or install a passive. Clamp a line's final score to zero after all its line effects have resolved, so a penalty never subtracts points from the stage total. One-block runs remain unscored. The line length used by conditions is the number of blocks in the **maximal, gap-free line**, even when a long line scores using a five-block subset.
+
+## Categories
+
+The categories follow the Balatro community wiki's seven Joker effect types (Chips, Additive Mult, Multiplicative Mult, Chips + Additive Mult, Effect, Retrigger, Economy). We fold the four scoring types into one **Scoring** category and show the scoring operation with an accent tint instead.
+
+Each category is a **trait** (`scoringCategory`, `economyCategory`, `effectCategory`, `retriggerCategory`), and together they form the **category facet** in `src/passive-categories.ts`. Every passive composes **exactly one** trait from the facet, naming its primary purpose (issue #81); `src/passive-categories.test.ts` enforces this for every definition. A category trait brings presentation defaults and nothing else: colours, an appearance finish, and an activation visual and sound. No rule, condition or effect reads it, and the same test checks that gameplay code never names a category trait or the scoring tints. The finish is appearance only and is unrelated to a card's gameplay material.
+
+| Category trait      | Base colour | Finish         | Activation visual       | Activation sound             | Passives                                             |
+| ------------------- | ----------- | -------------- | ----------------------- | ---------------------------- | ---------------------------------------------------- |
+| `scoringCategory`   | White       | Porcelain      | Brief white score pulse | `passive.activate.scoring`   | ×2, ×4, Carnivore, Woodworker, Crossroads, Long Haul |
+| `economyCategory`   | Green       | Brass          | Green coin glint        | `passive.activate.economy`   | Gold Standard, Scrapper, Seeing Red                  |
+| `effectCategory`    | Black       | Matte obsidian | Brief dark ripple       | `passive.activate.effect`    | Ace Exchange                                         |
+| `retriggerCategory` | Orange      | Copper         | Quick orange echo ring  | `passive.activate.retrigger` | None yet                                             |
+
+Card manipulation is part of Effect until a passive needs its own category.
+
+**Scoring tint.** A scoring passive stays white porcelain; its edge and symbol take an accent from `scoringCategory { operations }`: **icy blue** for additive, **indigo** for multiplicative, **violet** for exponential. A passive with several operations blends their tints evenly. ×2, ×4 and Carnivore are multiplicative; Woodworker, Crossroads and Long Haul are additive. The tints are in `scoringTints`, in the same file.
+
+Passives show their category's look by default. A definition may set its own `palette` only where an explicit design calls for it; none does today.
+
+**Not yet wired:** the activation visuals and sounds are configured and their sound ids registered, but nothing plays them yet. Playing them needs passive activations reported by the event-rule work in #63.
 
 ## Definitions
 

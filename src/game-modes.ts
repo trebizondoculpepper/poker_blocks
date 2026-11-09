@@ -3,24 +3,18 @@
  * `?mode=...` selects a developer mode; `?room=...` remains a backwards-compatible alias.
  */
 import { Registry } from "./core/registry";
+import type { GameFlow } from "./game-flow";
+import type { RunPositionOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
 import { saveKey } from "./save";
 import type { Scene } from "./scenes";
 import type { DestroyCause } from "./traits/destructible";
+import { standardGameFlow } from "./standard-game-flow";
 
-export const sceneNames = [
-  "title",
-  "settings",
-  "stage-1",
-  "stage-2",
-  "boss",
-  "shop",
-  "stage-won",
-  "game-over",
-] as const;
-export type SceneName = (typeof sceneNames)[number];
+export { standardGameFlow };
+
 export type SceneTraits = {
-  screen: { kind: SceneName };
+  screen: { kind: string };
   pausesBelow: { input: boolean; update: boolean };
   /** A HUD panel this scene shows while it is in front (see src/hud-panels.ts). */
   roundPanel: Record<never, never>;
@@ -40,33 +34,11 @@ export type ModeMusicStyle = "quiet" | "ordinary";
 /** What a fresh page load does in a mode (see ModeTraits.onLoad). */
 export type OnLoad = "title" | "newRun" | "resume";
 
-/**
- * A mode's scenes. Each scene composes only the traits whose behaviour it wants: the play
- * scenes take field placement and the round and deck panels, the shop takes the coin panel
- * and its exit. `stageTraits` are composed into every play scene on top of those.
- */
-function scenesForMode(
-  modeId: string,
-  stageTraits: Partial<SceneTraits> = {},
-): readonly ModeScene[] {
-  const sceneTraits: Record<SceneName, Partial<SceneTraits>> = {
-    title: {},
-    settings: { pausesBelow: { input: true, update: true } },
-    "stage-1": { ...playSceneTraits, ...stageTraits },
-    "stage-2": { ...playSceneTraits, ...stageTraits },
-    boss: { ...playSceneTraits, ...stageTraits },
-    shop: { coinsPanel: {}, shopExit: {}, shopStock: {} },
-    "stage-won": { pausesBelow: { input: true, update: true } },
-    "game-over": {},
-  };
-  return sceneNames.map((kind) => ({
-    id: modeSceneId(modeId, kind),
-    traits: {
-      screen: { kind },
-      ...sceneTraits[kind],
-    },
-  }));
-}
+/** A shared scene definition: a name and the traits every mode's copy of it composes. */
+export type SceneDefinition = {
+  readonly name: string;
+  readonly traits: Partial<SceneTraits>;
+};
 
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
 const playSceneTraits: Partial<SceneTraits> = {
@@ -75,6 +47,56 @@ const playSceneTraits: Partial<SceneTraits> = {
   fieldPlacement: {},
 };
 
+/**
+ * The scene definitions every mode composes by reference (see doc/game-architecture.md,
+ * "Scene definitions"). A scene is configured here once; a mode adds traits to the scenes it
+ * names, and never keeps its own copy of the catalogue.
+ */
+export const sceneDefinitions = [
+  { name: "title", traits: {} },
+  { name: "settings", traits: { pausesBelow: { input: true, update: true } } },
+  { name: "stage-1", traits: playSceneTraits },
+  { name: "stage-2", traits: playSceneTraits },
+  { name: "boss", traits: playSceneTraits },
+  { name: "shop", traits: { coinsPanel: {}, shopExit: {}, shopStock: {} } },
+  { name: "stage-won", traits: { pausesBelow: { input: true, update: true } } },
+  { name: "game-over", traits: {} },
+] as const satisfies readonly SceneDefinition[];
+
+export type SceneName = (typeof sceneDefinitions)[number]["name"];
+export const sceneNames: readonly SceneName[] = sceneDefinitions.map(({ name }) => name);
+
+/** The scenes a run is played in, which a mode may give extra traits as a group. */
+export const playScenes: readonly SceneName[] = ["stage-1", "stage-2", "boss"];
+
+/** Traits a mode adds to some of the shared scenes. */
+export type SceneAdditions = {
+  readonly scenes: readonly SceneName[];
+  readonly traits: Partial<SceneTraits>;
+};
+
+/**
+ * A mode's scenes: every shared definition, under the mode's own scene ids, with each scene's
+ * `screen` trait first and then its definition's traits, plus any traits the mode adds to it.
+ */
+export function composeScenes(
+  modeId: string,
+  additions: readonly SceneAdditions[] = [],
+): readonly ModeScene[] {
+  return sceneDefinitions.map(({ name, traits }) => ({
+    id: modeSceneId(modeId, name),
+    traits: Object.assign(
+      { screen: { kind: name } },
+      traits,
+      ...additions.filter(({ scenes }) => scenes.includes(name)).map((added) => added.traits),
+    ),
+  }));
+}
+
+/**
+ * A scene's id: `<mode id>/<scene name>`. Modes share one scene manager, so the mode is part of
+ * the id; a save records only the scene name, because its save key already names the mode.
+ */
 export function modeSceneId(modeId: string, scene: SceneName): string {
   return `${modeId}/${scene}`;
 }
@@ -125,6 +147,8 @@ export type GameMode = {
    * play straight away.
    */
   startScene: SceneName;
+  /** Outcome-keyed scene transitions; scene names are never inferred from run phases. */
+  flow: GameFlow<RunPositionOutcome, SceneName>;
   /** Other names that open this mode (old links). */
   aliases?: readonly string[];
   /** Ordered steps applied when a new game run is created; never applied on Continue. */
@@ -137,8 +161,9 @@ export const gameModeRegistry = new Registry<GameMode>("game mode");
 const gameModes: GameMode[] = [
   {
     id: "game",
-    scenes: scenesForMode("game"),
+    scenes: composeScenes("game"),
     startScene: "title",
+    flow: standardGameFlow,
     runSetup: [],
     // The real game has the passive rack, starting empty (passives come from the shop).
     traits: {
@@ -151,8 +176,9 @@ const gameModes: GameMode[] = [
   },
   {
     id: "dev0",
-    scenes: scenesForMode("dev0"),
+    scenes: composeScenes("dev0"),
     startScene: "title",
+    flow: standardGameFlow,
     aliases: ["dev"],
     runSetup: [{ step: "materialDeck" }],
     traits: {
@@ -165,8 +191,9 @@ const gameModes: GameMode[] = [
   },
   {
     id: "dev1",
-    scenes: scenesForMode("dev1"),
+    scenes: composeScenes("dev1"),
     startScene: "stage-1",
+    flow: standardGameFlow,
     runSetup: [{ step: "sandbox" }, { step: "materialDeck" }, { step: "materialSample" }],
     traits: {
       onLoad: "newRun",
@@ -178,8 +205,9 @@ const gameModes: GameMode[] = [
   },
   {
     id: "dev2",
-    scenes: scenesForMode("dev2"),
+    scenes: composeScenes("dev2"),
     startScene: "stage-1",
+    flow: standardGameFlow,
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck" },
@@ -196,8 +224,9 @@ const gameModes: GameMode[] = [
   },
   {
     id: "dev3",
-    scenes: scenesForMode("dev3"),
+    scenes: composeScenes("dev3"),
     startScene: "shop",
+    flow: standardGameFlow,
     runSetup: [{ step: "shopPreview", coins: 5 }],
     traits: {
       onLoad: "resume",
@@ -213,8 +242,11 @@ const gameModes: GameMode[] = [
     // Destruction sandbox: a mixed-material structure in which about half the blocks are
     // destructible; double-click one to destroy it. Destroyed blocks leave gaps.
     id: "dev4",
-    scenes: scenesForMode("dev4", { devManualBlockDestroyer: { cause: "manual" } }),
+    scenes: composeScenes("dev4", [
+      { scenes: playScenes, traits: { devManualBlockDestroyer: { cause: "manual" } } },
+    ]),
     startScene: "stage-1",
+    flow: standardGameFlow,
     runSetup: [
       { step: "sandbox" },
       { step: "materialDeck" },

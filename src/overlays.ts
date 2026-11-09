@@ -41,12 +41,46 @@ export type Overlays = {
   dispose(): void;
 };
 
+/**
+ * How menus move a scene stack. Closing menus pops only the scenes a menu pushed, so a scene
+ * the game flow pushed (for example a mode's opening transition) survives a menu closing.
+ */
+export function menuScreenScenes(stack: {
+  current(): string | undefined;
+  push(id: string): void;
+  pop(): boolean;
+  replace(scene: SceneName): void;
+  idFor(scene: SceneName): string;
+}): ScreenScenes {
+  const menuPushed: string[] = [];
+  return {
+    push(name) {
+      const id = stack.idFor(name);
+      if (stack.current() === id) return;
+      stack.push(id);
+      menuPushed.push(id);
+    },
+    replace(name) {
+      menuPushed.length = 0;
+      stack.replace(name);
+    },
+    resumeGame() {
+      while (menuPushed.length && stack.current() === menuPushed.at(-1) && stack.pop()) {
+        menuPushed.pop();
+      }
+      menuPushed.length = 0;
+    },
+  };
+}
+
 /** Which scene each menu screen puts in front. */
 export const screenScenes: Record<Screen, (scenes: ScreenScenes) => void> = {
   title: (scenes) => scenes.replace("title"),
   settings: (scenes) => scenes.push("settings"),
   game: (scenes) => scenes.resumeGame(),
-  over: (scenes) => scenes.replace("game-over"),
+  // The game over screen is presentation only: the mode's game flow has already placed the
+  // scene for a lost run (`run.position.over`), so this screen must not move the stack.
+  over: () => undefined,
 };
 
 export function createOverlays(

@@ -8,6 +8,13 @@ import { withoutSelectable } from "./traits/selectable";
 import { parseRunStats, type RunStats } from "./run-stats";
 import { createPassiveBlock, passiveDefinitions } from "./passives";
 import { stageKinds, type StageKind } from "./run-rules";
+import type { GameFlow, FlowTransition } from "./game-flow";
+import type { SceneName } from "./game-modes";
+import type { RunPositionOutcome } from "./game-run";
+import { standardGameFlow } from "./standard-game-flow";
+
+/** The mode's flow, which says which scene each run position shows. */
+export type SaveFlow = GameFlow<RunPositionOutcome, SceneName>;
 
 /**
  * Saved runs store card ids, not CardBlock objects: some traits hold functions, and the
@@ -20,7 +27,13 @@ export const saveKey = "poker-blocks.run";
 export type SaveRecord = {
   version: typeof saveVersion;
   round: number;
-  phase: RunPhase;
+  /**
+   * The scene the run was in, by name (the save key already names the mode). Saves written
+   * before scenes were recorded have `phase` instead; see `legacyPhaseScenes`.
+   */
+  scene?: SceneName;
+  /** Legacy: the run phase, in saves written before `scene`. Never written now. */
+  phase?: RunPhase;
   /** Stage immediately before this shop; absent in older boss-only shop saves. */
   shopAfter?: StageKind;
   dealer: string;
@@ -50,15 +63,56 @@ export type SaveRecord = {
   seed?: number;
 };
 
-const phases: readonly RunPhase[] = ["stage-1", "stage-2", "boss", "shop", "over"];
+/**
+ * How a legacy `phase` save migrates to a scene name: each stage and the shop to the matching
+ * scene, and `over` to none, because a lost run is never resumed. An unknown phase is invalid.
+ */
+const legacyPhaseScenes: Readonly<Record<RunPhase, SceneName | null>> = {
+  "stage-1": "stage-1",
+  "stage-2": "stage-2",
+  boss: "boss",
+  shop: "shop",
+  over: null,
+};
 
-export function toSaveRecord(snapshot: RunSnapshot): SaveRecord {
+/** The scene a transition shows; a pop shows none of its own. */
+function sceneOf(transition: FlowTransition<SceneName> | undefined): SceneName | undefined {
+  return transition && "scene" in transition ? transition.scene : undefined;
+}
+
+/** The scene a run position shows under a flow. */
+function sceneForPhase(flow: SaveFlow, phase: RunPhase): SceneName {
+  const scene = sceneOf(flow[`run.position.${phase}`]);
+  if (!scene) throw new Error(`The flow shows no scene for ${phase}`);
+  return scene;
+}
+
+/** The positions a run can be resumed in: any but a lost run's. */
+const resumablePhases: readonly RunPhase[] = ["stage-1", "stage-2", "boss", "shop"];
+
+/**
+ * The resumable run position a saved scene stands for: the one whose transition shows that
+ * scene. None for a lost run's scene or an unknown one, so such a save is never resumed.
+ */
+function phaseForScene(flow: SaveFlow, scene: unknown): RunPhase | undefined {
+  return resumablePhases.find((phase) => sceneOf(flow[`run.position.${phase}`]) === scene);
+}
+
+/** The scene a record resumes: its own, or its legacy phase's; null for a lost or bad run. */
+function savedScene(record: SaveRecord): SceneName | null {
+  if (record.scene !== undefined) return record.scene;
+  return Object.hasOwn(legacyPhaseScenes, record.phase ?? "")
+    ? legacyPhaseScenes[record.phase!]
+    : null;
+}
+
+export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGameFlow): SaveRecord {
   const ids = (blocks: readonly CardBlock[]) => blocks.map(({ id }) => id);
   const { state } = snapshot;
   return {
     version: saveVersion,
     round: snapshot.round,
-    phase: snapshot.phase,
+    scene: sceneForPhase(flow, snapshot.phase),
     ...(snapshot.shopAfter ? { shopAfter: snapshot.shopAfter } : {}),
     dealer: snapshot.dealer,
     state: {
@@ -94,12 +148,14 @@ export function fromSaveRecord(
   value: unknown,
   cards: readonly CardBlock[],
   dealers: Registry<Dealer>,
+  flow: SaveFlow = standardGameFlow,
 ): RunSnapshot | null {
   try {
     const record = value as SaveRecord;
     if (record?.version !== saveVersion) return null;
     if (!Number.isInteger(record.round) || record.round < 1) return null;
-    if (!phases.includes(record.phase) || record.phase === "over") return null;
+    const phase = phaseForScene(flow, savedScene(record));
+    if (!phase) return null;
     if (record.shopAfter !== undefined && !stageKinds.includes(record.shopAfter)) return null;
     if (!dealers.has(record.dealer)) return null;
     const byId = new Map(cards.map((card) => [card.id, card]));
@@ -159,8 +215,9 @@ export function fromSaveRecord(
     if (seen.size !== cards.length) return null;
     return {
       round: record.round,
-      phase: record.phase,
-      ...(record.phase === "shop" && record.shopAfter ? { shopAfter: record.shopAfter } : {}),
+      phase,
+      // Only a shop reads it; GameRun ignores it elsewhere.
+      ...(record.shopAfter ? { shopAfter: record.shopAfter } : {}),
       dealer: record.dealer,
       state: restored,
       stats: parseRunStats(record.stats),
@@ -226,11 +283,14 @@ export function saveRun(
   storage: SaveStorage | null,
   snapshot: RunSnapshot,
   key = saveKey,
+  flow: SaveFlow = standardGameFlow,
 ): boolean {
   if (!storage) return false;
   try {
-    if (snapshot.phase === "over") storage.removeItem(key);
-    else storage.setItem(key, JSON.stringify(toSaveRecord(snapshot)));
+    // A lost run is never resumed, so its save is cleared rather than written.
+    if (!phaseForScene(flow, sceneOf(flow[`run.position.${snapshot.phase}`])))
+      storage.removeItem(key);
+    else storage.setItem(key, JSON.stringify(toSaveRecord(snapshot, flow)));
     return true;
   } catch {
     return false;
@@ -246,17 +306,30 @@ export function loadRun(
   cards: readonly CardBlock[] | ((seed: number | undefined) => readonly CardBlock[]),
   dealers: Registry<Dealer>,
   key = saveKey,
+  flow: SaveFlow = standardGameFlow,
 ): RunSnapshot | null {
   if (!storage) return null;
   try {
     const raw = storage.getItem(key);
     if (!raw) return null;
     const record = JSON.parse(raw) as SaveRecord;
+    // A legacy save of a lost run is never resumed, and is cleared.
+    if (isLegacyLostRun(record)) {
+      storage.removeItem(key);
+      return null;
+    }
     const selected = typeof cards === "function" ? cards(seedOf(record)) : cards;
-    return fromSaveRecord(record, selected, dealers);
+    return fromSaveRecord(record, selected, dealers, flow);
   } catch {
     return null;
   }
+}
+
+/** A legacy save of a lost run: its phase migrates to no scene. */
+function isLegacyLostRun(record: SaveRecord | null): boolean {
+  const phase = record?.scene === undefined ? record?.phase : undefined;
+  if (phase === undefined || !Object.hasOwn(legacyPhaseScenes, phase)) return false;
+  return legacyPhaseScenes[phase] === null; // branch-ok: #86
 }
 
 /** A record's saved deck seed, read before its card ids are resolved. */

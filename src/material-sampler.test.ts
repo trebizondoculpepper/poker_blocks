@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 import { sampleMaterials } from "./material-sampler";
-import { blockMaterials, makeDevDeck, materialOf } from "./materials";
+import {
+  blockMaterials,
+  getMaterialDefinition,
+  makeDevDeck,
+  materialDefinitions,
+  materialOf,
+} from "./materials";
 import { cellKey, faceNormal, faces } from "./traits/attachable";
 
 describe("the dev1 materials sampler", () => {
@@ -31,11 +37,17 @@ describe("the dev1 materials sampler", () => {
 
 describe("the transparent trait", () => {
   it("marks exactly the see-through materials", async () => {
-    const { transparentMaterials } = await import("./materials");
-    const { isTransparent } = await import("./traits/transparent");
+    const { needsLandingHandover } = await import("./block-trait-behaviours");
     for (const card of makeDevDeck(7)) {
-      expect(isTransparent(card)).toBe(transparentMaterials.has(materialOf(card)));
+      expect(needsLandingHandover(card)).toBe(
+        getMaterialDefinition(materialOf(card)).traits.transparent !== undefined,
+      );
     }
-    expect([...transparentMaterials].sort()).toEqual(["fire", "ice", "prismatic"]);
+    expect(
+      materialDefinitions
+        .filter(({ traits }) => "transparent" in traits)
+        .map(({ id }) => id)
+        .sort(),
+    ).toEqual(["fire", "ice", "prismatic"]);
   });
 });

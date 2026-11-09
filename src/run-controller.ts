@@ -9,6 +9,7 @@
  */
 import type { DestroyCause } from "./traits/destructible";
 import type { AudioService } from "./audio-service";
+import { menuScreenScenes } from "./overlays";
 import { playSfx } from "./audio/sfx";
 import type { CameraViewService } from "./camera-view";
 import { cardName, standardDeck, type CardBlock } from "./cards";
@@ -16,6 +17,7 @@ import type { ConsoleApp } from "./console-host";
 import { dealerRegistry, roundOutcome, type RoundOutcome } from "./dealer";
 import type { FieldView } from "./field-view";
 import { GameRun, type RunPhase } from "./game-run";
+import { followFlow } from "./game-flow";
 import type { HandView } from "./hand-view";
 import type { HudPanels } from "./hud-panels";
 import type { MenuCallbacks } from "./menus";
@@ -127,14 +129,6 @@ const stageWonDelayMs = 900;
 /** When a lost stage's outcome has been announced, the game over screen follows. */
 const gameOverDelayMs = 1400;
 
-const sceneForPhase: Record<RunPhase, SceneName> = {
-  "stage-1": "stage-1",
-  "stage-2": "stage-2",
-  boss: "boss",
-  shop: "shop",
-  over: "game-over",
-};
-
 /** The run rules a mode starts from, before its run setup steps adjust them. */
 function baseRunRules(mode: GameMode): RunRules {
   return mode.traits.passiveRack
@@ -206,9 +200,14 @@ export function createRunController<Context>(options: {
     if (scenes.current?.id !== id) scenes.switchTo(id);
   }
 
-  function syncSceneToGame(): void {
-    // Temporary bridge until scene transitions drive GameRun progression (#37).
-    switchScene(sceneForPhase[game.phase]);
+  function followRunPosition(): void {
+    followFlow(currentMode.flow, game.positionOutcome, {
+      replace: switchScene,
+      push: (name) => scenes.pushIfNotCurrent(modeSceneId(currentMode.id, name)),
+      pop: () => {
+        void scenes.pop();
+      },
+    });
   }
 
   /**
@@ -265,7 +264,7 @@ export function createRunController<Context>(options: {
     const { views } = services;
     views.highlight(selected);
     const selectedNames = views.all
-      .filter(({ block }) => block.traits.selectable && selected.has(block.id))
+      .filter(({ block }) => selected.has(block.id))
       .map(({ block }) => cardName(block.traits.identity));
     host.setAttribute(
       "aria-label",
@@ -275,7 +274,7 @@ export function createRunController<Context>(options: {
 
   /** Save at a safe point: never while a placement, discard or score presentation is running. */
   function autosave(): void {
-    saveRun(storage, game.snapshot(), runSaveKey);
+    saveRun(storage, game.snapshot(), runSaveKey, currentMode.flow);
   }
 
   function refillHand(): void {
@@ -310,6 +309,7 @@ export function createRunController<Context>(options: {
     if (services.presenter.busy || services.input.dragging) return;
     playSfx("ui.click");
     if (game.phase === "over") {
+      followRunPosition();
       services.overlays.showGameOver(game.stats);
       return;
     }
@@ -343,7 +343,7 @@ export function createRunController<Context>(options: {
         return;
       }
       game = stockShopIfNeeded(game);
-      syncSceneToGame();
+      followRunPosition();
       resetTable();
       if (game.inStage) {
         services.audio.stageStarted(game.phase);
@@ -365,6 +365,7 @@ export function createRunController<Context>(options: {
   function endRun(): void {
     gameOverAt = null;
     playSfx("run.lost");
+    followRunPosition();
     updateHud();
     autosave();
     services.overlays.showGameOver(game.stats);
@@ -416,7 +417,7 @@ export function createRunController<Context>(options: {
     // The shop scene's own `shopStock` trait shows the stock. A new run begun in the shop
     // already in front causes no scene transition, so refresh that scene: its traits re-read
     // the run and show the new offers instead of the previous run's.
-    syncSceneToGame();
+    followRunPosition();
     refreshScene();
     const enterShop = game.phase === "shop" && fresh && !reducedMotion;
     if (enterShop) cameraView.beginShopEntrance();
@@ -432,7 +433,8 @@ export function createRunController<Context>(options: {
    * The saved run for this mode, if there is one. Its deck is rebuilt from the seed the run
    * itself was dealt from, so Continue matches even if browser storage has moved on.
    */
-  const loadSaved = () => loadRun(storage, cardsForSavedRun, dealerRegistry, runSaveKey);
+  const loadSaved = () =>
+    loadRun(storage, cardsForSavedRun, dealerRegistry, runSaveKey, currentMode.flow);
   const resume = (snapshot: NonNullable<ReturnType<typeof loadSaved>>) => {
     cards = cardsForSavedRun(snapshot.seed);
     return GameRun.fromSnapshot(dealerRegistry, runRules, cards, snapshot);
@@ -507,14 +509,13 @@ export function createRunController<Context>(options: {
     },
   };
 
-  const screenScenes: ScreenScenes = {
-    push: (name) => scenes.pushIfNotCurrent(modeSceneId(currentMode.id, name)),
-    replace: switchScene,
-    resumeGame() {
-      scenes.pop();
-      syncSceneToGame();
-    },
-  };
+  const screenScenes: ScreenScenes = menuScreenScenes({
+    current: () => scenes.current?.id,
+    push: (id) => scenes.push(id),
+    pop: () => scenes.pop(),
+    replace: (name) => switchScene(name),
+    idFor: (name) => modeSceneId(currentMode.id, name),
+  });
 
   const consoleApp: ConsoleApp = {
     game: () => game,
@@ -592,6 +593,7 @@ export function createRunController<Context>(options: {
       services.audio.start();
     },
     open() {
+      switchScene(currentMode.startScene);
       onLoadHandlers[currentMode.traits.onLoad]();
       if (restartMode) {
         window.history.replaceState(

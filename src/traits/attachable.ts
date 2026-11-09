@@ -58,3 +58,10 @@ export function attachmentCell(
   };
   return occupied.has(cellKey(neighbor)) ? null : neighbor;
 }
+import type { BlockTraitBehavior } from "../block-trait-behaviours";
+
+export const attachableBehavior: BlockTraitBehavior = {
+  canDrag: () => true,
+  attachment: (config, _block, target, face, occupied) =>
+    attachmentCell(config as AttachableTrait, target, face, occupied),
+};

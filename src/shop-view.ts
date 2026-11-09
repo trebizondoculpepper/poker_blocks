@@ -2,9 +2,9 @@ import * as THREE from "three";
 import { clamp01, easeInOutCubic, lerp } from "./easing";
 import { playSfx } from "./audio/sfx";
 import { cardName } from "./cards";
-import { materialOf } from "./materials";
+import { getMaterialDefinition, materialOf } from "./materials";
 import { passiveFaceTexture } from "./passive-rack";
-import { passiveDefinitions } from "./passives";
+import { passiveAppearance, passiveDefinitions } from "./passives";
 import type { ShopOffer } from "./shop-stock";
 import { createBlockAppearance } from "./visual/block-appearance";
 import { createMaterialise } from "./visual/materialise";
@@ -118,8 +118,7 @@ export function createShopView(
 
   function makeCube(offer: ShopOffer): { cube: THREE.Object3D; dispose(): void } {
     if (offer.kind === "passive") {
-      const appearance =
-        offer.block.traits.appearance ?? passiveDefinitions.get(offer.block.definitionId);
+      const appearance = passiveAppearance(offer.block);
       const texture = passiveFaceTexture(appearance);
       const geometry = new THREE.BoxGeometry(1.35, 1.35, 1.35);
       const material = new THREE.MeshStandardMaterial({
@@ -144,7 +143,7 @@ export function createShopView(
     }
     const appearance = createBlockAppearance(
       offer.block.traits.identity,
-      materialOf(offer.block),
+      getMaterialDefinition(materialOf(offer.block)),
       1.35,
     );
     const mesh = new THREE.Mesh(appearance.geometry, appearance.materials);

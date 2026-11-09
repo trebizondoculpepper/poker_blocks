@@ -1,3 +1,4 @@
+import type { ResaleModifier } from "./resale";
 import type { StageRules } from "./game-state";
 
 export const stageKinds = ["stage-1", "stage-2", "boss"] as const;
@@ -20,22 +21,46 @@ export type RunRules = {
   stageReward?: number;
   /** How many passives the rack can hold; unlimited when left out. */
   rackCapacity?: number;
-  /** What passives cost and fetch, in coins; `defaultPassivePrices` when left out. */
+  /** What passives cost, in coins; `defaultPassivePrices` when left out. */
   passivePrices?: PassivePrices;
+  /**
+   * Changes to a passive's sale payout, applied in order after the default resale policy
+   * (src/resale.ts). None by default; future sale-modifying passives plug in here.
+   */
+  resaleModifiers?: readonly ResaleModifier[];
   /** First playable-card shop price; one coin unless a run changes it. */
   cardPurchasePrice?: number;
 };
 
 /**
- * The passive price policy (issue #16). Owned by the run so another session can set a
- * different spread; selling may later fetch less than buying.
+ * The passive purchase price (issue #16). Selling is the resale policy in src/resale.ts, from
+ * each passive's base price in the balance config (#103).
  */
-export type PassivePrices = { buy: number; sell: number };
+export type PassivePrices = { buy: number };
 
-/** First version: a passive costs 1 coin and sells for 1 coin. */
-export const defaultPassivePrices: PassivePrices = { buy: 1, sell: 1 };
+/** First version: a passive costs 1 coin to buy, until the shop uses base prices (#18). */
+export const defaultPassivePrices: PassivePrices = { buy: 1 };
 
-const baseTargets: Record<StageKind, number> = { "stage-1": 100, "stage-2": 150, boss: 200 };
+/** A stage in the round, in order, with the data that is its own. */
+export type StageDefinition = {
+  kind: StageKind;
+  /** The round 1 target; later rounds grow it (see `demoRunRules`). */
+  baseTarget: number;
+};
+
+/** The demo round: each stage's own data, in play order. */
+export const demoStages: readonly StageDefinition[] = [
+  { kind: "stage-1", baseTarget: 100 },
+  { kind: "stage-2", baseTarget: 150 },
+  { kind: "boss", baseTarget: 200 },
+];
+
+/** A stage's own definition. */
+function stageDefinition(kind: StageKind): StageDefinition {
+  const definition = demoStages.find((stage) => stage.kind === kind);
+  if (!definition) throw new Error(`No stage definition for ${kind}`);
+  return definition;
+}
 
 /**
  * Placeholder demo progression: targets grow by half the base each round, every stage
@@ -45,7 +70,7 @@ export const demoRunRules: RunRules = {
   stage(round, kind) {
     return {
       dealer: "base",
-      targetScore: Math.round(baseTargets[kind] * (1 + (round - 1) / 2)),
+      targetScore: Math.round(stageDefinition(kind).baseTarget * (1 + (round - 1) / 2)),
       plays: 6,
       discards: 4,
     };

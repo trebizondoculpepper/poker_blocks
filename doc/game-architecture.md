@@ -67,6 +67,8 @@ The demo's pure helpers separate behavior from container wiring. `toggleBlockSel
 
 A block with the `selectable` trait can respond to a player click or tap. The trait toggles that block's selected state; selecting one block does not clear other selections. Clicking the same block again unselects it. Hand blocks carry this trait. Playing a block removes `selectable` from its field instance and clears its selection, while leaving `inspectable` intact. A block drawn into a later hand regains `selectable`. Selection is separate from identity: the card remains the same rank and suit. The toggle behavior belongs to the trait, not to a particular card or block type.
 
+The current serialized block shape uses trait keys. `block-trait-behaviours.ts` resolves those keys through registered behavior objects owned by the trait modules. Selection, cursor, drag eligibility, attachable faces, destruction causes, and transparency handover call the resulting capabilities without inspecting which trait provided them. A new trait can register a capability without changing those consumers. This is a transition toward the definition-object model above; the trait key is only a registry lookup, never a branch in the caller.
+
 The current visual cue is face illumination only. Selection does not change a block's size or position, so connected cubes remain aligned. True bloom remains an option if a softer glow is wanted later.
 
 What an operation does to the selected cards is still to be decided.
@@ -111,6 +113,8 @@ After a hand cube is dropped on an attachable face, its screen position is mappe
 
 A discarded hand cube dissolves with the same shader over one second before its slot refills. The discard effect runs backwards from the appearance effect. Other hand cubes stay in their slots during either animation. Reduced-motion settings shorten the effect and use a fade.
 
+Material appearance is defined on each material definition in `src/materials.ts`: printed ink, face pattern, relief, surface, geometry, edges, optical settings and the transparent trait attachment. `src/visual/block-appearance.ts` is a generic builder that dispatches named pattern, surface, relief, geometry and assembly handlers from that configuration. The same definition is used by blocks in hand, in the field and in the shop. A new material may combine existing handlers without changing the builder; a genuinely new visual technique gets one new registered handler. Material gameplay effects remain separate and are tracked in #8 and #63.
+
 ## Field visual effects (proposal)
 
 Field visual effects are presentation behaviors, separate from gameplay effects such as adding score or destroying blocks. The current `tintRow` effect temporarily colors a scoring line gold. A future field effect registry could resolve named requests with target block IDs and visual parameters such as color, intensity, duration, and easing. The same mechanism could later draw glows, bursts, or explosions for unrelated game events.
@@ -135,7 +139,17 @@ Trigger usage is configurable per passive: unlimited, a fixed count, or one-shot
 
 The proposed hand and passive rack are ordered zones in `GameState`. A generic reorder action would change item order when a block is dragged between slots in its own zone; it would not consume a play or discard. For passives responding to the same trigger, the default resolver would use a snapshot of rack order and apply their gameplay effects left to right. An explicitly defined timing rule could override that default. The renderer would reflect the new order but would not decide effect order itself.
 
+## Passive categories
+
+Each passive category is a trait, and the **category facet** (`src/passive-categories.ts`) is the set of them. A **facet** is a group of traits of which a block composes exactly one. Every passive composes exactly one category trait, and a test enforces it. A category trait brings presentation defaults (block colours, an appearance finish, an activation visual and sound, and for Scoring an accent tint from its operations) and no behaviour: gameplay rule evaluation never reads it, and a test enforces that too. A definition's own `palette` overrides the default.
+
+## Balance config and resale
+
+Tuning numbers live on the definition they belong to, never in a side table keyed by identity: a passive's `shop` balance (base price, unlock round) is on its definition (#7), and its block carries the base price as a `priced` trait. `validatePassiveBalance` (`src/balance.ts`) checks every definition's balance in one place, and a test requires one for every passive the shop can stock. Prices are fixed data; anything that changes a price is a modifier applied on top. Selling uses `resaleValue` (`src/resale.ts`): the default policy (half the `priced` base price, rounded down, at least 1), then `RunRules.resaleModifiers` in order. That list is the extension seam for future sale-modifying passives. The sale transaction (`GameRun.sellPassive`) asks the policy; the drop target and the run controller never compute a payout, and a test checks they don't.
+
 ## Line scoring
+
+**Materials (design, #8):** a card's material is a block trait. Its scoring effect is a `scoringModifier` trait (`additive`, `multiplicative`, `exponential`) whose values come from the balance config. It contributes event rules to the same queue as passives (#63): additive on `score.beforeBlockValue`, multiplicative and exponential on `score.beforeLineFinalized`, for contributing cards only. The line scorer supplies contributor ids and never names a material; see `doc/game.md`, "Material scoring", for the order of operations.
 
 `src/scoring.ts` holds pure scoring primitives with no UI, sound or state changes. `findScoringLines` returns every maximal gap-free run of two or more placed blocks along X, then Y, then Z, with its cells and blocks in cell order. `scoreLine` returns one line's numeric score, and `evaluateLine` adds the hand type and the ids of the cards that counted. Card points come from the configured `scorable` trait (`src/traits/scorable.ts`), never from the block type. `scoreField` scores every line, and `presentationOrder` drops zero-point lines and sorts the rest lowest first.
 
@@ -196,7 +210,7 @@ Loading rebuilds the blocks from the standard deck and `GameRun.fromSnapshot` re
 - **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, supplies mode-wide configuration such as save identity and optional game features, and declares its **run setup** as ordered steps in `runSetup`. Music is a mode trait (`traits.music`) whose behaviour lives in `src/mode-music.ts`. The scene list is a catalogue of definitions, not a scene graph.
 - **Scene** (`Scene`): a presentation context such as title, stage, shop, settings, stage-won or game-over. Scene data composes traits. `SceneManager` calls trait lifecycle hooks when scenes enter and exit.
 - **Scene stack**: the runtime layers currently active. Settings and stage-won are pushed over gameplay and popped to resume it. Title and game-over replace the stack.
-- **Game flow**: decisions about which scene follows an action or run outcome. Today `run-controller.ts` coordinates this using `GameRun.phase` and outcomes. The mode's `startScene` is not yet the authoritative transition graph.
+- **Game flow**: outcome-keyed scene-stack transitions declared by a mode. `GameRun` reports its current run-position outcome; `run-controller.ts` applies the mode's transition through `src/game-flow.ts`. Menu actions and stage results still have legacy presentation paths pending the screen-scene slices.
 - **GameRun**: live mutable state for one playthrough: cards, field, scoring, coins, passives and phase. It remains the same run while the scene stack changes. Its `snapshot()` method produces data that the run controller persists through `save.ts`.
 - **RunRules**: progression and economy rules used to create a run. Mode traits may further configure its save key, starting deck and optional features.
 - **Trait**: reusable behavior plus plain data, attached at a declared scope. A mode trait is not automatically copied onto each scene; composition between scopes must be explicit.
@@ -265,13 +279,25 @@ sequenceDiagram
   Note over Stack,Stage: Stage is visible again; it is not re-entered
 ```
 
-For each stack operation, the manager invokes `enter` on the newly active scene's composed traits and `exit` on traits of scenes removed from the stack. A push does not exit the scene underneath; a pop does not re-enter it. A replace exits the old stack and enters the replacement. Trait hooks can start or stop scene-owned behavior such as music, input handling or animation. In this code these hooks are named `enter` and `exit` (often called `onEnter` and `onExit` in engine APIs), and they belong to each trait attached to the scene rather than to a special callback on the stack item.
+For each stack operation, the manager invokes `enter` on the newly active scene's composed traits and `exit` on traits of scenes removed from the stack. A push does not exit the scene underneath; a pop does not re-enter it, but calls its traits' `resume` hooks so they can restore what the popped scene changed (the `screen` trait puts back `host.dataset.scene`). A replace exits the old stack and enters the replacement. Trait hooks can start or stop scene-owned behavior such as music, input handling or animation. In this code these hooks are named `enter` and `exit` (often called `onEnter` and `onExit` in engine APIs), and they belong to each trait attached to the scene rather than to a special callback on the stack item.
+
+### Run rules and the game flow (#94)
+
+`GameRun` holds the rules state and reports the run's position (`positionOutcome`); the mode's flow decides which scene that shows. No stage is special in `GameRun`: the round is the ordered `stageKinds`, its last stage is simply the last one, and a round ends when play leaves that stage's shop. What happens to the hand when a stage ends and to the discard pile when a round ends are handler tables keyed by the run rules' options (`handAtStageEnd`, `discardPileAfterShop`). Each stage's own numbers live on its **stage definition** (`demoStages` in `src/run-rules.ts`), such as its base target. `GameRun` still has run phases, including the shop position, until #36 removes them.
+
+### Scene definitions
+
+A scene is defined **once**, in `sceneDefinitions` (`src/game-modes.ts`): a name and the traits every copy of it composes. A mode does not keep its own catalogue. `composeScenes(modeId, additions)` gives the mode every shared definition under its own scene ids, each with a `screen` trait first, and a mode adds traits to the scenes it names (dev4 adds `devManualBlockDestroyer` to `playScenes`). Additions never change the shared definition. A new scene is a new entry in `sceneDefinitions`; no code is keyed by scene name.
+
+**Scene ids** are `<mode id>/<scene name>` (`modeSceneId`), because every mode's scenes share one scene manager. A save records only the **scene name**: the save key already names the mode.
+
+**Saves and the flow (#86).** A save writes `scene`, the name of the scene the mode's flow shows for the run's position, and no `phase`. Loading reads the flow in reverse: the run position whose transition shows that scene. A scene no resumable position shows (game over, or an unknown name) invalidates the save, so a renamed scene needs no code change. Saves written before this have `phase` and migrate explicitly (`legacyPhaseScenes` in `src/save.ts`): `stage-1`, `stage-2` and `boss` to the matching scene; `shop` to the shop scene, with `shopAfter` defaulting to `boss`; `over` to none, which clears the save; and an unknown phase invalidates it. That table is the one sanctioned phase-keyed lookup (`// branch-ok: #86`), and goes once no legacy saves remain.
 
 ### Where the code is today
 
 `src/scenes.ts` defines the scene-trait behavior registry and scene-stack manager. A switch exits the stack top-to-bottom and enters the replacement; push enters only the new top; pop exits only the top and resumes what is underneath. Updates run bottom-to-top unless blocked, and input dispatch runs top-to-bottom. DOM input routing is scaffolding: no current scene trait handles real input, so `pausesBelow.input` does not yet pause legacy DOM listeners.
 
-`src/game-modes.ts` defines each mode's scene catalogue, start scene, run setup and mode traits. A mode's `startScene` is authoritative for the scene a fresh page opens on: `title` shows the title screen, and any other scene starts play straight away. Whether that start continues the mode's saved run is a separate trait, `resumeSavedRun`: a mode composing it picks up where it left off, and a mode without it always deals a new run, which is what makes dev1's sandbox a sandbox. The two are independent, so a mode can open in play on a fresh run. `?mode=` is canonical; `?room=` remains accepted as a legacy URL alias. Developer-console mode changes update the URL and switch in memory without reloading. The scene manager tracks screen transitions, while `run-controller.ts` still coordinates stage/shop progression from run phase and outcomes. This is an interim arrangement, not a mode-owned flow graph.
+`src/game-modes.ts` defines each mode's scene catalogue, start scene, outcome-keyed flow, run setup and mode traits. `startScene` opens first on page load; a restored run then reports its position outcome so the mode flow can select its saved scene. The mode's `onLoad` handler chooses whether to show the title, start a new run or resume a saved run. `?mode=` is canonical; `?room=` remains accepted as a legacy URL alias. Developer-console mode changes update the URL and switch in memory without reloading. `src/game-flow.ts` dispatches each transition's replace, push or pop stack operation without inspecting the outcome or scene name. `GameRun` still sequences stages and shops; moving that sequencing and the remaining screen transitions into flow is later work in #35.
 
 ### Run setup
 

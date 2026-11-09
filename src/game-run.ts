@@ -1,8 +1,10 @@
 import type { CardBlock } from "./cards";
+import { resaleValue } from "./resale";
+import { blockCanDestroy } from "./block-trait-behaviours";
 import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
 import type { GameState, PlacedBlock, PlayAction } from "./game-state";
-import { canDestroy, type DestroyCause } from "./traits/destructible";
+import type { DestroyCause } from "./traits/destructible";
 import { moveItem } from "./zones";
 import { ledgerTotal, stageRewardLedger, type StageReward } from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
@@ -28,6 +30,8 @@ import type { ShopOffer } from "./shop-stock";
 
 /** Where a run is: one of a round's three stages, the shop, or finished after a loss. */
 export type RunPhase = StageKind | "shop" | "over";
+/** A position outcome describes the run without naming any scene. */
+export type RunPositionOutcome = `run.position.${RunPhase}`;
 
 /** What a future save/Continue flow needs to restore a run. */
 export type RunSnapshot = {
@@ -96,7 +100,9 @@ export class GameRun {
     session.currentState = snapshot.state;
     session.currentRound = snapshot.round;
     session.currentPhase = snapshot.phase;
-    session.shopAfter = snapshot.phase === "shop" ? (snapshot.shopAfter ?? "boss") : null;
+    // A shop snapshot names the stage before it; older ones that left it out followed the
+    // round's last stage, the only stage that had a shop then.
+    session.shopAfter = snapshot.phase === shopPosition ? (snapshot.shopAfter ?? finalStage) : null;
     session.runStats = snapshot.stats ?? emptyRunStats;
     session.rewarded = snapshot.rewarded ?? null;
     session.runSeed = snapshot.seed;
@@ -122,7 +128,7 @@ export class GameRun {
    */
   destroyBlock(blockId: string, cause: DestroyCause): PlacedBlock | null {
     const placed = this.currentState.field.find(({ block }) => block.id === blockId);
-    if (!placed || !canDestroy(placed.block, cause)) return null;
+    if (!placed || !blockCanDestroy(placed.block, cause)) return null;
     this.currentState = {
       ...this.currentState,
       field: this.currentState.field.filter((other) => other !== placed),
@@ -147,6 +153,10 @@ export class GameRun {
 
   get phase(): RunPhase {
     return this.currentPhase;
+  }
+
+  get positionOutcome(): RunPositionOutcome {
+    return `run.position.${this.currentPhase}`;
   }
 
   get shopAfterStage(): StageKind | null {
@@ -286,10 +296,12 @@ export class GameRun {
     // before the payout would quietly lose its row.
     if (this.stageRewardsPending) return null;
     const rack = this.currentState.passiveRack;
-    if (!rack.some(({ id }) => id === passiveId)) return null;
-    const price = this.passivePrices.sell;
-    // A bad price policy must not corrupt the balance (a save would then not load).
-    if (!Number.isSafeInteger(price) || price < 0) return null;
+    const passive = rack.find(({ id }) => id === passiveId);
+    if (!passive) return null;
+    // The resale policy prices it; a bad price must not corrupt the balance (a save would
+    // then not load), so resaleValue refuses one with null.
+    const price = resaleValue(passive, this.config.resaleModifiers);
+    if (price === null) return null;
     this.currentState = {
       ...this.currentState,
       passiveRack: rack.filter(({ id }) => id !== passiveId),
@@ -480,8 +492,9 @@ export class GameRun {
     this.claimStageRewards();
     this.shopAfter = this.currentPhase as StageKind;
     this.currentState = this.clearTable(this.currentState);
-    this.currentPhase = "shop";
-    if (this.shopAfter === "boss") this.runStats = recordRoundComplete(this.runStats);
+    this.currentPhase = shopPosition;
+    // The round's last stage completes the round; no stage is named for it.
+    if (!nextStage(this.shopAfter)) this.runStats = recordRoundComplete(this.runStats);
     this.lifecycle("shop.entered");
     return true;
   }
@@ -489,7 +502,8 @@ export class GameRun {
   /** Leave a shop for the next stage, or stage 1 of the next round after a boss. */
   leaveShop(): boolean {
     if (this.currentPhase !== "shop") return false;
-    const completed = this.shopAfter ?? "boss";
+    const completed = this.shopAfter ?? finalStage;
+    const next = nextStage(completed);
     // The sandbox's unbought card offers were borrowed from the deck, so return them.
     this.currentState = {
       ...this.currentState,
@@ -502,16 +516,12 @@ export class GameRun {
       // Undefined means a later shop will generate fresh stock, including after a skip.
       shopStock: undefined,
     };
-    if (completed === "boss" && this.config.discardPileAfterShop === "return-to-deck") {
-      const { deck, discardPile } = this.currentState;
-      this.currentState = {
-        ...this.currentState,
-        deck: [...deck, ...discardPile],
-        discardPile: [],
-      };
-    }
+    // Leaving the round's last shop ends the round, under the run's discard pile policy.
+    if (!next)
+      this.currentState = discardPileAtRoundEnd[this.config.discardPileAfterShop](
+        this.currentState,
+      );
     this.lifecycle("shop.left");
-    const next = stageKinds[stageKinds.indexOf(completed) + 1];
     if (!next) this.currentRound++;
     this.shopAfter = null;
     this.startStage(next ?? "stage-1");
@@ -531,17 +541,42 @@ export class GameRun {
     this.lifecycle("stage.started");
   }
 
-  /** Return the field and, under the current hand policy, the hand to the deck. */
+  /** Return the field to the deck, and the hand as the run's hand policy says. */
   private clearTable(state: GameState): GameState {
-    const returned = [
-      ...state.field.map(({ block }) => block),
-      ...(this.config.handAtStageEnd === "return-to-deck" ? state.hand : []),
-    ];
-    return {
+    const cleared = {
       ...state,
       field: [],
-      hand: this.config.handAtStageEnd === "return-to-deck" ? [] : state.hand,
-      deck: [...state.deck, ...returned],
+      deck: [...state.deck, ...state.field.map(({ block }) => block)],
     };
+    return handAtStageEnd[this.config.handAtStageEnd](cleared);
   }
 }
+
+/** The run position between stages. Its own until phases leave GameRun (#36). */
+const shopPosition: RunPhase = "shop";
+
+/** The round's last stage, after whose shop the next round begins. */
+const finalStage: StageKind = stageKinds[stageKinds.length - 1];
+
+/** The stage after this one in the round; none after the last. */
+function nextStage(completed: StageKind): StageKind | undefined {
+  return stageKinds.find((_, index) => index > 0 && stageKinds[index - 1] === completed);
+}
+
+/** What each hand policy does with the cards still in hand when a stage ends. */
+const handAtStageEnd: Record<RunRules["handAtStageEnd"], (state: GameState) => GameState> = {
+  "return-to-deck": (state) => ({ ...state, hand: [], deck: [...state.deck, ...state.hand] }),
+};
+
+/** What each discard pile policy does when a round ends. */
+const discardPileAtRoundEnd: Record<
+  RunRules["discardPileAfterShop"],
+  (state: GameState) => GameState
+> = {
+  "keep-out": (state) => state,
+  "return-to-deck": (state) => ({
+    ...state,
+    deck: [...state.deck, ...state.discardPile],
+    discardPile: [],
+  }),
+};

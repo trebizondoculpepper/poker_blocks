@@ -159,18 +159,65 @@ These prototypes have no material-specific rules yet. **Jelly** is excluded unti
 
 ### Basic scoring materials (planned)
 
-The shop's material pool expands by **round number**, through configured unlocks and stock weights rather than branches for named materials. Round 1 is the first round; its first shop can offer wood. Steel becomes eligible in round 2. Prismatic crystal becomes eligible in **round 4, after round 3 is complete**. Unlocking makes a material possible in stock, not guaranteed. Gold is reserved for an economic role and is not part of this played-material scoring progression.
+The shop's material pool expands by **round number**, through configured unlocks and stock weights rather than branches for named materials. Round 1 is the first round; its first shop can offer wood. Steel becomes eligible in round 2. Prismatic crystal becomes eligible in **round 5** (see "Material scoring" below). Unlocking makes a material possible in stock, not guaranteed. Gold is reserved for an economic role and is not part of this played-material scoring progression.
 
 | Material          | Earliest shop round | Effect when its block contributes to a scored hand                                                                                                                                                                                         |
 | ----------------- | ------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Paper             |       Starting deck | No material bonus.                                                                                                                                                                                                                         |
 | Wood              |                   1 | Add a small configured amount to that block's base value; **+1** is the first tuning value.                                                                                                                                                |
 | Steel             |                   2 | Multiply the line's working score by a configured factor; the factor is still to be tuned. Conductive and resilient are possible later traits, not part of this initial effect.                                                            |
-| Prismatic crystal |                   4 | After ordinary scoring changes, raise the line's working score to a configured power; **1.1** is the first tuning value. Each contributing prismatic applies its power in sequence, and the result is rounded only after all such effects. |
+| Prismatic crystal |                   5 | After ordinary scoring changes, raise the line's working score to a configured power; **1.1** is the first tuning value. Each contributing prismatic applies its power in sequence, and the result is rounded only after all such effects. |
 
 Only blocks that **contribute to the selected scoring hand** activate these material effects. A block present in a longer line but excluded from its best scoring hand has no material effect, unless a separate modifier explicitly extends eligibility. Material behavior belongs in configured traits; the line scorer supplies contributor IDs and the effect runner applies each eligible operation at its defined scoring phase. Exact steel strength, prismatic balance, and ordering with future passive effects remain tuning/design questions. This progression is not implemented yet; [material design issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8) tracks it.
 
 Material interactions will be built one combination at a time from configured, reusable traits, without material-name branches in the controller. The first mission is [ice beside fire](https://github.com/trebizondoculpepper/poker_blocks/issues/21): a timed destructible reaction removes melted ice, then face-connected groups settle toward the field's center of gravity before scoring. When numeric ice melts above another number card, the lower card permanently gains the ice's printed number before the field settles: 5 above 9 of Hearts makes **14 of Hearts**. Such nonstandard numeric ranks are valid in this game and must stay distinct from named Ace identity. The next mission is [meat beside fire](https://github.com/trebizondoculpepper/poker_blocks/issues/22): a `cookable` trait advances doneness over turns and a French themed passive rewards steak that is cooked but not overcooked. `Cookable` must support other ingredient progressions, such as salmon becoming opaque, flaky, then dry, through configuration. Flammable, brittle, corrodible, and conductive are possible later traits; their exact rules remain open.
+
+### Material scoring (design, [issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8))
+
+This section is the target design and supersedes the table above where they differ. It records only agreed rules; open questions are listed at the end and asked on the issue.
+
+#### Agreed model
+
+- Every card has **exactly one** material at a time (`traits.material.kind`; paper when absent). Changing a card's material is a distant-future idea.
+- First-version material behaviour is **scoring only**, and only when the card **contributes to the scored hand** of its line.
+- A material's effect is a **`scoringModifier` trait** configured in the balance config, with three inputs and their neutral values: `additive` (0), `multiplicative` (1), `exponential` (1).
+- Materials contribute **event rules** exactly as passives do ([#63](https://github.com/trebizondoculpepper/poker_blocks/issues/63)): `scoringModifier` expands to rules on `score.beforeBlockValue` (additive) and `score.beforeLineFinalized` (multiplicative, exponential), run by the same queue. The scorer never names a material.
+
+| Material          | Additive | Multiplicative | Exponential |  Unlock round |
+| ----------------- | -------: | -------------: | ----------: | ------------: |
+| Paper             |        0 |              1 |           1 | starting deck |
+| Wood              |       +1 |              1 |           1 |             1 |
+| Steel             |        0 |           1.25 |           1 |             2 |
+| Prismatic crystal |        0 |              1 |         1.1 |             5 |
+
+#### Order of operations (Agreed)
+
+1. Each contributing card's base value gets its material's **additive** value (summed if several apply), then passive `score.beforeBlockValue` effects, in rack order.
+2. The line's working score is computed from block values and the ordinary hand multiplier.
+3. **Multiplicative** material factors multiply the working score (all factors multiplied together). Whether this comes before or after step 4 is an open question.
+4. Passive `score.beforeLineFinalized` effects resolve in rack order.
+5. **Exponential** effects apply last, one per contributing crystal, in sequence.
+6. Round to an integer once, after all effects; clamp at zero.
+
+#### Worked examples
+
+Values use the current hand table (a pair's base values summed, ×2 hand multiplier). Exact hand values are those in "Hand value" above; only the material arithmetic matters here.
+
+- **Wood pair:** two wooden 7s. Base 7 + 7 → (7+1) + (7+1) = 16; ×2 = **32** (paper: 28).
+- **Steel in a pair:** one steel 7 and one paper 7. 14 ×2 = 28; ×1.25 = **35**.
+- **Two steels:** both 7s steel. 28 × 1.25 × 1.25 = 43.75 → **44**.
+- **Crystal:** a crystal 7 and a paper 7. 28^1.1 = 39.07 → **39**.
+- **Non-contributor:** a steel 3 in a line whose best hand is a pair of 7s has no effect.
+
+#### Balance config guardrails
+
+- One config entry per material holds its traits and values; nothing else holds material numbers.
+- Validation (at load and in a test): `additive` is a finite number, `multiplicative` and `exponential` are positive, unlock rounds are positive integers, and keyframes are ordered (see the shop rules).
+- A guardrail test confirms the scorer and effect runner contain no material ids.
+
+#### Open questions
+
+Asked on [issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8): whether material line effects resolve before or after passives in the same phase; whether meat, flame, ice and gold have any scoring effect in the first version; material cues and inspection text; how a save records a card's material. Steel and crystal strengths are first tuning values.
 
 ## Passives (design)
 
@@ -182,11 +229,13 @@ Installed passives live in an ordered rack at the top of the screen. Their passi
 
 Those events can occur anywhere in the game loop: before the first play of a stage, when a block is played, while a line's score is being prepared, after a line is scored, after the whole field is scored, or at victory or loss. Each trigger has an explicit moment and event context so a trait can test its condition. Score-changing effects must resolve before their score is finalized; reactions to a finalized score happen afterward. The event and effect coordinator, rather than the pure `scoreLine` function, runs these responses.
 
+Each passive has one **category** (Scoring, Economy, Effect or Retrigger) that sets its default look, activation effect and sound, and never its behaviour. Scoring passives are white porcelain with an accent showing their operation: icy blue for additive, indigo for multiplicative, violet for exponential. See [passives.md](passives.md), "Categories".
+
 Simple passive examples are **×2** and **×4** blocks, with matching icons, that multiply each line's score. By default, passives responding to the same event resolve **left to right in the rack**, unless a trait explicitly defines another timing rule. Players may reorder installed passives by dragging them between rack slots. Order can matter when future effects combine addition and multiplication; for example, adding 10 before doubling differs from doubling before adding 10.
 
 Players may also reorder blocks within the hand by dragging between hand slots. Reordering either area changes its stored order but does not play, discard, score, or consume an allowance. Dragging from the hand onto the field or discard area, or from the rack onto the sell target, remains a separate action. **Built in [issue #4](https://github.com/trebizondoculpepper/poker_blocks/issues/4):** dragging a passive over the rack previews the drop slot (neighbours glide aside); dropping there moves it (`GameRun.reorderPassive`), a drop past the last passive moves it to the end, and a drop off the rack or a cancelled drag restores the order. The new order is saved with the run and re-subscribes passive events, so scoring, stage rewards and events all resolve in the new left-to-right order. Reordering is refused once the run is over.
 
-The rack is separate from the hand and field. Passives are not discardable. **Built in [issue #16](https://github.com/trebizondoculpepper/poker_blocks/issues/16):** an installed passive can be dragged from the rack onto the shared lower-screen target, which reads **Sell** (gold) while a passive is dragged and **Discard** otherwise. A sale removes that exact passive and adds its sell value to the coins; it is not a discard and uses no play or discard. The game run owns the price policy (`RunRules.passivePrices`, first version: buy 1, sell 1). A drop elsewhere cancels; a sale after the run is over is refused with the red X. Rack capacity and the path from shop or deck into the rack are still to be designed.
+The rack is separate from the hand and field. Passives are not discardable. **Built in [issue #16](https://github.com/trebizondoculpepper/poker_blocks/issues/16):** an installed passive can be dragged from the rack onto the shared lower-screen target, which reads **Sell** (gold) while a passive is dragged and **Discard** otherwise. A sale removes that exact passive and adds its sell value to the coins; it is not a discard and uses no play or discard. **Resale ([#103](https://github.com/trebizondoculpepper/poker_blocks/issues/103)):** a passive sells for half its base purchase price from the balance config, rounded down, with a minimum of 1 coin: a 2-coin passive sells for 1, a 5-coin passive for 2, a 9-coin passive for 4. The game run applies this policy, then any resale modifiers the run configures (none yet; future passives may add them). Buying still costs the first-version 1 coin until the shop uses base prices (#18). A drop elsewhere cancels; a sale after the run is over is refused with the red X. Rack capacity and the path from shop or deck into the rack are still to be designed.
 
 ### Dev2 passive sandbox
 
@@ -259,6 +308,86 @@ The shop opens after each completed stage with five objects at rest on the table
 The shop entrance is a separate presentation sequence: a deliberately theatrical **SHOP OPEN** sign descends, blocks appear to be thrown onto the table by an unseen hand, and the camera moves to frame them. The items are at rest before the player interacts with them; the animation does not change stock or purchase rules.
 
 Shop transactions and the entrance animation are tracked separately in [shop gameplay issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18) and [shop presentation issue #19](https://github.com/trebizondoculpepper/poker_blocks/issues/19).
+
+### Shop rules (design, [issue #7](https://github.com/trebizondoculpepper/poker_blocks/issues/7))
+
+This section is the agreed target design. It replaces the first-version placeholders above (two passives, three cards, one coin each) once implemented ([#18](https://github.com/trebizondoculpepper/poker_blocks/issues/18)).
+
+#### Agreed rules
+
+- A shop follows every completed stage. Each visit generates fresh stock; unbought stock disappears on leaving. There are no rerolls in the first version.
+- Stock holds **5 to 9 offers**: at least one passive and at least one playable card; the rest are drawn from the eligible pool.
+- Only passives can be sold. Cards cannot be sold.
+- The discard pile returns to the deck after the boss stage.
+- Prices are in coins and are **fixed** base prices from the balance config. Price-changing passives are future work and will be modifiers applied on top of the base price, never edits to it.
+- When two comparable passives differ only in strength, the stronger costs more (×4 > ×2, Scrapper > Seeing Red).
+- Each round of the initial progression introduces at least one new item or material.
+
+#### Passive catalogue
+
+| Passive                                                                          | Base price | Earliest round |
+| -------------------------------------------------------------------------------- | ---------: | -------------: |
+| ×2                                                                               |          4 |              1 |
+| ×4                                                                               |          9 |              2 |
+| Gold Standard                                                                    |          5 |       4 (gold) |
+| Carnivore                                                                        |          3 |       3 (meat) |
+| Woodworker                                                                       |          4 |       1 (wood) |
+| Crossroads                                                                       |          2 |              1 |
+| Long Haul                                                                        |          4 |              1 |
+| Seeing Red                                                                       |          6 |              1 |
+| Scrapper                                                                         |          8 |              2 |
+| Ace Exchange                                                                     |          5 |              2 |
+| Le Chef ([#104](https://github.com/trebizondoculpepper/poker_blocks/issues/104)) |          5 |       3 (meat) |
+
+A passive whose effect names a material is never eligible before that material unlocks.
+
+#### Unlocks and stock weights
+
+Material unlocks by round: 1 wood; 2 steel; 3 meat, flame and ice; 4 gold; 5 prismatic crystal.
+
+Every offer type in the balance config has a **minimum unlock round**, a **default weight** and optional **weight keyframes** by round. A type is eligible from its unlock round. Its weight is interpolated linearly between keyframes and holds the last keyframe's value afterwards. Drawing normalizes the eligible weights; weights are relative, not probabilities.
+
+| Material card     | Weight keyframes                |
+| ----------------- | ------------------------------- |
+| Wood              | 1 from round 1                  |
+| Steel             | 0.5 at round 2, 1 at round 4    |
+| Prismatic crystal | 0.25 at round 5, 0.5 at round 6 |
+
+#### Stage targets
+
+Round 1 stage 1 targets **300**. Each next target is the previous one ×1.75 (stage 1 → stage 2), ×1.5 (stage 2 → boss) and ×1.25 (boss → next round's stage 1), rounded to the nearest integer at each step: 300, 525, 788, 985, 1724, 2586, … The rates are balance config.
+
+#### Balance config guardrails
+
+- **One source of truth:** prices, unlock rounds, weights and keyframes, material effects, hand values and stage target rates live in a single balance config module; consumers read it and never hold their own numbers.
+- **Validation at load (and in a test):** every price is a positive integer; unlock rounds are positive integers; weights are non-negative; keyframe rounds are strictly increasing and not before the unlock round; every passive that names a material unlocks no earlier than that material.
+- **Base prices are data; modifiers are separate:** a future price-changing passive is an event rule that adjusts a working price, never an edit to the config.
+
+#### Drawing stock
+
+Stock meets its minimums first, then follows the weights: one offer is drawn from the eligible passives and one from the eligible playable cards, and the remaining slots are filled from the whole eligible pool by normalized weight.
+
+#### Buying, selling and leaving
+
+- **A bought playable card goes straight into the hand.** In the shop the hand may hold more than its usual size.
+- **A bought passive is dragged into a free rack slot** and installs there immediately. The rack has a fixed capacity; while it is full, a passive can't be bought until one is sold.
+- **Selling** a passive works at any time, in a stage or in the shop ([#16](https://github.com/trebizondoculpepper/poker_blocks/issues/16)). It pays half the passive's base price, rounded down, with a minimum of 1 coin ([#103](https://github.com/trebizondoculpepper/poker_blocks/issues/103)); future passives may modify the payout.
+- **Refusals** (too few coins, a full rack) use the shared refused feedback: `action.denied` and the red X ([#18](https://github.com/trebizondoculpepper/poker_blocks/issues/18)). Nothing is spent.
+- **Leaving** through the shop exit discards unbought stock and continues to the next stage, or to the next round after the boss's shop.
+
+| Example       | Before                         | Action                        | After                                |
+| ------------- | ------------------------------ | ----------------------------- | ------------------------------------ |
+| Buy           | 6 coins, ×2 offered at 4       | Drag ×2 into a free rack slot | 2 coins; ×2 installed; offer gone    |
+| Too few coins | 3 coins, ×2 offered at 4       | Drag ×2 to the rack           | Refused, red X; nothing changes      |
+| Full rack     | Rack full, 9 coins, ×2 offered | Drag ×2 to the rack           | Refused, red X; nothing changes      |
+| Sell          | Scrapper (base 8) installed    | Drag it to Sell               | +4 coins; Scrapper removed           |
+| Exit          | Two offers unbought            | Press the exit                | Offers gone; the next stage is dealt |
+
+#### State, ownership and saves
+
+- The game run owns the stock, coins, hand, deck and rack; the shop scene only presents them. Buying, selling and leaving each apply completely or are refused with no change.
+- **Ownership:** every card the player owns is in exactly one of deck, hand, field or discard pile, and every passive in exactly one of stock or rack. A purchase moves an offer from stock to its destination in one step.
+- **Continue** restores purchases and the remaining stock exactly; a reload never rerolls the shop.
 
 ### Rack reorganization
 

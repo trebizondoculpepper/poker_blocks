@@ -12,6 +12,8 @@ export type SceneOperation = "input" | "update";
 export type SceneTraitBehaviour<Context, Config extends object> = {
   enter?(context: Context, config: Config): void;
   exit?(context: Context, config: Config): void;
+  /** The scene is in front again after the scene pushed over it popped. */
+  resume?(context: Context, config: Config): void;
   update?(context: Context, config: Config, dt: number): void;
   /** Return true when this trait consumes the event and stops propagation below. */
   handles?(context: Context, config: Config, event: unknown): boolean;
@@ -111,12 +113,16 @@ export class SceneManager<Traits extends SceneTraitConfigs, Context> {
     if (this.active.at(-1) !== next.id) this.push(next.id);
   }
 
-  /** Exit only the top scene; the scene underneath resumes without another enter call. */
+  /**
+   * Exit only the top scene. The scene underneath is not entered again; its traits' `resume`
+   * hooks run instead, so it can restore whatever the popped scene changed.
+   */
   pop(): boolean {
     if (this.active.length < 2) return false;
     const id = this.active.at(-1)!;
     this.exit(this.scenes.get(id)!);
     this.active.pop();
+    this.resume(this.current!);
     return true;
   }
 
@@ -162,6 +168,12 @@ export class SceneManager<Traits extends SceneTraitConfigs, Context> {
   private enter(scene: Scene<Traits>): void {
     for (const [name, config] of Object.entries(scene.traits)) {
       this.behaviours.get(name as keyof Traits & string).enter?.(this.context, config!);
+    }
+  }
+
+  private resume(scene: Scene<Traits>): void {
+    for (const [name, config] of Object.entries(scene.traits)) {
+      this.behaviours.get(name as keyof Traits & string).resume?.(this.context, config!);
     }
   }
 

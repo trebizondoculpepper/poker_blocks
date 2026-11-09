@@ -1,4 +1,4 @@
-import type { CardBlock } from "../cards";
+import type { BlockTraitBehavior } from "../block-trait-behaviours";
 
 /**
  * A see-through block (fire, ice, crystal): you can see into or through it. Its hand
@@ -7,6 +7,4 @@ import type { CardBlock } from "../cards";
  */
 export type TransparentTrait = Record<string, never>;
 
-export function isTransparent(block: CardBlock): boolean {
-  return Boolean(block.traits.transparent);
-}
+export const transparentBehavior: BlockTraitBehavior = { handover: () => true };

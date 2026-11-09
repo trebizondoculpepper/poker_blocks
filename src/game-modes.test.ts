@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
+  composeScenes,
   developerModes,
+  gameModeRegistry,
   gameModeFor,
   gameModeFromParams,
   modeSceneId,
+  sceneDefinitions,
   sceneNames,
   type SceneName,
 } from "./game-modes";
@@ -126,6 +129,19 @@ describe("game modes composed from traits", () => {
     });
     // Every mode lists every scene, so a mode never loses a scene it did not mention.
     expect(gameModeFor("dev4").scenes).toHaveLength(sceneNames.length);
+  });
+
+  it("composes every mode from the shared scene definitions, by reference", () => {
+    for (const id of gameModeRegistry.names()) {
+      const names = gameModeFor(id).scenes.map(({ traits }) => traits.screen?.kind);
+      expect(names).toEqual(sceneDefinitions.map(({ name }) => name));
+    }
+    // A mode's additions land on its own scenes and never on the shared definition.
+    const scenes = composeScenes("probe", [{ scenes: ["shop"], traits: { roundPanel: {} } }]);
+    expect(scenes.find(({ id }) => id === "probe/shop")!.traits).toHaveProperty("roundPanel");
+    expect(sceneDefinitions.find(({ name }) => name === "shop")!.traits).not.toHaveProperty(
+      "roundPanel",
+    );
   });
 });
 
