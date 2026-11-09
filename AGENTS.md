@@ -25,15 +25,15 @@ Instead, give the behaviour a home: a trait with `enter`/`exit`/`update`/`handle
 
 ## Code Review Rules
 
-Use these checks for pull requests. Report a concrete inconsistency with the changed lines and the relevant rule or design decision; do not request speculative features or changes unrelated to the pull request.
+The primary review question is whether this PR moves the code toward the **target architecture** in [doc/game-architecture.md](doc/game-architecture.md), even where current code is still transitional. Review the changed behavior against that target, not merely against neighboring legacy code. Report a concrete inconsistency with the changed lines and the relevant rule or design decision; do not request speculative features or a complete migration in an unrelated PR.
+
+### Composable architecture
+
+- Compare new behavior with the "No special cases" rule above and the target design in [doc/game-architecture.md](doc/game-architecture.md). Flag new or expanded block, scene, room, mode, dealer, or material-specific branches; trait-presence flags; behavior placed on objects instead of traits; and new game logic in `src/main.ts`. The safe path is configured traits, their lifecycle hooks, or shared registries. Do not flag untouched legacy code just because it exists. Treat an exception as agreed only when its `// branch-ok: #<issue>` points to the recorded user decision.
 
 ### Game rules and intended behavior
 
 - Compare changed gameplay with the linked issue and the applicable rules in [doc/game.md](doc/game.md). Flag behavior that contradicts an agreed rule or misses a stated acceptance criterion. A PR may intentionally change a rule if it updates the design document in the same change and explains the decision.
-
-### Composable architecture
-
-- Compare new behavior with [doc/game-architecture.md](doc/game-architecture.md) and the "No special cases" rule above. Flag block, scene, room, mode, dealer, or material-specific branches, trait-presence flags, and new game logic in `src/main.ts`. The safe path is configured traits, their lifecycle hooks, or shared registries. Treat an exception as agreed only when its `// branch-ok: #<issue>` points to the recorded user decision.
 
 ### State and presentation
 
