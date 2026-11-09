@@ -88,3 +88,16 @@ describe("attract cards come in every material, by weight", () => {
     expect(pickMaterial(none, () => 0.5)).toBe("paper");
   });
 });
+
+describe("material trails (#203)", () => {
+  it("names only registered trail effects, and gives prismatic crystal its rainbow stars", async () => {
+    const { trailEffects } = await import("./attract-trails");
+    const { getMaterialDefinition } = await import("./materials");
+    for (const material of blockMaterials)
+      for (const trail of getMaterialDefinition(material).appearance.trails ?? [])
+        expect(trailEffects.has(trail.effect), `${material}: ${trail.effect}`).toBe(true);
+    expect(
+      getMaterialDefinition("prismatic").appearance.trails?.map(({ effect }) => effect),
+    ).toEqual(["rainbowStars"]);
+  });
+});

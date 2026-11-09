@@ -18,6 +18,7 @@ import { standardDeck, type IdentityTrait } from "./cards";
 import { blockMaterials, getMaterialDefinition, type BlockMaterial } from "./materials";
 import { createAttractTuningPanel } from "./attract-tuning-panel";
 import { createBlockAppearance } from "./visual/block-appearance";
+import { trailEffects, type Trail } from "./attract-trails";
 
 /**
  * How many cards are in flight at once. The ticket allows three or four in view; the travel is
@@ -126,6 +127,8 @@ type AttractCard = {
   cube: THREE.Mesh;
   /** The materials to fade, so the geometry and textures are not touched. */
   materials: THREE.MeshStandardMaterial[];
+  /** The particle trails the card's material leaves (`appearance.trails`). */
+  trails: readonly Trail[];
   /** Extra meshes on the card (a crystal's fire, a fire block's glass). */
   extras: readonly THREE.Mesh[];
   /** Still fading in; drawn transparent until fully opaque. */
@@ -252,7 +255,12 @@ export function createAttractScene(
   /** One card cube, built once per replacement so materials are disposed with it. */
   function makeCard(): AttractCard {
     const { identity, material } = randomCard(random, tuning.materialWeights);
-    const appearance = createBlockAppearance(identity, getMaterialDefinition(material), cubeSize);
+    const definition = getMaterialDefinition(material);
+    const appearance = createBlockAppearance(identity, definition, cubeSize);
+    // Whatever trails the card's material lists, each built by its registered effect.
+    const trails = (definition.appearance.trails ?? []).map((trail) =>
+      trailEffects.get(trail.effect)(trail, scene, random),
+    );
     // The card as it looks on the table, where its finish differs from the hand's: crystal and
     // glass refract there (transmission, dispersion) and reflect at full strength, while their
     // hand finish is alpha-blended, which scales every glint down (#203).
@@ -281,6 +289,7 @@ export function createAttractScene(
     return {
       cube,
       materials,
+      trails,
       extras: appearance.extras ?? [],
       fading: true,
       settle() {
@@ -296,6 +305,7 @@ export function createAttractScene(
       spin: sample(tuning.spin, random),
       speed: sample(tuning.velocity, random),
       dispose() {
+        for (const trail of trails) trail.dispose();
         scene.remove(cube);
         appearance.geometry.dispose();
         for (const material of new Set([...appearance.materials, ...materials])) material.dispose();
@@ -380,6 +390,8 @@ export function createAttractScene(
       for (const card of cards) {
         card.cube.position.z += card.speed * delta * 1.2;
         card.cube.rotateOnAxis(card.axis, card.spin * delta);
+        for (const trail of card.trails)
+          trail.update(delta, card.cube.position, depthOpacity(card.cube.position.z));
         // Fade in with depth, eased, between `spawnZ` and `fadedInZ`; fully opaque after.
         if (card.fading) {
           const opacity = depthOpacity(card.cube.position.z);
