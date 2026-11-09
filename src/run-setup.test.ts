@@ -235,6 +235,25 @@ describe("Continue never re-applies run setup", () => {
     expect(rebuilt.seed).toBe(dealt.seed);
   });
 
+  it.each(["dev2", "dev4"])(
+    "%s: Continue rebuilds every card's material and trait, not a fresh deal (#76)",
+    (modeId) => {
+      const steps = gameModeFor(modeId).runSetup;
+      const dealt = newDeck(steps);
+      // A different fresh seed is on offer, as it always is in the running game.
+      const rebuilt = createRunSetupRegistry(noOffers).deck(
+        steps,
+        { deck: standardDeck, seed: dealt.seed },
+        { ...services, newSeed: () => 90210 },
+      );
+      expect(rebuilt.seed).toBe(dealt.seed);
+      expect(rebuilt.deck.map(materialOf)).toEqual(dealt.deck.map(materialOf));
+      expect(rebuilt.deck.map(({ traits }) => traits.destructible)).toEqual(
+        dealt.deck.map(({ traits }) => traits.destructible),
+      );
+    },
+  );
+
   it("resolves a save with no seed against the plain deck rather than the last dealt", () => {
     // Old saves are not supported: nothing about a deck lives outside the run, so a save
     // without a seed simply gets the plain deck instead of a mix recovered from storage.
