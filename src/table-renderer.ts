@@ -37,6 +37,11 @@ export type TableRenderer = {
    * are drawn while any such scene is on the stack, so the title shows none of it.
    */
   tableEntered(entered: boolean): void;
+  /**
+   * A scene composing `handView` came to the front, or left (#180). The hand is drawn while any
+   * such scene is on the stack, so a scene with no hand shows none of it.
+   */
+  handEntered(entered: boolean): void;
   setShadowQuality(quality: ShadowQuality): void;
   /** Per frame: the card room's lamp follows the structure. */
   frame(center: THREE.Vector3, radius: number, delta: number): void;
@@ -54,6 +59,13 @@ const shadowOnly = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: 
 export function createTableRenderer(host: HTMLElement): TableRenderer {
   /** How many scenes in front compose `tableBackground`; the table is drawn while any does. */
   let tableScenes = 0;
+  /** How many scenes in front compose `handView`; the hand is drawn while any does. */
+  let handScenes = 0;
+  /** Show or hide the whole back canvas. Its renderer is opaque, so a cleared frame would still
+   *  cover anything behind it — the attract backdrop (#147) lives there. */
+  function showBackCanvas(visible: boolean): void {
+    renderer.domElement.hidden = !visible;
+  }
   // The attract sequence has its own renderer and canvas, so it can run at quarter resolution
   // without disturbing the table's drawing.
   const attractCanvas = document.createElement("canvas");
@@ -138,8 +150,8 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
     render(boardCamera, handCamera) {
       // The back canvas is cleared even when the table is off, so a scene leaving the table
       // behind does not leave its last frame on screen.
+      showBackCanvas(tableScenes > 0);
       if (tableScenes > 0) renderBack(boardCamera);
-      else renderer.clear();
       // The front canvas: the board's blocks (the default layer only), then the hand over
       // them, then dragged blocks on a fresh depth buffer, so nothing can clip into them.
       front.clear();
@@ -150,6 +162,8 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
       front.render(scene, boardCamera);
       scene.background = background;
       boardCamera.layers.mask = layers;
+      // The hand only while a scene composing `handView` is in front (#180).
+      if (handScenes === 0) return;
       front.clearDepth();
       handCamera.layers.set(0);
       front.render(handScene, handCamera);
@@ -160,6 +174,10 @@ export function createTableRenderer(host: HTMLElement): TableRenderer {
     },
     tableEntered(entered) {
       tableScenes = Math.max(0, tableScenes + (entered ? 1 : -1));
+      showBackCanvas(tableScenes > 0);
+    },
+    handEntered(entered) {
+      handScenes = Math.max(0, handScenes + (entered ? 1 : -1));
     },
     attract(attractScene, attractCamera, delta) {
       if (!attractScene || !attractCamera) {

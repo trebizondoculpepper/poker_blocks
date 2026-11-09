@@ -81,6 +81,11 @@ export type TableInput = {
   pickUpPassive(block: PassiveBlock, event: PointerEvent): void;
   /** Refresh the discard target: exhausted when no discards are left, armed with a count. */
   refreshDiscardTarget(): void;
+  /**
+   * Show or hide the discard bin (#180). A scene composing `discardBin` shows it; one that does
+   * not — the title, or a scene with no hand to discard from — leaves it out.
+   */
+  setDiscardBin(visible: boolean): void;
   /** The id of the table block under a screen point, if any. */
   fieldBlockAt(clientX: number, clientY: number): string | undefined;
   /** Per frame: keep a dragged card's drop target current as the board moves under it. */
@@ -761,6 +766,7 @@ export function createTableInput(options: {
   document.addEventListener("visibilitychange", onVisibilityChange);
 
   return {
+    setDiscardBin: (visible) => (discardArea.hidden = !visible),
     fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
     get selection() {
       return selected;

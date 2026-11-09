@@ -12,7 +12,10 @@ function recordingHost() {
   const host: SceneHost = {
     host: { dataset: {} } as HTMLElement,
     services: {
-      renderer: { tableEntered: (entered) => void calls.push(`table:${entered}`) },
+      renderer: {
+        tableEntered: (entered) => void calls.push(`table:${entered}`),
+        handEntered: (entered) => void calls.push(`hand:${entered}`),
+      },
       attract: {
         start: () => void calls.push("attract:start"),
         stop: () => void calls.push("attract:stop"),
@@ -31,6 +34,7 @@ function recordingHost() {
         hide: (panel) => void (shown.delete(panel), calls.push(`hide:${panel}`)),
       },
       input: {
+        setDiscardBin: (visible) => void calls.push(`bin:${visible}`),
         setFieldActive: (active) => calls.push(`fieldActive:${active}`),
         cancelGestures: () => void calls.push("gestures:cancel"),
       },

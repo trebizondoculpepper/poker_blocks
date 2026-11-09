@@ -38,6 +38,10 @@ export type SceneTraits = {
    * so no table appears there (#147); every scene played on the table does.
    */
   tableBackground: Record<never, never>;
+  /** The hand is laid out and drawn while this scene is in front (#180). */
+  handView: Record<never, never>;
+  /** The discard bin is shown while this scene is in front (#180). */
+  discardBin: Record<never, never>;
   /** Testing only: live sliders for the attract sequence's velocity, spin and spawn rate. */
   devAttractTuning: Record<never, never>;
   /** Testing only: double-click a block to destroy it with this cause. */
@@ -132,6 +136,8 @@ const escapeOpensPause: Partial<SceneTraits> = {
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
 const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
+  handView: {},
+  discardBin: {},
   roundPanel: {},
   deckPanel: {},
   fieldPlacement: {},

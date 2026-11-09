@@ -63,8 +63,9 @@ body,
 .deck-hud,
 .coin-hud {
   position: absolute;
-  /* Above the front canvas (z-index 2), so panel text is never under the blocks. */
-  z-index: 3;
+  /* Below the front canvas, per doc/game.md's screen layers: blocks may cover a HUD panel, and
+     turning or zooming the board is how you see what is underneath. */
+  z-index: 1;
   border: 1px solid #8191a777;
   border-radius: 10px;
   background: #1c2739d9;
