@@ -213,6 +213,56 @@ RunRules + mode configuration ── create ──> GameRun
 
 The Escape/settings menu is a scene pushed over gameplay. Popping it resumes the underlying scene. Stage-won is pushed while rewards are presented; the shop is a scene between stages while the same run persists. Title and game-over currently replace the stack. A future victory ending should be represented by a scene as well.
 
+### Example: game progression is a flow
+
+Flow answers **what happens next?** A mode's flow follows game events and run outcomes to choose the next scene. The scene manager performs that choice; the `GameRun` remains the same object as the player advances through stages and shops.
+
+```mermaid
+flowchart TD
+  Title[Title scene] -->|New game / Continue| Stage1[Stage 1 scene]
+  Stage1 -->|stage won| Won[Stage-won scene]
+  Won -->|continue| Shop1[Shop scene]
+  Shop1 -->|leave shop| Stage2[Stage 2 scene]
+  Stage2 -->|stage won| Won2[Stage-won scene]
+  Won2 -->|continue| Shop2[Shop scene]
+  Shop2 -->|leave shop| Boss[Boss scene]
+  Boss -->|stage won| Won3[Stage-won scene]
+  Won3 -->|continue| BossShop[Shop scene]
+  BossShop -->|leave shop| NextRound[Next round: Stage 1]
+  NextRound --> Stage1
+  Stage1 -->|stage lost| Fail[Game-over scene]
+  Stage2 -->|stage lost| Fail
+  Boss -->|stage lost| Fail
+```
+
+Here `stage-won` is a success presentation for one stage, not the end of a complete run. The current game repeats rounds, so it has no terminal run-victory screen. If a mode later has a finite objective, its flow can route the final successful outcome to a distinct **run-won scene**, just as a failed outcome routes to **game-over**. Both are flow destinations; the result scene itself is presentation.
+
+### Example: title, game and Escape menu use a scene stack
+
+The stack answers **what is currently layered on top of what?** Starting a new game replaces the title scene with the active stage scene. Opening Settings from gameplay pushes it above that stage. Closing Settings pops only the top item, revealing the same stage and run state underneath.
+
+```mermaid
+sequenceDiagram
+  participant Player
+  participant Flow as Run controller / flow
+  participant Stack as SceneManager
+  participant Stage as Stage scene
+  participant Settings as Settings scene
+  Player->>Flow: New game
+  Flow->>Stack: replace(Stage)
+  Stack->>Stage: enter traits
+  Player->>Flow: Escape
+  Flow->>Stack: push(Settings)
+  Stack->>Settings: enter traits
+  Note over Stack,Stage: Stage remains on the stack, suspended underneath
+  Player->>Flow: Close settings
+  Flow->>Stack: pop()
+  Stack->>Settings: exit traits
+  Note over Stack,Stage: Stage is visible again; it is not re-entered
+```
+
+For each stack operation, the manager invokes `enter` on the newly active scene's composed traits and `exit` on traits of scenes removed from the stack. A push does not exit the scene underneath; a pop does not re-enter it. A replace exits the old stack and enters the replacement. Trait hooks can start or stop scene-owned behavior such as music, input handling or animation. In this code these hooks are named `enter` and `exit` (often called `onEnter` and `onExit` in engine APIs), and they belong to each trait attached to the scene rather than to a special callback on the stack item.
+
 ### Where the code is today
 
 `src/scenes.ts` defines the scene-trait behavior registry and scene-stack manager. A switch exits the stack top-to-bottom and enters the replacement; push enters only the new top; pop exits only the top and resumes what is underneath. Updates run bottom-to-top unless blocked, and input dispatch runs top-to-bottom. DOM input routing is scaffolding: no current scene trait handles real input, so `pausesBelow.input` does not yet pause legacy DOM listeners.

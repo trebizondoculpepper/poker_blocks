@@ -40,6 +40,10 @@ RunRules ── supplies progression/economy rules to a new GameRun
 Traits ── add reusable behavior to scenes, modes and blocks
 ```
 
-The Escape/settings menu is a scene pushed over the active game scene. Dismissing it pops the menu and reveals the same underlying scene. The stage-won result is also pushed while its reward sequence plays. The shop is a scene between stages; the `GameRun` remains the same run and enters its shop phase. Title and game-over screens currently replace the stack. A future win ending can use its own scene in the same way.
+For example, the main game **flow** routes a stage win to the stage-won presentation, then to the shop, then to the next stage. A loss routes to game-over. The current game has repeated rounds rather than a terminal run victory, so stage-won is a per-stage result; a finite mode can add a run-won destination to its flow.
+
+The title-to-game transition replaces the title stack with the first stage. During play, Escape **pushes** Settings above that stage; closing Settings **pops** it and reveals the same stage and `GameRun` underneath. The stage-won result is also pushed while its reward sequence plays. The shop is a scene between stages; the run persists through it. Title and game-over currently replace the stack.
+
+When a scene becomes active, `SceneManager` calls each attached trait's `enter(context, config)` hook. When a scene is removed, it calls its traits' `exit(context, config)` hooks. Pushing Settings enters Settings traits but leaves the covered stage entered; popping Settings exits its traits and resumes the stage without calling the stage's enter hook again. Replacing the stack exits removed scenes and enters the replacement. This is how scene-owned behaviors can start and stop in step with stack changes.
 
 Mode-wide configuration and scene traits are distinct attachment scopes. Current mode traits configure run creation, save identity, music policy and available game features; they are not automatically inherited by each scene. Scene traits describe behavior composed on a particular scene. If a mode should provide defaults to scenes, that composition should be explicit in the mode/scene model.
