@@ -70,50 +70,81 @@ export const lensClearance = 2.8;
 /** No card is slower than this, however its speed is dealt, so none stalls in the field. */
 const minimumSpeed = 1.2;
 
-/**
- * Two cards closer than this push each other apart: two cube widths, centre to centre, so a
- * tumbling cube's corners clear its neighbour's.
- */
-export const separationDistance = cubeSize * 2;
-/** How hard two close cards push apart, in units per second at full overlap. */
-const separationStrength = 3.5;
+/** Where a card is, how it moves and how it spins: what collisions act on. */
+export type Body = {
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  /** Spin axis scaled by its rate, in radians per second. */
+  angular: THREE.Vector3;
+};
+
+/** Two cards whose centres come this close touch, and collide. */
+export const contactDistance = cubeSize * 1.2;
+/** How much of their closing speed two colliding cards keep: a little is lost to the knock. */
+const restitution = 0.85;
+/** How much a glancing knock sets a card spinning. */
+const spinKick = 0.35;
+/** The fastest any card spins, so a run of knocks never sets one whirling. */
+const maximumSpin = 4;
 
 /**
- * Push close cards apart (#203). Each pair nearer than `separationDistance` is pushed apart
- * sideways (x and y only, so neither changes speed toward the camera), harder the closer they
- * are. A push never takes a card inside `lensClearance` of the camera's axis, so the rule that
- * no card crosses the lens still holds.
+ * Collide touching cards (#203). Equal masses, so an elastic impulse along the line between
+ * their centres trades their closing speed: a fast card catching a slow one passes its speed
+ * on, and an off-centre knock sends both away at an angle. The sliding part of the knock adds
+ * spin, so they tumble off differently. Overlap is pushed out evenly, so they never sink in.
  */
-export function separate(positions: readonly THREE.Vector3[], delta: number): void {
-  const away = new THREE.Vector2();
-  for (let first = 0; first < positions.length; first++) {
-    for (let second = first + 1; second < positions.length; second++) {
-      const a = positions[first]!;
-      const b = positions[second]!;
-      const distance = a.distanceTo(b);
-      if (distance >= separationDistance) continue;
-      away.set(a.x - b.x, a.y - b.y);
-      // Directly in line along z: pick a sideways direction rather than none.
-      if (away.lengthSq() < 1e-6) away.set(1, 0);
-      away.normalize();
-      const push = separationStrength * (1 - distance / separationDistance) * delta;
-      a.x += away.x * push;
-      a.y += away.y * push;
-      b.x -= away.x * push;
-      b.y -= away.y * push;
+export function collide(bodies: readonly Body[]): void {
+  const normal = new THREE.Vector3();
+  const relative = new THREE.Vector3();
+  const torque = new THREE.Vector3();
+  for (let first = 0; first < bodies.length; first++) {
+    for (let second = first + 1; second < bodies.length; second++) {
+      const a = bodies[first]!;
+      const b = bodies[second]!;
+      normal.subVectors(a.position, b.position);
+      const distance = normal.length();
+      if (distance >= contactDistance || distance < 1e-6) continue;
+      normal.divideScalar(distance);
+      const overlap = contactDistance - distance;
+      a.position.addScaledVector(normal, overlap / 2);
+      b.position.addScaledVector(normal, -overlap / 2);
+      relative.subVectors(a.velocity, b.velocity);
+      const closing = relative.dot(normal);
+      // Already moving apart: nothing to exchange.
+      if (closing >= 0) continue;
+      const impulse = (-(1 + restitution) * closing) / 2;
+      a.velocity.addScaledVector(normal, impulse);
+      b.velocity.addScaledVector(normal, -impulse);
+      // The sliding part of the knock spins them in opposite senses.
+      relative.addScaledVector(normal, -closing);
+      torque.crossVectors(normal, relative).multiplyScalar(spinKick);
+      a.angular.add(torque).clampLength(0, maximumSpin);
+      b.angular.sub(torque).clampLength(0, maximumSpin);
     }
   }
-  for (const position of positions) keepClearOfLens(position);
 }
 
-/** Move a card back out to `lensClearance` from the camera's axis if a push took it inside. */
-function keepClearOfLens(position: THREE.Vector3): void {
-  const radius = Math.hypot(position.x, position.y);
+/**
+ * The lens lane is a wall (#203): a card knocked toward the camera's axis bounces off the
+ * invisible tube of radius `lensClearance` around it, so no card ever crosses the lens.
+ */
+export function bounceOffLens(body: Body): void {
+  const radius = Math.hypot(body.position.x, body.position.y);
   if (radius >= lensClearance) return;
   // Exactly on the axis has no outward direction: step out along x.
-  const outward = radius > 1e-6 ? lensClearance / radius : 0;
-  position.set(outward ? position.x * outward : lensClearance, position.y * outward, position.z);
+  const outX = radius > 1e-6 ? body.position.x / radius : 1;
+  const outY = radius > 1e-6 ? body.position.y / radius : 0;
+  body.position.x = outX * lensClearance;
+  body.position.y = outY * lensClearance;
+  const inward = body.velocity.x * outX + body.velocity.y * outY;
+  if (inward >= 0) return;
+  body.velocity.x -= (1 + restitution) * inward * outX;
+  body.velocity.y -= (1 + restitution) * inward * outY;
 }
+
+/** A card knocked this far behind its spawn, or this far off the axis, has left the field. */
+const lostBehindZ = spawnZ - 8;
+const lostRadius = 40;
 
 /**
  * One tunable value: a mean and the spread around it. A card is dealt a value from this
@@ -184,9 +215,10 @@ type AttractCard = {
   /** Fully faded in: give each material back its own transparency. */
   settle(): void;
   /** The spin axis, tilting each card's tumble slightly differently. */
-  axis: THREE.Vector3;
-  spin: number;
-  speed: number;
+  /** How it moves: forward toward the camera, and wherever knocks have sent it. */
+  velocity: THREE.Vector3;
+  /** Its spin axis scaled by its rate, in radians per second. */
+  angular: THREE.Vector3;
   dispose(): void;
 };
 
@@ -347,12 +379,17 @@ export function createAttractScene(
         });
       },
       // A different axis per card: mostly y, tilted a little, so the tumbling varies.
-      axis: new THREE.Vector3(random() - 0.5, 1, random() - 0.5).normalize(),
+      angular: new THREE.Vector3(random() - 0.5, 1, random() - 0.5)
+        .normalize()
+        .multiplyScalar(sample(tuning.spin, random)),
       // Dealt from the tuned distributions, so changing a mean changes what appears next
-      // rather than teleporting cards already in flight.
-      spin: sample(tuning.spin, random),
-      // Normally distributed, but never so slow that a card stalls in the field.
-      speed: Math.max(minimumSpeed, sample(tuning.velocity, random)),
+      // rather than teleporting cards already in flight. Normally distributed, but never so
+      // slow that a card stalls in the field.
+      velocity: new THREE.Vector3(
+        0,
+        0,
+        Math.max(minimumSpeed, sample(tuning.velocity, random)) * 1.2,
+      ),
       dispose() {
         for (const trail of trails) trail.dispose();
         scene.remove(cube);
@@ -395,6 +432,9 @@ export function createAttractScene(
     cards.push(card);
   }
 
+  /** Scratch for a card's normalised spin axis each frame. */
+  const spinAxis = new THREE.Vector3();
+
   /** Seconds until the next replacement, from the tuned spawn interval. */
   let sinceSpawn = 0;
 
@@ -436,14 +476,19 @@ export function createAttractScene(
     },
     update(delta) {
       sinceSpawn -= delta;
-      // Cards that come close push each other aside, so they never pass through one another.
-      separate(
-        cards.map(({ cube }) => cube.position),
-        delta,
-      );
+      // Touching cards knock each other about, and the lens lane turns them away.
+      const bodies = cards.map(({ cube, velocity, angular }) => ({
+        position: cube.position,
+        velocity,
+        angular,
+      }));
+      collide(bodies);
+      for (const body of bodies) bounceOffLens(body);
       for (const card of cards) {
-        card.cube.position.z += card.speed * delta * 1.2;
-        card.cube.rotateOnAxis(card.axis, card.spin * delta);
+        card.cube.position.addScaledVector(card.velocity, delta);
+        const spin = card.angular.length();
+        if (spin > 0)
+          card.cube.rotateOnAxis(spinAxis.copy(card.angular).divideScalar(spin), spin * delta);
         for (const trail of card.trails)
           trail.update(delta, card.cube.position, depthOpacity(card.cube.position.z));
         // Fade in with depth, eased, between `spawnZ` and `fadedInZ`; fully opaque after.
@@ -457,7 +502,10 @@ export function createAttractScene(
         }
         // A card is replaced once it has passed the camera, and never sooner than the tuned
         // interval allows, so the field can be made busier or calmer without changing depth.
-        if (card.cube.position.z <= despawnZ || sinceSpawn > 0) continue;
+        // Knocked backward into the distance, or off the side, also leaves the field.
+        const { x, y, z } = card.cube.position;
+        const gone = z > despawnZ || z < lostBehindZ || Math.hypot(x, y) > lostRadius;
+        if (!gone || sinceSpawn > 0) continue;
         card.dispose();
         const replacement = makeCard();
         placeAlongPath(replacement, spawnZ);

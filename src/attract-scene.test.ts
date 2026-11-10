@@ -8,8 +8,10 @@ import {
   lensClearance,
   pathPoint,
   pickMaterial,
-  separate,
-  separationDistance,
+  bounceOffLens,
+  collide,
+  contactDistance,
+  type Body,
   spawnZ,
   type MaterialWeight,
 } from "./attract-scene";
@@ -105,34 +107,50 @@ describe("material trails (#203)", () => {
   });
 });
 
-describe("attract cards keep out of each other (#203)", () => {
-  it("pushes two close cards apart sideways, harder the closer they are", () => {
-    const a = new THREE.Vector3(4, 0, -10);
-    const b = new THREE.Vector3(5, 0, -10.5);
-    const gap = () => a.distanceTo(b);
-    const before = gap();
-    for (let frame = 0; frame < 120; frame++) separate([a, b], 1 / 60);
-    expect(gap()).toBeGreaterThan(before);
-    // Neither card's depth changes: the push is sideways only.
-    expect([a.z, b.z]).toEqual([-10, -10.5]);
+describe("attract cards collide (#203)", () => {
+  const body = (position: [number, number, number], velocity: [number, number, number]): Body => ({
+    position: new THREE.Vector3(...position),
+    velocity: new THREE.Vector3(...velocity),
+    angular: new THREE.Vector3(0, 0.5, 0),
+  });
+  const momentum = (bodies: readonly Body[]) =>
+    bodies.reduce((sum, { velocity }) => sum.add(velocity), new THREE.Vector3());
+
+  it("passes a fast card's speed to a slow one it catches head on, keeping momentum", () => {
+    const slow = body([5, 0, -10], [0, 0, 2]);
+    const fast = body([5, 0, -11], [0, 0, 8]);
+    const before = momentum([slow, fast]);
+    collide([slow, fast]);
+    expect(slow.velocity.z).toBeGreaterThan(fast.velocity.z);
+    expect(momentum([slow, fast]).distanceTo(before)).toBeLessThan(1e-9);
   });
 
-  it("leaves cards further apart than two cube widths alone", () => {
-    const a = new THREE.Vector3(4, 0, 0);
-    const b = new THREE.Vector3(4, 0, -separationDistance - 0.1);
-    separate([a, b], 1);
-    expect(a.toArray()).toEqual([4, 0, 0]);
+  it("sends an off-centre knock off at an angle, and sets the cards spinning differently", () => {
+    const a = body([5, 0.6, -10], [0, 0, 2]);
+    const b = body([5, 0, -11], [0, 0, 8]);
+    const spinBefore = a.angular.clone();
+    collide([a, b]);
+    expect(Math.abs(a.velocity.y)).toBeGreaterThan(0.1);
+    expect(Math.sign(a.velocity.y)).toBe(-Math.sign(b.velocity.y));
+    expect(a.angular.distanceTo(spinBefore)).toBeGreaterThan(0);
   });
 
-  it("never pushes a card inside the lens clearance", () => {
-    // Two cards just outside the lane, one on each side of the axis... and a third pushing in.
-    const cards = [
-      new THREE.Vector3(lensClearance, 0.1, 0),
-      new THREE.Vector3(lensClearance + 0.5, 0.1, 0),
-      new THREE.Vector3(lensClearance + 1, 0.1, 0),
-    ];
-    for (let frame = 0; frame < 300; frame++) separate(cards, 1 / 60);
-    for (const card of cards)
-      expect(Math.hypot(card.x, card.y)).toBeGreaterThanOrEqual(lensClearance - 1e-9);
+  it("pushes touching cards out of each other, and ignores cards not touching", () => {
+    const a = body([5, 0, -10], [0, 0, 4]);
+    const b = body([5, 0, -10.5], [0, 0, 4]);
+    collide([a, b]);
+    expect(a.position.distanceTo(b.position)).toBeCloseTo(contactDistance);
+    const far = body([5, 0, 0], [0, 0, 4]);
+    const other = body([5, 0, -contactDistance - 0.1], [0, 0, 9]);
+    collide([far, other]);
+    expect(far.velocity.toArray()).toEqual([0, 0, 4]);
+  });
+
+  it("bounces a card off the lens lane, so none crosses the camera's axis", () => {
+    const card = body([lensClearance - 0.3, 0, -5], [-3, 0, 4]);
+    bounceOffLens(card);
+    expect(Math.hypot(card.position.x, card.position.y)).toBeCloseTo(lensClearance);
+    expect(card.velocity.x).toBeGreaterThan(0);
+    expect(card.velocity.z).toBe(4);
   });
 });
