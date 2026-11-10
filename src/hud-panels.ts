@@ -69,6 +69,7 @@ const outcomeSuffixes: Record<RoundOutcome, string> = {
 };
 
 const count = (n: number) => (n >= unlimited / 2 ? "∞" : String(n));
+const target = (n: number) => (n === unlimited ? "∞" : String(n));
 
 /** What each panel shows for a view: pure, so it is tested without a DOM. */
 export type HudDisplay = {
@@ -102,7 +103,7 @@ export function hudDisplay(view: HudView, composed: Readonly<ComposedPanels>): H
     stats: {
       heading: `${heading}${outcomeSuffixes[outcome]}`,
       score: String(view.score),
-      target: count(view.targetScore),
+      target: target(view.targetScore),
       moves: count(view.movesLeft),
       discards: count(view.discardsLeft),
       coins: String(view.coins),

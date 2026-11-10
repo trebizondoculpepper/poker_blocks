@@ -27,6 +27,47 @@ export function cardOfferPrice(rank: string, material: { shop?: { basePrice: num
   return (material.shop?.basePrice ?? Number.NaN) + (gameTuning.cardRankSurcharge[rank] ?? 0);
 }
 
+/** Stage target numbers live together here; stage order supplies the rates into each stage. */
+export type StageTargetBalance<Kind extends string> = {
+  readonly openingTarget: number;
+  readonly stages: readonly { readonly kind: Kind; readonly rateInto: number }[];
+};
+
+export const stageTargetBalance = {
+  openingTarget: 300,
+  stages: [
+    { kind: "stage-1", rateInto: 1.25 },
+    { kind: "stage-2", rateInto: 1.75 },
+    { kind: "boss", rateInto: 1.5 },
+  ],
+} as const satisfies StageTargetBalance<string>;
+
+/** Report invalid balance data before a run begins. */
+export function validateStageTargetBalance<Kind extends string>(
+  balance: StageTargetBalance<Kind>,
+): string[] {
+  const errors: string[] = [];
+  if (!Number.isSafeInteger(balance.openingTarget) || balance.openingTarget < 1)
+    errors.push("opening target must be a positive whole number");
+  if (balance.stages.length === 0) errors.push("stage sequence must not be empty");
+  const kinds = balance.stages.map(({ kind }) => kind);
+  if (new Set(kinds).size !== kinds.length) errors.push("stage kinds must be unique");
+  for (const stage of balance.stages) {
+    if (!Number.isFinite(stage.rateInto) || stage.rateInto < 1)
+      errors.push(`${stage.kind}: rate must be finite and at least 1`);
+  }
+  if (errors.length) return errors;
+  let target = balance.openingTarget;
+  for (let step = 1; step <= balance.stages.length; step++) {
+    target = Math.round(target * balance.stages[step % balance.stages.length].rateInto);
+    if (!Number.isSafeInteger(target) || target < 1) {
+      errors.push("stage target must remain a positive safe integer after rounding");
+      break;
+    }
+  }
+  return errors;
+}
+
 /** Everything wrong with these passives' shop balance; retired passives need none. */
 export function validatePassiveBalance(definitions: readonly PassiveDefinition[]): string[] {
   return definitions.flatMap((definition) => {

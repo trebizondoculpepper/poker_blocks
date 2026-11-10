@@ -1,8 +1,9 @@
 import type { ResaleModifier } from "./resale";
 import type { GameState, StageRules } from "./game-state";
+import { stageTargetBalance, type StageTargetBalance } from "./balance";
 
-export const stageKinds = ["stage-1", "stage-2", "boss"] as const;
-export type StageKind = (typeof stageKinds)[number];
+export type StageKind = (typeof stageTargetBalance.stages)[number]["kind"];
+export const stageKinds: readonly StageKind[] = stageTargetBalance.stages.map(({ kind }) => kind);
 
 /** A stage's dealer and the numbers it starts with. */
 export type StageSetup = StageRules & { dealer: string };
@@ -35,35 +36,43 @@ export type RunRules = {
 };
 
 /** A stage in the round, in order, with the data that is its own. */
-export type StageDefinition = {
-  kind: StageKind;
-  /** The round 1 target; later rounds grow it (see `demoRunRules`). */
-  baseTarget: number;
-};
+export type StageDefinition<Kind extends string = StageKind> =
+  StageTargetBalance<Kind>["stages"][number];
 
 /** The demo round: each stage's own data, in play order. */
-export const demoStages: readonly StageDefinition[] = [
-  { kind: "stage-1", baseTarget: 100 },
-  { kind: "stage-2", baseTarget: 150 },
-  { kind: "boss", baseTarget: 200 },
-];
+export const demoStages: readonly StageDefinition[] = stageTargetBalance.stages;
 
-/** A stage's own definition. */
-function stageDefinition(kind: StageKind): StageDefinition {
-  const definition = demoStages.find((stage) => stage.kind === kind);
-  if (!definition) throw new Error(`No stage definition for ${kind}`);
-  return definition;
+/** Walk the configured sequence, rounding after each entered stage. */
+export function targetForStage<Kind extends string>(
+  balance: StageTargetBalance<Kind>,
+  round: number,
+  kind: Kind,
+): number {
+  if (!Number.isSafeInteger(round) || round < 1) throw new Error("round must be positive");
+  const stageIndex = balance.stages.findIndex((stage) => stage.kind === kind);
+  if (stageIndex < 0) throw new Error(`No stage definition for ${kind}`);
+  let target = balance.openingTarget;
+  const steps = (round - 1) * balance.stages.length + stageIndex;
+  for (let step = 1; step <= steps; step++) {
+    const next = Math.round(target * balance.stages[step % balance.stages.length].rateInto);
+    if (!Number.isFinite(next) || next < 1)
+      throw new Error("stage target must remain a positive number after rounding");
+    // A never-ending run eventually outgrows safe integers; keep the target representable.
+    target = Math.min(next, Number.MAX_SAFE_INTEGER);
+    if (target === Number.MAX_SAFE_INTEGER) break;
+  }
+  return target;
 }
 
 /**
- * Placeholder demo progression: targets grow by half the base each round, every stage
- * has six plays and four discards, and the boss uses the base dealer until boss rules exist.
+ * Agreed target progression with six plays and four discards per stage. The boss uses
+ * the base dealer until boss rules exist.
  */
 export const demoRunRules: RunRules = {
   stage(round, kind) {
     return {
       dealer: "base",
-      targetScore: Math.round(stageDefinition(kind).baseTarget * (1 + (round - 1) / 2)),
+      targetScore: targetForStage(stageTargetBalance, round, kind),
       plays: 6,
       discards: 4,
     };

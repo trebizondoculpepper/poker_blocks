@@ -291,15 +291,15 @@ The two-Ace effect is a first use case for an event leading to another event: th
 
 - A **round** is three stages: **stage 1**, **stage 2** and the **boss stage**. Stage 1 has a lower target than stage 2. The boss stage can use a different dealer, which adds extra rules or restrictions for more challenge.
 - A skippable shop follows every completed stage. Leaving the boss-stage shop starts the next round. See [issue #23](https://github.com/trebizondoculpepper/poker_blocks/issues/23).
-- Target scores rise as the run goes on (_tune_).
+- Target scores follow the configured stage progression below.
 - A run is **won** by beating a fixed number of rounds (_tune_). Losing any stage ends the run.
 - The deck, including blocks bought at the shop, carries over for the whole run.
 
 ### Placeholder progression rules
 
-The demo uses these placeholders. They live in `src/run-rules.ts` so they can be replaced without changing the controller:
+The remaining demo placeholders live in `src/run-rules.ts` so they can be replaced without changing the controller:
 
-- **Targets:** stage 1 = 100, stage 2 = 150, boss stage = 200, each growing by half its base every round (round 2: 150, 225, 300). Every stage has 6 plays and 4 discards.
+- **Plays and discards:** every stage has 6 plays and 4 discards. Targets use the implemented stage-target progression below.
 - **Boss dealer:** the boss stage uses the base dealer until boss rules exist.
 - **Hand at a stage boundary:** cards left in the hand return to the deck before the next stage is dealt.
 - **Discard pile after the boss-stage shop:** returns to the deck after the boss stage, so discards remain unavailable in stage 2 and the boss stage but the deck does not run out over a long run.
@@ -375,7 +375,9 @@ Passives are drawn from their unlock round by a named frequency curve (`shop.fre
 
 #### Stage targets
 
-Round 1 stage 1 targets **300**. Each next target is the previous one ×1.75 (stage 1 → stage 2), ×1.5 (stage 2 → boss) and ×1.25 (boss → next round's stage 1), rounded to the nearest integer at each step: 300, 525, 788, 985, 1724, 2586, … The rates are balance config.
+Round 1 stage 1 targets **300**. Each next target is the previous one ×1.75 (stage 1 → stage 2), ×1.5 (stage 2 → boss) and ×1.25 (boss → next round's stage 1), rounded to the nearest integer at each step: 300, 525, 788, 985, 1724, 2586, … The opening target and each stage's incoming rate are balance data in `src/balance.ts`. This progression is implemented; existing saves keep their current stage target until the next stage is dealt.
+
+An endless run eventually reaches the numeric limit. Targets then stay at `Number.MAX_SAFE_INTEGER`, so a far-round shop transition remains valid and saved targets stay representable.
 
 #### Balance config guardrails
 
