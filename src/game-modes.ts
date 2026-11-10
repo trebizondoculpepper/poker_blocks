@@ -87,6 +87,8 @@ export type SceneTraits = {
   devShopBalanceEditor: { backTo: string };
   /** Developer tool: the object browser, every game object by category (dev9). */
   devObjectBrowser: { backTo: string };
+  /** Developer tool: the block design room, auditioning letter-block materials and fonts (dev12). */
+  devBlockDesigner: { backTo: string };
   /** Developer tool: a live panel of drag-and-drop state and input decisions (dev10). */
   devDropInspector: DevDropInspectorConfig;
   /**
@@ -315,6 +317,7 @@ export const sceneDefinitions = [
     ? ([
         { name: "balance-editor", traits: {} },
         { name: "object-browser", traits: {} },
+        { name: "block-designer", traits: {} },
       ] as const)
     : []),
   {
@@ -750,6 +753,23 @@ const gameModes: GameMode[] = [
             save: { key: "poker-blocks.dev10-run" },
             console: { name: "dev10" },
             restartable: { param: "restart" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // Letter-block materials and fonts, auditioned with a copyable config export (#296).
+          id: "dev12",
+          scenes: composeScenes("dev12", [
+            { scenes: ["block-designer"], traits: { devBlockDesigner: { backTo: "game" } } },
+          ]),
+          startScene: "block-designer",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev12-run" },
+            console: { name: "dev12" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,

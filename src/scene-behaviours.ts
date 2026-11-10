@@ -66,6 +66,7 @@ export type SceneHost = {
     deckView: Pick<DeckView, "show" | "hide">;
     devShopBalanceEditor: Pick<ShopBalanceEditor, "show" | "hide">;
     devObjectBrowser: Pick<ShopBalanceEditor, "show" | "hide">;
+    devBlockDesigner: Pick<ShopBalanceEditor, "show" | "hide">;
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
     run: Pick<
       RunController,
@@ -288,6 +289,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("devShopBalanceEditor", {
     enter: ({ services }, { backTo }) => services.devShopBalanceEditor.show(backTo),
     exit: ({ services }) => services.devShopBalanceEditor.hide(),
+  });
+  behaviours.register("devBlockDesigner", {
+    enter: ({ services }, { backTo }) => services.devBlockDesigner.show(backTo),
+    exit: ({ services }) => services.devBlockDesigner.hide(),
   });
   behaviours.register("devObjectBrowser", {
     enter: ({ services }, { backTo }) => services.devObjectBrowser.show(backTo),

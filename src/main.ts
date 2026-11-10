@@ -123,6 +123,7 @@ type TraitContext = {
     deckView: DeckView;
     devShopBalanceEditor: ShopBalanceEditor;
     devObjectBrowser: ShopBalanceEditor;
+    devBlockDesigner: ShopBalanceEditor;
     version: string;
     sound: (id: SoundEffectId) => void;
   };
@@ -132,6 +133,9 @@ const deckView = createDeckView(host);
 // The developer tool has its own build boundary; production never imports its UI or data.
 const devShopBalanceEditor: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/shop-balance-editor")).createShopBalanceEditor(host)
+  : { show() {}, hide() {}, dispose() {} };
+const devBlockDesigner: ShopBalanceEditor = import.meta.env.DEV
+  ? (await import("./tools/block-designer")).createBlockDesigner(host)
   : { show() {}, hide() {}, dispose() {} };
 const devObjectBrowser: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/object-browser")).createObjectBrowser(host)
@@ -205,6 +209,7 @@ const traitContext: TraitContext = {
     deckView,
     devShopBalanceEditor,
     devObjectBrowser,
+    devBlockDesigner,
     sound: (id) => playSfx(id),
     version: appVersion,
   },
@@ -395,6 +400,7 @@ if (import.meta.hot) {
     shopView.dispose();
     devShopBalanceEditor.dispose();
     devObjectBrowser.dispose();
+    devBlockDesigner.dispose();
     view.dispose();
   });
 }

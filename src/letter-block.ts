@@ -5,11 +5,17 @@ import {
   type BlockMaterial,
   type MaterialDefinition,
 } from "./materials";
-import { defaultLettering, graphemes, loadLettering } from "./visual/lettering";
+import { defaultLettering, graphemes, loadLettering, type Lettering } from "./visual/lettering";
 import { textFaceArt } from "./visual/text-face-art";
 import { writtenBlock } from "./visual/written-block";
 
-export type WritingOptions = { material?: BlockMaterial; random?: () => number; size?: number };
+export type WritingOptions = {
+  material?: BlockMaterial;
+  random?: () => number;
+  size?: number;
+  /** A font to print in instead of the material's own (auditioning, #296). */
+  lettering?: Lettering;
+};
 /** All registered materials are eligible; choose once and retain the actual definition. */
 export function writingMaterial(options: WritingOptions): MaterialDefinition {
   if (options.material !== undefined) return getMaterialDefinition(options.material);
@@ -24,7 +30,7 @@ export async function createLetterBlock(character: string, options: WritingOptio
   if (graphemes(character).length !== 1)
     throw new Error("A letter block needs exactly one character");
   const material = writingMaterial(options);
-  const lettering = material.lettering ?? defaultLettering;
+  const lettering = options.lettering ?? material.lettering ?? defaultLettering;
   await loadLettering(lettering, character);
   const visual = writtenBlock(textFaceArt(character, lettering), material, options.size ?? 1);
   return { ...visual, material, character };
