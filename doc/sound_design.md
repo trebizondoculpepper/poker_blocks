@@ -214,7 +214,9 @@ These already happen in the game, but have no dedicated id:
 
 - **Generated:** priority 1 is done. `shop.buy`, `shop.stock.toss`, `shop.stock.land`, `shop.stock.burn`, `block.destroyed`, and `passive.activate.scoring`, `.economy`, `.effect` and `.retrigger` now have generated audio. So do the nine gameplay `material.attach.*` sounds from #232, which no longer fall back to `card.attach`.
 - **Loudness:** takes that came back quiet were peak-normalised offline with ffmpeg to about −1 dB. These were wood, terracotta, ice and crystal attach, and the scoring, economy and effect activations. All committed takes now peak between −3 dB and 0 dB.
-- **Still pending:** each take needs to be auditioned by ear in `/sfx.html`, and the remaining priorities 2–5 are still open.
+- **Kept:** `score.line` and `score.big` stay in the registry with their audio, at the owner's request, though nothing plays them yet.
+- **New ids for existing actions (priority 4):** `shop.leave` (leaving the shop, standing in with `shop.open`) and `passive.pickup` (lifting a passive, standing in with `card.pickup`), both registered with prompts so their audio can be made later. The stage-won reward rows already play `reward.coin` as each appears, so they need no new id.
+- **Still pending:** each take needs to be auditioned by ear in `/sfx.html`.
 
 ### Recommendations, in priority order
 
