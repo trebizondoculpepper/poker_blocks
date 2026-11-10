@@ -7,7 +7,7 @@
 import type { ShopTrait } from "./game-modes";
 import type { GameState } from "./game-state";
 import { sampleMaterials } from "./material-sampler";
-import { makeDevDeck } from "./materials";
+import { makeDevDeck, makeUniformDeck } from "./materials";
 import { createPassiveBlock, randomPassiveDefinitions, type PassiveBlock } from "./passives";
 import { sandboxRunRules } from "./run-rules";
 import { RunSetupRegistry } from "./run-setup";
@@ -31,6 +31,10 @@ export function createRunSetupRegistry(
       const seed = context.seed ?? services.newSeed();
       return { deck: makeDevDeck(seed), seed };
     },
+  });
+
+  registry.register("uniformMaterialDeck", {
+    deck: (context, { material }) => ({ deck: makeUniformDeck(material), seed: context.seed }),
   });
 
   registry.register("destructibleMix", {

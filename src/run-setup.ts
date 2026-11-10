@@ -12,6 +12,7 @@
  * Run setup applies to a new game run; Continue restores the saved run. The `policy` and `deck`
  * passes are the exception, because those are properties of the run rather than of the deal.
  */
+import type { BlockMaterial } from "./materials";
 import type { CardBlock } from "./cards";
 import type { RunSnapshot } from "./game-run";
 import type { RunRules } from "./run-rules";
@@ -26,6 +27,8 @@ export type RunSetupStepConfigs = {
    * Continue rebuilds the same mix and a new run gets a new one.
    */
   materialDeck: Record<never, never>;
+  /** Every card is made of this one material: how a mode shows a visual experiment (#227). */
+  uniformMaterialDeck: { material: BlockMaterial };
   /** The run begins on a structure holding one block of every material. */
   materialSample: Record<never, never>;
   /** Testing only: about `share` of the deck is destructible by the given causes. */

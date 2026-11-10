@@ -349,6 +349,13 @@ const entries = [
     placeholder: "card.attach",
   },
   {
+    id: "material.attach.custard",
+    trigger: "A block lands where custard is the softer of the two materials meeting (#232)",
+    prompt: "Hollow plastic tub clicking into place, with a soft gloopy wobble inside",
+    durationSeconds: 0.6,
+    placeholder: "card.attach",
+  },
+  {
     id: "material.attach.ice",
     trigger: "A block lands where ice is the softer of the two materials meeting (#232)",
     prompt: "Crisp icy clink of a frozen cube set against another block",
