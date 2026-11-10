@@ -612,6 +612,10 @@ export function createTableInput(options: {
     canvas.style.cursor = "default";
   };
 
+  /** How long a drag that lost its capture waits for its release before it is cancelled. */
+  const releaseGraceMs = 250;
+  let releaseGrace = 0;
+
   const onPointerUp = (event: PointerEvent) => {
     if (hold.up(event.pointerId)) {
       // A hold only inspects: lifting it neither taps, plays nor rotates.
@@ -685,17 +689,52 @@ export function createTableInput(options: {
   };
 
   /** Capture taken away mid-gesture (by the browser or system) counts as a cancel. */
+  /**
+   * Capture taken away mid-gesture. A browser can take capture away a few milliseconds *before*
+   * the pointerup of the same release (seen in dev10's action history), so for a hand drag this
+   * is not yet a cancel: the drag stays alive and finishes on that pointer's release, which no
+   * longer reaches the canvas and is caught on the window instead. If no release comes within
+   * `releaseGraceMs`, or a real cancel or blur does, the drag is cancelled as before. A board
+   * drag (turning the structure) is cancelled at once; it has nothing to drop.
+   */
   const onLostCapture = (event: PointerEvent) => {
+    if (drag?.pointerId === event.pointerId && drag.active) {
+      trace("pointer capture lost", "mid-drag: waiting for the release");
+      const waiting = drag;
+      window.clearTimeout(releaseGrace);
+      releaseGrace = window.setTimeout(() => {
+        if (drag !== waiting) return;
+        trace("drag ended", `no release ${releaseGraceMs}ms after capture was lost: cancelled`);
+        // The same cleanup as a cancel: the finger is no longer tracked as down.
+        hold.cancel();
+        touches.delete(waiting.pointerId);
+        finishDrag(false);
+      }, releaseGraceMs);
+      return;
+    }
     trace(
       "pointer capture lost",
-      drag?.pointerId === event.pointerId
-        ? drag.active
-          ? "mid-drag: the drag is cancelled"
-          : "on a pressed hand block (no drag yet)"
-        : "no drag",
+      drag?.pointerId === event.pointerId ? "on a pressed hand block (no drag yet)" : "no drag",
     );
     if (drag?.pointerId === event.pointerId || boardDrag?.pointerId === event.pointerId)
       onPointerCancel(event);
+  };
+
+  /** A release that lost its capture: finish the hand drag it belongs to as a drop. */
+  const onWindowPointerUp = (event: PointerEvent) => {
+    // Any finger that lifts is no longer down, wherever its release lands and whether or not a
+    // drag is still waiting for it, so the next single touch is never taken for a second finger
+    // (a pinch). The canvas's handler does the same when the release reaches it.
+    if (event.pointerType === "touch") touches.delete(event.pointerId);
+    // The canvas's own handler ran first if the release reached it, and finished the drag.
+    if (drag?.pointerId !== event.pointerId || !drag.active) return;
+    window.clearTimeout(releaseGrace);
+    hold.up(event.pointerId);
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+    moveDraggedBlock();
+    trace("drag ended", "button released after capture was lost: dropped");
+    finishDrag(true);
   };
 
   const onClick = (event: MouseEvent) => {
@@ -888,6 +927,7 @@ export function createTableInput(options: {
   for (const [type, listener, listenerOptions] of canvasListeners)
     canvas.addEventListener(type, listener as EventListener, listenerOptions);
   window.addEventListener("blur", onBlur);
+  window.addEventListener("pointerup", onWindowPointerUp);
   document.addEventListener("visibilitychange", onVisibilityChange);
 
   /** How many scenes in front compose `discardBin`; the bin is shown while any does. */
@@ -973,6 +1013,8 @@ export function createTableInput(options: {
       for (const [type, listener] of canvasListeners)
         canvas.removeEventListener(type, listener as EventListener);
       window.removeEventListener("blur", onBlur);
+      window.removeEventListener("pointerup", onWindowPointerUp);
+      window.clearTimeout(releaseGrace);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     },
   };
