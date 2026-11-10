@@ -27,6 +27,14 @@ export type RuleFrame = {
 type Selector = (config: unknown, frame: Readonly<RuleFrame>) => unknown;
 type Condition = (config: unknown, selected: unknown, frame: Readonly<RuleFrame>) => boolean;
 type Effect = (config: unknown, selected: unknown, frame: Readonly<RuleFrame>) => RuleFrame;
+type ValueSource = (config: unknown, random: () => number) => number;
+
+/**
+ * A value an effect's configuration can take instead of a fixed number (#97): it names a
+ * registered value source and configures it, `{ valueSource: "roll", sides: 6 }`. Rules are
+ * resolved once per scoring resolution (`resolveValues`), so every effect sees plain numbers.
+ */
+export type ValueSourceConfig = { valueSource: string } & Record<string, unknown>;
 
 /**
  * The runner never interprets handler IDs. Registrations own selection, matching and effects.
@@ -36,6 +44,7 @@ export class EventRuleRegistry {
   private readonly selectors = new Map<string, Selector>();
   private readonly conditions = new Map<string, Condition>();
   private readonly effects = new Map<string, Effect>();
+  private readonly valueSources = new Map<string, ValueSource>();
 
   registerSelector<Config, Selected>(
     id: string,
@@ -56,6 +65,40 @@ export class EventRuleRegistry {
     handler: (config: Config, selected: Selected, frame: Readonly<RuleFrame>) => RuleFrame,
   ): void {
     register(this.effects, id, handler as Effect, "effect");
+  }
+
+  registerValueSource<Config>(
+    id: string,
+    handler: (config: Config, random: () => number) => number,
+  ): void {
+    register(this.valueSources, id, handler as ValueSource, "value source");
+  }
+
+  /**
+   * The rule with every value source in its effects' configuration resolved to a number,
+   * drawing from `random` once per value source. A rule with none is returned unchanged and
+   * draws nothing, so rules without random amounts never move the run's random sequence.
+   */
+  resolveValues(rule: EventRule, random: () => number): EventRule {
+    if (!rule.effects.some((effect) => hasValueSource(effect.config))) return rule;
+    return {
+      ...rule,
+      effects: rule.effects.map((effect) => ({
+        ...effect,
+        config: this.resolveConfig(effect.config, random),
+      })),
+    };
+  }
+
+  private resolveConfig(config: unknown, random: () => number): unknown {
+    if (isValueSource(config))
+      return get(this.valueSources, config.valueSource, "value source")(config, random);
+    if (Array.isArray(config)) return config.map((item) => this.resolveConfig(item, random));
+    if (config && typeof config === "object")
+      return Object.fromEntries(
+        Object.entries(config).map(([key, value]) => [key, this.resolveConfig(value, random)]),
+      );
+    return config;
   }
 
   /** Whether a configured condition holds for `selected`: for selectors that filter (#170). */
@@ -89,4 +132,14 @@ function get<T>(registry: Map<string, T>, id: string, what: string): T {
   const handler = registry.get(id);
   if (!handler) throw new Error(`Unknown ${what}: ${id}`);
   return handler;
+}
+
+function isValueSource(config: unknown): config is ValueSourceConfig {
+  return !!config && typeof config === "object" && "valueSource" in config;
+}
+
+function hasValueSource(config: unknown): boolean {
+  if (isValueSource(config)) return true;
+  if (config && typeof config === "object") return Object.values(config).some(hasValueSource);
+  return false;
 }

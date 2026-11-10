@@ -208,7 +208,9 @@ This section is the target design and supersedes the table above where they diff
 3. **Multiplicative** material factors multiply the working score (all factors multiplied together).
 4. **Exponential** effects apply next, one per contributing crystal, in sequence.
 5. Passive `score.beforeLineFinalized` effects resolve in rack order, on the material-adjusted score. This is the owner's decision on #8: material effects come before passives.
-6. Round to an integer once, after all effects; clamp at zero.
+6. Clamp at zero.
+7. Passive `score.afterLineClamp` effects resolve in rack order. These are flat bonuses that can't rescue a negative line: a die adds its roll here (#97). Each die rolls once per scoring resolution, and the same roll is added to every scored line.
+8. Round to an integer once, after all effects.
 
 #### Worked examples
 

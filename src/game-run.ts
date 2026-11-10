@@ -451,7 +451,12 @@ export class GameRun {
     if (!this.inStage) return null;
     const next = this.activeDealer.play(this.currentState, action);
     if (next) {
-      this.scoredLines = scoreFieldWithPassives(next.field, next.passiveRack);
+      this.scoredLines = scoreFieldWithPassives(
+        next.field,
+        next.passiveRack,
+        undefined,
+        this.random,
+      );
       const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
       this.runStats = recordPlay(this.runStats, gained, action.cardIds?.length || 1);
       this.currentState = {
