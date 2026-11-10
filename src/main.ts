@@ -169,7 +169,6 @@ const traitContext: TraitContext = {
         animating: presenter.busy,
         presenting: presenter.presenting,
         dragging: input.dragging,
-        dropHeld: input.dropHeld,
         modelBlocks: run.fieldCount(),
         drawnBlocks: field.cells().length,
       }),
