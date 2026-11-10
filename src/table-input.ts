@@ -118,8 +118,6 @@ export type TableInput = {
   readonly dragging: boolean;
   /** The cell a dragged block would be played into right now, if any. */
   readonly candidateCell: Cell | null;
-  /** The scene in front allows (or no longer allows) blocks to be played onto the field. */
-  setFieldActive(active: boolean): void;
   /**
    * Abandon every gesture in progress (a hand, board or passive drag, a hold, a pinch): nothing
    * is played, discarded, sold or rotated, and dragged blocks return (#124).
@@ -144,7 +142,6 @@ type Drag = {
   grabOffset: THREE.Vector3;
   pointerId: number;
   active: boolean;
-  candidate: Candidate | null;
   /** The last drop target the trace reported, so it reports only changes. */
   tracedTarget?: string;
   /** The drop target hit at the point under the pointer (#273), if any. */
@@ -240,6 +237,35 @@ export function createTableInput(options: {
       verdict === "accept" ? "the bin" : "none: over the bin with no discards left",
   });
   /**
+   * The grid (#274), a drop target: takes dropped hand blocks as a play at the attachment under
+   * the pointer (a single block, a selected group's line, or the first play on an empty table)
+   * while plays are left. It previews the cells it would fill and commits the play on drop.
+   */
+  let gridCandidate: Candidate | null = null;
+  let gridShown: Candidate | null = null;
+  dropTargetKinds.register("grid", {
+    canDrop(carried, clientX, clientY) {
+      gridCandidate = rules.canPlay() ? pickAttachment(clientX, clientY, carried.length) : null;
+      return gridCandidate ? "accept" : null;
+    },
+    hover(verdict) {
+      const shown = verdict ? gridCandidate : null;
+      const moved = shown && (!gridShown || cellKey(shown.cell) !== cellKey(gridShown.cell));
+      gridShown = shown;
+      field.showCandidate(shown);
+      if (moved) playSfx("card.drag.snap");
+    },
+    drop: (carried) => (gridCandidate ? rules.play(carried, gridCandidate) : false),
+    reject: () => {},
+    describe: () =>
+      gridCandidate
+        ? `${gridCandidate.cells.length} cell${gridCandidate.cells.length === 1 ? "" : "s"} from ${
+            gridCandidate.target ? `the ${gridCandidate.face} face of a block` : "the empty table"
+          }`
+        : "the grid",
+  });
+
+  /**
    * Drag sources (#282): what can be picked up. The hand gives up the draggable block under the
    * pointer while the scene in front takes plays.
    */
@@ -247,7 +273,7 @@ export function createTableInput(options: {
   dragSourceKinds.register("hand", {
     pick(clientX, clientY) {
       const source = pickBlock(clientX, clientY, reachableHand());
-      return fieldActive && source && blockCanDrag(source.block) ? source : null;
+      return source && blockCanDrag(source.block) ? source : null;
     },
   });
   /**
@@ -272,8 +298,6 @@ export function createTableInput(options: {
     surface: canvas,
   });
   let selected: Selection = new Set();
-  /** Whether the scene in front lets blocks be played onto the field. */
-  let fieldActive = false;
   let drag: Drag | null = null;
   /** Whether the board is being turned by a drag (use-gesture, #275). */
   let boardDragging = false;
@@ -370,38 +394,23 @@ export function createTableInput(options: {
 
   function updateCandidate(): void {
     if (!drag?.active) return;
-    const previousCell = drag.candidate ? cellKey(drag.candidate.cell) : null;
-    // The drop targets a scene allows (#273) are hit-tested first, by priority; the first to
-    // answer takes the point. The grid's placement is the fallback until it's a target (#274).
-    drag.hit = dragDrop.hitTest([drag.source, ...drag.group], drag.lastX, drag.lastY);
+    // The drop targets a scene allows (the bin, the grid; #273, #274) are hit-tested by
+    // priority; the first to answer takes the point and shows its own preview.
+    drag.hit = dragDrop.hitTest(playOrder(drag), drag.lastX, drag.lastY);
     dragDrop.hover(drag.hit);
-    const claimed = drag.hit !== null;
     // A group plays as a line (one play) or is discarded; it is not reordered as one.
     const single = drag.group.length === 0;
-    drag.candidate =
-      fieldActive && !claimed && rules.canPlay()
-        ? pickAttachment(drag.lastX, drag.lastY, drag.group.length + 1)
-        : null;
-    field.showCandidate(drag.candidate);
     const previousSlot = drag.reorderSlot;
-    drag.reorderSlot =
-      single && !claimed && !drag.candidate ? handReorderSlot(drag.lastX, drag.lastY) : null;
+    drag.reorderSlot = single && !drag.hit ? handReorderSlot(drag.lastX, drag.lastY) : null;
     if (drag.reorderSlot !== previousSlot) hand.layout();
-    if (drag.candidate && cellKey(drag.candidate.cell) !== previousCell) playSfx("card.drag.snap");
     // Tracing (dev10): each time the drop target changes, say where it is now, or why there's none.
-    const target = drag.candidate
-      ? `${drag.candidate.cells.length} cell${drag.candidate.cells.length === 1 ? "" : "s"} from ${
-          drag.candidate.target ? `the ${drag.candidate.face} face of a block` : "the empty table"
-        }`
-      : drag.hit
-        ? drag.hit.target.describe(drag.hit.verdict)
-        : !fieldActive
-          ? "none: this scene doesn't take plays"
-          : !rules.canPlay()
-            ? "none: no plays left"
-            : drag.group.length > 0 && pickAttachment(drag.lastX, drag.lastY, 1)
-              ? `none: a face is here, but no room for a ${drag.group.length + 1}-block line`
-              : "none: not over a face that can take a block";
+    const target = drag.hit
+      ? drag.hit.target.describe(drag.hit.verdict)
+      : !rules.canPlay()
+        ? "none: no plays left"
+        : drag.group.length > 0 && pickAttachment(drag.lastX, drag.lastY, 1)
+          ? `none: a face is here, but no room for a ${drag.group.length + 1}-block line`
+          : "none: not over a place that takes them";
     if (target !== drag.tracedTarget) {
       drag.tracedTarget = target;
       trace("drop target", target);
@@ -441,17 +450,17 @@ export function createTableInput(options: {
     const activeDrag = drag;
     if (activeDrag.active) {
       if (drop) updateCandidate();
-      const candidate = drop ? activeDrag.candidate : null;
       const hit = drop ? activeDrag.hit : null;
+      // The play order, taken before the drag ends (it reads the selection).
+      const ordered = playOrder(activeDrag);
       drag = null;
-      field.showCandidate(null);
       dragDrop.hover(null);
       if (hit?.verdict === "reject") hit.target.reject();
       cameraView.changeMotionRate(normalMotionRate);
       suppressClickUntil = performance.now() + 250;
       // Model first (#272): the drop commits now, even while earlier plays are still being
       // shown; their animations and this one catch up with the model.
-      commitDrop(activeDrag, candidate, hit, drop);
+      commitDrop(activeDrag, ordered, hit, drop);
     } else {
       drag = null;
     }
@@ -463,30 +472,19 @@ export function createTableInput(options: {
    */
   function commitDrop(
     activeDrag: Drag,
-    candidate: Candidate | null,
+    ordered: readonly RenderedBlock[],
     hit: DropHit | null,
     drop: boolean,
   ): void {
     const reorderSlot = drop ? activeDrag.reorderSlot : null;
     const carried = [activeDrag.source, ...activeDrag.group];
     for (const rendered of carried) options.setDragLayer(rendered.cube, false);
-    // A drop target that accepted takes the blocks itself (#273); otherwise the grid's placement does.
-    const delivered = hit?.verdict === "accept";
-    const accepted = delivered
-      ? hit.target.drop(carried)
-      : candidate
-        ? rules.play(playOrder(activeDrag), candidate)
-        : false;
+    // A drop target that accepted takes the blocks itself (#273, #274), in play order.
+    const accepted = hit?.verdict === "accept" ? hit.target.drop(ordered) : false;
     const blocks = carried.length;
     trace(
-      accepted
-        ? delivered
-          ? `dropped on ${hit.name}`
-          : "played"
-        : candidate || hit
-          ? "refused"
-          : "returned",
-      `${blocks} block${blocks === 1 ? "" : "s"}${candidate ? " onto the field" : hit ? ` at ${hit.name}` : ""}`,
+      accepted ? `dropped on ${hit!.name}` : hit ? "refused" : "returned",
+      `${blocks} block${blocks === 1 ? "" : "s"}${hit ? ` at ${hit.name}` : ""}`,
     );
     const from = rules.hand().indexOf(activeDrag.source.block);
     if (!accepted && reorderSlot !== null && reorderSlot !== from) {
@@ -498,7 +496,7 @@ export function createTableInput(options: {
     } else if (!accepted) {
       // A drop the rules refuse (or any drop with no plays left) is denied; a drop on
       // empty space just returns the block to the hand.
-      const refused = drop && (hit !== null || candidate !== null || !rules.canPlay());
+      const refused = drop && (hit !== null || !rules.canPlay());
       playSfx(refused ? "action.denied" : "card.drag.return");
       hand.putBack([activeDrag.source, ...activeDrag.group]);
       hand.layout();
@@ -548,7 +546,6 @@ export function createTableInput(options: {
       lastX: x,
       lastY: y,
       active: true,
-      candidate: null,
       hit: null,
       group,
       reorderSlot: null,
@@ -742,9 +739,7 @@ export function createTableInput(options: {
         ? "on a hand block: can drag"
         : !source
           ? "on no hand block"
-          : !fieldActive
-            ? "on a hand block, but this scene doesn't take plays"
-            : "on a hand block that can't be dragged",
+          : "on a hand block that can't be picked up here",
     );
     // A drag source's pointer belongs to dnd-kit, which starts the drag once it moves (#282);
     // turning the board is use-gesture's (#275).
@@ -1029,10 +1024,7 @@ export function createTableInput(options: {
       return Boolean(drag?.active);
     },
     get candidateCell() {
-      return drag?.active ? (drag.candidate?.cell ?? null) : null;
-    },
-    setFieldActive(active) {
-      fieldActive = active;
+      return drag?.active ? (gridShown?.cell ?? null) : null;
     },
     cancelGestures() {
       onBlur();

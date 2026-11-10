@@ -2,7 +2,7 @@
  * The behaviour each scene trait installs (see doc/game-architecture.md, "Trait").
  * `screen` marks the host with the scene in front, for styling and tests; `pausesBelow`
  * stops the scenes underneath a pop-up or menu taking input or updates; the HUD panel traits
- * show and hide one panel each; `fieldPlacement` lets the input place blocks onto the field;
+ * show and hide one panel each; `dropTarget` and `dragSource` allow drops and pick-ups;
  * `shopStock` shows and hides the shop's stock; `gameOverScreen` shows the run's totals and
  * choices; `musicCue` plays a music cue on entering; `devManualBlockDestroyer` (testing only)
  * destroys a double-clicked table block.
@@ -50,7 +50,6 @@ export type SceneHost = {
     hud: Pick<HudPanels, "show" | "hide">;
     input: Pick<
       TableInput,
-      | "setFieldActive"
       | "cancelGestures"
       | "discardBinEntered"
       | "sellBinEntered"
@@ -160,14 +159,6 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("deckPanel", panel<Context, "deck">("deck"));
   behaviours.register("coinsPanel", panel<Context, "coins">("coins"));
   behaviours.register("shopExit", panel<Context, "shopExit">("shopExit"));
-  behaviours.register("fieldPlacement", {
-    enter(context) {
-      context.services.input.setFieldActive(true);
-    },
-    exit(context) {
-      context.services.input.setFieldActive(false);
-    },
-  });
   behaviours.register("shopStock", {
     enter({ services }) {
       services.shop.render(services.run.shopStock(), true);
