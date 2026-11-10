@@ -705,6 +705,9 @@ export function createTableInput(options: {
       releaseGrace = window.setTimeout(() => {
         if (drag !== waiting) return;
         trace("drag ended", `no release ${releaseGraceMs}ms after capture was lost: cancelled`);
+        // The same cleanup as a cancel: the finger is no longer tracked as down.
+        hold.cancel();
+        touches.delete(waiting.pointerId);
         finishDrag(false);
       }, releaseGraceMs);
       return;
@@ -719,13 +722,14 @@ export function createTableInput(options: {
 
   /** A release that lost its capture: finish the hand drag it belongs to as a drop. */
   const onWindowPointerUp = (event: PointerEvent) => {
+    // Any finger that lifts is no longer down, wherever its release lands and whether or not a
+    // drag is still waiting for it, so the next single touch is never taken for a second finger
+    // (a pinch). The canvas's handler does the same when the release reaches it.
+    if (event.pointerType === "touch") touches.delete(event.pointerId);
     // The canvas's own handler ran first if the release reached it, and finished the drag.
     if (drag?.pointerId !== event.pointerId || !drag.active) return;
     window.clearTimeout(releaseGrace);
-    // The same release bookkeeping as on the canvas: a finger that lifted is no longer down, so
-    // the next single touch isn't mistaken for a second finger (a pinch).
     hold.up(event.pointerId);
-    if (event.pointerType === "touch") touches.delete(event.pointerId);
     drag.lastX = event.clientX;
     drag.lastY = event.clientY;
     moveDraggedBlock();
