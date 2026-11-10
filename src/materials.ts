@@ -378,6 +378,8 @@ export const experimentalMaterials = [
         traceOpacity: 0.45,
         shellOpacity: 0.16,
         wall: 0.92,
+        // The shell's reflections at full strength, so the plastic catches the light.
+        gloss: 1.6,
       },
     },
   },

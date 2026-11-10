@@ -1,3 +1,5 @@
+import { beatShapes } from "./dance/beat-shapes";
+import { danceCycles } from "./dance/dance-floor";
 import { createActionLog } from "./action-log";
 import { describe, expect, it } from "vite-plus/test";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
@@ -20,7 +22,20 @@ function recordingHost() {
       },
       blockTitles: {
         show: () => () => {},
-        tuning: () => ({ scale: 1, phaseDegrees: 180 }),
+        tuning: () => ({
+          scale: 1,
+          phaseDegrees: 180,
+          precessionAngle: 7,
+          precessionSeconds: 32,
+          bounce: 0.008,
+          bounceCycle: "bar",
+          bounceShape: "envelope",
+          bounceWindow: 0.75,
+          bounceAttack: 0.5,
+          bounceTimeSpread: 0,
+          bounceAngleSpread: 0,
+          restAngleSpread: 0,
+        }),
         retune() {},
       },
       attract: {
@@ -643,13 +658,88 @@ describe("developer word tuning", () => {
     };
     const behaviour = sceneBehaviours<SceneHost>().get("devAttractTuning");
     behaviour.enter!(host, {});
-    expect(controls.map(({ value }) => value)).toEqual([1, 180]);
+    expect(controls.map(({ label }) => label)).toEqual([
+      "Word size",
+      "Word phase difference (degrees)",
+      "Precession angle (degrees)",
+      "Precession period (s)",
+      "Bounce",
+      "Bounce cycle",
+      "Bounce shape",
+      "Bounce window (share of cycle)",
+      "Bounce attack (envelope: share of the bump spent rising)",
+      "Bounce time messiness (std dev, beats)",
+      "Bounce angle messiness (std dev, degrees)",
+      "Initial angle messiness (std dev, degrees)",
+    ]);
+    // The bounce cycle is picked by its position among the registered dance cycles.
+    const cycles = danceCycles.names();
+    expect(controls.map(({ value }) => value)).toEqual([
+      1,
+      180,
+      7,
+      32,
+      0.008,
+      cycles.indexOf("bar"),
+      beatShapes.names().indexOf("envelope"),
+      0.75,
+      0.5,
+      0,
+      0,
+      0,
+    ]);
+    expect(controls[5]!.format?.(cycles.indexOf("fourBars"))).toBe("fourBars");
+    const base = {
+      scale: 1,
+      phaseDegrees: 180,
+      precessionAngle: 7,
+      precessionSeconds: 32,
+      bounce: 0.008,
+      bounceCycle: "bar",
+      bounceShape: "envelope",
+      bounceWindow: 0.75,
+      bounceAttack: 0.5,
+      bounceTimeSpread: 0,
+      bounceAngleSpread: 0,
+      restAngleSpread: 0,
+    };
     controls[0]!.onChange(0.75);
     controls[1]!.onChange(90);
+    controls[2]!.onChange(12);
+    controls[3]!.onChange(60);
+    controls[4]!.onChange(0.05);
+    controls[5]!.onChange(cycles.indexOf("beat"));
     expect(updates).toEqual([
-      { scale: 0.75, phaseDegrees: 180 },
-      { scale: 0.75, phaseDegrees: 90 },
+      { ...base, scale: 0.75 },
+      { ...base, scale: 0.75, phaseDegrees: 90 },
+      { ...base, scale: 0.75, phaseDegrees: 90, precessionAngle: 12 },
+      { ...base, scale: 0.75, phaseDegrees: 90, precessionAngle: 12, precessionSeconds: 60 },
+      {
+        ...base,
+        scale: 0.75,
+        phaseDegrees: 90,
+        precessionAngle: 12,
+        precessionSeconds: 60,
+        bounce: 0.05,
+      },
+      {
+        ...base,
+        scale: 0.75,
+        phaseDegrees: 90,
+        precessionAngle: 12,
+        precessionSeconds: 60,
+        bounce: 0.05,
+        bounceCycle: "beat",
+      },
     ]);
+    controls[7]!.onChange(0.5);
+    controls[8]!.onChange(0.25);
+    expect(updates.at(-1)).toMatchObject({ bounceWindow: 0.5, bounceAttack: 0.25 });
+    controls[9]!.onChange(0.08);
+    controls[10]!.onChange(6);
+    expect(updates.at(-1)).toMatchObject({ bounceTimeSpread: 0.08, bounceAngleSpread: 6 });
+    controls[11]!.onChange(1.5);
+    expect(updates.at(-1)).toMatchObject({ restAngleSpread: 1.5 });
     behaviour.exit!(host, {});
     expect(calls).toContain("attract:tuning-hide");
   });

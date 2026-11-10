@@ -1,17 +1,43 @@
 import * as THREE from "three";
-import { createBlockAppearance } from "./block-appearance";
+import { createBlockAppearance, type BlockAppearance } from "./block-appearance";
 import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
+
+/**
+ * Which of an appearance's materials a written block wears: the hand's (the default), or, for
+ * a block shown as if on the table, its board materials (where glass and crystal refract).
+ */
+export type Finish = (appearance: BlockAppearance) => THREE.Material[];
+export const handFinish: Finish = (appearance) => appearance.materials;
+export const boardFinish: Finish = (appearance) =>
+  appearance.boardMaterials ?? appearance.materials;
 
 /** Assemble artwork with registered material appearance. This layer knows no artwork kind. */
 export function writtenBlock(
   art: FaceArt,
   definition: MaterialDefinition,
   size: number,
-): { object: THREE.Group; dispose(): void } {
+  finish: Finish = handFinish,
+): {
+  object: THREE.Group;
+  /**
+   * What reflects a renderer's own environment: the block's face materials, and any extra
+   * material marked `userData.reflective` (a vessel's gloss); not other extras (a fire's
+   * glass, crystal fire), which keep their own look.
+   */
+  surfaces: readonly THREE.Material[];
+  dispose(): void;
+} {
   const appearance = createBlockAppearance(art, definition, size);
   const object = new THREE.Group();
-  object.add(new THREE.Mesh(appearance.geometry, appearance.materials));
+  const faces = finish(appearance);
+  object.add(new THREE.Mesh(appearance.geometry, faces));
+  const surfaces = [
+    ...faces,
+    ...(appearance.extras ?? [])
+      .flatMap(({ material }) => [material].flat())
+      .filter((material) => material.userData.reflective === true),
+  ];
   for (const extra of appearance.extras ?? []) object.add(extra);
   const edges = new THREE.EdgesGeometry(appearance.geometry);
   const edgeMaterial = new THREE.LineBasicMaterial({
@@ -23,6 +49,7 @@ export function writtenBlock(
   let disposed = false;
   return {
     object,
+    surfaces,
     dispose() {
       if (disposed) return;
       disposed = true;
