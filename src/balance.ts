@@ -50,6 +50,8 @@ export function validateStageTargetBalance<Kind extends string>(
   if (!Number.isSafeInteger(balance.openingTarget) || balance.openingTarget < 1)
     errors.push("opening target must be a positive whole number");
   if (balance.stages.length === 0) errors.push("stage sequence must not be empty");
+  const kinds = balance.stages.map(({ kind }) => kind);
+  if (new Set(kinds).size !== kinds.length) errors.push("stage kinds must be unique");
   for (const stage of balance.stages) {
     if (!Number.isFinite(stage.rateInto) || stage.rateInto < 1)
       errors.push(`${stage.kind}: rate must be finite and at least 1`);

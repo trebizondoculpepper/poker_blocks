@@ -54,9 +54,12 @@ export function targetForStage<Kind extends string>(
   let target = balance.openingTarget;
   const steps = (round - 1) * balance.stages.length + stageIndex;
   for (let step = 1; step <= steps; step++) {
-    target = Math.round(target * balance.stages[step % balance.stages.length].rateInto);
-    if (!Number.isSafeInteger(target) || target < 1)
-      throw new Error("stage target must remain a positive safe integer after rounding");
+    const next = Math.round(target * balance.stages[step % balance.stages.length].rateInto);
+    if (!Number.isFinite(next) || next < 1)
+      throw new Error("stage target must remain a positive number after rounding");
+    // A never-ending run eventually outgrows safe integers; keep the target representable.
+    target = Math.min(next, Number.MAX_SAFE_INTEGER);
+    if (target === Number.MAX_SAFE_INTEGER) break;
   }
   return target;
 }

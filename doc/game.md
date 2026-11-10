@@ -377,6 +377,8 @@ Passives are drawn from their unlock round by a named frequency curve (`shop.fre
 
 Round 1 stage 1 targets **300**. Each next target is the previous one ×1.75 (stage 1 → stage 2), ×1.5 (stage 2 → boss) and ×1.25 (boss → next round's stage 1), rounded to the nearest integer at each step: 300, 525, 788, 985, 1724, 2586, … The opening target and each stage's incoming rate are balance data in `src/balance.ts`. This progression is implemented; existing saves keep their current stage target until the next stage is dealt.
 
+An endless run eventually reaches the numeric limit. Targets then stay at `Number.MAX_SAFE_INTEGER`, so a far-round shop transition remains valid and saved targets stay representable.
+
 #### Balance config guardrails
 
 - **One source of truth:** prices, unlock rounds, weights and keyframes, material effects, hand values and stage target rates live in a single balance config module; consumers read it and never hold their own numbers.

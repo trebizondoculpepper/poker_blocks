@@ -106,4 +106,16 @@ describe("stage target balance (#137)", () => {
       }),
     ).toContain("stage target must remain a positive safe integer after rounding");
   });
+
+  it("rejects duplicate stage kinds", () => {
+    expect(
+      validateStageTargetBalance({
+        openingTarget: 300,
+        stages: [
+          { kind: "opening", rateInto: 1.25 },
+          { kind: "opening", rateInto: 1.75 },
+        ],
+      }),
+    ).toContain("stage kinds must be unique");
+  });
 });

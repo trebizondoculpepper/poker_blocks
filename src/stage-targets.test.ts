@@ -33,6 +33,12 @@ describe("stage target progression (#137)", () => {
     const sandbox = sandboxRunRules(demoRunRules);
     expect(sandbox.stage(1, "stage-1").targetScore).toBe(unlimited);
     expect(sandbox.stage(2, "boss").targetScore).toBe(unlimited);
+    expect(sandbox.stage(27, "stage-2").targetScore).toBe(unlimited);
+  });
+
+  it("caps far-round targets at the largest safe integer so the run can continue", () => {
+    expect(targetForStage(stageTargetBalance, 27, "stage-2")).toBe(Number.MAX_SAFE_INTEGER);
+    expect(targetForStage(stageTargetBalance, 100, "boss")).toBe(Number.MAX_SAFE_INTEGER);
   });
 
   it("keeps an older saved target until the next stage is dealt", () => {
