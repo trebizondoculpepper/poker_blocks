@@ -62,12 +62,13 @@ export type SceneTraits = {
   boardGestures: Record<never, never>;
   /** The ghost cube that invites a stage's first play, and how it looks and responds. */
   firstPlayPrompt: FirstPlayPromptConfig;
-  /** The passive rack is shown while this scene is on the stack (#187). */
-  passiveRackView: Record<never, never>;
-  /** Blocks may be played onto the field while this scene is in front. */
-  fieldPlacement: Record<never, never>;
+  /**
+   * The passive rack is shown while this scene is on the stack (#187), and its passives can be
+   * picked up from the drag source it names (#277): dragged to reorder or to sell.
+   */
+  passiveRackView: { source: string };
   /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
-  shopStock: Record<never, never>;
+  shopStock: { source: string };
   /**
    * The blurred card attract sequence is the background while this scene is in front (#147).
    * It is cosmetic: it draws no game state and its randomness is not the session's.
@@ -190,7 +191,15 @@ const escapeOpensPause: Partial<SceneTraits> = {
 const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
   // The bin takes discards dropped on it; asked before the grid, since it sits over the table.
-  dropTarget: { targets: [{ target: "discard", priority: 10 }] },
+  dropTarget: {
+    targets: [
+      { target: "discard", priority: 10 },
+      // The grid takes plays (#274): a single block, a selected group's line, the first play.
+      { target: "grid", priority: 0 },
+      // The hand takes a single block back to reorder it (#276), where nothing else does.
+      { target: "hand", priority: -10 },
+    ],
+  },
   // Hand blocks can be picked up and dragged to play, discard or reorder them.
   dragSource: { sources: [{ source: "hand" }] },
   // The board can be turned and zoomed.
@@ -207,7 +216,6 @@ const playSceneTraits: Partial<SceneTraits> = {
   handView: {},
   discardBin: {},
   deckPanel: { opens: "openDeck" },
-  fieldPlacement: {},
   runInPlay: {},
   ...escapeOpensPause,
 };
@@ -341,7 +349,7 @@ export const sceneDefinitions = [
       sellBin: {},
       coinsPanel: {},
       shopExit: { label: "Continue" },
-      shopStock: {},
+      shopStock: { source: "shop" },
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},
@@ -388,7 +396,7 @@ export type SceneAdditions = {
 /** A mode with a passive rack shows it in play and in the shop, never on the title (#187). */
 const rackScenes: SceneAdditions = {
   scenes: [...playScenes, "shop"],
-  traits: { passiveRackView: {} },
+  traits: { passiveRackView: { source: "rack" } },
 };
 
 /**

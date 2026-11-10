@@ -36,12 +36,26 @@ export type DropTarget = {
 };
 
 /**
- * A drag source (#282, #276): something that can be picked up. It answers what is picked up
- * under a pointer, or null where it has nothing to pick up.
+ * A drag source (#282, #276, #277): something that can be picked up. It answers what is picked
+ * up under a pointer (or null where it has nothing), and it runs its own drag: dnd-kit decides
+ * when a press becomes a drag and when it ends, and the manager hands each step to the source
+ * that started it, never asking what the source is.
  */
-export type DragSource = {
-  pick(clientX: number, clientY: number): RenderedBlock | null;
+export type DragSource<Picked = any> = {
+  /** The element pressed to pick from this source; the manager's surface when omitted. */
+  readonly surface?: Element;
+  /** What is picked up at a point, or null. */
+  pick(clientX: number, clientY: number): Picked | null;
+  /** The drag began: `press` is where the pointer went down, `at` where the drag started. */
+  begin(picked: Picked, press: Point, at: Point): void;
+  /** The pointer moved during the drag. */
+  move(at: Point): void;
+  /** The drag ended: dropped at `at`, or cancelled (put everything back). */
+  end(at: Point, canceled: boolean): void;
 };
+
+/** A point on the screen, in client pixels. */
+export type Point = { clientX: number; clientY: number };
 
 /** One drag source a scene allows, from its `dragSource` data. */
 export type DragSourceConfig = { source: string };
@@ -62,7 +76,7 @@ export type DragDropManager = {
   /** Allow a drag source while a scene shows; returns a function that disallows it again. */
   enableSource(config: DragSourceConfig): () => void;
   /** What an enabled drag source would pick up at a point, if anything. */
-  pickUp(clientX: number, clientY: number): RenderedBlock | null;
+  pickUp(clientX: number, clientY: number): unknown;
   /**
    * Whether a dnd-kit draggable may start a drag from a press at a point: its source picks
    * something up there. What it picks up, and where, is kept for `pressed`.
@@ -78,7 +92,7 @@ export type DragDropManager = {
 };
 
 /** A press on a drag source: what it picked up and where the pointer went down. */
-export type Press = { picked: RenderedBlock; clientX: number; clientY: number };
+export type Press = Point & { picked: unknown };
 
 /**
  * The drag-and-drop manager over dnd-kit (#282): each enabled drop target is a dnd-kit
@@ -100,6 +114,37 @@ export function createDragDropManager(
    */
   const sourcesEnabled: { config: DragSourceConfig; draggable: Draggable }[] = [];
   const presses = new Map<Draggable, Press>();
+  /** The source running the current drag, if any. */
+  let running: DragSource | null = null;
+  const sourceOf = (draggable: unknown) =>
+    sourcesEnabled.find((enabled) => enabled.draggable === draggable);
+  dnd.monitor.addEventListener("dragstart", ({ operation }) => {
+    const entry = sourceOf(operation.source);
+    const press = entry && presses.get(entry.draggable);
+    if (!entry || !press) {
+      dnd.actions.stop({ canceled: true });
+      return;
+    }
+    running = sources.kinds.get(entry.config.source);
+    const { x, y } = operation.position.current;
+    running.begin(press.picked, press, { clientX: x, clientY: y });
+  });
+  dnd.monitor.addEventListener("dragmove", ({ operation, to }) => {
+    const { x, y } = to ?? operation.position.current;
+    running?.move({ clientX: x, clientY: y });
+  });
+  dnd.monitor.addEventListener("dragend", ({ operation, canceled, nativeEvent }) => {
+    const source = running;
+    running = null;
+    const release = nativeEvent as PointerEvent | undefined;
+    const { x, y } = operation.position.current;
+    source?.end(
+      release && !canceled
+        ? { clientX: release.clientX, clientY: release.clientY }
+        : { clientX: x, clientY: y },
+      canceled,
+    );
+  });
   type Enabled = { config: DropTargetConfig; droppable: Droppable };
   /** Enabled drop targets; one enabled by two scenes stays until both disable it. */
   const enabled: Enabled[] = [];
@@ -169,7 +214,7 @@ export function createDragDropManager(
         draggable: new Draggable(
           {
             id: `${config.source}:${(serial += 1)}`,
-            handle: sources.surface,
+            handle: sources.kinds.get(config.source).surface ?? sources.surface,
             data: { source: config.source },
           },
           dnd,

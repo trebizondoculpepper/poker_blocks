@@ -39,13 +39,7 @@ function activationFrame(entry: RenderedPassive, time: number, reducedMotion: bo
 }
 
 /** A fixed screen-space rack with one Three.js scene for all rotating passive blocks. */
-export function createPassiveRack(
-  host: HTMLElement,
-  options: {
-    /** A pointer went down on an installed passive (the start of a possible drag). */
-    onPickUp?(block: PassiveBlock, event: PointerEvent): void;
-  } = {},
-): {
+export function createPassiveRack(host: HTMLElement): {
   element: HTMLElement;
   /**
    * A scene composing `passiveRackView` came to the front, or left (#187). The rack is shown,
@@ -55,6 +49,8 @@ export function createPassiveRack(
   render(rack: readonly PassiveBlock[]): void;
   /** Hide one passive's cube while it is being dragged (null shows them all). */
   lift(id: string | null): void;
+  /** The installed passive under a screen point, or null (the rack's drag source picks it). */
+  blockAt(clientX: number, clientY: number): PassiveBlock | null;
   /** The rack slot under a screen point (clamped to the filled slots), or null off the rack. */
   slotAt(clientX: number, clientY: number): number | null;
   /** Glide the cubes into this order while a reorder is previewed; null restores the rack. */
@@ -167,7 +163,6 @@ export function createPassiveRack(
           item.setAttribute("aria-label", block.traits.inspectable.inspect());
           item.tabIndex = 0;
           item.dataset.passiveId = block.id;
-          item.addEventListener("pointerdown", (event) => options.onPickUp?.(block, event));
           const description = document.createElement("span");
           description.className = "passive-description";
           description.textContent = block.traits.inspectable.inspect();
@@ -202,6 +197,19 @@ export function createPassiveRack(
       liftedId = id;
       for (const passive of rendered.values()) passive.mesh.visible = passive.id !== id;
       renderer.render(scene, camera);
+    },
+    blockAt(clientX, clientY) {
+      for (const passive of rendered.values()) {
+        const box = passive.item.getBoundingClientRect();
+        if (
+          clientX >= box.left &&
+          clientX <= box.right &&
+          clientY >= box.top &&
+          clientY <= box.bottom
+        )
+          return passive.block;
+      }
+      return null;
     },
     slotAt(clientX, clientY) {
       const bounds = element.getBoundingClientRect();

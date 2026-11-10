@@ -26,9 +26,9 @@
     }
   },
   "card.drag.return": {
-    "uses": 3,
+    "uses": 4,
     "files": {
-      "table-input.ts": 3
+      "table-input.ts": 4
     }
   },
   "card.place.fly": {

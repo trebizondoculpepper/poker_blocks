@@ -2,7 +2,7 @@
  * The behaviour each scene trait installs (see doc/game-architecture.md, "Trait").
  * `screen` marks the host with the scene in front, for styling and tests; `pausesBelow`
  * stops the scenes underneath a pop-up or menu taking input or updates; the HUD panel traits
- * show and hide one panel each; `fieldPlacement` lets the input place blocks onto the field;
+ * show and hide one panel each; `dropTarget` and `dragSource` allow drops and pick-ups;
  * `shopStock` shows and hides the shop's stock; `gameOverScreen` shows the run's totals and
  * choices; `musicCue` plays a music cue on entering; `devManualBlockDestroyer` (testing only)
  * destroys a double-clicked table block.
@@ -10,6 +10,7 @@
  * Each trait brings its own behaviour, so a scene composes the panels and permissions it
  * wants and nothing has to ask which scene is in front.
  */
+import type { BinView } from "./bin-view";
 import { devDropInspector } from "./scene-traits/dev-drop-inspector";
 import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
 import type { ActionLog } from "./action-log";
@@ -48,16 +49,11 @@ export type SceneHost = {
     /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
     renderer: Pick<TableRenderer, "tableEntered" | "handEntered">;
     hud: Pick<HudPanels, "show" | "hide">;
+    /** The bin: shown while a scene composing `discardBin` or `sellBin` is on the stack (#278). */
+    bin: Pick<BinView, "discardBinEntered" | "sellBinEntered">;
     input: Pick<
       TableInput,
-      | "setFieldActive"
-      | "cancelGestures"
-      | "discardBinEntered"
-      | "sellBinEntered"
-      | "handEntered"
-      | "enableDropTarget"
-      | "enableDragSource"
-      | "enableBoardGestures"
+      "cancelGestures" | "enableDropTarget" | "enableDragSource" | "enableBoardGestures"
     >;
     shop: ShopView;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
@@ -160,20 +156,17 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("deckPanel", panel<Context, "deck">("deck"));
   behaviours.register("coinsPanel", panel<Context, "coins">("coins"));
   behaviours.register("shopExit", panel<Context, "shopExit">("shopExit"));
-  behaviours.register("fieldPlacement", {
-    enter(context) {
-      context.services.input.setFieldActive(true);
-    },
-    exit(context) {
-      context.services.input.setFieldActive(false);
-    },
-  });
+  // The shop's stock is shown, and its offers can be dragged to BUY (#277), while it's in front.
+  const stockSources = new WeakMap<object, () => void>();
   behaviours.register("shopStock", {
-    enter({ services }) {
+    enter({ services }, config) {
       services.shop.render(services.run.shopStock(), true);
+      stockSources.set(config, services.input.enableDragSource({ source: config.source }));
     },
-    exit({ services }) {
+    exit({ services }, config) {
       services.shop.render([], false);
+      stockSources.get(config)?.();
+      stockSources.delete(config);
     },
   });
   behaviours.register("attractBackground", {
@@ -191,14 +184,12 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // The hand and the discard bin, like the table, exist while a scene that wants them is on the
   // stack (#183): a menu pushed over a stage leaves them, and the title composes neither.
   behaviours.register("handView", {
-    // Drawn and reachable together: a scene without the hand can neither see nor touch it.
+    // Drawn and reachable together: the input reaches hand blocks only while the renderer shows them.
     enter({ services }) {
       services.renderer.handEntered(true);
-      services.input.handEntered(true);
     },
     exit({ services }) {
       services.renderer.handEntered(false);
-      services.input.handEntered(false);
     },
   });
   behaviours.register("firstPlayPrompt", firstPlayPrompt<Context>());
@@ -241,17 +232,25 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       gesturesBound.delete(config);
     },
   });
+  const rackSources = new WeakMap<object, () => void>();
   behaviours.register("passiveRackView", {
-    enter: ({ services }) => services.rack.viewEntered(true, services.run.rackCapacity()),
-    exit: ({ services }) => services.rack.viewEntered(false, services.run.rackCapacity()),
+    enter({ services }, config) {
+      services.rack.viewEntered(true, services.run.rackCapacity());
+      rackSources.set(config, services.input.enableDragSource({ source: config.source }));
+    },
+    exit({ services }, config) {
+      services.rack.viewEntered(false, services.run.rackCapacity());
+      rackSources.get(config)?.();
+      rackSources.delete(config);
+    },
   });
   behaviours.register("discardBin", {
-    enter: ({ services }) => services.input.discardBinEntered(true),
-    exit: ({ services }) => services.input.discardBinEntered(false),
+    enter: ({ services }) => services.bin.discardBinEntered(true),
+    exit: ({ services }) => services.bin.discardBinEntered(false),
   });
   behaviours.register("sellBin", {
-    enter: ({ services }) => services.input.sellBinEntered(true),
-    exit: ({ services }) => services.input.sellBinEntered(false),
+    enter: ({ services }) => services.bin.sellBinEntered(true),
+    exit: ({ services }) => services.bin.sellBinEntered(false),
   });
   behaviours.register("deckView", {
     // Read-only: it shows the deck and its Back button goes back; it never changes the deck.

@@ -14,9 +14,11 @@ import type { CardBlock } from "./cards";
 import type { PassiveBlock } from "./passives";
 import { createBlockAppearance } from "./visual/block-appearance";
 import { createMaterialise } from "./visual/materialise";
+import type { DragSource, Point } from "./drag-drop";
 import "./shop-view.css";
 
 type DisplayedOffer = {
+  offer: ShopOffer;
   item: HTMLElement;
   slot: HTMLElement;
   cube: THREE.Object3D;
@@ -28,6 +30,11 @@ type Entrance = { startedAt: number; landed: Set<number> };
 export type ShopView = {
   /** The shop's purchase drop target, placed by the shared HUD frame. */
   readonly buyTarget: HTMLElement;
+  /**
+   * The shop's stock as a drag source (#277), run by dnd-kit like every drag: an offer pressed
+   * and moved follows the pointer, and dropped on BUY it's bought.
+   */
+  readonly dragSource: DragSource<DisplayedOffer>;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
   burnUnsold(reducedMotion: boolean): Promise<void>;
   frame(): void;
@@ -314,45 +321,7 @@ export function createShopView(
       cube.cube.rotation.set(-0.34, 0.48, 0);
       reflectInShop(cube.cube, reflections.texture);
       scene.add(cube.cube);
-      displayed.push({ item, slot, ...cube });
-      item.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0) return;
-        item.setPointerCapture(event.pointerId);
-        item.classList.add("is-dragging");
-        const x = event.clientX;
-        const y = event.clientY;
-        const move = (next: PointerEvent) => {
-          item.style.translate = `${next.clientX - x}px ${next.clientY - y}px`;
-        };
-        const cancel = () => {
-          item.removeEventListener("pointermove", move);
-          item.removeEventListener("pointerup", finish);
-          item.removeEventListener("pointercancel", cancel);
-          item.style.translate = "";
-          item.classList.remove("is-dragging");
-        };
-        const finish = (end: PointerEvent) => {
-          item.removeEventListener("pointermove", move);
-          item.removeEventListener("pointerup", finish);
-          item.removeEventListener("pointercancel", cancel);
-          if (burn) {
-            cancel();
-            return;
-          }
-          const destination = offerKind(offer).destination;
-          const from = item.getBoundingClientRect();
-          const label = item.dataset.label ?? "";
-          if (!contains(buyTarget, end.clientX, end.clientY) || !buy(offer.block.id, destination)) {
-            cancel();
-            return;
-          }
-          animatePurchase(from, label, flightTargets[view.flightTarget]);
-          cancel();
-        };
-        item.addEventListener("pointermove", move);
-        item.addEventListener("pointerup", finish);
-        item.addEventListener("pointercancel", cancel);
-      });
+      displayed.push({ offer, item, slot, ...cube });
       stock.append(item);
     }
     if (animateEntrance && displayed.length > 0) {
@@ -507,8 +476,49 @@ export function createShopView(
     renderer.render(scene, camera);
   }
 
+  /** The offer being dragged and where its press went down. */
+  let dragging: { entry: DisplayedOffer; press: Point } | null = null;
+  const dragSource: DragSource<DisplayedOffer> = {
+    surface: stock,
+    pick(clientX, clientY) {
+      // While the stock tosses in or burns out, nothing can be picked up.
+      if (burn || stock.inert) return null;
+      return displayed.find(({ item }) => contains(item, clientX, clientY)) ?? null;
+    },
+    begin(entry, press) {
+      dragging = { entry, press };
+      entry.item.classList.add("is-dragging");
+    },
+    move({ clientX, clientY }) {
+      if (!dragging) return;
+      const { entry, press } = dragging;
+      entry.item.style.translate = `${clientX - press.clientX}px ${clientY - press.clientY}px`;
+    },
+    end({ clientX, clientY }, canceled) {
+      if (!dragging) return;
+      const { entry } = dragging;
+      dragging = null;
+      const putBack = () => {
+        entry.item.style.translate = "";
+        entry.item.classList.remove("is-dragging");
+      };
+      if (canceled || burn) return putBack();
+      const view = offerViews.get(entry.offer.kind);
+      const from = entry.item.getBoundingClientRect();
+      const label = entry.item.dataset.label ?? "";
+      if (
+        !contains(buyTarget, clientX, clientY) ||
+        !buy(entry.offer.block.id, offerKind(entry.offer).destination)
+      )
+        return putBack();
+      animatePurchase(from, label, flightTargets[view.flightTarget]);
+      putBack();
+    },
+  };
+
   return {
     buyTarget,
+    dragSource,
     render,
     burnUnsold,
     frame,

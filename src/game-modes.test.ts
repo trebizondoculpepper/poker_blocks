@@ -138,7 +138,13 @@ describe("game modes composed from traits", () => {
         tableBackground: {},
         roundPanel: {},
         deckPanel: { opens: "openDeck" },
-        fieldPlacement: {},
+        dropTarget: {
+          targets: [
+            { target: "discard", priority: 10 },
+            { target: "grid", priority: 0 },
+            { target: "hand", priority: -10 },
+          ],
+        },
       });
       expect(traitsOf("game", stage)).not.toHaveProperty("coinsPanel");
       expect(traitsOf("game", stage)).not.toHaveProperty("shopStock");
@@ -148,10 +154,10 @@ describe("game modes composed from traits", () => {
       tableBackground: {},
       handView: {},
       sellBin: {},
-      passiveRackView: {},
+      passiveRackView: { source: "rack" },
       coinsPanel: {},
       shopExit: { label: "Continue" },
-      shopStock: {},
+      shopStock: { source: "shop" },
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},
@@ -247,14 +253,19 @@ describe("game modes composed from traits", () => {
       screen: { kind: "stage-1" },
       roundPanel: { stage: "STAGE 1", actions: { lost: "End game" } },
       tableBackground: {},
-      dropTarget: { targets: [{ target: "discard", priority: 10 }] },
+      dropTarget: {
+        targets: [
+          { target: "discard", priority: 10 },
+          { target: "grid", priority: 0 },
+          { target: "hand", priority: -10 },
+        ],
+      },
       dragSource: { sources: [{ source: "hand" }] },
       boardGestures: {},
       firstPlayPrompt: expect.objectContaining({ colour: 0x65f4dd }),
       handView: {},
       discardBin: {},
       deckPanel: { opens: "openDeck" },
-      fieldPlacement: {},
       runInPlay: {},
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
       musicTrack: { pool: "stage" },

@@ -48,6 +48,10 @@ function recordingHost() {
         show: (panel) => void (shown.add(panel), calls.push(`show:${panel}`)),
         hide: (panel) => void (shown.delete(panel), calls.push(`hide:${panel}`)),
       },
+      bin: {
+        discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
+        sellBinEntered: (entered) => void calls.push(`sellBin:${entered}`),
+      },
       input: {
         enableDropTarget: ({ target }) => {
           calls.push(`target:${target}:on`);
@@ -61,11 +65,7 @@ function recordingHost() {
           calls.push("board:on");
           return () => void calls.push("board:off");
         },
-        setFieldActive: (active) => calls.push(`fieldActive:${active}`),
         cancelGestures: () => void calls.push("gestures:cancel"),
-        discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
-        sellBinEntered: (entered) => void calls.push(`sellBin:${entered}`),
-        handEntered: (entered) => void calls.push(`handInput:${entered}`),
       },
       deckView: {
         show: (blocks: readonly unknown[], close: () => void) => {
@@ -87,6 +87,7 @@ function recordingHost() {
       },
       shop: {
         buyTarget: {} as HTMLElement,
+        dragSource: { pick: () => null, begin: () => {}, move: () => {}, end: () => {} },
         render: (offers: readonly ShopOffer[], visible: boolean) =>
           calls.push(`shop:${visible}:${offers.length}`),
         burnUnsold: () => Promise.resolve(),
@@ -157,7 +158,7 @@ describe("scene traits own their behaviour", () => {
   it("shows the rack, sized from the run, while its scene is on the stack (#187)", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
-    scenes.register(scene("stage", { passiveRackView: {} }));
+    scenes.register(scene("stage", { passiveRackView: { source: "rack" } }));
     scenes.register(scene("menu", { pausesBelow: { input: true, update: true } }));
     scenes.register(scene("title", {}));
     scenes.switchTo("stage");
@@ -178,7 +179,8 @@ describe("scene traits own their behaviour", () => {
     scenes.register(scene("title", {}));
 
     scenes.switchTo("stage");
-    expect(calls).toEqual(["hand:true", "handInput:true", "bin:true"]);
+    // The input reaches the hand through the renderer's handShown (#278): no switch of its own.
+    expect(calls).toEqual(["hand:true", "bin:true"]);
     calls.length = 0;
     scenes.push("menu");
     scenes.pop();
@@ -187,7 +189,6 @@ describe("scene traits own their behaviour", () => {
     expect(calls.filter((call) => /^(hand|handInput|bin):/.test(call)).sort()).toEqual([
       "bin:false",
       "hand:false",
-      "handInput:false",
     ]);
   });
 
@@ -359,23 +360,11 @@ describe("scene traits own their behaviour", () => {
     expect([...shown]).toEqual(["deck"]);
   });
 
-  it("turns field placement on in a play scene and off in the shop", () => {
-    const { host, calls } = recordingHost();
-    const scenes = new SceneManager(sceneBehaviours(), host);
-    scenes.register(scene("stage", { fieldPlacement: {} }));
-    scenes.register(scene("shop", { coinsPanel: {}, shopStock: {} }));
-
-    scenes.switchTo("stage");
-    scenes.switchTo("shop");
-    expect(calls).toContain("fieldActive:true");
-    expect(calls).toContain("fieldActive:false");
-  });
-
   it("shows the shop's stock on entering the shop and hides it on leaving", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
     scenes.register(scene("stage", { roundPanel: { stage: "S" } }));
-    scenes.register(scene("shop", { shopStock: {} }));
+    scenes.register(scene("shop", { shopStock: { source: "shop" } }));
 
     scenes.switchTo("shop");
     scenes.switchTo("stage");
@@ -409,7 +398,6 @@ describe("scene traits own their behaviour", () => {
       "deckPanel",
       "coinsPanel",
       "shopExit",
-      "fieldPlacement",
       "shopStock",
       "sellBin",
       "pausesBelow",
