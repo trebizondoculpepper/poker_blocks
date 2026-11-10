@@ -4,6 +4,7 @@ import {
   defaultSettings,
   loadSettings,
   prefersReducedMotion,
+  landscapeAspect,
   resolveLayout,
   resolveShadowQuality,
   saveSettings,
@@ -72,14 +73,32 @@ describe("settings", () => {
   it("resolves the automatic layout from the viewport's shape (#120)", () => {
     const wide = { width: 1280, height: 800 };
     const tall = { width: 390, height: 844 };
-    const square = { width: 800, height: 800 };
+    const square = { width: 1250, height: 1000 };
     expect(resolveLayout("auto", wide, "portrait")).toBe("landscape");
     expect(resolveLayout("auto", tall, "landscape")).toBe("portrait");
-    // A square viewport keeps whichever layout is showing, so it never flips.
+    // At the threshold ratio, the layout showing is kept, so it never flips.
     expect(resolveLayout("auto", square, "landscape")).toBe("landscape");
     expect(resolveLayout("auto", square, "portrait")).toBe("portrait");
     // Turning the device re-evaluates: the same call with the new shape.
     expect(resolveLayout("auto", tall, resolveLayout("auto", wide, "portrait"))).toBe("portrait");
+  });
+
+  it("treats narrow landscape windows as portrait, below a 1.25 aspect ratio (#238)", () => {
+    expect(landscapeAspect).toBe(1.25);
+    expect(resolveLayout("auto", { width: 600, height: 510 }, "landscape")).toBe("portrait");
+    expect(resolveLayout("auto", { width: 800, height: 800 }, "landscape")).toBe("portrait");
+    expect(resolveLayout("auto", { width: 1251, height: 1000 }, "portrait")).toBe("landscape");
+    expect(resolveLayout("auto", { width: 1249, height: 1000 }, "landscape")).toBe("portrait");
+    // Common landscape screens stay landscape.
+    for (const [width, height] of [
+      [1280, 800],
+      [1024, 768],
+      [844, 390],
+      [800, 600],
+    ])
+      expect(resolveLayout("auto", { width, height }, "portrait"), `${width}x${height}`).toBe(
+        "landscape",
+      );
   });
 
   it("keeps a fixed layout whatever the viewport's shape (#119)", () => {

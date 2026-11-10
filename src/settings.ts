@@ -100,9 +100,16 @@ export function resolveShadowQuality(
 }
 
 /**
- * The layout to show (#120): a fixed choice as chosen; "auto" picks landscape for a viewport
- * wider than tall and portrait for one taller than wide. A square viewport keeps the current
- * layout, so it never flips back and forth.
+ * The width-to-height ratio at which the automatic layout switches (#238). Below it, even a
+ * slightly wide window (600×510, say) is laid out as portrait, because the landscape layout
+ * needs real width beside the rack; above it, landscape.
+ */
+export const landscapeAspect = 1.25;
+
+/**
+ * The layout to show (#120, #238): a fixed choice as chosen; "auto" picks landscape when the
+ * viewport's width-to-height ratio is above `landscapeAspect` and portrait when below. A ratio
+ * exactly at the threshold keeps the current layout, so it never flips back and forth.
  */
 export function resolveLayout(
   setting: LayoutSetting,
@@ -110,6 +117,7 @@ export function resolveLayout(
   current: "landscape" | "portrait",
 ): "landscape" | "portrait" {
   if (setting !== "auto") return setting;
-  if (viewport.width === viewport.height) return current;
-  return viewport.width > viewport.height ? "landscape" : "portrait";
+  const aspect = viewport.width / viewport.height;
+  if (aspect === landscapeAspect) return current;
+  return aspect > landscapeAspect ? "landscape" : "portrait";
 }
