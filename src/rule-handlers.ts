@@ -85,6 +85,16 @@ ruleHandlers.registerCondition<{ stages: readonly StageKind[] }, StageKind | und
   ({ stages }, stage) => !!stage && stages.includes(stage),
 );
 
+// ----- Value sources: amounts an effect's configuration may take instead of a number (#97) -----
+
+/** A fixed amount, for symmetry with the random sources: `{ valueSource: "fixed", value: 3 }`. */
+ruleHandlers.registerValueSource<{ value: number }>("fixed", ({ value }) => value);
+/** A die: a whole number from 1 to `sides`, each equally likely. */
+ruleHandlers.registerValueSource<{ sides: number }>(
+  "roll",
+  ({ sides }, random) => 1 + Math.min(sides - 1, Math.floor(random() * sides)),
+);
+
 // ----- Effects: what the rule does to the working value -----
 
 ruleHandlers.registerEffect<{ factor: number }, unknown>(
