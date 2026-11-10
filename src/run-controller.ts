@@ -441,7 +441,14 @@ export function createRunController<Context>(options: {
    * itself was dealt from, so Continue matches even if browser storage has moved on.
    */
   const loadSaved = () =>
-    loadRun(storage, cardsForSavedRun, dealerRegistry, runSaveKey, currentMode.flow);
+    loadRun(
+      storage,
+      cardsForSavedRun,
+      dealerRegistry,
+      runSaveKey,
+      currentMode.flow,
+      runSetup.requiresSavedSeed(currentMode.runSetup),
+    );
   const resume = (snapshot: NonNullable<ReturnType<typeof loadSaved>>) => {
     cards = cardsForSavedRun(snapshot.seed);
     // Continue resumes the session's random sequence where it left off, so the run replays

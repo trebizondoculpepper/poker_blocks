@@ -3,6 +3,7 @@ import { fixedRandom } from "./random";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
 import { GameRun } from "./game-run";
+import type { GameState } from "./game-state";
 import { makeDevDeck, materialOf } from "./materials";
 import { demoRunRules } from "./run-rules";
 import { createRunSetupRegistry } from "./run-setup-behaviours";
@@ -13,7 +14,7 @@ import {
   type RunSetupStep,
 } from "./run-setup";
 import { gameModeFor } from "./game-modes";
-import { fromSaveRecord, toSaveRecord } from "./save";
+import { fromSaveRecord, loadRun, toSaveRecord } from "./save";
 
 const services: RunSetupServices = {
   standardDeck,
@@ -281,12 +282,64 @@ describe("Continue never re-applies run setup", () => {
     expect(restored.phase).toBe("stage-1");
   });
 
-  it("ignores a corrupt seed rather than refusing the save", () => {
+  it("rejects a corrupt seed even when the mode does not require one", () => {
     const run = freshRun("dev0");
     const record = JSON.parse(JSON.stringify(toSaveRecord(run.snapshot())));
     record.seed = "not a seed";
-    expect(fromSaveRecord(record, standardDeck, dealerRegistry)?.seed).toBeUndefined();
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)).toBeNull();
     record.seed = -1;
-    expect(fromSaveRecord(record, standardDeck, dealerRegistry)?.seed).toBeUndefined();
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)).toBeNull();
+  });
+
+  it("rejects unreconstructable material saves before rebuilding cards", () => {
+    const mode = gameModeFor("dev2");
+    const registry = createRunSetupRegistry(noOffers);
+    expect(registry.requiresSavedSeed(mode.runSetup)).toBe(true);
+    expect(registry.requiresSavedSeed(gameModeFor("dev3").runSetup)).toBe(false);
+    const run = freshRun("dev2");
+    const original = run.snapshot();
+    const [fieldBlock, discarded, ...hand] = original.state.hand;
+    const snapshot = {
+      ...original,
+      state: {
+        ...original.state,
+        field: [{ block: fieldBlock, cell: { x: 0, y: 0, z: 0 } }],
+        hand,
+        discardPile: [discarded],
+      },
+    };
+    const record = JSON.parse(JSON.stringify(toSaveRecord(snapshot)));
+    let rebuilds = 0;
+    const deck = (seed: number | undefined) => {
+      rebuilds++;
+      return registry.deck(mode.runSetup, { deck: standardDeck, seed }, services).deck;
+    };
+    const storage = {
+      getItem: () => JSON.stringify(record),
+      setItem: () => {},
+      removeItem: () => {},
+    };
+    const load = () => loadRun(storage, deck, dealerRegistry, "run", mode.flow, true);
+    const identity = (card: (typeof original.state.hand)[number]) => [
+      card.id,
+      card.traits.identity.rank,
+      card.traits.identity.suit.name,
+      materialOf(card),
+    ];
+    const zones = (state: GameState) => [
+      state.field.map(({ block }) => identity(block)),
+      state.hand.map(identity),
+      state.deck.map(identity),
+      state.discardPile.map(identity),
+    ];
+    expect(zones(load()!.state)).toEqual(zones(snapshot.state));
+    expect(rebuilds).toBe(1);
+    delete record.seed;
+    expect(load()).toBeNull();
+    record.seed = "bad";
+    expect(load()).toBeNull();
+    record.seed = 4294967296;
+    expect(load()).toBeNull();
+    expect(rebuilds).toBe(1);
   });
 });

@@ -225,7 +225,7 @@ The run is saved automatically (`src/save.ts`) at safe points only: when a place
 }
 ```
 
-Loading rebuilds the blocks from the mode's starting deck and `GameRun.fromSnapshot` restores the session. A record with another version, an unknown scene or dealer, unknown or duplicate card ids, a missing card or malformed numbers is ignored, which hides Continue. A lost run clears the save. All storage access is wrapped so the game still works, without Continue or remembered settings, when storage is unavailable.
+Loading rebuilds the blocks from the mode's starting deck and `GameRun.fromSnapshot` restores the session. A corrupt or incompatible record is rejected, which makes Continue unavailable. This includes another version, an unknown scene or dealer, unknown or duplicate card IDs, a missing card, malformed numbers or seed, and a material deck without the seed needed to reconstruct its original cards. A lost run clears the save. All storage access is wrapped so the game still works, without Continue or remembered settings, when storage is unavailable.
 
 ### Card identity across Continue (#214)
 
@@ -233,7 +233,7 @@ Loading rebuilds the blocks from the mode's starting deck and `GameRun.fromSnaps
 
 Newly bought cards differ: `boughtCards` serializes each card's ID, rank, suit and material in full. Card shop stock also saves these four fields through its offer kind; a passive offer saves its own definition and ID. `restoreCard` rebuilds a card from the saved rank, suit and material definition. Unknown ranks, suits or materials invalidate the save rather than silently changing the card. `fromSaveRecord` also rejects unknown or duplicate card IDs and requires every owned card to appear in exactly one of field, hand, deck or discard pile. Old borrowed-card offers saved only by ID are returned to the deck and removed from stock on load.
 
-The starting deck's rank and suit mapping and the material assignment algorithm are **current code**, not frozen in the record. Changing either while retaining an ID can change a starting card after Continue. A material-deck record with no valid seed is accepted for compatibility, but `run-controller.ts` then builds a fresh material mix; that legacy or malformed record can return a card with a different material ([#216](https://github.com/trebizondoculpepper/poker_blocks/issues/216)). A focused regression guardrail should compare ID, rank, suit and material for every owned zone and every card offer after a JSON save/load round trip, including a seeded material run and bought cards. The missing-seed case needs an explicit compatibility policy before it can claim identity preservation.
+The starting deck's rank and suit mapping and the material assignment algorithm are **current code**, not frozen in the record. Changing either while retaining an ID can change a starting card after Continue. A material-deck record without a valid seed is rejected before starting-card IDs are resolved (#216). The mode's run-setup registry declares which deck steps require a saved seed, so an unseeded standard-deck run remains valid. Invalid present seeds are rejected in every mode. A regression guardrail compares ID, rank, suit and material across the field, hand, deck and discard pile after JSON save/load; bought cards and offers are covered by their own save tests. Future changes to the starting deck or material algorithm that break reconstruction require a save version or migration decision rather than silently remapping identities.
 
 ## Modes, scenes and traits
 

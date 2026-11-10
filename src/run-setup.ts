@@ -70,6 +70,8 @@ export type RunSetupServices = {
 };
 
 export type RunSetupBehaviour<Config extends object> = {
+  /** This step cannot reconstruct a saved deck without its original seed. */
+  requiresSavedSeed?: boolean;
   policy?(rules: RunRules, config: Config, services: RunSetupServices): RunRules;
   deck?(context: RunDeck, config: Config, services: RunSetupServices): RunDeck;
   start?(context: RunStartContext, config: Config, services: RunSetupServices): RunStartContext;
@@ -90,6 +92,11 @@ export class RunSetupRegistry {
 
   has(name: string): boolean {
     return this.behaviours.has(name);
+  }
+
+  /** Whether the mode's saved deck needs a seed to preserve card identities. */
+  requiresSavedSeed(steps: readonly RunSetupStep[]): boolean {
+    return steps.some((step) => this.get(step.step).requiresSavedSeed === true);
   }
 
   /** The rules every run in this mode plays under, new or resumed. */
