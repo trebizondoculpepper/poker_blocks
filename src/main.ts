@@ -5,6 +5,7 @@
  * table-input; presentation in view services and scene traits. Keep mode, phase and
  * scene decisions out of this file. See doc/game-architecture.md.
  */
+import type { FirstPlayTable } from "./scene-traits/first-play-prompt";
 import type { BlockDestroyerBoard } from "./scene-traits/dev-manual-block-destroyer";
 import "./style.css";
 import { createAudioService, type AudioService } from "./audio-service";
@@ -96,6 +97,7 @@ type TraitContext = {
     overlays: Overlays;
     hand: HandView;
     field: FieldView;
+    firstPlay: FirstPlayTable;
     presenter: PlayPresenter;
     input: TableInput;
     run: RunController;
@@ -148,6 +150,17 @@ const traitContext: TraitContext = {
       destroy: (blockId, cause) => run.destroyBlock(blockId, cause),
     },
     attract,
+    // What the first-play prompt trait asks of the table, the run and the input.
+    firstPlay: {
+      firstPlayCell: () => run.firstPlayCell(),
+      fieldCount: () => run.fieldCount(),
+      candidateCell: () => input.candidateCell,
+      busy: () => input.dragging || presenter.busy,
+      reducedMotion: () => run.reducedMotion,
+      placeObject: (object, cell) => field.placeObject(object, cell),
+      removeObject: (object) => field.removeObject(object),
+      cubeSize,
+    },
     get shop() {
       return shopView;
     },
@@ -314,7 +327,6 @@ const animate = (time: number) => {
   hand.animate(time, delta, input.selection);
   view.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
   input.frame();
-  run.promptFirstPlay(time);
   passiveRackView.frame(time, run.reducedMotion);
   shopView.frame();
   render();

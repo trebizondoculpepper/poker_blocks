@@ -57,13 +57,14 @@ export type FieldView = {
   faceAt(raycaster: THREE.Raycaster): { target: DropTarget; face: Face } | null;
   /** Preview a drop, or clear the preview with null. */
   showCandidate(candidate: Candidate | null): void;
-  /** Pulse the outline of the first play's cell, or hide it with null. */
-  showPrompt(cell: Cell | null, time: number, reducedMotion: boolean): void;
   /**
-   * A scene composing `firstPlayPrompt` came to the front, or left (#203). The prompt is drawn
-   * only while such a scene is on the stack, so the title never shows it.
+   * Put a presentation object (a scene trait's own model, such as the first-play prompt) at a
+   * cell of the structure, so it moves and turns with the blocks; `removeObject` takes it away.
    */
-  promptEntered(entered: boolean): void;
+  placeObject(object: THREE.Object3D, cell: Cell): void;
+  removeObject(object: THREE.Object3D): void;
+  /** One cell's edge length, in the structure's units. */
+  readonly cubeSize: number;
   /** Briefly tint these blocks toward gold. */
   tint(blocks: readonly CardBlock[], now: number): void;
   /** Play the configured cue for placed cards whose material scoring rule fired. */
@@ -99,8 +100,6 @@ export function createFieldView(options: {
 }): FieldView {
   const { views, assembly, cubeSize } = options;
   const placed = new Map<string, RenderedBlock>();
-  /** How many scenes in front compose `firstPlayPrompt`; the prompt shows while any does. */
-  let promptScenes = 0;
   /** Blocks played and still flying in, by cell: invisible stand-ins for hit-testing (#167). */
   const expected = new Map<string, { block: CardBlock; cell: Cell; cube: THREE.Mesh }>();
   const forget = (key: string, standIn: { cube: THREE.Mesh }) => {
@@ -138,7 +137,6 @@ export function createFieldView(options: {
   ghost.add(new THREE.LineSegments(ghostEdgeGeometry, ghostEdgeMaterial));
   /** Extra outlines for the rest of a line being placed (the first cell uses `ghost`). */
   const lineGhosts: THREE.Mesh[] = [];
-  let ghostIsDropPreview = false;
 
   const faceGeometry = new THREE.PlaneGeometry(cubeSize * 0.94, cubeSize * 0.94);
   const faceMaterial = new THREE.MeshBasicMaterial({
@@ -245,11 +243,12 @@ export function createFieldView(options: {
       return { target, face: faceFromDirection(hit.face.normal) };
     },
     showCandidate(candidate) {
-      ghostIsDropPreview = Boolean(candidate);
-      ghost.visible = Boolean(candidate);
+      // The preview marks an attachment to a block. With no block to attach to (the first play
+      // onto an empty table) the `firstPlayPrompt` trait's ghost is the preview instead.
+      ghost.visible = Boolean(candidate?.target);
       faceHighlight.visible = Boolean(candidate?.target);
       showLineGhosts(candidate?.cells.slice(1) ?? []);
-      if (!candidate) return;
+      if (!candidate?.target) return;
       placeAt(ghost, candidate.cell);
       if (!candidate.target?.cell || !candidate.face) return;
       const normal = faceNormal(candidate.face);
@@ -263,24 +262,14 @@ export function createFieldView(options: {
         new THREE.Vector3(normal.x, normal.y, normal.z),
       );
     },
-    promptEntered(entered) {
-      promptScenes = Math.max(0, promptScenes + (entered ? 1 : -1));
+    placeObject(object, cell) {
+      placeAt(object, cell);
+      assembly.add(object);
     },
-    showPrompt(requested, time, reducedMotion) {
-      // Only a scene that composes the prompt shows it.
-      const cell = promptScenes > 0 ? requested : null;
-      ghost.visible = ghostIsDropPreview || Boolean(cell);
-      if (!ghost.visible) return;
-      if (ghostIsDropPreview) {
-        ghostMaterial.opacity = 0.18;
-        ghostEdgeMaterial.opacity = 1;
-        return;
-      }
-      placeAt(ghost, cell!);
-      const pulse = reducedMotion ? 0.8 : (1 + Math.cos((time * Math.PI * 2) / 1800)) / 2;
-      ghostMaterial.opacity = 0.18 * pulse;
-      ghostEdgeMaterial.opacity = pulse;
+    removeObject(object) {
+      assembly.remove(object);
     },
+    cubeSize,
     tint(blocks, now) {
       const ids = new Set(blocks.map(({ id }) => id));
       tints.push({ blocks: views.all.filter(({ block }) => ids.has(block.id)), startedAt: now });

@@ -83,6 +83,8 @@ export type TableInput = {
   handDrag(): HandDrag | null;
   /** Whether a hand card or the board is being dragged. */
   readonly dragging: boolean;
+  /** The cell a dragged block would be played into right now, if any. */
+  readonly candidateCell: Cell | null;
   /** The scene in front allows (or no longer allows) blocks to be played onto the field. */
   setFieldActive(active: boolean): void;
   /**
@@ -842,6 +844,9 @@ export function createTableInput(options: {
       drag?.active ? drag : pendingDrop && { ...pendingDrop.drag, reorderSlot: null },
     get dragging() {
       return Boolean(drag?.active);
+    },
+    get candidateCell() {
+      return drag?.active ? (drag.candidate?.cell ?? null) : null;
     },
     setFieldActive(active) {
       fieldActive = active;
