@@ -1089,7 +1089,12 @@ body,
 @media (max-width: 700px) {
   :root {
     --hud-rack-clear: 66px;
-    --hud-rack-band: 76px;
+  }
+}
+/* The compact rack: the same breakpoint as src/passive-rack.css, so the band always fits it. */
+@media (max-width: 700px), (max-height: 500px) {
+  :root {
+    --hud-rack-band: 80px;
   }
 }
 .scene
@@ -1107,18 +1112,25 @@ body,
  * above the hand, which spans the bottom band.
  */
 .scene .hud-frame[data-layout="portrait"] {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: var(--hud-rack-band) auto 1fr auto var(
-      --hud-hand-band,
-      max(96px, calc(22vw + 12px))
-    );
+  /* minmax(0, …) so wide content in one column never pushes the other off screen. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* The rack band follows the rack's own size; the hand band is capped by the height, so a short
+     screen still fits status and controls. */
+  grid-template-rows:
+    var(--hud-rack-band) auto 1fr auto
+    min(max(96px, calc(22vw + 12px)), 24vh);
   grid-template-areas:
     "top-center top-center"
     "top-left top-right"
     ". ."
     "bottom-left bottom-right"
     "bottom-center bottom-center";
-  row-gap: 8px;
+  row-gap: min(8px, 1vh);
+}
+/* Portrait zones are half the width, so what they hold wraps rather than spilling out. */
+.scene .hud-frame[data-layout="portrait"] .hud-zone {
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 /*
