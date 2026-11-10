@@ -194,6 +194,13 @@ These already happen in the game, but have no dedicated id:
 - **Passives:** picking up a passive from the rack, and selling a passive, plays `reward.coin`, but there is no pickup sound.
 - **Layout change (#119/#120):** changing it plays `ui.click`, which is fine and needs nothing new.
 
+
+### Produced since the audit (#236)
+
+- **Generated:** priority 1 is done. `shop.buy`, `shop.stock.toss`, `shop.stock.land`, `shop.stock.burn`, `block.destroyed`, and `passive.activate.scoring`, `.economy`, `.effect` and `.retrigger` now have generated audio. So do the nine gameplay `material.attach.*` sounds from #232, which no longer fall back to `card.attach`.
+- **Loudness:** takes that came back quiet were peak-normalised offline with ffmpeg to about −1 dB. These were wood, terracotta, ice and crystal attach, and the scoring, economy and effect activations. All committed takes now peak between −3 dB and 0 dB.
+- **Still pending:** each take needs to be auditioned by ear in `/sfx.html`, and the remaining priorities 2–5 are still open.
+
 ### Recommendations, in priority order
 
 1. **Generate audio for the silent sounds the player meets every run:** `shop.buy`, `shop.stock.toss` and `shop.stock.land` (the shop's entrance), `shop.stock.burn`, `block.destroyed`, and the four `passive.activate.*` categories. They are already wired up, so this is only `npm run sfx` with prompts. Most have no `prompt` yet.
