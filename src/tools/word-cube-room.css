@@ -1,0 +1,52 @@
+/* The menu block audition room (dev13, src/tools/word-cube-room.ts). */
+.word-cube-room {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #05070b;
+  color: #f4f0e8;
+  font:
+    14px system-ui,
+    sans-serif;
+}
+.word-cube-room[hidden] {
+  display: none;
+}
+.word-cube-room-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: #1d2b3b;
+}
+.word-cube-room-header h1 {
+  margin: 0;
+  font-size: 19px;
+}
+.word-cube-room a {
+  color: inherit;
+}
+.word-cube-room-stage {
+  min-height: 0;
+}
+.word-cube-room-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.word-cube-room-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 28px;
+  padding: 10px 18px;
+  background: #1d2b3b;
+}
+.word-cube-room-readout p {
+  margin: 0;
+}
+.word-cube-room-readout output {
+  font-weight: 600;
+}
