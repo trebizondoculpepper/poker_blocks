@@ -218,6 +218,8 @@ const playSceneTraits: Partial<SceneTraits> = {
     // The first dancer (#256): it grows through each bar and drops back to its base size on
     // the downbeat (the owner's sawtooth).
     dance: { cycle: "bar", shape: "saw", offset: 0, swell: 0.12 },
+    // Its glow flashes on each beat while music plays, a touch early so it reads as on time.
+    flash: { cycle: "beat", shape: "pulse", offset: 0.04 },
     release: { seconds: 0.55, growth: 0.6 },
   },
   handView: {},

@@ -155,6 +155,33 @@ describe("first-play prompt trait (#203)", () => {
     expect(dancers.size).toBe(0);
   });
 
+  it("flashes its glow on the beat while music plays, and keeps its own pulse without", () => {
+    const behaviour = firstPlayPrompt();
+    const { shown, dancers, dance, context } = table();
+    const flashing = { ...config, flash: { cycle: "beat", shape: "pulse", offset: 0.04 } };
+    behaviour.enter!(context, flashing);
+    expect([...dancers].map(({ cycle, offset }) => [cycle, offset])).toEqual([["beat", 0.04]]);
+    behaviour.update!(context, flashing, 0.016);
+    const [ghost] = meshes(shown);
+    // The glow: the fill's opacity is 0.18 at the peak of a pulse or flash.
+    const glow = () => opacity(ghost!) / 0.18;
+    // On the beat: full brightness; late in the beat: almost dark.
+    dance(0, 1);
+    behaviour.update!(context, flashing, 0.016);
+    expect(glow()).toBeCloseTo(1);
+    dance(0.9, 1);
+    behaviour.update!(context, flashing, 0.016);
+    expect(glow()).toBeLessThan(0.01);
+    // With no music (energy 0), the glow is its own slow pulse, whatever the beat.
+    dance(0.9, 0);
+    behaviour.update!(context, flashing, 0.016);
+    expect(glow()).toBeGreaterThan(0.9);
+    // Flashing never changes its size.
+    expect(ghost!.scale.x).toBe(1);
+    behaviour.exit!(context, flashing);
+    expect(dancers.size).toBe(0);
+  });
+
   it("doesn't dance when its configuration has no dance", () => {
     const behaviour = firstPlayPrompt();
     const { dancers, context } = table();
