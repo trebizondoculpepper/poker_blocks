@@ -55,6 +55,11 @@ export type OfferView<Block extends OfferBlock> = {
   /** Destination explained to the player and used by the purchase flight. */
   purchaseDescription: string;
   flightTarget: "deck" | "rack";
+  /**
+   * Where dropping it buys it: the BUY box, and for a passive the rack itself, where it will
+   * be installed. A target the shop doesn't show (no rack) is skipped.
+   */
+  dropTargets: readonly ("buy" | "rack")[];
 };
 
 const offerViews = new Registry<OfferView<OfferBlock>>("offer view");
@@ -131,6 +136,7 @@ registerOfferView<CardBlock>("card", {
   className: "is-card",
   purchaseDescription: "BUY to add to the deck",
   flightTarget: "deck",
+  dropTargets: ["buy"],
 });
 
 registerOfferView<PassiveBlock>("passive", {
@@ -138,8 +144,9 @@ registerOfferView<PassiveBlock>("passive", {
   name: (block) => passiveDefinitions.get(block.definitionId).name,
   describe: (block) => block.traits.inspectable.inspect(),
   className: "is-passive",
-  purchaseDescription: "BUY to install in the passive rack",
+  purchaseDescription: "BUY or the passive rack to install it",
   flightTarget: "rack",
+  dropTargets: ["buy", "rack"],
 });
 
 /** Shop stock is drawn with the same real cube appearances as cards and installed passives. */
@@ -162,6 +169,8 @@ export function createShopView(
     "<strong>BUY</strong><span>Cards to deck · Passives to rack</span><small></small>";
   host.append(stock, buyTarget);
   const flightTargets = { deck: buyTarget.querySelector("small")!, rack: rack ?? buyTarget };
+  /** The elements an offer may be dropped on to buy it, by the names views give them. */
+  const dropTargets = { buy: [buyTarget], rack: [rack ?? []].flat() };
   const sign = document.createElement("div");
   sign.className = "shop-open-sign";
   sign.textContent = "SHOP OPEN";
@@ -507,10 +516,10 @@ export function createShopView(
       const view = offerViews.get(entry.offer.kind);
       const from = entry.item.getBoundingClientRect();
       const label = entry.item.dataset.label ?? "";
-      if (
-        !contains(buyTarget, clientX, clientY) ||
-        !buy(entry.offer.block.id, offerKind(entry.offer).destination)
-      )
+      const onTarget = view.dropTargets
+        .flatMap((name) => dropTargets[name])
+        .some((target) => contains(target, clientX, clientY));
+      if (!onTarget || !buy(entry.offer.block.id, offerKind(entry.offer).destination))
         return putBack();
       animatePurchase(from, label, flightTargets[view.flightTarget]);
       putBack();
