@@ -341,6 +341,8 @@ export const experimentalMaterials = [
   {
     id: "custard",
     name: "Custard",
+    // Plastic, between wood and ice (#232).
+    acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
     traits: { transparent: {} },
     appearance: {
       pattern: "cardSheet",
