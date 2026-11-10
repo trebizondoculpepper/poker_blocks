@@ -45,6 +45,7 @@ describe("game modes composed from traits", () => {
       "dev8",
       "dev9",
       "dev10",
+      "dev11",
       "dev12",
     ]);
   });
