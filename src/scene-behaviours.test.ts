@@ -49,7 +49,7 @@ function recordingHost() {
         },
         hide: () => void calls.push("deck:hide"),
       },
-      shopBalanceEditor: {
+      devShopBalanceEditor: {
         show: () => void calls.push("balance:show"),
         hide: () => void calls.push("balance:hide"),
       },
@@ -177,7 +177,7 @@ describe("scene traits own their behaviour", () => {
   it("mounts the draft editor only while its developer scene is active", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
-    scenes.register(scene("balance", { shopBalanceEditor: {} }));
+    scenes.register(scene("balance", { devShopBalanceEditor: {} }));
     scenes.register(scene("table", {}));
     scenes.switchTo("balance");
     expect(calls).toContain("balance:show");

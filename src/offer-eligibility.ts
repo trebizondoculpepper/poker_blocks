@@ -12,7 +12,10 @@ export function materialUnlockRound(material: MaterialDefinition): number {
 }
 
 /** Every material a passive's rules name anywhere in their configuration. */
-export function materialsNamedBy(definition: PassiveDefinition): MaterialDefinition[] {
+export function materialsNamedBy(
+  definition: PassiveDefinition,
+  materials: readonly MaterialDefinition[] = materialDefinitions,
+): MaterialDefinition[] {
   const named = new Set<string>();
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) value.forEach(visit);
@@ -23,7 +26,7 @@ export function materialsNamedBy(definition: PassiveDefinition): MaterialDefinit
       }
   };
   visit(definition.eventRules);
-  return (materialDefinitions as readonly MaterialDefinition[]).filter(({ id }) => named.has(id));
+  return materials.filter(({ id }) => named.has(id));
 }
 
 /**

@@ -26,7 +26,7 @@ import {
 } from "./scene-traits/dev-manual-block-destroyer";
 import { SceneTraitRegistry } from "./scenes";
 import type { DeckView } from "./deck-view";
-import type { ShopBalanceEditor } from "./shop-balance-editor";
+import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
 import { devHudStyleAudition, hudStyle } from "./scene-traits/hud-style";
 import type { SoundEffectId } from "./audio/sfx-registry";
 
@@ -51,7 +51,7 @@ export type SceneHost = {
     rack: { viewEntered(entered: boolean, capacity: number): void };
     /** The read-only deck view (#175). */
     deckView: Pick<DeckView, "show" | "hide">;
-    shopBalanceEditor: Pick<ShopBalanceEditor, "show" | "hide">;
+    devShopBalanceEditor: Pick<ShopBalanceEditor, "show" | "hide">;
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
     run: Pick<
       RunController,
@@ -218,9 +218,9 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     // The panel belongs to this scene, so leaving it takes the panel with it (#166).
     exit: ({ services }) => services.attract.hideTuning(),
   });
-  behaviours.register("shopBalanceEditor", {
-    enter: ({ services }) => services.shopBalanceEditor.show(),
-    exit: ({ services }) => services.shopBalanceEditor.hide(),
+  behaviours.register("devShopBalanceEditor", {
+    enter: ({ services }) => services.devShopBalanceEditor.show(),
+    exit: ({ services }) => services.devShopBalanceEditor.hide(),
   });
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
   behaviours.register("hudStyle", hudStyle<Context>());

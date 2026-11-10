@@ -1,10 +1,10 @@
 /** A complete, editable JSON draft of the shop's numeric balance. No edit touches live data. */
-import { gameTuning, validateMaterialBalance, validatePassiveBalance } from "./balance";
-import { defaultShop } from "./game-modes";
-import { materialDefinitions, type MaterialDefinition } from "./materials";
-import { passiveFrequencies, validateWeightCurve, type WeightCurve } from "./offer-weights";
-import { passiveDefinitions, type PassiveDefinition } from "./passives";
-import { materialsNamedBy } from "./offer-eligibility";
+import { gameTuning, validateMaterialBalance, validatePassiveBalance } from "../balance";
+import { defaultShop } from "../game-modes";
+import { materialDefinitions, type MaterialDefinition } from "../materials";
+import { passiveFrequencies, validateWeightCurve, type WeightCurve } from "../offer-weights";
+import { passiveDefinitions, type PassiveDefinition } from "../passives";
+import { materialsNamedBy } from "../offer-eligibility";
 
 export type DraftCurve = [round: number, weight: number][];
 export type ShopBalanceDraft = {
@@ -195,6 +195,6 @@ export function validateShopBalanceDraft(draft: ShopBalanceDraft): DraftError[] 
     ...passiveDefinitions.get(id),
     shop: draft.passives[id] ?? undefined,
   })) as PassiveDefinition[];
-  for (const message of validatePassiveBalance(passives)) add("passives", message);
+  for (const message of validatePassiveBalance(passives, materials)) add("passives", message);
   return errors;
 }

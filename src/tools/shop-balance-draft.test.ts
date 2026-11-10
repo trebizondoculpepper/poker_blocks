@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
-import { defaultShop } from "./game-modes";
-import { materialDefinitions } from "./materials";
-import { passiveFrequencies } from "./offer-weights";
-import { passiveDefinitions } from "./passives";
+import { defaultShop } from "../game-modes";
+import { materialDefinitions } from "../materials";
+import { passiveFrequencies } from "../offer-weights";
+import { passiveDefinitions } from "../passives";
 import { currentShopBalanceDraft, validateShopBalanceDraft } from "./shop-balance-draft";
 
 describe("shop balance draft", () => {
@@ -42,6 +42,9 @@ describe("shop balance draft", () => {
     expect(validateShopBalanceDraft(draft)).toContainEqual(
       expect.objectContaining({ path: "passives.gold-standard.unlockRound" }),
     );
+    draft.materials.gold!.weights = [[2, 1]];
+    draft.passives["gold-standard"]!.unlockRound = 2;
+    expect(validateShopBalanceDraft(draft)).toEqual([]);
   });
 
   it("reports an unsupported keyframe shape without throwing", () => {

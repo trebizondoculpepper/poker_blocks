@@ -60,7 +60,7 @@ export type SceneTraits = {
   /** Testing only: live sliders for the attract sequence's velocity, spin and spawn rate. */
   devAttractTuning: Record<never, never>;
   /** Developer-only shop balance draft editor, mounted only by a mode composing it. */
-  shopBalanceEditor: Record<never, never>;
+  devShopBalanceEditor: Record<never, never>;
   /** The HUD wears this registered style (src/hud-styles.ts) while the scene is on the stack. */
   hudStyle: HudStyleConfig;
   /** Testing only: a selector that switches the HUD between these styles (#121). */
@@ -248,10 +248,7 @@ export const sceneDefinitions = [
       keyAction: { key: "Escape", action: "back", sfx: "ui.back" },
     },
   },
-  {
-    name: "balance-editor",
-    traits: {},
-  },
+  ...(import.meta.env.DEV ? ([{ name: "balance-editor", traits: {} }] as const) : []),
   {
     name: "stage-1",
     traits: {
@@ -599,22 +596,26 @@ const gameModes: GameMode[] = [
       music: { style: "quiet" },
     },
   },
-  {
-    id: "dev-balance",
-    scenes: composeScenes("dev-balance", [
-      { scenes: ["balance-editor"], traits: { shopBalanceEditor: {} } },
-    ]),
-    startScene: "balance-editor",
-    flow: standardGameFlow,
-    navigation: standardNavigation,
-    runSetup: [],
-    traits: {
-      onLoad: "scene",
-      save: { key: "poker-blocks.dev-balance-run" },
-      console: { name: "dev-balance" },
-      music: { style: "quiet" },
-    },
-  },
+  ...(import.meta.env.DEV
+    ? [
+        {
+          id: "dev-balance",
+          scenes: composeScenes("dev-balance", [
+            { scenes: ["balance-editor"], traits: { devShopBalanceEditor: {} } },
+          ]),
+          startScene: "balance-editor",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev-balance-run" },
+            console: { name: "dev-balance" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+      ]
+    : []),
 ];
 for (const mode of gameModes) gameModeRegistry.register(mode.id, mode);
 

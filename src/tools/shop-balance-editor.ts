@@ -1,6 +1,6 @@
 /** Developer-only draft editor. It owns no run state and never writes balance definitions. */
-import { weightAt, type WeightCurve } from "./offer-weights";
-import { playSfx } from "./audio/sfx";
+import { weightAt, type WeightCurve } from "../offer-weights";
+import { playSfx } from "../audio/sfx";
 import {
   currentShopBalanceDraft,
   validateShopBalanceDraft,
