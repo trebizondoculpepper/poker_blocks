@@ -155,6 +155,30 @@ describe("first-play prompt trait (#203)", () => {
     expect(dancers.size).toBe(0);
   });
 
+  it("pulses in a windowed sine on the beat and rests flat between beats", () => {
+    const behaviour = firstPlayPrompt();
+    const { shown, dance, context } = table();
+    const pulsing = {
+      ...config,
+      dance: { cycle: "beat", shape: "sine", offset: 0, swell: 0.12, window: 0.4 },
+    };
+    behaviour.enter!(context, pulsing);
+    behaviour.update!(context, pulsing, 0.016);
+    const [ghost] = meshes(shown);
+    const scaleAt = (phase: number) => {
+      dance(phase, 1);
+      behaviour.update!(context, pulsing, 0.016);
+      return ghost!.scale.x;
+    };
+    // Peaks on the beat, eases either side within the window, and is flat outside it.
+    expect(scaleAt(0)).toBeCloseTo(1.12);
+    expect(scaleAt(0.1)).toBeCloseTo(1.06);
+    expect(scaleAt(0.9)).toBeCloseTo(1.06);
+    expect(scaleAt(0.3)).toBeCloseTo(1);
+    expect(scaleAt(0.5)).toBeCloseTo(1);
+    behaviour.exit!(context, pulsing);
+  });
+
   it("glows steadily while idle: no pulse and no flash, music or not", () => {
     const behaviour = firstPlayPrompt();
     const { shown, dance, context } = table();

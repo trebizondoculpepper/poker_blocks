@@ -16,7 +16,7 @@ import { createLaserOutline, type LaserOutlineConfig } from "../visual/laser-out
  */
 import * as THREE from "three";
 import type { SceneTraitBehaviour } from "../scenes";
-import { beatShapes } from "../dance/beat-shapes";
+import { beatShapes, bouncePhase } from "../dance/beat-shapes";
 import type { DanceFloor } from "../dance/dance-floor";
 import type { Cell } from "../traits/attachable";
 
@@ -43,12 +43,18 @@ export type FirstPlayPromptConfig = {
   dance?: {
     /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`, `fourBars`. */
     cycle: string;
-    /** A registered beat shape: `sine`, `pulse`, `bounce`, `gate`. */
+    /** A registered beat shape: `sine`, `pulse`, `bounce`, `gate`, `saw`, `envelope`. */
     shape: string;
     /** Beats to shift the move by (negative peaks a little early, which reads as on time). */
     offset: number;
     /** How much larger the ghost grows at the top of the move, as a fraction of a cell. */
     swell: number;
+    /**
+     * Squeeze the shape into this fraction of the cycle, peaking on the cycle's start (the
+     * beat) and flat the rest of the time, as the block title's bounce does. Leave it out and
+     * the shape fills the cycle.
+     */
+    window?: number;
   };
   /** When the first block is played. */
   release: {
@@ -155,7 +161,12 @@ export function firstPlayPrompt<
       // The ghost dances by joining the floor: its size follows a cycle, and its dance records
       // the shaped level, which the idle state below scales by the music's energy.
       const join = (
-        { cycle, shape, offset }: { cycle: string; shape: string; offset: number },
+        {
+          cycle,
+          shape,
+          offset,
+          window,
+        }: { cycle: string; shape: string; offset: number; window?: number },
         record: (move: { level: number; energy: number }) => void,
       ) => {
         const shaped = beatShapes.get(shape);
@@ -163,7 +174,8 @@ export function firstPlayPrompt<
           firstPlay.danceFloor.join({
             cycle,
             offset,
-            dance: ({ phase, energy }) => record({ level: shaped(phase), energy }),
+            dance: ({ phase, energy }) =>
+              record({ level: shaped(bouncePhase(phase, window)), energy }),
           }),
         );
       };
