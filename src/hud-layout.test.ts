@@ -18,6 +18,8 @@ describe("the gameplay HUD in the frame (#117)", () => {
     expect(zoneOf("menu")).toBe("top-right");
     expect(zoneOf("discard")).toBe("bottom-left");
     expect(zoneOf("deck")).toBe("bottom-right");
+    expect(zoneOf("shopBuy")).toBe("bottom-left");
+    expect(zoneOf("shopExit")).toBe("bottom-right");
   });
 
   it("places each element once, in a real zone", () => {

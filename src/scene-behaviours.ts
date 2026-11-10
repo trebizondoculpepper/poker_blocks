@@ -43,7 +43,7 @@ export type SceneHost = {
     hud: Pick<HudPanels, "show" | "hide">;
     input: Pick<
       TableInput,
-      "setFieldActive" | "cancelGestures" | "discardBinEntered" | "handEntered"
+      "setFieldActive" | "cancelGestures" | "discardBinEntered" | "sellBinEntered" | "handEntered"
     >;
     shop: ShopView;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
@@ -196,6 +196,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("discardBin", {
     enter: ({ services }) => services.input.discardBinEntered(true),
     exit: ({ services }) => services.input.discardBinEntered(false),
+  });
+  behaviours.register("sellBin", {
+    enter: ({ services }) => services.input.sellBinEntered(true),
+    exit: ({ services }) => services.input.sellBinEntered(false),
   });
   behaviours.register("deckView", {
     // Read-only: it shows the deck and its Back button goes back; it never changes the deck.

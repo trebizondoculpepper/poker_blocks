@@ -72,6 +72,8 @@ export type TableInput = {
    * the passives' sell target, is shown while any such scene is on the stack.
    */
   discardBinEntered(entered: boolean): void;
+  /** A shop scene composes the same target as Sell, without exposing Discard. */
+  sellBinEntered(entered: boolean): void;
   /** The selected block ids (hand and field). */
   readonly selection: Selection;
   /** Forget these blocks from the selection (they were played or discarded). */
@@ -692,11 +694,12 @@ export function createTableInput(options: {
     slot: number | null;
   } | null = null;
 
-  /** The shared lower-screen target reads Sell while a passive is dragged, else Discard. */
+  /** The shared lower-screen target reads Sell in the shop or while a passive is dragged. */
   function showSellTarget(selling: boolean): void {
-    discardArea.classList.toggle("is-sell", selling);
-    discardArea.setAttribute("aria-label", selling ? "Sell area" : "Discard area");
-    discardArea.querySelector(".discard-label")!.textContent = selling ? "SELL" : "DISCARD";
+    const showSell = selling || sellBinScenes > 0;
+    discardArea.classList.toggle("is-sell", showSell);
+    discardArea.setAttribute("aria-label", showSell ? "Sell area" : "Discard area");
+    discardArea.querySelector(".discard-label")!.textContent = showSell ? "SELL" : "DISCARD";
     if (!selling) discardArea.classList.remove("is-target", "is-refused");
   }
 
@@ -808,6 +811,7 @@ export function createTableInput(options: {
 
   /** How many scenes in front compose `discardBin`; the bin is shown while any does. */
   let discardBinScenes = 0;
+  let sellBinScenes = 0;
 
   return {
     handEntered(entered) {
@@ -815,7 +819,12 @@ export function createTableInput(options: {
     },
     discardBinEntered(entered) {
       discardBinScenes = Math.max(0, discardBinScenes + (entered ? 1 : -1));
-      discardArea.hidden = discardBinScenes === 0;
+      discardArea.hidden = discardBinScenes + sellBinScenes === 0;
+    },
+    sellBinEntered(entered) {
+      sellBinScenes = Math.max(0, sellBinScenes + (entered ? 1 : -1));
+      discardArea.hidden = discardBinScenes + sellBinScenes === 0;
+      showSellTarget(false);
     },
     fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
     get selection() {

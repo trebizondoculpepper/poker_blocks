@@ -450,23 +450,24 @@ body,
 .shop-exit {
   position: absolute;
   z-index: 4;
-  top: 22px;
-  /* Left of the settings gear (44px wide, 22px from the edge). */
-  right: calc(max(22px, env(safe-area-inset-right)) + 54px);
   width: auto;
+  min-height: 44px;
   margin: 0;
 }
 
-@media (max-width: 700px) {
-  .shop-exit {
-    top: 12px;
-  }
+/* The shop's two drop targets share the lower-left frame zone beside the hand. */
+.hud-zone[data-zone="bottom-left"]:has(.shop-buy-target:not([hidden])) {
+  gap: 8px;
+}
+.hud-zone[data-zone="bottom-left"]:has(.shop-buy-target:not([hidden])) .discard-area {
+  width: 112px;
+  height: 112px;
 }
 
-@media (max-width: 600px) {
-  /* The gear moves below the deck panel here, so the corner is free. */
-  .shop-exit {
-    right: max(12px, env(safe-area-inset-right));
+@media (max-width: 900px), (max-height: 600px) {
+  .hud-zone[data-zone="bottom-left"]:has(.shop-buy-target:not([hidden])) .discard-area {
+    width: 76px;
+    height: 76px;
   }
 }
 

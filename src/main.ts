@@ -209,6 +209,8 @@ const shopView = createShopView(
   (offer) => run.offerPrice(offer),
   (id, destination) => run.buy(id, destination),
   () => cameraView.finishShopEntrance(),
+  () => run.deckBlocks().length,
+  () => run.reducedMotion,
 );
 shopView.render([], false);
 const presenter: PlayPresenter = createPlayPresenter({
@@ -261,6 +263,7 @@ const hudElements: Record<HudElement, HTMLElement> = {
   deck: hud.element("deck"),
   coins: hud.element("coins"),
   shopExit: hud.element("shopExit"),
+  shopBuy: shopView.buyTarget,
   discard: discardArea,
   menu: overlays.menuButton,
 };

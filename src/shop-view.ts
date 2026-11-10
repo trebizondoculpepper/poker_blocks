@@ -25,6 +25,8 @@ type DisplayedOffer = {
 type Entrance = { startedAt: number; landed: Set<number> };
 
 export type ShopView = {
+  /** The shop's purchase drop target, placed by the shared HUD frame. */
+  readonly buyTarget: HTMLElement;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
   burnUnsold(reducedMotion: boolean): Promise<void>;
   frame(): void;
@@ -58,8 +60,8 @@ const coins = (amount: number) => `${amount} coin${amount === 1 ? "" : "s"}`;
 
 /** What each destination is called in an offer's description. */
 const destinationLabels: Record<OfferDestination, string> = {
-  hand: "the deck",
-  "passive-rack": "passive rack",
+  hand: "BUY to add to the deck",
+  "passive-rack": "BUY to install in the passive rack",
 };
 
 /** A passive offer's token: its own shape and faces (src/passive-visual.ts). */
@@ -137,14 +139,18 @@ export function createShopView(
   price: (offer: ShopOffer) => number,
   buy: (id: string, destination: OfferDestination) => boolean,
   onEntranceDone: () => void,
+  deckSize: () => number,
+  reducedMotion: () => boolean,
 ): ShopView {
   const stock = document.createElement("section");
   stock.className = "shop-stock";
   stock.setAttribute("aria-label", "Shop stock");
-  const handTarget = document.createElement("div");
-  handTarget.className = "shop-hand-target";
-  handTarget.textContent = "DROP PLAYABLE BLOCKS HERE TO ADD THEM TO YOUR DECK";
-  host.append(stock, handTarget);
+  const buyTarget = document.createElement("div");
+  buyTarget.className = "shop-buy-target";
+  buyTarget.setAttribute("aria-label", "Buy offer");
+  buyTarget.innerHTML =
+    "<strong>BUY</strong><span>Cards to deck · Passives to rack</span><small></small>";
+  host.append(stock, buyTarget);
   const sign = document.createElement("div");
   sign.className = "shop-open-sign";
   sign.textContent = "SHOP OPEN";
@@ -233,8 +239,36 @@ export function createShopView(
     return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
   };
 
+  /** A bought offer travels to the deck badge or the installed-passive rack. */
+  function animatePurchase(from: DOMRect, label: string, destination: OfferDestination): void {
+    if (reducedMotion()) return;
+    const target =
+      destination === "passive-rack" && rack ? rack : buyTarget.querySelector("small")!;
+    const to = target.getBoundingClientRect();
+    const flight = document.createElement("div");
+    flight.className = "shop-purchase-flight";
+    flight.textContent = label;
+    flight.style.left = `${from.left + from.width / 2}px`;
+    flight.style.top = `${from.top + from.height / 2}px`;
+    document.body.append(flight);
+    const dx = to.left + to.width / 2 - from.left - from.width / 2;
+    const dy = to.top + to.height / 2 - from.top - from.height / 2;
+    const animation = flight.animate(
+      [
+        { transform: "translate(0, 0) scale(1)", opacity: 1 },
+        { transform: `translate(${dx}px, ${dy}px) scale(0.35)`, opacity: 0.25 },
+      ],
+      { duration: 480, easing: "cubic-bezier(.2,.7,.2,1)", fill: "forwards" },
+    );
+    void animation.finished.then(
+      () => flight.remove(),
+      () => flight.remove(),
+    );
+  }
+
   function render(offers: readonly ShopOffer[], visible: boolean, animateEntrance = false): void {
-    stock.hidden = handTarget.hidden = renderer.domElement.hidden = !visible;
+    stock.hidden = buyTarget.hidden = renderer.domElement.hidden = !visible;
+    buyTarget.querySelector("small")!.textContent = `DECK ${deckSize()}`;
     clear();
     stock.replaceChildren();
     stock.classList.remove("is-burning");
@@ -289,12 +323,15 @@ export function createShopView(
             cancel();
             return;
           }
-          const destination = contains(rack, end.clientX, end.clientY)
-            ? "passive-rack"
-            : contains(handTarget, end.clientX, end.clientY)
-              ? "hand"
-              : null;
-          if (!destination || !buy(offer.block.id, destination)) cancel();
+          const destination = offerKind(offer).destination;
+          const from = item.getBoundingClientRect();
+          const label = item.querySelector(".shop-offer-label")!.textContent ?? "";
+          if (!contains(buyTarget, end.clientX, end.clientY) || !buy(offer.block.id, destination)) {
+            cancel();
+            return;
+          }
+          animatePurchase(from, label, destination);
+          cancel();
         };
         item.addEventListener("pointermove", move);
         item.addEventListener("pointerup", finish);
@@ -322,7 +359,7 @@ export function createShopView(
       return Promise.resolve();
     }
     stock.classList.add("is-burning");
-    handTarget.hidden = true;
+    buyTarget.hidden = true;
     const seconds = reducedMotion ? 0.4 : displayed.length === 1 ? 1.5 : 1.05;
     const stagger = reducedMotion || displayed.length === 1 ? 0 : 0.45 / (displayed.length - 1);
     burnPromise = new Promise((resolve) => {
@@ -430,6 +467,7 @@ export function createShopView(
   }
 
   return {
+    buyTarget,
     render,
     burnUnsold,
     frame,
@@ -439,7 +477,7 @@ export function createShopView(
       renderer.dispose();
       renderer.domElement.remove();
       stock.remove();
-      handTarget.remove();
+      buyTarget.remove();
       sign.remove();
       skip.remove();
     },
