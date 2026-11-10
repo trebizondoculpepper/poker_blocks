@@ -12,8 +12,15 @@ import {
 } from "./game-modes";
 import { saveKey } from "./save";
 import { createModeMusicBehaviours } from "./mode-music";
+import { validateShopStock } from "./shop-stock-config";
 
 describe("game modes composed from traits", () => {
+  it("keeps every composed shop within its stock limits", () => {
+    for (const id of gameModeRegistry.names()) {
+      const shop = gameModeRegistry.get(id).traits.shop;
+      if (shop) expect(validateShopStock(shop), id).toEqual([]);
+    }
+  });
   it("opens modes by id or alias, and the normal game otherwise", () => {
     expect(gameModeFor(null).id).toBe("game");
     expect(gameModeFor("dev2").id).toBe("dev2");
