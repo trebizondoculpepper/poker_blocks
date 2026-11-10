@@ -16,7 +16,16 @@ export type LoopInfo = {
   loop_seconds: number;
   /** Where beat 1 of a bar falls in the loop. */
   first_beat_seconds?: number;
+  /** Beats in a bar; 4 when absent. */
+  beats_per_bar?: number;
 };
+
+/**
+ * Where the heard music is (#255): its beat position from the shared beat clock, the current
+ * bar length and the tempo. Computed from each loop's registered tempo and beat offset; nothing
+ * analyses audio.
+ */
+export type MusicPosition = { beat: number; beatsPerBar: number; tempo: number };
 
 export type MusicTrack = { id: string; url: string; info: LoopInfo };
 
@@ -62,6 +71,11 @@ export type MusicPlayer = {
   setMuted(muted: boolean): void;
   /** Call from a user gesture: browsers keep audio suspended until one happens. */
   unlock(): void;
+  /**
+   * Where the music being heard is at `performanceNow` (a `performance.now()` time), or null
+   * when nothing is playing. Muted music still has a position: its clock keeps running.
+   */
+  position(performanceNow: number): MusicPosition | null;
 };
 
 /** A low-pass cut-off high enough to leave the music untouched. */
@@ -76,6 +90,20 @@ function sweep(context: AudioContext, filter: BiquadFilterNode, hz: number, seco
   frequency.cancelScheduledValues(now);
   frequency.setValueAtTime(frequency.value, now);
   frequency.exponentialRampToValueAtTime(hz, now + Math.max(0.01, seconds));
+}
+
+/** A track's bar length in beats. */
+export const beatsPerBar = (info: LoopInfo): number => info.beats_per_bar ?? 4;
+
+/**
+ * The audio-clock time being heard at `performanceNow`: through the context's paired output
+ * timestamp where the browser gives one, otherwise the current time less the output latency.
+ */
+export function heardTime(context: AudioContext, performanceNow: number): number {
+  const stamp = context.getOutputTimestamp?.();
+  if (stamp?.contextTime && stamp.performanceTime)
+    return stamp.contextTime + (performanceNow - stamp.performanceTime) / 1000;
+  return context.currentTime - (context.outputLatency || context.baseLatency || 0);
 }
 
 /** Seconds into a loop for a shared beat position (beat 0 is the first downbeat). */
@@ -160,8 +188,9 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
     voice.source.addEventListener("ended", () => fading.delete(voice));
   }
 
-  /** Seconds that `bars` bars last at `tempo` BPM. */
-  const barsToSeconds = (bars: number, tempo: number) => (bars * 4 * 60) / tempo;
+  /** Seconds that `bars` bars of `track` last at `tempo` BPM. */
+  const barsToSeconds = (bars: number, tempo: number, track: MusicTrack) =>
+    (bars * beatsPerBar(track.info) * 60) / tempo;
 
   function rateCurve(start: number, seconds: number, tempo: number): Float32Array {
     const curve = new Float32Array(128);
@@ -192,19 +221,20 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
         current.gain.gain.setValueCurveAtTime(
           fadeCurve(options.fadeKind, true),
           at,
-          barsToSeconds(options.fadeBars, track.info.tempo_bpm),
+          barsToSeconds(options.fadeBars, track.info.tempo_bpm, track),
         );
         return;
       }
 
       // Fades start on the next bar line, with B entering on the same beat at A's tempo.
       const now = context.currentTime + 0.05;
-      const at = clock.timeOfBeat(Math.ceil(clock.beatAt(now) / 4) * 4);
+      const bar = beatsPerBar(current.track.info);
+      const at = clock.timeOfBeat(Math.ceil(clock.beatAt(now) / bar) * bar);
       const from = clock.tempoAt(at);
       const to = track.info.tempo_bpm;
       const beat = clock.beatAt(at);
       // The tempo holds at `from` through the fade, so its bars are a fixed length.
-      const fadeSeconds = barsToSeconds(options.fadeBars, from);
+      const fadeSeconds = barsToSeconds(options.fadeBars, from, current.track);
       clock.ramp(at, 0, from);
       const easeAt = at + fadeSeconds + options.easeDelaySeconds;
       clock.ramp(easeAt, options.easeSeconds, to);
@@ -312,6 +342,16 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
     unlock() {
       const { context } = audio();
       if (context.state === "suspended") void context.resume();
+    },
+
+    position(performanceNow) {
+      if (!context || !clock || !current || context.state !== "running") return null;
+      const heard = heardTime(context, performanceNow);
+      return {
+        beat: clock.beatAt(heard),
+        beatsPerBar: beatsPerBar(current.track.info),
+        tempo: clock.tempoAt(heard),
+      };
     },
   };
 }
