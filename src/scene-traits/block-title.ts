@@ -5,9 +5,14 @@ export type BlockTitleConfig = {
   /** Relative size; 1 is full size, .5 is half size. */
   scale: number;
   rowSpacing?: number;
+  /** Slow circular tilt: cycle length in seconds and cone angle in degrees. */
+  precession?: { seconds?: number; angle?: number; phaseDegrees?: number };
   dance?: { cycle?: string; phaseStep?: number; bounce?: number; tilt?: number };
 };
+export type BlockTitleTuning = { scale: number; phaseDegrees: number };
 export type BlockTitles = {
+  tuning(): BlockTitleTuning;
+  retune(tuning: BlockTitleTuning): void;
   show(config: BlockTitleConfig): () => void;
   frame(): void;
   dispose(): void;

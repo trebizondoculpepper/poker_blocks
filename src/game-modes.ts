@@ -287,7 +287,7 @@ export const sceneDefinitions = [
     traits: {
       tableBackground: {},
       menu: pauseMenu,
-      blockTitle: { text: "Poker Blocks", scale: 0.5 },
+      blockTitle: { text: "Poker Blocks", scale: 1 },
       panelFooter: { links: projectLinks },
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "lowpass" },
@@ -700,7 +700,7 @@ const gameModes: GameMode[] = [
       onLoad: "title",
       save: { key: "poker-blocks.dev7-run" },
       console: { name: "dev7" },
-      music: { style: "quiet" },
+      music: { style: "ordinary" },
     },
   },
   ...(import.meta.env.DEV
