@@ -1,0 +1,358 @@
+{
+  "card.select": {
+    "uses": 1,
+    "files": {
+      "table-input.ts": 1
+    }
+  },
+  "card.deselect": {
+    "uses": 1,
+    "files": {
+      "table-input.ts": 1
+    }
+  },
+  "card.pickup": {
+    "uses": 2,
+    "files": {
+      "table-input.ts": 2
+    }
+  },
+  "card.drag.snap": {
+    "uses": 1,
+    "files": {
+      "table-input.ts": 1
+    }
+  },
+  "card.drag.return": {
+    "uses": 3,
+    "files": {
+      "table-input.ts": 3
+    }
+  },
+  "card.place.fly": {
+    "uses": 1,
+    "files": {
+      "play-presenter.ts": 1
+    }
+  },
+  "card.attach": {
+    "uses": 10,
+    "files": {
+      "audio/sfx-registry.ts (placeholder)": 10
+    }
+  },
+  "discard.hover": {
+    "uses": 2,
+    "files": {
+      "table-input.ts": 2
+    }
+  },
+  "card.discard": {
+    "uses": 1,
+    "files": {
+      "play-presenter.ts": 1
+    }
+  },
+  "card.deal": {
+    "uses": 1,
+    "files": {
+      "hand-view.ts": 1
+    }
+  },
+  "block.destroyed": {
+    "uses": 2,
+    "files": {
+      "game-run.ts": 1,
+      "run-controller.ts": 1
+    }
+  },
+  "action.denied": {
+    "uses": 7,
+    "files": {
+      "menus.ts": 2,
+      "run-controller.ts": 2,
+      "table-input.ts": 3
+    }
+  },
+  "score.line": {
+    "uses": 0,
+    "files": {}
+  },
+  "score.big": {
+    "uses": 0,
+    "files": {}
+  },
+  "score.magnitude.ones": {
+    "uses": 1,
+    "files": {
+      "audio/sfx-families.ts": 1
+    }
+  },
+  "score.magnitude.tens": {
+    "uses": 1,
+    "files": {
+      "audio/sfx-families.ts": 1
+    }
+  },
+  "score.magnitude.hundreds": {
+    "uses": 1,
+    "files": {
+      "audio/sfx-families.ts": 1
+    }
+  },
+  "score.magnitude.thousands": {
+    "uses": 1,
+    "files": {
+      "audio/sfx-families.ts": 1
+    }
+  },
+  "score.magnitude.ten_thousands": {
+    "uses": 1,
+    "files": {
+      "audio/sfx-families.ts": 1
+    }
+  },
+  "score.magnitude.hundred_thousands": {
+    "uses": 1,
+    "files": {
+      "audio/sfx-families.ts": 1
+    }
+  },
+  "score.magnitude.millions": {
+    "uses": 1,
+    "files": {
+      "audio/sfx-families.ts": 1
+    }
+  },
+  "round.cleared": {
+    "uses": 1,
+    "files": {
+      "run-controller.ts": 1
+    }
+  },
+  "round.failed": {
+    "uses": 1,
+    "files": {
+      "run-controller.ts": 1
+    }
+  },
+  "round.start": {
+    "uses": 3,
+    "files": {
+      "game-modes.ts": 3
+    }
+  },
+  "shop.open": {
+    "uses": 1,
+    "files": {
+      "game-modes.ts": 1
+    }
+  },
+  "shop.stock.toss": {
+    "uses": 1,
+    "files": {
+      "shop-view.ts": 1
+    }
+  },
+  "shop.stock.land": {
+    "uses": 1,
+    "files": {
+      "shop-view.ts": 1
+    }
+  },
+  "shop.buy": {
+    "uses": 1,
+    "files": {
+      "run-controller.ts": 1
+    }
+  },
+  "shop.stock.burn": {
+    "uses": 1,
+    "files": {
+      "run-controller.ts": 1
+    }
+  },
+  "run.lost": {
+    "uses": 1,
+    "files": {
+      "run-controller.ts": 1
+    }
+  },
+  "attract.card.bonk": {
+    "uses": 1,
+    "files": {
+      "attract-scene.ts": 1
+    }
+  },
+  "ui.click": {
+    "uses": 23,
+    "files": {
+      "game-modes.ts": 2,
+      "menus.ts": 7,
+      "run-controller.ts": 1,
+      "settings-panel.ts": 7,
+      "tools/shop-balance-editor.ts": 6
+    }
+  },
+  "ui.hover": {
+    "uses": 2,
+    "files": {
+      "menus.ts": 2
+    }
+  },
+  "ui.back": {
+    "uses": 8,
+    "files": {
+      "game-modes.ts": 4,
+      "menus.ts": 1,
+      "scene-behaviours.ts": 1,
+      "settings-panel.ts": 1,
+      "tools/shop-balance-editor.ts": 1
+    }
+  },
+  "hand.reorder": {
+    "uses": 2,
+    "files": {
+      "table-input.ts": 2
+    }
+  },
+  "view.zoom": {
+    "uses": 2,
+    "files": {
+      "audio-service.ts": 2
+    }
+  },
+  "reward.coin": {
+    "uses": 2,
+    "files": {
+      "menus.ts": 1,
+      "table-input.ts": 1
+    }
+  },
+  "passive.coins": {
+    "uses": 1,
+    "files": {
+      "play-presenter.ts": 1
+    }
+  },
+  "passive.granted": {
+    "uses": 1,
+    "files": {
+      "play-presenter.ts": 1
+    }
+  },
+  "passive.activate.scoring": {
+    "uses": 1,
+    "files": {
+      "passive-categories.ts": 1
+    }
+  },
+  "material.attach.meat": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.attach.paper": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.attach.wood": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.attach.custard": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.attach.ice": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.attach.terracotta": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.attach.gold": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.attach.steel": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.attach.fire": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.attach.prismatic": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.activate.wood": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.activate.gold": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.activate.steel": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.activate.prismatic": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "passive.activate.economy": {
+    "uses": 1,
+    "files": {
+      "passive-categories.ts": 1
+    }
+  },
+  "passive.activate.effect": {
+    "uses": 1,
+    "files": {
+      "passive-categories.ts": 1
+    }
+  },
+  "passive.activate.retrigger": {
+    "uses": 1,
+    "files": {
+      "passive-categories.ts": 1
+    }
+  },
+  "ui.screenshot": {
+    "uses": 1,
+    "files": {
+      "screenshot.ts": 1
+    }
+  }
+}

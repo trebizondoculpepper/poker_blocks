@@ -16,6 +16,16 @@ Every sound the game needs, the moment it plays, and whether it exists yet. The 
 
 Status: **generated** means the file exists. **Registered** means the entry exists but has no audio yet. **Planned** means the sound is not in the registry yet. Add a planned sound to the registry when the feature it belongs to is built.
 
+### Usage record and the listening room
+
+`src/audio/sfx-usage.json` is the registry's record of where each sound is used. For each id it gives how many places name it, and in which files. That covers `playSfx` calls, data that names a sound (scene `enterSound`, material activations, family variants), and registry entries that use it as their `placeholder`. Run `npm run sfx:usage` after adding, removing or moving a sound; `src/audio/sfx-usage.test.ts` fails while the record is out of date.
+
+The listening room (`/sfx.html`) reads the record:
+
+- each row shows **used ×N**, with the files listed on hover, or **unused**;
+- a **Show** filter lists all sounds, only used ones, or only unused ones;
+- each row's **Copy** button copies the sound's id.
+
 ## Hand and placement (current game)
 
 | Id                 | Plays when                                                          | Status    |

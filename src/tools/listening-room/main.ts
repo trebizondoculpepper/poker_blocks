@@ -1,6 +1,8 @@
 // Development page for auditioning every registered sound effect. Served at /sfx.html.
 import "./style.css";
 import { sfxFileNames, soundEffects, withSfxDefaults } from "../../audio/sfx-registry";
+// How many places use each sound: the registry's record (npm run sfx:usage).
+import usage from "../../audio/sfx-usage.json";
 
 const urls = import.meta.glob<string>("../../assets/sfx/*.mp3", {
   eager: true,
@@ -54,6 +56,13 @@ function play(url: string, row: HTMLElement | null, rate = 1): Promise<void> {
   });
 }
 
+/** Show a short confirmation on a button, then put its label back. */
+function flash(button: HTMLButtonElement, text: string): void {
+  const label = button.textContent;
+  button.textContent = text;
+  setTimeout(() => (button.textContent = label), 1200);
+}
+
 type Entry = { row: HTMLLIElement; takes: string[] };
 const entries: Entry[] = [];
 
@@ -74,7 +83,8 @@ for (const [index, effect] of soundEffects.entries()) {
       <span class="sound-trigger"></span>
       <span class="sound-prompt"></span>
     </span>
-    <span class="sound-meta"></span>`;
+    <span class="sound-meta"></span>
+    <span class="sound-usage"></span>`;
   main.querySelector(".sound-id")!.textContent = effect.id;
   main.querySelector(".sound-trigger")!.textContent = effect.trigger;
   main.querySelector(".sound-prompt")!.textContent = effect.prompt
@@ -86,12 +96,40 @@ for (const [index, effect] of soundEffects.entries()) {
       : effect.prompt
         ? "not generated"
         : "needs prompt";
+  const used = (usage as Record<string, { uses: number; files: Record<string, number> }>)[
+    effect.id
+  ] ?? { uses: 0, files: {} };
+  const badge = main.querySelector<HTMLElement>(".sound-usage")!;
+  badge.textContent = used.uses > 0 ? `used ×${used.uses}` : "unused";
+  badge.title =
+    used.uses > 0
+      ? Object.entries(used.files)
+          .map(([file, count]) => `${file} ×${count}`)
+          .join("\n")
+      : "No code or data names this sound";
+  row.classList.add(used.uses > 0 ? "used" : "unused");
   main.disabled = takes.length === 0;
   main.addEventListener("click", () => {
     const take = takes[Math.floor(Math.random() * takes.length)];
     void play(take, row);
   });
-  row.append(main);
+  // Copy the sound's id, to paste into a ticket, a chat or `playSfx("…")`.
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = "sound-copy";
+  copy.textContent = "Copy";
+  copy.title = `Copy “${effect.id}”`;
+  copy.setAttribute("aria-label", `Copy the id ${effect.id}`);
+  copy.addEventListener("click", () => {
+    void navigator.clipboard.writeText(effect.id).then(
+      () => flash(copy, "Copied"),
+      () => flash(copy, "Copy failed"),
+    );
+  });
+  const head = document.createElement("div");
+  head.className = "sound-head";
+  head.append(main, copy);
+  row.append(head);
 
   if (takes.length > 1) {
     const variants = document.createElement("div");
@@ -124,6 +162,12 @@ element("play-all").addEventListener("click", async () => {
 });
 
 element("stop").addEventListener("click", stopAll);
+
+// Show all sounds, only the ones the game uses, or only the unused ones.
+const usageFilter = element<HTMLSelectElement>("usage-filter");
+usageFilter.addEventListener("change", () => {
+  list.dataset.show = usageFilter.value;
+});
 
 // Preview of a chain: one registered sound repeated at rising pitch, two semitones apart. The
 // sound is chosen from the registry, and `?sound=<id>` in the URL preselects it (#71).
