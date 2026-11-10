@@ -5,13 +5,18 @@
  * panel never decides where Back goes.
  */
 import { playSfx } from "./audio/sfx";
-import type { MotionSetting, Settings, ShadowSetting } from "./settings";
+import type { LayoutSetting, MotionSetting, Settings, ShadowSetting } from "./settings";
 
 const shadowLabels: Record<ShadowSetting, string> = {
   auto: "Automatic",
   high: "High",
   low: "Low",
   off: "Off",
+};
+
+const layoutLabels: Record<LayoutSetting, string> = {
+  landscape: "Landscape",
+  portrait: "Portrait",
 };
 
 const motionLabels: Record<MotionSetting, string> = {
@@ -60,6 +65,10 @@ export function createSettingsPanel(
        <legend>Shadows</legend>
        ${radios("shadows", shadowLabels)}
      </fieldset>
+     <fieldset class="menu-field">
+       <legend>Layout</legend>
+       ${radios("layout", layoutLabels)}
+     </fieldset>
      <div class="menu-buttons"><button type="button" data-menu="back">Back</button></div>`,
   );
   const find = <T extends HTMLElement>(name: string) =>
@@ -70,6 +79,7 @@ export function createSettingsPanel(
   const music = find<HTMLInputElement>("music");
   const motionInputs = [...panel.querySelectorAll<HTMLInputElement>('input[name="motion"]')];
   const shadowInputs = [...panel.querySelectorAll<HTMLInputElement>('input[name="shadows"]')];
+  const layoutInputs = [...panel.querySelectorAll<HTMLInputElement>('input[name="layout"]')];
 
   function change(next: Partial<Settings>): void {
     settings = { ...settings, ...next };
@@ -109,6 +119,12 @@ export function createSettingsPanel(
       playSfx("ui.click");
     }),
   );
+  layoutInputs.forEach((input) =>
+    input.addEventListener("change", () => {
+      change({ layout: input.value as LayoutSetting });
+      playSfx("ui.click");
+    }),
+  );
 
   return {
     refresh() {
@@ -119,6 +135,7 @@ export function createSettingsPanel(
       sfx.disabled = music.disabled = settings.muted;
       motionInputs.forEach((input) => (input.checked = input.value === settings.motion));
       shadowInputs.forEach((input) => (input.checked = input.value === settings.shadows));
+      layoutInputs.forEach((input) => (input.checked = input.value === settings.layout));
     },
     focus() {
       panel.querySelector<HTMLElement>("input")?.focus();

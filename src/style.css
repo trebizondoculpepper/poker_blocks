@@ -1057,17 +1057,68 @@ body,
   justify-content: flex-end;
 }
 
-@media (orientation: landscape) {
-  /*
-   * On landscape screens, every element placed in a zone flows into it (#117). Relative, not
-   * static, so a panel's own absolutely placed parts (the bin's count badge and refused X) stay
-   * anchored to it.
-   */
-  .scene .hud-frame[data-layout="landscape"] .hud-zone > * {
-    position: relative;
-    inset: auto;
-    margin: 0;
+/*
+ * In either layout, every element placed in a zone flows into it (#117). Relative, not static,
+ * so a panel's own absolutely placed parts (the bin's count badge and refused X) stay anchored
+ * to it. The layout comes from the player's Layout setting, never from the device's
+ * orientation (#119), so none of these rules sit in an orientation media query.
+ */
+.scene .hud-frame[data-layout="landscape"] .hud-zone > *,
+.scene .hud-frame[data-layout="portrait"] .hud-zone > * {
+  position: relative;
+  inset: auto;
+  margin: 0;
+}
+
+/*
+ * Clearances the frame keeps for things drawn outside it (#119): the hand spans the full width on
+ * a tall screen, and the passive rack crosses the top on a narrow one. They measure how much room
+ * those take on this screen; they never choose the layout, which is the player's setting.
+ */
+:root {
+  --hud-hand-clear: 0px;
+  --hud-rack-clear: 0px;
+  /* The portrait layout's rack band: the full-size rack, or the compact one on a phone. */
+  --hud-rack-band: 136px;
+}
+@media (max-aspect-ratio: 1/1) {
+  :root {
+    --hud-hand-clear: max(96px, calc(22vw + 12px));
   }
+}
+@media (max-width: 700px) {
+  :root {
+    --hud-rack-clear: 66px;
+    --hud-rack-band: 76px;
+  }
+}
+.scene
+  .hud-frame[data-layout="landscape"]
+  :is([data-zone="bottom-left"], [data-zone="bottom-right"]) {
+  padding-bottom: var(--hud-hand-clear);
+}
+.scene .hud-frame[data-layout="landscape"] :is([data-zone="top-left"], [data-zone="top-right"]) {
+  padding-top: var(--hud-rack-clear);
+}
+
+/*
+ * Portrait (#119): the passive rack keeps a band across the top, with status and Settings in
+ * the row under it; the table fills the middle; the bin, BUY, deck and Continue sit in a row
+ * above the hand, which spans the bottom band.
+ */
+.scene .hud-frame[data-layout="portrait"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: var(--hud-rack-band) auto 1fr auto var(
+      --hud-hand-band,
+      max(96px, calc(22vw + 12px))
+    );
+  grid-template-areas:
+    "top-center top-center"
+    "top-left top-right"
+    ". ."
+    "bottom-left bottom-right"
+    "bottom-center bottom-center";
+  row-gap: 8px;
 }
 
 /*

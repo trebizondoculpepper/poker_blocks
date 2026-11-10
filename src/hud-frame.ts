@@ -9,8 +9,10 @@
  * covered control. Board zoom never moves it.
  *
  * The frame knows nothing about scenes, modes or what a panel is: a service places its element
- * in a zone, and the scene traits that show and hide panels stay as they are. The layout is
- * landscape (the default); portrait and the orientation choice are #119 and #120.
+ * in a zone, and the scene traits that show and hide panels stay as they are.
+ *
+ * Its layout is landscape or portrait (#119), set from the player's Layout setting; the
+ * device's physical orientation never changes it (automatic choice is #120).
  */
 
 /** The frame's zones, top to bottom and left to right. */
@@ -24,14 +26,16 @@ export const frameZones = [
 ] as const;
 export type FrameZone = (typeof frameZones)[number];
 
-/** The frame's layouts; only landscape exists yet (#119 adds portrait). */
-export type FrameLayout = "landscape";
+/** The frame's layouts (#119). */
+export type FrameLayout = "landscape" | "portrait";
 
 export type HudFrame = {
   readonly element: HTMLElement;
   /** Put a panel or control in a zone, after anything already there. */
   place(panel: HTMLElement, zone: FrameZone): void;
   readonly layout: FrameLayout;
+  /** Rearrange the zones for a layout; what is placed in each zone stays. */
+  setLayout(layout: FrameLayout): void;
 };
 
 export function createHudFrame(host: HTMLElement, layout: FrameLayout = "landscape"): HudFrame {
@@ -49,9 +53,14 @@ export function createHudFrame(host: HTMLElement, layout: FrameLayout = "landsca
   host.append(element);
   return {
     element,
-    layout,
+    get layout() {
+      return element.dataset.layout as FrameLayout;
+    },
     place(panel, zone) {
       zones.get(zone)!.append(panel);
+    },
+    setLayout(next) {
+      element.dataset.layout = next;
     },
   };
 }

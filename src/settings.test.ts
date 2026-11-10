@@ -34,6 +34,7 @@ describe("settings", () => {
       music: true,
       motion: "reduced",
       shadows: "off",
+      layout: "portrait",
     } as const;
     saveSettings(storage, custom);
     expect(loadSettings(storage)).toEqual(custom);
@@ -50,11 +51,19 @@ describe("settings", () => {
         music: "no",
         motion: "full",
         shadows: "ultra",
+        layout: "sideways",
       }),
     );
     expect(loadSettings(storage)).toEqual({ ...defaultSettings, motion: "full" });
     storage.setItem(settingsKey, "{broken");
     expect(loadSettings(storage)).toEqual(defaultSettings);
+  });
+
+  it("defaults the layout to landscape, including for settings saved before it existed (#119)", () => {
+    expect(defaultSettings.layout).toBe("landscape");
+    const storage = memoryStorage();
+    storage.setItem(settingsKey, JSON.stringify({ volume: 0.4, shadows: "low" }));
+    expect(loadSettings(storage).layout).toBe("landscape");
   });
 
   it("keeps settings saved before the sound effects and music toggles, with both on", () => {

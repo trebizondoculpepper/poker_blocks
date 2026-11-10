@@ -7,6 +7,7 @@
  *
  * It decides what happens; the other services show it.
  */
+import type { HudFrame } from "./hud-frame";
 import type { DestroyCause } from "./traits/destructible";
 import type { AudioService } from "./audio-service";
 import { menuScreenScenes } from "./overlays";
@@ -75,6 +76,8 @@ export type RunServices = {
   readonly overlays: Overlays;
   readonly rack: PassiveRackView;
   readonly shop: ShopView;
+  /** The shared HUD frame, laid out from the Layout setting (#119). */
+  readonly frame: Pick<HudFrame, "setLayout">;
 };
 
 export type RunController = {
@@ -258,6 +261,7 @@ export function createRunController<Context>(options: {
     services.audio.applySettings(next);
     reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
     services.renderer.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
+    services.frame.setLayout(next.layout);
   }
 
   function updateHud(): void {

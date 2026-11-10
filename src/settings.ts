@@ -4,6 +4,9 @@ export type MotionSetting = "system" | "reduced" | "full";
 
 export type ShadowSetting = "auto" | "high" | "low" | "off";
 
+/** The HUD frame's layout (#119): chosen by the player, never by the device's orientation. */
+export type LayoutSetting = "landscape" | "portrait";
+
 export type Settings = {
   /** 0 to 1. */
   volume: number;
@@ -16,6 +19,8 @@ export type Settings = {
   motion: MotionSetting;
   /** Shadow quality; "auto" picks low on touch devices, high elsewhere. */
   shadows: ShadowSetting;
+  /** The HUD layout for gameplay and the shop; landscape by default (#119). */
+  layout: LayoutSetting;
 };
 
 export const defaultSettings: Settings = {
@@ -25,6 +30,7 @@ export const defaultSettings: Settings = {
   music: true,
   motion: "system",
   shadows: "auto",
+  layout: "landscape",
 };
 export const settingsKey = "poker-blocks.settings";
 
@@ -52,7 +58,10 @@ export function loadSettings(storage: SaveStorage | null): Settings {
   )
     ? (stored.shadows as ShadowSetting)
     : defaultSettings.shadows;
-  return { volume, muted, sfx, music, motion, shadows };
+  const layout = (["landscape", "portrait"] as const).includes(stored.layout as LayoutSetting)
+    ? (stored.layout as LayoutSetting)
+    : defaultSettings.layout;
+  return { volume, muted, sfx, music, motion, shadows, layout };
 }
 
 export function saveSettings(storage: SaveStorage | null, settings: Settings): void {
