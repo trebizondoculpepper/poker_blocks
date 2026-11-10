@@ -1,3 +1,4 @@
+import { createScatterPlacer } from "./shop-scatter";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { clamp01, easeInOutCubic, lerp } from "./easing";
@@ -266,6 +267,9 @@ export function createShopView(
     );
   }
 
+  // Each offer keeps its scatter spot while the stock changes (#122).
+  const placeOffers = createScatterPlacer();
+
   function render(offers: readonly ShopOffer[], visible: boolean, animateEntrance = false): void {
     stock.hidden = buyTarget.hidden = renderer.domElement.hidden = !visible;
     buyTarget.querySelector("small")!.textContent = `DECK ${deckSize()}`;
@@ -273,6 +277,7 @@ export function createShopView(
     stock.replaceChildren();
     stock.classList.remove("is-burning");
     if (!visible) return;
+    const spots = placeOffers(offers.map((offer) => offer.block.id));
     for (const offer of offers) {
       const view = offerViews.get(offer.kind);
       const name = view.name(offer.block);
@@ -281,6 +286,9 @@ export function createShopView(
       const item = document.createElement("button");
       item.type = "button";
       item.className = `shop-offer ${view.className}`;
+      const spot = spots.get(offer.block.id)!;
+      item.style.setProperty("--x", String(spot.x));
+      item.style.setProperty("--y", String(spot.y));
       item.setAttribute(
         "aria-label",
         `${description}, ${coins(price(offer))}, drag to ${destination}`,
@@ -289,7 +297,15 @@ export function createShopView(
       slot.className = "shop-cube-slot";
       const label = document.createElement("span");
       label.className = "shop-offer-label";
-      label.textContent = `${name} · ${coins(price(offer))}`;
+      // Name and price are separate, so a small spot can shorten the name but never the price.
+      const labelName = document.createElement("span");
+      labelName.className = "shop-offer-name";
+      labelName.textContent = name;
+      const labelPrice = document.createElement("span");
+      labelPrice.className = "shop-offer-price";
+      labelPrice.textContent = coins(price(offer));
+      label.append(labelName, labelPrice);
+      item.dataset.label = `${name} · ${coins(price(offer))}`;
       const tooltip = document.createElement("span");
       tooltip.className = "shop-offer-description";
       tooltip.textContent = description;
@@ -325,7 +341,7 @@ export function createShopView(
           }
           const destination = offerKind(offer).destination;
           const from = item.getBoundingClientRect();
-          const label = item.querySelector(".shop-offer-label")!.textContent ?? "";
+          const label = item.dataset.label ?? "";
           if (!contains(buyTarget, end.clientX, end.clientY) || !buy(offer.block.id, destination)) {
             cancel();
             return;

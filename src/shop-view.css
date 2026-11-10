@@ -57,24 +57,36 @@
 }
 
 .shop-stock {
+  /*
+   * The circular scatter (#122, src/shop-scatter.ts): a round area, each offer 0.19 of it across (spotSize radii), with
+   * each offer centred on its predefined spot (--x, --y in radius units). Never smaller than
+   * --scatter-min, so every offer keeps a 44px touch target.
+   */
+  --scatter-min: 232px;
+  --scatter: max(var(--scatter-min), min(56vh, 90vw, 520px));
+  /* Clear of the passive rack above: its bottom edge plus a margin. */
+  --scatter-top-clear: 158px;
   position: absolute;
   z-index: 4;
-  top: 31%;
+  top: max(46%, calc(var(--scatter) / 2 + var(--scatter-top-clear)));
   left: 50%;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  justify-items: center;
-  gap: clamp(8px, 1.5vw, 20px);
-  width: min(760px, calc(100vw - 230px));
-  transform: translateX(-50%);
+  width: var(--scatter);
+  height: var(--scatter);
+  transform: translate(-50%, -50%);
 }
 
 .shop-offer {
-  position: relative;
+  position: absolute;
+  left: calc(50% + var(--x, 0) * 50%);
+  top: calc(50% + var(--y, 0) * 50%);
+  transform: translate(-50%, -50%);
   display: grid;
   justify-items: center;
-  gap: 8px;
-  width: clamp(68px, 10vw, 108px);
+  align-content: center;
+  gap: 4px;
+  width: calc(var(--scatter) * 0.19);
+  height: calc(var(--scatter) * 0.19);
+  padding: 0;
   border: 0;
   background: none;
   color: #fff8df;
@@ -108,8 +120,8 @@
 
 .shop-cube-slot {
   display: block;
-  width: 90px;
-  height: 90px;
+  width: calc(var(--scatter) * 0.19 * 0.72);
+  height: calc(var(--scatter) * 0.19 * 0.72);
   pointer-events: none;
 }
 
@@ -119,6 +131,10 @@
   font: 700 11px var(--hud-font, system-ui, sans-serif);
   text-align: center;
   text-shadow: 0 2px 4px #000;
+}
+
+.shop-offer-price::before {
+  content: " · ";
 }
 
 .shop-offer-description {
@@ -204,21 +220,33 @@
 
 @media (max-width: 900px), (max-height: 600px) {
   .shop-stock {
-    top: 34%;
-    width: calc(100vw - 135px);
-    gap: 3px 5px;
+    /* The compact rack is shorter. */
+    --scatter-top-clear: 104px;
   }
+  /* Small spots: a smaller cube, so a two-line label fits inside the spot (#122). */
   .shop-offer {
-    width: min(100%, 90px);
-    gap: 2px;
+    gap: 1px;
   }
   .shop-cube-slot {
-    width: 44px;
-    height: 44px;
+    width: calc(var(--scatter) * 0.19 * 0.55);
+    height: calc(var(--scatter) * 0.19 * 0.55);
   }
   .shop-offer-label {
-    font-size: 9px;
-    line-height: 1.1;
+    font-size: 8px;
+    line-height: 1.05;
+  }
+  .shop-offer-name {
+    display: block;
+    max-width: calc(var(--scatter) * 0.19 + 12px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .shop-offer-price {
+    display: block;
+  }
+  .shop-offer-price::before {
+    content: none;
   }
   .shop-offer-description {
     top: 65px;
