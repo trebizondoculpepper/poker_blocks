@@ -69,8 +69,10 @@ export function createBeatSignal(read: () => MusicPosition | null): BeatSignal {
       if (!now) return;
       const { beat, beatsPerBar, tempo } = now;
       const bar = Math.floor(beat / beatsPerBar);
-      // Only a forward step crosses a line; a track change re-anchors without firing.
-      if (latest && beat > latest.beat && beat - latest.beat < beatsPerBar * 2) {
+      // Only a forward step crosses a line. Switching tracks keeps the beat, and a new clock
+      // (music starting from silence, or the wind-up) restarts at beat 0, a backward step, so
+      // neither fires; any forward step, however long, fires each event at most once.
+      if (latest && beat > latest.beat) {
         if (Math.floor(beat) > Math.floor(latest.beat)) emit("beat", Math.floor(beat));
         if (bar > latest.bar) emit("bar", bar);
       }
