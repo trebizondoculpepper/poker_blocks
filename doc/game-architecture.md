@@ -148,7 +148,7 @@ Material appearance is defined on each material definition in `src/materials.ts`
 
 - **Dancers:** a dancer names the cycle it follows (`halfBeat`, `beat`, `bar` or `twoBars`, a registry of cycle lengths) and an optional `offset` in beats. It implements `dance(move)`, which is called every frame with its `phase` through that cycle, the music's `energy` and the `tempo`.
 - **What a dance may change:** the dancer decides. Usually that's its appearance, but not always. The floor never asks what a dancer is.
-- **Shapes:** pure functions of phase, from 0 to 1, in a registry keyed by name (`src/dance/beat-shapes.ts`): `sine`, `pulse`, `bounce` and `gate`.
+- **Shapes:** pure functions of phase, from 0 to 1, in a registry keyed by name (`src/dance/beat-shapes.ts`): `sine`, `pulse`, `bounce`, `gate` and `saw`.
 - **Resting:** with no music, or with reduced motion, `energy` is 0, so dancers settle.
 - **The first dancer is the ghost cube.** `firstPlayPrompt`'s `dance` data (cycle, shape, offset, swell) makes its prompt join the floor. Its idle pulse blends from its own period onto the beat as the energy rises, and it swells slightly at the top of each bob. A prompt without `dance` never joins.
 

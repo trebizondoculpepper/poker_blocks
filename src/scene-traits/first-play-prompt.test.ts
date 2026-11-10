@@ -125,28 +125,30 @@ describe("first-play prompt trait (#203)", () => {
     expect(shown.size).toBe(0);
   });
 
-  it("dances: joins the floor on its cycle, and its pulse follows the beat as energy rises (#256)", () => {
+  it("dances: grows through its cycle and drops back to base size at the start (#256)", () => {
     const behaviour = firstPlayPrompt();
     const { shown, dancers, dance, context } = table();
-    const dancing = {
-      ...config,
-      dance: { cycle: "beat", shape: "bounce", offset: -0.03, swell: 0.04 },
-    };
+    const dancing = { ...config, dance: { cycle: "bar", shape: "saw", offset: 0, swell: 0.12 } };
     behaviour.enter!(context, dancing);
-    expect([...dancers].map(({ cycle, offset }) => [cycle, offset])).toEqual([["beat", -0.03]]);
-    // Mid-beat at full energy: the bounce is at its top, so the ghost is at its largest.
-    dance(0.5, 1);
+    expect([...dancers].map(({ cycle, offset }) => [cycle, offset])).toEqual([["bar", 0]]);
     behaviour.update!(context, dancing, 0.016);
     const [ghost] = meshes(shown);
-    expect(ghost!.scale.x).toBeCloseTo(1.04);
-    expect(opacity(ghost!)).toBeCloseTo(0.18);
-    // On the beat the bounce touches down.
+    const glow = opacity(ghost!);
+    // Halfway through the bar, then just before the downbeat: steadily larger.
+    dance(0.5, 1);
+    behaviour.update!(context, dancing, 0.016);
+    expect(ghost!.scale.x).toBeCloseTo(1.06);
+    dance(0.99, 1);
+    behaviour.update!(context, dancing, 0.016);
+    expect(ghost!.scale.x).toBeCloseTo(1.1188);
+    // On the downbeat: back to its base size at once.
     dance(0, 1);
     behaviour.update!(context, dancing, 0.016);
-    expect(ghost!.scale.x).toBeCloseTo(1);
-    expect(opacity(ghost!)).toBeCloseTo(0);
-    // With no music (energy 0) it keeps its own idle pulse and never grows.
-    dance(0.5, 0);
+    expect(ghost!.scale.x).toBe(1);
+    // The dance moves only its size: the glow keeps its own pulse.
+    expect(opacity(ghost!)).toBeCloseTo(glow, 1);
+    // With no music (energy 0) it never grows.
+    dance(0.9, 0);
     behaviour.update!(context, dancing, 0.016);
     expect(ghost!.scale.x).toBe(1);
     behaviour.exit!(context, dancing);

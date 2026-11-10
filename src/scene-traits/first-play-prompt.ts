@@ -34,8 +34,9 @@ export type FirstPlayPromptConfig = {
     opacity: readonly [number, number];
   };
   /**
-   * Dance with the music (#256): while music plays, the idle pulse follows this cycle instead of
-   * its own period, shaped by a registered beat shape. Leave it out and the ghost never dances.
+   * Dance with the music (#256): while music plays, the ghost's size follows this cycle, shaped
+   * by a registered beat shape; its glow keeps its own idle pulse. Leave it out and the ghost
+   * never dances.
    */
   dance?: {
     /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`. */
@@ -221,12 +222,11 @@ export function firstPlayPrompt<
         ghost.edges.opacity = 1;
         return;
       }
-      // Idle: its own slow pulse, blending onto the music's beat as the dance's energy rises.
-      const idle = still
+      // Idle: its own slow pulse in the glow; the dance, when the music plays, moves its size.
+      const pulse = still
         ? 0.8
         : (1 + Math.cos((state.time * Math.PI * 2) / config.pulseSeconds)) / 2;
       const { level, energy } = state.move;
-      const pulse = idle + (level - idle) * energy;
       ghost.mesh.scale.setScalar(1 + (config.dance?.swell ?? 0) * level * energy);
       ghost.fill.opacity = 0.18 * pulse;
       ghost.edges.opacity = pulse;

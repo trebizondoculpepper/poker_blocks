@@ -7,6 +7,8 @@
  * - `pulse`: a hit on the beat that dies away (exp(−8φ)); it jumps at the cycle's start by design.
  * - `bounce`: a bob that touches down on the beat (|sin πφ|).
  * - `gate`: on for the first quarter of the cycle, then off; for flashes.
+ * - `saw`: grows steadily through the cycle and drops back to 0 at its start (the downbeat,
+ *   for a bar cycle).
  */
 import { Registry } from "../core/registry";
 
@@ -17,3 +19,4 @@ beatShapes.register("sine", (phase) => (1 - Math.cos(phase * Math.PI * 2)) / 2);
 beatShapes.register("pulse", (phase) => Math.exp(-8 * phase));
 beatShapes.register("bounce", (phase) => Math.abs(Math.sin(phase * Math.PI)));
 beatShapes.register("gate", (phase) => (phase < 0.25 ? 1 : 0));
+beatShapes.register("saw", (phase) => phase);

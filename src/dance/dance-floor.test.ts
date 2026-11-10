@@ -73,6 +73,9 @@ describe("dance floor (#256)", () => {
       expect(beatShapes.get(name)(0)).toBeCloseTo(beatShapes.get(name)(0.9999), 2);
     expect(beatShapes.get("pulse")(0)).toBe(1);
     expect(beatShapes.get("bounce")(0.5)).toBeCloseTo(1);
+    // The sawtooth climbs steadily and is back at 0 on the cycle's start.
+    expect(beatShapes.get("saw")(0)).toBe(0);
+    expect(beatShapes.get("saw")(0.5)).toBe(0.5);
   });
 
   it("guardrail: the floor and shapes never name a dancer", () => {
