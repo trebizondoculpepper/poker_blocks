@@ -87,9 +87,16 @@ describe("wordCube menu traits", () => {
     const original = material.onBeforeCompile;
     block.emit("presentation.mount", { object: new THREE.Group(), materials: [material] });
     block.emit("input.enabled", false);
-    const shader = { uniforms: {}, fragmentShader: "void main() { gl_FragColor = vec4(1.0); }" };
+    const shader = {
+      uniforms: {},
+      fragmentShader:
+        "void main() { if (!gl_FrontFacing) { gl_FragColor = vec4(1.0); return; } gl_FragColor = vec4(0.5); }",
+    };
     material.onBeforeCompile(shader as never, {} as never);
     expect(shader.fragmentShader).toContain("interactionSaturation");
+    expect(shader.fragmentShader).toContain("void interactionOriginalMain()");
+    expect(shader.fragmentShader).toMatch(/void main\(\)\s*\{\s*interactionOriginalMain\(\);/);
+    expect(shader.fragmentShader.match(/void main\(/g)).toHaveLength(1);
     expect(
       (shader.uniforms as Record<string, { value: number }>).interactionSaturation!.value,
     ).toBe(0);

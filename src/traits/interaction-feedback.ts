@@ -64,12 +64,19 @@ export const disabledAppearance = defineTrait({
         material.onBeforeCompile = (shader, renderer) => {
           compile.call(material, shader, renderer);
           shader.uniforms.interactionSaturation = uniform;
+          // Wrap main rather than appending to it: shader returns must still reach the filter.
           shader.fragmentShader =
-            "uniform float interactionSaturation;\n" +
             shader.fragmentShader.replace(
-              /}\s*$/,
-              "gl_FragColor.rgb = mix(vec3(dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)) * 0.65 + 0.12), gl_FragColor.rgb, interactionSaturation);\n}",
-            );
+              /\bvoid\s+main\s*\(\s*(?:void\s*)?\)/,
+              "void interactionOriginalMain()",
+            ) +
+            `
+            uniform float interactionSaturation;
+            void main() {
+              interactionOriginalMain();
+              gl_FragColor.rgb = mix(vec3(dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)) * 0.65 + 0.12), gl_FragColor.rgb, interactionSaturation);
+            }
+          `;
         };
         material.customProgramCacheKey = () => key + "|interaction-saturation";
         material.needsUpdate = true;
