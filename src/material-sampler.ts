@@ -4,14 +4,14 @@
  */
 import type { CardBlock } from "./cards";
 import type { PlacedBlock } from "./game-state";
-import { blockMaterials, materialOf } from "./materials";
+import { materialOf } from "./materials";
 import { cellKey, faceNormal, faces, type Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
 
 /**
  * Take the first card of each material from `deck` and attach each one to a random free
  * face of a block already placed (the first sits at the centre). Returns the structure and
- * the deck without those cards. Materials missing from the deck are skipped.
+ * the deck without those cards: one block for each material the deck holds.
  */
 export function sampleMaterials(
   deck: readonly CardBlock[],
@@ -20,7 +20,8 @@ export function sampleMaterials(
   const field: PlacedBlock[] = [];
   const occupied = new Set<string>();
   const used = new Set<string>();
-  for (const material of blockMaterials) {
+  // Every material the deck holds, whichever pool dealt it (dev1 deals experiments too).
+  for (const material of new Set(deck.map(materialOf))) {
     const block = deck.find((card) => !used.has(card.id) && materialOf(card) === material);
     if (!block) continue;
     let cell: Cell = { x: 0, y: 0, z: 0 };
