@@ -198,12 +198,24 @@ describe("game modes composed from traits", () => {
     }
   });
 
+  it("shows the first-play prompt in the play scenes only, never on the title (#203)", () => {
+    for (const mode of gameModeRegistry.names()) {
+      const traitsOf = (scene: SceneName) =>
+        gameModeFor(mode).scenes.find(({ id }) => id === modeSceneId(mode, scene))!.traits;
+      expect(traitsOf("title"), mode).not.toHaveProperty("firstPlayPrompt");
+      expect(traitsOf("shop"), mode).not.toHaveProperty("firstPlayPrompt");
+      for (const scene of ["stage-1", "stage-2", "boss"] as const)
+        expect(traitsOf(scene), `${mode} ${scene}`).toHaveProperty("firstPlayPrompt");
+    }
+  });
+
   it("lets a mode add a play-scene trait without disturbing the rest", () => {
     const boss = gameModeFor("dev4").scenes.find(({ id }) => id === "dev4/stage-1")!;
     expect(boss.traits).toEqual({
       screen: { kind: "stage-1" },
       roundPanel: { stage: "STAGE 1", actions: { lost: "End game" } },
       tableBackground: {},
+      firstPlayPrompt: {},
       handView: {},
       discardBin: {},
       deckPanel: { opens: "openDeck" },

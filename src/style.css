@@ -484,6 +484,15 @@ body,
   font-family: system-ui, sans-serif;
 }
 
+/*
+ * The title sits over the attract sequence, whose cards should read sharp and bright: no blur
+ * and no dark wash behind the menu (#203). The menu panel keeps its own background.
+ */
+.menu-overlay.title-screen {
+  background: transparent;
+  backdrop-filter: none;
+}
+
 .menu-overlay[hidden] {
   display: none;
 }
@@ -550,14 +559,16 @@ body,
   font-size: 11px;
 }
 
-/* The panel's footer: the build version and links out, aligned to the bottom-right (#129). */
+/* The build version and links out, in the far bottom-right of the screen (#129). */
 .menu-footer {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 18px;
   font-size: 12px;
 }
 
@@ -1059,9 +1070,9 @@ body,
 }
 
 /*
- * The title's attract background (#147): quarter resolution, stretched to fill and blurred, so
- * the cards read as a soft backdrop and every word of the menu stays sharp above it. It needs no
- * z-index trickery to hide the table: a scene that wants a table composes `tableBackground`, and
+ * The title's attract background (#147). Its quarter-resolution and blur pass is currently off
+ * while the cards' appearance is tuned: a blur hides exactly what is being judged. It needs no
+ * z-index trickery to hide the table — a scene that wants a table composes `tableBackground`, and
  * the title does not, so none is drawn while this is on screen.
  */
 .scene canvas.attract-canvas {
@@ -1071,7 +1082,6 @@ body,
   width: 100%;
   height: 100%;
   background: #000;
-  filter: blur(6px) saturate(0.85) brightness(0.9);
   pointer-events: none;
 }
 
