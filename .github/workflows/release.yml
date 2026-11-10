@@ -1,17 +1,24 @@
 name: Release
 
-# A release (#128) is a merged `Release vX.Y.Z` PR, opened by `npm run release`. On every push to
-# main, this checks whether package.json's version has a release yet. If it doesn't (and isn't
-# the starting 0.0.0), it runs the checks, builds the game at exactly that version, zips the web
-# build (index.html at the archive root) and publishes the GitHub release vX.Y.Z on this commit.
-# To publish a failed release again: gh workflow run release.yml
+# A release (#128, made to work like The Pool's) is a push of main to the `release` branch:
+# `npm run release` does it. This runs the checks, builds the game at the next minor version
+# (the last vX.Y.Z tag's minor plus one), publishes the GitHub release vX.Y.Z on that commit with
+# the web build zipped (index.html at the archive root), which makes the tag, and pushes the
+# same build to itch.io. A major or exact version runs this by hand on main:
+# `npm run release -- major` (only when the owner asks) or `-- 1.2.3`.
+# To push the last release to itch.io again: gh workflow run release.yml -f itch_only=true
 on:
   push:
-    branches: [main]
+    branches: [release]
   workflow_dispatch:
     inputs:
+      level:
+        description: "minor, major (only when the owner asks) or an exact version x.y.z"
+        required: false
+        default: minor
+        type: string
       itch_only:
-        description: "Push the current version's build to itch.io again, leaving the GitHub release alone"
+        description: "Push the last release's build to itch.io again, leaving the GitHub release alone"
         required: false
         default: false
         type: boolean
@@ -19,8 +26,7 @@ on:
 permissions:
   contents: write
 
-# One release run at a time, never cancelling one under way, so draft recovery below only ever
-# sees a draft left by an interrupted run.
+# One release run at a time, never cancelling one under way.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -33,45 +39,60 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
+          fetch-tags: true
       - uses: voidzero-dev/setup-vp@v1.22.0
         with:
           node-version: "26"
           cache: true
-      - name: Is this version released yet?
+      - name: Work out the version
         id: version
         env:
           GH_TOKEN: ${{ github.token }}
+          LEVEL: ${{ inputs.level || 'minor' }}
+          ITCH_ONLY: ${{ inputs.itch_only || false }}
         run: |
-          version="$(node -p "require('./package.json').version")"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          # A draft left by an interrupted publish isn't a release: remove it and publish again.
-          draft="$(gh release view "v${version}" --json isDraft -q .isDraft 2>/dev/null || echo none)"
-          if [ "$draft" = "true" ]; then
-            gh release delete "v${version}" --yes --cleanup-tag
-            draft=none
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "The commit to release is not on main; release only ever follows main" >&2
+            exit 1
           fi
-          if [ "$version" = "0.0.0" ] || [ "$draft" = "false" ]; then
+          last="$(git describe --tags --first-parent --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' HEAD 2>/dev/null || true)"
+          if [ "$ITCH_ONLY" = "true" ]; then
+            [ -n "$last" ] || { echo "No release to push to itch.io" >&2; exit 1; }
+            git checkout --quiet "$last"
+            echo "version=${last#v}" >> "$GITHUB_OUTPUT"
             echo "publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          # itch.io follows a new release, or a manual itch_only retry of the current one.
-          if [ "$version" != "0.0.0" ] && { [ "$draft" != "false" ] || [ "${{ inputs.itch_only }}" = "true" ]; }; then
-            echo "build=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "build=false" >> "$GITHUB_OUTPUT"
+          if [ -n "$(git tag --points-at HEAD --list 'v[0-9]*')" ]; then
+            echo "::notice::This commit is already released ($(git tag --points-at HEAD --list 'v[0-9]*')); nothing to do."
+            echo "publish=skip" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-      - if: steps.version.outputs.build == 'true'
+          base="${last#v}"
+          [ -n "$base" ] || base="$(node -p "require('./package.json').version")"
+          version="$(node --input-type=module -e "import { releaseVersion } from './scripts/versioning.ts'; console.log(releaseVersion(process.argv[1], process.argv[2]))" "$base" "$LEVEL")"
+          # A draft left by an interrupted publish isn't a release: remove it and publish again.
+          if [ "$(gh release view "v${version}" --json isDraft -q .isDraft 2>/dev/null)" = "true" ]; then
+            gh release delete "v${version}" --yes --cleanup-tag
+          fi
+          if gh release view "v${version}" >/dev/null 2>&1; then
+            echo "v${version} is already released from another commit" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+      - if: steps.version.outputs.publish != 'skip'
         run: vp check
-      - if: steps.version.outputs.build == 'true'
+      - if: steps.version.outputs.publish != 'skip'
         run: vp test run --passWithNoTests
       - name: Build at the release version
-        if: steps.version.outputs.build == 'true'
+        if: steps.version.outputs.publish != 'skip'
         env:
           POKER_BLOCKS_VERSION: ${{ steps.version.outputs.version }}
         run: vp build
       - name: Publish the GitHub release with the web build
-        if: steps.version.outputs.publish == 'true' && !inputs.itch_only
+        if: steps.version.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
@@ -79,16 +100,14 @@ jobs:
           zip_name="poker-blocks-v${VERSION}-web.zip"
           (cd dist && zip -qr "../${zip_name}" .)
           gh release create "v${VERSION}" "${zip_name}" \
-            --target "${GITHUB_SHA}" \
+            --target "$(git rev-parse HEAD)" \
             --title "Poker Blocks v${VERSION}" \
             --generate-notes
       # itch.io (#130): the same web build goes to the HTML5 channel of the itch.io project, on
-      # every intentional release. butler logs in with the BUTLER_API_KEY repository secret; until
-      # the owner adds it, this step is skipped with a warning so GitHub releases still publish.
-      # An upload never changes the page's visibility or settings (fullscreen launch, public or
-      # not); the owner sets those on itch.io.
+      # every release. butler logs in with the BUTLER_API_KEY repository secret. An upload never
+      # changes the page's visibility or settings; the owner sets those on itch.io.
       - name: Push the release to itch.io
-        if: steps.version.outputs.build == 'true'
+        if: steps.version.outputs.publish != 'skip'
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
           VERSION: ${{ steps.version.outputs.version }}

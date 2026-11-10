@@ -88,4 +88,4 @@ Sibling projects live one directory up. `../shrew_farmer` and `../no_touch` are 
 
 ## Versions and releases
 
-Each merged PR moves the build's patch version on; `npm run release` opens the PR for the next minor release, and merging it publishes a GitHub release with the web build. See [doc/releasing.md](doc/releasing.md).
+Each merged PR moves the build's patch version on; `npm run release` pushes `main` to the `release` branch, which publishes the next minor release to GitHub and itch.io. See [doc/releasing.md](doc/releasing.md).

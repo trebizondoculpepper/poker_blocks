@@ -1,10 +1,10 @@
 /**
- * The game's versions (#127, #128; the model used by The Pool). `package.json` holds the
- * version of the last release, starting at 0.0.0. Every other build derives its patch: that
- * version plus the first-parent commits on `main` since the commit that last changed it, so it
- * rises with every merged PR and never repeats, and no build commits anything. A release
- * (`npm run release`) is the only thing that changes `package.json`'s version: the next minor
- * by default, a major only when the owner asks.
+ * The game's versions (#127, #128; the model used by The Pool). A release is a `vX.Y.Z` tag,
+ * made by the release workflow when `main` is pushed to the `release` branch: the next minor by
+ * default, a major only when the owner asks. Every other build derives its patch: the last
+ * release tag plus the first-parent commits on `main` since it, so it rises with every merged PR
+ * and never repeats, and no build commits anything. Before the first tag, `package.json`'s
+ * version is the base, counted from the commit that last changed it.
  */
 import { execFileSync } from "node:child_process";
 
@@ -87,8 +87,44 @@ export function commitsSinceVersionChange(git: Git): number | null {
   }
 }
 
-/** This checkout's build version: the release's own, or derived from the commits since. */
+/** The last release tag on this checkout's first-parent history, or null when there is none. */
+export function lastReleaseTag(git: Git): string | null {
+  try {
+    return (
+      git(
+        "describe",
+        "--tags",
+        "--first-parent",
+        "--abbrev=0",
+        "--match",
+        "v[0-9]*.[0-9]*.[0-9]*",
+      ) || null
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** The first-parent commits since the last release tag, or null when history can't tell. */
+export function commitsSinceRelease(git: Git, tag: string): number | null {
+  try {
+    if (git("rev-parse", "--is-shallow-repository") === "true") return null;
+    return Number(git("rev-list", "--count", "--first-parent", `${tag}..HEAD`));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * This checkout's build version: the last release tag's, moved on by the commits since; or,
+ * before any tag, `version` (package.json's) moved on by the commits since it last changed.
+ */
 export function buildVersion(version: string, git: Git): string {
+  const tag = lastReleaseTag(git);
+  if (tag) {
+    const since = commitsSinceRelease(git, tag);
+    return since === null ? `${tag.slice(1)}-dev` : derivedVersion(tag.slice(1), since);
+  }
   const commits = commitsSinceVersionChange(git);
   return commits === null ? `${version}-dev` : derivedVersion(version, commits);
 }
