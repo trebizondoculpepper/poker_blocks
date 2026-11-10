@@ -251,6 +251,8 @@ const overlays: Overlays = createOverlays(host, {
   reducedMotion: () => run.reducedMotion,
   scenes: run.screenScenes,
   menus: run.menus,
+  // A won or lost stage waits while the deck view is open, like a menu (#175).
+  panels: [deckView],
 });
 // The shared HUD frame (#116): each HUD element goes in its zone (src/hud-layout.ts, #117).
 const hudFrame = createHudFrame(host);

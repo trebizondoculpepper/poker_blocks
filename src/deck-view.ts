@@ -10,6 +10,8 @@ export type DeckView = {
   /** Show these blocks; `close` is called by the Back button. */
   show(blocks: readonly CardBlock[], close: () => void): void;
   hide(): void;
+  /** Showing: a stage's outcome waits until it closes (#175). */
+  readonly isOpen: boolean;
 };
 
 /** Display order: 2 to 10, the court cards, then the Ace. */
@@ -92,6 +94,9 @@ export function createDeckView(host: HTMLElement): DeckView {
     hide() {
       root.hidden = true;
       root.replaceChildren();
+    },
+    get isOpen() {
+      return !root.hidden;
     },
   };
 }
