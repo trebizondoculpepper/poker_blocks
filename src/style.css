@@ -469,9 +469,15 @@ body,
   margin: 0;
 }
 
-/* The shop's two drop targets share the lower-left frame zone beside the hand. */
+/*
+ * The shop's two drop targets share the lower-left frame zone (BUY first, then Sell). In the
+ * shop there is no hand, so the zone moves to the empty bottom centre: BUY below the left of the
+ * stock and Sell below its right, a short drag from any offer.
+ */
 .hud-zone[data-zone="bottom-left"]:has(.shop-buy-target:not([hidden])) {
-  gap: 8px;
+  grid-area: bottom-center;
+  justify-content: center;
+  gap: clamp(24px, 16vw, 280px);
 }
 .hud-zone[data-zone="bottom-left"]:has(.shop-buy-target:not([hidden])) .discard-area {
   width: 112px;
