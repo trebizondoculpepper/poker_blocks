@@ -5,6 +5,7 @@
  * — and reports changes to whoever owns the sequence. It is composed by a dev mode only, so the
  * normal game never builds it (AGENTS.md, "Dev traits").
  */
+import { playSfx } from "./audio/sfx";
 import type { AttractTuning, MeanSpread } from "./attract-scene";
 
 /** The tuning values that are a mean and a spread; each gets a pair of sliders. */
@@ -53,6 +54,16 @@ const knobs: readonly Knob[] = [
   },
 ];
 
+/** Extra scalar controls supplied by the composing developer trait. */
+export type TuningControl = {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange(value: number): void;
+};
+
 export type AttractTuningPanel = {
   readonly element: HTMLElement;
   dispose(): void;
@@ -60,6 +71,7 @@ export type AttractTuningPanel = {
 
 export function createAttractTuningPanel(options: {
   tuning: AttractTuning;
+  controls?: readonly TuningControl[];
   onChange(next: AttractTuning): void;
 }): AttractTuningPanel {
   const element = document.createElement("aside");
@@ -114,6 +126,27 @@ export function createAttractTuningPanel(options: {
     element.append(row);
   }
 
+  for (const control of options.controls ?? []) {
+    const row = document.createElement("div");
+    row.className = "attract-knob";
+    const readout = document.createElement("output");
+    readout.textContent = `${control.label}: ${control.value}`;
+    const input = slider(
+      control.label,
+      control.min,
+      control.max,
+      control.step,
+      control.value,
+      (value) => {
+        readout.textContent = `${control.label}: ${value}`;
+        control.onChange(value);
+      },
+    );
+    controls.push(input);
+    row.append(readout, group(control.label, input));
+    element.append(row);
+  }
+
   const reset = document.createElement("button");
   reset.type = "button";
   reset.textContent = "Copy values";
@@ -153,6 +186,7 @@ function slider(
   input.value = String(value);
   input.setAttribute("aria-label", label);
   input.addEventListener("input", () => onInput(Number(input.value)));
+  input.addEventListener("change", () => playSfx("ui.click"));
   return input;
 }
 

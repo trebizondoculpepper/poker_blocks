@@ -1,3 +1,4 @@
+import type { TuningControl } from "./attract-tuning-panel";
 import { blockTitle, type BlockTitles } from "./scene-traits/block-title";
 /**
  * The behaviour each scene trait installs (see doc/game-architecture.md, "Trait").
@@ -47,8 +48,13 @@ export type SceneHost = {
     actionLog: ActionLog;
     actionWatch: ActionWatch;
     /** The title's attract sequence: started and stopped by a scene trait (#147). */
-    blockTitles: Pick<BlockTitles, "show">;
-    attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
+    blockTitles: Pick<BlockTitles, "show" | "tuning" | "retune">;
+    attract: {
+      start(): void;
+      stop(): void;
+      showTuning(controls?: readonly TuningControl[]): void;
+      hideTuning(): void;
+    };
     /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
     renderer: Pick<TableRenderer, "tableEntered" | "handEntered">;
     hud: Pick<HudPanels, "show" | "hide">;
@@ -290,7 +296,33 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   behaviours.register("devAttractTuning", {
     // Testing only: the panel drives the attract background's live tuning (#166).
-    enter: ({ services }) => services.attract.showTuning(),
+    enter: ({ services }) => {
+      let tuning = services.blockTitles.tuning();
+      services.attract.showTuning([
+        {
+          label: "Word size",
+          min: 0.25,
+          max: 1.5,
+          step: 0.05,
+          value: tuning.scale,
+          onChange: (scale) => {
+            tuning = { ...tuning, scale };
+            services.blockTitles.retune(tuning);
+          },
+        },
+        {
+          label: "Word phase difference (degrees)",
+          min: 0,
+          max: 360,
+          step: 1,
+          value: tuning.phaseDegrees,
+          onChange: (phaseDegrees) => {
+            tuning = { ...tuning, phaseDegrees };
+            services.blockTitles.retune(tuning);
+          },
+        },
+      ]);
+    },
     // The panel belongs to this scene, so leaving it takes the panel with it (#166).
     exit: ({ services }) => services.attract.hideTuning(),
   });

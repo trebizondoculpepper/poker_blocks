@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { sceneDefinitions, type SceneTraits } from "./game-modes";
 
 describe("block titles in menus", () => {
-  it("composes the same title above menu choices, with exactly half the pause scale", () => {
+  it("composes the same title above menu choices, at the same large scale", () => {
     const title: Partial<SceneTraits> = sceneDefinitions.find(
       (scene) => scene.name === "title",
     )!.traits;
@@ -12,7 +12,7 @@ describe("block titles in menus", () => {
     )!.traits;
     expect(title.blockTitle?.text).toBe("Poker Blocks");
     expect(pause.blockTitle?.text).toBe(title.blockTitle?.text);
-    expect(pause.blockTitle!.scale).toBe(title.blockTitle!.scale * 0.5);
+    expect(pause.blockTitle!.scale).toBe(title.blockTitle!.scale);
     expect(Object.keys(title).indexOf("blockTitle")).toBeGreaterThan(
       Object.keys(title).indexOf("titleScreen"),
     );

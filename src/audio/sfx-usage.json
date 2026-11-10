@@ -190,8 +190,9 @@
     }
   },
   "ui.click": {
-    "uses": 28,
+    "uses": 29,
     "files": {
+      "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 1,
       "game-modes.ts": 2,
       "menus.ts": 7,
