@@ -29,6 +29,8 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
       container.setAttribute("role", "heading");
       container.setAttribute("aria-level", "1");
       container.setAttribute("aria-label", config.text);
+      container.style.position = "relative";
+      container.style.zIndex = "4";
       container.style.width = "100%";
       container.style.maxWidth = "520px";
       container.style.height = `${240 * config.scale}px`;
@@ -36,6 +38,7 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
       container.style.pointerEvents = "none";
       parent().prepend(container);
       const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.domElement.setAttribute("aria-hidden", "true");
       renderer.domElement.style.cssText = "width:100%;height:100%;display:block";
@@ -43,8 +46,8 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
       const scene = new THREE.Scene();
       const camera = new THREE.OrthographicCamera(-4, 4, 2, -2, 0.1, 100);
       camera.position.z = 10;
-      scene.add(new THREE.AmbientLight(0xffffff, 2));
-      const light = new THREE.DirectionalLight(0xffffff, 3);
+      scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+      const light = new THREE.DirectionalLight(0xffffff, 2);
       light.position.set(3, 5, 8);
       scene.add(light);
       const pmrem = new THREE.PMREMGenerator(renderer);
@@ -79,6 +82,7 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
         rows.forEach((row) => row.dispose());
         environment.dispose();
         renderer.dispose();
+        renderer.forceContextLoss();
         title.clear();
         views.delete(view);
       };
