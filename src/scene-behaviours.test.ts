@@ -49,6 +49,10 @@ function recordingHost() {
         hide: (panel) => void (shown.delete(panel), calls.push(`hide:${panel}`)),
       },
       input: {
+        enableDropZone: ({ zone }) => {
+          calls.push(`zone:${zone}:on`);
+          return () => void calls.push(`zone:${zone}:off`);
+        },
         setFieldActive: (active) => calls.push(`fieldActive:${active}`),
         cancelGestures: () => void calls.push("gestures:cancel"),
         discardBinEntered: (entered) => void calls.push(`bin:${entered}`),

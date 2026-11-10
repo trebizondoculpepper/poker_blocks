@@ -8,6 +8,14 @@
  * The rules decide whether a gesture is allowed and what it does to the run; the game
  * supplies them through `TableRules`. Each gesture plays its sound here, as it happens.
  */
+import { Registry } from "./core/registry";
+import {
+  createDropZoneRouter,
+  type DropClaim,
+  type DropVerdict,
+  type DropZone,
+  type DropZoneConfig,
+} from "./drop-zones";
 import * as THREE from "three";
 import type { AudioService } from "./audio-service";
 import { playSfx } from "./audio/sfx";
@@ -72,6 +80,11 @@ export type TableInput = {
    * the passives' sell target, is shown while any such scene is on the stack.
    */
   discardBinEntered(entered: boolean): void;
+  /**
+   * Allow a drop zone while a scene shows (the `canDragTo` trait, #273); returns a function that
+   * disallows it again.
+   */
+  enableDropZone(config: DropZoneConfig): () => void;
   /** A shop scene composes the same target as Sell, without exposing Discard. */
   sellBinEntered(entered: boolean): void;
   /** The selected block ids (hand and field). */
@@ -116,9 +129,8 @@ type Drag = {
   candidate: Candidate | null;
   /** The last drop target the trace reported, so it reports only changes. */
   tracedTarget?: string;
-  discardTarget: boolean;
-  /** Over the bin while discarding is not allowed: the red X shows. */
-  refused: boolean;
+  /** The drop zone that has claimed the point under the pointer (#273), if any. */
+  claim: DropClaim | null;
   /** Other selected hand blocks carried with the dragged one (a group discard). */
   group: RenderedBlock[];
   /** Hand position the dragged card would move to if dropped inside the hand. */
@@ -195,6 +207,30 @@ export function createTableInput(options: {
   const trace = options.trace ?? (() => {});
   const { host, canvas, discardArea, rules, cameraView, hand, field, rack, cubeSize } = options;
   const discardCount = discardArea.querySelector<HTMLElement>(".discard-count")!;
+
+  // ----- Drop zones (#273): each owns its own decision; the drag asks them by priority -----
+
+  const dropZoneKinds = new Registry<DropZone>("drop zone");
+  /**
+   * The bin: takes dropped hand blocks as a discard when discards are left, refuses them (the
+   * red X, the denied sound) when none are. It shows its own target highlight and hover sound.
+   */
+  let discardPreview: DropVerdict | null = null;
+  dropZoneKinds.register("discard", {
+    verdictAt: (_carried, clientX, clientY) =>
+      overDiscardArea(clientX, clientY) ? (rules.canDiscard() ? "accept" : "refuse") : null,
+    preview(verdict) {
+      if (verdict === "accept" && discardPreview !== "accept") playSfx("discard.hover");
+      discardPreview = verdict;
+      discardArea.classList.toggle("is-target", verdict === "accept");
+      discardArea.classList.toggle("is-refused", verdict === "refuse");
+    },
+    deliver: (carried) => rules.discard([...carried]),
+    refuse: () => options.overlays().flashRefused(discardArea),
+    describe: (verdict) =>
+      verdict === "accept" ? "the bin" : "none: over the bin with no discards left",
+  });
+  const dropZones = createDropZoneRouter(dropZoneKinds);
   let selected: Selection = new Set();
   /** Whether the scene in front lets blocks be played onto the field. */
   let fieldActive = false;
@@ -298,36 +334,31 @@ export function createTableInput(options: {
 
   function updateCandidate(): void {
     if (!drag?.active) return;
-    const wasDiscardTarget = drag.discardTarget;
     const previousCell = drag.candidate ? cellKey(drag.candidate.cell) : null;
-    const overBin = overDiscardArea(drag.lastX, drag.lastY);
-    const canDiscard = rules.canDiscard();
-    drag.discardTarget = canDiscard && overBin;
-    drag.refused = !canDiscard && overBin;
-    discardArea.classList.toggle("is-target", drag.discardTarget);
-    discardArea.classList.toggle("is-refused", drag.refused);
+    // The drop zones a scene allows (#273) are asked first, by priority; the first to answer
+    // claims the point. The grid's placement is the fallback until it becomes a zone (#274).
+    drag.claim = dropZones.claimAt([drag.source, ...drag.group], drag.lastX, drag.lastY);
+    dropZones.preview(drag.claim);
+    const claimed = drag.claim !== null;
     // A group plays as a line (one play) or is discarded; it is not reordered as one.
     const single = drag.group.length === 0;
     drag.candidate =
-      fieldActive && !overBin && rules.canPlay()
+      fieldActive && !claimed && rules.canPlay()
         ? pickAttachment(drag.lastX, drag.lastY, drag.group.length + 1)
         : null;
     field.showCandidate(drag.candidate);
     const previousSlot = drag.reorderSlot;
     drag.reorderSlot =
-      single && !overBin && !drag.candidate ? handReorderSlot(drag.lastX, drag.lastY) : null;
+      single && !claimed && !drag.candidate ? handReorderSlot(drag.lastX, drag.lastY) : null;
     if (drag.reorderSlot !== previousSlot) hand.layout();
-    if (drag.discardTarget && !wasDiscardTarget) playSfx("discard.hover");
     if (drag.candidate && cellKey(drag.candidate.cell) !== previousCell) playSfx("card.drag.snap");
     // Tracing (dev10): each time the drop target changes, say where it is now, or why there's none.
     const target = drag.candidate
       ? `${drag.candidate.cells.length} cell${drag.candidate.cells.length === 1 ? "" : "s"} from ${
           drag.candidate.target ? `the ${drag.candidate.face} face of a block` : "the empty table"
         }`
-      : overBin
-        ? canDiscard
-          ? "the bin"
-          : "none: over the bin with no discards left"
+      : drag.claim
+        ? drag.claim.zone.describe(drag.claim.verdict)
         : !fieldActive
           ? "none: this scene doesn't take plays"
           : !rules.canPlay()
@@ -375,12 +406,11 @@ export function createTableInput(options: {
     if (activeDrag.active) {
       if (drop) updateCandidate();
       const candidate = drop ? activeDrag.candidate : null;
-      const discard = drop && activeDrag.discardTarget;
-      const refusedAtBin = drop && activeDrag.refused;
+      const claim = drop ? activeDrag.claim : null;
       drag = null;
       field.showCandidate(null);
-      discardArea.classList.remove("is-target", "is-refused");
-      if (refusedAtBin) options.overlays().flashRefused(discardArea);
+      dropZones.preview(null);
+      if (claim?.verdict === "refuse") claim.zone.refuse();
       cameraView.changeMotionRate(normalMotionRate);
       suppressClickUntil = performance.now() + 250;
       if (canvas.hasPointerCapture(activeDrag.pointerId)) {
@@ -388,7 +418,7 @@ export function createTableInput(options: {
       }
       // Model first (#272): the drop commits now, even while earlier plays are still being
       // shown; their animations and this one catch up with the model.
-      commitDrop(activeDrag, candidate, discard, drop);
+      commitDrop(activeDrag, candidate, claim, drop);
     } else {
       drag = null;
     }
@@ -401,21 +431,29 @@ export function createTableInput(options: {
   function commitDrop(
     activeDrag: Drag,
     candidate: Candidate | null,
-    discard: boolean,
+    claim: DropClaim | null,
     drop: boolean,
   ): void {
     const reorderSlot = drop ? activeDrag.reorderSlot : null;
-    for (const rendered of [activeDrag.source, ...activeDrag.group])
-      options.setDragLayer(rendered.cube, false);
-    const accepted = discard
-      ? rules.discard([activeDrag.source, ...activeDrag.group])
+    const carried = [activeDrag.source, ...activeDrag.group];
+    for (const rendered of carried) options.setDragLayer(rendered.cube, false);
+    // A zone that accepted takes the blocks itself (#273); otherwise the grid's placement does.
+    const delivered = claim?.verdict === "accept";
+    const accepted = delivered
+      ? claim.zone.deliver(carried)
       : candidate
         ? rules.play(playOrder(activeDrag), candidate)
         : false;
-    const blocks = 1 + activeDrag.group.length;
+    const blocks = carried.length;
     trace(
-      accepted ? (discard ? "discarded" : "played") : candidate || discard ? "refused" : "returned",
-      `${blocks} block${blocks === 1 ? "" : "s"}${candidate ? " onto the field" : discard ? " to the bin" : ""}`,
+      accepted
+        ? delivered
+          ? `delivered to ${claim.name}`
+          : "played"
+        : candidate || claim
+          ? "refused"
+          : "returned",
+      `${blocks} block${blocks === 1 ? "" : "s"}${candidate ? " onto the field" : claim ? ` at ${claim.name}` : ""}`,
     );
     const from = rules.hand().indexOf(activeDrag.source.block);
     if (!accepted && reorderSlot !== null && reorderSlot !== from) {
@@ -427,12 +465,7 @@ export function createTableInput(options: {
     } else if (!accepted) {
       // A drop the rules refuse (or any drop with no plays left) is denied; a drop on
       // empty space just returns the block to the hand.
-      const refused =
-        drop &&
-        (discard ||
-          candidate ||
-          !rules.canPlay() ||
-          overDiscardArea(activeDrag.lastX, activeDrag.lastY));
+      const refused = drop && (claim !== null || candidate !== null || !rules.canPlay());
       playSfx(refused ? "action.denied" : "card.drag.return");
       hand.putBack([activeDrag.source, ...activeDrag.group]);
       hand.layout();
@@ -500,8 +533,7 @@ export function createTableInput(options: {
         lastY: event.clientY,
         active: false,
         candidate: null,
-        discardTarget: false,
-        refused: false,
+        claim: null,
         group: [],
         reorderSlot: null,
       };
@@ -916,6 +948,7 @@ export function createTableInput(options: {
     handEntered(entered) {
       handScenes = Math.max(0, handScenes + (entered ? 1 : -1));
     },
+    enableDropZone: (config) => dropZones.enable(config),
     discardBinEntered(entered) {
       discardBinScenes = Math.max(0, discardBinScenes + (entered ? 1 : -1));
       discardArea.hidden = discardBinScenes + sellBinScenes === 0;
