@@ -8,6 +8,7 @@ import { commitCommands } from "./rule-commands";
 import type { PassiveBlock } from "./passives";
 import { passiveDefinitions } from "./passives";
 import type { StageKind } from "./run-rules";
+import { getMaterialDefinition, materialOf, materialDefinitions } from "./materials";
 
 /** One line of the ledger: where the coins come from, what to call it, how many. */
 export type RewardEntry = { source: string; label: string; coins: number };
@@ -20,7 +21,7 @@ export const stageCompleteBonus = 4;
 
 /**
  * The ledger for a won stage: the completion bonus first, then each passive that pays on a
- * stage win, in the rack's left-to-right order. Passives paying nothing are left out.
+ * stage win, in the rack's left-to-right order. Material hand rewards come before passives.
  */
 export function stageRewardLedger(
   state: GameState,
@@ -29,6 +30,7 @@ export function stageRewardLedger(
 ): RewardEntry[] {
   const entries: RewardEntry[] = [
     { source: "stage.complete", label: "Stage complete bonus", coins: bonus },
+    ...materialHandRewardEntries(state),
   ];
   for (const passive of state.passiveRack) {
     const coins = stageWonCoins(state, passive, stage);
@@ -39,6 +41,17 @@ export function stageRewardLedger(
     entries.push({ source: `passive.${passive.definitionId}`, label: name, coins });
   }
   return entries;
+}
+
+/** Rewards configured on materials held at settlement, on wins and losses alike. */
+export function materialHandRewardEntries(state: GameState): RewardEntry[] {
+  return materialDefinitions.flatMap(({ id, name }) => {
+    const rate = getMaterialDefinition(id).handReward?.coinsPerCard ?? 0;
+    const count = state.hand.filter((card) => materialOf(card) === id).length;
+    return rate && count
+      ? [{ source: `material.${id}`, label: `${name} held in hand`, coins: count * rate }]
+      : [];
+  });
 }
 
 /**

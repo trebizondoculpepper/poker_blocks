@@ -89,6 +89,22 @@ describe("save records", () => {
     reject({ ...good, state: { ...good.state, round: { ...good.state.round, score: "lots" } } });
     reject({ ...good, state: { ...good.state, coins: -1 } });
     reject({ ...good, state: { ...good.state, coins: 1.5 } });
+    reject({ ...good, rewarded: { stage: "1:stage-1", reward: { entries: [], balance: -1 } } });
+    reject({
+      ...good,
+      rewarded: { stage: "bogus", reward: { entries: [], balanceBefore: 0, balance: 0 } },
+    });
+    reject({
+      ...good,
+      rewarded: {
+        stage: "1:stage-1",
+        reward: {
+          entries: [{ source: "material.gold", label: "Gold", coins: 2 }],
+          balanceBefore: 0,
+          balance: 0,
+        },
+      },
+    });
     reject({
       ...good,
       state: { ...good.state, passiveRack: [{ id: "passive.1", definitionId: "unknown" }] },

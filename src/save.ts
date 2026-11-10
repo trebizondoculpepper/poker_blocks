@@ -272,22 +272,39 @@ function parseSeed(value: unknown): { seed: number } | Record<string, never> {
     : {};
 }
 
-/** A saved "already paid" marker, or nothing if it is missing or malformed. */
-function parseRewarded(value: unknown): { rewarded: NonNullable<RunSnapshot["rewarded"]> } | null {
+/** A saved paid-stage marker; malformed data must never permit a second payout. */
+function parseRewarded(
+  value: unknown,
+): { rewarded: NonNullable<RunSnapshot["rewarded"]> } | Record<string, never> {
+  if (value === undefined) return {};
   const saved = value as RunSnapshot["rewarded"];
-  if (!saved || typeof saved.stage !== "string" || !Array.isArray(saved.reward?.entries))
-    return null;
-  const entries = saved.reward.entries
-    .filter((entry) => typeof entry?.label === "string" && Number.isFinite(entry?.coins))
-    .map(({ source, label, coins }) => ({ source: String(source), label, coins }));
+  if (
+    !saved ||
+    typeof saved.stage !== "string" ||
+    !/^[1-9]\d*:(stage-1|stage-2|boss)$/.test(saved.stage) ||
+    !Array.isArray(saved.reward?.entries)
+  )
+    throw new Error("bad paid-stage marker");
+  const entries = saved.reward.entries.map(({ source, label, coins }) => {
+    if (
+      typeof source !== "string" ||
+      !source ||
+      typeof label !== "string" ||
+      !label ||
+      !Number.isSafeInteger(coins) ||
+      coins < 0
+    )
+      throw new Error("bad reward entry");
+    return { source, label, coins };
+  });
+  const balanceBefore = nonnegativeInteger(saved.reward.balanceBefore);
+  const balance = nonnegativeInteger(saved.reward.balance);
+  if (balance !== balanceBefore + entries.reduce((total, entry) => total + entry.coins, 0))
+    throw new Error("bad reward balance");
   return {
     rewarded: {
       stage: saved.stage,
-      reward: {
-        entries,
-        balanceBefore: Number(saved.reward.balanceBefore) || 0,
-        balance: Number(saved.reward.balance) || 0,
-      },
+      reward: { entries, balanceBefore, balance },
     },
   };
 }

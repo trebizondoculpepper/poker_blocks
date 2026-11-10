@@ -93,8 +93,12 @@ export function validatePassiveBalance(definitions: readonly PassiveDefinition[]
 
 /** Everything wrong with these materials' scoring modifiers (#141); a neutral one needs none. */
 export function validateMaterialBalance(definitions: readonly MaterialDefinition[]): string[] {
-  return definitions.flatMap(({ id, scoringModifier, shop }) => [
+  return definitions.flatMap(({ id, scoringModifier, handReward, shop }) => [
     ...validateScoringModifier(id, scoringModifier),
+    ...(handReward === undefined ||
+    (Number.isSafeInteger(handReward.coinsPerCard) && handReward.coinsPerCard >= 0)
+      ? []
+      : [`${id}: hand reward must be a nonnegative safe integer`]),
     ...(shop === undefined || (Number.isSafeInteger(shop.basePrice) && shop.basePrice >= 1)
       ? []
       : [`${id}: base price must be a positive whole number of coins`]),

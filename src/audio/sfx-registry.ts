@@ -319,6 +319,10 @@ const entries = [
     trigger: "A wood card's scoring modifier activates as its line is presented",
   },
   {
+    id: "material.activate.gold",
+    trigger: "A gold card's scoring modifier activates as its line is presented",
+  },
+  {
     id: "material.activate.steel",
     trigger: "A steel card's scoring modifier activates as its line is presented",
   },
