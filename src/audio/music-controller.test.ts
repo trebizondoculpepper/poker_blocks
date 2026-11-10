@@ -44,6 +44,10 @@ function setup() {
   return { music, log };
 }
 
+/** The track a log line started, whether it crossfaded in (play) or spun up from silence. */
+const started = (line: string) => line.replace(/^(play|windUp) /, "");
+const isStart = (line: string) => /^(play|windUp) /.test(line);
+
 describe("music controller", () => {
   it("waits for the first gesture, then plays the last request", () => {
     const { music, log } = setup();
@@ -51,7 +55,18 @@ describe("music controller", () => {
     music.switchToBossTrack();
     expect(log).toEqual([]);
     music.unlock();
-    expect(log).toEqual(["unlock", "play solitaire-boss"]);
+    // From silence, the music spins up.
+    expect(log).toEqual(["unlock", "windUp solitaire-boss"]);
+  });
+
+  it("spins a title tune up from silence on page load, once audio may play", () => {
+    const { music, log } = setup();
+    music.playTitle();
+    music.unlock();
+    expect(log).toEqual(["unlock", "windUp blaxploitation-horns"]);
+    // Already playing: a later track crossfades rather than spinning up again.
+    music.switchToBossTrack();
+    expect(log.at(-1)).toBe("play solitaire-boss");
   });
 
   it("plays horns or sleaze on the title, and keeps one already playing", () => {
@@ -59,7 +74,7 @@ describe("music controller", () => {
     music.unlock();
     music.playTitle();
     music.playTitle();
-    expect(log.filter((l) => l.startsWith("play"))).toEqual(["play blaxploitation-horns"]);
+    expect(log.filter((l) => /^(play|windUp) /.test(l))).toEqual(["windUp blaxploitation-horns"]);
   });
 
   it("switches stages to a fresh random vibe and bosses to the boss loop", () => {
@@ -68,7 +83,7 @@ describe("music controller", () => {
     music.switchToRandomStageTrack();
     music.switchToRandomStageTrack();
     music.switchToBossTrack();
-    const plays = log.filter((l) => l.startsWith("play")).map((l) => l.slice(5));
+    const plays = log.filter(isStart).map(started);
     expect(plays[0]).not.toBe(plays[1]);
     expect(plays.slice(0, 2).every((id) => id !== "solitaire-boss")).toBe(true);
     expect(plays[2]).toBe("solitaire-boss");
@@ -78,10 +93,10 @@ describe("music controller", () => {
     const { music, log } = setup();
     music.unlock();
     music.switchToRandomStageTrack();
-    const stage = log.at(-1);
+    const stage = started(log.at(-1)!);
     music.playTitle();
     music.resumeStage();
-    expect(log.at(-1)).toBe(stage);
+    expect(started(log.at(-1)!)).toBe(stage);
   });
 
   it("winds the music down like a record player", () => {
@@ -110,7 +125,7 @@ describe("music controller", () => {
     const { music, log } = setup();
     music.unlock();
     music.switchToRandomStageTrack();
-    const stage = log.at(-1)!.slice(5);
+    const stage = started(log.at(-1)!);
     music.windDown();
     music.windUp();
     expect(log.at(-1)).toBe(`windUp ${stage}`);

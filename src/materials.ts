@@ -4,6 +4,19 @@ import type { WeightCurve } from "./offer-weights";
 import type { EventRule } from "./event-rules";
 import { scoringModifierRules, type ScoringModifier } from "./scoring-modifier";
 
+/** A particle trail: a registered effect (src/attract-trails.ts) and its configuration. */
+export type AppearanceTrail = {
+  effect: string;
+  /** Particles emitted per second while the block moves. */
+  rate: number;
+  /** Seconds each particle lives. */
+  life: number;
+  /** A particle's size in world units. */
+  size: number;
+  /** How far from the block's centre a particle may start. */
+  spread: number;
+};
+
 /** Data on each material definition, consumed by reusable appearance handlers. */
 export type MaterialDefinition = {
   id: string;
@@ -33,6 +46,11 @@ export type MaterialDefinition = {
     geometry: { shape: string; segments: number; radius: number; scale: number };
     reliefScale: number;
     endGrainFaces: readonly number[];
+    /**
+     * Particle trails a block of this material leaves as it moves, where a scene shows them
+     * (the title's attract sequence). Each names a registered trail effect and configures it.
+     */
+    trails?: readonly AppearanceTrail[];
     optics?: {
       tint: number;
       handIor: number;
@@ -155,6 +173,7 @@ export const materialDefinitions = [
       geometry: { shape: "rounded", segments: 1, radius: 0.14, scale: 0.985 },
       reliefScale: 0,
       endGrainFaces: noEnds,
+      trails: [{ effect: "rainbowStars", rate: 70, life: 1.8, size: 1.1, spread: 0.8 }],
       optics: {
         tint: 0xffffff,
         handIor: 2.33,

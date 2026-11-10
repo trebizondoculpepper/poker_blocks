@@ -55,6 +55,11 @@ export type FieldView = {
   showCandidate(candidate: Candidate | null): void;
   /** Pulse the outline of the first play's cell, or hide it with null. */
   showPrompt(cell: Cell | null, time: number, reducedMotion: boolean): void;
+  /**
+   * A scene composing `firstPlayPrompt` came to the front, or left (#203). The prompt is drawn
+   * only while such a scene is on the stack, so the title never shows it.
+   */
+  promptEntered(entered: boolean): void;
   /** Briefly tint these blocks toward gold. */
   tint(blocks: readonly CardBlock[], now: number): void;
   /** Advance the tints by one frame. */
@@ -85,6 +90,8 @@ export function createFieldView(options: {
 }): FieldView {
   const { views, assembly, cubeSize } = options;
   const placed = new Map<string, RenderedBlock>();
+  /** How many scenes in front compose `firstPlayPrompt`; the prompt shows while any does. */
+  let promptScenes = 0;
   /** Blocks played and still flying in, by cell: invisible stand-ins for hit-testing (#167). */
   const expected = new Map<string, { block: CardBlock; cell: Cell; cube: THREE.Mesh }>();
   const forget = (key: string, standIn: { cube: THREE.Mesh }) => {
@@ -233,7 +240,12 @@ export function createFieldView(options: {
         new THREE.Vector3(normal.x, normal.y, normal.z),
       );
     },
-    showPrompt(cell, time, reducedMotion) {
+    promptEntered(entered) {
+      promptScenes = Math.max(0, promptScenes + (entered ? 1 : -1));
+    },
+    showPrompt(requested, time, reducedMotion) {
+      // Only a scene that composes the prompt shows it.
+      const cell = promptScenes > 0 ? requested : null;
       ghost.visible = ghostIsDropPreview || Boolean(cell);
       if (!ghost.visible) return;
       if (ghostIsDropPreview) {

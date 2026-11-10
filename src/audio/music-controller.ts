@@ -89,9 +89,13 @@ export function createMusicController(
     wanted = action;
     if (unlocked) action();
   };
+  /**
+   * Start a loop. From silence (nothing playing, as on page load, or after a wind-down) it spins
+   * up like a record player coming up to speed; over music already playing it crossfades.
+   */
   const start = (id: string | null) => {
     if (!id) return;
-    if (woundDown) {
+    if (woundDown || player.current === null) {
       woundDown = false;
       void player.windUp(id);
     } else {
