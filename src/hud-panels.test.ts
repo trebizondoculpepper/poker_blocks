@@ -52,6 +52,12 @@ describe("HUD panels", () => {
     expect(
       hudDisplay({ ...stageView, targetScore: unlimited }, composed("round")).stats.target,
     ).toBe("∞");
+    const sandboxAfterAction = hudDisplay(
+      { ...stageView, movesLeft: unlimited - 1, discardsLeft: unlimited - 1 },
+      composed("round"),
+    );
+    expect(sandboxAfterAction.stats.moves).toBe("∞");
+    expect(sandboxAfterAction.stats.discards).toBe("∞");
   });
 
   it("announces a lost stage and offers to end the game, but not while a play is presenting", () => {
