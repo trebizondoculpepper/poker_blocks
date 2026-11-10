@@ -15,6 +15,8 @@
  */
 import * as THREE from "three";
 import type { SceneTraitBehaviour } from "../scenes";
+import { beatShapes } from "../dance/beat-shapes";
+import type { DanceFloor } from "../dance/dance-floor";
 import type { Cell } from "../traits/attachable";
 
 export type FirstPlayPromptConfig = {
@@ -30,6 +32,21 @@ export type FirstPlayPromptConfig = {
     scale: readonly [number, number];
     /** The fill's opacity at the bottom and the top of a breath. */
     opacity: readonly [number, number];
+  };
+  /**
+   * Dance with the music (#256): while music plays, the ghost's size follows this cycle, shaped
+   * by a registered beat shape; its glow keeps its own idle pulse. Leave it out and the ghost
+   * never dances.
+   */
+  dance?: {
+    /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`. */
+    cycle: string;
+    /** A registered beat shape: `sine`, `pulse`, `bounce`, `gate`. */
+    shape: string;
+    /** Beats to shift the move by (negative peaks a little early, which reads as on time). */
+    offset: number;
+    /** How much larger the ghost grows at the top of the move, as a fraction of a cell. */
+    swell: number;
   };
   /** When the first block is played. */
   release: {
@@ -53,6 +70,8 @@ export type FirstPlayTable = {
   placeObject(object: THREE.Object3D, cell: Cell): void;
   removeObject(object: THREE.Object3D): void;
   readonly cubeSize: number;
+  /** The dance floor, for a prompt that dances with the music. */
+  danceFloor: Pick<DanceFloor, "join">;
 };
 
 /** One ghost model: a translucent box and its outline, with materials of its own. */
@@ -97,6 +116,9 @@ type PromptState = {
   fieldCount: number;
   time: number;
   burst: { ghost: Ghost; elapsed: number } | null;
+  /** The ghost's dance (#256): the shaped move and the music's energy, from the dance floor. */
+  move: { level: number; energy: number };
+  leaveFloor: (() => void) | null;
 };
 
 export function firstPlayPrompt<
@@ -119,20 +141,37 @@ export function firstPlayPrompt<
 
   return {
     enter({ services: { firstPlay } }, config) {
-      states.set(config, {
+      const state: PromptState = {
         ghost: createGhost(firstPlay.cubeSize, config.colour),
         cell: null,
         lastCell: null,
         fieldCount: firstPlay.fieldCount(),
         time: 0,
         burst: null,
-      });
+        move: { level: 0, energy: 0 },
+        leaveFloor: null,
+      };
+      states.set(config, state);
+      // The ghost dances by joining the floor: it follows its cycle, and its dance records the
+      // shaped move, which the idle pulse below blends towards as the music's energy rises.
+      const { dance } = config;
+      if (dance) {
+        const shape = beatShapes.get(dance.shape);
+        state.leaveFloor = firstPlay.danceFloor.join({
+          cycle: dance.cycle,
+          offset: dance.offset,
+          dance: ({ phase, energy }) => {
+            state.move = { level: shape(phase), energy };
+          },
+        });
+      }
     },
     exit({ services: { firstPlay } }, config) {
       const state = states.get(config);
       if (!state) return;
       hide(firstPlay, state);
       endBurst(firstPlay, state);
+      state.leaveFloor?.();
       state.ghost.dispose();
       states.delete(config);
     },
@@ -183,10 +222,12 @@ export function firstPlayPrompt<
         ghost.edges.opacity = 1;
         return;
       }
+      // Idle: its own slow pulse in the glow; the dance, when the music plays, moves its size.
       const pulse = still
         ? 0.8
         : (1 + Math.cos((state.time * Math.PI * 2) / config.pulseSeconds)) / 2;
-      ghost.mesh.scale.setScalar(1);
+      const { level, energy } = state.move;
+      ghost.mesh.scale.setScalar(1 + (config.dance?.swell ?? 0) * level * energy);
       ghost.fill.opacity = 0.18 * pulse;
       ghost.edges.opacity = pulse;
     },

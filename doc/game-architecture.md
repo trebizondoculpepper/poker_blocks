@@ -144,6 +144,14 @@ Material appearance is defined on each material definition in `src/materials.ts`
 - **Bar length:** the player now uses each loop's `beats_per_bar` (4 when absent) for bar alignment and crossfade length.
 - **Scope:** presentation only; rules and scoring never read it. The `danceToBeat` trait (#256) is its first consumer.
 
+**Dancing (#256).** Things move with the music by joining the **dance floor** (`src/dance/dance-floor.ts`).
+
+- **Dancers:** a dancer names the cycle it follows (`halfBeat`, `beat`, `bar` or `twoBars`, a registry of cycle lengths) and an optional `offset` in beats. It implements `dance(move)`, which is called every frame with its `phase` through that cycle, the music's `energy` and the `tempo`.
+- **What a dance may change:** the dancer decides. Usually that's its appearance, but not always. The floor never asks what a dancer is.
+- **Shapes:** pure functions of phase, from 0 to 1, in a registry keyed by name (`src/dance/beat-shapes.ts`): `sine`, `pulse`, `bounce`, `gate` and `saw`.
+- **Resting:** with no music, or with reduced motion, `energy` is 0, so dancers settle.
+- **The first dancer is the ghost cube.** `firstPlayPrompt`'s `dance` data (cycle, shape, offset, swell) makes its prompt join the floor. For now a dance affects only the ghost's **size**: a sawtooth over the bar, growing steadily through each bar and dropping back to its base size on the downbeat (`{ cycle: "bar", shape: "saw", swell: 0.12 }`). Its glow keeps its own idle pulse. A prompt without `dance` never joins.
+
 ## Field visual effects (proposal)
 
 Field visual effects are presentation behaviors, separate from gameplay effects such as adding score or destroying blocks. The current `tintRow` effect temporarily colors a scoring line gold. A future field effect registry could resolve named requests with target block IDs and visual parameters such as color, intensity, duration, and easing. The same mechanism could later draw glows, bursts, or explosions for unrelated game events.

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import type * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
+import type { Dancer } from "../dance/dance-floor";
 import type { Cell } from "../traits/attachable";
 import {
   firstPlayPrompt,
@@ -26,6 +27,8 @@ function table() {
     still: false,
   };
   const shown = new Set<THREE.Object3D>();
+  // A dance floor the test drives by hand: it records who joined and moves them on demand.
+  const dancers = new Set<Dancer>();
   const firstPlay: FirstPlayTable = {
     firstPlayCell: () => state.cell,
     fieldCount: () => state.count,
@@ -35,8 +38,16 @@ function table() {
     placeObject: (object) => void shown.add(object),
     removeObject: (object) => void shown.delete(object),
     cubeSize: 2.4,
+    danceFloor: {
+      join(dancer) {
+        dancers.add(dancer);
+        return () => dancers.delete(dancer);
+      },
+    },
   };
-  return { state, shown, context: { services: { firstPlay } } };
+  const dance = (phase: number, energy: number) =>
+    dancers.forEach((dancer) => dancer.dance({ phase, energy, tempo: 120 }));
+  return { state, shown, dancers, dance, context: { services: { firstPlay } } };
 }
 
 const meshes = (shown: Set<THREE.Object3D>) => [...shown] as THREE.Mesh[];
@@ -112,6 +123,43 @@ describe("first-play prompt trait (#203)", () => {
     behaviour.update!(context, config, 0.05);
     behaviour.exit!(context, config);
     expect(shown.size).toBe(0);
+  });
+
+  it("dances: grows through its cycle and drops back to base size at the start (#256)", () => {
+    const behaviour = firstPlayPrompt();
+    const { shown, dancers, dance, context } = table();
+    const dancing = { ...config, dance: { cycle: "bar", shape: "saw", offset: 0, swell: 0.12 } };
+    behaviour.enter!(context, dancing);
+    expect([...dancers].map(({ cycle, offset }) => [cycle, offset])).toEqual([["bar", 0]]);
+    behaviour.update!(context, dancing, 0.016);
+    const [ghost] = meshes(shown);
+    const glow = opacity(ghost!);
+    // Halfway through the bar, then just before the downbeat: steadily larger.
+    dance(0.5, 1);
+    behaviour.update!(context, dancing, 0.016);
+    expect(ghost!.scale.x).toBeCloseTo(1.06);
+    dance(0.99, 1);
+    behaviour.update!(context, dancing, 0.016);
+    expect(ghost!.scale.x).toBeCloseTo(1.1188);
+    // On the downbeat: back to its base size at once.
+    dance(0, 1);
+    behaviour.update!(context, dancing, 0.016);
+    expect(ghost!.scale.x).toBe(1);
+    // The dance moves only its size: the glow keeps its own pulse.
+    expect(opacity(ghost!)).toBeCloseTo(glow, 1);
+    // With no music (energy 0) it never grows.
+    dance(0.9, 0);
+    behaviour.update!(context, dancing, 0.016);
+    expect(ghost!.scale.x).toBe(1);
+    behaviour.exit!(context, dancing);
+    expect(dancers.size).toBe(0);
+  });
+
+  it("doesn't dance when its configuration has no dance", () => {
+    const behaviour = firstPlayPrompt();
+    const { dancers, context } = table();
+    behaviour.enter!(context, config);
+    expect(dancers.size).toBe(0);
   });
 
   it("guardrail: the ghost's behaviour lives only in this trait", () => {
