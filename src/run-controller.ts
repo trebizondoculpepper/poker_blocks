@@ -492,6 +492,11 @@ export function createRunController<Context>(options: {
     newRun: freshRun,
     resume: freshRun,
     scene() {
+      // A previous mode can have an outcome timer or an animated play in flight. Replace
+      // its run before changing scenes so neither can resume into this scene-only tool.
+      stageWonAt = gameOverAt = null;
+      game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+      resetTable();
       showScene(currentMode.startScene);
     },
   };
