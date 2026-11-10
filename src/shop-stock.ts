@@ -6,6 +6,7 @@ import { defaultShop, type ShopTrait } from "./game-modes";
 import { drawWeighted, passiveFrequencies, weightAt } from "./offer-weights";
 import { passiveUnlockRound } from "./offer-eligibility";
 import type { ShopOffer } from "./offer-kinds";
+import { validateShopStock } from "./shop-stock-config";
 
 export type { ShopOffer } from "./offer-kinds";
 
@@ -23,6 +24,9 @@ export function shopPreviewState(
   stock: ShopTrait = defaultShop,
   round = 1,
 ): GameState {
+  const stockErrors = validateShopStock(stock);
+  if (stockErrors.length)
+    throw new Error(`Invalid shop stock: ${stockErrors.map(({ message }) => message).join("; ")}`);
   const deck = [...state.deck, ...state.hand, ...state.field.map(({ block }) => block)];
   const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!;
   // Offer ids must not repeat a card or passive the run already has: a duplicate id would make

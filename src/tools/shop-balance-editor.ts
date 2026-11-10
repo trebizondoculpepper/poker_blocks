@@ -1,6 +1,7 @@
 /** Developer-only draft editor. It owns no run state and never writes balance definitions. */
 import { weightAt, type WeightCurve } from "../offer-weights";
 import { playSfx } from "../audio/sfx";
+import { gameModeFor, modeLink } from "../game-modes";
 import {
   currentShopBalanceDraft,
   validateShopBalanceDraft,
@@ -9,7 +10,7 @@ import {
 } from "./shop-balance-draft";
 import "./shop-balance-editor.css";
 
-export type ShopBalanceEditor = { show(): void; hide(): void; dispose(): void };
+export type ShopBalanceEditor = { show(backTo: string): void; hide(): void; dispose(): void };
 type Selection = { panel: "stock" | "material" | "passive" | "frequency"; id: string };
 
 export function createShopBalanceEditor(host: HTMLElement): ShopBalanceEditor {
@@ -18,7 +19,7 @@ export function createShopBalanceEditor(host: HTMLElement): ShopBalanceEditor {
   root.hidden = true;
   root.setAttribute("aria-label", "Shop Balance Editor");
   root.innerHTML = `
-    <header><h1>Shop Balance Editor</h1><p>Draft only · current run is unchanged</p><a href="?mode=game">Back to game</a></header>
+    <header><h1>Shop Balance Editor</h1><p>Draft only · current run is unchanged</p><a>Back to game</a></header>
     <div class="balance-editor-body"><nav aria-label="Shop balance entries"></nav><div class="balance-editor-detail"></div></div>
     <footer><span class="balance-editor-status" role="status"></span><button type="button" data-action="copy">Copy complete JSON</button><button type="button" data-action="download">Download JSON</button></footer>`;
   host.append(root);
@@ -410,7 +411,10 @@ export function createShopBalanceEditor(host: HTMLElement): ShopBalanceEditor {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   return {
-    show() {
+    show(backTo) {
+      root
+        .querySelector("header a")!
+        .setAttribute("href", modeLink(gameModeFor(backTo), window.location.href).href);
       draft = currentShopBalanceDraft();
       selection = { panel: "stock", id: "stock" };
       renderNav();

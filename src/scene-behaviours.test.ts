@@ -177,7 +177,7 @@ describe("scene traits own their behaviour", () => {
   it("mounts the draft editor only while its developer scene is active", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
-    scenes.register(scene("balance", { devShopBalanceEditor: {} }));
+    scenes.register(scene("balance", { devShopBalanceEditor: { backTo: "game" } }));
     scenes.register(scene("table", {}));
     scenes.switchTo("balance");
     expect(calls).toContain("balance:show");

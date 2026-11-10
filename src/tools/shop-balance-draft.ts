@@ -5,6 +5,7 @@ import { materialDefinitions, type MaterialDefinition } from "../materials";
 import { passiveFrequencies, validateWeightCurve, type WeightCurve } from "../offer-weights";
 import { passiveDefinitions, type PassiveDefinition } from "../passives";
 import { materialsNamedBy } from "../offer-eligibility";
+import { validateShopStock } from "../shop-stock-config";
 
 export type DraftCurve = [round: number, weight: number][];
 export type ShopBalanceDraft = {
@@ -85,25 +86,8 @@ export function validateShopBalanceDraft(draft: ShopBalanceDraft): DraftError[] 
     !keysMatch(stock, ["minOffers", "maxOffers", "guaranteedPassives", "guaranteedCards"])
   )
     add("stock", "Stock fields must match the configuration schema");
-  for (const key of ["minOffers", "maxOffers", "guaranteedPassives", "guaranteedCards"] as const)
-    if (!safeWhole(stock?.[key], key.startsWith("guaranteed") ? 0 : 1))
-      add(`stock.${key}`, "Use a whole, nonnegative count");
-  if (
-    safeWhole(stock?.minOffers, 1) &&
-    safeWhole(stock?.maxOffers, 1) &&
-    stock.minOffers > stock.maxOffers
-  )
-    add("stock.maxOffers", "Maximum must be at least the minimum");
-  if (safeWhole(stock?.maxOffers, 1) && stock.maxOffers > 9)
-    add("stock.maxOffers", "The landscape shop fits at most nine offers");
-  if (
-    stock &&
-    safeWhole(stock.minOffers, 1) &&
-    safeWhole(stock.guaranteedPassives, 0) &&
-    safeWhole(stock.guaranteedCards, 0) &&
-    stock.guaranteedPassives + stock.guaranteedCards > stock.minOffers
-  )
-    add("stock.guaranteedPassives", "Guaranteed offers cannot exceed the minimum stock count");
+  if (stock)
+    for (const { field, message } of validateShopStock(stock)) add(`stock.${field}`, message);
 
   const rankKeys = Object.keys(gameTuning.cardRankSurcharge);
   if (!keysMatch(draft.cardRankSurcharge, rankKeys))

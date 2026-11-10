@@ -219,7 +219,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.attract.hideTuning(),
   });
   behaviours.register("devShopBalanceEditor", {
-    enter: ({ services }) => services.devShopBalanceEditor.show(),
+    enter: ({ services }, { backTo }) => services.devShopBalanceEditor.show(backTo),
     exit: ({ services }) => services.devShopBalanceEditor.hide(),
   });
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());

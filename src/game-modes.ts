@@ -60,7 +60,7 @@ export type SceneTraits = {
   /** Testing only: live sliders for the attract sequence's velocity, spin and spawn rate. */
   devAttractTuning: Record<never, never>;
   /** Developer-only shop balance draft editor, mounted only by a mode composing it. */
-  devShopBalanceEditor: Record<never, never>;
+  devShopBalanceEditor: { backTo: string };
   /** The HUD wears this registered style (src/hud-styles.ts) while the scene is on the stack. */
   hudStyle: HudStyleConfig;
   /** Testing only: a selector that switches the HUD between these styles (#121). */
@@ -601,7 +601,7 @@ const gameModes: GameMode[] = [
         {
           id: "dev-balance",
           scenes: composeScenes("dev-balance", [
-            { scenes: ["balance-editor"], traits: { devShopBalanceEditor: {} } },
+            { scenes: ["balance-editor"], traits: { devShopBalanceEditor: { backTo: "game" } } },
           ]),
           startScene: "balance-editor",
           flow: standardGameFlow,

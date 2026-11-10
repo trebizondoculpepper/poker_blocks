@@ -45,7 +45,7 @@ describe("game modes composed from traits", () => {
       gameModeFor(mode).scenes.find(({ id }) => id.endsWith("/balance-editor"))?.traits
         .devShopBalanceEditor;
     expect(editor("game")).toBeUndefined();
-    expect(editor("dev-balance")).toEqual({});
+    expect(editor("dev-balance")).toEqual({ backTo: "game" });
     expect(gameModeFor("dev-balance").traits.onLoad).toBe("scene");
   });
 

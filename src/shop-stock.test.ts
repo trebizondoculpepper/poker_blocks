@@ -32,6 +32,20 @@ function shop() {
 const priceOf = (block: object) => (block as PassiveBlock).traits.priced!.basePrice;
 
 describe("shop preview", () => {
+  it("rejects stock counts that would overflow the shop or its guaranteed slots", () => {
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    expect(() =>
+      shopPreviewState(game.state, 5, () => 0.25, {
+        minOffers: 2,
+        maxOffers: 2,
+        guaranteedPassives: 5,
+        guaranteedCards: 1,
+      }),
+    ).toThrow("Invalid shop stock");
+    expect(() =>
+      shopPreviewState(game.state, 5, () => 0.25, { minOffers: 5, maxOffers: 10 }),
+    ).toThrow("Invalid shop stock");
+  });
   it("uses the configured guaranteed offer counts", () => {
     const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
     const state = shopPreviewState(game.state, 5, () => 0.25, {
