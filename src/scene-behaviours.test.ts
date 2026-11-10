@@ -104,6 +104,10 @@ function recordingHost() {
         hide: () => void calls.push("balance:hide"),
       },
       devBlockDesigner: { show: () => {}, hide: () => {} },
+      devWordCubeRoom: {
+        show: ({ items }) => void calls.push(`cubes:show:${items.length}`),
+        hide: () => void calls.push("cubes:hide"),
+      },
       devObjectBrowser: {
         show: (backTo) => void calls.push(`browser:show:${backTo}`),
         hide: () => void calls.push("browser:hide"),
@@ -281,6 +285,21 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toContain("balance:show");
     scenes.switchTo("table");
     expect(calls).toContain("balance:hide");
+  });
+
+  it("mounts the menu block room with its configured items only while its scene is active (#303)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    const items = [
+      { label: "Resume", action: "resume" },
+      { label: "Quit", action: "quitToTitle", enabled: false, description: "Not now." },
+    ];
+    scenes.register(scene("cubes", { devWordCubeRoom: { backTo: "game", items } }));
+    scenes.register(scene("table", {}));
+    scenes.switchTo("cubes");
+    expect(calls).toContain("cubes:show:2");
+    scenes.switchTo("table");
+    expect(calls).toContain("cubes:hide");
   });
 
   it("mounts the object browser only while its developer scene is active (dev9)", () => {

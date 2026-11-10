@@ -92,6 +92,11 @@ export type SceneTraits = {
   devObjectBrowser: { backTo: string };
   /** Developer tool: the block design room, auditioning letter-block materials and fonts (dev12). */
   devBlockDesigner: { backTo: string };
+  /**
+   * Developer tool: the menu block audition room (dev13, #303). Each item becomes a word cube
+   * made by the real creator; activating one shows its action rather than running it.
+   */
+  devWordCubeRoom: { backTo: string; items: readonly MenuBlockItem[] };
   /** Developer tool: a live panel of drag-and-drop state and input decisions (dev10). */
   devDropInspector: DevDropInspectorConfig;
   /**
@@ -233,6 +238,15 @@ const playSceneTraits: Partial<SceneTraits> = {
 /** A lost stage can be ended from the HUD; a won one moves on from its Stage Won pop-up. */
 const stageActions: RoundPanelConfig["actions"] = { lost: "End game" };
 
+/** One menu item auditioned as a word cube (#303): its label, action and state. */
+export type MenuBlockItem = {
+  label: string;
+  action: string;
+  enabled?: boolean;
+  /** Shown when the cube is hovered or tapped (its inspectable trait). */
+  description?: string;
+};
+
 /** The pause menu: the same menu from the title and from play (#87). */
 const pauseMenu: SceneTraits["menu"] = {
   label: "Paused",
@@ -346,6 +360,7 @@ export const sceneDefinitions = [
         { name: "balance-editor", traits: {} },
         { name: "object-browser", traits: {} },
         { name: "block-designer", traits: {} },
+        { name: "menu-blocks", traits: {} },
         {
           // The block title over the flying-block background, nothing else (#295): an audition.
           name: "title-audition",
@@ -822,6 +837,45 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev12-run" },
             console: { name: "dev12" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // The menu items as word cubes, auditioned before the real menus move to blocks
+          // (#303). Their actions are the production menus' own ids; the room only shows them.
+          id: "dev13",
+          scenes: composeScenes("dev13", [
+            {
+              scenes: ["menu-blocks"],
+              traits: {
+                devWordCubeRoom: {
+                  backTo: "game",
+                  items: [
+                    {
+                      label: "Continue",
+                      action: "continue",
+                      enabled: false,
+                      description: "There is no saved game to continue.",
+                    },
+                    { label: "New game", action: "new" },
+                    { label: "Settings", action: "openSettings" },
+                    { label: "Start", action: "confirmNewGame" },
+                    { label: "Cancel", action: "cancelNewGame" },
+                    { label: "Resume", action: "resume" },
+                    { label: "Quit", action: "quitToTitle" },
+                  ],
+                },
+              },
+            },
+          ]),
+          startScene: "menu-blocks",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev13-run" },
+            console: { name: "dev13" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,
