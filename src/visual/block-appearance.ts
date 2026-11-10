@@ -485,8 +485,10 @@ function cloudyIce(
 }
 
 /**
- * Meat. Along the grain: streaks of muscle and fat. Across the grain (the cut faces, like
- * wood's end grain): a steak's cross-section. No key line: a chopped hunk has no neat edge.
+ * Meat. Along the grain: streaks of muscle and fat running from one cut face to the other (up
+ * and down the long faces, since the cut faces are the top and bottom). Across the grain (the
+ * cut faces, like wood's end grain): a steak's cross-section. No key line: a chopped hunk has no
+ * neat edge.
  */
 function drawMeat(g: CanvasRenderingContext2D, random: () => number, endGrain: boolean): void {
   if (endGrain) return drawMeatCrossSection(g, random);
@@ -495,6 +497,11 @@ function drawMeat(g: CanvasRenderingContext2D, random: () => number, endGrain: b
     [0.48, "#8d3c48"],
     [1, "#cc7776"],
   ]);
+  // The streaks are drawn across, then turned a quarter so they run toward the cut faces.
+  g.save();
+  g.translate(SIZE / 2, SIZE / 2);
+  g.rotate(Math.PI / 2);
+  g.translate(-SIZE / 2, -SIZE / 2);
   for (let n = 0; n < 24; n++) {
     g.strokeStyle = n % 3 === 0 ? "#ffe5ce88" : "#671f3466";
     g.lineWidth = 2 + random() * 7;
@@ -504,33 +511,33 @@ function drawMeat(g: CanvasRenderingContext2D, random: () => number, endGrain: b
     g.bezierCurveTo(70, y - 22, 170, y + 28, SIZE + 10, y + (random() - 0.5) * 45);
     g.stroke();
   }
+  g.restore();
   flecks(g, random, 90, "#f5c1b966", 4);
 }
 
 /**
- * A cut across the grain: bundles of muscle fibre as irregular dark-red cells with pale
- * connective tissue between them, flecks of fat, a creamy fat cap along one edge, and a vein
- * cut through, a pale ring round a dark hollow. Both cut faces share this texture, so the vein
- * sits in the same place on each, as if it runs right through the hunk.
+ * A cut across the grain: an even, fine texture of muscle-fibre bundles, one tone with thin
+ * connective seams between them, so the only thing standing out is the vein cut through it, a
+ * pale ring round a dark hollow. Both cut faces share this texture, so the vein sits in the same
+ * place on each, as if it runs right through the hunk.
  */
 function drawMeatCrossSection(g: CanvasRenderingContext2D, random: () => number): void {
-  // Connective tissue: the thin pale lines left showing between the bundles.
-  g.fillStyle = "#d9958f";
+  // Connective tissue: the thin seams left showing between the bundles.
+  g.fillStyle = "#b5606a";
   g.fillRect(0, 0, SIZE, SIZE);
-  const cells = 6;
+  const cells = 10;
   const cell = SIZE / cells;
+  g.fillStyle = "#8a2b3b";
   for (let row = -1; row <= cells; row++) {
     for (let column = -1; column <= cells; column++) {
-      const cx = (column + 0.5 + (random() - 0.5) * 0.5) * cell;
-      const cy = (row + 0.5 + (random() - 0.5) * 0.5) * cell;
-      const shade = Math.floor(random() * 3);
-      g.fillStyle = ["#86283a", "#962f42", "#74202f"][shade]!;
+      // A gently jittered grid of near-touching bundles, all the same tone.
+      const cx = (column + 0.5 + (random() - 0.5) * 0.25) * cell;
+      const cy = (row + 0.5 + (random() - 0.5) * 0.25) * cell;
       g.beginPath();
       const points = 7;
       for (let n = 0; n < points; n++) {
-        const angle = (n / points) * Math.PI * 2 + random() * 0.4;
-        // Large enough that neighbours nearly touch, leaving only thin seams between them.
-        const radius = cell * (0.6 + random() * 0.14);
+        const angle = (n / points) * Math.PI * 2 + random() * 0.3;
+        const radius = cell * (0.58 + random() * 0.06);
         const x = cx + Math.cos(angle) * radius;
         const y = cy + Math.sin(angle) * radius;
         if (n === 0) g.moveTo(x, y);
@@ -540,30 +547,6 @@ function drawMeatCrossSection(g: CanvasRenderingContext2D, random: () => number)
       g.fill();
     }
   }
-  // Fat marbling: thin wandering streaks and a few flecks, then a fat cap along one edge.
-  g.strokeStyle = "#f7e2d0aa";
-  for (let n = 0; n < 7; n++) {
-    g.lineWidth = 1 + random() * 2.5;
-    g.beginPath();
-    let x = random() * SIZE;
-    let y = random() * SIZE;
-    g.moveTo(x, y);
-    for (let step = 0; step < 5; step++) {
-      x += (random() - 0.5) * 60;
-      y += (random() - 0.5) * 60;
-      g.lineTo(x, y);
-    }
-    g.stroke();
-  }
-  flecks(g, random, 30, "#fbe8d6cc", 4);
-  g.fillStyle = "#f6e3c9";
-  g.beginPath();
-  g.moveTo(0, SIZE);
-  for (let x = 0; x <= SIZE; x += 16)
-    g.lineTo(x, SIZE - 22 - Math.sin(x / 37 + random()) * 6 - random() * 4);
-  g.lineTo(SIZE, SIZE);
-  g.closePath();
-  g.fill();
   // The vein: a pale wall round a dark hollow, off centre.
   const vx = SIZE * (0.28 + random() * 0.44);
   const vy = SIZE * (0.25 + random() * 0.35);
