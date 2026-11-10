@@ -10,5 +10,10 @@
   "crossfade_seconds": 0.05,
   "sample_rate": 48000,
   "beats": 208,
-  "first_beat_seconds": 0.9497
+  "first_beat_seconds": 0.9497,
+  "review": {
+    "reason": "Beat fit prefers 99.0 BPM over the current 132.0 (fit score 0.83); check by ear (#257).",
+    "candidate_bpm": 99.0,
+    "issue": 257
+  }
 }

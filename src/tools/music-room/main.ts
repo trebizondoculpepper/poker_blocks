@@ -15,6 +15,11 @@ type LoopInfo = {
   /** Where beat 1 of a bar falls in the loop; 0 when the loop starts on a downbeat. */
   first_beat_seconds?: number;
   source?: string;
+  /**
+   * Set when a loop's beat grid is suspect and needs checking by ear (#257): why, and the
+   * tempo the offline beat fit prefers. Remove it once the tempo is settled.
+   */
+  review?: { reason: string; candidate_bpm: number; issue?: number };
 };
 type Track = {
   id: string;
@@ -440,6 +445,16 @@ for (const group of new Set(tracks.map((track) => track.group))) {
     button.className = "track";
     button.dataset.id = track.id;
     button.innerHTML = `<strong>${track.name}</strong><span>${trackSummary(track)}</span>`;
+    // A loop whose beat grid needs checking by ear wears a badge saying so (#257).
+    const review = track.info.review;
+    if (review) {
+      const badge = document.createElement("em");
+      badge.className = "track-suspect";
+      badge.textContent = `Suspect: maybe ${review.candidate_bpm} BPM`;
+      badge.title = review.reason;
+      button.classList.add("is-suspect");
+      button.prepend(badge);
+    }
     button.addEventListener("click", () => void select(track));
     list.append(button);
   }

@@ -12,5 +12,10 @@
   "tempo_bpm": 194.9485,
   "measured_tempo_bpm": 141.86,
   "beats": 424,
-  "first_beat_seconds": 0.4065
+  "first_beat_seconds": 0.4065,
+  "review": {
+    "reason": "Beat fit prefers 97.5 BPM over the current 194.9 (fit score 1.45); check by ear (#257).",
+    "candidate_bpm": 97.5,
+    "issue": 257
+  }
 }
