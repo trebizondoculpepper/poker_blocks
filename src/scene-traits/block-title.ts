@@ -5,6 +5,8 @@ export type BlockTitleConfig = {
   /** Relative size; 1 is full size, .5 is half size. */
   scale: number;
   rowSpacing?: number;
+  /** Slow circular tilt: cycle length in seconds and cone angle in degrees. */
+  precession?: { seconds?: number; angle?: number };
   dance?: { cycle?: string; phaseStep?: number; bounce?: number; tilt?: number };
 };
 export type BlockTitles = {

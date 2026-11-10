@@ -4,6 +4,29 @@ import { createWord } from "./letter-block";
 import type { DanceFloor, DanceMove } from "./dance/dance-floor";
 import type { BlockTitleConfig, BlockTitles } from "./scene-traits/block-title";
 
+/** Circular pitch/yaw around a word's centre, without rolling about its forward axis. */
+export function precessTitleRow(
+  row: THREE.Group,
+  seconds: number,
+  index: number,
+  count: number,
+  config: BlockTitleConfig,
+  energy: number,
+): void {
+  const phase =
+    Math.PI * 2 * (seconds / (config.precession?.seconds ?? 16) + index / Math.max(1, count));
+  const angle = THREE.MathUtils.degToRad(config.precession?.angle ?? 7) * energy;
+  // A constant cone angle gives the forward ray an exactly circular intersection.
+  row.quaternion.setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1),
+    new THREE.Vector3(
+      Math.sin(angle) * Math.cos(phase),
+      Math.sin(angle) * Math.sin(phase),
+      Math.cos(angle),
+    ),
+  );
+}
+
 /** A rigid row follows the shared dance floor; no separate clock or music analysis. */
 export function danceTitleRow(
   row: THREE.Group,
@@ -29,14 +52,7 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
       container.setAttribute("role", "heading");
       container.setAttribute("aria-level", "1");
       container.setAttribute("aria-label", config.text);
-      container.style.position = "relative";
-      container.style.zIndex = "4";
-      container.style.width = "100%";
-      container.style.maxWidth = "520px";
-      container.style.height = `${240 * config.scale}px`;
-      container.style.margin = "0 auto";
-      container.style.pointerEvents = "none";
-      parent().prepend(container);
+      parent().append(container);
       const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -60,6 +76,8 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
       title.scale.setScalar(config.scale);
       scene.add(title);
       const rows: Awaited<ReturnType<typeof createWord>>[] = [];
+      const precessions: { pivot: THREE.Group; index: number; energy: number }[] = [];
+      const started = performance.now();
       const leave: (() => void)[] = [];
       let alive = true;
       const words = config.text.trim().split(/\s+/u).filter(Boolean);
@@ -67,7 +85,17 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
         const width = Math.max(1, container.clientWidth);
         const height = Math.max(1, container.clientHeight);
         renderer.setSize(width, height, false);
-        const halfHeight = (4 * height) / width;
+        const longest = Math.max(1, ...words.map((word) => Array.from(word).length));
+        // The longest row fills two-thirds of the viewport, with room for its tilt.
+        const rowHeight = (words.length - 1) * (config.rowSpacing ?? 1.45) + 1.5;
+        const halfWidth = Math.max(
+          (longest * 1.1) / (2 * (2 / 3)),
+          (rowHeight * config.scale * width) / (height * 1.2),
+        );
+        camera.left = -halfWidth;
+        camera.right = halfWidth;
+        const halfHeight = (halfWidth * height) / width;
+        camera.position.y = -halfHeight * 0.3;
         camera.top = halfHeight;
         camera.bottom = -halfHeight;
         camera.updateProjectionMatrix();
@@ -88,7 +116,19 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
       };
       const view: TitleView = {
         frame() {
-          if (alive) renderer.render(scene, camera);
+          if (!alive) return;
+          const seconds = (performance.now() - started) / 1000;
+          for (const motion of precessions) {
+            precessTitleRow(
+              motion.pivot,
+              seconds,
+              motion.index,
+              words.length,
+              config,
+              motion.energy,
+            );
+          }
+          renderer.render(scene, camera);
         },
         dispose() {
           if (!alive) {
@@ -117,13 +157,21 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
             }
           });
           const restY = ((words.length - 1) / 2 - index) * (config.rowSpacing ?? 1.45);
-          row.object.position.y = restY;
-          title.add(row.object);
+          const pivot = new THREE.Group();
+          pivot.position.y = restY;
+          pivot.add(row.object);
+          row.object.position.y = 0;
+          title.add(pivot);
+          const motion = { pivot, index, energy: 0 };
+          precessions.push(motion);
           leave.push(
             floor.join({
               cycle: config.dance?.cycle ?? "beat",
               offset: index * (config.dance?.phaseStep ?? 0.12),
-              dance: (move) => danceTitleRow(row.object, restY, config, move),
+              dance: (move) => {
+                motion.energy = move.energy;
+                danceTitleRow(row.object, 0, config, move);
+              },
             }),
           );
         }),

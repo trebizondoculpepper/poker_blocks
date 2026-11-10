@@ -132,7 +132,7 @@ type TraitContext = {
   };
 };
 const attract = createAttractBackground(backgrounds);
-const blockTitles = createBlockTitles(() => overlays.panelHeadingHost(), danceFloor);
+const blockTitles = createBlockTitles(() => host, danceFloor);
 const deckView = createDeckView(host);
 // The developer tool has its own build boundary; production never imports its UI or data.
 const devShopBalanceEditor: ShopBalanceEditor = import.meta.env.DEV

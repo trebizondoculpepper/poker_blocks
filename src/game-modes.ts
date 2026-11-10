@@ -287,7 +287,7 @@ export const sceneDefinitions = [
     traits: {
       tableBackground: {},
       menu: pauseMenu,
-      blockTitle: { text: "Poker Blocks", scale: 0.5 },
+      blockTitle: { text: "Poker Blocks", scale: 1 },
       panelFooter: { links: projectLinks },
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "lowpass" },
