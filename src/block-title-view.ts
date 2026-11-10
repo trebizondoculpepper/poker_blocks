@@ -14,7 +14,10 @@ export function precessTitleRow(
   energy: number,
 ): void {
   const phase =
-    Math.PI * 2 * (seconds / (config.precession?.seconds ?? 16) + index / Math.max(1, count));
+    Math.PI *
+    2 *
+    (seconds / (config.precession?.seconds ?? 16) +
+      (index * (config.precession?.phaseDegrees ?? 360 / Math.max(1, count))) / 360);
   const angle = THREE.MathUtils.degToRad(config.precession?.angle ?? 7) * energy;
   // A constant cone angle gives the forward ray an exactly circular intersection.
   row.quaternion.setFromUnitVectors(
@@ -39,12 +42,29 @@ export function danceTitleRow(
   row.rotation.z = wave * THREE.MathUtils.degToRad(config.dance?.tilt ?? 3) * move.energy;
 }
 
-type TitleView = { frame(): void; dispose(): void };
+type TitleView = { config: BlockTitleConfig; frame(): void; dispose(): void };
 /** Reusable view service. The caller supplies its mounting surface, never a scene identity. */
 export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor): BlockTitles {
   const views = new Set<TitleView>();
   return {
-    show(config) {
+    tuning() {
+      const config = [...views].at(-1)?.config;
+      const count = config?.text.trim().split(/\s+/u).filter(Boolean).length ?? 2;
+      return {
+        scale: config?.scale ?? 1,
+        phaseDegrees: config?.precession?.phaseDegrees ?? 360 / Math.max(1, count),
+      };
+    },
+    retune(next) {
+      if (!(next.scale > 0 && Number.isFinite(next.scale) && Number.isFinite(next.phaseDegrees)))
+        throw new Error("Invalid block title tuning");
+      for (const view of views) {
+        view.config.scale = next.scale;
+        view.config.precession = { ...view.config.precession, phaseDegrees: next.phaseDegrees };
+      }
+    },
+    show(definition) {
+      const config = structuredClone(definition);
       if (!(config.scale > 0 && Number.isFinite(config.scale)))
         throw new Error("Block title scale must be positive");
       const container = document.createElement("div");
@@ -90,7 +110,7 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
         const rowHeight = (words.length - 1) * (config.rowSpacing ?? 1.45) + 1.5;
         const halfWidth = Math.max(
           (longest * 1.1) / (2 * (2 / 3)),
-          (rowHeight * config.scale * width) / (height * 1.2),
+          (rowHeight * width) / (height * 1.2),
         );
         camera.left = -halfWidth;
         camera.right = halfWidth;
@@ -115,8 +135,10 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
         views.delete(view);
       };
       const view: TitleView = {
+        config,
         frame() {
           if (!alive) return;
+          title.scale.setScalar(config.scale);
           const seconds = (performance.now() - started) / 1000;
           for (const motion of precessions) {
             precessTitleRow(

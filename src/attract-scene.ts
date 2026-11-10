@@ -18,7 +18,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { standardDeck, type IdentityTrait } from "./cards";
 import { blockMaterials, getMaterialDefinition, type BlockMaterial } from "./materials";
-import { createAttractTuningPanel } from "./attract-tuning-panel";
+import { createAttractTuningPanel, type TuningControl } from "./attract-tuning-panel";
 import { createBlockAppearance } from "./visual/block-appearance";
 import { trailEffects, type Trail } from "./attract-trails";
 
@@ -657,7 +657,7 @@ export type AttractBackground = {
   /** Replace the tuning; cards already in flight keep the values they were dealt. */
   retune(next: AttractTuning): void;
   /** Testing only: show the live tuning panel, which drives `retune` (#166). */
-  showTuning(): void;
+  showTuning(controls?: readonly TuningControl[]): void;
   /** Testing only: remove the tuning panel, when its scene leaves. */
   hideTuning(): void;
   dispose(): void;
@@ -714,10 +714,14 @@ export function createAttractBackground(
       tuning = next;
       scene.retune(next);
     },
-    showTuning() {
+    showTuning(controls) {
       // Created unless one already exists, so a re-entry does not stack panels.
       if (panel) return;
-      panel = createAttractTuningPanel({ tuning, onChange: (next) => scope.retune(next) });
+      panel = createAttractTuningPanel({
+        tuning,
+        controls,
+        onChange: (next) => scope.retune(next),
+      });
     },
     hideTuning() {
       panel?.dispose();
