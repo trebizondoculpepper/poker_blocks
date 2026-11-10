@@ -142,6 +142,7 @@ describe("game modes composed from traits", () => {
           targets: [
             { target: "discard", priority: 10 },
             { target: "grid", priority: 0 },
+            { target: "hand", priority: -10 },
           ],
         },
       });
@@ -256,6 +257,7 @@ describe("game modes composed from traits", () => {
         targets: [
           { target: "discard", priority: 10 },
           { target: "grid", priority: 0 },
+          { target: "hand", priority: -10 },
         ],
       },
       dragSource: { sources: [{ source: "hand" }] },
