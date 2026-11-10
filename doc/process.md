@@ -19,7 +19,7 @@ How an agent works through tickets. Several agents work at once, so each takes *
 3. **Intake check** (below): read it, check whether it's partly done, and check it fits the plan. If it isn't ready, ask on the ticket, relabel it, release it and go back to step 1.
 4. **Build it** on a branch named after the issue, with tests and doc updates. Open one PR that closes the issue.
 5. **Get it through review.** Fix Codex findings and real problems CodeRabbit raises (advisory). Reply to and resolve each thread, then merge once `verify` passes (see "Branches and pull requests").
-6. **If you get stuck partway** (a missing API key, a question nobody knew to ask): push what you have, comment on the ticket saying why it's blocked and what unblocks it, set `status:incomplete` or `status:blocked` (plus `question` if you asked one), and remove your `agent:` label. Then go back to step 1. **Don't stop and wait.**
+6. **If you get stuck partway** (a missing API key, a question nobody knew to ask): push what you have, comment on the ticket saying why it's blocked and what unblocks it, set `status:incomplete` or `status:blocked` (plus `question` if you asked one; see "Open questions": decide by default and ask only when the choice is costly to undo), and remove your `agent:` label. Then go back to step 1. **Don't stop and wait.**
 7. **After merging:** remove your `agent:` label and check that the issue closed. Then look at the tickets that waited on it: move each one now free to `status:ready`, with a comment saying what unblocked it.
 8. **Repeat** until no ready tickets are left. Then review the blocked and needs-design tickets: check each says why it's blocked and what unblocks it, and look for any labelled wrongly (marked blocked but actually free, or ready but waiting on something).
 
@@ -44,15 +44,18 @@ Before writing any code:
 
 ## Open questions
 
-Design decisions belong to the user. An agent never settles an open question by writing its own answer into the docs or the code.
+**Decide by default; ask only when the stakes are high.** A missing detail is not a reason to stop. Pick the option that best fits [game.md](game.md), [game-architecture.md](game-architecture.md) and earlier decisions on related tickets, and build it. Record each choice as an **Assumption** in the PR description and as a comment on the ticket (and in the docs, if it changes a rule), so the user can reverse it later with a comment on the ticket. Don't add the `question` label for an assumption.
 
-When you have questions about a ticket:
+Block a ticket and ask instead only when the choice would be costly to undo: for example a save-format change, economy-wide balance, removing a feature, or something that affects other tickets' work, or when the documents contradict each other and nothing says which wins.
+
+When you do need to ask:
 
 1. **Check first.** Read the whole issue, its comments and the linked docs; the question may already be answered. If every question is answered, carry on with the ticket as normal.
-2. **Ask on the ticket.** Post the questions that are still open as one numbered comment on the issue.
-3. **Keep any partial work.** If you built part of it, push your branch (or open the PR), link it from the comment, and say what is done and what remains.
-4. **Label it and release it.** Add `question`, and set exactly one readiness label: `status:needs-design` if nothing can go ahead until the answers come, or `status:incomplete` if part is built and only the answered remainder is left. Remove `status:ready` and your `agent:` label.
-5. **Move on** to the next ticket. Don't wait for an answer.
+2. **Build what doesn't depend on the answer.** Ask only about the costly part; implement the rest.
+3. **Ask on the ticket.** Post the questions that are still open as one numbered comment on the issue.
+4. **Keep any partial work.** If you built part of it, push your branch (or open the PR), link it from the comment, and say what is done and what remains.
+5. **Label it and release it.** Add `question`, and set exactly one readiness label: `status:needs-design` if nothing can go ahead until the answers come, or `status:incomplete` if part is built and only the answered remainder is left. Remove `status:ready` and your `agent:` label.
+6. **Move on** to the next ticket. Don't wait for an answer.
 
 The user answers questions in a regular Q&A round. **Whoever records the answers** removes `question` once none remain open, and moves the ticket to `status:ready` if nothing else blocks it.
 
