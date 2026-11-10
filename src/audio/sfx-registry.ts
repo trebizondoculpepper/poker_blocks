@@ -246,18 +246,22 @@ const entries = [
   {
     id: "shop.stock.toss",
     trigger: "The shop offers begin their entrance toss onto the table",
+    prompt: "Soft whoosh of several small blocks tossed in an arc across a felt table",
   },
   {
     id: "shop.stock.land",
     trigger: "A tossed shop offer lands on the table",
+    prompt: "Single small wooden block landing on green felt, soft muted thud",
   },
   {
     id: "shop.buy",
-    trigger: "A player buys one shop block and it joins the hand or passive rack",
+    trigger: "A player buys one shop block and it joins the deck or passive rack",
+    prompt: "Cheerful short cash register ding with a coin clink, a purchase made",
   },
   {
     id: "shop.stock.burn",
     trigger: "Unbought shop stock burns away when the player leaves the shop",
+    prompt: "Quick soft whoosh of paper catching fire and crumbling to ash",
   },
   {
     id: "run.lost",
