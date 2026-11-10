@@ -1,3 +1,4 @@
+import type { FirstPlayPromptConfig } from "./scene-traits/first-play-prompt";
 import type { DevHudStyleAuditionConfig, HudStyleConfig } from "./scene-traits/hud-style";
 /**
  * A game mode defines the available scenes and start scene, plus mode-wide traits for a run.
@@ -40,7 +41,8 @@ export type SceneTraits = {
   /** The shared lower-left target presents Sell, and accepts installed passives only. */
   sellBin: Record<never, never>;
   /** The pulsing outline inviting a stage's first play is shown while this scene is on the stack. */
-  firstPlayPrompt: Record<never, never>;
+  /** The ghost cube that invites a stage's first play, and how it looks and responds. */
+  firstPlayPrompt: FirstPlayPromptConfig;
   /** The passive rack is shown while this scene is on the stack (#187). */
   passiveRackView: Record<never, never>;
   /** Blocks may be played onto the field while this scene is in front. */
@@ -161,7 +163,12 @@ const escapeOpensPause: Partial<SceneTraits> = {
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
 const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
-  firstPlayPrompt: {},
+  firstPlayPrompt: {
+    colour: 0x65f4dd,
+    pulseSeconds: 1.8,
+    armed: { beatSeconds: 0.52, scale: [1.04, 1.09], opacity: [0.3, 0.42] },
+    release: { seconds: 0.55, growth: 0.6 },
+  },
   handView: {},
   discardBin: {},
   deckPanel: { opens: "openDeck" },
