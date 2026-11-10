@@ -72,7 +72,7 @@
   z-index: 4;
   top: max(
     calc(var(--scatter) / 2 + var(--scatter-top-clear)),
-    min(46%, calc(100% - 100px - var(--scatter) / 2))
+    min(46%, calc(var(--scatter-bottom, calc(100% - 100px)) - var(--scatter) / 2))
   );
   left: 50%;
   width: var(--scatter);

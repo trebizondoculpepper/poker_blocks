@@ -1127,6 +1127,12 @@ body,
     "bottom-center bottom-center";
   row-gap: min(8px, 1vh);
 }
+/* Portrait keeps the passive rack in its band across the top, whatever older size rules say
+   (narrow landscape windows used to move it under the HUD; #238). */
+.scene:has(.hud-frame[data-layout="portrait"]) .passive-rack {
+  top: max(4px, env(safe-area-inset-top));
+}
+
 /* Portrait zones are half the width, so what they hold wraps rather than spilling out. */
 .scene .hud-frame[data-layout="portrait"] .hud-zone {
   flex-wrap: wrap;

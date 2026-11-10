@@ -398,17 +398,21 @@ export function createShopView(
    * Keep the scatter below the passive rack wherever the rack is drawn (#122): its position
    * varies with the screen, so the clearance is measured rather than guessed in CSS.
    */
-  let rackClear = -1;
+  let measured = "";
   function clearRack(): void {
     if (!rack || rack.hidden) return;
-    const clear = Math.round(
-      rack.getBoundingClientRect().bottom - host.getBoundingClientRect().top + 8,
-    );
-    if (clear === rackClear) return;
-    rackClear = clear;
+    const hostTop = host.getBoundingClientRect().top;
+    const clear = Math.round(rack.getBoundingClientRect().bottom - hostTop + 8);
+    // What is left between the rack and the BUY target, wherever the layout puts it.
+    const bottom = buyTarget.hidden
+      ? host.clientHeight - 100
+      : Math.round(buyTarget.getBoundingClientRect().top - hostTop - 8);
+    const key = `${clear},${bottom}`;
+    if (key === measured) return;
+    measured = key;
     stock.style.setProperty("--scatter-top-clear", `${clear}px`);
-    // What is left below the rack, keeping 100px for BUY, SELL and Continue at the bottom.
-    stock.style.setProperty("--scatter-room", `${host.clientHeight - clear - 100}px`);
+    stock.style.setProperty("--scatter-bottom", `${bottom}px`);
+    stock.style.setProperty("--scatter-room", `${bottom - clear}px`);
   }
 
   function frame(): void {
