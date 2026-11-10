@@ -116,6 +116,8 @@ type Drag = {
   startY: number;
   active: boolean;
   candidate: Candidate | null;
+  /** The last drop target the trace reported, so it reports only changes. */
+  tracedTarget?: string;
   discardTarget: boolean;
   /** Over the bin while discarding is not allowed: the red X shows. */
   refused: boolean;
@@ -319,6 +321,26 @@ export function createTableInput(options: {
     if (drag.reorderSlot !== previousSlot) hand.layout();
     if (drag.discardTarget && !wasDiscardTarget) playSfx("discard.hover");
     if (drag.candidate && cellKey(drag.candidate.cell) !== previousCell) playSfx("card.drag.snap");
+    // Tracing (dev10): each time the drop target changes, say where it is now, or why there's none.
+    const target = drag.candidate
+      ? `${drag.candidate.cells.length} cell${drag.candidate.cells.length === 1 ? "" : "s"} from ${
+          drag.candidate.target ? `the ${drag.candidate.face} face of a block` : "the empty table"
+        }`
+      : overBin
+        ? canDiscard
+          ? "the bin"
+          : "none: over the bin with no discards left"
+        : !fieldActive
+          ? "none: this scene doesn't take plays"
+          : !rules.canPlay()
+            ? "none: no plays left"
+            : drag.group.length > 0 && pickAttachment(drag.lastX, drag.lastY, 1)
+              ? `none: a face is here, but no room for a ${drag.group.length + 1}-block line`
+              : "none: not over a face that can take a block";
+    if (target !== drag.tracedTarget) {
+      drag.tracedTarget = target;
+      trace("drop target", target);
+    }
   }
 
   function moveDraggedBlock(): void {
@@ -455,6 +477,7 @@ export function createTableInput(options: {
       if (touches.size >= 2) {
         // A second finger changes the gesture, never places or discards a card.
         hold.cancel();
+        if (drag?.active) trace("drag ended", "a second finger touched (a pinch)");
         if (drag) finishDrag(false);
         if (boardDrag) finishBoardDrag();
         pinch = { zoom: cameraView.zoom, distance: touchSpread() };
@@ -531,7 +554,11 @@ export function createTableInput(options: {
         Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8
       ) {
         drag.active = true;
-        trace("drag started", rules.busy() ? "while an animation is running" : "");
+        const carried = selected.has(drag.source.block.id) ? hand.selected(selected).length : 1;
+        trace(
+          "drag started",
+          `carrying ${carried} block${carried === 1 ? "" : "s"}${carried > 1 ? " (the dragged one is selected, so the whole selection comes)" : ""}${rules.busy() ? ", while an animation is running" : ""}`,
+        );
         // Dragging a selected block carries the rest of the hand selection with it.
         if (selected.has(drag.source.block.id)) {
           const source = drag.source;
@@ -606,6 +633,7 @@ export function createTableInput(options: {
       drag.lastX = event.clientX;
       drag.lastY = event.clientY;
       moveDraggedBlock();
+      if (drag.active) trace("drag ended", "button released");
       finishDrag(true);
     }
     if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
@@ -628,7 +656,10 @@ export function createTableInput(options: {
         return;
       }
     }
-    if (drag?.pointerId === event.pointerId) finishDrag(false);
+    if (drag?.pointerId === event.pointerId) {
+      if (drag.active) trace("drag ended", `cancelled (${event.type})`);
+      finishDrag(false);
+    }
     if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
     options.overlays().hideTooltip();
     canvas.style.cursor = "default";
@@ -640,6 +671,7 @@ export function createTableInput(options: {
     if (!target) return;
     const { pointerId, clientX, clientY } = event;
     hold.down(pointerId, clientX, clientY, () => {
+      if (drag?.pointerId === pointerId && drag.active) trace("drag ended", "held still: inspect");
       if (drag?.pointerId === pointerId) finishDrag(false);
       if (boardDrag?.pointerId === pointerId) finishBoardDrag();
       // Above the finger, so the label never sits under it or over the card.
@@ -654,6 +686,14 @@ export function createTableInput(options: {
 
   /** Capture taken away mid-gesture (by the browser or system) counts as a cancel. */
   const onLostCapture = (event: PointerEvent) => {
+    trace(
+      "pointer capture lost",
+      drag?.pointerId === event.pointerId
+        ? drag.active
+          ? "mid-drag: the drag is cancelled"
+          : "on a pressed hand block (no drag yet)"
+        : "no drag",
+    );
     if (drag?.pointerId === event.pointerId || boardDrag?.pointerId === event.pointerId)
       onPointerCancel(event);
   };
@@ -680,6 +720,7 @@ export function createTableInput(options: {
   const onBlur = () => {
     hold.cancel();
     options.overlays().hideTooltip();
+    if (drag?.active) trace("drag ended", "the window lost focus");
     if (drag) finishDrag(false);
     if (boardDrag) finishBoardDrag();
     touches.clear();
