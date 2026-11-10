@@ -266,6 +266,37 @@ export function createTableInput(options: {
   });
 
   /**
+   * The hand (#276), a drop target: a single hand block dropped back among the hand moves to the
+   * slot under the pointer. Reordering is not a play or a discard, and nothing refills. While
+   * hovered it opens the gap where the block would go.
+   */
+  let handSlot: number | null = null;
+  dropTargetKinds.register("hand", {
+    canDrop(carried, clientX, clientY) {
+      // A group plays as a line or is discarded; only one block at a time is reordered.
+      handSlot = carried.length === 1 ? handReorderSlot(clientX, clientY) : null;
+      return handSlot === null ? null : "accept";
+    },
+    hover(verdict) {
+      const slot = verdict ? handSlot : null;
+      if (!drag || drag.reorderSlot === slot) return;
+      drag.reorderSlot = slot;
+      hand.layout();
+    },
+    drop([moved]) {
+      const from = moved ? rules.hand().indexOf(moved.block) : -1;
+      if (!moved || handSlot === null || from < 0) return false;
+      if (handSlot !== from) rules.reorderHand(from, handSlot);
+      playSfx(handSlot !== from ? "hand.reorder" : "card.drag.return");
+      hand.putBack([moved]);
+      hand.sync(rules.hand());
+      return true;
+    },
+    reject: () => {},
+    describe: () => `slot ${(handSlot ?? 0) + 1} of the hand`,
+  });
+
+  /**
    * Drag sources (#282): what can be picked up. The hand gives up the draggable block under the
    * pointer while the scene in front takes plays.
    */
@@ -398,11 +429,6 @@ export function createTableInput(options: {
     // priority; the first to answer takes the point and shows its own preview.
     drag.hit = dragDrop.hitTest(playOrder(drag), drag.lastX, drag.lastY);
     dragDrop.hover(drag.hit);
-    // A group plays as a line (one play) or is discarded; it is not reordered as one.
-    const single = drag.group.length === 0;
-    const previousSlot = drag.reorderSlot;
-    drag.reorderSlot = single && !drag.hit ? handReorderSlot(drag.lastX, drag.lastY) : null;
-    if (drag.reorderSlot !== previousSlot) hand.layout();
     // Tracing (dev10): each time the drop target changes, say where it is now, or why there's none.
     const target = drag.hit
       ? drag.hit.target.describe(drag.hit.verdict)
@@ -467,8 +493,8 @@ export function createTableInput(options: {
   }
 
   /**
-   * Carry out a finished drag: play it at its candidate, discard it, reorder the hand, or put it
-   * back. Every carried block ends up exactly once: played, discarded or back in the hand.
+   * Carry out a finished drag: the drop target hit takes the blocks (a play, a discard, a hand
+   * reorder), or they go back. Every carried block ends up exactly once: played, discarded or back in the hand.
    */
   function commitDrop(
     activeDrag: Drag,
@@ -476,7 +502,6 @@ export function createTableInput(options: {
     hit: DropHit | null,
     drop: boolean,
   ): void {
-    const reorderSlot = drop ? activeDrag.reorderSlot : null;
     const carried = [activeDrag.source, ...activeDrag.group];
     for (const rendered of carried) options.setDragLayer(rendered.cube, false);
     // A drop target that accepted takes the blocks itself (#273, #274), in play order.
@@ -486,14 +511,7 @@ export function createTableInput(options: {
       accepted ? `dropped on ${hit!.name}` : hit ? "refused" : "returned",
       `${blocks} block${blocks === 1 ? "" : "s"}${hit ? ` at ${hit.name}` : ""}`,
     );
-    const from = rules.hand().indexOf(activeDrag.source.block);
-    if (!accepted && reorderSlot !== null && reorderSlot !== from) {
-      // A drop inside the hand reorders it: not a play or discard, and nothing refills.
-      rules.reorderHand(from, reorderSlot);
-      hand.putBack([activeDrag.source]);
-      hand.sync(rules.hand());
-      playSfx("hand.reorder");
-    } else if (!accepted) {
+    if (!accepted) {
       // A drop the rules refuse (or any drop with no plays left) is denied; a drop on
       // empty space just returns the block to the hand.
       const refused = drop && (hit !== null || !rules.canPlay());

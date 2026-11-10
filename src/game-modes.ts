@@ -193,6 +193,8 @@ const playSceneTraits: Partial<SceneTraits> = {
       { target: "discard", priority: 10 },
       // The grid takes plays (#274): a single block, a selected group's line, the first play.
       { target: "grid", priority: 0 },
+      // The hand takes a single block back to reorder it (#276), where nothing else does.
+      { target: "hand", priority: -10 },
     ],
   },
   // Hand blocks can be picked up and dragged to play, discard or reorder them.
