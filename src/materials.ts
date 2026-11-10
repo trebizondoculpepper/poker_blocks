@@ -1,3 +1,4 @@
+import type { VesselConfig } from "./visual/filled-vessel";
 import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
@@ -57,6 +58,8 @@ export type MaterialDefinition = {
      * (the title's attract sequence). Each names a registered trail effect and configures it.
      */
     trails?: readonly AppearanceTrail[];
+    /** A hollow vessel part-filled with fluid, for the `filledVessel` assembly (#227). */
+    vessel?: VesselConfig;
     optics?: {
       tint: number;
       handIor: number;
@@ -313,10 +316,47 @@ export const materialDefinitions = [
   },
 ] as const satisfies readonly MaterialDefinition[];
 
-export type BlockMaterial = (typeof materialDefinitions)[number]["id"];
+/**
+ * Visual experiments (#227): materials that exist only to be looked at in a developer mode.
+ * They are not in `materialDefinitions`, so no shop, reward, dev deck or attract sequence ever
+ * deals them; a mode reaches one only through the `uniformMaterialDeck` run setup step. They
+ * have no scoring, prices or rewards.
+ */
+export const experimentalMaterials = [
+  {
+    id: "custard",
+    name: "Custard",
+    traits: { transparent: {} },
+    appearance: {
+      pattern: "cardSheet",
+      assembly: "filledVessel",
+      surface: "clear",
+      height: "none",
+      ink: lightInk,
+      edge: { color: 0xe8eef2, opacity: 0.3 },
+      geometry: { shape: "rounded", segments: 1, radius: 0.08, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: noEnds,
+      vessel: {
+        fill: 0xf2c84b,
+        surface: 0xfadf7e,
+        level: 0.45,
+        settleSeconds: 1.4,
+        traceSeconds: 4,
+        traceOpacity: 0.45,
+        shellOpacity: 0.16,
+        wall: 0.92,
+      },
+    },
+  },
+] as const satisfies readonly MaterialDefinition[];
+
+export type BlockMaterial =
+  | (typeof materialDefinitions)[number]["id"]
+  | (typeof experimentalMaterials)[number]["id"];
 export const blockMaterials: readonly BlockMaterial[] = materialDefinitions.map(({ id }) => id);
 const materialRegistry = new Map<string, MaterialDefinition>(
-  materialDefinitions.map((item) => [item.id, item]),
+  [...materialDefinitions, ...experimentalMaterials].map((item) => [item.id, item]),
 );
 
 export function getMaterialDefinition(kind: BlockMaterial): MaterialDefinition {
@@ -368,4 +408,10 @@ export function makeDevDeck(seed: number): readonly CardBlock[] {
     [assignments[index], assignments[other]] = [assignments[other], assignments[index]];
   }
   return standardDeck.map((card, index) => withMaterial(card, assignments[index]));
+}
+
+/** Every standard card made of one material, for a mode that shows only that material (#227). */
+export function makeUniformDeck(material: BlockMaterial): readonly CardBlock[] {
+  const definition = getMaterialDefinition(material);
+  return standardDeck.map((card) => withMaterial(card, definition));
 }

@@ -581,6 +581,23 @@ const gameModes: GameMode[] = [
     },
   },
   {
+    // Visual experiment (#227): sandbox play with every card made of custard, a clear plastic
+    // vessel of slow-settling custard. Turn the structure to watch it level and leave a trace.
+    id: "dev-custard",
+    scenes: composeScenes("dev-custard"),
+    startScene: "stage-1",
+    flow: standardGameFlow,
+    navigation: standardNavigation,
+    runSetup: [{ step: "sandbox" }, { step: "uniformMaterialDeck", material: "custard" }],
+    traits: {
+      onLoad: "newRun",
+      save: { key: "poker-blocks.dev-custard-run" },
+      console: { name: "dev-custard" },
+      restartable: { param: "restart" },
+      music: { style: "quiet" },
+    },
+  },
+  {
     // Attract-sequence sandbox (#166): the title's background with live tuning sliders, so its
     // feel can be dialled in without editing constants. It opens straight on the title scene.
     id: "dev-attract",
