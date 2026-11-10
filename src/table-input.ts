@@ -722,6 +722,10 @@ export function createTableInput(options: {
     // The canvas's own handler ran first if the release reached it, and finished the drag.
     if (drag?.pointerId !== event.pointerId || !drag.active) return;
     window.clearTimeout(releaseGrace);
+    // The same release bookkeeping as on the canvas: a finger that lifted is no longer down, so
+    // the next single touch isn't mistaken for a second finger (a pinch).
+    hold.up(event.pointerId);
+    if (event.pointerType === "touch") touches.delete(event.pointerId);
     drag.lastX = event.clientX;
     drag.lastY = event.clientY;
     moveDraggedBlock();
