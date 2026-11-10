@@ -3,6 +3,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
 import { additiveSheen } from "./additive-light";
+import { choppedGeometry, type ChopSettings } from "./chopped-geometry";
 import { createCrystalFire } from "./crystal-fire";
 import { createFilledVessel } from "./filled-vessel";
 import { createFireCore } from "./fire-core";
@@ -483,12 +484,24 @@ function cloudyIce(
   });
 }
 
-function drawMeat(g: CanvasRenderingContext2D, random: () => number): void {
+/**
+ * Meat. Along the grain: streaks of muscle and fat running from one cut face to the other (up
+ * and down the long faces, since the cut faces are the top and bottom). Across the grain (the
+ * cut faces, like wood's end grain): a steak's cross-section. No key line: a chopped hunk has no
+ * neat edge.
+ */
+function drawMeat(g: CanvasRenderingContext2D, random: () => number, endGrain: boolean): void {
+  if (endGrain) return drawMeatCrossSection(g, random);
   gradient(g, [
     [0, "#d78387"],
     [0.48, "#8d3c48"],
     [1, "#cc7776"],
   ]);
+  // The streaks are drawn across, then turned a quarter so they run toward the cut faces.
+  g.save();
+  g.translate(SIZE / 2, SIZE / 2);
+  g.rotate(Math.PI / 2);
+  g.translate(-SIZE / 2, -SIZE / 2);
   for (let n = 0; n < 24; n++) {
     g.strokeStyle = n % 3 === 0 ? "#ffe5ce88" : "#671f3466";
     g.lineWidth = 2 + random() * 7;
@@ -498,8 +511,54 @@ function drawMeat(g: CanvasRenderingContext2D, random: () => number): void {
     g.bezierCurveTo(70, y - 22, 170, y + 28, SIZE + 10, y + (random() - 0.5) * 45);
     g.stroke();
   }
+  g.restore();
   flecks(g, random, 90, "#f5c1b966", 4);
-  border(g, "#722e3e", 6);
+}
+
+/**
+ * A cut across the grain: an even, fine texture of muscle-fibre bundles, one tone with thin
+ * connective seams between them, so the only thing standing out is the vein cut through it, a
+ * pale ring round a dark hollow. Both cut faces share this texture, so the vein sits in the same
+ * place on each, as if it runs right through the hunk.
+ */
+function drawMeatCrossSection(g: CanvasRenderingContext2D, random: () => number): void {
+  // Connective tissue: the thin seams left showing between the bundles.
+  g.fillStyle = "#b5606a";
+  g.fillRect(0, 0, SIZE, SIZE);
+  const cells = 10;
+  const cell = SIZE / cells;
+  g.fillStyle = "#8a2b3b";
+  for (let row = -1; row <= cells; row++) {
+    for (let column = -1; column <= cells; column++) {
+      // A gently jittered grid of near-touching bundles, all the same tone.
+      const cx = (column + 0.5 + (random() - 0.5) * 0.25) * cell;
+      const cy = (row + 0.5 + (random() - 0.5) * 0.25) * cell;
+      g.beginPath();
+      const points = 7;
+      for (let n = 0; n < points; n++) {
+        const angle = (n / points) * Math.PI * 2 + random() * 0.3;
+        const radius = cell * (0.58 + random() * 0.06);
+        const x = cx + Math.cos(angle) * radius;
+        const y = cy + Math.sin(angle) * radius;
+        if (n === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.closePath();
+      g.fill();
+    }
+  }
+  // The vein: a pale wall round a dark hollow, off centre.
+  const vx = SIZE * (0.28 + random() * 0.44);
+  const vy = SIZE * (0.25 + random() * 0.35);
+  const radius = 11 + random() * 6;
+  g.fillStyle = "#f4cfc4";
+  g.beginPath();
+  g.ellipse(vx, vy, radius * 1.15, radius, random(), 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = "#3b0c16";
+  g.beginPath();
+  g.ellipse(vx, vy, radius * 0.6, radius * 0.48, random(), 0, Math.PI * 2);
+  g.fill();
 }
 
 /** The face art, in the colours of the material's ink. */
@@ -567,7 +626,7 @@ const patternRegistry = new Map<string, PatternHandler>([
   ["goldFoil", (g) => drawGold(g)],
   ["crackedClay", (g, random, art) => drawTerracotta(g, random, potteryCracks(art))],
   ["frostedIce", (g, random) => drawIce(g, random)],
-  ["marbledFlesh", (g, random) => drawMeat(g, random)],
+  ["marbledFlesh", (g, random, _identity, endGrain) => drawMeat(g, random, endGrain)],
 ]);
 
 function faceTexture(
@@ -1135,11 +1194,24 @@ const assemblyRegistry = new Map<string, AssemblyHandler>([
   ["filledVessel", filledVessel],
 ]);
 
+/** A chopped shape's cuts and dents when its material gives none. */
+const defaultChop: ChopSettings = { cuts: [2, 3], depth: [0.06, 0.15], dent: 0.03 };
+
 const geometryRegistry = new Map<
   string,
-  (size: number, geometry: MaterialDefinition["appearance"]["geometry"]) => THREE.BufferGeometry
+  (
+    size: number,
+    geometry: MaterialDefinition["appearance"]["geometry"],
+    /** The block's art seed, for shapes that differ block to block. */
+    seed: string,
+  ) => THREE.BufferGeometry
 >([
   ["box", (size) => new THREE.BoxGeometry(size, size, size)],
+  [
+    "chopped",
+    (size, settings, seed) =>
+      choppedGeometry(size, settings.segments, settings.chop ?? defaultChop, seed),
+  ],
   [
     "rounded",
     (size, settings) =>
@@ -1155,7 +1227,7 @@ export function createBlockAppearance(
   const appearance = definition.appearance;
   const makeGeometry = geometryRegistry.get(appearance.geometry.shape);
   if (!makeGeometry) throw new Error("Unknown block geometry: " + appearance.geometry.shape);
-  const geometry = makeGeometry(size, appearance.geometry);
+  const geometry = makeGeometry(size, appearance.geometry, art.seed);
   geometry.scale(appearance.geometry.scale, appearance.geometry.scale, appearance.geometry.scale);
   const assemble = assemblyRegistry.get(appearance.assembly);
   if (!assemble) throw new Error("Unknown appearance assembly: " + appearance.assembly);

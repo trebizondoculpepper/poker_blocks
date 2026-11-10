@@ -1,3 +1,4 @@
+import type { ChopSettings } from "./visual/chopped-geometry";
 import type { Lettering } from "./visual/lettering";
 import { Registry } from "./core/registry";
 import type { VesselConfig } from "./visual/filled-vessel";
@@ -60,7 +61,14 @@ export type MaterialDefinition = {
     height: string;
     ink: { red: string; black: string; onDark: boolean };
     edge: { color: number; opacity: number };
-    geometry: { shape: string; segments: number; radius: number; scale: number };
+    geometry: {
+      shape: string;
+      segments: number;
+      radius: number;
+      scale: number;
+      /** For the `chopped` shape: its cleaver cuts and dents (src/visual/chopped-geometry.ts). */
+      chop?: ChopSettings;
+    };
     reliefScale: number;
     endGrainFaces: readonly number[];
     /**
@@ -323,9 +331,17 @@ export const materialDefinitions = [
       height: "none",
       ink: { red: "#bd3651", black: "#f4e9db", onDark: true },
       edge: { color: 0x6b2538, opacity: 0 },
-      geometry: { shape: "rounded", segments: 3, radius: 0.09, scale: 1 },
+      // A crudely chopped hunk: three or four cleaver cuts and shallow dents, its own per card.
+      geometry: {
+        shape: "chopped",
+        segments: 8,
+        radius: 0,
+        scale: 1,
+        chop: { cuts: [3, 4], depth: [0.08, 0.16], dent: 0.04 },
+      },
       reliefScale: 2,
-      endGrainFaces: noEnds,
+      // Like wood, the grain runs one way: the top and bottom are cut across it.
+      endGrainFaces: [2, 3],
     },
   },
   {
