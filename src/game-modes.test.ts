@@ -25,6 +25,13 @@ describe("game modes composed from traits", () => {
     expect(gameModeFor(null).id).toBe("game");
     expect(gameModeFor("dev2").id).toBe("dev2");
     expect(gameModeFor("dev").id).toBe("dev0");
+    // Every developer room is dev followed by a number; the old names still open them.
+    for (const id of gameModeRegistry.names().filter((name) => name !== "game"))
+      expect(id).toMatch(/^dev\d+$/);
+    expect(gameModeFor("dev-style").id).toBe("dev5");
+    expect(gameModeFor("dev-custard").id).toBe("dev6");
+    expect(gameModeFor("dev-attract").id).toBe("dev7");
+    expect(gameModeFor("dev-balance").id).toBe("dev8");
     expect(gameModeFor("nonsense").id).toBe("game");
     expect(developerModes()).toEqual([
       "dev0",
@@ -32,10 +39,10 @@ describe("game modes composed from traits", () => {
       "dev2",
       "dev3",
       "dev4",
-      "dev-style",
-      "dev-custard",
-      "dev-attract",
-      "dev-balance",
+      "dev5",
+      "dev6",
+      "dev7",
+      "dev8",
     ]);
   });
 
@@ -53,8 +60,8 @@ describe("game modes composed from traits", () => {
       gameModeFor(mode).scenes.find(({ id }) => id.endsWith("/balance-editor"))?.traits
         .devShopBalanceEditor;
     expect(editor("game")).toBeUndefined();
-    expect(editor("dev-balance")).toEqual({ backTo: "game" });
-    expect(gameModeFor("dev-balance").traits.onLoad).toBe("scene");
+    expect(editor("dev8")).toEqual({ backTo: "game" });
+    expect(gameModeFor("dev8").traits.onLoad).toBe("scene");
   });
 
   it("lists, links and restarts modes through their console and restartable traits", async () => {

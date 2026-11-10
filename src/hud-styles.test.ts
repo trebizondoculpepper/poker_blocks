@@ -34,7 +34,7 @@ describe("HUD styles (#121)", () => {
   });
 
   it("are auditioned in a developer mode, across gameplay and the shop", () => {
-    const mode = gameModeRegistry.get("dev-style");
+    const mode = gameModeRegistry.get("dev5");
     expect(mode.traits.console).toBeDefined();
     const auditioned = mode.scenes.filter(({ traits }) => traits.devHudStyleAudition);
     expect(new Set(auditioned.map(({ id }) => id.split("/").at(-1)))).toEqual(

@@ -69,7 +69,7 @@ Proposed palette, softest first:
 | 9        | Fire       | rattling  | `material.attach.fire`       | iron frame clank with a faint crackle       |
 | 10       | Crystal    | ringing   | `material.attach.prismatic`  | bright glassy ting                          |
 
-Hardness 4 is **plastic**, which the owner places between wood and gold: the custard vessel from #227 (`material.attach.custard`, character "hollow"). Custard is an experimental material, seen only in `?mode=dev-custard`.
+Hardness 4 is **plastic**, which the owner places between wood and gold: the custard vessel from #227 (`material.attach.custard`, character "hollow"). Custard is an experimental material, seen only in `?mode=dev6`.
 
 **For owner review:**
 

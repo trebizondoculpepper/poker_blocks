@@ -565,8 +565,10 @@ const gameModes: GameMode[] = [
   {
     // HUD style audition (#121): the shop, then sandbox play, with a selector that switches the
     // gameplay and shop overlays between the candidate styles. Continue leaves the shop for play.
-    id: "dev-style",
-    scenes: composeScenes("dev-style", [
+    id: "dev5",
+    // Renumbered from "dev-style"; the old name still works.
+    aliases: ["dev-style"],
+    scenes: composeScenes("dev5", [
       rackScenes,
       {
         scenes: [...playScenes, "shop"],
@@ -579,8 +581,8 @@ const gameModes: GameMode[] = [
     runSetup: [{ step: "sandbox" }, { step: "materialDeck" }, { step: "shopPreview", coins: 30 }],
     traits: {
       onLoad: "resume",
-      save: { key: "poker-blocks.dev-style-run" },
-      console: { name: "dev-style" },
+      save: { key: "poker-blocks.dev5-run" },
+      console: { name: "dev5" },
       restartable: { param: "restart" },
       passiveRack: { ...defaultPassiveRack },
       shop: { ...defaultShop },
@@ -590,16 +592,18 @@ const gameModes: GameMode[] = [
   {
     // Visual experiment (#227): sandbox play with every card made of custard, a clear plastic
     // vessel of slow-settling custard. Turn the structure to watch it level and leave a trace.
-    id: "dev-custard",
-    scenes: composeScenes("dev-custard"),
+    id: "dev6",
+    // Renumbered from "dev-custard"; the old name still works.
+    aliases: ["dev-custard"],
+    scenes: composeScenes("dev6"),
     startScene: "stage-1",
     flow: standardGameFlow,
     navigation: standardNavigation,
     runSetup: [{ step: "sandbox" }, { step: "uniformMaterialDeck", material: "custard" }],
     traits: {
       onLoad: "newRun",
-      save: { key: "poker-blocks.dev-custard-run" },
-      console: { name: "dev-custard" },
+      save: { key: "poker-blocks.dev6-run" },
+      console: { name: "dev6" },
       restartable: { param: "restart" },
       music: { style: "quiet" },
     },
@@ -607,24 +611,28 @@ const gameModes: GameMode[] = [
   {
     // Attract-sequence sandbox (#166): the title's background with live tuning sliders, so its
     // feel can be dialled in without editing constants. It opens straight on the title scene.
-    id: "dev-attract",
-    scenes: composeScenes("dev-attract", [{ scenes: ["title"], traits: { devAttractTuning: {} } }]),
+    id: "dev7",
+    // Renumbered from "dev-attract"; the old name still works.
+    aliases: ["dev-attract"],
+    scenes: composeScenes("dev7", [{ scenes: ["title"], traits: { devAttractTuning: {} } }]),
     startScene: "title",
     flow: standardGameFlow,
     navigation: standardNavigation,
     runSetup: [],
     traits: {
       onLoad: "title",
-      save: { key: "poker-blocks.dev-attract-run" },
-      console: { name: "dev-attract" },
+      save: { key: "poker-blocks.dev7-run" },
+      console: { name: "dev7" },
       music: { style: "quiet" },
     },
   },
   ...(import.meta.env.DEV
     ? [
         {
-          id: "dev-balance",
-          scenes: composeScenes("dev-balance", [
+          id: "dev8",
+          // Renumbered from "dev-balance"; the old name still works.
+          aliases: ["dev-balance"],
+          scenes: composeScenes("dev8", [
             { scenes: ["balance-editor"], traits: { devShopBalanceEditor: { backTo: "game" } } },
           ]),
           startScene: "balance-editor",
@@ -633,8 +641,8 @@ const gameModes: GameMode[] = [
           runSetup: [],
           traits: {
             onLoad: "scene",
-            save: { key: "poker-blocks.dev-balance-run" },
-            console: { name: "dev-balance" },
+            save: { key: "poker-blocks.dev8-run" },
+            console: { name: "dev8" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,
