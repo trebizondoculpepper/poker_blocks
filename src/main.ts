@@ -32,6 +32,7 @@ import { SceneManager } from "./scenes";
 import { sceneBehaviours } from "./scene-behaviours";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView, type ShopView } from "./shop-view";
+import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
 import { createHudFrame } from "./hud-frame";
@@ -103,12 +104,17 @@ type TraitContext = {
     shop: ShopView;
     rack: { viewEntered(entered: boolean, capacity: number): void };
     deckView: DeckView;
+    devShopBalanceEditor: ShopBalanceEditor;
     version: string;
     sound: (id: SoundEffectId) => void;
   };
 };
 const attract = createAttractBackground(backgrounds);
 const deckView = createDeckView(host);
+// The developer tool has its own build boundary; production never imports its UI or data.
+const devShopBalanceEditor: ShopBalanceEditor = import.meta.env.DEV
+  ? (await import("./tools/shop-balance-editor")).createShopBalanceEditor(host)
+  : { show() {}, hide() {}, dispose() {} };
 const traitContext: TraitContext = {
   host,
   services: {
@@ -145,6 +151,7 @@ const traitContext: TraitContext = {
       return passiveRackView;
     },
     deckView,
+    devShopBalanceEditor,
     sound: (id) => playSfx(id),
     version: appVersion,
   },
@@ -326,6 +333,7 @@ if (import.meta.hot) {
     field.dispose();
     passiveRackView.dispose();
     shopView.dispose();
+    devShopBalanceEditor.dispose();
     view.dispose();
   });
 }

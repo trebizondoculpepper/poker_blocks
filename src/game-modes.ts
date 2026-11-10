@@ -59,6 +59,8 @@ export type SceneTraits = {
   tableBackground: Record<never, never>;
   /** Testing only: live sliders for the attract sequence's velocity, spin and spawn rate. */
   devAttractTuning: Record<never, never>;
+  /** Developer-only shop balance draft editor, mounted only by a mode composing it. */
+  devShopBalanceEditor: { backTo: string };
   /** The HUD wears this registered style (src/hud-styles.ts) while the scene is on the stack. */
   hudStyle: HudStyleConfig;
   /** Testing only: a selector that switches the HUD between these styles (#121). */
@@ -139,7 +141,7 @@ export type ModeScene = Scene<SceneTraits>;
 export type ModeMusicStyle = "quiet" | "ordinary";
 
 /** What a fresh page load does in a mode (see ModeTraits.onLoad). */
-export type OnLoad = "title" | "newRun" | "resume";
+export type OnLoad = "title" | "newRun" | "resume" | "scene";
 
 /** A shared scene definition: a name and the traits every mode's copy of it composes. */
 export type SceneDefinition = {
@@ -246,6 +248,7 @@ export const sceneDefinitions = [
       keyAction: { key: "Escape", action: "back", sfx: "ui.back" },
     },
   },
+  ...(import.meta.env.DEV ? ([{ name: "balance-editor", traits: {} }] as const) : []),
   {
     name: "stage-1",
     traits: {
@@ -373,8 +376,19 @@ export const defaultPassiveRack: PassiveRackTrait = { capacity: 5 };
  * How many offers a shop holds: a number from `minOffers` to `maxOffers`, drawn each visit
  * (#145). What it actually stocks is game-run state, chosen by run setup.
  */
-export type ShopTrait = { minOffers: number; maxOffers: number };
-export const defaultShop: ShopTrait = { minOffers: 5, maxOffers: 9 };
+export type ShopTrait = {
+  minOffers: number;
+  maxOffers: number;
+  /** Minimum offers of each kind, when eligible. Omitted legacy configs use one each. */
+  guaranteedPassives?: number;
+  guaranteedCards?: number;
+};
+export const defaultShop: ShopTrait = {
+  minOffers: 5,
+  maxOffers: 9,
+  guaranteedPassives: 1,
+  guaranteedCards: 1,
+};
 
 export type ModeTraits = {
   /** Save slot used by runs in this mode. */
@@ -582,6 +596,26 @@ const gameModes: GameMode[] = [
       music: { style: "quiet" },
     },
   },
+  ...(import.meta.env.DEV
+    ? [
+        {
+          id: "dev-balance",
+          scenes: composeScenes("dev-balance", [
+            { scenes: ["balance-editor"], traits: { devShopBalanceEditor: { backTo: "game" } } },
+          ]),
+          startScene: "balance-editor",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev-balance-run" },
+            console: { name: "dev-balance" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+      ]
+    : []),
 ];
 for (const mode of gameModes) gameModeRegistry.register(mode.id, mode);
 

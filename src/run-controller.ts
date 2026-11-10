@@ -463,6 +463,9 @@ export function createRunController<Context>(options: {
    * reads one value and looks up the handler; it never asks which mode is open.
    */
   const onLoadHandlers: Record<OnLoad, () => void> = {
+    scene() {
+      showScene(currentMode.startScene);
+    },
     title() {
       if (!restartMode) {
         showScene("title");
@@ -481,6 +484,26 @@ export function createRunController<Context>(options: {
       services.overlays.closeAll();
     },
   };
+
+  /** Console reset always starts fresh; scene-only tools re-enter their own start scene. */
+  const freshRun = () => startRun(newRun());
+  const consoleStartHandlers: Record<OnLoad, () => void> = {
+    title: freshRun,
+    newRun: freshRun,
+    resume: freshRun,
+    scene() {
+      // A previous mode can have an outcome timer or an animated play in flight. Replace
+      // its run before changing scenes so neither can resume into this scene-only tool.
+      stageWonAt = gameOverAt = null;
+      game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+      resetTable();
+      showScene(currentMode.startScene);
+    },
+  };
+  function startFromConsole(): void {
+    consoleStartHandlers[currentMode.traits.onLoad]();
+    services.overlays.closeAll();
+  }
 
   const rules: TableRules = {
     busy: () => services.presenter.busy,
@@ -592,8 +615,7 @@ export function createRunController<Context>(options: {
     screen: () => services.overlays.screen,
     next: takeNextAction,
     newRun() {
-      startRun(newRun());
-      services.overlays.closeAll();
+      startFromConsole();
     },
     home: () => showScene("title"),
     hardReset() {
@@ -608,11 +630,8 @@ export function createRunController<Context>(options: {
     },
     mode: () => currentMode,
     openMode(mode) {
-      enterMode(mode);
-      // The new run's flow puts its scene in front, so the scene's arrival (its sound, the
-      // shop's entrance) happens once, with the run ready.
-      startRun(newRun());
-      services.overlays.closeAll();
+      enterMode(mode, false);
+      startFromConsole();
     },
     forceOutcome(outcome) {
       if (services.presenter.busy || !game.forceOutcome(outcome)) return false;

@@ -271,6 +271,12 @@ Enter `reset` in the developer console to restart the current dev mode in place.
 
 `?mode=dev3` skips the title screen and opens directly in the shop scene with five coins and a round-1 stock of 5–9 offers. Drag an offer to BUY: a passive costs its base price (2–9 coins) and enters the rack; a card costs its material's price plus its rank's surcharge and enters the deck. It has its own saved run; `reset` in the developer console or `&restart=true` in the URL starts the shop again with five coins and fresh offers. This is a shop sandbox; the full shop flow remains [issue #18](https://github.com/trebizondoculpepper/poker_blocks/issues/18). In any mode, the console command `coins` shows the balance, `coins +5` adds five, and `coins -2` removes two (stopping at zero). Changes update the HUD and saved run.
 
+### Developer shop balance editor (#161)
+
+Run the development server and open `?mode=dev-balance` to edit a **draft** of the shop balance. It starts from the current values in the game: stock range and guaranteed counts, card-rank surcharges, each shop material’s price and weight curve, each passive’s price and unlock round, and the named passive frequency curves. Select an entry on the left to see its controls and a graph of relative weight by round. Drag a graph point or change its round/weight fields; **Add keyframe** and **Remove** edit the curve. Curves interpolate in straight lines and stay at their last value after the final keyframe. A passive’s graph edits its named shared curve, so every passive using that curve is affected in the draft.
+
+Errors appear in the status bar and highlight the affected fields. An invalid price, unlock round, stock count, keyframe order or weight, unknown entry, or unsupported value disables export. **Copy complete JSON** and **Download JSON** export every shop setting, not just the changes. The editor never changes the active run, the live shop, saved games or the source files; **Back to game** leaves it and discards the draft. To apply it, give the JSON to the source-update workflow (for example, paste it into an LLM request to update the definitions in `src/game-modes.ts`, `src/balance.ts`, `src/materials.ts`, `src/passives.ts` and `src/offer-weights.ts`), run validation, and restart the game. The JSON is a reviewable draft, not a runtime import format.
+
 ### Destructible blocks and the Dev4 destruction sandbox
 
 A block can be **destructible**: its `destructible { by }` trait names what may destroy it. Destroying a block removes it from the field. It costs no play or discard and does not change the score. Nothing settles into the gap, so blocks it held up stay where they are, even floating; settling will be a separate trait. The destroyed card goes to the discard pile, out of play like a discard, and returns to the deck whenever the discard pile does. Destruction emits `block.destroyed`, not a discard event. The only cause today is `manual`; later causes such as melting (#21) or bombs (#24) name their own.
@@ -393,7 +399,7 @@ An endless run eventually reaches the numeric limit. Targets then stay at `Numbe
 
 #### Balance config guardrails
 
-- **One source of truth:** prices, unlock rounds, weights and keyframes, material effects, hand values and stage target rates live in a single balance config module; consumers read it and never hold their own numbers.
+- **One source of truth:** prices, unlock rounds, weights and keyframes live on their definition owners and shared tuning modules; the editor reads those same values and never holds a duplicate default table. Material effects and stage target rates also remain in their definition or balance modules.
 - **Validation at load (and in a test):** every price is a positive integer; unlock rounds are positive integers; weights are non-negative; keyframe rounds are strictly increasing and not before the unlock round; every passive that names a material unlocks no earlier than that material.
 - **Base prices are data; modifiers are separate:** a future price-changing passive is an event rule that adjusts a working price, never an edit to the config.
 

@@ -22,7 +22,7 @@ export type ConsoleApp = {
   screen(): string;
   /** Press the HUD's next-action button. */
   next(): void;
-  /** Start a new run in the current mode and close any menu. */
+  /** Reset the current mode (a new run or a fresh developer scene) and close any menu. */
   newRun(): void;
   /** Go to the title screen. */
   home(): void;
@@ -30,7 +30,7 @@ export type ConsoleApp = {
   hardReset(): void;
   /** The mode playing now. */
   mode(): GameMode;
-  /** Make `mode` active and start a fresh run there, without reloading the page. */
+  /** Make `mode` active and open its fresh start, without reloading the page. */
   openMode(mode: GameMode): void;
   forceOutcome(outcome: "won" | "lost"): boolean;
   adjustCoins(delta: number): number;

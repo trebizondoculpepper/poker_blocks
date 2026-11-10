@@ -1,0 +1,181 @@
+.shop-balance-editor {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #101a24f5;
+  color: #f4f0e8;
+  font:
+    14px system-ui,
+    sans-serif;
+}
+.shop-balance-editor[hidden] {
+  display: none;
+}
+.shop-balance-editor > header,
+.shop-balance-editor > footer {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 18px;
+  background: #1d2b3b;
+}
+.shop-balance-editor h1 {
+  margin: 0;
+  font-size: 19px;
+}
+.shop-balance-editor > header p {
+  margin: 0;
+  color: #a8b9c9;
+}
+.shop-balance-editor > header a {
+  margin-left: auto;
+  color: #a6f2df;
+}
+.balance-editor-body {
+  display: grid;
+  grid-template-columns: minmax(155px, 22vw) minmax(0, 1fr);
+  min-height: 0;
+}
+.balance-editor-body nav,
+.balance-editor-detail {
+  overflow: auto;
+  padding: 15px;
+}
+.balance-editor-body nav {
+  background: #172331;
+}
+.balance-editor-body nav h2 {
+  margin: 12px 0 5px;
+  color: #93b8bf;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.balance-editor-body nav button {
+  display: block;
+  width: 100%;
+  margin: 2px 0;
+  padding: 7px 9px;
+  text-align: left;
+}
+.balance-editor-body nav button.is-selected {
+  border-color: #74d8c7;
+  background: #34535d;
+}
+.balance-editor-detail h2 {
+  margin: 0 0 14px;
+  font-size: 20px;
+}
+.balance-editor-body button,
+.shop-balance-editor > footer button {
+  min-height: 38px;
+  border: 1px solid #587085;
+  border-radius: 5px;
+  background: #24394d;
+  color: #f4f0e8;
+  cursor: pointer;
+}
+.balance-editor-body button:hover,
+.shop-balance-editor > footer button:hover {
+  background: #35566b;
+}
+.balance-editor-body button:disabled,
+.shop-balance-editor > footer button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.balance-editor-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+.balance-editor-field {
+  display: inline-grid;
+  gap: 4px;
+  min-width: 130px;
+  margin: 5px;
+}
+.balance-editor-field span {
+  color: #b9ced7;
+}
+.balance-editor-field input {
+  width: 100%;
+  padding: 7px;
+  border: 1px solid #678396;
+  border-radius: 4px;
+  background: #0e1d29;
+  color: #fff;
+  font: inherit;
+}
+.balance-editor-field.is-invalid input,
+.balance-editor-keyframes.is-invalid input {
+  border-color: #ff8f78;
+  outline-color: #ff8f78;
+}
+.balance-editor-keyframe {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  margin: 5px 0;
+}
+.balance-editor-keyframe button {
+  margin-bottom: 5px;
+  padding: 5px 10px;
+}
+.balance-editor-graph {
+  max-width: 900px;
+  margin: 8px 0 16px;
+  border: 1px solid #587085;
+  border-radius: 6px;
+  background: #142533;
+}
+.balance-editor-graph svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+}
+.balance-editor-graph .axis {
+  stroke: #6b879a;
+  stroke-width: 1.5;
+}
+.balance-editor-graph .curve {
+  fill: none;
+  stroke: #78e4cb;
+  stroke-width: 3;
+}
+.balance-editor-graph text {
+  fill: #a8c4cf;
+  font-size: 12px;
+  text-anchor: middle;
+}
+.balance-editor-graph .keyframe-point {
+  fill: #f3c85e;
+  stroke: #2b3644;
+  stroke-width: 2;
+  cursor: grab;
+}
+.balance-editor-help {
+  color: #aac1ca;
+}
+.shop-balance-editor > footer {
+  flex-wrap: wrap;
+}
+.balance-editor-status {
+  flex: 1;
+  min-width: 230px;
+}
+.shop-balance-editor > footer button {
+  padding: 8px 12px;
+}
+@media (max-width: 700px) {
+  .balance-editor-body {
+    grid-template-columns: 145px minmax(0, 1fr);
+  }
+  .shop-balance-editor > header,
+  .shop-balance-editor > footer {
+    padding: 7px 9px;
+    gap: 8px;
+  }
+}

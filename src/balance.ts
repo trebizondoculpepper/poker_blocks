@@ -69,7 +69,10 @@ export function validateStageTargetBalance<Kind extends string>(
 }
 
 /** Everything wrong with these passives' shop balance; retired passives need none. */
-export function validatePassiveBalance(definitions: readonly PassiveDefinition[]): string[] {
+export function validatePassiveBalance(
+  definitions: readonly PassiveDefinition[],
+  materials?: readonly MaterialDefinition[],
+): string[] {
   return definitions.flatMap((definition) => {
     const { id, shop, retired } = definition;
     if (retired) return [];
@@ -81,7 +84,7 @@ export function validatePassiveBalance(definitions: readonly PassiveDefinition[]
       ...(Number.isSafeInteger(shop.unlockRound) && shop.unlockRound >= 1
         ? []
         : [`${id}: unlock round must be a positive whole number`]),
-      ...materialsNamedBy(definition)
+      ...materialsNamedBy(definition, materials)
         .filter((material) => shop.unlockRound < materialUnlockRound(material))
         .map((material) => `${id}: unlocks before ${material.id}, which it names`),
       ...(passiveFrequencies.has(shop.frequency)

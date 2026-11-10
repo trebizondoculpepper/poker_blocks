@@ -12,8 +12,15 @@ import {
 } from "./game-modes";
 import { saveKey } from "./save";
 import { createModeMusicBehaviours } from "./mode-music";
+import { validateShopStock } from "./shop-stock-config";
 
 describe("game modes composed from traits", () => {
+  it("keeps every composed shop within its stock limits", () => {
+    for (const id of gameModeRegistry.names()) {
+      const shop = gameModeRegistry.get(id).traits.shop;
+      if (shop) expect(validateShopStock(shop), id).toEqual([]);
+    }
+  });
   it("opens modes by id or alias, and the normal game otherwise", () => {
     expect(gameModeFor(null).id).toBe("game");
     expect(gameModeFor("dev2").id).toBe("dev2");
@@ -27,6 +34,7 @@ describe("game modes composed from traits", () => {
       "dev4",
       "dev-style",
       "dev-attract",
+      "dev-balance",
     ]);
   });
 
@@ -37,6 +45,15 @@ describe("game modes composed from traits", () => {
     expect(opened("room=dev")).toBe("dev0");
     expect(opened("mode=dev1&room=dev3")).toBe("dev1");
     expect(opened("")).toBe("game");
+  });
+
+  it("composes the balance editor only in its developer mode", () => {
+    const editor = (mode: string) =>
+      gameModeFor(mode).scenes.find(({ id }) => id.endsWith("/balance-editor"))?.traits
+        .devShopBalanceEditor;
+    expect(editor("game")).toBeUndefined();
+    expect(editor("dev-balance")).toEqual({ backTo: "game" });
+    expect(gameModeFor("dev-balance").traits.onLoad).toBe("scene");
   });
 
   it("lists, links and restarts modes through their console and restartable traits", async () => {
@@ -69,7 +86,7 @@ describe("game modes composed from traits", () => {
       onLoad: "title",
       save: { key: saveKey },
       passiveRack: { capacity: 5 },
-      shop: { minOffers: 5, maxOffers: 9 },
+      shop: { minOffers: 5, maxOffers: 9, guaranteedPassives: 1, guaranteedCards: 1 },
       music: { style: "ordinary" },
     });
     expect(gameModeFor(null).runSetup).toEqual([]);
