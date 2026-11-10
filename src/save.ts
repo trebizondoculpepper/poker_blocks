@@ -159,6 +159,7 @@ export function fromSaveRecord(
   try {
     const record = value as SaveRecord;
     if (record?.version !== saveVersion) return null;
+    if (record.seed !== undefined && parseSeed(record.seed).seed === undefined) return null;
     if (!Number.isInteger(record.round) || record.round < 1) return null;
     const phase = phaseForScene(flow, savedScene(record));
     if (!phase) return null;
@@ -342,6 +343,7 @@ export function loadRun(
   dealers: Registry<Dealer>,
   key = saveKey,
   flow: SaveFlow = standardGameFlow,
+  requiresSeed = false,
 ): RunSnapshot | null {
   if (!storage) return null;
   try {
@@ -353,7 +355,10 @@ export function loadRun(
       storage.removeItem(key);
       return null;
     }
-    const selected = typeof cards === "function" ? cards(seedOf(record)) : cards;
+    // Validate before resolving card IDs: a fresh material deck would silently change them.
+    const seed = parseSeed(record.seed).seed;
+    if (seed === undefined && (requiresSeed || record.seed !== undefined)) return null;
+    const selected = typeof cards === "function" ? cards(seed) : cards;
     return fromSaveRecord(record, selected, dealers, flow);
   } catch {
     return null;
@@ -365,11 +370,6 @@ function isLegacyLostRun(record: SaveRecord | null): boolean {
   const phase = record?.scene === undefined ? record?.phase : undefined;
   if (phase === undefined || !Object.hasOwn(legacyPhaseScenes, phase)) return false;
   return legacyPhaseScenes[phase] === null; // branch-ok: #86
-}
-
-/** A record's saved deck seed, read before its card ids are resolved. */
-function seedOf(record: SaveRecord): number | undefined {
-  return typeof record?.seed === "number" ? record.seed : undefined;
 }
 
 /** Discard a saved run. The key is the active mode's, so a dev mode clears its own slot. */
