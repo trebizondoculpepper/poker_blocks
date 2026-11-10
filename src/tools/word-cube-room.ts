@@ -106,7 +106,11 @@ export function createWordCubeRoom(host: HTMLElement): WordCubeRoom {
         });
         cube.object.position.copy(positions[index]!);
         cube.block.on("menu.action", (action) => (part("action").textContent = String(action)));
-        cube.block.on("inspection", (text) => (part("inspect").textContent = String(text)));
+        // Each cube's inspection, plus which material it was made of, so blocks can be told apart.
+        cube.block.on(
+          "inspection",
+          (text) => (part("inspect").textContent = `${String(text)} · ${cube.material.name}`),
+        );
         return { ...cube, index };
       }),
     );
