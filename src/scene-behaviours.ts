@@ -258,6 +258,9 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });
+  behaviours.register("exitSound", {
+    exit: ({ services }, { sfx }) => services.sound(sfx),
+  });
   // The theatrical arrival (#19): the camera rises to frame the stock as the shop comes in
   // front. Reduced motion keeps the camera still.
   behaviours.register("shopEntrance", {

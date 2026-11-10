@@ -88,7 +88,6 @@ export function createSettingsPanel(
   }
 
   find("back").addEventListener("click", () => {
-    playSfx("ui.back");
     options.onBack();
   });
   // Preview the new volume once the slider is released, so dragging is not noisy.

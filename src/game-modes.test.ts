@@ -154,6 +154,8 @@ describe("game modes composed from traits", () => {
       screen: { kind: "title" },
       attractBackground: {},
       musicCue: { cue: "title" },
+      enterSound: { sfx: "ui.title.enter" },
+      exitSound: { sfx: "ui.title.exit" },
       panelFooter: {
         links: [
           {

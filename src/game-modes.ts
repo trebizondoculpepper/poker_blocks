@@ -86,6 +86,8 @@ export type SceneTraits = {
   musicTrack: { pool: StageMusicPool };
   /** Entering this scene plays a sound: a stage's start, the shop opening (#93). */
   enterSound: { sfx: SoundEffectId };
+  /** Leaving this scene plays a sound: the title or settings screen closing. */
+  exitSound: { sfx: SoundEffectId };
   /** Entering the shop runs its camera entrance, unless motion is reduced (#93). */
   shopEntrance: Record<never, never>;
   /**
@@ -213,6 +215,8 @@ export const sceneDefinitions = [
       panelFooter: { links: projectLinks },
       attractBackground: {},
       musicCue: { cue: "title" },
+      enterSound: { sfx: "ui.title.enter" },
+      exitSound: { sfx: "ui.title.exit" },
       ...escapeOpensPause,
     },
   },
@@ -245,7 +249,10 @@ export const sceneDefinitions = [
       settingsPanel: {},
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "highpass" },
-      keyAction: { key: "Escape", action: "back", sfx: "ui.back" },
+      enterSound: { sfx: "ui.settings.enter" },
+      // Leaving plays `ui.settings.exit`, so Escape and Back add no sound of their own.
+      exitSound: { sfx: "ui.settings.exit" },
+      keyAction: { key: "Escape", action: "back" },
     },
   },
   ...(import.meta.env.DEV ? ([{ name: "balance-editor", traits: {} }] as const) : []),
