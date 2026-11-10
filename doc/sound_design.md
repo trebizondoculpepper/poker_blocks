@@ -99,9 +99,9 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 ## Title screen
 
-| Id                  | Plays when                                                                   | Status                          |
-| ------------------- | ---------------------------------------------------------------------------- | ------------------------------- |
-| `attract.card.bonk` | A card in the title's attract sequence flies into the camera and bounces off | registered, audio not generated |
+| Id                  | Plays when                                                                   | Status     |
+| ------------------- | ---------------------------------------------------------------------------- | ---------- |
+| `attract.card.bonk` | A card in the title's attract sequence flies into the camera and bounces off | registered |
 
 ## Open questions
 
