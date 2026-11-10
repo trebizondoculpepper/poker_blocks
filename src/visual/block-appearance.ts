@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import type { IdentityTrait } from "../cards";
+import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
 import { additiveSheen } from "./additive-light";
 import { createCrystalFire } from "./crystal-fire";
@@ -24,9 +24,9 @@ export type BlockAppearance = {
 
 const SIZE = 256;
 
-function randomFor(identity: IdentityTrait, kind: string, endGrain: boolean): () => number {
+function randomFor(art: FaceArt, kind: string, endGrain: boolean): () => number {
   let seed = 2166136261;
-  for (const char of `${identity.rank}-${identity.suit.name}-${kind}-${endGrain}`) {
+  for (const char of `${art.seed}-${kind}-${endGrain}`) {
     seed = Math.imul(seed ^ char.charCodeAt(0), 16777619);
   }
   return () => {
@@ -223,8 +223,8 @@ type Crack = { x: number; y: number }[];
  * point on a side, wanders inward and sometimes forks. Seeded per card so the colour and
  * the relief agree.
  */
-function potteryCracks(identity: IdentityTrait): Crack[] {
-  const random = randomFor(identity, "terracotta", true);
+function potteryCracks(art: FaceArt): Crack[] {
+  const random = randomFor(art, "terracotta", true);
   const cracks: Crack[] = [];
   const count = 3 + Math.floor(random() * 4);
   for (let n = 0; n < count; n++) {
@@ -322,9 +322,9 @@ function drawIce(g: CanvasRenderingContext2D, random: () => number): void {
 }
 
 /** Ice's rough relief: a field of soft lumps and pits, like a frozen, frosted face. */
-function iceRoughHeight(identity: IdentityTrait): THREE.CanvasTexture {
+function iceRoughHeight(art: FaceArt): THREE.CanvasTexture {
   const { canvas, g } = heightCanvas();
-  const random = randomFor(identity, "ice", true);
+  const random = randomFor(art, "ice", true);
   for (let n = 0; n < 420; n++) {
     const x = random() * SIZE;
     const y = random() * SIZE;
@@ -344,11 +344,11 @@ function iceRoughHeight(identity: IdentityTrait): THREE.CanvasTexture {
  * that tiles top to bottom. Used as both colour (faint glints) and bump (raised beads), and
  * scrolled downwards over time so the drops appear to run down the face.
  */
-function meltwater(identity: IdentityTrait): THREE.CanvasTexture {
+function meltwater(art: FaceArt): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = SIZE;
   const g = canvas.getContext("2d")!;
-  const random = randomFor(identity, "meat", true);
+  const random = randomFor(art, "meat", true);
   for (let n = 0; n < 11; n++) {
     const x = 18 + random() * (SIZE - 36);
     const y = random() * SIZE;
@@ -402,12 +402,12 @@ const faceAxes: [THREE.Vector3, THREE.Vector3][] = [
  * face is (one transform change per face, no redraw). On a level face they barely move.
  */
 function meltwaterSkin(
-  identity: IdentityTrait,
+  art: FaceArt,
   geometry: THREE.BufferGeometry,
 ): { skin: THREE.Mesh; texture: THREE.CanvasTexture } {
-  const texture = meltwater(identity);
+  const texture = meltwater(art);
   // Seconds for a drop to slide the height of an upright face, varied a little per block.
-  const secondsPerFace = 14 + randomFor(identity, "ice", false)() * 10;
+  const secondsPerFace = 14 + randomFor(art, "ice", false)() * 10;
   const turned = new THREE.Quaternion();
   const down = new THREE.Vector3();
   const materials = faceAxes.map(([u, v]) => {
@@ -431,7 +431,7 @@ function meltwaterSkin(
       polygonOffsetUnits: -1,
     });
     let last = performance.now();
-    let travelled = randomFor(identity, "ice", true)();
+    let travelled = randomFor(art, "ice", true)();
     material.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
       const now = performance.now();
       const seconds = Math.min((now - last) / 1000, 0.1);
@@ -502,22 +502,16 @@ function drawMeat(g: CanvasRenderingContext2D, random: () => number): void {
   border(g, "#722e3e", 6);
 }
 
-/** The rank and suit, in the colours that suit the material. */
+/** The face art, in the colours of the material's ink. */
 function drawPrint(
   g: CanvasRenderingContext2D,
-  identity: IdentityTrait,
+  art: FaceArt,
   appearance: MaterialDefinition["appearance"],
 ): void {
   const ink = appearance.ink;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
   g.shadowColor = ink.onDark ? "#28170caa" : "#ffffffbb";
   g.shadowBlur = ink.onDark ? 5 : 3;
-  g.fillStyle = identity.suit.color === "#bd3651" ? ink.red : ink.black;
-  g.font = "bold 80px system-ui, sans-serif";
-  g.fillText(identity.rank, 128, 100);
-  g.font = "94px Georgia, serif";
-  g.fillText(identity.suit.symbol, 128, 180);
+  art.paint(g, (tone) => ink[tone]);
 }
 
 /**
@@ -526,7 +520,7 @@ function drawPrint(
  * through the block, then show no lettering, so the faces you look at read clearly.
  */
 function printSkin(
-  identity: IdentityTrait,
+  art: FaceArt,
   appearance: MaterialDefinition["appearance"],
   geometry: THREE.BufferGeometry,
 ): { skin: THREE.Mesh; texture: THREE.CanvasTexture } {
@@ -534,7 +528,7 @@ function printSkin(
   canvas.width = canvas.height = SIZE;
   const g = canvas.getContext("2d");
   if (!g) throw new Error("Canvas 2D is unavailable");
-  drawPrint(g, identity, appearance);
+  drawPrint(g, art, appearance);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
@@ -559,7 +553,7 @@ function printSkin(
 type PatternHandler = (
   g: CanvasRenderingContext2D,
   random: () => number,
-  identity: IdentityTrait,
+  art: FaceArt,
   endGrain: boolean,
   brushAngle: number,
 ) => void;
@@ -571,13 +565,13 @@ const patternRegistry = new Map<string, PatternHandler>([
   ["ironFrame", (g) => drawFireFrame(g)],
   ["rainbowCrystal", (g, random) => drawPrismatic(g, random)],
   ["goldFoil", (g) => drawGold(g)],
-  ["crackedClay", (g, random, identity) => drawTerracotta(g, random, potteryCracks(identity))],
+  ["crackedClay", (g, random, art) => drawTerracotta(g, random, potteryCracks(art))],
   ["frostedIce", (g, random) => drawIce(g, random)],
   ["marbledFlesh", (g, random) => drawMeat(g, random)],
 ]);
 
 function faceTexture(
-  identity: IdentityTrait,
+  art: FaceArt,
   definition: MaterialDefinition,
   endGrain: boolean,
   /** Brush direction for steel, in radians. */
@@ -591,8 +585,8 @@ function faceTexture(
   if (!g) throw new Error("Canvas 2D is unavailable");
   const pattern = patternRegistry.get(definition.appearance.pattern);
   if (!pattern) throw new Error(`Unknown face pattern: ${definition.appearance.pattern}`);
-  pattern(g, randomFor(identity, definition.id, endGrain), identity, endGrain, brushAngle);
-  if (print) drawPrint(g, identity, definition.appearance);
+  pattern(g, randomFor(art, definition.id, endGrain), art, endGrain, brushAngle);
+  if (print) drawPrint(g, art, definition.appearance);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
@@ -699,24 +693,18 @@ function heightCanvas(): { canvas: HTMLCanvasElement; g: CanvasRenderingContext2
   return { canvas, g };
 }
 
-/** The rank and suit, stamped: pressed slightly into the face. */
-function stampPrint(g: CanvasRenderingContext2D, identity: IdentityTrait, shade: string): void {
-  g.fillStyle = shade;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.font = "bold 80px system-ui, sans-serif";
-  g.fillText(identity.rank, 128, 100);
-  g.font = "94px Georgia, serif";
-  g.fillText(identity.suit.symbol, 128, 180);
+/** The face art, stamped: pressed slightly into the face. */
+function stampPrint(g: CanvasRenderingContext2D, art: FaceArt, shade: string): void {
+  art.paint(g, () => shade);
 }
 
 /**
  * Steel's relief: brush grooves along `angle`, a raised rim with a groove inside it, domed
  * rivets at the corners and the stamped rank and suit.
  */
-function steelHeight(identity: IdentityTrait, angle: number): THREE.CanvasTexture {
+function steelHeight(art: FaceArt, angle: number): THREE.CanvasTexture {
   const { canvas, g } = heightCanvas();
-  const random = randomFor(identity, "steel", false);
+  const random = randomFor(art, "steel", false);
   g.save();
   g.translate(SIZE / 2, SIZE / 2);
   g.rotate(angle);
@@ -757,7 +745,7 @@ function steelHeight(identity: IdentityTrait, angle: number): THREE.CanvasTextur
       g.lineTo(x + 5, y - 3);
       g.stroke();
     }
-  stampPrint(g, identity, "#5a5a5a");
+  stampPrint(g, art, "#5a5a5a");
   return new THREE.CanvasTexture(canvas);
 }
 
@@ -788,18 +776,18 @@ function reliefFrom(texture: THREE.CanvasTexture): {
 }
 
 /** Wood: the grain, plus the rank, suit and key lines carved into the surface. */
-function woodHeight(texture: THREE.CanvasTexture, identity: IdentityTrait): THREE.CanvasTexture {
+function woodHeight(texture: THREE.CanvasTexture, art: FaceArt): THREE.CanvasTexture {
   const { canvas, g } = reliefFrom(texture);
   border(g, "#383838", 7);
   border(g, "#505050", 2.5);
-  stampPrint(g, identity, "#303030");
+  stampPrint(g, art, "#303030");
   return new THREE.CanvasTexture(canvas);
 }
 
 /** Gold: perfectly smooth, but the rank and suit are engraved. */
-function goldHeight(identity: IdentityTrait): THREE.CanvasTexture {
+function goldHeight(art: FaceArt): THREE.CanvasTexture {
   const { canvas, g } = heightCanvas();
-  stampPrint(g, identity, "#404040");
+  stampPrint(g, art, "#404040");
   return new THREE.CanvasTexture(canvas);
 }
 
@@ -820,12 +808,9 @@ function paperHeight(): THREE.CanvasTexture {
 }
 
 /** Terracotta: its pitted surface, with the cracks cut in. */
-function terracottaHeight(
-  texture: THREE.CanvasTexture,
-  identity: IdentityTrait,
-): THREE.CanvasTexture {
+function terracottaHeight(texture: THREE.CanvasTexture, art: FaceArt): THREE.CanvasTexture {
   const { canvas, g } = reliefFrom(texture);
-  strokeCracks(g, potteryCracks(identity), "#202020", 2.2);
+  strokeCracks(g, potteryCracks(art), "#202020", 2.2);
   return new THREE.CanvasTexture(canvas);
 }
 
@@ -939,8 +924,8 @@ function surface(
 }
 
 /** Directions a steel block's six faces are brushed in, varied per card. */
-function brushAngles(identity: IdentityTrait): number[] {
-  const random = randomFor(identity, "steel", true);
+function brushAngles(art: FaceArt): number[] {
+  const random = randomFor(art, "steel", true);
   const choices = [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4, Math.PI / 6, -Math.PI / 3];
   return choices.map(() => choices[Math.floor(random() * choices.length)] + (random() - 0.5) * 0.2);
 }
@@ -951,7 +936,7 @@ function brushAngles(identity: IdentityTrait): number[] {
  * light differently as the block turns.
  */
 type AssemblyContext = {
-  identity: IdentityTrait;
+  art: FaceArt;
   definition: MaterialDefinition;
   geometry: THREE.BufferGeometry;
   size: number;
@@ -960,30 +945,30 @@ type AssemblyContext = {
 type AssemblyHandler = (context: AssemblyContext) => BlockAppearance;
 type HeightHandler = (
   texture: THREE.CanvasTexture,
-  identity: IdentityTrait,
+  art: FaceArt,
   angle: number,
 ) => THREE.CanvasTexture | undefined;
 
 const heightRegistry = new Map<string, HeightHandler>([
   ["none", () => undefined],
   ["cardRim", () => paperHeight()],
-  ["carvedTimber", (texture, identity) => woodHeight(texture, identity)],
-  ["engravedGold", (_texture, identity) => goldHeight(identity)],
-  ["clayRelief", (texture, identity) => terracottaHeight(texture, identity)],
-  ["steelRelief", (_texture, identity, angle) => steelHeight(identity, angle)],
-  ["iceRelief", (_texture, identity) => iceRoughHeight(identity)],
+  ["carvedTimber", (texture, art) => woodHeight(texture, art)],
+  ["engravedGold", (_texture, art) => goldHeight(art)],
+  ["clayRelief", (texture, art) => terracottaHeight(texture, art)],
+  ["steelRelief", (_texture, art, angle) => steelHeight(art, angle)],
+  ["iceRelief", (_texture, art) => iceRoughHeight(art)],
   ["frameRelief", () => frameHeight()],
 ]);
 
 function heightFor(
   texture: THREE.CanvasTexture,
-  identity: IdentityTrait,
+  art: FaceArt,
   appearance: MaterialDefinition["appearance"],
   angle = 0,
 ): THREE.CanvasTexture | undefined {
   const makeHeight = heightRegistry.get(appearance.height);
   if (!makeHeight) throw new Error("Unknown relief handler: " + appearance.height);
-  return makeHeight(texture, identity, angle);
+  return makeHeight(texture, art, angle);
 }
 
 function appearanceBase(
@@ -1005,7 +990,7 @@ function appearanceBase(
 }
 
 function sixFaces(context: AssemblyContext): BlockAppearance {
-  const { identity, definition } = context;
+  const { art, definition } = context;
   const appearance = definition.appearance;
   const faceCache = new Map<
     boolean,
@@ -1019,8 +1004,8 @@ function sixFaces(context: AssemblyContext): BlockAppearance {
     const endGrain = appearance.endGrainFaces.includes(face);
     let entry = faceCache.get(endGrain);
     if (!entry) {
-      const texture = faceTexture(identity, definition, endGrain);
-      const height = heightFor(texture, identity, appearance);
+      const texture = faceTexture(art, definition, endGrain);
+      const height = heightFor(texture, art, appearance);
       entry = { texture, height, material: surface(texture, appearance, height) };
       faceCache.set(endGrain, entry);
     }
@@ -1033,11 +1018,11 @@ function sixFaces(context: AssemblyContext): BlockAppearance {
 }
 
 function brushedFaces(context: AssemblyContext): BlockAppearance {
-  const { identity, definition } = context;
-  const angles = brushAngles(identity);
-  const textures = angles.map((angle) => faceTexture(identity, definition, false, angle));
+  const { art, definition } = context;
+  const angles = brushAngles(art);
+  const textures = angles.map((angle) => faceTexture(art, definition, false, angle));
   const heights = textures.map((texture, face) =>
-    heightFor(texture, identity, definition.appearance, angles[face]),
+    heightFor(texture, art, definition.appearance, angles[face]),
   );
   const materials = textures.map((texture, face) =>
     surface(texture, definition.appearance, heights[face], angles[face]),
@@ -1050,12 +1035,12 @@ function brushedFaces(context: AssemblyContext): BlockAppearance {
 }
 
 function refractiveCrystal(context: AssemblyContext): BlockAppearance {
-  const { identity, definition, geometry, size } = context;
+  const { art, definition, geometry, size } = context;
   const optics = definition.appearance.optics;
   if (!optics) throw new Error("Refractive crystal needs optics");
-  const texture = faceTexture(identity, definition, false, 0, false);
-  const height = heightFor(texture, identity, definition.appearance);
-  const print = printSkin(identity, definition.appearance, geometry);
+  const texture = faceTexture(art, definition, false, 0, false);
+  const height = heightFor(texture, art, definition.appearance);
+  const print = printSkin(art, definition.appearance, geometry);
   const mask = clearMask(texture);
   const inHand = surface(texture, definition.appearance, height);
   const onTable = clearOnTable(texture, mask, optics, size);
@@ -1069,10 +1054,10 @@ function refractiveCrystal(context: AssemblyContext): BlockAppearance {
 }
 
 function flameFrame(context: AssemblyContext): BlockAppearance {
-  const { identity, definition, geometry, size } = context;
-  const texture = faceTexture(identity, definition, false, 0, false);
-  const print = printSkin(identity, definition.appearance, geometry);
-  const height = heightFor(texture, identity, definition.appearance);
+  const { art, definition, geometry, size } = context;
+  const texture = faceTexture(art, definition, false, 0, false);
+  const print = printSkin(art, definition.appearance, geometry);
+  const height = heightFor(texture, art, definition.appearance);
   const iron = surface(texture, definition.appearance, height);
   return appearanceBase(
     context,
@@ -1107,11 +1092,11 @@ function glassPanes(geometry: THREE.BufferGeometry): THREE.Mesh {
 }
 
 function frostedBlock(context: AssemblyContext): BlockAppearance {
-  const { identity, definition, geometry, size } = context;
-  const texture = faceTexture(identity, definition, false, 0, false);
-  const height = heightFor(texture, identity, definition.appearance);
-  const print = printSkin(identity, definition.appearance, geometry);
-  const melt = meltwaterSkin(identity, geometry);
+  const { art, definition, geometry, size } = context;
+  const texture = faceTexture(art, definition, false, 0, false);
+  const height = heightFor(texture, art, definition.appearance);
+  const print = printSkin(art, definition.appearance, geometry);
+  const melt = meltwaterSkin(art, geometry);
   const inHand = surface(texture, definition.appearance, height);
   const onTable = cloudyIce(texture, height, size, definition.appearance.reliefScale);
   return appearanceBase(
@@ -1128,10 +1113,10 @@ function frostedBlock(context: AssemblyContext): BlockAppearance {
  * `appearance.vessel` data (src/visual/filled-vessel.ts). The rank and suit sit on a print skin.
  */
 function filledVessel(context: AssemblyContext): BlockAppearance {
-  const { identity, definition, geometry, size } = context;
+  const { art, definition, geometry, size } = context;
   const vessel = definition.appearance.vessel;
   if (!vessel) throw new Error("A filled vessel needs vessel data");
-  const print = printSkin(identity, definition.appearance, geometry);
+  const print = printSkin(art, definition.appearance, geometry);
   const { shell, extras } = createFilledVessel(geometry, size, vessel, reflectionEnvironment);
   return appearanceBase(
     context,
@@ -1163,7 +1148,7 @@ const geometryRegistry = new Map<
 ]);
 
 export function createBlockAppearance(
-  identity: IdentityTrait,
+  art: FaceArt,
   definition: MaterialDefinition,
   size: number,
 ): BlockAppearance {
@@ -1174,5 +1159,5 @@ export function createBlockAppearance(
   geometry.scale(appearance.geometry.scale, appearance.geometry.scale, appearance.geometry.scale);
   const assemble = assemblyRegistry.get(appearance.assembly);
   if (!assemble) throw new Error("Unknown appearance assembly: " + appearance.assembly);
-  return assemble({ identity, definition, geometry, size });
+  return assemble({ art, definition, geometry, size });
 }
