@@ -85,8 +85,6 @@ export type TableInput = {
   readonly dragging: boolean;
   /** The cell a dragged block would be played into right now, if any. */
   readonly candidateCell: Cell | null;
-  /** A drop is held, waiting for the last animation to finish before it commits (#167). */
-  readonly dropHeld: boolean;
   /** The scene in front allows (or no longer allows) blocks to be played onto the field. */
   setFieldActive(active: boolean): void;
   /**
@@ -371,10 +369,6 @@ export function createTableInput(options: {
       .filter((rendered): rendered is RenderedBlock => Boolean(rendered));
   }
 
-  /** A drop made while the last play or discard was still animating, waiting to commit (#167). */
-  type PendingDrop = { drag: Drag; candidate: Candidate | null; discard: boolean };
-  let pendingDrop: PendingDrop | null = null;
-
   function finishDrag(drop: boolean): void {
     if (!drag) return;
     const activeDrag = drag;
@@ -392,14 +386,8 @@ export function createTableInput(options: {
       if (canvas.hasPointerCapture(activeDrag.pointerId)) {
         canvas.releasePointerCapture(activeDrag.pointerId);
       }
-      // A drop made while the last play or discard is still landing waits, held where it was
-      // dropped, and commits as soon as that animation ends (see `frame`). Committing over it
-      // would start a second animation over the first.
-      if ((candidate || discard) && rules.busy()) {
-        pendingDrop = { drag: activeDrag, candidate, discard };
-        trace("drop held", "the last play or discard is still animating; the model waits");
-        return;
-      }
+      // Model first (#272): the drop commits now, even while earlier plays are still being
+      // shown; their animations and this one catch up with the model.
       commitDrop(activeDrag, candidate, discard, drop);
     } else {
       drag = null;
@@ -466,12 +454,8 @@ export function createTableInput(options: {
   // ----- Hand cards and the board -----
 
   const onPointerDown = (event: PointerEvent) => {
-    // A card can be picked up while the last play is still landing (#167); only a drop still
-    // waiting to commit holds new gestures back.
-    if (pendingDrop) {
-      trace("pointer ignored", "a held drop is still waiting to commit");
-      return;
-    }
+    // A card can be picked up at any time, while earlier plays are still being shown (#167,
+    // #272): input always commits to the model at once.
     if (event.pointerType === "touch") {
       touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (touches.size >= 2) {
@@ -782,15 +766,9 @@ export function createTableInput(options: {
   const onDiscardClick = () => {
     // While it reads Sell (a passive is being dragged) the target never discards.
     if (passiveDrag || discardArea.classList.contains("is-sell")) return;
-    if (rules.busy() || drag?.active || !rules.inStage()) {
-      trace(
-        "discard ignored",
-        rules.busy()
-          ? "an animation is running"
-          : drag?.active
-            ? "a drag is active"
-            : "not in a stage",
-      );
+    // Model first (#272): a discard commits at once, even while earlier plays are shown.
+    if (drag?.active || !rules.inStage()) {
+      trace("discard ignored", drag?.active ? "a drag is active" : "not in a stage");
       return;
     }
     const chosen = hand.selected(selected);
@@ -958,14 +936,9 @@ export function createTableInput(options: {
     clearSelection() {
       selected = new Set();
     },
-    // A drop waiting to commit keeps its blocks held where they were dropped (#167).
-    handDrag: () =>
-      drag?.active ? drag : pendingDrop && { ...pendingDrop.drag, reorderSlot: null },
+    handDrag: () => (drag?.active ? drag : null),
     get dragging() {
       return Boolean(drag?.active);
-    },
-    get dropHeld() {
-      return pendingDrop !== null;
     },
     get candidateCell() {
       return drag?.active ? (drag.candidate?.cell ?? null) : null;
@@ -994,14 +967,6 @@ export function createTableInput(options: {
     refreshDiscardTarget,
     frame() {
       if (drag?.active) updateCandidate();
-      // A drop that waited for the last play's animation commits once it has finished; the
-      // rules check it again then, so a play the new state refuses is put back, denied.
-      if (pendingDrop && !rules.busy()) {
-        const waiting = pendingDrop;
-        pendingDrop = null;
-        trace("held drop committing", "the animation finished");
-        commitDrop(waiting.drag, waiting.candidate, waiting.discard, true);
-      }
     },
     dispose() {
       window.removeEventListener("pointermove", movePassive);
