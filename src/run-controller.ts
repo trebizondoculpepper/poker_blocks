@@ -7,6 +7,7 @@
  *
  * It decides what happens; the other services show it.
  */
+import type { SelectionBadge } from "./selection-badge";
 import type { Cell } from "./traits/attachable";
 import type { HudFrame } from "./hud-frame";
 import type { DestroyCause } from "./traits/destructible";
@@ -66,6 +67,8 @@ type ShopView = ReturnType<typeof createShopView>;
 
 /** The services the run drives. Reached when needed: some are built after the controller. */
 export type RunServices = {
+  /** "N selected" over the hand (#305); its count follows the selection. */
+  readonly selectionBadge: Pick<SelectionBadge, "count">;
   readonly hud: HudPanels;
   readonly audio: AudioService;
   readonly renderer: TableRenderer;
@@ -303,6 +306,10 @@ export function createRunController<Context>(options: {
     const selectedNames = views.all
       .filter(({ block }) => selected.has(block.id))
       .map(({ block }) => cardName(block.traits.identity));
+    // With two or more hand blocks selected, a badge over the hand says how many (#305), so a
+    // drag that will carry the whole selection is never a surprise.
+    const inHand = game.state.hand.filter((block) => selected.has(block.id)).length;
+    services.selectionBadge.count(inHand);
     host.setAttribute(
       "aria-label",
       `${game.state.field.length} blocks in play. Hand: ${game.state.hand.map((block) => cardName(block.traits.identity)).join(", ")}. ${game.state.deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,
