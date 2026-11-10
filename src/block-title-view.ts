@@ -7,7 +7,7 @@ import {
   sparkleEnvironment,
 } from "./visual/attract-look";
 import { boardFinish } from "./visual/written-block";
-import { beatShapes } from "./dance/beat-shapes";
+import { beatShapes, bouncePhase } from "./dance/beat-shapes";
 import { danceCycles, type DanceFloor, type DanceMove } from "./dance/dance-floor";
 import type { BlockTitleConfig, BlockTitles } from "./scene-traits/block-title";
 
@@ -44,17 +44,6 @@ export function precessTitleRow(
 export function tiltTitleRow(row: THREE.Group, config: BlockTitleConfig, move: DanceMove): void {
   const wave = Math.sin(move.phase * Math.PI * 2);
   row.rotation.z = wave * THREE.MathUtils.degToRad(config.dance?.tilt ?? 3) * move.energy;
-}
-
-/**
- * Where a bounce is through its shape. With no window, the whole cycle. With a window, the
- * shape runs over that fraction of the cycle, placed so its peak (`attack` of the way through
- * it) falls on the cycle's start, and rests at its end (phase 1) the rest of the time.
- */
-export function bouncePhase(phase: number, window?: number, attack = 0.5): number {
-  if (window === undefined) return phase;
-  const local = ((phase + attack * window) % 1) / window;
-  return Math.min(1, local);
 }
 
 /** A standard normal sample (Box-Muller), for the blocks' messiness. */
