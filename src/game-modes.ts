@@ -221,9 +221,9 @@ const playSceneTraits: Partial<SceneTraits> = {
     // A steady glow: the laser edges and the dance give it life, so it never flashes.
     glow: 0.8,
     armed: { beatSeconds: 0.52, scale: [1.04, 1.09], opacity: [0.3, 0.42] },
-    // The first dancer (#256): a raised-cosine swell peaking on each bar's downbeat and flat
-    // for the rest of the bar, as the block title bounces.
-    dance: { cycle: "bar", shape: "sine", offset: 0, swell: 0.12, window: 0.2 },
+    // No `dance`: the ghost holds a steady size in the first play's cell. A per-bar swell made
+    // it pulse, which read as flashing rather than as an invitation. The laser edges and the
+    // armed response still give it life; it now only moves while a block is dragged over it.
     release: { seconds: 0.55, growth: 0.6 },
   },
   handView: {},
