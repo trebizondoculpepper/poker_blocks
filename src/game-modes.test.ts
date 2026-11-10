@@ -185,7 +185,12 @@ describe("game modes composed from traits", () => {
           },
         ],
       },
-      blockTitle: { text: "Poker Blocks", scale: 1 },
+      blockTitle: {
+        text: "Poker Blocks",
+        scale: 1,
+        precession: { seconds: 32 },
+        dance: { bounceCycle: "bar", bounceShape: "pulse", bounce: 0.008, tilt: 0 },
+      },
       titleScreen: {
         items: [
           {

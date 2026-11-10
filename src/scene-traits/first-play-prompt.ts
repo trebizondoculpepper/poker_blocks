@@ -32,7 +32,7 @@ export type FirstPlayPromptConfig = {
    * out and the glow keeps its own pulse.
    */
   flash?: {
-    /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`. */
+    /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`, `fourBars`. */
     cycle: string;
     /** A registered beat shape: `sine`, `pulse`, `bounce`, `gate`, `saw`. */
     shape: string;
@@ -54,7 +54,7 @@ export type FirstPlayPromptConfig = {
    * never dances.
    */
   dance?: {
-    /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`. */
+    /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`, `fourBars`. */
     cycle: string;
     /** A registered beat shape: `sine`, `pulse`, `bounce`, `gate`. */
     shape: string;

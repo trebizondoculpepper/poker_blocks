@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { blockTitle, type BlockTitleConfig } from "./block-title";
-import { danceTitleRow, precessTitleRow } from "../block-title-view";
+import { bounceTitleRow, precessTitleRow, tiltTitleRow } from "../block-title-view";
 
 describe("reusable block title", () => {
   it("owns separate scene instances and releases precisely the instance that exits", () => {
@@ -28,11 +28,23 @@ describe("reusable block title", () => {
     letter.position.set(2, 0, 0);
     row.add(letter);
     const config = { text: "Anything", scale: 1, dance: { bounce: 0.2, tilt: 4 } };
-    danceTitleRow(row, 1, config, { phase: 0.25, energy: 1, tempo: 120 });
+    // A quarter through the tilt's cycle: tilted fully; halfway through the bounce's: at the top.
+    tiltTitleRow(row, config, { phase: 0.25, energy: 1, tempo: 120 });
+    bounceTitleRow(row, 1, config, { phase: 0.5, energy: 1, tempo: 120 });
     expect(row.position.y).toBeCloseTo(1.2);
     expect(row.rotation.z).toBeCloseTo(THREE.MathUtils.degToRad(4));
     expect(letter.position.toArray()).toEqual([2, 0, 0]);
-    danceTitleRow(row, 1, config, { phase: 0.25, energy: 0, tempo: 120 });
+    // The bounce touches down at the start of its cycle (the downbeat, on a bar cycle).
+    bounceTitleRow(row, 1, config, { phase: 0, energy: 1, tempo: 120 });
+    expect(row.position.y).toBeCloseTo(1);
+    // A configured beat shape: \`pulse\` hits at the start of its cycle and dies away.
+    const pulsing = { ...config, dance: { ...config.dance, bounceShape: "pulse" } };
+    bounceTitleRow(row, 1, pulsing, { phase: 0, energy: 1, tempo: 120 });
+    expect(row.position.y).toBeCloseTo(1.2);
+    bounceTitleRow(row, 1, pulsing, { phase: 0.9, energy: 1, tempo: 120 });
+    expect(row.position.y).toBeLessThan(1.001);
+    tiltTitleRow(row, config, { phase: 0.25, energy: 0, tempo: 120 });
+    bounceTitleRow(row, 1, config, { phase: 0.5, energy: 0, tempo: 120 });
     expect(row.position.y).toBe(1);
     expect(row.rotation.z).toBe(0);
   });
