@@ -69,7 +69,7 @@ A block with the `selectable` trait can respond to a player click or tap. The tr
 
 The current serialized block shape uses trait keys. `block-trait-behaviours.ts` resolves those keys through registered behavior objects owned by the trait modules. Selection, cursor, drag eligibility, attachable faces, destruction causes, and transparency handover call the resulting capabilities without inspecting which trait provided them. A new trait can register a capability without changing those consumers. This is a transition toward the definition-object model above; the trait key is only a registry lookup, never a branch in the caller.
 
-The current visual cue is face illumination only. Selection does not change a block's size or position, so connected cubes remain aligned. True bloom remains an option if a softer glow is wanted later.
+The visual cues (owner decision on #305) are face illumination and an **outline**: a selected block's edges turn the accent cyan. A selected **hand** block also **lifts** a little above the others (instantly under reduced motion), and with two or more hand blocks selected a "N selected" badge shows over the hand, so a drag that carries the whole selection is never a surprise. Selection never changes a block's size, and a **table** block never moves, so connected cubes remain aligned; only loose hand blocks lift. True bloom remains an option if a softer glow is wanted later.
 
 What an operation does to the selected cards is still to be decided.
 

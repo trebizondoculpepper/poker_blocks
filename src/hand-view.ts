@@ -229,7 +229,10 @@ export function createHandView(options: {
       for (const rendered of blocks) {
         if (isDragged(rendered)) continue;
         const target = rendered.baseY + (selection.has(rendered.block.id) ? selectedLift : 0);
-        rendered.cube.position.y += (target - rendered.cube.position.y) * step;
+        // Under reduced motion it moves straight there instead of easing.
+        rendered.cube.position.y = options.reducedMotion()
+          ? target
+          : rendered.cube.position.y + (target - rendered.cube.position.y) * step;
       }
       // Hand cubes rock gently; a selected one eases into a quick, small vibration.
       for (const rendered of blocks) {
