@@ -154,9 +154,13 @@ The first family is `score.magnitude` (#1). Its bands start at 1, 10, 100, 1,000
 
 ## Title screen
 
-| Id                  | Plays when                                                                   | Status     |
-| ------------------- | ---------------------------------------------------------------------------- | ---------- |
-| `attract.card.bonk` | A card in the title's attract sequence flies into the camera and bounces off | registered |
+| Id                  | Plays when                                                                         | Status     |
+| ------------------- | ---------------------------------------------------------------------------------- | ---------- |
+| `attract.card.bonk` | A card in the title's attract sequence flies into the camera and bounces off       | registered |
+| `ui.title.enter`    | The title screen comes in front (stand-in: `ui.click`)                             | stand-in   |
+| `ui.title.exit`     | The title screen closes as a game starts or continues (stand-in: `card.place.fly`) | stand-in   |
+| `ui.settings.enter` | The settings screen opens (stand-in: `card.select`)                                | stand-in   |
+| `ui.settings.exit`  | The settings screen closes, by Back or Escape (stand-in: `ui.back`)                | stand-in   |
 
 ## Coverage audit (#234, 2026-11-10)
 

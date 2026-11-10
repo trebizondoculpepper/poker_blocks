@@ -393,10 +393,18 @@ describe("the pause menu's scene traits (#87)", () => {
     scenes.push(pause.id);
     calls.length = 0;
     scenes.push(settings.id);
-    expect(calls).toEqual(["table:true", "settings:show", "gestures:cancel", "filter:highpass"]);
+    expect(calls).toEqual([
+      "table:true",
+      "settings:show",
+      "gestures:cancel",
+      "filter:highpass",
+      "sound:ui.settings.enter",
+    ]);
     calls.length = 0;
     scenes.pop();
     expect(calls).toEqual([
+      // Leaving Settings plays its own sound.
+      "sound:ui.settings.exit",
       "filter:null",
       "settings:hide",
       // Settings does not compose `tableBackground`: the pause menu under it already drew the
@@ -423,7 +431,9 @@ describe("the pause menu's scene traits (#87)", () => {
       "action:openPause",
       "sound:ui.back",
       "action:resume",
-      "sound:ui.back",
+      // Settings plays its own sound coming in, and its Escape adds none: leaving it plays
+      // `ui.settings.exit` (only when the stage actually pops it, which this test doesn't).
+      "sound:ui.settings.enter",
       "action:back",
     ]);
     // Other keys, and a held key's auto-repeat, pass through untouched.
