@@ -163,6 +163,8 @@ for (const modeId of gameModeRegistry.names()) {
 
 // ----- The run, and the services that show it -----
 
+// The shared HUD frame (#116), over the back canvas; the run lays it out from settings (#119).
+const hudFrame = createHudFrame(host);
 const storage = browserStorage();
 const run: RunController = createRunController({
   host,
@@ -194,6 +196,7 @@ const run: RunController = createRunController({
     get shop() {
       return shopView;
     },
+    frame: hudFrame,
   },
 });
 const passiveRackView = createPassiveRack(host, {
@@ -263,8 +266,7 @@ const overlays: Overlays = createOverlays(host, {
   // A won or lost stage waits while the deck view is open, like a menu (#175).
   panels: [deckView],
 });
-// The shared HUD frame (#116): each HUD element goes in its zone (src/hud-layout.ts, #117).
-const hudFrame = createHudFrame(host);
+// Each HUD element goes in its zone of the shared frame (src/hud-layout.ts, #117).
 const hudElements: Record<HudElement, HTMLElement> = {
   round: hud.element("round"),
   deck: hud.element("deck"),

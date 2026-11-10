@@ -1057,17 +1057,50 @@ body,
   justify-content: flex-end;
 }
 
-@media (orientation: landscape) {
-  /*
-   * On landscape screens, every element placed in a zone flows into it (#117). Relative, not
-   * static, so a panel's own absolutely placed parts (the bin's count badge and refused X) stay
-   * anchored to it.
-   */
-  .scene .hud-frame[data-layout="landscape"] .hud-zone > * {
-    position: relative;
-    inset: auto;
-    margin: 0;
+/*
+ * In either layout, every element placed in a zone flows into it (#117). Relative, not static,
+ * so a panel's own absolutely placed parts (the bin's count badge and refused X) stay anchored
+ * to it. The layout comes from the player's Layout setting, never from the device's
+ * orientation (#119), so none of these rules sit in an orientation media query.
+ */
+.scene .hud-frame[data-layout="landscape"] .hud-zone > *,
+.scene .hud-frame[data-layout="portrait"] .hud-zone > * {
+  position: relative;
+  inset: auto;
+  margin: 0;
+}
+
+/*
+ * On a narrow screen the hand spans the full width, so the landscape layout's bottom corners
+ * (bin, BUY, deck, Continue) sit above it rather than over the end cards. This depends on the
+ * screen's width, not its orientation (#119).
+ */
+@media (max-width: 700px) {
+  .scene
+    .hud-frame[data-layout="landscape"]
+    :is([data-zone="bottom-left"], [data-zone="bottom-right"]) {
+    padding-bottom: max(96px, calc(22vw + 12px));
   }
+}
+
+/*
+ * Portrait (#119): the passive rack keeps a band across the top, with status and Settings in
+ * the row under it; the table fills the middle; the bin, BUY, deck and Continue sit in a row
+ * above the hand, which spans the bottom band.
+ */
+.scene .hud-frame[data-layout="portrait"] {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: var(--hud-rack-band, 76px) auto 1fr auto var(
+      --hud-hand-band,
+      max(96px, calc(22vw + 12px))
+    );
+  grid-template-areas:
+    "top-center top-center"
+    "top-left top-right"
+    ". ."
+    "bottom-left bottom-right"
+    "bottom-center bottom-center";
+  row-gap: 8px;
 }
 
 /*
