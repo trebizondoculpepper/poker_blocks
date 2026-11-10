@@ -120,10 +120,10 @@ describe("game modes composed from traits", () => {
       screen: { kind: "shop" },
       tableBackground: {},
       handView: {},
-      discardBin: {},
+      sellBin: {},
       passiveRackView: {},
       coinsPanel: {},
-      shopExit: { label: "Continue / Skip shop" },
+      shopExit: { label: "Continue" },
       shopStock: {},
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
@@ -176,14 +176,17 @@ describe("game modes composed from traits", () => {
     });
   });
 
-  it("gives the hand and the discard bin to the play scenes and the shop, never the title (#183)", () => {
+  it("shows Discard in play and Sell in the shop, with the hand in both (#118)", () => {
     for (const mode of gameModeRegistry.names()) {
       const traitsOf = (scene: SceneName) =>
         gameModeFor(mode).scenes.find(({ id }) => id === modeSceneId(mode, scene))!.traits;
       expect(traitsOf("title"), mode).not.toHaveProperty("handView");
       expect(traitsOf("title"), mode).not.toHaveProperty("discardBin");
-      for (const scene of ["stage-1", "stage-2", "boss", "shop"] as const)
+      expect(traitsOf("title"), mode).not.toHaveProperty("sellBin");
+      for (const scene of ["stage-1", "stage-2", "boss"] as const)
         expect(traitsOf(scene), `${mode} ${scene}`).toMatchObject({ handView: {}, discardBin: {} });
+      expect(traitsOf("shop"), mode).toMatchObject({ handView: {}, sellBin: {} });
+      expect(traitsOf("shop"), mode).not.toHaveProperty("discardBin");
     }
   });
 

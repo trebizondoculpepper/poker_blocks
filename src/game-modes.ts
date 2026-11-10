@@ -37,6 +37,8 @@ export type SceneTraits = {
   handView: Record<never, never>;
   /** The discard bin (also the passives' sell target) is shown while this scene is on the stack. */
   discardBin: Record<never, never>;
+  /** The shared lower-left target presents Sell, and accepts installed passives only. */
+  sellBin: Record<never, never>;
   /** The pulsing outline inviting a stage's first play is shown while this scene is on the stack. */
   firstPlayPrompt: Record<never, never>;
   /** The passive rack is shown while this scene is on the stack (#187). */
@@ -275,11 +277,11 @@ export const sceneDefinitions = [
     name: "shop",
     traits: {
       tableBackground: {},
-      // Bought cards drop into the hand, and passives are sold on the bin.
+      // The shop keeps the hand in view; its own drop targets handle purchases and sales.
       handView: {},
-      discardBin: {},
+      sellBin: {},
       coinsPanel: {},
-      shopExit: { label: "Continue / Skip shop" },
+      shopExit: { label: "Continue" },
       shopStock: {},
       runInPlay: {},
       enterSound: { sfx: "shop.open" },

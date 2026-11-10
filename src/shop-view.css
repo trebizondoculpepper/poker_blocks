@@ -9,7 +9,7 @@
 
 .shop-cubes-canvas[hidden],
 .shop-stock[hidden],
-.shop-hand-target[hidden],
+.shop-buy-target[hidden],
 .shop-entrance-skip[hidden] {
   display: none;
 }
@@ -59,15 +59,13 @@
 .shop-stock {
   position: absolute;
   z-index: 4;
-  top: 43%;
+  top: 31%;
   left: 50%;
-  display: flex;
-  /* Up to nine offers (#145): wrap onto a second row rather than run off the screen. */
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: clamp(8px, 2vw, 28px);
-  width: max-content;
-  max-width: calc(100vw - 180px);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  justify-items: center;
+  gap: clamp(8px, 1.5vw, 20px);
+  width: min(760px, calc(100vw - 230px));
   transform: translateX(-50%);
 }
 
@@ -155,46 +153,86 @@
   outline-offset: 2px;
 }
 
-.shop-hand-target {
-  position: absolute;
+.shop-buy-target {
   z-index: 2;
-  bottom: 22px;
-  left: 50%;
-  width: min(600px, 65vw);
-  height: 125px;
-  transform: translateX(-50%);
+  display: flex;
+  width: 124px;
+  min-height: 112px;
+  box-sizing: border-box;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px;
   border: var(--hud-target-border, 3px dotted #f4f0e8);
   border-radius: var(--hud-panel-radius, 10px);
+  background: var(--hud-panel-bg, #1c2739d9);
   color: var(--hud-ink, #f4f0e8);
-  font: 700 11px var(--hud-heading-font, system-ui, sans-serif);
-  letter-spacing: var(--hud-heading-spacing, 0.12em);
+  font: 700 10px var(--hud-heading-font, system-ui, sans-serif);
   text-align: center;
-  padding-top: 8px;
   pointer-events: none;
 }
 
-@media (max-width: 700px) {
+.shop-buy-target strong {
+  color: var(--hud-accent, #9ce6d7);
+  font-size: 18px;
+  letter-spacing: 0.1em;
+}
+
+.shop-buy-target small {
+  color: var(--hud-accent, #9ce6d7);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.shop-purchase-flight {
+  position: fixed;
+  z-index: 30;
+  max-width: 120px;
+  padding: 8px;
+  translate: -50% -50%;
+  border: 2px solid var(--hud-accent, #9ce6d7);
+  border-radius: 8px;
+  background: var(--hud-panel-bg, #1c2739);
+  color: var(--hud-ink, #f4f0e8);
+  font:
+    700 12px system-ui,
+    sans-serif;
+  text-align: center;
+  pointer-events: none;
+}
+
+@media (max-width: 900px), (max-height: 600px) {
   .shop-stock {
-    top: 47%;
-    flex-wrap: wrap;
-    justify-content: center;
-    width: calc(100vw - 36px);
-    max-width: none;
-    gap: 2px 10px;
+    top: 34%;
+    width: calc(100vw - 135px);
+    gap: 3px 5px;
   }
   .shop-offer {
-    width: 30%;
+    width: min(100%, 90px);
     gap: 2px;
   }
   .shop-cube-slot {
-    width: 72px;
-    height: 72px;
+    width: 44px;
+    height: 44px;
+  }
+  .shop-offer-label {
+    font-size: 9px;
+    line-height: 1.1;
   }
   .shop-offer-description {
-    top: 94px;
+    top: 65px;
   }
-  .shop-hand-target {
-    width: 58vw;
-    height: 116px;
+  .shop-buy-target {
+    width: 82px;
+    min-height: 76px;
+    padding: 4px;
+    font-size: 8px;
+  }
+  .shop-buy-target strong {
+    font-size: 13px;
+  }
+  .shop-buy-target small {
+    font-size: 9px;
   }
 }

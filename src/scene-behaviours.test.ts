@@ -39,6 +39,7 @@ function recordingHost() {
         setFieldActive: (active) => calls.push(`fieldActive:${active}`),
         cancelGestures: () => void calls.push("gestures:cancel"),
         discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
+        sellBinEntered: (entered) => void calls.push(`sellBin:${entered}`),
         handEntered: (entered) => void calls.push(`handInput:${entered}`),
       },
       deckView: {
@@ -52,6 +53,7 @@ function recordingHost() {
         viewEntered: (entered, capacity) => void calls.push(`rack:${entered}:${capacity}`),
       },
       shop: {
+        buyTarget: {} as HTMLElement,
         render: (offers: readonly ShopOffer[], visible: boolean) =>
           calls.push(`shop:${visible}:${offers.length}`),
         burnUnsold: () => Promise.resolve(),
@@ -154,6 +156,18 @@ describe("scene traits own their behaviour", () => {
       "hand:false",
       "handInput:false",
     ]);
+  });
+
+  it("composes Sell in the shop without exposing the Discard bin", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("shop", { sellBin: {}, handView: {} }));
+    scenes.register(scene("title", {}));
+    scenes.switchTo("shop");
+    expect(calls).toContain("sellBin:true");
+    expect(calls).not.toContain("bin:true");
+    scenes.switchTo("title");
+    expect(calls).toContain("sellBin:false");
   });
 
   it("lists the deck read-only and goes back from its Back button (#175)", () => {
@@ -302,6 +316,7 @@ describe("scene traits own their behaviour", () => {
       "shopExit",
       "fieldPlacement",
       "shopStock",
+      "sellBin",
       "pausesBelow",
       "devManualBlockDestroyer",
     ]) {

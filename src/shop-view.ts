@@ -25,6 +25,8 @@ type DisplayedOffer = {
 type Entrance = { startedAt: number; landed: Set<number> };
 
 export type ShopView = {
+  /** The shop's purchase drop target, placed by the shared HUD frame. */
+  readonly buyTarget: HTMLElement;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
   burnUnsold(reducedMotion: boolean): Promise<void>;
   frame(): void;
@@ -41,6 +43,9 @@ export type OfferView<Block extends OfferBlock> = {
   describe(block: Block): string;
   /** A class for the offer's button. */
   className: string;
+  /** Destination explained to the player and used by the purchase flight. */
+  purchaseDescription: string;
+  flightTarget: "deck" | "rack";
 };
 
 const offerViews = new Registry<OfferView<OfferBlock>>("offer view");
@@ -55,12 +60,6 @@ export function registerOfferView<Block extends OfferBlock>(
 
 /** A price in words: "1 coin", "4 coins". */
 const coins = (amount: number) => `${amount} coin${amount === 1 ? "" : "s"}`;
-
-/** What each destination is called in an offer's description. */
-const destinationLabels: Record<OfferDestination, string> = {
-  hand: "the deck",
-  "passive-rack": "passive rack",
-};
 
 /** A passive offer's token: its own shape and faces (src/passive-visual.ts). */
 function passiveCube(block: PassiveBlock): OfferCube {
@@ -121,6 +120,8 @@ registerOfferView<CardBlock>("card", {
   name: (block) => cardName(block.traits.identity),
   describe: (block) => block.traits.inspectable?.inspect() ?? cardName(block.traits.identity),
   className: "is-card",
+  purchaseDescription: "BUY to add to the deck",
+  flightTarget: "deck",
 });
 
 registerOfferView<PassiveBlock>("passive", {
@@ -128,6 +129,8 @@ registerOfferView<PassiveBlock>("passive", {
   name: (block) => passiveDefinitions.get(block.definitionId).name,
   describe: (block) => block.traits.inspectable.inspect(),
   className: "is-passive",
+  purchaseDescription: "BUY to install in the passive rack",
+  flightTarget: "rack",
 });
 
 /** Shop stock is drawn with the same real cube appearances as cards and installed passives. */
@@ -137,14 +140,19 @@ export function createShopView(
   price: (offer: ShopOffer) => number,
   buy: (id: string, destination: OfferDestination) => boolean,
   onEntranceDone: () => void,
+  deckSize: () => number,
+  reducedMotion: () => boolean,
 ): ShopView {
   const stock = document.createElement("section");
   stock.className = "shop-stock";
   stock.setAttribute("aria-label", "Shop stock");
-  const handTarget = document.createElement("div");
-  handTarget.className = "shop-hand-target";
-  handTarget.textContent = "DROP PLAYABLE BLOCKS HERE TO ADD THEM TO YOUR DECK";
-  host.append(stock, handTarget);
+  const buyTarget = document.createElement("div");
+  buyTarget.className = "shop-buy-target";
+  buyTarget.setAttribute("aria-label", "Buy offer");
+  buyTarget.innerHTML =
+    "<strong>BUY</strong><span>Cards to deck · Passives to rack</span><small></small>";
+  host.append(stock, buyTarget);
+  const flightTargets = { deck: buyTarget.querySelector("small")!, rack: rack ?? buyTarget };
   const sign = document.createElement("div");
   sign.className = "shop-open-sign";
   sign.textContent = "SHOP OPEN";
@@ -233,8 +241,34 @@ export function createShopView(
     return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
   };
 
+  /** A bought offer travels to the deck badge or the installed-passive rack. */
+  function animatePurchase(from: DOMRect, label: string, target: HTMLElement): void {
+    if (reducedMotion()) return;
+    const to = target.getBoundingClientRect();
+    const flight = document.createElement("div");
+    flight.className = "shop-purchase-flight";
+    flight.textContent = label;
+    flight.style.left = `${from.left + from.width / 2}px`;
+    flight.style.top = `${from.top + from.height / 2}px`;
+    document.body.append(flight);
+    const dx = to.left + to.width / 2 - from.left - from.width / 2;
+    const dy = to.top + to.height / 2 - from.top - from.height / 2;
+    const animation = flight.animate(
+      [
+        { transform: "translate(0, 0) scale(1)", opacity: 1 },
+        { transform: `translate(${dx}px, ${dy}px) scale(0.35)`, opacity: 0.25 },
+      ],
+      { duration: 480, easing: "cubic-bezier(.2,.7,.2,1)", fill: "forwards" },
+    );
+    void animation.finished.then(
+      () => flight.remove(),
+      () => flight.remove(),
+    );
+  }
+
   function render(offers: readonly ShopOffer[], visible: boolean, animateEntrance = false): void {
-    stock.hidden = handTarget.hidden = renderer.domElement.hidden = !visible;
+    stock.hidden = buyTarget.hidden = renderer.domElement.hidden = !visible;
+    buyTarget.querySelector("small")!.textContent = `DECK ${deckSize()}`;
     clear();
     stock.replaceChildren();
     stock.classList.remove("is-burning");
@@ -243,7 +277,7 @@ export function createShopView(
       const view = offerViews.get(offer.kind);
       const name = view.name(offer.block);
       const description = view.describe(offer.block);
-      const destination = destinationLabels[offerKind(offer).destination];
+      const destination = view.purchaseDescription;
       const item = document.createElement("button");
       item.type = "button";
       item.className = `shop-offer ${view.className}`;
@@ -289,12 +323,15 @@ export function createShopView(
             cancel();
             return;
           }
-          const destination = contains(rack, end.clientX, end.clientY)
-            ? "passive-rack"
-            : contains(handTarget, end.clientX, end.clientY)
-              ? "hand"
-              : null;
-          if (!destination || !buy(offer.block.id, destination)) cancel();
+          const destination = offerKind(offer).destination;
+          const from = item.getBoundingClientRect();
+          const label = item.querySelector(".shop-offer-label")!.textContent ?? "";
+          if (!contains(buyTarget, end.clientX, end.clientY) || !buy(offer.block.id, destination)) {
+            cancel();
+            return;
+          }
+          animatePurchase(from, label, flightTargets[view.flightTarget]);
+          cancel();
         };
         item.addEventListener("pointermove", move);
         item.addEventListener("pointerup", finish);
@@ -322,7 +359,7 @@ export function createShopView(
       return Promise.resolve();
     }
     stock.classList.add("is-burning");
-    handTarget.hidden = true;
+    buyTarget.hidden = true;
     const seconds = reducedMotion ? 0.4 : displayed.length === 1 ? 1.5 : 1.05;
     const stagger = reducedMotion || displayed.length === 1 ? 0 : 0.45 / (displayed.length - 1);
     burnPromise = new Promise((resolve) => {
@@ -390,6 +427,9 @@ export function createShopView(
     camera.lookAt(camera.position.x, camera.position.y, 0);
     for (const [index, entry] of displayed.entries()) {
       const slot = entry.slot.getBoundingClientRect();
+      // The DOM slot is the hit area and the projection's size reference. Keep the WebGL
+      // offer inside it when compact landscape CSS shrinks the slot.
+      entry.cube.scale.setScalar(slot.width / 90);
       const x = (slot.left + slot.width / 2 - bounds.left - width / 2) / pixelsPerUnit;
       const y = (height / 2 - (slot.top + slot.height / 2 - bounds.top)) / pixelsPerUnit;
       if (!entrance) {
@@ -430,6 +470,7 @@ export function createShopView(
   }
 
   return {
+    buyTarget,
     render,
     burnUnsold,
     frame,
@@ -439,7 +480,7 @@ export function createShopView(
       renderer.dispose();
       renderer.domElement.remove();
       stock.remove();
-      handTarget.remove();
+      buyTarget.remove();
       sign.remove();
       skip.remove();
     },
