@@ -489,13 +489,10 @@ body,
 .menu-overlay {
   position: absolute;
   inset: 0;
-  z-index: 5;
   display: grid;
   place-items: center;
   padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
     max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  background: #0b1018f0;
-  backdrop-filter: blur(3px);
   font-family: system-ui, sans-serif;
 }
 
@@ -503,9 +500,48 @@ body,
  * The title sits over the attract sequence, whose cards should read sharp and bright: no blur
  * and no dark wash behind the menu (#203). The menu panel keeps its own background.
  */
-.menu-overlay.title-screen {
+.menu-overlay.title-screen::before {
   background: transparent;
   backdrop-filter: none;
+}
+
+/* Keep the wash below scene-composed titles and all menu content in front. */
+.menu-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: #0b1018f0;
+  backdrop-filter: blur(3px);
+}
+
+/*
+ * A menu covered by another one (Settings over the pause menu, say; src/menus.ts makes it inert)
+ * sits under the front menu's wash, so it reads dimmed and blurred behind it as before, while the
+ * active block title stays between the front wash and the front panel.
+ */
+.menu-overlay[inert]::before {
+  z-index: 1;
+}
+.menu-overlay[inert] > * {
+  z-index: 2;
+}
+
+.block-title {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+/* Only the topmost composed title is drawn when menus are stacked. */
+.block-title:has(~ .block-title) {
+  visibility: hidden;
+}
+
+.scene:has(> .block-title) > .menu-overlay {
+  align-items: end;
+  padding-bottom: max(6dvh, 36px);
 }
 
 .menu-overlay[hidden] {
@@ -513,6 +549,8 @@ body,
 }
 
 .menu-panel {
+  position: relative;
+  z-index: 5;
   /* 360px of content plus padding and border, as before border-box sizing. */
   width: min(410px, 100%);
   padding: 28px 24px;
@@ -576,6 +614,7 @@ body,
 
 /* The build version and links out, in the far bottom-right of the screen (#129). */
 .menu-footer {
+  z-index: 5;
   position: absolute;
   right: max(16px, env(safe-area-inset-right));
   bottom: max(12px, env(safe-area-inset-bottom));
@@ -1175,7 +1214,9 @@ body,
   right: 16px;
   top: 16px;
   z-index: 1200;
-  width: 260px;
+  width: min(260px, calc(100vw - 60px));
+  max-height: calc(100dvh - 60px);
+  overflow-y: auto;
   padding: 14px;
   border: 1px solid #8191a7;
   border-radius: 12px;

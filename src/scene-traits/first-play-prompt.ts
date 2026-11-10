@@ -4,7 +4,7 @@ import { createLaserOutline, type LaserOutlineConfig } from "../visual/laser-out
  * does lives here, configured by the scene's `firstPlayPrompt` data:
  *
  * - **Idle:** while the field is empty and a play can be made, the ghost pulses in the first
- *   play's cell.
+ *   play's cell; with `flash` configured, its glow flashes on the beat while music plays.
  * - **Armed:** while a dragged block is over that cell, it brightens and breathes larger and
  *   quicker, so the drop target clearly responds.
  * - **Release:** when the first block is played, an outline grows and fades from that cell
@@ -24,8 +24,21 @@ export type FirstPlayPromptConfig = {
   /** The ghost's colour (hex). */
   colour: number;
   laser?: Partial<LaserOutlineConfig>;
-  /** The idle pulse's period, in seconds. */
+  /** The idle pulse's period, in seconds: the glow's own rhythm while no music plays. */
   pulseSeconds: number;
+  /**
+   * Flash with the music: while music plays, the idle glow follows this cycle, shaped by a
+   * registered beat shape, blending in from its own pulse as the music's energy rises. Leave it
+   * out and the glow keeps its own pulse.
+   */
+  flash?: {
+    /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`. */
+    cycle: string;
+    /** A registered beat shape: `sine`, `pulse`, `bounce`, `gate`, `saw`. */
+    shape: string;
+    /** Beats to shift the flash by (negative lands a little early, which reads as on time). */
+    offset: number;
+  };
   /** While a dragged block is over the cell. */
   armed: {
     /** The breathing period, in seconds. */
@@ -118,7 +131,9 @@ type PromptState = {
   burst: { ghost: Ghost; elapsed: number } | null;
   /** The ghost's dance (#256): the shaped move and the music's energy, from the dance floor. */
   move: { level: number; energy: number };
-  leaveFloor: (() => void) | null;
+  /** The glow's flash with the music, from the dance floor, the same way. */
+  flash: { level: number; energy: number };
+  leaveFloor: Array<() => void>;
 };
 
 export function firstPlayPrompt<
@@ -149,29 +164,35 @@ export function firstPlayPrompt<
         time: 0,
         burst: null,
         move: { level: 0, energy: 0 },
-        leaveFloor: null,
+        flash: { level: 0, energy: 0 },
+        leaveFloor: [],
       };
       states.set(config, state);
-      // The ghost dances by joining the floor: it follows its cycle, and its dance records the
-      // shaped move, which the idle pulse below blends towards as the music's energy rises.
-      const { dance } = config;
-      if (dance) {
-        const shape = beatShapes.get(dance.shape);
-        state.leaveFloor = firstPlay.danceFloor.join({
-          cycle: dance.cycle,
-          offset: dance.offset,
-          dance: ({ phase, energy }) => {
-            state.move = { level: shape(phase), energy };
-          },
-        });
-      }
+      // The ghost dances by joining the floor: its size and its glow each follow a cycle, and
+      // each dance records its shaped level, which the idle state below blends towards as the
+      // music's energy rises.
+      const join = (
+        { cycle, shape, offset }: { cycle: string; shape: string; offset: number },
+        record: (move: { level: number; energy: number }) => void,
+      ) => {
+        const shaped = beatShapes.get(shape);
+        state.leaveFloor.push(
+          firstPlay.danceFloor.join({
+            cycle,
+            offset,
+            dance: ({ phase, energy }) => record({ level: shaped(phase), energy }),
+          }),
+        );
+      };
+      for (const dance of [config.dance ?? []].flat()) join(dance, (move) => (state.move = move));
+      for (const flash of [config.flash ?? []].flat()) join(flash, (move) => (state.flash = move));
     },
     exit({ services: { firstPlay } }, config) {
       const state = states.get(config);
       if (!state) return;
       hide(firstPlay, state);
       endBurst(firstPlay, state);
-      state.leaveFloor?.();
+      state.leaveFloor.forEach((leave) => leave());
       state.ghost.dispose();
       states.delete(config);
     },
@@ -225,10 +246,11 @@ export function firstPlayPrompt<
         ghost.edges.material.opacity = 1;
         return;
       }
-      // Idle: its own slow pulse in the glow; the dance, when the music plays, moves its size.
-      const pulse = still
-        ? 0.8
-        : (1 + Math.cos((state.time * Math.PI * 2) / config.pulseSeconds)) / 2;
+      // Idle: its own slow pulse in the glow, giving way to the flash as the music plays; the
+      // dance, when the music plays, moves its size.
+      const ownPulse = (1 + Math.cos((state.time * Math.PI * 2) / config.pulseSeconds)) / 2;
+      const { flash } = state;
+      const pulse = still ? 0.8 : ownPulse + (flash.level - ownPulse) * flash.energy;
       const { level, energy } = state.move;
       ghost.mesh.scale.setScalar(1 + (config.dance?.swell ?? 0) * level * energy);
       ghost.fill.opacity = 0.18 * pulse;
