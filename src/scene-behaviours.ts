@@ -55,7 +55,7 @@ export type SceneHost = {
       | "discardBinEntered"
       | "sellBinEntered"
       | "handEntered"
-      | "enableDropZone"
+      | "enableDropTarget"
     >;
     shop: ShopView;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
@@ -200,18 +200,18 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
   });
   behaviours.register("firstPlayPrompt", firstPlayPrompt<Context>());
-  // While a scene shows, the drop zones its `canDragTo` data names are allowed (#273).
-  const zonesEnabled = new WeakMap<object, (() => void)[]>();
-  behaviours.register("canDragTo", {
+  // While a scene shows, the drop targets its `dropTarget` data names are allowed (#273).
+  const targetsEnabled = new WeakMap<object, (() => void)[]>();
+  behaviours.register("dropTarget", {
     enter({ services }, config) {
-      zonesEnabled.set(
+      targetsEnabled.set(
         config,
-        config.zones.map((zone) => services.input.enableDropZone(zone)),
+        config.targets.map((target) => services.input.enableDropTarget(target)),
       );
     },
     exit(_context, config) {
-      zonesEnabled.get(config)?.forEach((disable) => disable());
-      zonesEnabled.delete(config);
+      targetsEnabled.get(config)?.forEach((disable) => disable());
+      targetsEnabled.delete(config);
     },
   });
   behaviours.register("passiveRackView", {
