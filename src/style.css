@@ -1071,16 +1071,31 @@ body,
 }
 
 /*
- * On a narrow screen the hand spans the full width, so the landscape layout's bottom corners
- * (bin, BUY, deck, Continue) sit above it rather than over the end cards. This depends on the
- * screen's width, not its orientation (#119).
+ * Clearances the frame keeps for things drawn outside it (#119): the hand spans the full width on
+ * a tall screen, and the passive rack crosses the top on a narrow one. They measure how much room
+ * those take on this screen; they never choose the layout, which is the player's setting.
  */
-@media (max-width: 700px) {
-  .scene
-    .hud-frame[data-layout="landscape"]
-    :is([data-zone="bottom-left"], [data-zone="bottom-right"]) {
-    padding-bottom: max(96px, calc(22vw + 12px));
+:root {
+  --hud-hand-clear: 0px;
+  --hud-rack-clear: 0px;
+}
+@media (max-aspect-ratio: 1/1) {
+  :root {
+    --hud-hand-clear: max(96px, calc(22vw + 12px));
   }
+}
+@media (max-width: 700px) {
+  :root {
+    --hud-rack-clear: 66px;
+  }
+}
+.scene
+  .hud-frame[data-layout="landscape"]
+  :is([data-zone="bottom-left"], [data-zone="bottom-right"]) {
+  padding-bottom: var(--hud-hand-clear);
+}
+.scene .hud-frame[data-layout="landscape"] :is([data-zone="top-left"], [data-zone="top-right"]) {
+  padding-top: var(--hud-rack-clear);
 }
 
 /*
