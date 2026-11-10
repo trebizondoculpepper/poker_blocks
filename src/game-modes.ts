@@ -270,6 +270,7 @@ export const sceneDefinitions = [
           { id: "openSettings", label: "Settings" },
         ],
       },
+      blockTitle: { text: "Poker Blocks", scale: 1 },
       // After `titleScreen`, so the panel is already showing when the footer is added to it.
       panelFooter: { links: projectLinks },
       attractBackground: {},
@@ -284,6 +285,7 @@ export const sceneDefinitions = [
     traits: {
       tableBackground: {},
       menu: pauseMenu,
+      blockTitle: { text: "Poker Blocks", scale: 0.5 },
       panelFooter: { links: projectLinks },
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "lowpass" },

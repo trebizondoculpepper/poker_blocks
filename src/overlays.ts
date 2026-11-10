@@ -25,6 +25,7 @@ export type ScreenScenes = {
 export type Overlays = {
   /** The button that opens the pause menu, for the HUD frame to place (#116). */
   readonly menuButton: HTMLElement;
+  panelHeadingHost(): HTMLElement;
   /** The screen in front: a menu, or the game. */
   readonly screen: Screen;
   /** Whether a menu screen covers the game. */
@@ -138,6 +139,7 @@ export function createOverlays(
     },
     showTitle: (items) => menus.showTitle(items),
     hideTitle: () => menus.hideTitle(),
+    panelHeadingHost: () => menus.panelHeadingHost(),
     showPanelFooter: (links, version) => menus.showPanelFooter(links, version),
     hidePanelFooter: () => menus.hidePanelFooter(),
     closeAll: () => menus.closeAll(),

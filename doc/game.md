@@ -463,3 +463,7 @@ The hand and passive rack share a layout rule, separate from the shop. When an i
 12. **Scoring feedback:** the gold line-highlight duration and where to show each hand name and score; how the highlight combines with selection and other temporary effects.
 13. **Stage boundary:** how the empty field signals its opening drop target.
 14. **Passives:** rack capacity, sale value, shop/deck installation flow, and how a one-use passive is removed from the player's collection after it triggers.
+
+### Block titles on menus
+
+The title and pause screens display Poker Blocks as two rows of letter blocks above their menu options. Each word moves as a rigid row, independently phased to the music. Both use the same behavior; the pause title is half the title-screen scale. Materials and lettering fonts are chosen when each scene's title is created and stay fixed for that scene instance. Reduced motion stills the words. Menu actions and backgrounds retain their existing behavior.
