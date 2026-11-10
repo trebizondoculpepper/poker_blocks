@@ -12,6 +12,7 @@
  * replayable run (#134). See doc/randomness.md.
  */
 import { createSceneLayer } from "./scene-layer";
+import { playSfx } from "./audio/sfx";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { standardDeck, type IdentityTrait } from "./cards";
@@ -148,18 +149,19 @@ const glance = 0.9;
 /**
  * Bounce a card off the camera (#203). A card coming at the lens rebounds back the way it came,
  * glances off sideways in a random direction so it does not retrace its path, and is set
- * spinning by the knock. A card moving away, or not touching, is left alone.
+ * spinning by the knock. A card moving away, or not touching, is left alone. True when it
+ * bounced, so the scene can play the bonk.
  */
-export function bounceOffCamera(body: Body, random: () => number): void {
+export function bounceOffCamera(body: Body, random: () => number): boolean {
   const away = new THREE.Vector3().subVectors(body.position, cameraPosition);
   const distance = away.length();
-  if (distance >= cameraHitDistance) return;
+  if (distance >= cameraHitDistance) return false;
   // Dead on the lens has no direction to bounce in: straight back down the field.
   if (distance < 1e-6) away.set(0, 0, -1);
   else away.divideScalar(distance);
   body.position.copy(cameraPosition).addScaledVector(away, cameraHitDistance);
   const towards = body.velocity.dot(away);
-  if (towards >= 0) return;
+  if (towards >= 0) return false;
   body.velocity.addScaledVector(away, -(1 + restitution) * towards);
   // A random sideways glance, at right angles to the bounce.
   const sideways = new THREE.Vector3(random() - 0.5, random() - 0.5, random() - 0.5)
@@ -169,6 +171,7 @@ export function bounceOffCamera(body: Body, random: () => number): void {
   body.angular
     .add(new THREE.Vector3(random() - 0.5, random() - 0.5, random() - 0.5).multiplyScalar(4))
     .clampLength(0, maximumSpin);
+  return true;
 }
 
 /** Seconds a card may stay in the field at most, so a ricochet that lingers still leaves. */
@@ -511,7 +514,8 @@ export function createAttractScene(
         angular,
       }));
       collide(bodies);
-      for (const body of bodies) bounceOffCamera(body, random);
+      // A card that hits the lens goes "bonk".
+      for (const body of bodies) if (bounceOffCamera(body, random)) playSfx("attract.card.bonk");
       for (const card of cards) {
         card.cube.position.addScaledVector(card.velocity, delta);
         const spin = card.angular.length();

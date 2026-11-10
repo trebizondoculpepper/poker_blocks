@@ -257,6 +257,14 @@ const entries = [
     durationSeconds: 2.5,
   },
   {
+    id: "attract.card.bonk",
+    trigger: "A card in the title's attract sequence flies into the camera and bounces off it",
+    prompt:
+      "Comic hollow bonk of a small wooden block knocking against a glass lens, cartoonish and light",
+    durationSeconds: 0.6,
+    variants: 3,
+  },
+  {
     id: "ui.click",
     trigger: "A HUD button is pressed",
     prompt: "A crisp tiny soft button click, subtle",

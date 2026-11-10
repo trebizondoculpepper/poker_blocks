@@ -97,6 +97,12 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | `ui.click` | A button is pressed                                 | generated |
 | `ui.back`  | A menu or panel is closed, or a choice is cancelled | generated |
 
+## Title screen
+
+| Id                  | Plays when                                                                   | Status                          |
+| ------------------- | ---------------------------------------------------------------------------- | ------------------------------- |
+| `attract.card.bonk` | A card in the title's attract sequence flies into the camera and bounces off | registered, audio not generated |
+
 ## Open questions
 
 1. **Scoring and round sounds:** after a play, each line that scores is presented from lowest to highest score, about a third of a second apart. Its row is tinted gold and its `score.magnitude.*` sound plays, chosen by that line's points. `round.cleared` or `round.failed` follows the last line. `score.line` and `score.big` are generated but no longer played; remove them if the magnitude family covers every need.

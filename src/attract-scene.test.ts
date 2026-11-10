@@ -153,7 +153,7 @@ describe("attract cards collide (#203)", () => {
   it("bounces a card off the camera, back and glancing sideways", () => {
     const card = body([0.2, 0.1, 7], [0, 0, 6]);
     let draw = 0;
-    bounceOffCamera(card, () => [0.9, 0.2, 0.7, 0.1, 0.4, 0.8][draw++ % 6]!);
+    expect(bounceOffCamera(card, () => [0.9, 0.2, 0.7, 0.1, 0.4, 0.8][draw++ % 6]!)).toBe(true);
     // Pushed back out to the hit distance, heading away from the camera, and off to the side.
     expect(card.position.distanceTo(new THREE.Vector3(0, 0, 8))).toBeCloseTo(cameraHitDistance);
     expect(card.velocity.z).toBeLessThan(0);
@@ -162,10 +162,10 @@ describe("attract cards collide (#203)", () => {
 
   it("leaves a card alone that is moving away from the camera or not touching it", () => {
     const leaving = body([0, 0, 7], [0, 0, -3]);
-    bounceOffCamera(leaving, () => 0.5);
+    expect(bounceOffCamera(leaving, () => 0.5)).toBe(false);
     expect(leaving.velocity.toArray()).toEqual([0, 0, -3]);
     const passing = body([5, 0, 8], [0, 0, 6]);
-    bounceOffCamera(passing, () => 0.5);
+    expect(bounceOffCamera(passing, () => 0.5)).toBe(false);
     expect(passing.velocity.toArray()).toEqual([0, 0, 6]);
   });
 });
