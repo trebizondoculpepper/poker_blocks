@@ -167,6 +167,8 @@ const playSceneTraits: Partial<SceneTraits> = {
     colour: 0x65f4dd,
     pulseSeconds: 1.8,
     armed: { beatSeconds: 0.52, scale: [1.04, 1.09], opacity: [0.3, 0.42] },
+    // The first dancer (#256): a bob on every beat, peaking just before it.
+    dance: { cycle: "beat", shape: "bounce", offset: -0.03, swell: 0.04 },
     release: { seconds: 0.55, growth: 0.6 },
   },
   handView: {},

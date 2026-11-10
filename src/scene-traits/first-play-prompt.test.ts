@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import type * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
+import type { Dancer } from "../dance/dance-floor";
 import type { Cell } from "../traits/attachable";
 import {
   firstPlayPrompt,
@@ -26,6 +27,8 @@ function table() {
     still: false,
   };
   const shown = new Set<THREE.Object3D>();
+  // A dance floor the test drives by hand: it records who joined and moves them on demand.
+  const dancers = new Set<Dancer>();
   const firstPlay: FirstPlayTable = {
     firstPlayCell: () => state.cell,
     fieldCount: () => state.count,
@@ -35,8 +38,16 @@ function table() {
     placeObject: (object) => void shown.add(object),
     removeObject: (object) => void shown.delete(object),
     cubeSize: 2.4,
+    danceFloor: {
+      join(dancer) {
+        dancers.add(dancer);
+        return () => dancers.delete(dancer);
+      },
+    },
   };
-  return { state, shown, context: { services: { firstPlay } } };
+  const dance = (phase: number, energy: number) =>
+    dancers.forEach((dancer) => dancer.dance({ phase, energy, tempo: 120 }));
+  return { state, shown, dancers, dance, context: { services: { firstPlay } } };
 }
 
 const meshes = (shown: Set<THREE.Object3D>) => [...shown] as THREE.Mesh[];
@@ -112,6 +123,41 @@ describe("first-play prompt trait (#203)", () => {
     behaviour.update!(context, config, 0.05);
     behaviour.exit!(context, config);
     expect(shown.size).toBe(0);
+  });
+
+  it("dances: joins the floor on its cycle, and its pulse follows the beat as energy rises (#256)", () => {
+    const behaviour = firstPlayPrompt();
+    const { shown, dancers, dance, context } = table();
+    const dancing = {
+      ...config,
+      dance: { cycle: "beat", shape: "bounce", offset: -0.03, swell: 0.04 },
+    };
+    behaviour.enter!(context, dancing);
+    expect([...dancers].map(({ cycle, offset }) => [cycle, offset])).toEqual([["beat", -0.03]]);
+    // Mid-beat at full energy: the bounce is at its top, so the ghost is at its largest.
+    dance(0.5, 1);
+    behaviour.update!(context, dancing, 0.016);
+    const [ghost] = meshes(shown);
+    expect(ghost!.scale.x).toBeCloseTo(1.04);
+    expect(opacity(ghost!)).toBeCloseTo(0.18);
+    // On the beat the bounce touches down.
+    dance(0, 1);
+    behaviour.update!(context, dancing, 0.016);
+    expect(ghost!.scale.x).toBeCloseTo(1);
+    expect(opacity(ghost!)).toBeCloseTo(0);
+    // With no music (energy 0) it keeps its own idle pulse and never grows.
+    dance(0.5, 0);
+    behaviour.update!(context, dancing, 0.016);
+    expect(ghost!.scale.x).toBe(1);
+    behaviour.exit!(context, dancing);
+    expect(dancers.size).toBe(0);
+  });
+
+  it("doesn't dance when its configuration has no dance", () => {
+    const behaviour = firstPlayPrompt();
+    const { dancers, context } = table();
+    behaviour.enter!(context, config);
+    expect(dancers.size).toBe(0);
   });
 
   it("guardrail: the ghost's behaviour lives only in this trait", () => {

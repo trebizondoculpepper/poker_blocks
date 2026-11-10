@@ -5,6 +5,7 @@
  * table-input; presentation in view services and scene traits. Keep mode, phase and
  * scene decisions out of this file. See doc/game-architecture.md.
  */
+import { createDanceFloor } from "./dance/dance-floor";
 import { createBeatSignal } from "./audio/beat-signal";
 import type { FirstPlayTable } from "./scene-traits/first-play-prompt";
 import type { BlockDestroyerBoard } from "./scene-traits/dev-manual-block-destroyer";
@@ -78,6 +79,8 @@ const field: FieldView = createFieldView({
 const musicPlayer = createMusicPlayer(musicTracks);
 // Where the heard music is, as a phase visuals can follow (#255); presentation only.
 const beat = createBeatSignal(() => musicPlayer.position(performance.now()));
+// Things that move with the music join the dance floor (#256). Reduced motion stills them.
+const danceFloor = createDanceFloor(beat, () => run.reducedMotion);
 const audio: AudioService = createAudioService({
   player: musicPlayer,
   music: createMusicController(
@@ -163,6 +166,7 @@ const traitContext: TraitContext = {
       placeObject: (object, cell) => field.placeObject(object, cell),
       removeObject: (object) => field.removeObject(object),
       cubeSize,
+      danceFloor,
     },
     get shop() {
       return shopView;
@@ -321,6 +325,7 @@ const animate = (time: number) => {
   const delta = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
   lastTime = time;
   beat.update(delta);
+  danceFloor.update();
   cameraView.update(time, delta);
   presenter.update(time, delta);
   presenter.updateScore(time);

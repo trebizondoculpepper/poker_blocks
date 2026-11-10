@@ -32,6 +32,7 @@ function recordingHost() {
         placeObject: () => void calls.push("prompt:place"),
         removeObject: () => void calls.push("prompt:remove"),
         cubeSize: 2.4,
+        danceFloor: { join: () => () => {} },
       },
       board: {
         blockAt: () => {
