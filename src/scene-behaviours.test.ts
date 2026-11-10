@@ -49,6 +49,10 @@ function recordingHost() {
         },
         hide: () => void calls.push("deck:hide"),
       },
+      shopBalanceEditor: {
+        show: () => void calls.push("balance:show"),
+        hide: () => void calls.push("balance:hide"),
+      },
       rack: {
         viewEntered: (entered, capacity) => void calls.push(`rack:${entered}:${capacity}`),
       },
@@ -168,6 +172,17 @@ describe("scene traits own their behaviour", () => {
     expect(calls).not.toContain("bin:true");
     scenes.switchTo("title");
     expect(calls).toContain("sellBin:false");
+  });
+
+  it("mounts the draft editor only while its developer scene is active", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("balance", { shopBalanceEditor: {} }));
+    scenes.register(scene("table", {}));
+    scenes.switchTo("balance");
+    expect(calls).toContain("balance:show");
+    scenes.switchTo("table");
+    expect(calls).toContain("balance:hide");
   });
 
   it("lists the deck read-only and goes back from its Back button (#175)", () => {

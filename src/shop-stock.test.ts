@@ -32,6 +32,21 @@ function shop() {
 const priceOf = (block: object) => (block as PassiveBlock).traits.priced!.basePrice;
 
 describe("shop preview", () => {
+  it("uses the configured guaranteed offer counts", () => {
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    const state = shopPreviewState(game.state, 5, () => 0.25, {
+      minOffers: 4,
+      maxOffers: 4,
+      guaranteedPassives: 2,
+      guaranteedCards: 2,
+    });
+    expect(state.shopStock?.map(({ kind }) => kind)).toEqual([
+      "passive",
+      "passive",
+      "card",
+      "card",
+    ]);
+  });
   it("offers 5–9 unique offers, passives first, and buys into the right zones (#145)", () => {
     const game = shop();
     const stock = game.state.shopStock!;

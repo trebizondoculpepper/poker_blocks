@@ -32,6 +32,7 @@ import { SceneManager } from "./scenes";
 import { sceneBehaviours } from "./scene-behaviours";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView, type ShopView } from "./shop-view";
+import { createShopBalanceEditor, type ShopBalanceEditor } from "./shop-balance-editor";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
 import { createHudFrame } from "./hud-frame";
@@ -103,12 +104,14 @@ type TraitContext = {
     shop: ShopView;
     rack: { viewEntered(entered: boolean, capacity: number): void };
     deckView: DeckView;
+    shopBalanceEditor: ShopBalanceEditor;
     version: string;
     sound: (id: SoundEffectId) => void;
   };
 };
 const attract = createAttractBackground(backgrounds);
 const deckView = createDeckView(host);
+const shopBalanceEditor = createShopBalanceEditor(host);
 const traitContext: TraitContext = {
   host,
   services: {
@@ -145,6 +148,7 @@ const traitContext: TraitContext = {
       return passiveRackView;
     },
     deckView,
+    shopBalanceEditor,
     sound: (id) => playSfx(id),
     version: appVersion,
   },
@@ -326,6 +330,7 @@ if (import.meta.hot) {
     field.dispose();
     passiveRackView.dispose();
     shopView.dispose();
+    shopBalanceEditor.dispose();
     view.dispose();
   });
 }

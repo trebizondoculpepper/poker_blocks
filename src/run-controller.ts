@@ -463,6 +463,9 @@ export function createRunController<Context>(options: {
    * reads one value and looks up the handler; it never asks which mode is open.
    */
   const onLoadHandlers: Record<OnLoad, () => void> = {
+    scene() {
+      showScene(currentMode.startScene);
+    },
     title() {
       if (!restartMode) {
         showScene("title");

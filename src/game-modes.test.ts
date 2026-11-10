@@ -27,6 +27,7 @@ describe("game modes composed from traits", () => {
       "dev4",
       "dev-style",
       "dev-attract",
+      "dev-balance",
     ]);
   });
 
@@ -37,6 +38,15 @@ describe("game modes composed from traits", () => {
     expect(opened("room=dev")).toBe("dev0");
     expect(opened("mode=dev1&room=dev3")).toBe("dev1");
     expect(opened("")).toBe("game");
+  });
+
+  it("composes the balance editor only in its developer mode", () => {
+    const editor = (mode: string) =>
+      gameModeFor(mode).scenes.find(({ id }) => id.endsWith("/balance-editor"))?.traits
+        .shopBalanceEditor;
+    expect(editor("game")).toBeUndefined();
+    expect(editor("dev-balance")).toEqual({});
+    expect(gameModeFor("dev-balance").traits.onLoad).toBe("scene");
   });
 
   it("lists, links and restarts modes through their console and restartable traits", async () => {
@@ -69,7 +79,7 @@ describe("game modes composed from traits", () => {
       onLoad: "title",
       save: { key: saveKey },
       passiveRack: { capacity: 5 },
-      shop: { minOffers: 5, maxOffers: 9 },
+      shop: { minOffers: 5, maxOffers: 9, guaranteedPassives: 1, guaranteedCards: 1 },
       music: { style: "ordinary" },
     });
     expect(gameModeFor(null).runSetup).toEqual([]);

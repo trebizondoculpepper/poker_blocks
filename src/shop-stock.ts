@@ -10,8 +10,8 @@ import type { ShopOffer } from "./offer-kinds";
 export type { ShopOffer } from "./offer-kinds";
 
 /**
- * A shop's stock (#143, #145): `minOffers` to `maxOffers` offers, at least one passive and one
- * playable card when any is eligible, the rest drawn by normalised weight from everything
+ * A shop's stock (#143, #145): `minOffers` to `maxOffers` offers, with configurable guaranteed
+ * passive and card counts when eligible, the rest drawn by normalised weight from everything
  * eligible this round. A card offer is a new card of a material drawn by its weight curve
  * (any rank and suit, and it may repeat a card the deck holds); a passive offer is a passive
  * the run doesn't own, drawn by its frequency curve from its unlock round, at most once a shop.
@@ -77,9 +77,9 @@ export function shopPreviewState(
     chosen.push(candidate);
     if (candidate.once) candidate.weight = 0;
   };
-  // The minimums first: one passive and one playable card, then anything by weight.
-  draw(passives);
-  draw(cards);
+  // Guaranteed kinds first, then anything by weight. An ineligible pool yields no offer.
+  for (let index = 0; index < (stock.guaranteedPassives ?? 1); index++) draw(passives);
+  for (let index = 0; index < (stock.guaranteedCards ?? 1); index++) draw(cards);
   while (chosen.length < count && [...passives, ...cards].some(({ weight }) => weight > 0))
     draw([...passives, ...cards]);
   // Laid out passives first, then cards.
