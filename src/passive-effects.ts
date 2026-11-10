@@ -28,9 +28,12 @@ const passiveSource = (passive: PassiveBlock): RuleSource => ({
   id: passive.id,
   rules: passive.traits.passive.eventRules ?? [],
 });
-const cardSource = (block: CardBlock): RuleSource => ({
+const cardSource = (
+  block: CardBlock,
+  rulesForCard: (block: CardBlock) => EventRule[],
+): RuleSource => ({
   id: block.id,
-  rules: cardScoringRules(block),
+  rules: rulesForCard(block),
 });
 
 /**
@@ -84,6 +87,7 @@ function evaluateRules(
 export function scoreFieldWithPassives(
   field: readonly PlacedBlock[],
   rack: readonly PassiveBlock[],
+  rulesForCard: (block: CardBlock) => EventRule[] = cardScoringRules,
 ): PassiveScoredLine[] {
   const lines = findScoringLines(field);
   const passives = rack.map(passiveSource);
@@ -94,7 +98,7 @@ export function scoreFieldWithPassives(
       line.blocks.map((block) => [
         block.id,
         evaluateRules(
-          subscribedRules([cardSource(block), ...passives], "score.beforeBlockValue"),
+          subscribedRules([cardSource(block, rulesForCard), ...passives], "score.beforeBlockValue"),
           { type: "score.beforeBlockValue", score: { line, intersections, block } },
           scorableValue(block),
         ),
@@ -103,7 +107,7 @@ export function scoreFieldWithPassives(
     const result = evaluateLine(line.blocks, (block) => evaluated.get(block.id)!.value);
     // Only the chosen hand's cards bring their own line rules.
     const contributing = line.blocks.filter(({ id }) => result.contributingIds.includes(id));
-    const sources = [...contributing.map(cardSource), ...passives];
+    const sources = [...contributing.map((block) => cardSource(block, rulesForCard)), ...passives];
     const phases = linePhases.reduce(
       (previous, phase) => {
         const next = evaluateRules(

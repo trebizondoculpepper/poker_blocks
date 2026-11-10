@@ -8,9 +8,13 @@
  * placed block is under a ray.
  */
 import * as THREE from "three";
+import { playSfx } from "./audio/sfx";
+import type { SoundEffectId } from "./audio/sfx-registry";
 import type { CardBlock } from "./cards";
 import { addCell, centerOfGravity, removeCell, type MassCenter } from "./center-of-gravity";
 import type { BlockViews, RenderedBlock } from "./rendered-blocks";
+import { getMaterialDefinition, materialOf, type MaterialDefinition } from "./materials";
+import { applyGlow, tokenEffects } from "./passive-activation-effects";
 import { cellKey, faceFromDirection, faceNormal, type Cell, type Face } from "./traits/attachable";
 
 /** A block a drop can attach to: one on the table, or one played and still flying in. */
@@ -62,8 +66,10 @@ export type FieldView = {
   promptEntered(entered: boolean): void;
   /** Briefly tint these blocks toward gold. */
   tint(blocks: readonly CardBlock[], now: number): void;
-  /** Advance the tints by one frame. */
-  update(now: number): void;
+  /** Play the configured cue for placed cards whose material scoring rule fired. */
+  activate(sourceIds: readonly string[], now: number): void;
+  /** Advance scoring tints and material cues by one frame. */
+  update(now: number, reducedMotion?: boolean): void;
   /**
    * Take a destroyed block off the table: dispose its cube and move the centre of mass.
    * The gap stays; nothing settles into it.
@@ -87,6 +93,9 @@ export function createFieldView(options: {
   cubeSize: number;
   /** The structure's centre of mass moved: the board's rotation centre follows it. */
   onCenter(center: { x: number; y: number; z: number }): void;
+  /** Allows another material registry to supply definitions without changing the presenter. */
+  resolveMaterial?: (block: CardBlock) => MaterialDefinition;
+  sound?: (id: SoundEffectId) => void;
 }): FieldView {
   const { views, assembly, cubeSize } = options;
   const placed = new Map<string, RenderedBlock>();
@@ -100,6 +109,19 @@ export function createFieldView(options: {
   };
   let massCenter: MassCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
   const tints: { blocks: RenderedBlock[]; startedAt: number }[] = [];
+  const cues = new Map<
+    string,
+    {
+      rendered: RenderedBlock;
+      startedAt: number;
+      scale: THREE.Vector3;
+      emissive: { material: THREE.MeshStandardMaterial; colour: THREE.Color; intensity: number }[];
+      effect: NonNullable<MaterialDefinition["activation"]>["effect"];
+    }
+  >();
+  const resolveMaterial =
+    options.resolveMaterial ?? ((block: CardBlock) => getMaterialDefinition(materialOf(block)));
+  const sound = options.sound ?? playSfx;
 
   const ghostGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
   const ghostMaterial = new THREE.MeshBasicMaterial({
@@ -176,6 +198,7 @@ export function createFieldView(options: {
       return massCenter;
     },
     remove(blockId) {
+      cues.delete(blockId);
       for (const [key, standIn] of [...expected].filter(([, { block }]) => block.id === blockId))
         forget(key, standIn);
       for (const [key, rendered] of [...placed].filter(([, { block }]) => block.id === blockId)) {
@@ -262,7 +285,30 @@ export function createFieldView(options: {
       const ids = new Set(blocks.map(({ id }) => id));
       tints.push({ blocks: views.all.filter(({ block }) => ids.has(block.id)), startedAt: now });
     },
-    update(now) {
+    activate(sourceIds, now) {
+      const ids = new Set(sourceIds);
+      for (const rendered of placed.values()) {
+        if (!ids.has(rendered.block.id)) continue;
+        const activation = resolveMaterial(rendered.block).activation;
+        if (!activation) continue;
+        const previous = cues.get(rendered.block.id);
+        cues.set(rendered.block.id, {
+          rendered,
+          startedAt: now,
+          scale: previous?.scale ?? rendered.cube.scale.clone(),
+          emissive:
+            previous?.emissive ??
+            [...new Set(rendered.materials)].map((material) => ({
+              material,
+              colour: material.emissive.clone(),
+              intensity: material.emissiveIntensity,
+            })),
+          effect: activation.effect,
+        });
+        sound(activation.sfx);
+      }
+    },
+    update(now, reducedMotion = false) {
       for (let index = tints.length - 1; index >= 0; index--) {
         const tint = tints[index];
         const progress = Math.min(1, (now - tint.startedAt) / 1000 / tintSeconds);
@@ -274,12 +320,29 @@ export function createFieldView(options: {
         });
         if (progress === 1) tints.splice(index, 1);
       }
+      for (const [id, cue] of cues) {
+        const handler = tokenEffects.get(cue.effect.id);
+        const progress = Math.max(0, (now - cue.startedAt) / handler.milliseconds);
+        if (progress >= 1) {
+          cue.rendered.cube.scale.copy(cue.scale);
+          for (const { material, colour, intensity } of cue.emissive) {
+            material.emissive.copy(colour);
+            material.emissiveIntensity = intensity;
+          }
+          cues.delete(id);
+          continue;
+        }
+        const { scale, glow } = handler.frame(progress, reducedMotion);
+        cue.rendered.cube.scale.copy(cue.scale).multiplyScalar(scale);
+        applyGlow(cue.rendered.materials, cue.effect.colour, glow);
+      }
     },
     clear() {
       placed.clear();
       for (const { cube } of expected.values()) assembly.remove(cube);
       expected.clear();
       tints.length = 0;
+      cues.clear();
       massCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
     },
     dispose() {

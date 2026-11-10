@@ -188,6 +188,7 @@ This section is the target design and supersedes the table above where they diff
 - First-version material behaviour is **scoring only**, and only when the card **contributes to the scored hand** of its line.
 - A material's effect is a **`scoringModifier` trait** configured in the balance config, with three inputs and their neutral values: `additive` (0), `multiplicative` (1), `exponential` (1).
 - Materials contribute **event rules** exactly as passives do ([#63](https://github.com/trebizondoculpepper/poker_blocks/issues/63)). `scoringModifier` (on the material's own definition in `src/materials.ts`, expanded by `src/scoring-modifier.ts`) brings one rule per non-neutral value: additive on `score.beforeBlockValue`, multiplicative on `score.lineMultiply`, and exponential on `score.linePower`. The line phases run in that order, before the rack's `score.beforeLineFinalized`. In each phase, the contributing cards' own rules run first, then the passives'. The scorer never names a material.
+- When a material rule fires, that card pulses in the accent colour and plays the sound configured by its material's `activation` cue. The play presenter uses the scorer's activation source IDs while showing each line; paper has no scoring rule or cue. Reduced motion keeps the glow and removes the scale pulse.
 
 | Material          | Additive | Multiplicative | Exponential |  Unlock round |
 | ----------------- | -------: | -------------: | ----------: | ------------: |
