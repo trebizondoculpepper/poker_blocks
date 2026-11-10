@@ -485,6 +485,21 @@ export function createRunController<Context>(options: {
     },
   };
 
+  /** Console reset always starts fresh; scene-only tools re-enter their own start scene. */
+  const freshRun = () => startRun(newRun());
+  const consoleStartHandlers: Record<OnLoad, () => void> = {
+    title: freshRun,
+    newRun: freshRun,
+    resume: freshRun,
+    scene() {
+      showScene(currentMode.startScene);
+    },
+  };
+  function startFromConsole(): void {
+    consoleStartHandlers[currentMode.traits.onLoad]();
+    services.overlays.closeAll();
+  }
+
   const rules: TableRules = {
     busy: () => services.presenter.busy,
     inStage: () => game.inStage,
@@ -595,8 +610,7 @@ export function createRunController<Context>(options: {
     screen: () => services.overlays.screen,
     next: takeNextAction,
     newRun() {
-      startRun(newRun());
-      services.overlays.closeAll();
+      startFromConsole();
     },
     home: () => showScene("title"),
     hardReset() {
@@ -611,11 +625,8 @@ export function createRunController<Context>(options: {
     },
     mode: () => currentMode,
     openMode(mode) {
-      enterMode(mode);
-      // The new run's flow puts its scene in front, so the scene's arrival (its sound, the
-      // shop's entrance) happens once, with the run ready.
-      startRun(newRun());
-      services.overlays.closeAll();
+      enterMode(mode, false);
+      startFromConsole();
     },
     forceOutcome(outcome) {
       if (services.presenter.busy || !game.forceOutcome(outcome)) return false;
