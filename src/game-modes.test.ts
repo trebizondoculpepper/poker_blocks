@@ -247,7 +247,7 @@ describe("game modes composed from traits", () => {
       screen: { kind: "stage-1" },
       roundPanel: { stage: "STAGE 1", actions: { lost: "End game" } },
       tableBackground: {},
-      canDragTo: { zones: [{ zone: "discard", priority: 10 }] },
+      dropTarget: { targets: [{ target: "discard", priority: 10 }] },
       firstPlayPrompt: expect.objectContaining({ colour: 0x65f4dd }),
       handView: {},
       discardBin: {},
