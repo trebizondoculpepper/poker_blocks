@@ -1,11 +1,10 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { blockTitle, type BlockTitleConfig } from "./block-title";
-import { beatShapes } from "../dance/beat-shapes";
+import { beatShapes, bouncePhase } from "../dance/beat-shapes";
 import {
   bounceDirection,
   bounceJitter,
-  bouncePhase,
   bounceTitleBlock,
   restTurn,
   precessTitleRow,

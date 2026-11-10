@@ -19,9 +19,13 @@ export type StageReward = { entries: RewardEntry[]; balanceBefore: number; balan
 /** The default completion reward, in coins. */
 export const stageCompleteBonus = 4;
 
+/** What each play left unused when a stage is won pays, in coins. */
+export const coinsPerUnusedPlay = 1;
+
 /**
- * The ledger for a won stage: the completion bonus first, then each passive that pays on a
- * stage win, in the rack's left-to-right order. Material hand rewards come before passives.
+ * The ledger for a won stage: the completion bonus first, then a coin for each play left
+ * unused, then each passive that pays on a stage win, in the rack's left-to-right order.
+ * Material hand rewards come before passives.
  */
 export function stageRewardLedger(
   state: GameState,
@@ -30,6 +34,7 @@ export function stageRewardLedger(
 ): RewardEntry[] {
   const entries: RewardEntry[] = [
     { source: "stage.complete", label: "Stage complete bonus", coins: bonus },
+    ...unusedPlayEntries(state),
     ...materialHandRewardEntries(state),
   ];
   for (const passive of state.passiveRack) {
@@ -41,6 +46,20 @@ export function stageRewardLedger(
     entries.push({ source: `passive.${passive.definitionId}`, label: name, coins });
   }
   return entries;
+}
+
+/** A coin for each play the stage was won with to spare; no row when none are left. */
+export function unusedPlayEntries(state: GameState): RewardEntry[] {
+  const unused = Math.max(0, state.round.movesLeft);
+  return unused > 0
+    ? [
+        {
+          source: "stage.unusedPlays",
+          label: `Unused plays (${unused})`,
+          coins: unused * coinsPerUnusedPlay,
+        },
+      ]
+    : [];
 }
 
 /** Rewards configured on materials held at settlement, on wins and losses alike. */
