@@ -1,4 +1,4 @@
-import type * as THREE from "three";
+import * as THREE from "three";
 import { defineTrait } from "../core/trait";
 import type { InteractionState } from "./menu-action";
 
@@ -70,6 +70,10 @@ export const disabledAppearance = defineTrait({
         // oxlint-disable-next-line typescript/unbound-method -- explicitly called with material and restored on disposal
         const cache = material.customProgramCacheKey;
         const key = cache.call(material);
+        // Glow layers (fire, crystal fire) write premultiplied light: their colour is already
+        // scaled by their coverage. They are dithered on their unscaled brightness and scaled
+        // back, so a faint glow stays faint instead of turning into full-strength white specks.
+        const premultiplied = premultipliedOutput(material);
         material.onBeforeCompile = (shader, renderer) => {
           compile.call(material, shader, renderer);
           shader.uniforms.interactionDisabled = disabled;
@@ -83,18 +87,23 @@ export const disabledAppearance = defineTrait({
             `
             uniform float interactionDisabled;
             uniform float interactionDitherPixel;
+            const float interactionPremultiplied = ${premultiplied ? "1.0" : "0.0"};
             void main() {
               interactionOriginalMain();
               // Interleaved gradient noise: a threshold per screen cell, in [0, 1).
               vec2 cell = floor(gl_FragCoord.xy / interactionDitherPixel);
               float threshold = fract(52.9829189 * fract(dot(cell, vec2(0.06711056, 0.00583715))));
-              float luma = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+              // Premultiplied colour is judged unscaled, then scaled back by its coverage.
+              float coverage = mix(1.0, gl_FragColor.a, interactionPremultiplied);
+              float luma = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)) / max(coverage, 1e-4);
               // One bit: white where the brightness clears the threshold, black elsewhere.
-              gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(step(threshold, luma)), interactionDisabled);
+              vec3 bit = vec3(step(threshold, luma)) * coverage;
+              gl_FragColor.rgb = mix(gl_FragColor.rgb, bit, interactionDisabled);
             }
           `;
         };
-        material.customProgramCacheKey = () => key + "|interaction-dither";
+        material.customProgramCacheKey = () =>
+          key + (premultiplied ? "|interaction-dither-premultiplied" : "|interaction-dither");
         material.needsUpdate = true;
         restore.push(() => {
           material.onBeforeCompile = compile;
@@ -110,3 +119,14 @@ export const disabledAppearance = defineTrait({
     };
   },
 });
+
+/**
+ * Whether a material's shader writes premultiplied colour: three.js's own premultiplied mode,
+ * or a custom blend that adds its colour unscaled (source factor one), as the glow layers do.
+ */
+export function premultipliedOutput(material: THREE.Material): boolean {
+  return (
+    material.premultipliedAlpha ||
+    (material.blending === THREE.CustomBlending && material.blendSrc === THREE.OneFactor)
+  );
+}

@@ -2,7 +2,12 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { Block } from "./core/block";
 import { menuAction } from "./traits/menu-action";
-import { interactionFeedback, disabledAppearance } from "./traits/interaction-feedback";
+import {
+  interactionFeedback,
+  disabledAppearance,
+  premultipliedOutput,
+} from "./traits/interaction-feedback";
+import { additiveLight } from "./visual/additive-light";
 import { inspectableTrait } from "./traits/inspectable";
 import { playSfx } from "./audio/sfx";
 vi.mock("./audio/sfx", () => ({ playSfx: vi.fn() }));
@@ -79,6 +84,27 @@ describe("wordCube menu traits", () => {
     expect(inner.position.toArray()).toEqual([0, 0, 0]);
     block.dispose();
   });
+  it("dithers premultiplied glow layers on their unscaled brightness, keeping their coverage", () => {
+    const block = menu(false);
+    block.add(disabledAppearance);
+    const glow = new THREE.ShaderMaterial({ ...additiveLight });
+    const plain = new THREE.MeshBasicMaterial();
+    expect(premultipliedOutput(glow)).toBe(true);
+    expect(premultipliedOutput(plain)).toBe(false);
+    block.emit("presentation.mount", { object: new THREE.Group(), materials: [glow, plain] });
+    const compiled = (material: THREE.Material) => {
+      const shader = { uniforms: {}, fragmentShader: "void main() { gl_FragColor = vec4(0.1); }" };
+      material.onBeforeCompile(shader as never, {} as never);
+      return shader.fragmentShader;
+    };
+    expect(compiled(glow)).toContain("interactionPremultiplied = 1.0");
+    expect(compiled(plain)).toContain("interactionPremultiplied = 0.0");
+    expect(compiled(glow)).toContain("vec3(step(threshold, luma)) * coverage");
+    // The two compile to different programs.
+    expect(glow.customProgramCacheKey()).not.toBe(plain.customProgramCacheKey());
+    block.dispose();
+  });
+
   it("dithers disabled materials to black and white through a reusable filter, and restores their shader hook", () => {
     const block = menu(false);
     block.add(disabledAppearance);
