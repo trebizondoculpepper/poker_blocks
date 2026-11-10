@@ -137,6 +137,7 @@ type TraitContext = {
     devShopBalanceEditor: ShopBalanceEditor;
     devObjectBrowser: ShopBalanceEditor;
     devBlockDesigner: ShopBalanceEditor;
+    devContainedProof: ShopBalanceEditor;
     devWordCubeRoom: WordCubeRoom;
     version: string;
     sound: (id: SoundEffectId) => void;
@@ -151,6 +152,9 @@ const devShopBalanceEditor: ShopBalanceEditor = import.meta.env.DEV
   : { show() {}, hide() {}, dispose() {} };
 const devBlockDesigner: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/block-designer")).createBlockDesigner(host)
+  : { show() {}, hide() {}, dispose() {} };
+const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
+  ? (await import("./tools/contained-proof/room")).createContainedProofRoom(host)
   : { show() {}, hide() {}, dispose() {} };
 const devWordCubeRoom: WordCubeRoom = import.meta.env.DEV
   ? (await import("./tools/word-cube-room")).createWordCubeRoom(host)
@@ -230,6 +234,7 @@ const traitContext: TraitContext = {
     devShopBalanceEditor,
     devObjectBrowser,
     devBlockDesigner,
+    devContainedProof,
     devWordCubeRoom,
     sound: (id) => playSfx(id),
     version: appVersion,
@@ -425,6 +430,7 @@ if (import.meta.hot) {
     devShopBalanceEditor.dispose();
     devObjectBrowser.dispose();
     devBlockDesigner.dispose();
+    devContainedProof.dispose();
     devWordCubeRoom.dispose();
     view.dispose();
   });

@@ -80,6 +80,7 @@ export type SceneHost = {
     devShopBalanceEditor: Pick<ShopBalanceEditor, "show" | "hide">;
     devObjectBrowser: Pick<ShopBalanceEditor, "show" | "hide">;
     devBlockDesigner: Pick<ShopBalanceEditor, "show" | "hide">;
+    devContainedProof: Pick<ShopBalanceEditor, "show" | "hide">;
     devWordCubeRoom: {
       show(config: SceneTraits["devWordCubeRoom"]): void;
       hide(): void;
@@ -454,6 +455,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("devBlockDesigner", {
     enter: ({ services }, { backTo }) => services.devBlockDesigner.show(backTo),
     exit: ({ services }) => services.devBlockDesigner.hide(),
+  });
+  behaviours.register("devContainedProof", {
+    enter: ({ services }, { backTo }) => services.devContainedProof.show(backTo),
+    exit: ({ services }) => services.devContainedProof.hide(),
   });
   behaviours.register("devWordCubeRoom", {
     enter: ({ services }, config) => services.devWordCubeRoom.show(config),

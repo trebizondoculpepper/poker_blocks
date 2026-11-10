@@ -104,6 +104,7 @@ function recordingHost() {
         hide: () => void calls.push("balance:hide"),
       },
       devBlockDesigner: { show: () => {}, hide: () => {} },
+      devContainedProof: { show: () => {}, hide: () => {} },
       devWordCubeRoom: {
         show: ({ items }) => void calls.push(`cubes:show:${items.length}`),
         hide: () => void calls.push("cubes:hide"),

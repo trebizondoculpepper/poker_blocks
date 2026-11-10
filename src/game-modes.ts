@@ -92,6 +92,8 @@ export type SceneTraits = {
   devObjectBrowser: { backTo: string };
   /** Developer tool: the block design room, auditioning letter-block materials and fonts (dev12). */
   devBlockDesigner: { backTo: string };
+  /** Developer tool: the contained-components rendering proof (dev15, #346). */
+  devContainedProof: { backTo: string };
   /**
    * Developer tool: the menu block audition room (dev13, #303). Each item becomes a word cube
    * made by the real creator; activating one shows its action rather than running it.
@@ -360,6 +362,7 @@ export const sceneDefinitions = [
         { name: "balance-editor", traits: {} },
         { name: "object-browser", traits: {} },
         { name: "block-designer", traits: {} },
+        { name: "contained-proof", traits: {} },
         { name: "menu-blocks", traits: {} },
         {
           // The block title over the flying-block background, nothing else (#295): an audition.
@@ -876,6 +879,23 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev13-run" },
             console: { name: "dev13" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // Glass + refractive water + a fading film, measured against custard (#346).
+          id: "dev15",
+          scenes: composeScenes("dev15", [
+            { scenes: ["contained-proof"], traits: { devContainedProof: { backTo: "game" } } },
+          ]),
+          startScene: "contained-proof",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev15-run" },
+            console: { name: "dev15" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,

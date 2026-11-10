@@ -751,18 +751,49 @@ Stateless shaders of the clock (the flame core, cloud) need no simulation and ar
 
 **Cost and evidence.** A simulation step is a few vector operations: well under 0.01 ms. With cohorts there are at most (configurations × cohorts) steps per frame: one for the table, plus one per free contained block (a hand of 8 and a shop of 4 would add 12 tiny steps). The real cost is per-block residue history and transparent overdraw, which #346 measures.
 
-### The bounded comparison for #346
+### The rendering proof (#346): results and decision
 
-#346 builds one contained block (a glass shell, refractive water, a fading film) in a dev room, and measures before any extraction:
+`?mode=dev15` is the proof room (`src/tools/contained-proof/`, development builds only). It draws a glass shell, refractive water cut by its own levelling surface, and a fading wall film, in the layer order above, with every vessel turning independently over a checked backdrop (so refraction shows), optionally overlapping. It also draws the custard baseline, built by the game's own `createFilledVessel`. **Measure** records 240 frames as a Markdown row. Film storages and vessels are registered by name (`coatingStorages`, `vesselBuilders`), so the room never asks which it holds.
 
-- **Residue representations**, each fading over `seconds`:
-  1. **Lagging plane** (today): no memory, one previous surface.
-  2. **Plane ring buffer**: the last N surfaces (N = 4 and 8) as uniforms, fading by age. Fixed, small cost; remembers a few sloshes.
-  3. **Wetness texture**: a low-resolution wetness map over the wall (6 faces × 32² texels), written on the GPU each frame from the surface and decayed by `seconds`. Remembers any history; costs a render target per block.
-- **Layering:** the glass + water + film stack, at several angles and over a busy background, checked for sorting errors and flicker.
-- **Representative load:** 24 contained blocks on the table plus 8 in hand, on a desktop browser and a mid-range phone.
+**What was compared.** The issue asked for wall-coating storage per vertex against a per-face texture, using local wetting queries:
 
-**Targets** (to confirm or revise in #346): 60 fps on desktop and at least 50 fps on the phone at that load; at most 7 draw calls per contained block; residue memory at most 32 KB per block (a 6 × 32² single-channel float16 map is 12 KB); simulation steps at most 0.05 ms per frame in total. #346 records the measured numbers here and picks the residue representation for #334.
+- **Per vertex:** one strength per vertex of a box subdivided `resolution` times per edge, drawn just inside the wall. Detail depends on the mesh, so the coating needs its own dense mesh: the rounded block shell has too few vertices across a face to carry a wet line.
+- **Per-face texture:** one strength per texel of a six-face atlas (`resolution`² per face). The shader finds the face and texel from the fragment's local position, so it needs no UVs and its detail is independent of the wall mesh.
+
+Both keep each vessel's own history. A sample under the surface goes back to full strength (rewetting refreshes it); a dry one fades by `exp(-delta / seconds)`, so different places hold different ages.
+
+**Measured** on 2026-11-10: headless Chrome 150, ANGLE Metal on an Apple M3 Max, 960×758 at 1×, frame-rate limit off (so frame time is the work, not vsync), overlap on, every vessel tumbling:
+
+| Vessel               | Storage      | Resolution | Count | Mean ms | p95 ms | Update ms | Draw calls | Triangles | Film KB/vessel |
+| -------------------- | ------------ | ---------- | ----- | ------- | ------ | --------- | ---------- | --------- | -------------- |
+| custard (baseline)   | —            | —          | 8     | 2.11    | 3.30   | 0.000     | 49         | 46,658    | 0              |
+| custard (baseline)   | —            | —          | 32    | 2.00    | 3.50   | 0.001     | 193        | 186,626   | 0              |
+| glass + water + film | face texture | 32         | 8     | 2.16    | 3.80   | 0.155     | 50         | 38,980    | 30.0           |
+| glass + water + film | vertex       | 32         | 8     | 2.12    | 3.60   | 0.300     | 50         | 137,188   | 25.5           |
+| glass + water + film | face texture | 16         | 32    | 2.31    | 4.50   | 0.207     | 194        | 155,908   | 7.5            |
+| glass + water + film | vertex       | 16         | 32    | 2.16    | 3.80   | 0.345     | 194        | 253,828   | 6.8            |
+| glass + water + film | face texture | 32         | 32    | 2.12    | 4.20   | 0.587     | 194        | 155,908   | 30.0           |
+| glass + water + film | vertex       | 32         | 32    | 2.05    | 2.60   | 1.263     | 194        | 548,740   | 25.5           |
+| glass + water + film | face texture | 64         | 32    | 2.86    | 3.20   | 1.980     | 194        | 155,908   | 120.0          |
+| glass + water + film | vertex       | 64         | 32    | 4.86    | 6.00   | 3.995     | 194        | 1,728,388 | 99.0           |
+
+Each proof vessel is 6 draw calls (back glass, water top, film, water, front glass, print), one fewer than custard's 6 + gloss. On this machine the GPU is never the limit: frame time stays near 2 ms up to 32 vessels except at resolution 64. The real cost is the **CPU film update**, which grows with samples × vessels, and the vertex storage's **triangles**, which grow with the square of its resolution on every face.
+
+**Decision: per-face texture storage at 32 texels per face edge** for #334.
+
+- It is independent of the shell mesh, as the acceptance requires, and costs no extra triangles (the film is a plain box).
+- It updates twice as fast as vertex storage at the same density (0.59 ms against 1.26 ms for 32 vessels), and at 64 vertex storage triples the frame time.
+- Memory is 30 KB per vessel here, but 24 KB of that is the CPU float copy kept for clarity. Production keeps one byte per texel (6 KB per vessel at 32) or moves the decay to the GPU.
+
+**Visual checks** (in the room, at 1, 2 and 8 vessels): the water is cut cleanly by its surface and refracts the backdrop; the print stays legible on every face, front and back; overlapping, independently turning vessels sort without flicker in the layer order above. Approximations judged acceptable: the water's top is a flat, semi-transparent cap; the film is a box just inside the wall, so on a rounded corner it sits a little inside the glass.
+
+**Limitations to carry forward:**
+
+- **Nested transmission:** three.js transmission samples only opaque objects (`transmissionRenderTarget`), so refractive water shows the backdrop through it but not other glass or water. That matches the agreed look closely enough for a single vessel, but stacked water blocks do not refract each other. Accept it for #333; revisit only if the owner wants it.
+- **One machine:** these numbers come from one fast desktop GPU. No phone was measured. The budget below is set from the CPU cost, which scales predictably; #333 or #334 should measure on a phone before raising it.
+- **Not measured in the game's own passes:** the room has its own renderer. The hand and table passes add their own layers (print 20, meltwater 15); #330 checks the layer table there when it extracts the plastic shell.
+
+**Budget for later missions:** per contained block, at most 7 draw calls and 6 KB of film history; film update at most 1 ms per frame across all contained blocks (≈32 blocks at 32²); simulation steps at most 0.05 ms per frame in total; no per-block render target.
 
 ### Data flow by example
 
