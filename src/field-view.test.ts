@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
-import { standardDeck } from "./cards";
+import { standardDeck, type CardBlock } from "./cards";
 import { createFieldView } from "./field-view";
+import { getMaterialDefinition, type BlockMaterial, type MaterialDefinition } from "./materials";
+import { scoreFieldWithPassives } from "./passive-effects";
+import { scoringModifierRules } from "./scoring-modifier";
+import type { SoundEffectId } from "./audio/sfx-registry";
 import { faceFromDirection } from "./traits/attachable";
 import type { BlockViews, RenderedBlock } from "./rendered-blocks";
 
@@ -34,7 +38,12 @@ function fakeViews(): BlockViews {
   };
 }
 
-function setup() {
+function setup(
+  options: {
+    resolveMaterial?: (block: CardBlock) => MaterialDefinition;
+    sound?: (id: SoundEffectId) => void;
+  } = {},
+) {
   const centres: { x: number; y: number; z: number }[] = [];
   const assembly = new THREE.Group();
   const views = fakeViews();
@@ -43,6 +52,7 @@ function setup() {
     assembly,
     cubeSize: 2.4,
     onCenter: (center) => centres.push(center),
+    ...options,
   });
   return { field, views, assembly, centres };
 }
@@ -50,6 +60,49 @@ function setup() {
 const [first, second, third] = standardDeck;
 
 describe("field view", () => {
+  it("uses a test-only material's cue when its scoring rule fires", () => {
+    const definition: MaterialDefinition = {
+      ...getMaterialDefinition("wood"),
+      id: "test-copper",
+      scoringModifier: { additive: 2 },
+      activation: { effect: { id: "pulse", colour: "#ff5500" }, sfx: "material.activate.wood" },
+    };
+    const sevenHearts = standardDeck.find(
+      ({ traits }) => traits.identity.rank === "7" && traits.identity.suit.name === "hearts",
+    )!;
+    const sevenClubs = standardDeck.find(
+      ({ traits }) => traits.identity.rank === "7" && traits.identity.suit.name === "clubs",
+    )!;
+    const materialCard: CardBlock = {
+      ...sevenHearts,
+      traits: { ...sevenHearts.traits, material: { kind: definition.id as BlockMaterial } },
+    };
+    const sounds: SoundEffectId[] = [];
+    const { field } = setup({ resolveMaterial: () => definition, sound: (id) => sounds.push(id) });
+    const rendered = field.add(materialCard, { x: 0, y: 0, z: 0 });
+    const line = scoreFieldWithPassives(
+      [
+        { block: materialCard, cell: { x: 0, y: 0, z: 0 } },
+        { block: sevenClubs, cell: { x: 1, y: 0, z: 0 } },
+      ],
+      [],
+      (block) =>
+        block.id === materialCard.id ? scoringModifierRules(definition.scoringModifier) : [],
+    )[0]!;
+    expect(line.activations.map(({ sourceId }) => sourceId)).toContain(materialCard.id);
+    field.activate(
+      line.activations.map(({ sourceId }) => sourceId),
+      0,
+    );
+    expect(sounds).toEqual(["material.activate.wood"]);
+    field.update(225);
+    expect(rendered.cube.scale.x).toBeGreaterThan(1);
+    expect(rendered.materials[0]!.emissive.getHexString()).toBe("ff5500");
+    field.update(451);
+    expect(rendered.cube.scale.x).toBe(1);
+    expect(rendered.materials[0]!.emissiveIntensity).toBe(1);
+  });
+
   it("puts a block in its cell and moves the rotation centre to the structure's centre", () => {
     const { field, centres } = setup();
     const rendered = field.add(first, { x: 0, y: 0, z: 0 });

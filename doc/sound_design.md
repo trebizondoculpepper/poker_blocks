@@ -55,17 +55,19 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 
 ## Modifiers and materials
 
-| Id                        | Plays when                                                                        | Status  |
-| ------------------------- | --------------------------------------------------------------------------------- | ------- |
-| `modifier.held.trigger`   | A modifier block in the hand affects play                                         | planned |
-| `modifier.placed.trigger` | A modifier block on the field affects play                                        | planned |
-| `score.add`               | An effect adds to a score                                                         | planned |
-| `score.multiply`          | An effect multiplies a score (must sound clearly different from `score.add`)      | planned |
-| `effect.retrigger`        | An effect fires again                                                             | planned |
-| `material.<name>`         | A card's material affects scoring (one per material, once materials are designed) | planned |
-| `hand.upgrade`            | A hand type's base score is upgraded                                              | planned |
-| `block.destroy`           | A block is removed from the field (if removal is adopted)                         | planned |
-| `block.explode`           | An explosive block goes off (if adopted)                                          | planned |
+| Id                            | Plays when                                                                   | Status                    |
+| ----------------------------- | ---------------------------------------------------------------------------- | ------------------------- |
+| `modifier.held.trigger`       | A modifier block in the hand affects play                                    | planned                   |
+| `modifier.placed.trigger`     | A modifier block on the field affects play                                   | planned                   |
+| `score.add`                   | An effect adds to a score                                                    | planned                   |
+| `score.multiply`              | An effect multiplies a score (must sound clearly different from `score.add`) | planned                   |
+| `effect.retrigger`            | An effect fires again                                                        | planned                   |
+| `material.activate.wood`      | A wood card's scoring rule fires as its line is presented                    | registered; audio pending |
+| `material.activate.steel`     | A steel card's scoring rule fires as its line is presented                   | registered; audio pending |
+| `material.activate.prismatic` | A crystal card's scoring rule fires as its line is presented                 | registered; audio pending |
+| `hand.upgrade`                | A hand type's base score is upgraded                                         | planned                   |
+| `block.destroy`               | A block is removed from the field (if removal is adopted)                    | planned                   |
+| `block.explode`               | An explosive block goes off (if adopted)                                     | planned                   |
 
 ## Coins and shop
 

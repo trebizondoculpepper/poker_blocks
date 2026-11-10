@@ -3,6 +3,8 @@ import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
 import type { EventRule } from "./event-rules";
 import { scoringModifierRules, type ScoringModifier } from "./scoring-modifier";
+import type { TokenEffectConfig } from "./passive-activation-effects";
+import type { SoundEffectId } from "./audio/sfx-registry";
 
 /** A particle trail: a registered effect (src/attract-trails.ts) and its configuration. */
 export type AppearanceTrail = {
@@ -27,6 +29,8 @@ export type MaterialDefinition = {
    * scoring is designed: meat, fire, ice and gold wait on #104–#107.
    */
   scoringModifier?: ScoringModifier;
+  /** Presentation when one of this material's scoring rules fires. */
+  activation?: { effect: TokenEffectConfig; sfx: SoundEffectId };
   /**
    * What a new card of this material costs in the shop before its rank surcharge (#143). A
    * material without one is never offered.
@@ -115,6 +119,7 @@ export const materialDefinitions = [
       ],
     },
     scoringModifier: { additive: 1 },
+    activation: { effect: { id: "pulse", colour: "#c88b4c" }, sfx: "material.activate.wood" },
     appearance: {
       pattern: "timberGrain",
       assembly: "sixFaces",
@@ -139,6 +144,7 @@ export const materialDefinitions = [
       ],
     },
     scoringModifier: { multiplicative: 1.25 },
+    activation: { effect: { id: "pulse", colour: "#93b5d0" }, sfx: "material.activate.steel" },
     appearance: {
       pattern: "brushedRivets",
       assembly: "brushedFaces",
@@ -163,6 +169,10 @@ export const materialDefinitions = [
       ],
     },
     scoringModifier: { exponential: 1.1 },
+    activation: {
+      effect: { id: "pulse", colour: "#bf8cff" },
+      sfx: "material.activate.prismatic",
+    },
     appearance: {
       pattern: "rainbowCrystal",
       assembly: "refractiveCrystal",

@@ -291,7 +291,7 @@ const animate = (time: number) => {
   presenter.update(time, delta);
   presenter.updateScore(time);
   run.followOutcomes(time);
-  field.update(time);
+  field.update(time, run.reducedMotion);
   sceneManager.update(delta);
   attract.frame(delta);
   hand.animate(time, delta, input.selection);

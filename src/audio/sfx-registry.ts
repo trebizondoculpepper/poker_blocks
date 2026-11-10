@@ -315,6 +315,18 @@ const entries = [
     prompt: "A light, clean porcelain chime, single soft ding, short and bright",
   },
   {
+    id: "material.activate.wood",
+    trigger: "A wood card's scoring modifier activates as its line is presented",
+  },
+  {
+    id: "material.activate.steel",
+    trigger: "A steel card's scoring modifier activates as its line is presented",
+  },
+  {
+    id: "material.activate.prismatic",
+    trigger: "A prismatic crystal card's scoring modifier activates as its line is presented",
+  },
+  {
     id: "passive.activate.economy",
     trigger: "An economy-category passive activates and pays or changes coins",
     prompt: "A small bright brass coin glint, one quick metallic ting",

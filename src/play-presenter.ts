@@ -319,7 +319,9 @@ export function createPlayPresenter(options: {
       while (scoreSteps.length > 0 && scoreSteps[0].at <= now) {
         const { line } = scoreSteps.shift()!;
         field.tint(line.line.blocks, now);
-        options.activated([...new Set(line.activations.map(({ sourceId }) => sourceId))]);
+        const sourceIds = [...new Set(line.activations.map(({ sourceId }) => sourceId))];
+        options.activated(sourceIds);
+        field.activate(sourceIds, now);
         const sound = magnitudeSfxFor(line.points);
         if (sound) playSfx(sound, { jitter: 0 });
         shownScore += line.points;
