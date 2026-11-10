@@ -394,8 +394,26 @@ export function createShopView(
     return burnPromise;
   }
 
+  /**
+   * Keep the scatter below the passive rack wherever the rack is drawn (#122): its position
+   * varies with the screen, so the clearance is measured rather than guessed in CSS.
+   */
+  let rackClear = -1;
+  function clearRack(): void {
+    if (!rack || rack.hidden) return;
+    const clear = Math.round(
+      rack.getBoundingClientRect().bottom - host.getBoundingClientRect().top + 8,
+    );
+    if (clear === rackClear) return;
+    rackClear = clear;
+    stock.style.setProperty("--scatter-top-clear", `${clear}px`);
+    // What is left below the rack, keeping 100px for BUY, SELL and Continue at the bottom.
+    stock.style.setProperty("--scatter-room", `${host.clientHeight - clear - 100}px`);
+  }
+
   function frame(): void {
     if (renderer.domElement.hidden) return;
+    clearRack();
     if (burn) {
       const now = performance.now();
       for (const job of burn.jobs) {
