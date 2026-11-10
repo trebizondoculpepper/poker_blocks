@@ -1076,8 +1076,32 @@ function flameFrame(context: AssemblyContext): BlockAppearance {
     context,
     [texture, ...[height].filter((value) => value !== undefined), print.texture],
     Array.from({ length: 6 }, () => iron),
-    [createFireCore(size), print.skin],
+    [createFireCore(size), glassPanes(geometry), print.skin],
   );
+}
+
+/**
+ * Glass in a block's open faces: a clear, glossy sheet that only adds its reflections, so the
+ * fire behind it is never dimmed or hidden. Additive, black-based and not depth-writing, it
+ * reads as a sheen sliding across the pane as the block turns (#203).
+ */
+function glassPanes(geometry: THREE.BufferGeometry): THREE.Mesh {
+  const glass = new THREE.MeshPhysicalMaterial({
+    color: 0x000000,
+    metalness: 0,
+    roughness: 0.04,
+    clearcoat: 1,
+    clearcoatRoughness: 0.02,
+    envMap: reflectionEnvironment,
+    envMapIntensity: 1.2,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const panes = new THREE.Mesh(geometry, glass);
+  // Just inside the iron frame's outer surface, so the bars sit proud of the glass.
+  panes.scale.setScalar(0.97);
+  return panes;
 }
 
 function frostedBlock(context: AssemblyContext): BlockAppearance {

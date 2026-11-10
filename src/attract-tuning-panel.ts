@@ -7,9 +7,14 @@
  */
 import type { AttractTuning, MeanSpread } from "./attract-scene";
 
+/** The tuning values that are a mean and a spread; each gets a pair of sliders. */
+type SpreadKey = {
+  [Key in keyof AttractTuning]: AttractTuning[Key] extends MeanSpread ? Key : never;
+}[keyof AttractTuning];
+
 /** One tunable value, and the range its sliders cover. */
 type Knob = {
-  key: keyof AttractTuning;
+  key: SpreadKey;
   label: string;
   unit: string;
   meanMin: number;

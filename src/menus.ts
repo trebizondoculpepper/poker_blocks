@@ -179,12 +179,13 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   }
 
   /**
-   * The footer sits in the panel in front: the build version, then each link out (#129). The
-   * scene trait decides what a panel shows; this only renders it.
+   * The footer sits in the far bottom-right of the screen while the overlay in front is shown:
+   * the build version, then each link out (#129). The scene trait decides when it shows; this
+   * only renders it.
    */
   function showPanelFooter(links: readonly PanelLink[], version: string): void {
-    const panel = panelInFront();
-    if (!panel) return;
+    const overlay = overlayInFront();
+    if (!overlay) return;
     const footer = document.createElement("div");
     footer.className = "menu-footer";
     footer.dataset.menu = "footer";
@@ -204,7 +205,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
       footer.append(anchor);
     }
     hidePanelFooter();
-    panel.append(footer);
+    overlay.append(footer);
     shownFooter = footer;
   }
 
@@ -217,10 +218,10 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     shownFooter = null;
   }
 
-  /** The panel belonging to the overlay in front, for a footer the scene asked for there. */
-  function panelInFront(): HTMLElement | null {
+  /** The overlay in front (it covers the whole screen), for a footer the scene asked for. */
+  function overlayInFront(): HTMLElement | null {
     for (const screen of [gameOver, stageWon, settingsScreen, pauseMenu, title]) {
-      if (!screen.root.hidden) return screen.panel;
+      if (!screen.root.hidden) return screen.root;
     }
     return null;
   }
