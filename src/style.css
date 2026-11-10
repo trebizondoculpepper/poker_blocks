@@ -1388,3 +1388,22 @@ body,
   width: 44px;
   color: #a8b9c9;
 }
+
+/* The action history's copy button (src/scene-traits/action-history.ts): above the table canvases,
+   under the drop inspector, so a real click always reaches it. */
+.action-history-copy {
+  position: absolute;
+  z-index: 50;
+  top: 188px;
+  left: 16px;
+  padding: 7px 12px;
+  border: 1px solid #f2c14e;
+  border-radius: 8px;
+  background: #3a2c10;
+  color: #ffe9b8;
+  font:
+    600 13px system-ui,
+    sans-serif;
+  cursor: pointer;
+  pointer-events: auto;
+}
