@@ -1,0 +1,86 @@
+/* The block design room (dev12, src/tools/block-designer.ts). */
+.block-designer {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "header header"
+    "controls stage";
+  background: #101a24f5;
+  color: #f4f0e8;
+  font:
+    14px system-ui,
+    sans-serif;
+  user-select: text;
+}
+.block-designer[hidden] {
+  display: none;
+}
+.block-designer-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: #1d2b3b;
+}
+.block-designer-header h1 {
+  margin: 0;
+  font-size: 19px;
+}
+.block-designer a {
+  color: inherit;
+}
+.block-designer-controls {
+  grid-area: controls;
+  overflow: auto;
+  padding: 12px 16px;
+  border-right: 1px solid #ffffff1a;
+}
+.block-designer-controls h2 {
+  margin: 16px 0 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9fb3c8;
+}
+.block-designer-controls ol,
+.block-designer-controls ul {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}
+.block-designer-controls textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font:
+    12px ui-monospace,
+    monospace;
+}
+.block-designer-hint {
+  margin: 0 0 6px;
+  color: #c8d3de;
+}
+.block-designer-stage {
+  grid-area: stage;
+  min-height: 0;
+}
+.block-designer-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+@media (max-width: 700px) {
+  .block-designer {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(220px, 40vh) minmax(0, 1fr);
+    grid-template-areas:
+      "header"
+      "stage"
+      "controls";
+  }
+}

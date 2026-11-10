@@ -83,6 +83,7 @@ function recordingHost() {
         show: () => void calls.push("balance:show"),
         hide: () => void calls.push("balance:hide"),
       },
+      devBlockDesigner: { show: () => {}, hide: () => {} },
       devObjectBrowser: {
         show: (backTo) => void calls.push(`browser:show:${backTo}`),
         hide: () => void calls.push("browser:hide"),

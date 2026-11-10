@@ -9,9 +9,19 @@ import { defaultLettering, graphemes, loadLettering } from "./visual/lettering";
 import { textFaceArt } from "./visual/text-face-art";
 import { writtenBlock } from "./visual/written-block";
 
-export type WritingOptions = { material?: BlockMaterial; random?: () => number; size?: number };
+export type WritingOptions = {
+  material?: BlockMaterial;
+  random?: () => number;
+  size?: number;
+  /**
+   * A material definition to use as given, instead of looking one up: a draft whose lettering is
+   * being auditioned (#296).
+   */
+  definition?: MaterialDefinition;
+};
 /** All registered materials are eligible; choose once and retain the actual definition. */
 export function writingMaterial(options: WritingOptions): MaterialDefinition {
+  if (options.definition !== undefined) return options.definition;
   if (options.material !== undefined) return getMaterialDefinition(options.material);
   const materials = materialPools.get("registered")();
   const roll = (options.random ?? Math.random)();
