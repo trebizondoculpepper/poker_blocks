@@ -508,6 +508,22 @@ const entries = [
     placeholder: "card.attach",
   },
   {
+    id: "passive.pickup",
+    name: "Pickup",
+    family: "passive",
+    description: "A passive is lifted out of the rack to move or sell it",
+    prompt: "Light porcelain token lifted off a shelf, a soft bright clink",
+    placeholder: "card.pickup",
+  },
+  {
+    id: "shop.leave",
+    name: "Leave",
+    family: "shop",
+    description: "The player leaves the shop for the next round",
+    prompt: "Shop door closing with a small bell jingle, gentle and final",
+    placeholder: "shop.open",
+  },
+  {
     id: "material.activate.wood",
     name: "Activate wood",
     family: "material",

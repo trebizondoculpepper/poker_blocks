@@ -720,7 +720,7 @@ export function createTableInput(options: {
       passiveDrag.floating = floating;
       rack.lift(passiveDrag.block.id);
       showSellTarget(true);
-      playSfx("card.pickup");
+      playSfx("passive.pickup");
     }
     passiveDrag.floating.style.left = `${event.clientX}px`;
     passiveDrag.floating.style.top = `${event.clientY}px`;
