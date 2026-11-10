@@ -16,6 +16,8 @@ Versions keep their own natural tempos. When the game switches, it glides the pl
 
 Audition loops and switches at `/music.html` on the dev server (`src/music-room/`): pick a track to start, pick another to crossfade. Options: crossfade length, switching on the next bar, and a beat click for checking alignment by ear. The crossfade is logarithmic: each track's level moves evenly in decibels between silence (-60 dB) and full, which sounds steadier than a linear fade.
 
+A loop whose beat grid is in doubt carries a `review` entry in its sidecar: `{ "reason", "candidate_bpm", "issue" }`. The music room shows it as a **Suspect** badge with the tempo the offline beat fit prefers, and hovering shows the reason. Once its tempo is settled by ear (#257), the sidecar is rewritten and the `review` entry removed, so the badge goes.
+
 If the beat tracker reads a track at half time (as with big-band, about 69 BPM), double its `beats` and `tempo_bpm` in the sidecar, so tape-style tempo glides stay small.
 
 ## In the game

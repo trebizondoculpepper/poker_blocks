@@ -11,5 +11,10 @@
   "beat_tracker_bpm": 130.81,
   "measured_tempo_bpm": 129.26,
   "beats": 252,
-  "tempo_bpm": 129.606
+  "tempo_bpm": 129.606,
+  "review": {
+    "reason": "Beat fit prefers 96.7 BPM over the current 129.6 (fit score 1.09); check by ear (#257).",
+    "candidate_bpm": 96.7,
+    "issue": 257
+  }
 }

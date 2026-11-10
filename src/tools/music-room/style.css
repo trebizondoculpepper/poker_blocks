@@ -130,3 +130,18 @@ button {
     12px/1.4 ui-monospace,
     monospace;
 }
+
+/* A loop whose beat grid needs checking by ear (#257). */
+.track.is-suspect {
+  border-color: #d9a441;
+}
+.track-suspect {
+  justify-self: start;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #6b4a12;
+  color: #ffe9b8;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+}
