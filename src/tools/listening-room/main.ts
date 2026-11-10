@@ -66,8 +66,17 @@ function flash(button: HTMLButtonElement, text: string): void {
 type Entry = { row: HTMLLIElement; takes: string[] };
 const entries: Entry[] = [];
 
+/** A sound's own takes. */
+const ownTakes = (id: string) => {
+  const effect = soundEffects.find((candidate) => candidate.id === id);
+  return effect ? sfxFileNames(effect).flatMap((name) => urlByFile.get(name) ?? []) : [];
+};
+
 for (const [index, effect] of soundEffects.entries()) {
-  const takes = sfxFileNames(effect).flatMap((name) => urlByFile.get(name) ?? []);
+  const own = ownTakes(effect.id);
+  // With no audio of its own, a sound plays its placeholder in the game (#232), so here too.
+  const standIn = own.length === 0 && effect.placeholder ? ownTakes(effect.placeholder) : [];
+  const takes = own.length > 0 ? own : standIn;
   const row = document.createElement("li");
   row.className = "sound";
   if (takes.length === 0) row.classList.add("missing");
@@ -84,6 +93,7 @@ for (const [index, effect] of soundEffects.entries()) {
       <span class="sound-prompt"></span>
     </span>
     <span class="sound-meta"></span>
+    <span class="sound-audio"></span>
     <span class="sound-usage"></span>`;
   main.querySelector(".sound-id")!.textContent = effect.id;
   main.querySelector(".sound-trigger")!.textContent = effect.trigger;
@@ -108,6 +118,19 @@ for (const [index, effect] of soundEffects.entries()) {
           .join("\n")
       : "No code or data names this sound";
   row.classList.add(used.uses > 0 ? "used" : "unused");
+  // Whether the game hears it: its own audio, a placeholder's, or nothing at all.
+  const audio = main.querySelector<HTMLElement>(".sound-audio")!;
+  if (own.length === 0 && standIn.length > 0) {
+    row.classList.add("stand-in");
+    audio.textContent = `plays ${effect.placeholder}`;
+    audio.title = "No audio of its own yet: the game plays its placeholder instead";
+  } else if (own.length === 0) {
+    row.classList.add("silent");
+    audio.textContent = effect.placeholder
+      ? `silent (${effect.placeholder} has no audio)`
+      : "silent";
+    audio.title = "No audio and no working placeholder: the game plays nothing";
+  }
   main.disabled = takes.length === 0;
   main.addEventListener("click", () => {
     const take = takes[Math.floor(Math.random() * takes.length)];

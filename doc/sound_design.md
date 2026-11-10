@@ -25,6 +25,8 @@ The listening room (`/sfx.html`) reads the record:
 - each row shows **used ×N**, with the files listed on hover, or **unused**;
 - a **Show** filter lists all sounds, only used ones, or only unused ones;
 - each row's **Copy** button copies the sound's id.
+- a sound with no audio of its own shows what the game plays instead. **plays card.attach** means it falls back to its placeholder, and clicking the row plays that sound. **silent** means it has neither audio nor a working placeholder, so the game plays nothing;
+- the **Show** filter can list the sounds with no audio of their own, or only the silent ones.
 
 ## Hand and placement (current game)
 

@@ -181,3 +181,31 @@ button:focus-visible {
   flex: none;
   padding: 0 14px;
 }
+
+/* Sounds without their own audio: playing a placeholder, or silent in the game. */
+.sound-audio:empty {
+  display: none;
+}
+.sound-audio {
+  align-self: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sound.stand-in .sound-audio {
+  background: #6b5418;
+  color: #fff6dc;
+}
+.sound.silent .sound-audio {
+  background: #4a4f5c;
+  color: #f0f2f6;
+}
+.sound.stand-in .sound-main {
+  opacity: 1;
+  cursor: pointer;
+}
+.sounds[data-show="no-audio"] .sound:not(.stand-in, .silent),
+.sounds[data-show="silent"] .sound:not(.silent) {
+  display: none;
+}
