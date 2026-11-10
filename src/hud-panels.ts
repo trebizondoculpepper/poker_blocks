@@ -68,7 +68,7 @@ const outcomeSuffixes: Record<RoundOutcome, string> = {
   lost: " · LOST",
 };
 
-const count = (n: number) => (n >= unlimited / 2 ? "∞" : String(n));
+const count = (n: number) => (n === unlimited ? "∞" : String(n));
 
 /** What each panel shows for a view: pure, so it is tested without a DOM. */
 export type HudDisplay = {

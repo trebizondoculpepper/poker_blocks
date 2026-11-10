@@ -45,6 +45,15 @@ describe("HUD panels", () => {
     expect(display.visible).toEqual({ round: true, deck: true, coins: false, shopExit: false });
   });
 
+  it("keeps large finite stage targets visible while showing the unlimited sentinel as ∞", () => {
+    expect(hudDisplay({ ...stageView, targetScore: 655_897 }, composed("round")).stats.target).toBe(
+      "655897",
+    );
+    expect(
+      hudDisplay({ ...stageView, targetScore: unlimited }, composed("round")).stats.target,
+    ).toBe("∞");
+  });
+
   it("announces a lost stage and offers to end the game, but not while a play is presenting", () => {
     const lost = hudDisplay({ ...stageView, outcome: "lost" }, composed("round", "deck"));
     expect(lost.stats.heading).toBe("ROUND 2 · BOSS STAGE · LOST");
