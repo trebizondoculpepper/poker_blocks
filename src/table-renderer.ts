@@ -38,6 +38,8 @@ export type TableRenderer = {
    * dragged from it) is drawn while any such scene is on the stack, so the title shows none.
    */
   handEntered(entered: boolean): void;
+  /** Whether any scene shows the hand right now. */
+  handShown(): boolean;
   setShadowQuality(quality: ShadowQuality): void;
   /** Per frame: the card room's lamp follows the structure. */
   frame(center: THREE.Vector3, radius: number, delta: number): void;
@@ -161,6 +163,7 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
     handEntered(entered) {
       handScenes = Math.max(0, handScenes + (entered ? 1 : -1));
     },
+    handShown: () => handScenes > 0,
     setShadowQuality: (quality) => cardRoom.setShadowQuality(quality),
     frame: (center, radius, delta) => cardRoom.frame(center, radius, delta),
     dispose() {
