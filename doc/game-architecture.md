@@ -135,6 +135,15 @@ Material appearance is defined on each material definition in `src/materials.ts`
 
 **Random amounts in rules (#97).** A scoring effect's amount can be a registered **value source** (`fixed`, `roll`) instead of a number. Dice are just `add-line-score { amount: { valueSource: "roll", sides: N } }` on the `score.afterLineClamp` phase. The rules are resolved once per scoring resolution, before candidate hands are compared, using the run's seeded random source. No controller rolls dice or knows that a die exists; `src/dice.test.ts` checks that no die name or dice field appears in the run, the controller, the scorer or the rule runner. The token's polyhedral shape comes from #125's registered shapes and applies to passive tokens only.
 
+**The beat signal (#255).** `src/audio/beat-signal.ts` tells presentation where the music is, so visuals can follow it.
+
+- **Where the numbers come from:** each frame it reads `musicPlayer.position(performance.now())`. That comes from the shared beat clock, which is built from each loop's registered `tempo_bpm` and `first_beat_seconds`; nothing analyses audio.
+- **Heard time:** the position is taken at the time actually being heard, through `AudioContext.getOutputTimestamp()`, falling back to `currentTime` less the output latency.
+- **What it gives:** a continuous `beat`, `beatPhase` and `barPhase` (each 0–1), `bar`, `tempo`, and an `energy` from 0 to 1. Energy eases up while music plays and down when it stops, so movement settles instead of freezing. Muted music keeps its energy, because its clock still runs.
+- **Events:** `beat` and `bar` fire once when a frame crosses a line, never as a burst after a long frame, and not when a track change re-anchors the clock.
+- **Bar length:** the player now uses each loop's `beats_per_bar` (4 when absent) for bar alignment and crossfade length.
+- **Scope:** presentation only; rules and scoring never read it. The `danceToBeat` trait (#256) is its first consumer.
+
 ## Field visual effects (proposal)
 
 Field visual effects are presentation behaviors, separate from gameplay effects such as adding score or destroying blocks. The current `tintRow` effect temporarily colors a scoring line gold. A future field effect registry could resolve named requests with target block IDs and visual parameters such as color, intensity, duration, and easing. The same mechanism could later draw glows, bursts, or explosions for unrelated game events.
