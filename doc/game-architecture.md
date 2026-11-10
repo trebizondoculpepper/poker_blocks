@@ -586,3 +586,9 @@ Each row joins the existing dance floor with a configured beat cycle and phase o
 ### Title and pause composition (#310)
 
 The title and pause scene definitions compose `blockTitle` after their menu-presenting trait, with identical text and scales 1 and .5. `Menus.panelHeadingHost()` exposes the visible panel's generic heading surface; the composition root supplies that mounting callback to the block-title service. The menu markup no longer draws the old text headings. The block view supplies a labelled heading and an aria-hidden decorative canvas. Neither menu services nor the title renderer branch on the scene to choose a title or scale.
+
+### Smoke-modulated laser outlines (#318)
+
+`createLaserOutline(geometry, colour, size, config?)` is a reusable presentation effect, composed into the first-play prompt and placement-preview visuals. It builds a narrow core and wider soft halo from merged edge tubes. Both passes share uniforms, and placement-preview clones share their geometry/materials. There is no particle or fluid simulation and no gameplay state in the effect.
+
+A four-dimensional gradient-noise field uses quintic interpolation. Its three spatial coordinates drift through the block-local edge positions while its fourth coordinate advances independently: the bright smoke patches evolve even with drift set to zero. Two octaves modulate brightness. Configuration controls frequency, drift velocity, evolution speed, and core/halo radii relative to object size. The caller supplies elapsed seconds and its existing opacity; reduced motion freezes noise time while opacity and placement feedback continue. The effect owns its generated tube geometry and shader materials and leaves its input geometry alone. Release fades and scene cleanup dispose the effect through its existing owner.
