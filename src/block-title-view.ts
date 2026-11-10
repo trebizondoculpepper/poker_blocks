@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { createWord } from "./letter-block";
+import { beatShapes } from "./dance/beat-shapes";
 import type { DanceFloor, DanceMove } from "./dance/dance-floor";
 import type { BlockTitleConfig, BlockTitles } from "./scene-traits/block-title";
 
@@ -30,16 +31,24 @@ export function precessTitleRow(
   );
 }
 
-/** A rigid row follows the shared dance floor; no separate clock or music analysis. */
-export function danceTitleRow(
+/**
+ * A rigid row follows the shared dance floor; no separate clock or music analysis. Its tilt
+ * swings side to side once over its cycle.
+ */
+export function tiltTitleRow(row: THREE.Group, config: BlockTitleConfig, move: DanceMove): void {
+  const wave = Math.sin(move.phase * Math.PI * 2);
+  row.rotation.z = wave * THREE.MathUtils.degToRad(config.dance?.tilt ?? 3) * move.energy;
+}
+
+/** The row's lift: once over its own cycle, shaped by its registered beat shape. */
+export function bounceTitleRow(
   row: THREE.Group,
   restY: number,
   config: BlockTitleConfig,
   move: DanceMove,
 ): void {
-  const wave = Math.sin(move.phase * Math.PI * 2);
-  row.position.y = restY + Math.abs(wave) * (config.dance?.bounce ?? 0.08) * move.energy;
-  row.rotation.z = wave * THREE.MathUtils.degToRad(config.dance?.tilt ?? 3) * move.energy;
+  const hop = beatShapes.get(config.dance?.bounceShape ?? "bounce")(move.phase);
+  row.position.y = restY + hop * (config.dance?.bounce ?? 0.08) * move.energy;
 }
 
 type TitleView = { config: BlockTitleConfig; frame(): void; dispose(): void };
@@ -186,14 +195,20 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
           title.add(pivot);
           const motion = { pivot, index, energy: 0 };
           precessions.push(motion);
+          const offset = index * (config.dance?.phaseStep ?? 0.12);
           leave.push(
             floor.join({
               cycle: config.dance?.cycle ?? "beat",
-              offset: index * (config.dance?.phaseStep ?? 0.12),
+              offset,
               dance: (move) => {
                 motion.energy = move.energy;
-                danceTitleRow(row.object, 0, config, move);
+                tiltTitleRow(row.object, config, move);
               },
+            }),
+            floor.join({
+              cycle: config.dance?.bounceCycle ?? "halfBeat",
+              offset,
+              dance: (move) => bounceTitleRow(row.object, 0, config, move),
             }),
           );
         }),

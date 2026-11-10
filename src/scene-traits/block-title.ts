@@ -7,7 +7,19 @@ export type BlockTitleConfig = {
   rowSpacing?: number;
   /** Slow circular tilt: cycle length in seconds and cone angle in degrees. */
   precession?: { seconds?: number; angle?: number; phaseDegrees?: number };
-  dance?: { cycle?: string; phaseStep?: number; bounce?: number; tilt?: number };
+  /**
+   * Dancing with the music: each row tilts side to side over `cycle` and lifts once per
+   * `bounceCycle` (both registered dance cycles), shaped by `bounceShape` (a registered beat
+   * shape). The defaults, `halfBeat` and `bounce`, hop at each extreme of a beat's tilt.
+   */
+  dance?: {
+    cycle?: string;
+    bounceCycle?: string;
+    bounceShape?: string;
+    phaseStep?: number;
+    bounce?: number;
+    tilt?: number;
+  };
 };
 export type BlockTitleTuning = { scale: number; phaseDegrees: number };
 export type BlockTitles = {

@@ -254,6 +254,17 @@ export const projectLinks: readonly PanelLink[] = [
 ];
 
 /**
+ * The game's block title, on the title and pause menus. Its motion is slow: a smooth 32 s
+ * precession, no tilt on the beat, and one brief pulse up each bar, on the downbeat.
+ */
+const titleBlocks: BlockTitleConfig = {
+  text: "Poker Blocks",
+  scale: 1,
+  precession: { seconds: 32 },
+  dance: { bounceCycle: "bar", bounceShape: "pulse", bounce: 0.008, tilt: 0 },
+};
+
+/**
  * The scene definitions every mode composes by reference (see doc/game-architecture.md,
  * "Scene definitions"). A scene is configured here once; a mode adds traits to the scenes it
  * names, and never keeps its own copy of the catalogue.
@@ -274,7 +285,7 @@ export const sceneDefinitions = [
           { id: "openSettings", label: "Settings" },
         ],
       },
-      blockTitle: { text: "Poker Blocks", scale: 1 },
+      blockTitle: titleBlocks,
       // After `titleScreen`, so the panel is already showing when the footer is added to it.
       panelFooter: { links: projectLinks },
       attractBackground: {},
@@ -289,7 +300,7 @@ export const sceneDefinitions = [
     traits: {
       tableBackground: {},
       menu: pauseMenu,
-      blockTitle: { text: "Poker Blocks", scale: 1 },
+      blockTitle: titleBlocks,
       panelFooter: { links: projectLinks },
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "lowpass" },
