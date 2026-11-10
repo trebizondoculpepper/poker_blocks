@@ -4,8 +4,11 @@ export type MotionSetting = "system" | "reduced" | "full";
 
 export type ShadowSetting = "auto" | "high" | "low" | "off";
 
-/** The HUD frame's layout (#119): chosen by the player, never by the device's orientation. */
-export type LayoutSetting = "landscape" | "portrait";
+/**
+ * The HUD frame's layout: a fixed choice (#119), or "auto", which follows the viewport's shape
+ * (#120). A fixed choice is never overridden by the device's orientation.
+ */
+export type LayoutSetting = "auto" | "landscape" | "portrait";
 
 export type Settings = {
   /** 0 to 1. */
@@ -19,7 +22,7 @@ export type Settings = {
   motion: MotionSetting;
   /** Shadow quality; "auto" picks low on touch devices, high elsewhere. */
   shadows: ShadowSetting;
-  /** The HUD layout for gameplay and the shop; landscape by default (#119). */
+  /** The HUD layout for gameplay and the shop; automatic by default (#120). */
   layout: LayoutSetting;
 };
 
@@ -30,7 +33,7 @@ export const defaultSettings: Settings = {
   music: true,
   motion: "system",
   shadows: "auto",
-  layout: "landscape",
+  layout: "auto",
 };
 export const settingsKey = "poker-blocks.settings";
 
@@ -58,7 +61,9 @@ export function loadSettings(storage: SaveStorage | null): Settings {
   )
     ? (stored.shadows as ShadowSetting)
     : defaultSettings.shadows;
-  const layout = (["landscape", "portrait"] as const).includes(stored.layout as LayoutSetting)
+  const layout = (["auto", "landscape", "portrait"] as const).includes(
+    stored.layout as LayoutSetting,
+  )
     ? (stored.layout as LayoutSetting)
     : defaultSettings.layout;
   return { volume, muted, sfx, music, motion, shadows, layout };
@@ -92,4 +97,19 @@ export function resolveShadowQuality(
 ): "high" | "low" | "off" {
   if (setting !== "auto") return setting;
   return coarsePointer ? "low" : "high";
+}
+
+/**
+ * The layout to show (#120): a fixed choice as chosen; "auto" picks landscape for a viewport
+ * wider than tall and portrait for one taller than wide. A square viewport keeps the current
+ * layout, so it never flips back and forth.
+ */
+export function resolveLayout(
+  setting: LayoutSetting,
+  viewport: { width: number; height: number },
+  current: "landscape" | "portrait",
+): "landscape" | "portrait" {
+  if (setting !== "auto") return setting;
+  if (viewport.width === viewport.height) return current;
+  return viewport.width > viewport.height ? "landscape" : "portrait";
 }
