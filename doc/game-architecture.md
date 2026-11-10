@@ -545,3 +545,7 @@ A HUD style is data: a registered entry in `src/hud-styles.ts` listing the `--hu
 ### The deck view (#175)
 
 The deck view is its own scene, `deck`, pushed by the `openDeck` navigation action and popped by `back`. It composes `deckView` (shows `src/deck-view.ts`'s overlay with the run's deck, read-only), `pausesBelow` and an Escape `keyAction`. The deck counter opens it through data: the play scenes compose `deckPanel: { opens: "openDeck" }`, and the HUD dispatches whatever action its panel config names, so the HUD knows nothing about the deck view.
+
+### Shared block face artwork (#292)
+
+`createBlockAppearance` takes a `FaceArt` provider with a stable seed and a `paint(context, pen)` function. Material assemblies ask this provider to draw colour, relief and transparent skin artwork using the layer’s ink pen. Card callers supply `cardFaceArt(identity)`, preserving the existing centred rank/suit and fonts. New face artwork can reuse geometry and material appearance without adding kind branches to the builder.

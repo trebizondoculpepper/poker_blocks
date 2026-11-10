@@ -1,3 +1,4 @@
+import { cardFaceArt } from "../visual/face-art";
 /**
  * The developer object browser (dev9): every object the game defines, by category, one page
  * each, with a turning preview drawn by the game's own renderer and a table of its properties.
@@ -43,7 +44,11 @@ function materialPage(definition: MaterialDefinition, note?: string): BrowsedObj
     note,
     properties: definition,
     preview(size) {
-      const appearance = createBlockAppearance(sampleCard.traits.identity, definition, size);
+      const appearance = createBlockAppearance(
+        cardFaceArt(sampleCard.traits.identity),
+        definition,
+        size,
+      );
       const cube = new THREE.Mesh(
         appearance.geometry,
         appearance.boardMaterials ?? appearance.materials,

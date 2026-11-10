@@ -1,3 +1,4 @@
+import { cardFaceArt } from "./face-art";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { standardDeck } from "../cards";
 import type { MaterialDefinition } from "../materials";
@@ -27,7 +28,11 @@ describe("composed material appearance", () => {
       },
     };
     try {
-      const appearance = createBlockAppearance(standardDeck[0].traits.identity, definition, 2.4);
+      const appearance = createBlockAppearance(
+        cardFaceArt(standardDeck[0].traits.identity),
+        definition,
+        2.4,
+      );
       expect(appearance.materials).toHaveLength(6);
       expect(appearance.textures).toHaveLength(1);
       expect(appearance.edgeColor).toBe(0x123456);
