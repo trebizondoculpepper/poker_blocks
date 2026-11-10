@@ -227,3 +227,19 @@ button:focus-visible {
 .family-heading[hidden] {
   display: none;
 }
+
+/* A magnitude family's members (#235, #244): introduced once, each with its band. */
+.family-subheading {
+  list-style: none;
+  margin: 4px 0 4px 12px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+.sound-band {
+  justify-self: start;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #2b3550;
+  font-size: 0.75rem;
+}
