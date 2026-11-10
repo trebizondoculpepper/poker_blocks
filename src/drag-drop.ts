@@ -73,6 +73,8 @@ export type DragDropManager = {
    * on the move that crosses its threshold, by which time the pointer may be off the block.
    */
   pressed(draggable: Draggable): Press | null;
+  /** Forget every pending press: a cancelled gesture can't become a drag later. */
+  forgetPresses(): void;
 };
 
 /** A press on a drag source: what it picked up and where the pointer went down. */
@@ -97,7 +99,7 @@ export function createDragDropManager(
    * (the canvas): dnd-kit's sensors start it, and only where its source picks something up.
    */
   const sourcesEnabled: { config: DragSourceConfig; draggable: Draggable }[] = [];
-  const presses = new WeakMap<Draggable, Press>();
+  const presses = new Map<Draggable, Press>();
   type Enabled = { config: DropTargetConfig; droppable: Droppable };
   /** Enabled drop targets; one enabled by two scenes stays until both disable it. */
   const enabled: Enabled[] = [];
@@ -177,6 +179,7 @@ export function createDragDropManager(
       return () => {
         const at = sourcesEnabled.indexOf(entry);
         if (at >= 0) sourcesEnabled.splice(at, 1);
+        presses.delete(entry.draggable);
         entry.draggable.destroy();
       };
     },
@@ -195,6 +198,7 @@ export function createDragDropManager(
       return Boolean(picked);
     },
     pressed: (draggable) => presses.get(draggable) ?? null,
+    forgetPresses: () => presses.clear(),
     hover(hit) {
       for (const name of new Set(enabled.map(({ config }) => config.target))) {
         const target = kinds.get(name);

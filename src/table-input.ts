@@ -527,6 +527,9 @@ export function createTableInput(options: {
 
   /** Cancel the hand drag dnd-kit is running, if any; its dragend puts the blocks back. */
   function cancelHandDrag(reason: string): void {
+    // A press still under dnd-kit's threshold is forgotten too, so it can't start a drag later
+    // (behind the pause menu, say).
+    dragDrop.forgetPresses();
     if (dnd.dragOperation.status.idle) return;
     trace("drag ended", reason);
     dnd.actions.stop({ canceled: true });
@@ -534,7 +537,9 @@ export function createTableInput(options: {
 
   dnd.monitor.addEventListener("beforedragstart", (event) => {
     // A hold (inspect) or a second finger (a pinch) has already claimed this pointer.
-    if (hold.holding || pinch) event.preventDefault();
+    // A press that was cancelled (forgotten) never becomes a drag.
+    const source = event.operation.source as Draggable | null;
+    if (hold.holding || pinch || !source || !dragDrop.pressed(source)) event.preventDefault();
   });
   dnd.monitor.addEventListener("dragstart", ({ operation }) => {
     const activator = operation.activatorEvent as PointerEvent | null;

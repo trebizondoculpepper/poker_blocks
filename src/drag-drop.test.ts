@@ -106,6 +106,10 @@ describe("drag and drop (#273, on dnd-kit #282)", () => {
     expect(router.pressed(draggable!)).toEqual({ picked: block, clientX: 5, clientY: 7 });
     expect(router.canStart(draggable!, 50, 7)).toBe(false);
     expect(router.pressed(draggable!)).toBeNull();
+    // A cancelled gesture forgets its pending press.
+    router.canStart(draggable!, 5, 7);
+    router.forgetPresses();
+    expect(router.pressed(draggable!)).toBeNull();
   });
 
   it("refuses an unknown drop target kind", () => {
