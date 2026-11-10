@@ -18,6 +18,7 @@
  * levels move it along its normal in proportion. Exact volume is not kept as the block tilts.
  */
 import * as THREE from "three";
+import { sharedSimulations, type Simulation } from "./shared-simulation";
 
 export type VesselConfig = {
   /** The fluid's colour (hex). */
@@ -150,17 +151,16 @@ export function createFilledVessel(
   trace.scale.setScalar(config.wall * 0.995);
   trace.renderOrder = 3;
 
-  const settle = createSettler(config);
-  const rotation = new THREE.Quaternion();
+  // One simulation per vessel configuration, shared by every block made from it (#230). It
+  // keeps the fluid's surface in world space; each block turns that into its own space.
+  const shared = sharedSimulations.acquire(config, () => createVesselSimulation(config));
+  const own = new THREE.Quaternion();
   fluid.onBeforeRender = () => {
-    fluid.getWorldQuaternion(rotation);
-    settle(
-      rotation,
-      performance.now() / 1000,
-      uniforms.surfaceNormal.value,
-      uniforms.traceNormal.value,
-    );
+    fluid.getWorldQuaternion(own);
+    shared.simulation.step(frameSeconds(), own);
+    shared.simulation.localNormals(own, uniforms.surfaceNormal.value, uniforms.traceNormal.value);
   };
+  fluid.material.addEventListener("dispose", () => shared.release());
   return { shell, extras: [inner, fluid, trace] };
 }
 
@@ -188,4 +188,44 @@ export function createSettler(
     }
     last = now;
   };
+}
+
+/**
+ * The shared fluid simulation for one vessel configuration (#230). It steps once per frame,
+ * driven by the rotation of the first block rendered that frame (blocks on the table all share
+ * the structure's rotation), and keeps the result as world-space normals that any block can
+ * turn into its own space.
+ */
+export type VesselSimulation = Simulation<THREE.Quaternion> & {
+  /** This frame's surface and trace normals, in the space of a block with rotation `own`. */
+  localNormals(own: THREE.Quaternion, surface: THREE.Vector3, trace: THREE.Vector3): void;
+};
+
+export function createVesselSimulation(
+  config: Pick<VesselConfig, "settleSeconds" | "traceSeconds">,
+): VesselSimulation {
+  const settle = createSettler(config);
+  const surfaceLocal = new THREE.Vector3(0, 1, 0);
+  const traceLocal = new THREE.Vector3(0, 1, 0);
+  const surfaceWorld = new THREE.Vector3(0, 1, 0);
+  const traceWorld = new THREE.Vector3(0, 1, 0);
+  const inverse = new THREE.Quaternion();
+  return {
+    step(now, rotation) {
+      settle(rotation, now, surfaceLocal, traceLocal);
+      surfaceWorld.copy(surfaceLocal).applyQuaternion(rotation);
+      traceWorld.copy(traceLocal).applyQuaternion(rotation);
+    },
+    localNormals(own, surface, trace) {
+      inverse.copy(own).invert();
+      surface.copy(surfaceWorld).applyQuaternion(inverse);
+      trace.copy(traceWorld).applyQuaternion(inverse);
+    },
+  };
+}
+
+/** The current frame's time, in seconds: the same for every block drawn in one frame. */
+function frameSeconds(): number {
+  const time = typeof document === "undefined" ? null : document.timeline?.currentTime;
+  return (typeof time === "number" ? time : performance.now()) / 1000;
 }
