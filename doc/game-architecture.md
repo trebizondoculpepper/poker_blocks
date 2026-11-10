@@ -173,7 +173,9 @@ Material appearance is defined on each material definition in `src/materials.ts`
   - our `dragSource` and `dropTarget` traits are a thin adapter registering dnd-kit draggables and droppables;
   - the 3D grid gets a custom collision detector over the existing raycasting.
 
-  dnd-kit has no pinch or rotate, so board rotation and pinch or wheel zoom keep their own code for now (#282). The version is pinned while dnd-kit is pre-1.0. #282 carries out the change.
+  The version is pinned while dnd-kit is pre-1.0. #282 carries out the change.
+
+- **Library: use-gesture** (`@use-gesture/vanilla`; owner decision, 2026-11-10) handles the **board gestures**, which dnd-kit doesn't: dragging empty board to turn the structure, **pinch** zoom (mapped logarithmically) with two-finger **twist** to rotate, and **wheel** zoom (#275). **Who takes a pointer:** where it lands decides. A pointer on a drag source is dnd-kit's; one on empty board, or a second finger, is use-gesture's.
 
 - **Drag sources** (`dragSource` trait, #276, #277): things that can be picked up (the hand, the passive rack, the shop stock). A drag source says what is picked up under a pointer and what comes with it (the selection, say).
 - **Drop targets** (`dropTarget` trait, #273): places dragged things can be dropped (the grid, the bin, the hand for reordering, the rack, the shop's BUY). While something is dragged, the **drag-and-drop manager** (`src/drag-drop.ts`) **hit-tests** the drop targets a scene allows, in priority order:
