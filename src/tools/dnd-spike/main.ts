@@ -82,8 +82,13 @@ const manager = new DragDropManager({
     PointerSensor.configure({
       activationConstraints: [new PointerActivationConstraints.Distance({ value: 8 })],
       // Every block's draggable listens on the canvas: only the block under the pointer starts.
+      // Three.js raycasts hit invisible meshes too, so a binned (hidden) block is excluded.
       preventActivation: (event, source) =>
-        hit(event.clientX, event.clientY, blocks)?.userData.id !== source.id,
+        hit(
+          event.clientX,
+          event.clientY,
+          blocks.filter((mesh) => mesh.visible),
+        )?.userData.id !== source.id,
     }),
   ],
 });
