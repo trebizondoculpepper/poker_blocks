@@ -1,3 +1,4 @@
+import { Registry } from "./core/registry";
 import type { VesselConfig } from "./visual/filled-vessel";
 import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
@@ -333,9 +334,10 @@ export const materialDefinitions = [
 
 /**
  * Visual experiments (#227): materials that exist only to be looked at in a developer mode.
- * They are not in `materialDefinitions`, so no shop, reward, dev deck or attract sequence ever
- * deals them; a mode reaches one only through the `uniformMaterialDeck` run setup step. They
- * have no scoring, prices or rewards.
+ * They are not in `materialDefinitions`, so no shop, reward, material sample or attract
+ * sequence ever deals them. A developer mode deals one only by asking: the `uniformMaterialDeck`
+ * run setup step, or `materialDeck` with the `registered` pool (dev0).
+ * They have no scoring, prices or rewards.
  */
 export const experimentalMaterials = [
   {
@@ -414,12 +416,20 @@ export function withMaterial(card: CardBlock, definition: MaterialDefinition): C
   };
 }
 
-/** Give every standard card one stable visual material for this dev run. */
-export function makeDevDeck(seed: number): readonly CardBlock[] {
+/**
+ * Pools of materials a developer deck can deal from, by name: `gameplay` (what the game deals)
+ * and `registered` (every registered material, visual experiments included, for seeing how all
+ * of them look and meet; dev0).
+ */
+export const materialPools = new Registry<() => readonly MaterialDefinition[]>("material pool");
+materialPools.register("gameplay", () => materialDefinitions);
+materialPools.register("registered", () => [...materialRegistry.values()]);
+
+/** Give every standard card one stable visual material for this dev run, from `pool`. */
+export function makeDevDeck(seed: number, pool = "gameplay"): readonly CardBlock[] {
   const random = seededRandom(seed);
-  const assignments = standardDeck.map(
-    (_, index) => materialDefinitions[index % materialDefinitions.length],
-  );
+  const materials = materialPools.get(pool)();
+  const assignments = standardDeck.map((_, index) => materials[index % materials.length]);
   for (let index = assignments.length - 1; index > 0; index--) {
     const other = Math.floor(random() * (index + 1));
     [assignments[index], assignments[other]] = [assignments[other], assignments[index]];
