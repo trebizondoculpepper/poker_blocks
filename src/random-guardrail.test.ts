@@ -15,6 +15,8 @@ import { describe, expect, it } from "vite-plus/test";
 /** Files allowed to call `Math.random`, each for a stated reason. */
 const allowed: Readonly<Record<string, string>> = {
   "src/random.ts": "creating a session's secret seed",
+  "src/letter-block.ts":
+    "cosmetic writing materials; callers can inject a scene seed without consuming the run stream",
   "src/motion.ts": "the idle wobble of a block: presentation",
   "src/audio/music-plan.ts": "which track plays: presentation",
   "src/audio/music-controller.ts": "shuffling the music queue: presentation",
