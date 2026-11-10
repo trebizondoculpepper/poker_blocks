@@ -86,6 +86,33 @@ describe("beat signal (#255)", () => {
     expect(beats).toEqual([3]);
   });
 
+  it("still fires one beat and one bar after a pause of several bars (Codex on #259)", () => {
+    const { state, read } = music(120);
+    const signal = createBeatSignal(read);
+    const beats: number[] = [];
+    const bars: number[] = [];
+    signal.on("beat", (beat) => beats.push(beat));
+    signal.on("bar", (bar) => bars.push(bar));
+    run(signal, state, 0.1);
+    // From beat 0.2 to beat 10.2 in one frame.
+    state.time += 5;
+    signal.update(5);
+    expect(beats).toEqual([10]);
+    expect(bars).toEqual([2]);
+  });
+
+  it("fires nothing when a new clock restarts the beat at zero", () => {
+    let beat = 5.5;
+    const signal = createBeatSignal(() => ({ beat, beatsPerBar: 4, tempo: 120 }));
+    const events: string[] = [];
+    signal.on("beat", () => events.push("beat"));
+    signal.on("bar", () => events.push("bar"));
+    signal.update(1 / 60);
+    beat = 0.01;
+    signal.update(1 / 60);
+    expect(events).toEqual([]);
+  });
+
   it("uses the track's bar length", () => {
     const { state, read } = music(120);
     state.beatsPerBar = 3;
