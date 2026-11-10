@@ -64,8 +64,6 @@ export type SceneTraits = {
   firstPlayPrompt: FirstPlayPromptConfig;
   /** The passive rack is shown while this scene is on the stack (#187). */
   passiveRackView: Record<never, never>;
-  /** Blocks may be played onto the field while this scene is in front. */
-  fieldPlacement: Record<never, never>;
   /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
   shopStock: Record<never, never>;
   /**
@@ -190,7 +188,13 @@ const escapeOpensPause: Partial<SceneTraits> = {
 const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
   // The bin takes discards dropped on it; asked before the grid, since it sits over the table.
-  dropTarget: { targets: [{ target: "discard", priority: 10 }] },
+  dropTarget: {
+    targets: [
+      { target: "discard", priority: 10 },
+      // The grid takes plays (#274): a single block, a selected group's line, the first play.
+      { target: "grid", priority: 0 },
+    ],
+  },
   // Hand blocks can be picked up and dragged to play, discard or reorder them.
   dragSource: { sources: [{ source: "hand" }] },
   // The board can be turned and zoomed.
@@ -207,7 +211,6 @@ const playSceneTraits: Partial<SceneTraits> = {
   handView: {},
   discardBin: {},
   deckPanel: { opens: "openDeck" },
-  fieldPlacement: {},
   runInPlay: {},
   ...escapeOpensPause,
 };

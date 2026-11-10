@@ -61,7 +61,6 @@ function recordingHost() {
           calls.push("board:on");
           return () => void calls.push("board:off");
         },
-        setFieldActive: (active) => calls.push(`fieldActive:${active}`),
         cancelGestures: () => void calls.push("gestures:cancel"),
         discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
         sellBinEntered: (entered) => void calls.push(`sellBin:${entered}`),
@@ -359,18 +358,6 @@ describe("scene traits own their behaviour", () => {
     expect([...shown]).toEqual(["deck"]);
   });
 
-  it("turns field placement on in a play scene and off in the shop", () => {
-    const { host, calls } = recordingHost();
-    const scenes = new SceneManager(sceneBehaviours(), host);
-    scenes.register(scene("stage", { fieldPlacement: {} }));
-    scenes.register(scene("shop", { coinsPanel: {}, shopStock: {} }));
-
-    scenes.switchTo("stage");
-    scenes.switchTo("shop");
-    expect(calls).toContain("fieldActive:true");
-    expect(calls).toContain("fieldActive:false");
-  });
-
   it("shows the shop's stock on entering the shop and hides it on leaving", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
@@ -409,7 +396,6 @@ describe("scene traits own their behaviour", () => {
       "deckPanel",
       "coinsPanel",
       "shopExit",
-      "fieldPlacement",
       "shopStock",
       "sellBin",
       "pausesBelow",
