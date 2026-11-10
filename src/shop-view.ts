@@ -43,6 +43,9 @@ export type OfferView<Block extends OfferBlock> = {
   describe(block: Block): string;
   /** A class for the offer's button. */
   className: string;
+  /** Destination explained to the player and used by the purchase flight. */
+  purchaseDescription: string;
+  flightTarget: "deck" | "rack";
 };
 
 const offerViews = new Registry<OfferView<OfferBlock>>("offer view");
@@ -57,12 +60,6 @@ export function registerOfferView<Block extends OfferBlock>(
 
 /** A price in words: "1 coin", "4 coins". */
 const coins = (amount: number) => `${amount} coin${amount === 1 ? "" : "s"}`;
-
-/** What each destination is called in an offer's description. */
-const destinationLabels: Record<OfferDestination, string> = {
-  hand: "BUY to add to the deck",
-  "passive-rack": "BUY to install in the passive rack",
-};
 
 /** A passive offer's token: its own shape and faces (src/passive-visual.ts). */
 function passiveCube(block: PassiveBlock): OfferCube {
@@ -123,6 +120,8 @@ registerOfferView<CardBlock>("card", {
   name: (block) => cardName(block.traits.identity),
   describe: (block) => block.traits.inspectable?.inspect() ?? cardName(block.traits.identity),
   className: "is-card",
+  purchaseDescription: "BUY to add to the deck",
+  flightTarget: "deck",
 });
 
 registerOfferView<PassiveBlock>("passive", {
@@ -130,6 +129,8 @@ registerOfferView<PassiveBlock>("passive", {
   name: (block) => passiveDefinitions.get(block.definitionId).name,
   describe: (block) => block.traits.inspectable.inspect(),
   className: "is-passive",
+  purchaseDescription: "BUY to install in the passive rack",
+  flightTarget: "rack",
 });
 
 /** Shop stock is drawn with the same real cube appearances as cards and installed passives. */
@@ -151,6 +152,7 @@ export function createShopView(
   buyTarget.innerHTML =
     "<strong>BUY</strong><span>Cards to deck · Passives to rack</span><small></small>";
   host.append(stock, buyTarget);
+  const flightTargets = { deck: buyTarget.querySelector("small")!, rack: rack ?? buyTarget };
   const sign = document.createElement("div");
   sign.className = "shop-open-sign";
   sign.textContent = "SHOP OPEN";
@@ -240,10 +242,8 @@ export function createShopView(
   };
 
   /** A bought offer travels to the deck badge or the installed-passive rack. */
-  function animatePurchase(from: DOMRect, label: string, destination: OfferDestination): void {
+  function animatePurchase(from: DOMRect, label: string, target: HTMLElement): void {
     if (reducedMotion()) return;
-    const target =
-      destination === "passive-rack" && rack ? rack : buyTarget.querySelector("small")!;
     const to = target.getBoundingClientRect();
     const flight = document.createElement("div");
     flight.className = "shop-purchase-flight";
@@ -277,7 +277,7 @@ export function createShopView(
       const view = offerViews.get(offer.kind);
       const name = view.name(offer.block);
       const description = view.describe(offer.block);
-      const destination = destinationLabels[offerKind(offer).destination];
+      const destination = view.purchaseDescription;
       const item = document.createElement("button");
       item.type = "button";
       item.className = `shop-offer ${view.className}`;
@@ -330,7 +330,7 @@ export function createShopView(
             cancel();
             return;
           }
-          animatePurchase(from, label, destination);
+          animatePurchase(from, label, flightTargets[view.flightTarget]);
           cancel();
         };
         item.addEventListener("pointermove", move);
