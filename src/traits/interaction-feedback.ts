@@ -74,7 +74,7 @@ export const disabledAppearance = defineTrait({
             uniform float interactionSaturation;
             void main() {
               interactionOriginalMain();
-              gl_FragColor.rgb = mix(vec3(dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)) * 0.65 + 0.12), gl_FragColor.rgb, interactionSaturation);
+              gl_FragColor.rgb = mix(vec3(dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)) * 0.65), gl_FragColor.rgb, interactionSaturation);
             }
           `;
         };

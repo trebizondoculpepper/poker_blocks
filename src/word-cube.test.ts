@@ -97,6 +97,9 @@ describe("wordCube menu traits", () => {
     expect(shader.fragmentShader).toContain("void interactionOriginalMain()");
     expect(shader.fragmentShader).toMatch(/void main\(\)\s*\{\s*interactionOriginalMain\(\);/);
     expect(shader.fragmentShader.match(/void main\(/g)).toHaveLength(1);
+    // Luminance-only scaling preserves zero RGB and premultiplied transparent coverage.
+    expect(shader.fragmentShader).not.toContain("+ 0.12");
+    expect(shader.fragmentShader).toContain("0.0722)) * 0.65)");
     expect(
       (shader.uniforms as Record<string, { value: number }>).interactionSaturation!.value,
     ).toBe(0);
