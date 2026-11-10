@@ -27,6 +27,9 @@ function target(
   };
 }
 
+/** A drag source's lifecycle that does nothing (these tests only pick). */
+const noLifecycle = { begin: () => {}, move: () => {}, end: () => {} };
+
 /** A bare dnd-kit manager: no sensors or plugins, the droppables only. */
 const dnd = () => new DragDropManager({ plugins: [], sensors: [] });
 
@@ -72,7 +75,7 @@ describe("drag and drop (#273, on dnd-kit #282)", () => {
   it("drag sources pick up only while a scene enables them, and gate dnd-kit's start", () => {
     const block = { block: { id: "b1" } } as unknown as RenderedBlock;
     const sourceKinds = new Registry<DragSource>("drag source");
-    sourceKinds.register("hand", { pick: (x) => (x < 10 ? block : null) });
+    sourceKinds.register("hand", { pick: (x) => (x < 10 ? block : null), ...noLifecycle });
     const manager = dnd();
     const router = createDragDropManager(new Registry<DropTarget>("drop target"), manager, {
       kinds: sourceKinds,
@@ -92,7 +95,7 @@ describe("drag and drop (#273, on dnd-kit #282)", () => {
   it("a press on a drag source records what it picked up and where; a miss clears it", async () => {
     const block = { block: { id: "b1" } } as unknown as RenderedBlock;
     const sourceKinds = new Registry<DragSource>("drag source");
-    sourceKinds.register("hand", { pick: (x) => (x < 10 ? block : null) });
+    sourceKinds.register("hand", { pick: (x) => (x < 10 ? block : null), ...noLifecycle });
     const manager = dnd();
     const router = createDragDropManager(new Registry<DropTarget>("drop target"), manager, {
       kinds: sourceKinds,
