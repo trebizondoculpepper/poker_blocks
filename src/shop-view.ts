@@ -427,6 +427,9 @@ export function createShopView(
     camera.lookAt(camera.position.x, camera.position.y, 0);
     for (const [index, entry] of displayed.entries()) {
       const slot = entry.slot.getBoundingClientRect();
+      // The DOM slot is the hit area and the projection's size reference. Keep the WebGL
+      // offer inside it when compact landscape CSS shrinks the slot.
+      entry.cube.scale.setScalar(slot.width / 90);
       const x = (slot.left + slot.width / 2 - bounds.left - width / 2) / pixelsPerUnit;
       const y = (height / 2 - (slot.top + slot.height / 2 - bounds.top)) / pixelsPerUnit;
       if (!entrance) {
