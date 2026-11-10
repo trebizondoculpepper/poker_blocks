@@ -1108,17 +1108,17 @@ body,
  */
 .scene .hud-frame[data-layout="portrait"] {
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: var(--hud-rack-band) auto 1fr auto var(
-      --hud-hand-band,
-      max(96px, calc(22vw + 12px))
-    );
+  /* Both bands are capped by the height, so a short screen still fits status and controls. */
+  grid-template-rows:
+    min(var(--hud-rack-band), 20vh) auto 1fr auto
+    min(max(96px, calc(22vw + 12px)), 24vh);
   grid-template-areas:
     "top-center top-center"
     "top-left top-right"
     ". ."
     "bottom-left bottom-right"
     "bottom-center bottom-center";
-  row-gap: 8px;
+  row-gap: min(8px, 1vh);
 }
 
 /*
