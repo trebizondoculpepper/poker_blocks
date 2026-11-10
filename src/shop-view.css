@@ -73,9 +73,19 @@
   width: var(--scatter);
   height: var(--scatter);
   transform: translate(-50%, -50%);
+  /* Only the offers take input, so the round area never blocks the rack beside it. */
+  pointer-events: none;
+}
+
+/* The compact rack is shorter: the same breakpoint as src/passive-rack.css. */
+@media (max-width: 700px), (max-height: 500px) {
+  .shop-stock {
+    --scatter-top-clear: 104px;
+  }
 }
 
 .shop-offer {
+  pointer-events: auto;
   position: absolute;
   left: calc(50% + var(--x, 0) * 50%);
   top: calc(50% + var(--y, 0) * 50%);
@@ -219,10 +229,6 @@
 }
 
 @media (max-width: 900px), (max-height: 600px) {
-  .shop-stock {
-    /* The compact rack is shorter. */
-    --scatter-top-clear: 104px;
-  }
   /* Small spots: a smaller cube, so a two-line label fits inside the spot (#122). */
   .shop-offer {
     gap: 1px;
