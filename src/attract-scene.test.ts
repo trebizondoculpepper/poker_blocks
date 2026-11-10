@@ -5,10 +5,11 @@ import {
   depthOpacity,
   equalMaterialWeights,
   fadedInZ,
-  lensClearance,
+  fieldRadius,
+  cameraHitDistance,
   pathPoint,
   pickMaterial,
-  bounceOffLens,
+  bounceOffCamera,
   cameraRoll,
   cameraRollPeriod,
   collide,
@@ -20,15 +21,16 @@ import {
 import { blockMaterials } from "./materials";
 
 describe("the attract sequence's paths (#147)", () => {
-  it("never sends a card through the camera's axis", () => {
-    // A path straight through the axis would pass through the lens and fill the screen with one
-    // card. Every path must stay a minimum distance from it.
-    const closest = Array.from({ length: 2000 }, (_, index) => {
-      const { x, y } = pathPoint(() => (index * 0.6180339887) % 1);
-      return Math.hypot(x, y);
-    });
-    // Against the real clearance, so lowering it to fit the view cannot quietly weaken the rule.
-    expect(Math.min(...closest)).toBeGreaterThan(lensClearance - 0.001);
+  it("spreads paths evenly over the field, so now and then one comes straight at the camera", () => {
+    const radii = Array.from(
+      { length: 2000 },
+      (_, index) => pathPoint(() => (index * 0.6180339887) % 1).radius,
+    );
+    expect(Math.max(...radii)).toBeLessThanOrEqual(fieldRadius);
+    // Some paths come within hitting distance of the camera; most pass beside it.
+    const headOn = radii.filter((radius) => radius < cameraHitDistance).length / radii.length;
+    expect(headOn).toBeGreaterThan(0);
+    expect(headOn).toBeLessThan(0.2);
   });
 
   it("scatters the paths around the axis rather than lining them up", () => {
@@ -148,12 +150,23 @@ describe("attract cards collide (#203)", () => {
     expect(far.velocity.toArray()).toEqual([0, 0, 4]);
   });
 
-  it("bounces a card off the lens lane, so none crosses the camera's axis", () => {
-    const card = body([lensClearance - 0.3, 0, -5], [-3, 0, 4]);
-    bounceOffLens(card);
-    expect(Math.hypot(card.position.x, card.position.y)).toBeCloseTo(lensClearance);
-    expect(card.velocity.x).toBeGreaterThan(0);
-    expect(card.velocity.z).toBe(4);
+  it("bounces a card off the camera, back and glancing sideways", () => {
+    const card = body([0.2, 0.1, 7], [0, 0, 6]);
+    let draw = 0;
+    bounceOffCamera(card, () => [0.9, 0.2, 0.7, 0.1, 0.4, 0.8][draw++ % 6]!);
+    // Pushed back out to the hit distance, heading away from the camera, and off to the side.
+    expect(card.position.distanceTo(new THREE.Vector3(0, 0, 8))).toBeCloseTo(cameraHitDistance);
+    expect(card.velocity.z).toBeLessThan(0);
+    expect(Math.hypot(card.velocity.x, card.velocity.y)).toBeGreaterThan(1);
+  });
+
+  it("leaves a card alone that is moving away from the camera or not touching it", () => {
+    const leaving = body([0, 0, 7], [0, 0, -3]);
+    bounceOffCamera(leaving, () => 0.5);
+    expect(leaving.velocity.toArray()).toEqual([0, 0, -3]);
+    const passing = body([5, 0, 8], [0, 0, 6]);
+    bounceOffCamera(passing, () => 0.5);
+    expect(passing.velocity.toArray()).toEqual([0, 0, 6]);
   });
 });
 

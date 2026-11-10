@@ -56,16 +56,11 @@ export function depthOpacity(z: number): number {
   const progress = Math.min(1, Math.max(0, (z - spawnZ) / (fadedInZ - spawnZ)));
   return progress * progress * (3 - 2 * progress);
 }
-/** How far beyond the clearance ring a card's path may sit, so the field is not all one ring. */
-const spread = 5.5;
 /**
- * How far off the camera's axis a card's path must stay. A path straight through the origin
- * would pass through the lens and fill the screen with one card; this is a lane the cards
- * orbit rather than cross. It is also what keeps a card on screen for most of its travel: the
- * frustum is narrower the closer a card gets, so a large clearance leaves the frame early and
- * spends the rest of its journey invisible.
+ * How far off the camera's axis a card's path may sit. Paths fill this disc evenly, so most
+ * pass beside the camera and now and then one comes straight at it, and bounces off.
  */
-export const lensClearance = 2.8;
+export const fieldRadius = 8.3;
 
 /** One full back-and-forth of the camera's roll, in seconds. */
 export const cameraRollPeriod = 140;
@@ -140,23 +135,44 @@ export function collide(bodies: readonly Body[]): void {
   }
 }
 
+/** The camera, as something a card can hit: a ball around the lens, at the camera's spot. */
+const cameraPosition = new THREE.Vector3(0, 0, cameraZ);
 /**
- * The lens lane is a wall (#203): a card knocked toward the camera's axis bounces off the
- * invisible tube of radius `lensClearance` around it, so no card ever crosses the lens.
+ * A card bounces off the camera when its centre comes this close: by then it fills the screen,
+ * which is the joke.
  */
-export function bounceOffLens(body: Body): void {
-  const radius = Math.hypot(body.position.x, body.position.y);
-  if (radius >= lensClearance) return;
-  // Exactly on the axis has no outward direction: step out along x.
-  const outX = radius > 1e-6 ? body.position.x / radius : 1;
-  const outY = radius > 1e-6 ? body.position.y / radius : 0;
-  body.position.x = outX * lensClearance;
-  body.position.y = outY * lensClearance;
-  const inward = body.velocity.x * outX + body.velocity.y * outY;
-  if (inward >= 0) return;
-  body.velocity.x -= (1 + restitution) * inward * outX;
-  body.velocity.y -= (1 + restitution) * inward * outY;
+export const cameraHitDistance = 1.9;
+/** How much sideways a card glances off the camera, as a share of the speed it hit with. */
+const glance = 0.9;
+
+/**
+ * Bounce a card off the camera (#203). A card coming at the lens rebounds back the way it came,
+ * glances off sideways in a random direction so it does not retrace its path, and is set
+ * spinning by the knock. A card moving away, or not touching, is left alone.
+ */
+export function bounceOffCamera(body: Body, random: () => number): void {
+  const away = new THREE.Vector3().subVectors(body.position, cameraPosition);
+  const distance = away.length();
+  if (distance >= cameraHitDistance) return;
+  // Dead on the lens has no direction to bounce in: straight back down the field.
+  if (distance < 1e-6) away.set(0, 0, -1);
+  else away.divideScalar(distance);
+  body.position.copy(cameraPosition).addScaledVector(away, cameraHitDistance);
+  const towards = body.velocity.dot(away);
+  if (towards >= 0) return;
+  body.velocity.addScaledVector(away, -(1 + restitution) * towards);
+  // A random sideways glance, at right angles to the bounce.
+  const sideways = new THREE.Vector3(random() - 0.5, random() - 0.5, random() - 0.5)
+    .cross(away)
+    .normalize();
+  body.velocity.addScaledVector(sideways, -towards * glance);
+  body.angular
+    .add(new THREE.Vector3(random() - 0.5, random() - 0.5, random() - 0.5).multiplyScalar(4))
+    .clampLength(0, maximumSpin);
 }
+
+/** Seconds a card may stay in the field at most, so a ricochet that lingers still leaves. */
+const longestStay = 40;
 
 /** A card knocked this far behind its spawn, or this far off the axis, has left the field. */
 const lostBehindZ = spawnZ - 8;
@@ -235,6 +251,8 @@ type AttractCard = {
   velocity: THREE.Vector3;
   /** Its spin axis scaled by its rate, in radians per second. */
   angular: THREE.Vector3;
+  /** Seconds since it entered the field. */
+  age: number;
   dispose(): void;
 };
 
@@ -254,16 +272,13 @@ export type AttractScene = {
 };
 
 /**
- * Where a card's path sits around the camera's axis, and how far from it. Exported so the rule
- * that no card passes through the lens can be tested directly, rather than by copying the
- * arithmetic into a test and hoping both stay right.
+ * Where a card's path sits around the camera's axis: anywhere in the field's disc, evenly by
+ * area (the square root spreads them out from the middle), so the camera's axis is no more
+ * crowded than anywhere else. A path through the middle hits the camera and bounces off it.
  */
 export function pathPoint(random: () => number): { x: number; y: number; radius: number } {
-  // A true circle, not an ellipse. Squashing the ring vertically to match the view's
-  // proportions looks natural but shortens the distance to the axis on mostly vertical paths,
-  // which is exactly where a card would drift through the lens.
   const angle = random() * Math.PI * 2;
-  const radius = lensClearance + random() * spread;
+  const radius = Math.sqrt(random()) * fieldRadius;
   return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, radius };
 }
 
@@ -385,6 +400,7 @@ export function createAttractScene(
     return {
       cube,
       materials,
+      age: 0,
       trails,
       extras: appearance.extras ?? [],
       fading: true,
@@ -425,17 +441,8 @@ export function createAttractScene(
    * the opening field is spread along the whole travel so the title is never empty.
    */
   function placeAlongPath(card: AttractCard, z: number): void {
-    // A path is a point on a ring around the camera's axis, carried toward the viewer. Picking
-    // the point on the ring keeps every path `lensClearance` from the axis, so no card ever
-    // passes through the lens; picking the angle rather than an x/y pair means the field still
-    // looks scattered rather than arranged.
-    // A true circle, not an ellipse. Squashing the ring vertically to match the view looks
-    // natural but shortens the distance to the axis on the vertical paths, which is exactly
-    // where a card would drift through the lens. A circle keeps the closest approach at
-    // `lensClearance` whichever way a card is placed.
-    const angle = random() * Math.PI * 2;
-    const radius = lensClearance + random() * spread;
-    card.cube.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, z);
+    const { x, y } = pathPoint(random);
+    card.cube.position.set(x, y, z);
   }
 
   for (let index = 0; index < cardsInFlight; index++) {
@@ -497,14 +504,14 @@ export function createAttractScene(
       elapsed += delta;
       // Looking down -z, so a turn about z rolls the view around the cards' line of travel.
       camera.rotation.set(0, 0, cameraRoll(elapsed));
-      // Touching cards knock each other about, and the lens lane turns them away.
+      // Touching cards knock each other about, and a card that reaches the camera bounces off.
       const bodies = cards.map(({ cube, velocity, angular }) => ({
         position: cube.position,
         velocity,
         angular,
       }));
       collide(bodies);
-      for (const body of bodies) bounceOffLens(body);
+      for (const body of bodies) bounceOffCamera(body, random);
       for (const card of cards) {
         card.cube.position.addScaledVector(card.velocity, delta);
         const spin = card.angular.length();
@@ -525,7 +532,12 @@ export function createAttractScene(
         // interval allows, so the field can be made busier or calmer without changing depth.
         // Knocked backward into the distance, or off the side, also leaves the field.
         const { x, y, z } = card.cube.position;
-        const gone = z > despawnZ || z < lostBehindZ || Math.hypot(x, y) > lostRadius;
+        card.age += delta;
+        const gone =
+          z > despawnZ ||
+          z < lostBehindZ ||
+          Math.hypot(x, y) > lostRadius ||
+          card.age > longestStay;
         if (!gone || sinceSpawn > 0) continue;
         card.dispose();
         const replacement = makeCard();
