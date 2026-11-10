@@ -1166,3 +1166,8 @@ body,
   background: #f6f0e3;
   color: #111;
 }
+
+/* Hidden while the New Game confirmation stands alone (#197). */
+.menu-buttons[hidden] {
+  display: none;
+}
