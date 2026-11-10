@@ -4,6 +4,7 @@ import {
   defaultSettings,
   loadSettings,
   prefersReducedMotion,
+  resolveLayout,
   resolveShadowQuality,
   saveSettings,
   silencedAudio,
@@ -59,11 +60,36 @@ describe("settings", () => {
     expect(loadSettings(storage)).toEqual(defaultSettings);
   });
 
-  it("defaults the layout to landscape, including for settings saved before it existed (#119)", () => {
-    expect(defaultSettings.layout).toBe("landscape");
+  it("defaults the layout to automatic, including for settings saved before it existed (#120)", () => {
+    expect(defaultSettings.layout).toBe("auto");
     const storage = memoryStorage();
     storage.setItem(settingsKey, JSON.stringify({ volume: 0.4, shadows: "low" }));
+    expect(loadSettings(storage).layout).toBe("auto");
+    storage.setItem(settingsKey, JSON.stringify({ layout: "landscape" }));
     expect(loadSettings(storage).layout).toBe("landscape");
+  });
+
+  it("resolves the automatic layout from the viewport's shape (#120)", () => {
+    const wide = { width: 1280, height: 800 };
+    const tall = { width: 390, height: 844 };
+    const square = { width: 800, height: 800 };
+    expect(resolveLayout("auto", wide, "portrait")).toBe("landscape");
+    expect(resolveLayout("auto", tall, "landscape")).toBe("portrait");
+    // A square viewport keeps whichever layout is showing, so it never flips.
+    expect(resolveLayout("auto", square, "landscape")).toBe("landscape");
+    expect(resolveLayout("auto", square, "portrait")).toBe("portrait");
+    // Turning the device re-evaluates: the same call with the new shape.
+    expect(resolveLayout("auto", tall, resolveLayout("auto", wide, "portrait"))).toBe("portrait");
+  });
+
+  it("keeps a fixed layout whatever the viewport's shape (#119)", () => {
+    for (const viewport of [
+      { width: 1280, height: 800 },
+      { width: 390, height: 844 },
+    ]) {
+      expect(resolveLayout("landscape", viewport, "portrait")).toBe("landscape");
+      expect(resolveLayout("portrait", viewport, "landscape")).toBe("portrait");
+    }
   });
 
   it("keeps settings saved before the sound effects and music toggles, with both on", () => {
