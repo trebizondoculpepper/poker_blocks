@@ -520,7 +520,12 @@ const gameModes: GameMode[] = [
     startScene: "stage-1",
     flow: standardGameFlow,
     navigation: standardNavigation,
-    runSetup: [{ step: "sandbox" }, { step: "materialDeck" }, { step: "materialSample" }],
+    // Every registered material, visual experiments included, like dev0.
+    runSetup: [
+      { step: "sandbox" },
+      { step: "materialDeck", pool: "registered" },
+      { step: "materialSample" },
+    ],
     traits: {
       onLoad: "newRun",
       save: { key: "poker-blocks.dev1-run" },

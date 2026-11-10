@@ -334,9 +334,9 @@ export const materialDefinitions = [
 
 /**
  * Visual experiments (#227): materials that exist only to be looked at in a developer mode.
- * They are not in `materialDefinitions`, so no shop, reward, material sample or attract
- * sequence ever deals them. A developer mode deals one only by asking: the `uniformMaterialDeck`
- * run setup step, or `materialDeck` with the `registered` pool (dev0).
+ * They are not in `materialDefinitions`, so no shop, reward or attract sequence ever deals
+ * them. A developer mode deals one only by asking: the `uniformMaterialDeck` run setup step, or
+ * `materialDeck` with the `registered` pool (dev0, dev1).
  * They have no scoring, prices or rewards.
  */
 export const experimentalMaterials = [
