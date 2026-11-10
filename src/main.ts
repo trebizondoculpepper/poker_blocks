@@ -1,3 +1,5 @@
+import { createBlockTitles } from "./block-title-view";
+import type { BlockTitles } from "./scene-traits/block-title";
 /**
  * Composition root. Allowed here: create the DOM host, construct services and the scene
  * manager, connect their narrow interfaces, open the selected mode, run the frame loop,
@@ -117,6 +119,7 @@ type TraitContext = {
     input: TableInput;
     run: RunController;
     board: BlockDestroyerBoard;
+    blockTitles: BlockTitles;
     attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
     shop: ShopView;
     rack: { viewEntered(entered: boolean, capacity: number): void };
@@ -128,6 +131,7 @@ type TraitContext = {
   };
 };
 const attract = createAttractBackground(backgrounds);
+const blockTitles = createBlockTitles(() => host, danceFloor);
 const deckView = createDeckView(host);
 // The developer tool has its own build boundary; production never imports its UI or data.
 const devShopBalanceEditor: ShopBalanceEditor = import.meta.env.DEV
@@ -166,6 +170,7 @@ const traitContext: TraitContext = {
       destroy: (blockId, cause) => run.destroyBlock(blockId, cause),
     },
     attract,
+    blockTitles,
     // The action log records only while a scene composing `actionHistory` shows (dev10).
     actionLog,
     actionWatch: {
@@ -365,6 +370,7 @@ const animate = (time: number) => {
   field.update(time, run.reducedMotion);
   sceneManager.update(delta);
   attract.frame(delta);
+  blockTitles.frame();
   hand.animate(time, delta, input.selection);
   view.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
   input.frame();
@@ -387,6 +393,7 @@ if (import.meta.hot) {
     overlays.dispose();
     run.dispose();
     attract.dispose();
+    blockTitles.dispose();
     presenter.dispose();
     hand.dispose();
     blockViews.disposeAll();
