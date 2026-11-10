@@ -124,16 +124,16 @@ The first family is `score.magnitude` (#1). Its bands start at 1, 10, 100, 1,000
 
 ## Coins and shop
 
-| Id                   | Plays when                                          | Status     |
-| -------------------- | --------------------------------------------------- | ---------- |
-| `coin.earn`          | Coins are earned, from a stage win or a block       | planned    |
-| `coin.spend`         | Coins are spent                                     | planned    |
-| `shop.open`          | The shop opens after a boss stage                   | generated  |
-| `shop.buy`           | A block is bought                                   | planned    |
-| `shop.stock.burn`    | Unbought stock burns away when leaving the shop     | registered |
-| `shop.cannot_afford` | The player tries to buy something they can't afford | planned    |
-| `deck.add_block`     | A bought block joins the deck                       | planned    |
-| `shop.leave`         | The player leaves the shop for the next round       | planned    |
+| Id                | Plays when                                          | Status     |
+| ----------------- | --------------------------------------------------- | ---------- |
+| `coin.earn`       | Coins are earned, from a stage win or a block       | planned    |
+| `coin.spend`      | Coins are spent                                     | planned    |
+| `shop.open`       | The shop opens after a boss stage                   | generated  |
+| `shop.buy`        | A block is bought                                   | planned    |
+| `shop.stock.burn` | Unbought stock burns away when leaving the shop     | registered |
+| `shop.buy.denied` | The player tries to buy something they can't afford | stand-in   |
+| `deck.add_block`  | A bought block joins the deck                       | planned    |
+| `shop.leave`      | The player leaves the shop for the next round       | planned    |
 
 ## Bosses and the run
 

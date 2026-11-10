@@ -756,9 +756,11 @@ export function createRunController<Context>(options: {
     seed: () => randomizer.seed,
     dispatch,
     buy(id, destination) {
+      const affordable = game.canAfford(id);
       const bought = game.buyShopOffer(id, destination);
       if (!bought) {
-        playSfx("action.denied");
+        // Not enough coins has its own sound; any other refusal (no room) is the usual "no".
+        playSfx(affordable ? "action.denied" : "shop.buy.denied");
         return false;
       }
       showPurchase();
