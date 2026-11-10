@@ -583,6 +583,13 @@ export function createTableInput(options: {
     const { x, y } = to ?? operation.position.current;
     drag.lastX = x;
     drag.lastY = y;
+    // dnd-kit stops the canvas seeing this finger's moves; keep its position current, so a
+    // second finger starts a pinch from where this one really is.
+    const finger = touches.get(drag.pointerId);
+    if (finger) {
+      finger.x = x;
+      finger.y = y;
+    }
     options.overlays().hideTooltip();
     moveDraggedBlock();
     updateCandidate();
@@ -591,6 +598,7 @@ export function createTableInput(options: {
   dnd.monitor.addEventListener("dragend", ({ canceled, nativeEvent }) => {
     const release = nativeEvent as PointerEvent | undefined;
     if (release?.pointerType === "touch") touches.delete(release.pointerId);
+    window.clearTimeout(releaseGrace);
     if (!drag?.active) return;
     if (release && !canceled) {
       drag.lastX = release.clientX;
@@ -601,6 +609,27 @@ export function createTableInput(options: {
     finishDrag(!canceled);
     canvas.style.cursor = "default";
   });
+
+  /** How long a hand drag that lost its capture waits for its release before it is cancelled. */
+  const releaseGraceMs = 250;
+  let releaseGrace = 0;
+  /**
+   * dnd-kit captures a dragged pointer on the body and finishes on its release wherever it
+   * lands, but nothing ends the drag if capture is lost and no release or cancel ever comes.
+   * A release usually follows within milliseconds (#267), so wait briefly, then cancel.
+   */
+  const onBodyLostCapture = (event: PointerEvent) => {
+    if (!drag?.active || drag.pointerId !== event.pointerId) return;
+    trace("pointer capture lost", "mid-drag: waiting for the release");
+    const waiting = drag;
+    window.clearTimeout(releaseGrace);
+    releaseGrace = window.setTimeout(() => {
+      if (drag !== waiting) return;
+      touches.delete(waiting.pointerId);
+      cancelHandDrag(`no release ${releaseGraceMs}ms after capture was lost: cancelled`);
+    }, releaseGraceMs);
+  };
+  document.body.addEventListener("lostpointercapture", onBodyLostCapture);
 
   // ----- Hand cards and the board -----
 
@@ -1029,6 +1058,8 @@ export function createTableInput(options: {
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("pointerup", onWindowPointerUp);
       dnd.destroy();
+      window.clearTimeout(releaseGrace);
+      document.body.removeEventListener("lostpointercapture", onBodyLostCapture);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     },
   };

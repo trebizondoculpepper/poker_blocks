@@ -89,6 +89,25 @@ describe("drag and drop (#273, on dnd-kit #282)", () => {
     expect(() => router.enableSource({ source: "nowhere" })).toThrow();
   });
 
+  it("a press on a drag source records what it picked up and where; a miss clears it", async () => {
+    const block = { block: { id: "b1" } } as unknown as RenderedBlock;
+    const sourceKinds = new Registry<DragSource>("drag source");
+    sourceKinds.register("hand", { pick: (x) => (x < 10 ? block : null) });
+    const manager = dnd();
+    const router = createDragDropManager(new Registry<DropTarget>("drop target"), manager, {
+      kinds: sourceKinds,
+    });
+    router.enableSource({ source: "hand" });
+    // dnd-kit registers a draggable asynchronously.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const [draggable] = [...manager.registry.draggables];
+    expect(draggable).toBeDefined();
+    expect(router.canStart(draggable!, 5, 7)).toBe(true);
+    expect(router.pressed(draggable!)).toEqual({ picked: block, clientX: 5, clientY: 7 });
+    expect(router.canStart(draggable!, 50, 7)).toBe(false);
+    expect(router.pressed(draggable!)).toBeNull();
+  });
+
   it("refuses an unknown drop target kind", () => {
     const router = createDragDropManager(new Registry<DropTarget>("drop target"), dnd());
     expect(() => router.enable({ target: "nowhere", priority: 1 })).toThrow();

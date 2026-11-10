@@ -187,6 +187,31 @@ describe("scene traits own their behaviour", () => {
     ]);
   });
 
+  it("enables its drag sources while its scene shows, through menus, and never leaks one (#282)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    // Shared by two stages, as play scenes share one trait object through playSceneTraits.
+    const dragSource = { sources: [{ source: "hand" }] };
+    scenes.register(scene("stage-1", { dragSource }));
+    scenes.register(scene("stage-2", { dragSource }));
+    scenes.register(scene("menu", { pausesBelow: { input: true, update: true } }));
+    scenes.register(scene("title", {}));
+    const sources = () => calls.filter((call) => call.startsWith("source:"));
+
+    scenes.switchTo("stage-1");
+    expect(sources()).toEqual(["source:hand:on"]);
+    scenes.push("menu");
+    scenes.pop();
+    expect(sources()).toEqual(["source:hand:on"]);
+    scenes.switchTo("stage-2");
+    scenes.switchTo("title");
+    // Every enable is matched by a disable: nothing is left enabled.
+    expect(sources().filter((call) => call.endsWith(":on")).length).toBe(
+      sources().filter((call) => call.endsWith(":off")).length,
+    );
+    expect(sources().at(-1)).toBe("source:hand:off");
+  });
+
   it("composes Sell in the shop without exposing the Discard bin", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
