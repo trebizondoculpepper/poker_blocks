@@ -103,6 +103,8 @@ export type TableInput = {
    * that disallows it again.
    */
   enableDragSource(config: DragSourceConfig): () => void;
+  /** Register a drag source kind that lives outside the table (the shop's stock, #277). */
+  registerDragSource(name: string, source: DragSource): void;
   /**
    * Bind the board gestures while a scene shows (the `boardGestures` trait, #275): dragging the
    * structure turns it, a pinch zooms and a two-finger twist turns it, the wheel zooms. Returns
@@ -1025,6 +1027,7 @@ export function createTableInput(options: {
     },
     enableDropTarget: (config) => dragDrop.enable(config),
     enableDragSource: (config) => dragDrop.enableSource(config),
+    registerDragSource: (name, source) => dragSourceKinds.register(name, source),
     enableBoardGestures: bindBoardGestures,
     discardBinEntered(entered) {
       discardBinScenes = Math.max(0, discardBinScenes + (entered ? 1 : -1));

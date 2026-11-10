@@ -305,6 +305,8 @@ const input: TableInput = createTableInput({
   trace: (event, detail) => actionLog.record("input", event, detail),
   rules: run.rules,
 });
+// The shop's stock drags like everything else (#277); its shopStock trait enables it.
+input.registerDragSource("shop", shopView.dragSource);
 run.begin();
 const overlays: Overlays = createOverlays(host, {
   settings: run.settings,

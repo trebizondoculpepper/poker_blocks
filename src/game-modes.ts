@@ -68,7 +68,7 @@ export type SceneTraits = {
    */
   passiveRackView: { source: string };
   /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
-  shopStock: Record<never, never>;
+  shopStock: { source: string };
   /**
    * The blurred card attract sequence is the background while this scene is in front (#147).
    * It is cosmetic: it draws no game state and its randomness is not the session's.
@@ -349,7 +349,7 @@ export const sceneDefinitions = [
       sellBin: {},
       coinsPanel: {},
       shopExit: { label: "Continue" },
-      shopStock: {},
+      shopStock: { source: "shop" },
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},

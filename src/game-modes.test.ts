@@ -157,7 +157,7 @@ describe("game modes composed from traits", () => {
       passiveRackView: { source: "rack" },
       coinsPanel: {},
       shopExit: { label: "Continue" },
-      shopStock: {},
+      shopStock: { source: "shop" },
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},

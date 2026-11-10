@@ -159,12 +159,17 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("deckPanel", panel<Context, "deck">("deck"));
   behaviours.register("coinsPanel", panel<Context, "coins">("coins"));
   behaviours.register("shopExit", panel<Context, "shopExit">("shopExit"));
+  // The shop's stock is shown, and its offers can be dragged to BUY (#277), while it's in front.
+  const stockSources = new WeakMap<object, () => void>();
   behaviours.register("shopStock", {
-    enter({ services }) {
+    enter({ services }, config) {
       services.shop.render(services.run.shopStock(), true);
+      stockSources.set(config, services.input.enableDragSource({ source: config.source }));
     },
-    exit({ services }) {
+    exit({ services }, config) {
       services.shop.render([], false);
+      stockSources.get(config)?.();
+      stockSources.delete(config);
     },
   });
   behaviours.register("attractBackground", {
