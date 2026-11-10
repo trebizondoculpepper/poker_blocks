@@ -1,3 +1,4 @@
+import { createActionLog } from "./action-log";
 import { describe, expect, it } from "vite-plus/test";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
 import { sceneBehaviours, type SceneHost } from "./scene-behaviours";
@@ -34,6 +35,8 @@ function recordingHost() {
         cubeSize: 2.4,
         danceFloor: { join: () => () => {} },
       },
+      actionLog: createActionLog(),
+      actionWatch: { state: () => ({}), header: () => [] },
       board: {
         blockAt: () => {
           calls.push("blockAt");

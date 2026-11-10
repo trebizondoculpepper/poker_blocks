@@ -10,6 +10,9 @@
  * Each trait brings its own behaviour, so a scene composes the panels and permissions it
  * wants and nothing has to ask which scene is in front.
  */
+import { devDropInspector } from "./scene-traits/dev-drop-inspector";
+import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
+import type { ActionLog } from "./action-log";
 import { firstPlayPrompt, type FirstPlayTable } from "./scene-traits/first-play-prompt";
 import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
 import type { AudioService } from "./audio-service";
@@ -37,6 +40,9 @@ export type SceneHost = {
     board: BlockDestroyerBoard;
     /** The field, for the first-play prompt a play scene shows. */
     firstPlay: FirstPlayTable;
+    /** The action log and what it watches, for the action history and the drop inspector. */
+    actionLog: ActionLog;
+    actionWatch: ActionWatch;
     /** The title's attract sequence: started and stopped by a scene trait (#147). */
     attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
     /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
@@ -224,6 +230,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     enter: ({ services }, { backTo }) => services.devObjectBrowser.show(backTo),
     exit: ({ services }) => services.devObjectBrowser.hide(),
   });
+  behaviours.register("devDropInspector", devDropInspector<Context>());
+  behaviours.register("actionHistory", actionHistory<Context>());
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
   behaviours.register("hudStyle", hudStyle<Context>());
   behaviours.register("devHudStyleAudition", devHudStyleAudition<Context>());

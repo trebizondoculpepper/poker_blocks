@@ -1,3 +1,5 @@
+import type { DevDropInspectorConfig } from "./scene-traits/dev-drop-inspector";
+import type { ActionHistoryConfig } from "./scene-traits/action-history";
 import type { FirstPlayPromptConfig } from "./scene-traits/first-play-prompt";
 import type { DevHudStyleAuditionConfig, HudStyleConfig } from "./scene-traits/hud-style";
 /**
@@ -65,6 +67,13 @@ export type SceneTraits = {
   devShopBalanceEditor: { backTo: string };
   /** Developer tool: the object browser, every game object by category (dev9). */
   devObjectBrowser: { backTo: string };
+  /** Developer tool: a live panel of drag-and-drop state and input decisions (dev10). */
+  devDropInspector: DevDropInspectorConfig;
+  /**
+   * Record interaction events and the game's callbacks while the scene shows, with a button that
+   * copies the last 30 seconds of them with timestamps (dev10 for now; any mode can compose it).
+   */
+  actionHistory: ActionHistoryConfig;
   /** The HUD wears this registered style (src/hud-styles.ts) while the scene is on the stack. */
   hudStyle: HudStyleConfig;
   /** Testing only: a selector that switches the HUD between these styles (#121). */
@@ -679,6 +688,27 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev9-run" },
             console: { name: "dev9" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // Drag-and-drop debugging (dev10): ordinary sandbox play that records an action history
+          // (the last 30 seconds of interaction events and callbacks, copied with a button) and
+          // shows a live panel of when an animation holds drops back and whether the model and the
+          // drawn field agree.
+          id: "dev10",
+          scenes: composeScenes("dev10", [
+            { scenes: playScenes, traits: { actionHistory: {}, devDropInspector: {} } },
+          ]),
+          startScene: "stage-1",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [{ step: "sandbox" }],
+          traits: {
+            onLoad: "newRun",
+            save: { key: "poker-blocks.dev10-run" },
+            console: { name: "dev10" },
+            restartable: { param: "restart" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,
