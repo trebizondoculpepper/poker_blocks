@@ -58,7 +58,7 @@ export type Menus = {
    * `action` (Visit shop), which calls `onContinue`. The music is
    * left alone.
    */
-  /** Show the pop-up, with the session seed so a run can be replayed (#134). */
+  /** Show the pop-up; the seed is the final result screen's alone (#164). */
   showStageWon(reward: StageReward, next: MenuChoice): void;
   /** Close the stage-won pop-up, cancelling any rows still counting in. */
   hideStageWon(): void;
@@ -72,11 +72,12 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     `<h1 class="menu-title">POKER BLOCKS</h1>
      <p class="menu-subtitle">Poker solitaire in three dimensions</p>
      <div class="menu-buttons" data-menu="items"></div>
-     <div class="menu-confirm" data-menu="confirm" hidden>
-       <p>Start again? Your saved game will be lost.</p>
+     <div class="menu-confirm" data-menu="confirm" role="alertdialog" aria-modal="true"
+          aria-labelledby="new-game-warning" hidden>
+       <p id="new-game-warning">Start a new game? The game in progress will be lost.</p>
        <div class="menu-row">
-         <button type="button" data-menu="confirm-yes">Start new game</button>
-         <button type="button" data-menu="confirm-no">Keep it</button>
+         <button type="button" data-menu="confirm-yes">Start New Game</button>
+         <button type="button" data-menu="confirm-no">Cancel</button>
        </div>
      </div>`,
   );
@@ -157,8 +158,17 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     callbacks.onScreen?.("game");
   }
 
+  /**
+   * The New Game confirmation (#197) stands alone: while it is up, the title's own items
+   * (Continue, Settings and New Game itself) are hidden, so it offers only its two choices.
+   */
+  function confirmNewGame(shown: boolean): void {
+    confirm.hidden = !shown;
+    titleItems.hidden = shown;
+  }
+
   function showTitle(items: readonly MenuChoice[]): void {
-    confirm.hidden = true;
+    confirmNewGame(false);
     fillTitleItems(items);
     open(title.root);
     callbacks.onScreen?.("title");
@@ -247,7 +257,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
       // Starting again discards a saved run, so it asks first (#10). Focus goes to the
       // non-destructive choice, so a held or repeated Enter cannot overwrite the save.
       if (callbacks.hasSave()) {
-        confirm.hidden = false;
+        confirmNewGame(true);
         find<HTMLButtonElement>(confirm, "confirm-no").focus();
         return;
       }
@@ -347,7 +357,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   });
   find(confirm, "confirm-no").addEventListener("click", () => {
     playSfx("ui.back");
-    confirm.hidden = true;
+    confirmNewGame(false);
     titleItems.querySelector<HTMLButtonElement>("button")?.focus();
   });
   // The touch-visible button opens the same pause menu as Escape.
