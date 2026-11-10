@@ -154,7 +154,7 @@ Material appearance is defined on each material definition in `src/materials.ts`
 
 **Action history and the drop inspector (dev10).**
 
-- **The action log** (`src/action-log.ts`) is a rolling record of the last 100 interaction events and callbacks. Each entry has a `performance.now()` time and the main loop's frame number, and runs of pointer moves are folded into one entry. It records only while a scene composing the **`actionHistory`** trait is showing.
+- **The action log** (`src/action-log.ts`) is a record of the last 30 seconds of interaction events and callbacks; anything older is thrown away, however many entries remain. Each entry has a `performance.now()` time and the main loop's frame number, and runs of pointer moves are folded into one entry. It records only while a scene composing the **`actionHistory`** trait is showing.
 - **What `actionHistory` records:** raw pointer and window events, every change in the watched state (animating, presenting, dragging, a held drop, model blocks against drawn ones), and the input's decisions, which arrive through the input's optional `trace` hook. The game passes the hook nothing outside the log, and tracing never changes behaviour.
 - **The copy button:** `actionHistory` adds a **Copy action history** button, which puts the log on the clipboard as plain text. A header carries the version, mode, screen, scene stack and current state. It's meant for pasting into a bug report after a drag-and-drop failure.
 - **The drop inspector:** **`devDropInspector`** is a live panel of the same state and the newest entries.

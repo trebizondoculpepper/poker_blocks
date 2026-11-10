@@ -1,6 +1,7 @@
 /**
- * The action log: a rolling record of interaction events and the game's callbacks, with precise
- * timestamps, for debugging (drag and drop first). It records only while something has started
+ * The action log: a record of the last 30 seconds of interaction events and the game's
+ * callbacks, with precise timestamps, for debugging (drag and drop first). Anything older than
+ * the window is thrown away, however many entries that leaves. It records only while something has started
  * it (the `actionHistory` scene trait), so a mode that doesn't compose that trait pays nothing.
  *
  * Each entry has a `performance.now()` time and the frame it happened in, so two entries in the
@@ -32,8 +33,11 @@ export type ActionLog = {
   entries(): readonly ActionEntry[];
 };
 
+/** How far back the log keeps entries, in milliseconds. */
+export const actionLogWindowMs = 30_000;
+
 export function createActionLog(
-  limit = 100,
+  windowMs = actionLogWindowMs,
   now: () => number = () => performance.now(),
 ): ActionLog {
   const entries: ActionEntry[] = [];
@@ -42,9 +46,17 @@ export function createActionLog(
   /** The current run of moves, while the last entry is that run's summary. */
   let moves: { entry: ActionEntry; count: number; first: number } | null = null;
 
+  /** Throw away everything older than the window. */
+  function prune(): void {
+    const oldest = now() - windowMs;
+    let stale = 0;
+    while (stale < entries.length && entries[stale]!.at < oldest) stale++;
+    if (stale > 0) entries.splice(0, stale);
+  }
+
   function push(entry: ActionEntry): void {
     entries.push(entry);
-    if (entries.length > limit) entries.shift();
+    prune();
   }
 
   return {
@@ -82,7 +94,10 @@ export function createActionLog(
     tick() {
       frame++;
     },
-    entries: () => entries,
+    entries() {
+      prune();
+      return entries;
+    },
   };
 }
 

@@ -35,7 +35,7 @@ function recordingHost() {
         cubeSize: 2.4,
         danceFloor: { join: () => () => {} },
       },
-      actionLog: createActionLog(100),
+      actionLog: createActionLog(),
       actionWatch: { state: () => ({}), header: () => [] },
       board: {
         blockAt: () => {

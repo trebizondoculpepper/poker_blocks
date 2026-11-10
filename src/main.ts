@@ -81,7 +81,7 @@ const field: FieldView = createFieldView({
 const musicPlayer = createMusicPlayer(musicTracks);
 // Where the heard music is, as a phase visuals can follow (#255); presentation only.
 // Interaction events and callbacks, recorded while a scene composes `actionHistory`.
-const actionLog = createActionLog(100);
+const actionLog = createActionLog();
 const beat = createBeatSignal(() => musicPlayer.position(performance.now()));
 // Things that move with the music join the dance floor (#256). Reduced motion stills them.
 const danceFloor = createDanceFloor(beat, () => run.reducedMotion);

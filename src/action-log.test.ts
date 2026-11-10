@@ -8,7 +8,7 @@ function clock() {
 
 describe("action log", () => {
   it("records only while started", () => {
-    const log = createActionLog(100);
+    const log = createActionLog();
     log.record("input", "ignored before start");
     const stop = log.start();
     log.record("input", "kept");
@@ -19,17 +19,26 @@ describe("action log", () => {
     expect(log.recording).toBe(false);
   });
 
-  it("keeps the last 100 entries", () => {
-    const log = createActionLog(100);
+  it("keeps the last 30 seconds and throws away anything older", () => {
+    const { now, advance } = clock();
+    const log = createActionLog(30_000, now);
     log.start();
-    for (let n = 0; n < 130; n++) log.record("input", `e${n}`);
-    expect(log.entries()).toHaveLength(100);
-    expect(log.entries()[0]!.event).toBe("e30");
+    for (let n = 0; n < 4; n++) {
+      log.record("input", `e${n}`);
+      advance(10_000);
+    }
+    // e0 is now 40 s old and e1 30 s old (still kept, on the edge); e2 and e3 are newer.
+    expect(log.entries().map(({ event }) => event)).toEqual(["e1", "e2", "e3"]);
+    advance(1);
+    expect(log.entries().map(({ event }) => event)).toEqual(["e2", "e3"]);
+    // However many fit in the window are kept.
+    for (let n = 0; n < 500; n++) log.record("input", `burst${n}`);
+    expect(log.entries()).toHaveLength(502);
   });
 
   it("folds a run of pointer moves into one entry, and starts a new run after another event", () => {
     const { now, advance } = clock();
-    const log = createActionLog(100, now);
+    const log = createActionLog(30_000, now);
     log.start();
     for (let n = 0; n < 5; n++) {
       log.move(10 * n, 20);
@@ -45,7 +54,7 @@ describe("action log", () => {
 
   it("stamps each entry with its time and frame, and formats them for pasting", () => {
     const { now, advance } = clock();
-    const log = createActionLog(100, now);
+    const log = createActionLog(30_000, now);
     log.start();
     log.record("pointer", "down", "mouse (5,6)");
     advance(12.34);

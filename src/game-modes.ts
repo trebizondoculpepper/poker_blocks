@@ -71,7 +71,7 @@ export type SceneTraits = {
   devDropInspector: DevDropInspectorConfig;
   /**
    * Record interaction events and the game's callbacks while the scene shows, with a button that
-   * copies the last 100 with timestamps (dev10 for now; any mode can compose it).
+   * copies the last 30 seconds of them with timestamps (dev10 for now; any mode can compose it).
    */
   actionHistory: ActionHistoryConfig;
   /** The HUD wears this registered style (src/hud-styles.ts) while the scene is on the stack. */
@@ -690,9 +690,10 @@ const gameModes: GameMode[] = [
           },
         } satisfies GameMode,
         {
-          // Drag-and-drop debugging (dev10): ordinary sandbox play that records an action history (the
-          // last 100 interaction events and callbacks, copied with a button) and shows a live panel of
-          // when an animation holds drops back and whether the model and the drawn field agree.
+          // Drag-and-drop debugging (dev10): ordinary sandbox play that records an action history
+          // (the last 30 seconds of interaction events and callbacks, copied with a button) and
+          // shows a live panel of when an animation holds drops back and whether the model and the
+          // drawn field agree.
           id: "dev10",
           scenes: composeScenes("dev10", [
             { scenes: playScenes, traits: { actionHistory: {}, devDropInspector: {} } },

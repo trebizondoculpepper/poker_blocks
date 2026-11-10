@@ -1,7 +1,7 @@
 /**
  * ActionHistory: while a scene composing it is showing, record interaction events and the
  * game's callbacks into the action log (src/action-log.ts), and show a button that copies the
- * last 100 entries, with their precise timestamps, to the clipboard as plain text. After a
+ * last 30 seconds of entries, with their precise timestamps, to the clipboard as plain text. After a
  * failure (a drop that didn't respond, say) the history can be pasted straight into a report.
  *
  * It records:
@@ -71,7 +71,8 @@ export function actionHistory<
       button.type = "button";
       button.className = "action-history-copy";
       button.textContent = "Copy action history";
-      button.title = "Copy the last 100 interaction events, with timestamps, to the clipboard";
+      button.title =
+        "Copy the last 30 seconds of interaction events, with timestamps, to the clipboard";
       button.addEventListener("click", (event) => {
         event.stopPropagation();
         const text = formatActionLog(actionLog.entries(), [
