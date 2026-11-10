@@ -61,6 +61,10 @@ function recordingHost() {
           calls.push(`source:${source}:on`);
           return () => void calls.push(`source:${source}:off`);
         },
+        enableSelectSource: ({ source }) => {
+          calls.push(`select:${source}:on`);
+          return () => void calls.push(`select:${source}:off`);
+        },
         enableBoardGestures: () => {
           calls.push("board:on");
           return () => void calls.push("board:off");
