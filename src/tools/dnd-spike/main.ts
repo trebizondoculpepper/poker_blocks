@@ -152,7 +152,14 @@ function pointerShape(): void {
   const { x, y } = manager.dragOperation.position.current;
   manager.dragOperation.shape = new Rectangle(x, y, 1, 1);
 }
-manager.monitor.addEventListener("dragstart", pointerShape);
+// Where the dragged block was when the drag began: a cancel or a miss puts it back there, so a
+// cancelled drag never undoes an earlier drop.
+const dragStartPosition = new THREE.Vector3();
+manager.monitor.addEventListener("dragstart", () => {
+  pointerShape();
+  const mesh = dragged();
+  if (mesh) dragStartPosition.copy(mesh.position);
+});
 manager.monitor.addEventListener("dragmove", () => {
   pointerShape();
   const mesh = dragged();
@@ -180,7 +187,7 @@ manager.monitor.addEventListener("dragend", ({ operation, canceled }) => {
   // Model first: the outcome is decided now; the view simply follows.
   const drop = canceled ? undefined : behaviour(operation.target?.data);
   if (drop) drop.drop(mesh);
-  else mesh.position.copy(homes[blocks.indexOf(mesh)]!);
+  else mesh.position.copy(dragStartPosition);
 });
 
 function frame(): void {
