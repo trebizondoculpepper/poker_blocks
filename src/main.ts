@@ -248,9 +248,7 @@ const run: RunController = createRunController({
     frame: hudFrame,
   },
 });
-const passiveRackView = createPassiveRack(host, {
-  onPickUp: (block, event) => input.pickUpPassive(block, event),
-});
+const passiveRackView = createPassiveRack(host);
 const hand: HandView = createHandView({
   views: blockViews,
   scene: view.handScene,

@@ -154,7 +154,7 @@ describe("game modes composed from traits", () => {
       tableBackground: {},
       handView: {},
       sellBin: {},
-      passiveRackView: {},
+      passiveRackView: { source: "rack" },
       coinsPanel: {},
       shopExit: { label: "Continue" },
       shopStock: {},

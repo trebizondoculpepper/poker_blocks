@@ -62,8 +62,11 @@ export type SceneTraits = {
   boardGestures: Record<never, never>;
   /** The ghost cube that invites a stage's first play, and how it looks and responds. */
   firstPlayPrompt: FirstPlayPromptConfig;
-  /** The passive rack is shown while this scene is on the stack (#187). */
-  passiveRackView: Record<never, never>;
+  /**
+   * The passive rack is shown while this scene is on the stack (#187), and its passives can be
+   * picked up from the drag source it names (#277): dragged to reorder or to sell.
+   */
+  passiveRackView: { source: string };
   /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
   shopStock: Record<never, never>;
   /**
@@ -393,7 +396,7 @@ export type SceneAdditions = {
 /** A mode with a passive rack shows it in play and in the shop, never on the title (#187). */
 const rackScenes: SceneAdditions = {
   scenes: [...playScenes, "shop"],
-  traits: { passiveRackView: {} },
+  traits: { passiveRackView: { source: "rack" } },
 };
 
 /**

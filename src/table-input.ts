@@ -19,6 +19,7 @@ import {
 import {
   createDragDropManager,
   type DragSource,
+  type Point,
   type DragSourceConfig,
   type DropHit,
   type DropTarget,
@@ -72,6 +73,9 @@ export type TableRules = {
 
 /** The passive rack view, as far as dragging a passive needs it. */
 type RackDragTarget = {
+  /** The rack's element: pressing an installed passive there picks it up. */
+  element: HTMLElement;
+  blockAt(clientX: number, clientY: number): PassiveBlock | null;
   lift(id: string | null): void;
   slotAt(clientX: number, clientY: number): number | null;
   preview(order: readonly string[] | null): void;
@@ -123,8 +127,6 @@ export type TableInput = {
    * is played, discarded, sold or rotated, and dragged blocks return (#124).
    */
   cancelGestures(): void;
-  /** Pick up a passive from the rack (its cube's pointerdown). */
-  pickUpPassive(block: PassiveBlock, event: PointerEvent): void;
   /** Refresh the discard target: exhausted when no discards are left, armed with a count. */
   refreshDiscardTarget(): void;
   /** The id of the table block under a screen point, if any. */
@@ -301,12 +303,16 @@ export function createTableInput(options: {
    * pointer while the scene in front takes plays.
    */
   const dragSourceKinds = new Registry<DragSource>("drag source");
-  dragSourceKinds.register("hand", {
+  const handSource: DragSource<RenderedBlock> = {
     pick(clientX, clientY) {
       const source = pickBlock(clientX, clientY, reachableHand());
       return source && blockCanDrag(source.block) ? source : null;
     },
-  });
+    begin: (source, press, at) => beginHandDrag(source, press, at),
+    move: (at) => moveHandDrag(at),
+    end: (at, canceled) => endHandDrag(at, canceled),
+  };
+  dragSourceKinds.register("hand", handSource);
   /**
    * dnd-kit (#282) runs the drag: its pointer sensor starts one only after the pointer moves
    * 8px (so a press released sooner is a click, which selects), captures the pointer, and
@@ -523,8 +529,8 @@ export function createTableInput(options: {
 
   // ----- The hand drag, run by dnd-kit (#282) -----
 
-  /** Cancel the hand drag dnd-kit is running, if any; its dragend puts the blocks back. */
-  function cancelHandDrag(reason: string): void {
+  /** Cancel the drag dnd-kit is running, if any; its source's `end` puts things back. */
+  function cancelDrag(reason: string): void {
     // A press still under dnd-kit's threshold is forgotten too, so it can't start a drag later
     // (behind the pause menu, say).
     dragDrop.forgetPresses();
@@ -539,15 +545,9 @@ export function createTableInput(options: {
     const source = event.operation.source as Draggable | null;
     if (hold.holding || pinching || !source || !dragDrop.pressed(source)) event.preventDefault();
   });
-  dnd.monitor.addEventListener("dragstart", ({ operation }) => {
-    const activator = operation.activatorEvent as PointerEvent | null;
-    const { x, y } = operation.position.current;
-    const press = operation.source && dragDrop.pressed(operation.source as Draggable);
-    if (!press) {
-      dnd.actions.stop({ canceled: true });
-      return;
-    }
-    const source = press.picked;
+  /** A hand drag began (the `hand` drag source, run by dnd-kit). */
+  function beginHandDrag(source: RenderedBlock, press: Point, at: Point): void {
+    const activator = dnd.dragOperation.activatorEvent as PointerEvent | null;
     // The grab is where the press went down on the block, not where the drag began.
     pointRay(press.clientX, press.clientY, cameraView.handCamera);
     const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
@@ -561,8 +561,8 @@ export function createTableInput(options: {
       source,
       grabOffset,
       pointerId: activator?.pointerId ?? -1,
-      lastX: x,
-      lastY: y,
+      lastX: at.clientX,
+      lastY: at.clientY,
       active: true,
       hit: null,
       group,
@@ -579,18 +579,31 @@ export function createTableInput(options: {
     options.overlays().hideTooltip();
     moveDraggedBlock();
     updateCandidate();
-  });
-  dnd.monitor.addEventListener("dragmove", ({ operation, to }) => {
+  }
+
+  function moveHandDrag(at: Point): void {
     if (!drag?.active) return;
-    const { x, y } = to ?? operation.position.current;
-    drag.lastX = x;
-    drag.lastY = y;
+    drag.lastX = at.clientX;
+    drag.lastY = at.clientY;
     options.overlays().hideTooltip();
     moveDraggedBlock();
     updateCandidate();
     canvas.style.cursor = "grabbing";
-  });
-  dnd.monitor.addEventListener("dragend", ({ operation, canceled, nativeEvent }) => {
+  }
+
+  function endHandDrag(at: Point, canceled: boolean): void {
+    if (!drag?.active) return;
+    if (!canceled) {
+      drag.lastX = at.clientX;
+      drag.lastY = at.clientY;
+      moveDraggedBlock();
+      trace("drag ended", "button released");
+    }
+    finishDrag(!canceled);
+    canvas.style.cursor = "default";
+  }
+
+  dnd.monitor.addEventListener("dragend", ({ operation, nativeEvent }) => {
     const release = nativeEvent as PointerEvent | undefined;
     // dnd-kit stops the release from reaching anything else, so use-gesture (#275), which saw
     // the press, would still think it held: tell it the pointer is up.
@@ -607,15 +620,6 @@ export function createTableInput(options: {
       );
     }
     window.clearTimeout(releaseGrace);
-    if (!drag?.active) return;
-    if (release && !canceled) {
-      drag.lastX = release.clientX;
-      drag.lastY = release.clientY;
-      moveDraggedBlock();
-    }
-    if (!canceled) trace("drag ended", "button released");
-    finishDrag(!canceled);
-    canvas.style.cursor = "default";
   });
 
   /** How long a hand drag that lost its capture waits for its release before it is cancelled. */
@@ -630,13 +634,15 @@ export function createTableInput(options: {
     // Only the body's own loss counts: the canvas losing a touch's capture to the body (as
     // dnd-kit takes it) bubbles up here too, and that drag is very much alive.
     if (event.target !== document.body) return;
-    if (!drag?.active || drag.pointerId !== event.pointerId) return;
+    const operation = dnd.dragOperation;
+    const pressed = operation.activatorEvent as PointerEvent | null;
+    if (operation.status.idle || pressed?.pointerId !== event.pointerId) return;
     trace("pointer capture lost", "mid-drag: waiting for the release");
-    const waiting = drag;
+    const waiting = operation.source;
     window.clearTimeout(releaseGrace);
     releaseGrace = window.setTimeout(() => {
-      if (drag !== waiting) return;
-      cancelHandDrag(`no release ${releaseGraceMs}ms after capture was lost: cancelled`);
+      if (dnd.dragOperation.status.idle || dnd.dragOperation.source !== waiting) return;
+      cancelDrag(`no release ${releaseGraceMs}ms after capture was lost: cancelled`);
     }, releaseGraceMs);
   };
   document.body.addEventListener("lostpointercapture", onBodyLostCapture);
@@ -709,7 +715,7 @@ export function createTableInput(options: {
             pinching = true;
             endBoardDrag("a second finger touched (a pinch)");
             hold.cancel();
-            cancelHandDrag("a second finger touched (a pinch)");
+            cancelDrag("a second finger touched (a pinch)");
             options.audio.zoomed();
           }
           cameraView.zoomWithPinch(start.zoom, start.distance, distance);
@@ -811,7 +817,7 @@ export function createTableInput(options: {
     if (!target) return;
     const { pointerId, clientX, clientY } = event;
     hold.down(pointerId, clientX, clientY, () => {
-      cancelHandDrag("held still: inspect");
+      cancelDrag("held still: inspect");
       // Above the finger, so the label never sits under it or over the card.
       showInspection(target.block, clientX, clientY - holdLabelLift);
     });
@@ -844,7 +850,7 @@ export function createTableInput(options: {
   const onBlur = () => {
     hold.cancel();
     options.overlays().hideTooltip();
-    cancelHandDrag("the window lost focus");
+    cancelDrag("the window lost focus");
     endBoardDrag("the window lost focus");
     pinching = false;
   };
@@ -880,13 +886,10 @@ export function createTableInput(options: {
 
   // ----- Selling or reordering a passive (issue #16): drag it from the rack -----
 
-  /** A passive picked up from the rack; it becomes a drag once the pointer moves a little. */
+  /** A passive being dragged from the rack: its floating token and the slot a drop would take. */
   let passiveDrag: {
     block: PassiveBlock;
-    pointerId: number;
-    startX: number;
-    startY: number;
-    floating: HTMLElement | null;
+    floating: HTMLElement;
     /** The rack slot a drop would move it to, while the pointer is over the rack. */
     slot: number | null;
   } | null = null;
@@ -900,13 +903,16 @@ export function createTableInput(options: {
     if (!selling) discardArea.classList.remove("is-target", "is-refused");
   }
 
-  function movePassive(event: PointerEvent): void {
-    if (!passiveDrag || event.pointerId !== passiveDrag.pointerId) return;
-    if (!passiveDrag.floating) {
-      if (Math.hypot(event.clientX - passiveDrag.startX, event.clientY - passiveDrag.startY) < 6)
-        return;
-      // A real drag: lift the cube out of the rack and show a token under the pointer.
-      const appearance = passiveAppearance(passiveDrag.block);
+  /**
+   * The rack (#277), a drag source run by dnd-kit like the hand: a passive pressed and moved is
+   * lifted out as a token under the pointer. Dropped inside the rack it moves to that slot (a
+   * reorder); dropped on the bin, which reads Sell while it's carried, it's sold.
+   */
+  const rackSource: DragSource<PassiveBlock> = {
+    surface: rack.element,
+    pick: (clientX, clientY) => rack.blockAt(clientX, clientY),
+    begin(block, _press, at) {
+      const appearance = passiveAppearance(block);
       const floating = document.createElement("div");
       floating.className = "passive-floating";
       floating.textContent = appearance.symbol;
@@ -914,58 +920,64 @@ export function createTableInput(options: {
       floating.style.color = appearance.palette.ink;
       floating.style.borderColor = appearance.palette.edge;
       document.body.append(floating);
-      passiveDrag.floating = floating;
-      rack.lift(passiveDrag.block.id);
+      passiveDrag = { block, floating, slot: null };
+      rack.lift(block.id);
       showSellTarget(true);
+      trace("drag started", "a passive from the rack");
       playSfx("passive.pickup");
-    }
-    passiveDrag.floating.style.left = `${event.clientX}px`;
-    passiveDrag.floating.style.top = `${event.clientY}px`;
-    // Over the rack, preview the reorder: neighbours glide aside to open the drop slot.
-    const slot = rack.slotAt(event.clientX, event.clientY) ?? null;
-    if (slot !== passiveDrag.slot) {
-      passiveDrag.slot = slot;
-      const ids = rules.passiveRack().map(({ id }) => id);
-      const from = ids.indexOf(passiveDrag.block.id);
-      rack.preview(slot === null || from < 0 ? null : moveItem(ids, from, slot));
-    }
-    const over = overDiscardArea(event.clientX, event.clientY);
-    const canSell = rules.canSellPassives();
-    const wasTarget = discardArea.classList.contains("is-target");
-    discardArea.classList.toggle("is-target", over && canSell);
-    discardArea.classList.toggle("is-refused", over && !canSell);
-    if (over && canSell && !wasTarget) playSfx("discard.hover");
-  }
-
-  function dropPassive(event: PointerEvent, cancelled: boolean): void {
-    if (!passiveDrag || event.pointerId !== passiveDrag.pointerId) return;
-    const { block, floating, slot } = passiveDrag;
-    passiveDrag = null;
-    if (!floating) return; // a click, not a drag: the rack's tooltip handles that
-    floating.remove();
-    showSellTarget(false);
-    rack.lift(null);
-    rack.preview(null);
-    // A drop inside the rack reorders it: not a sale, and nothing else changes.
-    const from = rules.passiveRack().findIndex(({ id }) => id === block.id);
-    if (!cancelled && slot !== null && from >= 0) {
-      if (slot !== from && rules.reorderPassive(from, slot)) playSfx("hand.reorder");
-      else playSfx("card.drag.return");
-      return;
-    }
-    if (cancelled || !overDiscardArea(event.clientX, event.clientY)) {
-      playSfx("card.drag.return");
-      return;
-    }
-    if (!rules.canSellPassives() || !rules.sellPassive(block.id)) {
-      options.overlays().flashRefused(discardArea);
-      playSfx("action.denied");
-      return;
-    }
-    playSfx("reward.coin");
-  }
-  const onPassiveUp = (event: PointerEvent) => dropPassive(event, false);
-  const onPassiveCancel = (event: PointerEvent) => dropPassive(event, true);
+      rackSource.move(at);
+    },
+    move({ clientX, clientY }) {
+      if (!passiveDrag) return;
+      passiveDrag.floating.style.left = `${clientX}px`;
+      passiveDrag.floating.style.top = `${clientY}px`;
+      // Over the rack, preview the reorder: neighbours glide aside to open the drop slot.
+      const slot = rack.slotAt(clientX, clientY) ?? null;
+      if (slot !== passiveDrag.slot) {
+        passiveDrag.slot = slot;
+        const ids = rules.passiveRack().map(({ id }) => id);
+        const from = ids.indexOf(passiveDrag.block.id);
+        rack.preview(slot === null || from < 0 ? null : moveItem(ids, from, slot));
+      }
+      const over = overDiscardArea(clientX, clientY);
+      const canSell = rules.canSellPassives();
+      const wasTarget = discardArea.classList.contains("is-target");
+      discardArea.classList.toggle("is-target", over && canSell);
+      discardArea.classList.toggle("is-refused", over && !canSell);
+      if (over && canSell && !wasTarget) playSfx("discard.hover");
+    },
+    end({ clientX, clientY }, canceled) {
+      if (!passiveDrag) return;
+      const { block, floating, slot } = passiveDrag;
+      passiveDrag = null;
+      floating.remove();
+      showSellTarget(false);
+      rack.lift(null);
+      rack.preview(null);
+      // A drop inside the rack reorders it: not a sale, and nothing else changes.
+      const from = rules.passiveRack().findIndex(({ id }) => id === block.id);
+      if (!canceled && slot !== null && from >= 0) {
+        trace("dropped on rack", `slot ${slot + 1}`);
+        if (slot !== from && rules.reorderPassive(from, slot)) playSfx("hand.reorder");
+        else playSfx("card.drag.return");
+        return;
+      }
+      if (canceled || !overDiscardArea(clientX, clientY)) {
+        trace("returned", "a passive to the rack");
+        playSfx("card.drag.return");
+        return;
+      }
+      if (!rules.canSellPassives() || !rules.sellPassive(block.id)) {
+        trace("refused", "selling a passive");
+        options.overlays().flashRefused(discardArea);
+        playSfx("action.denied");
+        return;
+      }
+      trace("dropped on sell", "a passive sold");
+      playSfx("reward.coin");
+    },
+  };
+  dragSourceKinds.register("rack", rackSource);
 
   // ----- Wiring -----
 
@@ -994,9 +1006,6 @@ export function createTableInput(options: {
     ["click", onClick],
     ["contextmenu", suppressBrowserGesture],
   ];
-  window.addEventListener("pointermove", movePassive);
-  window.addEventListener("pointerup", onPassiveUp);
-  window.addEventListener("pointercancel", onPassiveCancel);
   discardArea.addEventListener("click", onDiscardClick);
   for (const type of sceneInputEvents) host.addEventListener(type, routeSceneInput, true);
   host.addEventListener("dragstart", suppressBrowserGesture);
@@ -1046,30 +1055,12 @@ export function createTableInput(options: {
     },
     cancelGestures() {
       onBlur();
-      const lifted = passiveDrag;
-      if (lifted) dropPassive({ pointerId: lifted.pointerId } as PointerEvent, true);
-    },
-    pickUpPassive(block, event) {
-      // Only the primary pointer's main button picks a passive up.
-      if (passiveDrag || drag || !event.isPrimary || event.button !== 0) return;
-      passiveDrag = {
-        block,
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        floating: null,
-        slot: null,
-      };
-      (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
     },
     refreshDiscardTarget,
     frame() {
       if (drag?.active) updateCandidate();
     },
     dispose() {
-      window.removeEventListener("pointermove", movePassive);
-      window.removeEventListener("pointerup", onPassiveUp);
-      window.removeEventListener("pointercancel", onPassiveCancel);
       window.removeEventListener("keydown", routeSceneInput);
       discardArea.removeEventListener("click", onDiscardClick);
       for (const type of sceneInputEvents) host.removeEventListener(type, routeSceneInput, true);

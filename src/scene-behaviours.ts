@@ -232,9 +232,17 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       gesturesBound.delete(config);
     },
   });
+  const rackSources = new WeakMap<object, () => void>();
   behaviours.register("passiveRackView", {
-    enter: ({ services }) => services.rack.viewEntered(true, services.run.rackCapacity()),
-    exit: ({ services }) => services.rack.viewEntered(false, services.run.rackCapacity()),
+    enter({ services }, config) {
+      services.rack.viewEntered(true, services.run.rackCapacity());
+      rackSources.set(config, services.input.enableDragSource({ source: config.source }));
+    },
+    exit({ services }, config) {
+      services.rack.viewEntered(false, services.run.rackCapacity());
+      rackSources.get(config)?.();
+      rackSources.delete(config);
+    },
   });
   behaviours.register("discardBin", {
     enter: ({ services }) => services.input.discardBinEntered(true),

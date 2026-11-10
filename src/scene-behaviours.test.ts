@@ -156,7 +156,7 @@ describe("scene traits own their behaviour", () => {
   it("shows the rack, sized from the run, while its scene is on the stack (#187)", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
-    scenes.register(scene("stage", { passiveRackView: {} }));
+    scenes.register(scene("stage", { passiveRackView: { source: "rack" } }));
     scenes.register(scene("menu", { pausesBelow: { input: true, update: true } }));
     scenes.register(scene("title", {}));
     scenes.switchTo("stage");
