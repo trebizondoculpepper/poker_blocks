@@ -7,6 +7,7 @@
  *
  * It decides what happens; the other services show it.
  */
+import type { Cell } from "./traits/attachable";
 import type { HudFrame } from "./hud-frame";
 import type { DestroyCause } from "./traits/destructible";
 import type { AudioService } from "./audio-service";
@@ -146,8 +147,13 @@ export type RunController = {
   buy(id: string, destination: Parameters<GameRun["buyShopOffer"]>[1]): boolean;
   /** Per frame: once an announced outcome's delay has passed, the pop-up or game over follows. */
   followOutcomes(time: number): void;
-  /** Per frame: invite a stage's first play with the pulsing outline of its cell. */
-  promptFirstPlay(time: number): void;
+  /**
+   * Where a stage's first play would go: the cell, while the field is empty and a play can be
+   * made; otherwise null. The `firstPlayPrompt` trait draws its ghost there.
+   */
+  firstPlayCell(): Cell | null;
+  /** How many blocks are on the field. */
+  fieldCount(): number;
   dispose(): void;
 };
 
@@ -767,18 +773,17 @@ export function createRunController<Context>(options: {
         if (game.advance()) endRun();
       }
     },
-    promptFirstPlay(time) {
-      // The same outline as a valid attachment preview.
-      const cell =
-        game.inStage &&
+    firstPlayCell() {
+      return game.inStage &&
         game.state.field.length === 0 &&
         game.state.hand.length > 0 &&
         game.dealer.canPlay(game.state) &&
         roundOutcome(game.state) === "playing"
-          ? game.dealer.placementFor(game.state)
-          : null;
-      const idle = Boolean(cell) && !services.input.dragging && !services.presenter.busy;
-      services.field.showPrompt(idle ? cell : null, time, reducedMotion);
+        ? game.dealer.placementFor(game.state)
+        : null;
+    },
+    fieldCount() {
+      return game.state.field.length;
     },
     dispose() {
       systemMotionQuery.removeEventListener("change", onSystemMotion);

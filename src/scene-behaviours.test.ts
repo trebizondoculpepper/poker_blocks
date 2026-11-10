@@ -23,7 +23,16 @@ function recordingHost() {
         showTuning: () => void calls.push("attract:tuning"),
         hideTuning: () => void calls.push("attract:tuning-hide"),
       },
-      field: { promptEntered: (entered) => void calls.push(`prompt:${entered}`) },
+      firstPlay: {
+        firstPlayCell: () => null,
+        fieldCount: () => 0,
+        candidateCell: () => null,
+        busy: () => false,
+        reducedMotion: () => false,
+        placeObject: () => void calls.push("prompt:place"),
+        removeObject: () => void calls.push("prompt:remove"),
+        cubeSize: 2.4,
+      },
       board: {
         blockAt: () => {
           calls.push("blockAt");

@@ -10,11 +10,11 @@
  * Each trait brings its own behaviour, so a scene composes the panels and permissions it
  * wants and nothing has to ask which scene is in front.
  */
+import { firstPlayPrompt, type FirstPlayTable } from "./scene-traits/first-play-prompt";
 import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
 import type { AudioService } from "./audio-service";
 import type { CameraViewService } from "./camera-view";
 import type { Overlays } from "./overlays";
-import type { FieldView } from "./field-view";
 import type { HudPanel, HudPanelConfigs, HudPanels } from "./hud-panels";
 import type { RunController } from "./run-controller";
 import type { ShopView } from "./shop-view";
@@ -36,7 +36,7 @@ export type SceneHost = {
   services: {
     board: BlockDestroyerBoard;
     /** The field, for the first-play prompt a play scene shows. */
-    field: Pick<FieldView, "promptEntered">;
+    firstPlay: FirstPlayTable;
     /** The title's attract sequence: started and stopped by a scene trait (#147). */
     attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
     /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
@@ -188,10 +188,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       services.input.handEntered(false);
     },
   });
-  behaviours.register("firstPlayPrompt", {
-    enter: ({ services }) => services.field.promptEntered(true),
-    exit: ({ services }) => services.field.promptEntered(false),
-  });
+  behaviours.register("firstPlayPrompt", firstPlayPrompt<Context>());
   behaviours.register("passiveRackView", {
     enter: ({ services }) => services.rack.viewEntered(true, services.run.rackCapacity()),
     exit: ({ services }) => services.rack.viewEntered(false, services.run.rackCapacity()),

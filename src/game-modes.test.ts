@@ -246,7 +246,7 @@ describe("game modes composed from traits", () => {
       screen: { kind: "stage-1" },
       roundPanel: { stage: "STAGE 1", actions: { lost: "End game" } },
       tableBackground: {},
-      firstPlayPrompt: {},
+      firstPlayPrompt: expect.objectContaining({ colour: 0x65f4dd }),
       handView: {},
       discardBin: {},
       deckPanel: { opens: "openDeck" },
