@@ -90,7 +90,8 @@ describe("session lifecycle events (issue #13)", () => {
     const boss = heard.find(({ type, stage }) => type === "stage.won" && stage?.kind === "boss");
     expect(boss?.stage).toEqual({ round: 1, kind: "boss", dealer: "boss" });
     const reward = heard.find(({ type }) => type === "reward.finalized");
-    expect(reward?.reward).toEqual({ coins: 4, balanceBefore: 0, balance: 4 });
+    // The completion bonus (4) and a coin for each of the three unused plays.
+    expect(reward?.reward).toEqual({ coins: 7, balanceBefore: 0, balance: 7 });
   });
 
   it("announces a stage's outcome and reward once, however often it is asked", () => {
@@ -105,7 +106,7 @@ describe("session lifecycle events (issue #13)", () => {
       "reward.finalized 1:stage-1",
       "shop.entered 1:stage-1",
     ]);
-    expect(session.state.coins).toBe(4);
+    expect(session.state.coins).toBe(7);
   });
 
   it("announces a loss without any reward", () => {
@@ -146,7 +147,12 @@ describe("session lifecycle events (issue #13)", () => {
       session.advance();
       session.leaveShop();
     }
-    expect(paid).toEqual([[4], [4], [4, 3]]);
-    expect(session.state.coins).toBe(15);
+    // Bonus, three unused plays, then the boss bounty on the boss only.
+    expect(paid).toEqual([
+      [4, 3],
+      [4, 3],
+      [4, 3, 3],
+    ]);
+    expect(session.state.coins).toBe(24);
   });
 });
