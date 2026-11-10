@@ -24,6 +24,12 @@ describe("board view zoom", () => {
     expect(pinchZoom(1, 100, 1)).toBe(minViewZoom);
   });
 
+  it("is logarithmic: equal finger-spacing ratios and equal wheel steps zoom by equal factors (#283)", () => {
+    // Doubling the spacing doubles the zoom wherever it starts, so it feels even at every level.
+    expect(pinchZoom(0.8, 100, 200) / 0.8).toBeCloseTo(pinchZoom(1.6, 100, 200) / 1.6);
+    expect(wheelZoom(0.8, -100, 0) / 0.8).toBeCloseTo(wheelZoom(1.6, -100, 0) / 1.6);
+  });
+
   it("changes perspective FOV without changing the baseline", () => {
     expect(fovForZoom(1)).toBeCloseTo(boardBaseFov);
     expect(fovForZoom(2)).toBeLessThan(boardBaseFov);

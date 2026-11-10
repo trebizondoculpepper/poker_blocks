@@ -809,6 +809,13 @@ export function createTableInput(options: {
     if (document.hidden) onBlur();
   };
 
+  /**
+   * The browser's own gestures on the game surface (#283): a native drag (an image or text
+   * dragged by the browser fires pointercancel and stops the pointer stream) and the long-press
+   * context menu on the table. The game owns every press.
+   */
+  const suppressBrowserGesture = (event: Event) => event.preventDefault();
+
   const onClick = (event: MouseEvent) => {
     if (performance.now() < suppressClickUntil) return;
     const target = pickAny(event.clientX, event.clientY);
@@ -972,12 +979,14 @@ export function createTableInput(options: {
     ["pointerup", onPointerUp],
     ["pointercancel", onPointerCancel],
     ["click", onClick],
+    ["contextmenu", suppressBrowserGesture],
   ];
   window.addEventListener("pointermove", movePassive);
   window.addEventListener("pointerup", onPassiveUp);
   window.addEventListener("pointercancel", onPassiveCancel);
   discardArea.addEventListener("click", onDiscardClick);
   for (const type of sceneInputEvents) host.addEventListener(type, routeSceneInput, true);
+  host.addEventListener("dragstart", suppressBrowserGesture);
   window.addEventListener("keydown", routeSceneInput);
   for (const [type, listener, listenerOptions] of canvasListeners)
     canvas.addEventListener(type, listener as EventListener, listenerOptions);
@@ -1054,6 +1063,7 @@ export function createTableInput(options: {
       window.removeEventListener("keydown", routeSceneInput);
       discardArea.removeEventListener("click", onDiscardClick);
       for (const type of sceneInputEvents) host.removeEventListener(type, routeSceneInput, true);
+      host.removeEventListener("dragstart", suppressBrowserGesture);
       for (const [type, listener] of canvasListeners)
         canvas.removeEventListener(type, listener as EventListener);
       window.removeEventListener("blur", onBlur);
