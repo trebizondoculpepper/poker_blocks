@@ -14,7 +14,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { playSfx } from "../audio/sfx";
 import { gameModeFor, modeLink } from "../game-modes";
 import { createLetterBlock } from "../letter-block";
-import { materialPools, type BlockMaterial, type MaterialDefinition } from "../materials";
+import { materialPools, type MaterialDefinition } from "../materials";
 import { setReflectionEnvironment } from "../visual/block-appearance";
 import { fontCatalogue, type CatalogueFont } from "../visual/font-catalogue";
 import { defaultLettering, graphemes, type Lettering } from "../visual/lettering";
@@ -57,16 +57,15 @@ export function createBlockDesigner(host: HTMLElement): BlockDesigner {
   const part = <T extends HTMLElement>(name: string) =>
     root.querySelector<T>(`[data-part="${name}"]`)!;
 
-  const materials = (): readonly MaterialDefinition[] => materialPools.get("registered")();
-  /** The font chosen for each material, starting from its own lettering. */
-  const fontFor = new Map<string, CatalogueFont>(
-    materials().map((material) => [
-      material.id,
-      catalogued(material.lettering ?? defaultLettering),
-    ]),
-  );
-  /** The material chosen for each letter position; new positions take the materials in turn. */
-  const letterMaterials: string[] = [];
+  /**
+   * Draft copies of the registered materials: the room edits a draft's own `lettering` and
+   * builds letters from the draft itself, so the game's definitions are never touched.
+   */
+  const drafts: MaterialDefinition[] = materialPools
+    .get("registered")()
+    .map((material) => ({ ...material, lettering: material.lettering ?? defaultLettering }));
+  /** The draft chosen for each letter position; new positions take the drafts in turn. */
+  const letterDrafts: MaterialDefinition[] = [];
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -87,25 +86,32 @@ export function createBlockDesigner(host: HTMLElement): BlockDesigner {
   let built: { dispose(): void }[] = [];
   let generation = 0;
   let frame = 0;
+  /** How wide the row of blocks is, so the camera can fit it at any aspect. */
+  let rowWidth = 4;
 
   function characters(): string[] {
     return graphemes(part<HTMLInputElement>("text").value).filter((c) => !/\s/u.test(c));
+  }
+
+  function assignDrafts(letters: readonly string[]): void {
+    letters.forEach((_, index) => (letterDrafts[index] ??= drafts[index % drafts.length]!));
+  }
+
+  /** Back the camera off until the whole row fits the stage's current aspect. */
+  function fitCamera(): void {
+    camera.position.z =
+      rowWidth / (2 * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect) + 1.5;
   }
 
   /** Build the row of letter blocks again from the current choices. */
   async function rebuild(): Promise<void> {
     const mine = ++generation;
     const letters = characters();
-    const pool = materials();
-    letters.forEach((_, index) => (letterMaterials[index] ??= pool[index % pool.length]!.id));
+    assignDrafts(letters);
     const made = await Promise.all(
-      letters.map((character, index) => {
-        const material = letterMaterials[index]!;
-        return createLetterBlock(character, {
-          material: material as BlockMaterial,
-          lettering: fontFor.get(material),
-        });
-      }),
+      letters.map((character, index) =>
+        createLetterBlock(character, { definition: letterDrafts[index] }),
+      ),
     );
     if (mine !== generation) {
       made.forEach((block) => block.dispose());
@@ -118,8 +124,8 @@ export function createBlockDesigner(host: HTMLElement): BlockDesigner {
       row.add(block.object);
     });
     built = made;
-    const width = Math.max(4, made.length * 1.25 + 1);
-    camera.position.z = width / (2 * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect) + 1.5;
+    rowWidth = Math.max(4, made.length * 1.25 + 1);
+    fitCamera();
   }
 
   function option(value: string, label: string, selected: boolean): HTMLOptionElement {
@@ -133,16 +139,18 @@ export function createBlockDesigner(host: HTMLElement): BlockDesigner {
   /** Redraw the controls (letters, fonts, export) and the blocks. */
   function refresh(): void {
     const letters = characters();
-    const pool = materials();
-    letters.forEach((_, index) => (letterMaterials[index] ??= pool[index % pool.length]!.id));
-    const letterList = part("letters");
-    letterList.replaceChildren(
+    assignDrafts(letters);
+    part("letters").replaceChildren(
       ...letters.map((character, index) => {
         const item = document.createElement("li");
         const select = document.createElement("select");
-        select.append(...pool.map((m) => option(m.id, m.name, m.id === letterMaterials[index])));
+        select.append(
+          ...drafts.map((draft, at) =>
+            option(String(at), draft.name, draft === letterDrafts[index]),
+          ),
+        );
         select.addEventListener("change", () => {
-          letterMaterials[index] = select.value;
+          letterDrafts[index] = drafts[Number(select.value)]!;
           playSfx("ui.click");
           refresh();
         });
@@ -150,14 +158,14 @@ export function createBlockDesigner(host: HTMLElement): BlockDesigner {
         return item;
       }),
     );
-    const used = new Set(letters.map((_, index) => letterMaterials[index]!));
+    const used = new Set(letters.map((_, index) => letterDrafts[index]!));
     part("fonts").replaceChildren(
-      ...pool
-        .filter((material) => used.has(material.id))
-        .map((material) => {
+      ...drafts
+        .filter((draft) => used.has(draft))
+        .map((draft) => {
           const item = document.createElement("li");
           const select = document.createElement("select");
-          const current = fontFor.get(material.id)!;
+          const current = catalogued(draft.lettering!);
           const choices = fontCatalogue.some(({ font }) => font === current.font)
             ? fontCatalogue
             : [current, ...fontCatalogue];
@@ -165,14 +173,12 @@ export function createBlockDesigner(host: HTMLElement): BlockDesigner {
             ...choices.map((font) => option(font.font, font.label, font.font === current.font)),
           );
           select.addEventListener("change", () => {
-            fontFor.set(
-              material.id,
-              choices.find(({ font }) => font === select.value)!,
-            );
+            const { font, fallback, weight } = choices.find((c) => c.font === select.value)!;
+            draft.lettering = { font, fallback, weight };
             playSfx("ui.click");
             refresh();
           });
-          item.append(`${material.name} `, select);
+          item.append(`${draft.name} `, select);
           return item;
         }),
     );
@@ -180,14 +186,9 @@ export function createBlockDesigner(host: HTMLElement): BlockDesigner {
     void rebuild();
   }
 
-  /** Every material's chosen lettering, shaped like `MaterialDefinition["lettering"]`. */
+  /** Every draft's lettering, shaped like `MaterialDefinition["lettering"]`. */
   function exportConfig(): string {
-    const lettering = Object.fromEntries(
-      materials().map((material) => {
-        const { font, fallback, weight } = fontFor.get(material.id)!;
-        return [material.id, { font, fallback, weight }];
-      }),
-    );
+    const lettering = Object.fromEntries(drafts.map((draft) => [draft.id, draft.lettering]));
     return JSON.stringify({ lettering }, null, 2);
   }
 
@@ -199,13 +200,18 @@ export function createBlockDesigner(host: HTMLElement): BlockDesigner {
     window.setTimeout(() => (part("copy").textContent = "Copy config"), 1200);
   });
 
+  let stageSize = "";
   function resize(): void {
     const stage = part("stage");
     const width = Math.max(1, stage.clientWidth);
     const height = Math.max(1, stage.clientHeight);
+    if (`${width}x${height}` === stageSize) return;
+    stageSize = `${width}x${height}`;
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    // The stage changed shape (a narrower window, a rotated phone): refit the row.
+    fitCamera();
   }
 
   function spin(time: number): void {
