@@ -1,0 +1,1 @@
+Self-hosted Latin regular WOFF2 fonts from the corresponding @fontsource packages (5.3.x). Each family’s license is included alongside its font. Uncovered glyphs use the material font stack and platform fallback. No font network requests occur at runtime.

@@ -1,3 +1,4 @@
+import type { Lettering } from "./visual/lettering";
 import { Registry } from "./core/registry";
 import type { VesselConfig } from "./visual/filled-vessel";
 import { cardName, standardDeck, type CardBlock } from "./cards";
@@ -25,6 +26,8 @@ export type AppearanceTrail = {
 export type MaterialDefinition = {
   id: string;
   name: string;
+  /** Default text font for letter and word cubes; does not affect card faces. */
+  lettering?: Lettering;
   traits: { transparent?: Record<string, never> };
   /**
    * How the material sounds when blocks meet (#232). The softer of two materials meeting
@@ -96,6 +99,7 @@ const noEnds: readonly number[] = [];
 export const materialDefinitions = [
   {
     id: "paper",
+    lettering: { font: "Times New Roman", fallback: "Tinos, serif", weight: 400 },
     name: "Paper",
     acoustics: { character: "flimsy", hardness: 2, attach: "material.attach.paper" },
     traits: {},
@@ -120,6 +124,7 @@ export const materialDefinitions = [
   },
   {
     id: "wood",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Wood",
     acoustics: { character: "knocking", hardness: 3, attach: "material.attach.wood" },
     traits: {},
@@ -148,6 +153,7 @@ export const materialDefinitions = [
   },
   {
     id: "steel",
+    lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Steel",
     acoustics: { character: "clanking", hardness: 8, attach: "material.attach.steel" },
     traits: {},
@@ -174,6 +180,7 @@ export const materialDefinitions = [
   },
   {
     id: "prismatic",
+    lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
     name: "Prismatic Crystal",
     acoustics: { character: "ringing", hardness: 10, attach: "material.attach.prismatic" },
     traits: { transparent: {} },
@@ -222,6 +229,7 @@ export const materialDefinitions = [
   },
   {
     id: "gold",
+    lettering: { font: "Tinos", fallback: "serif", weight: 400 },
     name: "Gold",
     acoustics: { character: "dense", hardness: 7, attach: "material.attach.gold" },
     traits: {},
@@ -243,6 +251,7 @@ export const materialDefinitions = [
   },
   {
     id: "terracotta",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Terracotta",
     acoustics: { character: "dry", hardness: 6, attach: "material.attach.terracotta" },
     traits: {},
@@ -260,6 +269,7 @@ export const materialDefinitions = [
   },
   {
     id: "ice",
+    lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
     name: "Ice",
     acoustics: { character: "clinking", hardness: 5, attach: "material.attach.ice" },
     traits: { transparent: {} },
@@ -284,6 +294,7 @@ export const materialDefinitions = [
   },
   {
     id: "meat",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Meat",
     acoustics: { character: "squishy", hardness: 1, attach: "material.attach.meat" },
     traits: {},
@@ -308,6 +319,7 @@ export const materialDefinitions = [
   },
   {
     id: "fire",
+    lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Fire",
     acoustics: { character: "rattling", hardness: 9, attach: "material.attach.fire" },
     traits: { transparent: {} },
@@ -342,6 +354,7 @@ export const materialDefinitions = [
 export const experimentalMaterials = [
   {
     id: "custard",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Custard",
     // Plastic, between wood and ice (#232).
     acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
