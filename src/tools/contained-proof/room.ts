@@ -24,7 +24,7 @@ import "./room.css";
 export type ContainedProofRoom = { show(backTo: string): void; hide(): void; dispose(): void };
 
 const header =
-  "| Vessel | Storage | Resolution | Count | Overlap | Mean ms | p95 ms | Update ms | Calls | Triangles | Film KB/vessel | Samples/vessel |\n|---|---|---|---|---|---|---|---|---|---|---|---|";
+  "| Vessel | Storage | Resolution | Count | Overlap | Mean ms | p95 ms | Update ms | Update + render ms | Calls | Triangles | Film KB/vessel | Samples/vessel |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|";
 
 export function createContainedProofRoom(host: HTMLElement): ContainedProofRoom {
   const root = document.createElement("section");
@@ -83,11 +83,19 @@ export function createContainedProofRoom(host: HTMLElement): ContainedProofRoom 
   let vessels: ProofVessel[] = [];
   let frame = 0;
   let results: string[] = [];
-  let measuring: { frames: number[]; updates: number[]; calls: number; triangles: number } | null =
-    null;
+  let measuring: {
+    frames: number[];
+    updates: number[];
+    cpu: number[];
+    calls: number;
+    triangles: number;
+  } | null = null;
   let lastTime: number | null = null;
 
   function rebuild(): void {
+    // A measurement spans one configuration: changing it cancels the run in progress.
+    measuring = null;
+    part("measure").textContent = "Measure";
     vessels.forEach((vessel) => vessel.dispose());
     group.clear();
     const build = vesselBuilders.get(value("vessel"))!;
@@ -135,11 +143,15 @@ export function createContainedProofRoom(host: HTMLElement): ContainedProofRoom 
     vessels.forEach((vessel) => vessel.update(seconds));
     const updated = performance.now() - before;
     renderer.render(scene, camera);
+    // Update plus render: the baseline steps its simulation inside render (onBeforeRender), so
+    // only this total compares the two vessels like for like.
+    const cpu = performance.now() - before;
     const calls = renderer.info.render.calls;
     const triangles = renderer.info.render.triangles;
     if (measuring && lastTime !== null) {
       measuring.frames.push(time - lastTime);
       measuring.updates.push(updated);
+      measuring.cpu.push(cpu);
       measuring.calls = calls;
       measuring.triangles = triangles;
       if (measuring.frames.length >= 240) finishMeasure();
@@ -157,7 +169,7 @@ export function createContainedProofRoom(host: HTMLElement): ContainedProofRoom 
     const mean = (values: number[]) => values.reduce((sum, v) => sum + v, 0) / values.length;
     const first = vessels[0]!;
     results.push(
-      `| ${value("vessel")} | ${first.samples ? value("storage") : "—"} | ${first.samples ? value("resolution") : "—"} | ${vessels.length} | ${checked("overlap") ? "yes" : "no"} | ${mean(run.frames).toFixed(2)} | ${sorted[Math.floor(sorted.length * 0.95)]!.toFixed(2)} | ${mean(run.updates).toFixed(3)} | ${run.calls} | ${run.triangles} | ${(first.bytes / 1024).toFixed(1)} | ${first.samples} |`,
+      `| ${value("vessel")} | ${first.samples ? value("storage") : "—"} | ${first.samples ? value("resolution") : "—"} | ${vessels.length} | ${checked("overlap") ? "yes" : "no"} | ${mean(run.frames).toFixed(2)} | ${sorted[Math.floor(sorted.length * 0.95)]!.toFixed(2)} | ${mean(run.updates).toFixed(3)} | ${mean(run.cpu).toFixed(3)} | ${run.calls} | ${run.triangles} | ${(first.bytes / 1024).toFixed(1)} | ${first.samples} |`,
     );
     part<HTMLTextAreaElement>("results").value = [environmentLine(), "", header, ...results].join(
       "\n",
@@ -192,7 +204,7 @@ export function createContainedProofRoom(host: HTMLElement): ContainedProofRoom 
     });
   part("measure").addEventListener("click", () => {
     playSfx("ui.click");
-    measuring = { frames: [], updates: [], calls: 0, triangles: 0 };
+    measuring = { frames: [], updates: [], cpu: [], calls: 0, triangles: 0 };
     part("measure").textContent = "Measuring…";
   });
   part("copy").addEventListener("click", () => {
