@@ -109,11 +109,11 @@ A registered dealer reads `GameState` to decide whether a move is legal and retu
 
 ## Placement and card appearance
 
-**The drop contract (#167).** A hand card, with any selected cards it carries, can be picked up at any time, including while the last play or discard is still animating. When it's dropped, each carried card ends up exactly once: played at the candidate, discarded, moved within the hand, or put back.
+**The drop contract (#167, #272).** A hand card, with any selected cards it carries, can be picked up at any time, including while earlier plays or discards are still animating. When it's dropped, each carried card ends up exactly once: played at the candidate, discarded, moved within the hand, or put back.
 
-- **A drop during an animation waits.** The cards are held where they were dropped and commit as soon as the animation ends. Committing straight away would start a second animation over the first.
-- **The rules check it again then.** A drop the new state refuses (the stage was just won, say) goes back to the hand with the `action.denied` sound.
-- **One at a time.** While a drop is waiting, no new drag starts.
+- **A drop commits at once (model first, #272).** It goes to the rules immediately, even while earlier plays are still being shown. Their animations and this one catch up with the model: the presenter keeps every play and discard in flight in a list. Each play's scoring lines are captured when it commits and queued behind any still being shown (`queueScoreSteps`), so plays that land close together score one after another. A stage outcome's pop-up waits until all of it has been shown.
+- **The rules decide immediately.** A drop the current state refuses (the stage was just won by the play before it, say) goes back to the hand with the `action.denied` sound. Discards and passive sales commit at once too.
+- **Nothing waits for an animation.** No drop is held, and no new drag is blocked, while something is being shown.
 
 - **Hit-testing follows the game state, not the animation.** When a play is accepted, the field records each played block as an invisible stand-in at its final cell (`FieldView.expect`), which the real block replaces when it lands. A drop made while that block is still flying can attach to it, or finds the face it now covers taken. The empty-field check uses `occupiedCells()` for the same reason. `cells()` still means landed blocks, which is what the camera frames.
 

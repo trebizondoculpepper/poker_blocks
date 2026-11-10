@@ -50,6 +50,8 @@ type Playing = {
   /** One flight per block played: a single block, or a line in selection order. */
   flights: Flight[];
   startedAt: number;
+  /** This play's scored lines, captured when it committed: later plays may commit first. */
+  lines: readonly PassiveScoredLine[];
   /** Every running dissolve, for clean-up. */
   effects: Materialise[];
 };
@@ -129,8 +131,12 @@ export function createPlayPresenter(options: {
 }): PlayPresenter {
   const { views, hand, field, cameraView } = options;
   const game = () => options.game();
-  let playing: Playing | null = null;
-  let discarding: Discarding | null = null;
+  /**
+   * Plays and discards being shown (#272, model first): each committed to the model the moment
+   * the player made it, and its animation catches up. Several can be in flight at once.
+   */
+  let playing: Playing[] = [];
+  let discarding: Discarding[] = [];
   let scoreSteps: ScoreStep[] = [];
   let outcomeAt: number | null = null;
   let shownScore = game().state.round.score;
@@ -138,11 +144,17 @@ export function createPlayPresenter(options: {
   const placementRotation = new THREE.Quaternion();
 
   /** Present the lines from the play that just landed, lowest score first. */
-  function announceScore(now: number): void {
-    const lines = presentationOrder(game().lastScoredLines);
-    scoreSteps = lines.map((line, index) => ({ at: now + index * lineStepMs, line }));
-    // Let the last line's tint finish before announcing a stage outcome.
-    outcomeAt = lines.length > 0 ? now + (lines.length - 1) * lineStepMs + tintSeconds * 1000 : now;
+  /**
+   * Queue a play's scoring lines behind any still being shown, so plays that landed close
+   * together score one after the other rather than over each other.
+   */
+  function announceScore(now: number, scored: readonly PassiveScoredLine[]): void {
+    const queued = queueScoreSteps(scoreSteps, outcomeAt, presentationOrder(scored), now, {
+      lineStepMs,
+      settleMs: tintSeconds * 1000,
+    });
+    scoreSteps = queued.steps;
+    outcomeAt = queued.outcomeAt;
   }
 
   function updatePlay(action: Playing, now: number, delta: number): void {
@@ -183,7 +195,7 @@ export function createPlayPresenter(options: {
       ),
     );
     if (elapsed < lasts) return;
-    playing = null;
+    playing = playing.filter((other) => other !== action);
     action.effects.forEach((effect) => effect.finish());
     for (const flight of action.flights) {
       if (flight.target) {
@@ -206,7 +218,7 @@ export function createPlayPresenter(options: {
       getMaterialDefinition(materialOf(block)),
     ))
       playSfx(id);
-    announceScore(now);
+    announceScore(now, action.lines);
     cameraView.scheduleCameraMove();
     options.refill();
     options.save();
@@ -216,7 +228,7 @@ export function createPlayPresenter(options: {
     const elapsed = (now - action.startedAt) / 1000;
     action.effects.forEach((effect) => effect.update(delta));
     if (elapsed < 1) return;
-    discarding = null;
+    discarding = discarding.filter((other) => other !== action);
     action.sources.forEach((source) => views.dispose(source));
     options.refill();
     options.save();
@@ -224,10 +236,10 @@ export function createPlayPresenter(options: {
 
   return {
     get busy() {
-      return playing !== null || discarding !== null;
+      return playing.length > 0 || discarding.length > 0;
     },
     get presenting() {
-      return playing !== null || scoreSteps.length > 0 || outcomeAt !== null;
+      return playing.length > 0 || scoreSteps.length > 0 || outcomeAt !== null;
     },
     get shownScore() {
       return shownScore;
@@ -286,7 +298,12 @@ export function createPlayPresenter(options: {
           handedOver: false,
         };
       });
-      playing = { flights, startedAt: performance.now(), effects: [] };
+      playing.push({
+        flights,
+        startedAt: performance.now(),
+        effects: [],
+        lines: game().lastScoredLines,
+      });
       playSfx("card.place.fly");
       options.changed();
       return true;
@@ -315,15 +332,16 @@ export function createPlayPresenter(options: {
           reduced: options.reducedMotion(),
         });
       });
-      discarding = { sources: [...sources], startedAt: performance.now(), effects };
+      discarding.push({ sources: [...sources], startedAt: performance.now(), effects });
       playSfx("card.discard");
       options.changed();
       return true;
     },
     update(now, delta) {
       hand.updateDrawIns(delta);
-      if (playing) updatePlay(playing, now, delta);
-      if (discarding) updateDiscard(discarding, now, delta);
+      // Finishing reassigns the lists (filter), so iterating the current ones is safe.
+      for (const action of playing) updatePlay(action, now, delta);
+      for (const action of discarding) updateDiscard(action, now, delta);
     },
     updateScore(now) {
       while (scoreSteps.length > 0 && scoreSteps[0].at <= now) {
@@ -344,14 +362,38 @@ export function createPlayPresenter(options: {
       options.changed();
     },
     reset() {
-      playing = null;
-      discarding = null;
+      playing = [];
+      discarding = [];
       scoreSteps = [];
       outcomeAt = null;
       shownScore = game().state.round.score;
     },
     dispose() {
-      for (const action of [playing, discarding]) action?.effects.forEach((e) => e.finish());
+      for (const action of [...playing, ...discarding]) action.effects.forEach((e) => e.finish());
     },
   };
+}
+
+/**
+ * Queue a play's scoring lines (#272, model first): they start once any lines still waiting
+ * have been shown, one step apart, so plays that land close together score one after another.
+ * The stage outcome waits until the last queued line's tint has settled.
+ */
+export function queueScoreSteps<Line>(
+  waiting: readonly { at: number; line: Line }[],
+  outcomeAt: number | null,
+  lines: readonly Line[],
+  now: number,
+  timing: { lineStepMs: number; settleMs: number },
+): { steps: { at: number; line: Line }[]; outcomeAt: number } {
+  const queuedUntil =
+    waiting.length > 0 ? waiting[waiting.length - 1]!.at + timing.lineStepMs : now;
+  const start = Math.max(now, queuedUntil);
+  const steps = [
+    ...waiting,
+    ...lines.map((line, index) => ({ at: start + index * timing.lineStepMs, line })),
+  ];
+  const settled =
+    lines.length > 0 ? start + (lines.length - 1) * timing.lineStepMs + timing.settleMs : start;
+  return { steps, outcomeAt: Math.max(outcomeAt ?? settled, settled) };
 }

@@ -537,7 +537,8 @@ export function createRunController<Context>(options: {
     },
     passiveRack: () => game.state.passiveRack,
     // Not mid-play, nor when the run's rules refuse a sale (run over, rewards unpaid).
-    canSellPassives: () => game.canSellPassives && !services.presenter.busy,
+    // Model first (#272): selling commits at once, even while a play is still being shown.
+    canSellPassives: () => game.canSellPassives,
     reorderPassive(from, to) {
       if (!game.reorderPassive(from, to)) return false;
       services.rack.render(game.state.passiveRack);
