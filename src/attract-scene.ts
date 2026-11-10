@@ -70,10 +70,10 @@ export const lensClearance = 2.8;
 /** One full back-and-forth of the camera's roll, in seconds. */
 export const cameraRollPeriod = 140;
 /**
- * How far the camera rolls each way from level: one revolution, so each sweep from one
- * extreme to the other turns the view through two full revolutions before it reverses.
+ * How far the camera rolls each way from level: half a revolution, so each sweep from one
+ * extreme to the other turns the view through one full revolution before it reverses.
  */
-export const cameraRollAmplitude = Math.PI * 2;
+export const cameraRollAmplitude = Math.PI;
 
 /**
  * The camera's roll about its line of sight after `seconds`: simple harmonic motion, so it

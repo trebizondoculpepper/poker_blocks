@@ -158,20 +158,20 @@ describe("attract cards collide (#203)", () => {
 });
 
 describe("the attract camera rolls back and forth (#203)", () => {
-  it("swings through two revolutions and back over a 140 s period", () => {
+  it("swings through one revolution and back over a 140 s period", () => {
     expect(cameraRollPeriod).toBe(140);
     expect(cameraRoll(0)).toBeCloseTo(0);
-    // The extremes, a quarter and three quarters of the way through: one revolution each way.
-    expect(cameraRoll(35)).toBeCloseTo(Math.PI * 2);
-    expect(cameraRoll(105)).toBeCloseTo(-Math.PI * 2);
+    // The extremes, a quarter and three quarters of the way through: half a turn each way.
+    expect(cameraRoll(35)).toBeCloseTo(Math.PI);
+    expect(cameraRoll(105)).toBeCloseTo(-Math.PI);
     expect(cameraRoll(140)).toBeCloseTo(0);
-    // So each sweep between the extremes is two full revolutions.
-    expect(cameraRoll(35) - cameraRoll(105)).toBeCloseTo(Math.PI * 4);
+    // So each sweep between the extremes is one full revolution.
+    expect(cameraRoll(35) - cameraRoll(105)).toBeCloseTo(Math.PI * 2);
   });
 
   it("eases to a stop at each extreme and turns fastest through level", () => {
     const rate = (t: number) => (cameraRoll(t + 0.01) - cameraRoll(t - 0.01)) / 0.02;
     expect(Math.abs(rate(35))).toBeLessThan(0.01);
-    expect(Math.abs(rate(0))).toBeGreaterThan(0.2);
+    expect(Math.abs(rate(0))).toBeGreaterThan(0.1);
   });
 });
