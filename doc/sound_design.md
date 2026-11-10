@@ -26,7 +26,7 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | `card.drag.snap`   | A valid attachment face comes under the dragged block               | generated |
 | `card.drag.return` | A dragged block is dropped on nothing and returns to the hand       | generated |
 | `card.place.fly`   | A placed block flies to its cell, growing to full size              | generated |
-| `card.attach`      | A placed block lands and locks into its cell                        | generated |
+| `card.attach`      | Placeholder for every `material.attach.*` sound until it has audio  | generated |
 | `discard.hover`    | A dragged block moves over the discard bin                          | generated |
 | `card.discard`     | A block is dropped in the discard bin and dissolves                 | generated |
 | `hand.reorder`     | A hand card or passive is dropped into a new position in its rack   | generated |
@@ -34,6 +34,32 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | `action.denied`    | An action is refused: no plays or discards left, or an invalid drop | generated |
 | `board.rotate`     | The player drags to rotate the structure (quiet, optional)          | planned   |
 | `card.inspect`     | The hover tooltip opens (very subtle, optional)                     | planned   |
+
+### Attachment sounds by material (#232)
+
+When a block lands, the **softer** of the two materials that meet decides the sound: the landed block's own material, or its softest neighbour's if that is softer. On an empty table the block meets only itself. Each material's `acoustics` data (in `src/materials.ts`) gives a `hardness` (higher is harder), the `attach` sound, and a `character` word. `attachmentSound` in `src/attachment-sound.ts` is the generic resolver and never names a material. When several blocks land together, each distinct sound plays once. Every `material.attach.*` id names `card.attach` as its `placeholder` and plays that sound until its own audio is generated (`npm run sfx -- material.attach.<material>`).
+
+Proposed palette, softest first:
+
+| Hardness | Material   | Character | Sound id                     | Prompt idea                                 |
+| -------- | ---------- | --------- | ---------------------------- | ------------------------------------------- |
+| 1        | Meat       | squishy   | `material.attach.meat`       | wet, squishy slap                           |
+| 2        | Paper      | flimsy    | `material.attach.paper`      | flimsy papery tap                           |
+| 3        | Wood       | knocking  | `material.attach.wood`       | chunky wooden click (today's `card.attach`) |
+| 5        | Ice        | clinking  | `material.attach.ice`        | crisp icy clink                             |
+| 6        | Terracotta | dry       | `material.attach.terracotta` | dry clay knock                              |
+| 7        | Gold       | dense     | `material.attach.gold`       | heavy, warm metallic thunk                  |
+| 8        | Steel      | clanking  | `material.attach.steel`      | bright steel clank                          |
+| 9        | Fire       | rattling  | `material.attach.fire`       | iron frame clank with a faint crackle       |
+| 10       | Crystal    | ringing   | `material.attach.prismatic`  | bright glassy ting                          |
+
+Hardness 4 is **plastic**, which the owner places between wood and gold: the custard vessel from #227 (`material.attach.custard`, character "hollow"). Custard is an experimental material, seen only in `?mode=dev-custard`.
+
+**For owner review:**
+
+- **Wood (3), below plastic:** as directed.
+- **Ice (5) and terracotta (6):** these are proposals. Both sit between plastic and gold, and either could reasonably be harder than gold.
+- **Fire (9):** sits above steel because its block is an iron frame.
 
 ## Scoring and rounds
 
@@ -52,6 +78,17 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | `round.start`                                       | The deck is shuffled and the centre block appears                                                                                      | generated |
 | `round.cleared`                                     | The running total reaches the target score                                                                                             | generated |
 | `round.failed`                                      | Plays run out before the target is reached                                                                                             | generated |
+
+### Sound families by magnitude (#235)
+
+Some sounds come in sizes. Each size is still its own registered sound (its own id, prompt and files), and `src/audio/sfx-families.ts` groups them into a **family**. A caller asks for a family at a magnitude: `familySfx("score.magnitude", points)`. The resolver is generic and never names a family.
+
+- **Variants:** each variant covers magnitudes from its `from` up to the next variant's `from`. The variants are in ascending order, and the top one is open-ended (+Infinity takes it).
+- **Outside the family:** a magnitude below the first variant's `from`, or NaN, resolves to `null`, which means no sound.
+- **Checks:** every variant must be a registered sound id, in ascending order. `src/audio/sfx-families.test.ts` checks each family's boundaries and the outside rule.
+- **One-off sounds:** these stay plain registry entries, played with `playSfx(id)` as before.
+
+The first family is `score.magnitude` (#1). Its bands start at 1, 10, 100, 1,000, 10,000, 100,000 and 1,000,000 points, keep the same ids and generated audio, and are what `magnitudeSfxFor` now resolves through.
 
 ## Modifiers and materials
 
@@ -104,6 +141,68 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | Id                  | Plays when                                                                   | Status     |
 | ------------------- | ---------------------------------------------------------------------------- | ---------- |
 | `attract.card.bonk` | A card in the title's attract sequence flies into the camera and bounces off | registered |
+
+## Coverage audit (#234, 2026-11-10)
+
+Snapshot of `main` at the audit. It compares `src/audio/sfx-registry.ts` (48 entries), the call sites in `src/`, the committed audio under `src/assets/sfx/`, and the tables above. Two open PRs change this picture: #237 adds the `material.attach.*` sounds and #240 adds sound families. No code or registry entry is changed by this audit.
+
+### Registered, played, and with audio (31)
+
+These are complete: `card.select`, `card.deselect`, `card.pickup`, `card.drag.snap`, `card.drag.return`, `card.place.fly`, `card.attach`, `discard.hover`, `card.discard`, `card.deal`, `action.denied`, the seven `score.magnitude.*` bands, `round.start`, `round.cleared`, `round.failed`, `shop.open`, `run.lost`, `ui.click`, `ui.hover`, `ui.back`, `hand.reorder` and `reward.coin` (2 takes).
+
+### Registered and played, but silent: no audio yet (16)
+
+| Id                                                              | Played from                            | Note                                                               |
+| --------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------ |
+| `shop.buy`                                                      | run-controller                         | Every purchase is silent. The table above still says planned.      |
+| `shop.stock.toss`, `shop.stock.land`                            | shop-view                              | The shop's entrance animation is silent                            |
+| `shop.stock.burn`                                               | run-controller                         | Unbought stock burning on leaving is silent                        |
+| `block.destroyed`                                               | game-run, run-controller               | Destruction is silent; the table above lists it as `block.destroy` |
+| `passive.coins`, `passive.granted`                              | play-presenter                         |                                                                    |
+| `passive.activate.scoring`, `.economy`, `.effect`, `.retrigger` | passive-categories (category defaults) | Every passive activation is silent                                 |
+| `material.activate.wood`, `.gold`, `.steel`, `.prismatic`       | materials (activation data)            | Tracked by #212                                                    |
+| `view.zoom`                                                     | audio-service                          |                                                                    |
+| `attract.card.bonk`                                             | attract-scene                          | Attract sequence only                                              |
+| `ui.screenshot`                                                 | screenshot                             |                                                                    |
+
+### Registered with audio, but never played (stale: 2)
+
+- **`score.line` and `score.big`:** generated, but nothing plays them since the `score.magnitude` bands replaced them (#1). Either retire them (delete the entries and their MP3s), or give `score.big` a new trigger such as a whole play crossing a threshold. Their rows in the "Scoring and rounds" table still read as live.
+
+### Listed above, never registered (25)
+
+These are rows marked planned in the tables above with no registry entry. Most wait on features that don't exist yet; the ones in **bold** describe things the game already does.
+
+- **Exists in the game:**
+  - **`coin.earn`** is covered in practice by `reward.coin`. Drop the planned row, or rename it.
+  - **`coin.spend`** is covered by `shop.buy`.
+  - **`shop.cannot_afford`:** a refused purchase plays `action.denied`, which is fine to keep. Drop the row, or register it.
+  - **`deck.add_block`:** a bought card joining the deck (#143), currently silent apart from `shop.buy`.
+  - **`shop.leave`:** leaving the shop plays only `ui.click`.
+  - **`block.destroy`** is a duplicate of the registered `block.destroyed`; fix the table.
+- **Waiting on features:**
+  - scoring and modifiers: `score.hand.pair`, `score.hand.set`, `score.hand.five`, `score.hand.special`, `score.total.tick`, `score.target.near`, `plays.last`, `modifier.held.trigger`, `modifier.placed.trigger`, `score.add`, `score.multiply`, `effect.retrigger`, `hand.upgrade`;
+  - bombs, bosses and the run: `block.explode`, `boss.intro`, `boss.rule.applied`, `run.won`;
+  - optional polish: `board.rotate`, `card.inspect`.
+
+### Actions with no sound of their own
+
+These already happen in the game, but have no dedicated id:
+
+- **Stage won:** entering the stage-won pop-up has only `round.cleared` when the target is reached, and nothing as the pop-up's rows appear.
+- **Deck view:** opening the deck view (#175) plays `ui.click`; tapping a block inside it is silent.
+- **Passives:** picking up a passive from the rack, and selling a passive, plays `reward.coin`, but there is no pickup sound.
+- **Layout change (#119/#120):** changing it plays `ui.click`, which is fine and needs nothing new.
+
+### Recommendations, in priority order
+
+1. **Generate audio for the silent sounds the player meets every run:** `shop.buy`, `shop.stock.toss` and `shop.stock.land` (the shop's entrance), `shop.stock.burn`, `block.destroyed`, and the four `passive.activate.*` categories. They are already wired up, so this is only `npm run sfx` with prompts. Most have no `prompt` yet.
+2. **Retire or repurpose `score.line` and `score.big`,** and fix the table rows (`block.destroy` → `block.destroyed`, `shop.buy` → registered).
+3. **Fold duplicate plans into what exists:** `coin.earn` → `reward.coin`, `coin.spend` → `shop.buy`, `shop.cannot_afford` → `action.denied`.
+4. **New ids for existing actions:** `shop.leave`, `deck.add_block` (or let `shop.buy` cover it), `passive.pickup`, and a stage-won reward-row tick.
+5. **Families (#235):** the passive activations (`passive.coins` by amount) and future `score.total.tick` are natural magnitude families. Material attachment (#232) is grouped by material data instead, and needs no family.
+
+#236 is the follow-up that produces the missing effects.
 
 ## Open questions
 
