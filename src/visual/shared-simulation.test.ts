@@ -43,8 +43,9 @@ describe("shared visual simulations (#230)", () => {
   it("shows two vessels at the same orientation identical results, and a turned one the same world surface", () => {
     const simulation = createVesselSimulation({ settleSeconds: 1, traceSeconds: 4 });
     const tilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.6);
-    simulation.step(0, new THREE.Quaternion());
-    for (let t = 0.05; t < 0.5; t += 0.05) simulation.step(t, tilt);
+    const driver = {};
+    simulation.step(0, { rotation: new THREE.Quaternion(), driver });
+    for (let t = 0.05; t < 0.5; t += 0.05) simulation.step(t, { rotation: tilt, driver });
     const [a, b, c] = [0, 1, 2].map(() => ({
       surface: new THREE.Vector3(),
       trace: new THREE.Vector3(),
@@ -58,6 +59,36 @@ describe("shared visual simulations (#230)", () => {
     const worldA = a!.surface.clone().applyQuaternion(tilt);
     const worldC = c!.surface.clone().applyQuaternion(other);
     expect(worldC.distanceTo(worldA)).toBeLessThan(1e-9);
+  });
+
+  it("does not jump when a block at another orientation takes over driving it", () => {
+    const simulation = createVesselSimulation({ settleSeconds: 1, traceSeconds: 4 });
+    const first = {};
+    const second = {};
+    const rocked = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.4);
+    simulation.step(0, { rotation: new THREE.Quaternion(), driver: first });
+    simulation.step(0.016, { rotation: new THREE.Quaternion(), driver: first });
+    const before = { surface: new THREE.Vector3(), trace: new THREE.Vector3() };
+    simulation.localNormals(new THREE.Quaternion(), before.surface, before.trace);
+    // The first block is played; a rocked hand block now renders first.
+    simulation.step(0.032, { rotation: rocked, driver: second });
+    const after = { surface: new THREE.Vector3(), trace: new THREE.Vector3() };
+    simulation.localNormals(new THREE.Quaternion(), after.surface, after.trace);
+    expect(after.surface.distanceTo(before.surface)).toBeLessThan(1e-6);
+  });
+
+  it("turns the fluid with its container when the same block turns, then levels it", () => {
+    const simulation = createVesselSimulation({ settleSeconds: 1, traceSeconds: 4 });
+    const driver = {};
+    const turned = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.8);
+    simulation.step(0, { rotation: new THREE.Quaternion(), driver });
+    simulation.step(0.016, { rotation: turned, driver });
+    const world = new THREE.Vector3();
+    simulation.localNormals(new THREE.Quaternion(), world, new THREE.Vector3());
+    expect(world.y).toBeLessThan(0.75);
+    for (let t = 0.032; t < 10; t += 0.05) simulation.step(t, { rotation: turned, driver });
+    simulation.localNormals(new THREE.Quaternion(), world, new THREE.Vector3());
+    expect(world.y).toBeCloseTo(1, 3);
   });
 
   it("guardrail: an effect gets its simulation from the shared registry, never per block", () => {

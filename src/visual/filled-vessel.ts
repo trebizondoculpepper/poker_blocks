@@ -157,7 +157,7 @@ export function createFilledVessel(
   const own = new THREE.Quaternion();
   fluid.onBeforeRender = () => {
     fluid.getWorldQuaternion(own);
-    shared.simulation.step(frameSeconds(), own);
+    shared.simulation.step(frameSeconds(), { rotation: own, driver: fluid });
     shared.simulation.localNormals(own, uniforms.surfaceNormal.value, uniforms.traceNormal.value);
   };
   fluid.material.addEventListener("dispose", () => shared.release());
@@ -192,11 +192,12 @@ export function createSettler(
 
 /**
  * The shared fluid simulation for one vessel configuration (#230). It steps once per frame,
- * driven by the rotation of the first block rendered that frame (blocks on the table all share
- * the structure's rotation), and keeps the result as world-space normals that any block can
- * turn into its own space.
+ * driven by the first block rendered that frame (blocks on the table all share the structure's
+ * rotation). Its state is world-space normals, which any block turns into its own space; when
+ * the driving block turns, the fluid turns with it before levelling, and when a different block
+ * takes over driving, nothing jumps.
  */
-export type VesselSimulation = Simulation<THREE.Quaternion> & {
+export type VesselSimulation = Simulation<{ rotation: THREE.Quaternion; driver: object }> & {
   /** This frame's surface and trace normals, in the space of a block with rotation `own`. */
   localNormals(own: THREE.Quaternion, surface: THREE.Vector3, trace: THREE.Vector3): void;
 };
@@ -204,17 +205,31 @@ export type VesselSimulation = Simulation<THREE.Quaternion> & {
 export function createVesselSimulation(
   config: Pick<VesselConfig, "settleSeconds" | "traceSeconds">,
 ): VesselSimulation {
-  const settle = createSettler(config);
-  const surfaceLocal = new THREE.Vector3(0, 1, 0);
-  const traceLocal = new THREE.Vector3(0, 1, 0);
+  // The state is kept in world space, so it never depends on which block drives it.
   const surfaceWorld = new THREE.Vector3(0, 1, 0);
   const traceWorld = new THREE.Vector3(0, 1, 0);
+  const up = new THREE.Vector3(0, 1, 0);
+  const previous = new THREE.Quaternion();
+  const turn = new THREE.Quaternion();
   const inverse = new THREE.Quaternion();
+  let last: { now: number; driver: object } | null = null;
   return {
-    step(now, rotation) {
-      settle(rotation, now, surfaceLocal, traceLocal);
-      surfaceWorld.copy(surfaceLocal).applyQuaternion(rotation);
-      traceWorld.copy(traceLocal).applyQuaternion(rotation);
+    step(now, { rotation, driver }) {
+      if (last) {
+        // The same block turned since the last frame: the fluid turns with its container
+        // before it levels again. A different driving block carries nothing, so the shared
+        // result never jumps when the block that drives it changes.
+        if (last.driver === driver) {
+          turn.copy(rotation).multiply(inverse.copy(previous).invert());
+          surfaceWorld.applyQuaternion(turn);
+          traceWorld.applyQuaternion(turn);
+        }
+        const delta = Math.min(now - last.now, 0.1);
+        surfaceWorld.lerp(up, 1 - Math.exp(-delta / config.settleSeconds)).normalize();
+        traceWorld.lerp(surfaceWorld, 1 - Math.exp(-delta / config.traceSeconds)).normalize();
+      }
+      previous.copy(rotation);
+      last = { now, driver };
     },
     localNormals(own, surface, trace) {
       inverse.copy(own).invert();
