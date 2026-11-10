@@ -46,7 +46,7 @@ export function fitText(
   lettering: Lettering,
   extent = 208,
 ): { lines: string[]; size: number; lineHeight: number } {
-  for (let size = 96; size >= 1; size--) {
+  for (let size = 208; size >= 1; size--) {
     g.font = `${lettering.weight} ${size}px ${fontStack(lettering)}`;
     const lines = wrapText(g, text, extent);
     const lineHeight = size * 1.25;

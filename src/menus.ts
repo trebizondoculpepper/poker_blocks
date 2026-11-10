@@ -36,6 +36,8 @@ export type MenuCallbacks = {
 export type Menus = {
   /** The always-visible button that opens the pause menu, for the HUD frame to place. */
   readonly menuButton: HTMLElement;
+  /** The visible panel surface for scene-composed heading content. */
+  panelHeadingHost(): HTMLElement;
   /** The title's items are the title scene trait's decision, so they are passed in. */
   showTitle(items: readonly MenuChoice[]): void;
   hideTitle(): void;
@@ -69,8 +71,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const title = overlay("title-screen", "Poker Blocks");
   title.panel.insertAdjacentHTML(
     "beforeend",
-    `<h1 class="menu-title">POKER BLOCKS</h1>
-     <p class="menu-subtitle">Poker solitaire in three dimensions</p>
+    `<p class="menu-subtitle">Poker solitaire in three dimensions</p>
      <div class="menu-buttons" data-menu="items"></div>
      <div class="menu-confirm" data-menu="confirm" role="alertdialog" aria-modal="true"
           aria-labelledby="new-game-warning" hidden>
@@ -86,7 +87,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const pauseMenu = overlay("pause-screen", "Paused");
   pauseMenu.panel.insertAdjacentHTML(
     "beforeend",
-    `<h2 class="menu-heading">PAUSED</h2><div class="menu-buttons" data-menu="choices"></div>`,
+    `<div class="menu-buttons" data-menu="choices"></div>`,
   );
 
   const settingsScreen = overlay("settings-screen", "Settings");
@@ -495,6 +496,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
 
   return {
     menuButton: settingsButton,
+    panelHeadingHost: () => overlayInFront()?.querySelector<HTMLElement>(".menu-panel") ?? host,
     showTitle,
     hideTitle,
     showPanelFooter,
