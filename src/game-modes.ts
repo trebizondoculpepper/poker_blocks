@@ -213,13 +213,12 @@ const playSceneTraits: Partial<SceneTraits> = {
   boardGestures: {},
   firstPlayPrompt: {
     colour: 0x65f4dd,
-    pulseSeconds: 1.8,
+    // A steady glow: the laser edges and the dance give it life, so it never flashes.
+    glow: 0.8,
     armed: { beatSeconds: 0.52, scale: [1.04, 1.09], opacity: [0.3, 0.42] },
-    // The first dancer (#256): it grows through each bar and drops back to its base size on
-    // the downbeat (the owner's sawtooth).
-    dance: { cycle: "bar", shape: "saw", offset: 0, swell: 0.12 },
-    // Its glow flashes on each beat while music plays, a touch early so it reads as on time.
-    flash: { cycle: "beat", shape: "pulse", offset: 0.04 },
+    // The first dancer (#256): a raised-cosine swell peaking on each bar's downbeat and flat
+    // for the rest of the bar, as the block title bounces.
+    dance: { cycle: "bar", shape: "sine", offset: 0, swell: 0.12, window: 0.2 },
     release: { seconds: 0.55, growth: 0.6 },
   },
   handView: {},

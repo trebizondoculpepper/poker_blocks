@@ -29,3 +29,14 @@ beatShapes.register("envelope", (phase, attack = 0.5) => {
     ? (1 - Math.cos((Math.PI * phase) / peak)) / 2
     : (1 + Math.cos((Math.PI * (phase - peak)) / (1 - peak))) / 2;
 });
+
+/**
+ * Where a move is through its shape (a bounce, a pulse). With no window, the whole cycle. With a window, the
+ * shape runs over that fraction of the cycle, placed so its peak (`attack` of the way through
+ * it) falls on the cycle's start, and rests at its end (phase 1) the rest of the time.
+ */
+export function bouncePhase(phase: number, window?: number, attack = 0.5): number {
+  if (window === undefined) return phase;
+  const local = ((phase + attack * window) % 1) / window;
+  return Math.min(1, local);
+}
