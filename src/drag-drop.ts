@@ -13,9 +13,11 @@
  *
  * While dragged things are over a target it shows **hover** feedback. The manager never names a
  * target or asks what one is: target kinds are a registry keyed by name, and a scene's
- * `dropTarget` data names the ones it allows and their priority. (Drag sources, `dragSource`,
- * and the gesture arena that decides what a pointer becomes, follow in #276 and #282.)
+ * `dropTarget` data names the ones it allows and their priority. dnd-kit (#282) supplies the
+ * droppables, collision ordering and the drag lifecycle; see `createDragDropManager`.
  */
+import { type CollisionDetector, CollisionType, sortCollisions } from "@dnd-kit/abstract";
+import { type DragDropManager as DndKitManager, Draggable, Droppable } from "@dnd-kit/dom";
 import type { RenderedBlock } from "./rendered-blocks";
 
 export type DropVerdict = "accept" | "reject";
@@ -33,6 +35,17 @@ export type DropTarget = {
   describe(verdict: DropVerdict): string;
 };
 
+/**
+ * A drag source (#282, #276): something that can be picked up. It answers what is picked up
+ * under a pointer, or null where it has nothing to pick up.
+ */
+export type DragSource = {
+  pick(clientX: number, clientY: number): RenderedBlock | null;
+};
+
+/** One drag source a scene allows, from its `dragSource` data. */
+export type DragSourceConfig = { source: string };
+
 /** One drop target a scene allows, from its `dropTarget` data. */
 export type DropTargetConfig = { target: string; priority: number };
 
@@ -46,36 +59,155 @@ export type DragDropManager = {
   hitTest(carried: readonly RenderedBlock[], clientX: number, clientY: number): DropHit | null;
   /** Show this hit's hover feedback on its target and clear every other target's. */
   hover(hit: DropHit | null): void;
+  /** Allow a drag source while a scene shows; returns a function that disallows it again. */
+  enableSource(config: DragSourceConfig): () => void;
+  /** What an enabled drag source would pick up at a point, if anything. */
+  pickUp(clientX: number, clientY: number): RenderedBlock | null;
+  /**
+   * Whether a dnd-kit draggable may start a drag from a press at a point: its source picks
+   * something up there. What it picks up, and where, is kept for `pressed`.
+   */
+  canStart(draggable: Draggable, clientX: number, clientY: number): boolean;
+  /**
+   * What the press that started a draggable's drag picked up, and where. dnd-kit starts a drag
+   * on the move that crosses its threshold, by which time the pointer may be off the block.
+   */
+  pressed(draggable: Draggable): Press | null;
+  /** Forget every pending press: a cancelled gesture can't become a drag later. */
+  forgetPresses(): void;
 };
 
-export function createDragDropManager(kinds: { get(name: string): DropTarget }): DragDropManager {
+/** A press on a drag source: what it picked up and where the pointer went down. */
+export type Press = { picked: RenderedBlock; clientX: number; clientY: number };
+
+/**
+ * The drag-and-drop manager over dnd-kit (#282): each enabled drop target is a dnd-kit
+ * **droppable** whose collision detector is the target's own `canDrop`, with the scene's
+ * priority as its collision priority. Hit-testing runs those detectors and orders the
+ * collisions with dnd-kit's `sortCollisions`, synchronously, so the decision for a pointer
+ * position is made at that position.
+ */
+export function createDragDropManager(
+  kinds: { get(name: string): DropTarget },
+  dnd: DndKitManager,
+  sources: { kinds: { get(name: string): DragSource }; surface?: Element } = {
+    kinds: { get: (name) => missingSource(name) },
+  },
+): DragDropManager {
+  /**
+   * Enabled drag sources, each a dnd-kit draggable bound to the surface the pointer presses
+   * (the canvas): dnd-kit's sensors start it, and only where its source picks something up.
+   */
+  const sourcesEnabled: { config: DragSourceConfig; draggable: Draggable }[] = [];
+  const presses = new Map<Draggable, Press>();
+  type Enabled = { config: DropTargetConfig; droppable: Droppable };
   /** Enabled drop targets; one enabled by two scenes stays until both disable it. */
-  const enabled: DropTargetConfig[] = [];
-  const ordered = () => [...enabled].sort((a, b) => b.priority - a.priority);
+  const enabled: Enabled[] = [];
+  /** What a hit test is asking about: read by the droppables' collision detectors. */
+  let query: { carried: readonly RenderedBlock[]; x: number; y: number } = {
+    carried: [],
+    x: 0,
+    y: 0,
+  };
+  let serial = 0;
+  function detector(config: DropTargetConfig): CollisionDetector {
+    return ({ droppable }) => {
+      const verdict = kinds.get(config.target).canDrop(query.carried, query.x, query.y);
+      return verdict
+        ? {
+            id: droppable.id,
+            value: 1,
+            type: CollisionType.PointerIntersection,
+            priority: config.priority,
+            data: { verdict },
+          }
+        : null;
+    };
+  }
   return {
     enable(config) {
       kinds.get(config.target);
-      const entry = { ...config };
+      const entry: Enabled = {
+        config: { ...config },
+        droppable: new Droppable(
+          {
+            id: `${config.target}:${(serial += 1)}`,
+            collisionPriority: config.priority,
+            collisionDetector: detector(config),
+            data: { target: config.target },
+          },
+          dnd,
+        ),
+      };
       enabled.push(entry);
       return () => {
         const at = enabled.indexOf(entry);
         if (at >= 0) enabled.splice(at, 1);
+        entry.droppable.destroy();
         kinds.get(config.target).hover(null);
       };
     },
     hitTest(carried, clientX, clientY) {
-      for (const { target: name } of ordered()) {
-        const target = kinds.get(name);
-        const verdict = target.canDrop(carried, clientX, clientY);
-        if (verdict) return { name, target, verdict };
+      query = { carried, x: clientX, y: clientY };
+      const collisions = enabled.flatMap(({ droppable }) => {
+        const collision = droppable.collisionDetector({
+          droppable,
+          dragOperation: dnd.dragOperation,
+        });
+        return collision ? [collision] : [];
+      });
+      const first = collisions.sort(sortCollisions)[0];
+      const hit = first && enabled.find(({ droppable }) => droppable.id === first.id);
+      if (!first || !hit) return null;
+      const name = hit.config.target;
+      return { name, target: kinds.get(name), verdict: first.data!.verdict as DropVerdict };
+    },
+    enableSource(config) {
+      sources.kinds.get(config.source);
+      const entry = {
+        config: { ...config },
+        draggable: new Draggable(
+          {
+            id: `${config.source}:${(serial += 1)}`,
+            handle: sources.surface,
+            data: { source: config.source },
+          },
+          dnd,
+        ),
+      };
+      sourcesEnabled.push(entry);
+      return () => {
+        const at = sourcesEnabled.indexOf(entry);
+        if (at >= 0) sourcesEnabled.splice(at, 1);
+        presses.delete(entry.draggable);
+        entry.draggable.destroy();
+      };
+    },
+    pickUp(clientX, clientY) {
+      for (const { config } of sourcesEnabled) {
+        const picked = sources.kinds.get(config.source).pick(clientX, clientY);
+        if (picked) return picked;
       }
       return null;
     },
+    canStart(draggable, clientX, clientY) {
+      const entry = sourcesEnabled.find((enabled) => enabled.draggable === draggable);
+      const picked = entry ? sources.kinds.get(entry.config.source).pick(clientX, clientY) : null;
+      if (picked) presses.set(draggable, { picked, clientX, clientY });
+      else presses.delete(draggable);
+      return Boolean(picked);
+    },
+    pressed: (draggable) => presses.get(draggable) ?? null,
+    forgetPresses: () => presses.clear(),
     hover(hit) {
-      for (const name of new Set(enabled.map(({ target }) => target))) {
+      for (const name of new Set(enabled.map(({ config }) => config.target))) {
         const target = kinds.get(name);
         target.hover(hit?.target === target ? hit.verdict : null);
       }
     },
   };
+}
+
+function missingSource(name: string): never {
+  throw new Error(`Unknown drag source: ${name}`);
 }

@@ -56,6 +56,7 @@ export type SceneHost = {
       | "sellBinEntered"
       | "handEntered"
       | "enableDropTarget"
+      | "enableDragSource"
     >;
     shop: ShopView;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
@@ -212,6 +213,20 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit(_context, config) {
       targetsEnabled.get(config)?.forEach((disable) => disable());
       targetsEnabled.delete(config);
+    },
+  });
+  // While a scene shows, the drag sources its `dragSource` data names are allowed (#282).
+  const sourcesEnabled = new WeakMap<object, (() => void)[]>();
+  behaviours.register("dragSource", {
+    enter({ services }, config) {
+      sourcesEnabled.set(
+        config,
+        config.sources.map((source) => services.input.enableDragSource(source)),
+      );
+    },
+    exit(_context, config) {
+      sourcesEnabled.get(config)?.forEach((disable) => disable());
+      sourcesEnabled.delete(config);
     },
   });
   behaviours.register("passiveRackView", {
