@@ -24,7 +24,7 @@ A developer who needs a sound adds a registry entry for it straight away. The en
 
 `src/audio/sfx-usage.json` is the registry's record of where each sound is used. For each id it gives how many places name it, and in which files. That covers `playSfx` calls, data that names a sound (scene `enterSound`, material activations, family variants), and registry entries that use it as their `placeholder`. Run `npm run sfx:usage` after adding, removing or moving a sound; `src/audio/sfx-usage.test.ts` fails while the record is out of date.
 
-The listening room (`/sfx.html`) groups sounds under their family, shows each one's name and description, and reads the record:
+The listening room (`/sfx.html`) groups sounds under their registry `family` (#244), in the order families first appear in the registry, and shows each one's name and description. A magnitude family's members (`src/audio/sfx-families.ts`) sit together under one sub-heading, smallest band first, each labelled with the magnitude it starts at. The room takes all of this from registry data and names no family or sound itself; `src/tools/listening-room/families.test.ts` guards that. It also reads the usage record:
 
 - each row shows **used ×N**, with the files listed on hover, or **unused**;
 - a **Show** filter lists all sounds, only used ones, or only unused ones;
