@@ -26,9 +26,11 @@ export type MaterialDefinition = {
   traits: { transparent?: Record<string, never> };
   /**
    * How the material changes a line it contributes to (#141). Left out until the material's
-   * scoring is designed: meat, fire, ice and gold wait on #104–#107.
+   * scoring is designed: meat, fire and ice wait on #104–#106.
    */
   scoringModifier?: ScoringModifier;
+  /** Coins per card still held at settlement, on both a win and a loss. */
+  handReward?: { coinsPerCard: number };
   /** Presentation when one of this material's scoring rules fires. */
   activation?: { effect: TokenEffectConfig; sfx: SoundEffectId };
   /**
@@ -209,6 +211,9 @@ export const materialDefinitions = [
     name: "Gold",
     traits: {},
     shop: { basePrice: 8, weights: [[4, 1]] },
+    scoringModifier: { additive: 1 },
+    activation: { effect: { id: "pulse", colour: "#f3c85e" }, sfx: "material.activate.gold" },
+    handReward: { coinsPerCard: 2 },
     appearance: {
       pattern: "goldFoil",
       assembly: "sixFaces",

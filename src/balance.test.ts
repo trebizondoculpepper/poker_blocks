@@ -29,6 +29,14 @@ describe("the balance config (#7, #103)", () => {
         { ...materialDefinitions[1], scoringModifier: { multiplicative: 0 } },
       ]),
     ).toEqual(["wood: multiplicative must be positive"]);
+    expect(
+      validateMaterialBalance([
+        {
+          ...materialDefinitions.find(({ id }) => id === "gold")!,
+          handReward: { coinsPerCard: -1 },
+        },
+      ]),
+    ).toEqual(["gold: hand reward must be a nonnegative safe integer"]);
   });
 
   it("reports a missing balance or a bad price", () => {

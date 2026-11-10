@@ -6,7 +6,12 @@ import { roundOutcome, type Dealer } from "./dealer";
 import type { GameState, PlacedBlock, PlayAction } from "./game-state";
 import type { DestroyCause } from "./traits/destructible";
 import { moveItem } from "./zones";
-import { ledgerTotal, stageRewardLedger, type StageReward } from "./stage-rewards";
+import {
+  ledgerTotal,
+  materialHandRewardEntries,
+  stageRewardLedger,
+  type StageReward,
+} from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
 import { stageKinds, type RunRules, type StageKind } from "./run-rules";
 import {
@@ -254,22 +259,28 @@ export class GameRun {
   }
 
   /**
-   * Pay a won stage's rewards (issue #12): the completion bonus, then passives in rack
-   * order. Pays once per stage: asking again, after a reload or a second Continue, returns
-   * the same reward without adding coins. Null unless the current stage is won.
+   * Pay a decided stage once: a win gives the completion bonus, held-material rewards and
+   * stage-win passives; a loss gives held-material rewards only. A repeat returns the saved
+   * ledger without adding coins. Null while the stage is still playing.
    */
   claimStageRewards(): StageReward | null {
-    if (!this.inStage || roundOutcome(this.currentState) !== "won") return null;
+    if (!this.inStage) return null;
+    const outcome = roundOutcome(this.currentState);
+    if (outcome === "playing") return null;
     // The final stage.won always comes before its reward.finalized.
     this.announceOutcome();
     const stage = this.stageKey;
     if (this.rewarded?.stage === stage) return this.rewarded.reward;
     // Passive rewards read the state before payment: an interest rule sees balanceBefore.
-    const entries = stageRewardLedger(
-      this.currentState,
-      this.config.stageReward,
-      this.currentPhase as StageKind,
-    );
+    const entries =
+      outcome === "won"
+        ? stageRewardLedger(
+            this.currentState,
+            this.config.stageReward,
+            this.currentPhase as StageKind,
+          )
+        : materialHandRewardEntries(this.currentState);
+    if (outcome === "lost" && entries.length === 0) return null;
     const balanceBefore = this.currentState.coins;
     const balance = balanceBefore + ledgerTotal(entries);
     this.currentState = { ...this.currentState, coins: balance };
@@ -545,12 +556,11 @@ export class GameRun {
     const outcome = roundOutcome(this.currentState);
     if (outcome === "playing") return false;
     this.announceOutcome();
+    this.claimStageRewards();
     if (outcome === "lost") {
       this.currentPhase = "over";
       return true;
     }
-    // A won stage always pays before it is left (once; see claimStageRewards).
-    this.claimStageRewards();
     this.shopAfter = this.currentPhase as StageKind;
     this.currentState = this.clearTable(this.currentState);
     this.currentPhase = shopPosition;

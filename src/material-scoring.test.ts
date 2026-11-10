@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { standardDeck, type CardBlock } from "./cards";
 import type { PlacedBlock } from "./game-state";
-import { blockMaterials, type BlockMaterial } from "./materials";
+import { blockMaterials, getMaterialDefinition, type BlockMaterial } from "./materials";
 import { scoreFieldWithPassives } from "./passive-effects";
 import { createPassiveBlock } from "./passives";
 import { validateScoringModifier } from "./scoring-modifier";
@@ -24,6 +24,21 @@ describe("materials score through event rules (#141, doc/game.md worked examples
 
   it("wood pair: (7+1) + (7+1) = 16, x2 = 32", () => {
     expect(points(row(card("7", "hearts", "wood"), card("7", "clubs", "wood")))).toBe(32);
+  });
+
+  it("adds Gold's point only when that card contributes", () => {
+    const gold = card("7", "hearts", "gold");
+    expect(points(row(gold, card("7", "clubs")))).toBe(30);
+    const field = row(card("3", "spades", "gold"), card("7", "hearts"), card("7", "clubs"));
+    expect(points(field)).toBe(28);
+    expect(scoreFieldWithPassives(field, [])[0]!.activations).toEqual([]);
+    expect(scoreFieldWithPassives(row(gold, card("7", "clubs")), [])[0]!.activations).toEqual([
+      expect.objectContaining({ sourceId: gold.id, on: "score.beforeBlockValue" }),
+    ]);
+    expect(getMaterialDefinition("gold").activation).toMatchObject({
+      effect: { id: "pulse" },
+      sfx: "material.activate.gold",
+    });
   });
 
   it("steel in a pair: 28 x 1.25 = 35", () => {
