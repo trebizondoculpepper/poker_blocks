@@ -68,9 +68,13 @@ export function createWordCubeRoom(host: HTMLElement): WordCubeRoom {
       ).href;
       root.hidden = false;
       void stage.show(config.items, gridPositions(config.items.length)).then((cubes) =>
-        cubes.forEach(({ block }) => {
+        cubes.forEach(({ block, material }) => {
           block.on("menu.action", (action) => (part("action").textContent = String(action)));
-          block.on("inspection", (text) => (part("inspect").textContent = String(text)));
+          // Each cube's inspection, plus which material it was made of, so blocks can be told apart.
+          block.on(
+            "inspection",
+            (text) => (part("inspect").textContent = `${String(text)} · ${material.name}`),
+          );
         }),
       );
       // The scene's own animation: a gentle sway on each cube's outer group, so its faces catch

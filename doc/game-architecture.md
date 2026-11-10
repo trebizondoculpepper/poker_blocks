@@ -132,7 +132,7 @@ Material appearance is defined on each material definition in `src/materials.ts`
 - **How it works:** it is a lightweight approximation, not a fluid simulation. A copy of the block's shape is cut by a flat surface: fragments above it are discarded, and back faces seen through the cut are shaded flat, so the cut reads as the fluid's top. Each frame, the surface's normal eases toward "up" in the block's own space (the world's up, turned back by the block's rotation), using an exponential with the settle time constant. The fluid therefore levels slowly, without splashing or overshooting.
 - **Wall trace:** a second normal follows the surface more slowly. Inner wall that lies below that old surface but above the current one is tinted faintly. As the old surface catches up, the band shrinks to nothing, so the trace fades. Exact volume is not preserved as the block tilts.
 - **Where it can appear:** experimental materials live in `experimentalMaterials`, not `materialDefinitions`. No shop, reward, material sample or attract sequence ever deals them, and they carry no scoring, prices or rewards. A developer mode deals one only by asking: `materialDeck` with the `registered` pool (dev0 deals every registered material, so a new experiment appears there automatically), or the `uniformMaterialDeck` run setup step. The list is empty at the moment: custard, the first, graduated to `materialDefinitions` when the shop began to sell it (#342), so it is dealt like any gameplay material; `dev6` (sandbox play, every card custard) still shows it alone. `src/visual/filled-vessel.test.ts` checks that no file in `src/visual` names an experimental material, and that experiments stay out of gameplay.
-- **Shared simulations (#230):** blocks of one effect type show one simulation result. `src/visual/shared-simulation.ts` is a generic registry: `sharedSimulations.acquire(config, create)` returns the simulation for a configuration object (a material's appearance data), creating it on first use. It is released when the block's material is disposed, and dropped when no block uses it. A simulation advances at most once per frame, keyed on the frame's timestamp (`document.timeline.currentTime`), however many blocks render it. The vessel simulation keeps the fluid's surface and trace as world-space normals. It is driven by the rotation of the first block drawn each frame; blocks on the table all share the structure's rotation. Each block turns that result into its own space, so placement and orientation stay per block while the simulation runs once. `src/visual/shared-simulation.test.ts` checks one simulation and one step per frame for many blocks, separate configurations kept apart, identical results at one orientation, and the same world surface at another. It also guards that the per-block vessel factory gets its simulation from the registry. The flame core needs nothing more: it is a stateless shader of the shared clock, so every flame already looks identical. A future flame particle system should acquire its simulation the same way.
+- **Shared simulations (#230):** blocks of one effect type show one simulation result. `src/visual/shared-simulation.ts` is a generic registry: `sharedSimulations.acquire(config, create)` returns the simulation for a configuration object (a material's appearance data), creating it on first use. It is released when the block's material is disposed, and dropped when no block uses it. A simulation advances at most once per frame, keyed on the frame's timestamp (`document.timeline.currentTime`), however many blocks render it. The vessel simulation keeps the fluid's surface and trace as world-space normals. It is driven by the rotation of the first block drawn each frame; blocks on the table all share the structure's rotation. Each block turns that result into its own space, so placement and orientation stay per block while the simulation runs once. `src/visual/shared-simulation.test.ts` checks one simulation and one step per frame for many blocks, separate configurations kept apart, identical results at one orientation, and the same world surface at another. It also guards that the per-block vessel factory gets its simulation from the registry. The flame core needs nothing more: it is a stateless shader of the shared clock, so every flame already looks identical. A future flame particle system should acquire its simulation the same way. **Amended by #329:** simulations are shared per configuration _and_ motion cohort, and residue history is per block; see "Simulation sharing: amending #230" under Contained components.
 - **Performance:** each vessel adds three meshes (inner wall, fluid and trace) and two transparent layers (shell and trace), and the fluid is double-sided. That is more overdraw than an opaque block, and transparent sorting can occasionally flicker where vessels overlap. The shaders are cheap: one dot product and a discard, with no textures or extra render passes. A table full of vessels on a low-end phone is the case to watch. If it struggles, the first savings are to drop the trace mesh and use the outer shell alone.
 
 **Random amounts in rules (#97).** A scoring effect's amount can be a registered **value source** (`fixed`, `roll`) instead of a number. Dice are just `add-line-score { amount: { valueSource: "roll", sides: N } }` on the `score.afterLineClamp` phase. The rules are resolved once per scoring resolution, before candidate hands are compared, using the run's seeded random source. No controller rolls dice or knows that a die exists; `src/dice.test.ts` checks that no die name or dice field appears in the run, the controller, the scorer or the rule runner. The token's polyhedral shape comes from #125's registered shapes and applies to passive tokens only.
@@ -604,3 +604,178 @@ The title and pause scene definitions compose `blockTitle` with identical text a
 `createLaserOutline(geometry, colour, size, config?)` is a reusable presentation effect, composed into the first-play prompt and placement-preview visuals. It builds a narrow core and wider soft halo from merged edge tubes. Both passes share uniforms, and placement-preview clones share their geometry/materials. There is no particle or fluid simulation and no gameplay state in the effect.
 
 A four-dimensional gradient-noise field uses quintic interpolation. Its three spatial coordinates drift through the block-local edge positions while its fourth coordinate advances independently: the bright smoke patches evolve even with drift set to zero. Two octaves modulate brightness. Configuration controls frequency, drift velocity, evolution speed, and core/halo radii relative to object size. The caller supplies elapsed seconds and its existing opacity; reduced motion freezes noise time while opacity and placement feedback continue. The effect owns its generated tube geometry and shader materials and leaves its input geometry alone. Release fades and scene cleanup dispose the effect through its existing owner.
+
+## Contained components (#329, epic #328)
+
+**Status: design.** Nothing here is built yet. It records the contracts that #346 (the rendering proof) and #330–#336 and #349 (the extractions) implement. Code follows this section; where a mission learns something that changes it, that mission updates it in the same PR.
+
+### What exists today
+
+| Piece               | Where                                                                         | What it is                                                                                                                                                                                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plastic vessel      | `src/visual/filled-vessel.ts`, the `filledVessel` assembly                    | Clear plastic outer skin, inner skin drawn from the back for wall thickness, a fluid mesh cut by a plane, a wall-trace mesh and an optional additive gloss. One function builds shell, fluid and trace together, configured by `appearance.vessel`.                           |
+| Framed glass        | `flameFrame` and `glassPanes` in `src/visual/block-appearance.ts`             | An open iron frame (`frameRelief`), an additive glass sheen at 0.97 scale, and the raymarched flame (`src/visual/fire-core.ts`) inside.                                                                                                                                       |
+| Retired glass block | Removed in `f99d307` (2026-11-08); history in `9b23a60`, `c9779cf`, `b10308e` | A stained-glass lantern panel on each face: lead-and-steel came standing proud of six panes, each pane its own tint, refracting on the table. It was removed because it "looked too much like fire and prismatic crystal". Its code is recoverable from that commit's parent. |
+| Shared simulation   | `src/visual/shared-simulation.ts` (#230)                                      | One simulation per configuration object, stepped once per frame, driven by the first block drawn.                                                                                                                                                                             |
+
+Custard mixes three things the epic wants apart: a container (plastic shell and its inner wall), contents (a levelling fluid and its colours) and residue (the wall trace). Fire mixes a container (frame and panes) with contents (the flame).
+
+### The composition
+
+A contained block's appearance is three independent parts, declared as data on the material's appearance and built by one generic `contained` assembly:
+
+```ts
+appearance: {
+  assembly: "contained",
+  container: { shell: "plasticShell", shellConfig: { opacity: 0.18, gloss: 0.6 }, inset: 0.92 },
+  contents: { effect: "levellingFluid", config: { level: 0.55, settleSeconds: 1.2 }, look: "opaqueFluid", lookConfig: { fill: 0xf3d36b, surface: 0xffe9a8 } },
+  residue: { effect: "fadingFilm", config: { seconds: 6, opacity: 0.35 } },
+}
+```
+
+- `shell`, `effect`, `look` and residue `effect` are **handler names** in registries (`shellRegistry`, `contentsRegistry`, `fluidLookRegistry`, `residueRegistry`), the same pattern as `assemblyRegistry`. The assembly looks each name up and calls it; it never asks what a name is.
+- `contents` and `residue` are optional. **An empty container** (no contents) and **a fluid without residue** are valid. A block with no `container` is not a contained block; atomic materials (paper, wood, steel and the rest) stay as they are, and the block-writing and letter-block decomposition (#291) is untouched. The print skin is added by the assembly as today, so lettering stays independent.
+- Appearance values (colours, opacity, refraction, timings) are configuration, never a trait or handler per colour.
+- Experiments stay in `experimentalMaterials`, out of shops, rewards and material pools, as today.
+
+### The interior boundary
+
+The **interior boundary** is separate from the **visible shell**. The boundary is what contents live inside; the shell is what you see. They may share geometry but are never required to be the same mesh.
+
+```ts
+type InteriorBoundary = {
+  /** Immutable, shared: the block's own geometry. */
+  geometry: THREE.BufferGeometry;
+  /** Uniform scale from the block's outer surface to the inside of the wall (0–1). */
+  inset: number;
+  /** Half the block's size, in block-local units, at scale 1. */
+  halfSize: number;
+  /** A mesh placed just inside the wall, drawn from the back: where residue and wall effects draw. */
+  wall(material: THREE.Material, layer: ContainedLayer): THREE.Mesh;
+  /** A mesh filling the interior, for contents that clip against a plane or march a volume. */
+  volume(material: THREE.Material, layer: ContainedLayer): THREE.Mesh;
+};
+```
+
+- **Coordinate space:** block-local, unscaled. Every content and residue works in it. World "up" reaches them as `upLocal` (world up turned back by the block's rotation), computed once per block per frame by the assembly and passed in the frame context below. Nothing inside a container reads world space itself.
+- **Shapes:** only what exists: the block's rounded box, scaled by `inset`. No arbitrary concave vessels, SDFs or particle solvers. A future shape is a new boundary handler, not a branch.
+- The shell handler supplies the inset it needs (plastic is thin, the iron frame thicker), so contents never know which shell they are in.
+
+### Shells
+
+```ts
+type ShellHandler = (
+  context: AssemblyContext,
+  config: unknown,
+) => {
+  faces: THREE.Material[]; // the six outer-face materials
+  meshes: THREE.Mesh[]; // inner skin, panes, gloss…
+  inset: number; // where its interior starts
+  dispose(): void;
+};
+```
+
+Three shells are planned, each reusing an existing design: `plasticShell` (custard's two skins and gloss, #330), `framedGlass` (fire's frame and panes, #331) and `stainedLantern` (the retired glass block, recovered from `f99d307^`, #331). Whether the retired lantern may come back as a shell, given why it was removed, is an owner decision raised on #329; #331 does not revive it without that answer.
+
+### Contents and their capabilities
+
+Contents receive the boundary and a per-frame context, and publish **capabilities**: named, typed things other parts can query. Liquid surfaces and bounded volumes are different capabilities, so cloud and flame never invent a fluid surface to fit an interface.
+
+```ts
+type ContainedFrame = {
+  seconds: number;
+  delta: number;
+  upLocal: THREE.Vector3;
+  reducedMotion: boolean;
+};
+
+type ContentsHandler = (
+  boundary: InteriorBoundary,
+  config: unknown,
+  look: FluidLook | null,
+) => {
+  meshes: THREE.Mesh[];
+  update(frame: ContainedFrame): void;
+  capabilities: Partial<Capabilities>;
+  dispose(): void;
+};
+
+type Capabilities = {
+  /** A liquid's top: points p (block-local) with dot(p, normal) <= height are inside it. */
+  liquidSurface: { normal: THREE.Vector3; height: number; wet(p: THREE.Vector3): boolean };
+};
+```
+
+- **`levellingFluid`** (custard, water; #332) is today's settler: a surface normal easing toward `upLocal` with `settleSeconds`. It publishes `liquidSurface`. Its colours come from a separate **fluid look** (#333): `opaqueFluid` (custard's flat shade and lighter top) or `refractiveFluid` (water: transmission and refraction from `MeshPhysicalMaterial`). The fluid's dynamics never know its look.
+- **`flame`** (#335) is `fire-core.ts` moved inside the boundary's `volume`. It publishes no capabilities.
+- **`cloud`** (#336) is a cheap volume effect in the boundary, the same shape as flame. It publishes nothing either.
+- **Contained stars** (#349) emit the crystal title-trail star sprites inside the boundary, drifting under weak `upLocal` gravity, coloured by an age ramp. They are presentation only.
+
+Composition is checked when a material is built, by data: a residue declares the capability it requires (`requires: "liquidSurface"`), and the assembly throws a clear error at load if the contents don't publish it. That is a check of declared data, not a branch on what the contents are.
+
+### Residue
+
+Residue is optional and the fluid never knows it exists. Each frame, after contents update, the assembly hands the residue the contents' `liquidSurface`; the residue samples it (on the GPU, the plane as uniforms; on the CPU, `wet(p)` for any probe points) and keeps **its own** history of where the wall has been wet. No event per wetted texel or vertex is sent.
+
+Today's trace is one such history: a second plane that lags behind the surface. It costs nothing, but remembers only one previous surface, so a slosh back and forth leaves no trail. #346 compares representations before #334 picks one (below).
+
+### Render layers
+
+Composed parts must not pick render orders on their own: nested transparent layers (glass, refractive water, film) only look right in one order. The `contained` assembly owns a single table, and parts ask for a named layer:
+
+| Layer                 | Order | Holds                                            |
+| --------------------- | ----- | ------------------------------------------------ |
+| `shellBack`           | 1     | Inner skin / back walls, drawn from the back     |
+| `contentsOpaque`      | 2     | Opaque fluid, the fluid's cut top                |
+| `residue`             | 3     | Wall film, just inside the wall, from the back   |
+| `contentsTransparent` | 4     | Refractive water, flame, cloud, stars (additive) |
+| `shellFront`          | 5     | Front panes and plastic                          |
+| `gloss`               | 6     | Additive reflections over everything inside      |
+
+The print skin keeps its global order (20), above every contained layer. These orders replace today's ad-hoc numbers inside contained blocks (vessel 1–4, fire core 10); other global orders (face highlight 10, prompt 11, laser outline 12, meltwater 15, print 20) are unchanged. #346 checks this order with glass + refractive water + film, the hardest stack, before any extraction.
+
+### Lifecycle and ownership
+
+- **Build order:** shell (gives `inset`) → boundary → contents (given the boundary and look) → residue (given the boundary and the contents' capabilities) → print skin. The assembly returns one `BlockAppearance`, as every assembly does.
+- **Per frame:** one `onBeforeRender` on the block's first contained mesh builds the `ContainedFrame` once (`upLocal` from the block's world rotation, `seconds` from the frame clock) and calls `contents.update`, then `residue.update`. No other part reads the clock or world rotation.
+- **Dispose:** the reverse order, each part disposing what it created and releasing what it acquired. `rendered-blocks.ts` keeps disposing materials and textures as today; the parts' `dispose` releases shared simulations and history buffers.
+- **Ownership:** immutable definitions (configuration, geometry, shader programs) are shared; per-instance state (residue history, a block's own frame context) belongs to the block; rendering resources are created by the part that uses them and released by it.
+
+### Simulation sharing: amending #230
+
+#230's rule is "blocks of one effect type show one simulation result", one simulation per configuration, driven by the first block drawn each frame. That holds while all such blocks turn together (the table's structure). It is wrong for blocks that move independently, which contained blocks now do: a held block being dragged, hand and shop blocks, block-title rows each turning to the beat. Their fluid then levels with another block's motion. Residue makes it worse: wetting history is the record of one block's own past, so it cannot be shared at all.
+
+The amended rule has three tiers:
+
+1. **Immutable resources are shared per configuration**, always: geometry, shader programs, textures, fluid looks.
+2. **Simulations are shared per configuration _and_ motion cohort.** A cohort is a set of blocks that move rigidly together: the structure on the table, or a single free block (in hand, dragged, in the shop, in a title row). The cohort key is the rigid parent object the blocks share (the field's assembly group; a free block is its own cohort). `sharedSimulations.acquire` becomes keyed by `(configuration, cohort)` and the driving block is always a member of its cohort, so "first block drawn" can no longer be a block that moved differently. The table's case is unchanged: one simulation for the whole structure.
+3. **History is per block.** Residue keeps its own bounded history per contained block; nothing shares it.
+
+Stateless shaders of the clock (the flame core, cloud) need no simulation and are unaffected.
+
+**Cost and evidence.** A simulation step is a few vector operations: well under 0.01 ms. With cohorts there are at most (configurations × cohorts) steps per frame: one for the table, plus one per free contained block (a hand of 8 and a shop of 4 would add 12 tiny steps). The real cost is per-block residue history and transparent overdraw, which #346 measures.
+
+### The bounded comparison for #346
+
+#346 builds one contained block (a glass shell, refractive water, a fading film) in a dev room, and measures before any extraction:
+
+- **Residue representations**, each fading over `seconds`:
+  1. **Lagging plane** (today): no memory, one previous surface.
+  2. **Plane ring buffer**: the last N surfaces (N = 4 and 8) as uniforms, fading by age. Fixed, small cost; remembers a few sloshes.
+  3. **Wetness texture**: a low-resolution wetness map over the wall (6 faces × 32² texels), written on the GPU each frame from the surface and decayed by `seconds`. Remembers any history; costs a render target per block.
+- **Layering:** the glass + water + film stack, at several angles and over a busy background, checked for sorting errors and flicker.
+- **Representative load:** 24 contained blocks on the table plus 8 in hand, on a desktop browser and a mid-range phone.
+
+**Targets** (to confirm or revise in #346): 60 fps on desktop and at least 50 fps on the phone at that load; at most 7 draw calls per contained block; residue memory at most 32 KB per block (a 6 × 32² single-channel float16 map is 12 KB); simulation steps at most 0.05 ms per frame in total. #346 records the measured numbers here and picks the residue representation for #334.
+
+### Data flow by example
+
+| Block   | Shell                           | Boundary inset | Contents                           | Look              | Residue                                                       |
+| ------- | ------------------------------- | -------------- | ---------------------------------- | ----------------- | ------------------------------------------------------------- |
+| Custard | `plasticShell`                  | thin (≈0.92)   | `levellingFluid` → `liquidSurface` | `opaqueFluid`     | `fadingFilm` (optional)                                       |
+| Water   | `framedGlass` or `plasticShell` | per shell      | `levellingFluid` → `liquidSurface` | `refractiveFluid` | optional                                                      |
+| Fire    | `framedGlass`                   | frame (≈0.97)  | `flame` (volume, `upLocal`)        | —                 | none (needs `liquidSurface`, so declaring it is a load error) |
+| Air     | any shell                       | per shell      | `cloud` (volume)                   | —                 | none                                                          |
+| Empty   | any shell                       | per shell      | —                                  | —                 | —                                                             |
+
+The same boundary contract serves all of them; no content, look or residue knows which shell holds it.

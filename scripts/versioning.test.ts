@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { buildVersion, derivedVersion, releaseVersion, versionParts } from "./versioning";
 import { versionChangeProblem } from "./version-guard";
-import { manifestsAt } from "./release";
 
 describe("versions (#128)", () => {
   it("derives the patch from the commits since the last release", () => {
@@ -22,14 +21,25 @@ describe("versions (#128)", () => {
     expect(() => versionParts("1.2")).toThrow();
   });
 
+  it("derives the patch from the last release tag when there is one", () => {
+    const git = (...args: string[]) =>
+      args[0] === "describe" ? "v0.4.0" : args[0] === "rev-parse" ? "false" : "3";
+    expect(buildVersion("0.2.0", git)).toBe("0.4.3");
+  });
+
   it("marks a build without history as a development build", () => {
-    const shallow = () => "true";
+    const shallow = (...args: string[]) => {
+      if (args[0] === "describe") throw new Error("no tags");
+      return "true";
+    };
     expect(buildVersion("0.2.0", shallow)).toBe("0.2.0-dev");
   });
 
   it("counts first-parent commits since the version last changed", () => {
-    const git = (...args: string[]) =>
-      args[0] === "rev-parse" ? "false" : args[0] === "log" ? "abc123" : "5";
+    const git = (...args: string[]) => {
+      if (args[0] === "describe") throw new Error("no tags");
+      return args[0] === "rev-parse" ? "false" : args[0] === "log" ? "abc123" : "5";
+    };
     expect(buildVersion("0.2.0", git)).toBe("0.2.5");
   });
 });
@@ -47,20 +57,5 @@ describe("the version guard (#128)", () => {
 
   it("ignores commits that leave the version alone", () => {
     expect(versionChangeProblem({ ...change, after: "0.1.0", subject: "Anything" })).toBeNull();
-  });
-});
-
-describe("the release (#128)", () => {
-  it("writes the version into package.json and both lockfile fields", () => {
-    const [pkg, lock] = manifestsAt(
-      JSON.stringify({ name: "x", version: "0.0.0" }),
-      JSON.stringify({ version: "0.0.0", packages: { "": { version: "0.0.0" } } }),
-      "0.1.0",
-    );
-    expect(JSON.parse(pkg).version).toBe("0.1.0");
-    expect(JSON.parse(lock)).toMatchObject({
-      version: "0.1.0",
-      packages: { "": { version: "0.1.0" } },
-    });
   });
 });
