@@ -12,7 +12,7 @@ import {
 const origin: Cell = { x: 0, y: 0, z: 0 };
 const config: FirstPlayPromptConfig = {
   colour: 0x65f4dd,
-  pulseSeconds: 1.8,
+  glow: 0.8,
   armed: { beatSeconds: 0.5, scale: [1.04, 1.09], opacity: [0.3, 0.42] },
   release: { seconds: 0.5, growth: 0.6 },
 };
@@ -145,7 +145,7 @@ describe("first-play prompt trait (#203)", () => {
     dance(0, 1);
     behaviour.update!(context, dancing, 0.016);
     expect(ghost!.scale.x).toBe(1);
-    // The dance moves only its size: the glow keeps its own pulse.
+    // The dance moves only its size: the glow stays steady.
     expect(opacity(ghost!)).toBeCloseTo(glow, 1);
     // With no music (energy 0) it never grows.
     dance(0.9, 0);
@@ -155,31 +155,25 @@ describe("first-play prompt trait (#203)", () => {
     expect(dancers.size).toBe(0);
   });
 
-  it("flashes its glow on the beat while music plays, and keeps its own pulse without", () => {
+  it("glows steadily while idle: no pulse and no flash, music or not", () => {
     const behaviour = firstPlayPrompt();
-    const { shown, dancers, dance, context } = table();
-    const flashing = { ...config, flash: { cycle: "beat", shape: "pulse", offset: 0.04 } };
-    behaviour.enter!(context, flashing);
-    expect([...dancers].map(({ cycle, offset }) => [cycle, offset])).toEqual([["beat", 0.04]]);
-    behaviour.update!(context, flashing, 0.016);
+    const { shown, dance, context } = table();
+    const dancing = { ...config, dance: { cycle: "bar", shape: "saw", offset: 0, swell: 0.12 } };
+    behaviour.enter!(context, dancing);
+    behaviour.update!(context, dancing, 0.016);
     const [ghost] = meshes(shown);
-    // The glow: the fill's opacity is 0.18 at the peak of a pulse or flash.
-    const glow = () => opacity(ghost!) / 0.18;
-    // On the beat: full brightness; late in the beat: almost dark.
-    dance(0, 1);
-    behaviour.update!(context, flashing, 0.016);
-    expect(glow()).toBeCloseTo(1);
-    dance(0.9, 1);
-    behaviour.update!(context, flashing, 0.016);
-    expect(glow()).toBeLessThan(0.01);
-    // With no music (energy 0), the glow is its own slow pulse, whatever the beat.
-    dance(0.9, 0);
-    behaviour.update!(context, flashing, 0.016);
-    expect(glow()).toBeGreaterThan(0.9);
-    // Flashing never changes its size.
-    expect(ghost!.scale.x).toBe(1);
-    behaviour.exit!(context, flashing);
-    expect(dancers.size).toBe(0);
+    const glows = [];
+    for (const [phase, energy, seconds] of [
+      [0, 1, 0.3],
+      [0.5, 1, 0.7],
+      [0.9, 0, 1.1],
+    ] as const) {
+      dance(phase, energy);
+      behaviour.update!(context, dancing, seconds);
+      glows.push(opacity(ghost!));
+    }
+    expect(glows).toEqual([0.18 * 0.8, 0.18 * 0.8, 0.18 * 0.8]);
+    behaviour.exit!(context, dancing);
   });
 
   it("doesn't dance when its configuration has no dance", () => {
