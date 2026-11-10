@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { validateMaterialBalance, validatePassiveBalance } from "./balance";
+import {
+  stageTargetBalance,
+  validateMaterialBalance,
+  validatePassiveBalance,
+  validateStageTargetBalance,
+} from "./balance";
 import { materialDefinitions } from "./materials";
 import { passiveDefinitions, createPassiveBlock } from "./passives";
 import { defaultResale, resaleValue } from "./resale";
@@ -70,5 +75,35 @@ describe("the default resale policy (#103)", () => {
     for (const [file, text] of Object.entries(transactionSources)) {
       expect(text, file).not.toMatch(/basePrice|defaultResale|resaleValue/);
     }
+  });
+});
+
+describe("stage target balance (#137)", () => {
+  it("validates the configured opening target and stage rates", () => {
+    expect(validateStageTargetBalance(stageTargetBalance)).toEqual([]);
+    expect(validateStageTargetBalance({ ...stageTargetBalance, openingTarget: 0 })).toContain(
+      "opening target must be a positive whole number",
+    );
+    expect(
+      validateStageTargetBalance({
+        ...stageTargetBalance,
+        stages: [{ kind: "stage-1", rateInto: Number.POSITIVE_INFINITY }],
+      }),
+    ).toContain("stage-1: rate must be finite and at least 1");
+    expect(
+      validateStageTargetBalance({
+        ...stageTargetBalance,
+        stages: [{ kind: "stage-1", rateInto: 0.5 }],
+      }),
+    ).toContain("stage-1: rate must be finite and at least 1");
+  });
+
+  it("rejects a rounded target that cannot be represented safely", () => {
+    expect(
+      validateStageTargetBalance({
+        openingTarget: Number.MAX_SAFE_INTEGER,
+        stages: [{ kind: "first", rateInto: 2 }],
+      }),
+    ).toContain("stage target must remain a positive safe integer after rounding");
   });
 });
