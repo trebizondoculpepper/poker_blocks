@@ -18,7 +18,11 @@ function recordingHost() {
         tableEntered: (entered) => void calls.push(`table:${entered}`),
         handEntered: (entered) => void calls.push(`hand:${entered}`),
       },
-      blockTitles: { show: () => () => {} },
+      blockTitles: {
+        show: () => () => {},
+        tuning: () => ({ scale: 1, phaseDegrees: 180 }),
+        retune() {},
+      },
       attract: {
         start: () => void calls.push("attract:start"),
         stop: () => void calls.push("attract:stop"),
@@ -623,5 +627,30 @@ describe("the shop scene's own arrival (#93)", () => {
     scenes.register(scenesOf("shop"));
     scenes.switchTo(scenesOf("shop").id);
     expect(calls).not.toContain("camera:shopEntrance");
+  });
+});
+
+describe("developer word tuning", () => {
+  it("routes sliders to the live title without resetting the other value, and releases the panel", () => {
+    const { host, calls } = recordingHost();
+    let controls: readonly import("./attract-tuning-panel").TuningControl[] = [];
+    const updates: import("./scene-traits/block-title").BlockTitleTuning[] = [];
+    host.services.attract.showTuning = (next) => {
+      controls = next ?? [];
+    };
+    host.services.blockTitles.retune = (next) => {
+      updates.push(next);
+    };
+    const behaviour = sceneBehaviours<SceneHost>().get("devAttractTuning");
+    behaviour.enter!(host, {});
+    expect(controls.map(({ value }) => value)).toEqual([1, 180]);
+    controls[0]!.onChange(0.75);
+    controls[1]!.onChange(90);
+    expect(updates).toEqual([
+      { scale: 0.75, phaseDegrees: 180 },
+      { scale: 0.75, phaseDegrees: 90 },
+    ]);
+    behaviour.exit!(host, {});
+    expect(calls).toContain("attract:tuning-hide");
   });
 });

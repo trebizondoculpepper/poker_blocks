@@ -700,7 +700,7 @@ const gameModes: GameMode[] = [
       onLoad: "title",
       save: { key: "poker-blocks.dev7-run" },
       console: { name: "dev7" },
-      music: { style: "quiet" },
+      music: { style: "ordinary" },
     },
   },
   ...(import.meta.env.DEV

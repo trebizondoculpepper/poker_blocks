@@ -70,3 +70,18 @@ describe("word precession", () => {
     expect(forward(row).toArray()).toEqual([0, 0, 1]);
   });
 });
+
+it("allows live phase spacing to replace evenly spaced precession", () => {
+  const config = { text: "Two Words", scale: 1, precession: { phaseDegrees: 90 } };
+  const first = new THREE.Group();
+  const second = new THREE.Group();
+  precessTitleRow(first, 0, 0, 2, config, 1);
+  precessTitleRow(second, 0, 1, 2, config, 1);
+  const axis = new THREE.Vector3(0, 0, 1);
+  const a = axis.clone().applyQuaternion(first.quaternion);
+  const b = axis.clone().applyQuaternion(second.quaternion);
+  expect(a.x).toBeGreaterThan(0);
+  expect(a.y).toBeCloseTo(0);
+  expect(b.x).toBeCloseTo(0);
+  expect(b.y).toBeCloseTo(a.x);
+});

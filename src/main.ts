@@ -1,3 +1,4 @@
+import type { TuningControl } from "./attract-tuning-panel";
 import { createBlockTitles } from "./block-title-view";
 import type { BlockTitles } from "./scene-traits/block-title";
 /**
@@ -123,7 +124,12 @@ type TraitContext = {
     run: RunController;
     board: BlockDestroyerBoard;
     blockTitles: BlockTitles;
-    attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
+    attract: {
+      start(): void;
+      stop(): void;
+      showTuning(controls?: readonly TuningControl[]): void;
+      hideTuning(): void;
+    };
     shop: ShopView;
     rack: { viewEntered(entered: boolean, capacity: number): void };
     deckView: DeckView;
