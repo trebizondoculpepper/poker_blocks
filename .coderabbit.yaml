@@ -107,14 +107,17 @@ reviews:
           Judge input changes against "Input" in doc/game-architecture.md and AGENTS.md's
           "Input ownership". FAIL if the diff ADDS:
           1. A decision about what can be picked up, where something can be dropped, or what a
-             gesture becomes, made outside a drag source (`dragSource`), drop target
-             (`dropTarget`) or gesture recognizer.
-          2. A branch in the drag-and-drop manager (src/drag-drop.ts) or the gesture arena on an
-             owner, scene or block kind.
+             gesture does, made outside a drag source (`dragSource`), drop target
+             (`dropTarget`) or board-gesture handler.
+          2. A branch in the input adapter (src/drag-drop.ts, the dnd-kit and use-gesture
+             wiring) on an owner, scene or block kind.
+          2a. Drag, pinch, rotate or wheel handling written by hand where the chosen libraries
+             should do it: dnd-kit for drag and drop, use-gesture for board gestures.
           3. Input held back or ignored because an animation is running (model first, #272).
           4. A capture, cancel or lost-capture path that doesn't reach every owner.
           5. Non-standard names for these pieces (use drag source, drop target, hit test,
-             hover, drop, reject, gesture arena, recognizer, began/changed/ended/cancelled).
+             hover, drop, reject, draggable, droppable, sensor, collision detection,
+             began/changed/ended/cancelled).
           PASS otherwise. When failing, name each line and the owner that should hold it.
       - name: "Baseline only shrinks"
         mode: error
