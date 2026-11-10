@@ -24,7 +24,7 @@ A developer who needs a sound adds a registry entry for it straight away. The en
 
 `src/audio/sfx-usage.json` is the registry's record of where each sound is used. For each id it gives how many places name it, and in which files. That covers `playSfx` calls, data that names a sound (scene `enterSound`, material activations, family variants), and registry entries that use it as their `placeholder`. Run `npm run sfx:usage` after adding, removing or moving a sound; `src/audio/sfx-usage.test.ts` fails while the record is out of date.
 
-The listening room (`/sfx.html`) groups sounds under their family, shows each one's name and description, and reads the record:
+The listening room (`/sfx.html`) groups sounds under their registry `family` (#244), in the order families first appear in the registry, and shows each one's name and description. A magnitude family's members (`src/audio/sfx-families.ts`) sit together under one sub-heading, smallest band first, each labelled with the magnitude it starts at. The room takes all of this from registry data and names no family or sound itself; `src/tools/listening-room/families.test.ts` guards that. It also reads the usage record:
 
 - each row shows **used ×N**, with the files listed on hover, or **unused**;
 - a **Show** filter lists all sounds, only used ones, or only unused ones;
@@ -218,7 +218,9 @@ These already happen in the game, but have no dedicated id:
 
 - **Generated:** priority 1 is done. `shop.buy`, `shop.stock.toss`, `shop.stock.land`, `shop.stock.burn`, `block.destroyed`, and `passive.activate.scoring`, `.economy`, `.effect` and `.retrigger` now have generated audio. So do the nine gameplay `material.attach.*` sounds from #232, which no longer fall back to `card.attach`.
 - **Loudness:** takes that came back quiet were peak-normalised offline with ffmpeg to about −1 dB. These were wood, terracotta, ice and crystal attach, and the scoring, economy and effect activations. All committed takes now peak between −3 dB and 0 dB.
-- **Still pending:** each take needs to be auditioned by ear in `/sfx.html`, and the remaining priorities 2–5 are still open.
+- **Kept:** `score.line` and `score.big` stay in the registry with their audio, at the owner's request, though nothing plays them yet.
+- **New ids for existing actions (priority 4):** `shop.leave` (leaving the shop, standing in with `shop.open`) and `passive.pickup` (lifting a passive, standing in with `card.pickup`), both registered with prompts so their audio can be made later. The stage-won reward rows already play `reward.coin` as each appears, so they need no new id.
+- **Still pending:** each take needs to be auditioned by ear in `/sfx.html`.
 
 ### Recommendations, in priority order
 

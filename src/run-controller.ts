@@ -365,6 +365,7 @@ export function createRunController<Context>(options: {
       }
       const moved = leavingShop ? game.leaveShop() : game.advance();
       if (!moved) return;
+      if (leavingShop) playSfx("shop.leave");
       // advance() may have ended the run (TypeScript still has the pre-call narrowing).
       if ((game.phase as RunPhase) === "over") {
         endRun();

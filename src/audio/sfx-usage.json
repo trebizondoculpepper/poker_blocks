@@ -15,7 +15,8 @@
   "card.pickup": {
     "uses": 2,
     "files": {
-      "table-input.ts": 2
+      "audio/sfx-registry.ts (placeholder)": 1,
+      "table-input.ts": 1
     }
   },
   "card.drag.snap": {
@@ -145,8 +146,9 @@
     }
   },
   "shop.open": {
-    "uses": 1,
+    "uses": 2,
     "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
       "game-modes.ts": 1
     }
   },
@@ -308,6 +310,18 @@
     "uses": 1,
     "files": {
       "materials.ts": 1
+    }
+  },
+  "passive.pickup": {
+    "uses": 1,
+    "files": {
+      "table-input.ts": 1
+    }
+  },
+  "shop.leave": {
+    "uses": 1,
+    "files": {
+      "run-controller.ts": 1
     }
   },
   "material.activate.wood": {
