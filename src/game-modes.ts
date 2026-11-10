@@ -61,6 +61,8 @@ export type SceneTraits = {
   devAttractTuning: Record<never, never>;
   /** Developer-only shop balance draft editor, mounted only by a mode composing it. */
   devShopBalanceEditor: { backTo: string };
+  /** Developer tool: the object browser, every game object by category (dev9). */
+  devObjectBrowser: { backTo: string };
   /** The HUD wears this registered style (src/hud-styles.ts) while the scene is on the stack. */
   hudStyle: HudStyleConfig;
   /** Testing only: a selector that switches the HUD between these styles (#121). */
@@ -255,7 +257,12 @@ export const sceneDefinitions = [
       keyAction: { key: "Escape", action: "back" },
     },
   },
-  ...(import.meta.env.DEV ? ([{ name: "balance-editor", traits: {} }] as const) : []),
+  ...(import.meta.env.DEV
+    ? ([
+        { name: "balance-editor", traits: {} },
+        { name: "object-browser", traits: {} },
+      ] as const)
+    : []),
   {
     name: "stage-1",
     traits: {
@@ -643,6 +650,23 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev8-run" },
             console: { name: "dev8" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // Every game object by category, one page each, with a preview and its properties.
+          id: "dev9",
+          scenes: composeScenes("dev9", [
+            { scenes: ["object-browser"], traits: { devObjectBrowser: { backTo: "game" } } },
+          ]),
+          startScene: "object-browser",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev9-run" },
+            console: { name: "dev9" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,
