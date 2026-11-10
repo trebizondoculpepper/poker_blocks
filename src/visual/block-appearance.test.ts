@@ -13,6 +13,7 @@ describe("composed material appearance", () => {
       id: "test-amber",
       name: "Test Amber",
       traits: {},
+      acoustics: { character: "test", hardness: 1, attach: "material.attach.paper" },
       appearance: {
         pattern: "goldFoil",
         assembly: "sixFaces",
