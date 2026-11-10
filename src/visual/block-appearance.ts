@@ -3,6 +3,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import type { IdentityTrait } from "../cards";
 import type { MaterialDefinition } from "../materials";
 import { createCrystalFire } from "./crystal-fire";
+import { createFilledVessel } from "./filled-vessel";
 import { createFireCore } from "./fire-core";
 
 export type BlockAppearance = {
@@ -1121,12 +1122,31 @@ function frostedBlock(context: AssemblyContext): BlockAppearance {
   );
 }
 
+/**
+ * A hollow clear vessel part-filled with fluid (#227), configured by the material's
+ * `appearance.vessel` data (src/visual/filled-vessel.ts). The rank and suit sit on a print skin.
+ */
+function filledVessel(context: AssemblyContext): BlockAppearance {
+  const { identity, definition, geometry, size } = context;
+  const vessel = definition.appearance.vessel;
+  if (!vessel) throw new Error("A filled vessel needs vessel data");
+  const print = printSkin(identity, definition.appearance, geometry);
+  const { shell, extras } = createFilledVessel(geometry, size, vessel, reflectionEnvironment);
+  return appearanceBase(
+    context,
+    [print.texture],
+    Array.from({ length: 6 }, () => shell),
+    [...extras, print.skin],
+  );
+}
+
 const assemblyRegistry = new Map<string, AssemblyHandler>([
   ["sixFaces", sixFaces],
   ["brushedFaces", brushedFaces],
   ["refractiveCrystal", refractiveCrystal],
   ["flameFrame", flameFrame],
   ["frostedBlock", frostedBlock],
+  ["filledVessel", filledVessel],
 ]);
 
 const geometryRegistry = new Map<
