@@ -196,7 +196,7 @@ These are rows marked planned in the tables above with no registry entry. Most w
 - **Exists in the game:**
   - **`coin.earn`** is covered in practice by `reward.coin`. Drop the planned row, or rename it.
   - **`coin.spend`** is covered by `shop.buy`.
-  - **`shop.cannot_afford`:** a refused purchase plays `action.denied`, which is fine to keep. Drop the row, or register it.
+  - **`shop.cannot_afford`:** registered as `shop.buy.denied` (the owner found the shared `action.denied` too easy to miss); a refusal for no room still plays `action.denied`.
   - **`deck.add_block`:** a bought card joining the deck (#143), currently silent apart from `shop.buy`.
   - **`shop.leave`:** leaving the shop plays only `ui.click`.
   - **`block.destroy`** is a duplicate of the registered `block.destroyed`; fix the table.
@@ -226,7 +226,7 @@ These already happen in the game, but have no dedicated id:
 
 1. **Generate audio for the silent sounds the player meets every run:** `shop.buy`, `shop.stock.toss` and `shop.stock.land` (the shop's entrance), `shop.stock.burn`, `block.destroyed`, and the four `passive.activate.*` categories. They are already wired up, so this is only `npm run sfx` with prompts. Most have no `prompt` yet.
 2. **Retire or repurpose `score.line` and `score.big`,** and fix the table rows (`block.destroy` → `block.destroyed`, `shop.buy` → registered).
-3. **Fold duplicate plans into what exists:** `coin.earn` → `reward.coin`, `coin.spend` → `shop.buy`, `shop.cannot_afford` → `action.denied`.
+3. **Fold duplicate plans into what exists:** `coin.earn` → `reward.coin`, `coin.spend` → `shop.buy`, `shop.cannot_afford` → `shop.buy.denied`.
 4. **New ids for existing actions:** `shop.leave`, `deck.add_block` (or let `shop.buy` cover it), `passive.pickup`, and a stage-won reward-row tick.
 5. **Families (#235):** the passive activations (`passive.coins` by amount) and future `score.total.tick` are natural magnitude families. Material attachment (#232) is grouped by material data instead, and needs no family.
 
