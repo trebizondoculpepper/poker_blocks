@@ -211,19 +211,27 @@ The run is saved automatically (`src/save.ts`) at safe points only: when a place
 {
   "version": 1,
   "round": 1,
-  "phase": "stage-2",
+  "scene": "stage-2",
   "dealer": "base",
   "state": {
     "field": [{ "cardId": "7-hearts", "cell": { "x": 0, "y": 0, "z": 0 } }],
     "hand": ["K-spades"],
     "deck": ["..."],
     "discardPile": ["..."],
-    "round": { "score": 0, "targetScore": 150, "movesLeft": 6, "discardsLeft": 4 }
+    "round": { "score": 0, "targetScore": 525, "movesLeft": 6, "discardsLeft": 4 }
   }
 }
 ```
 
-Loading rebuilds the blocks from the standard deck and `GameRun.fromSnapshot` restores the session. A record with another version, an unknown phase or dealer, unknown or duplicate card ids, a missing card or malformed numbers is ignored, which hides Continue. A lost run (phase `over`) clears the save. All storage access is wrapped so the game still works, without Continue or remembered settings, when storage is unavailable.
+Loading rebuilds the blocks from the mode's starting deck and `GameRun.fromSnapshot` restores the session. A record with another version, an unknown scene or dealer, unknown or duplicate card ids, a missing card or malformed numbers is ignored, which hides Continue. A lost run clears the save. All storage access is wrapped so the game still works, without Continue or remembered settings, when storage is unavailable.
+
+### Card identity across Continue (#214)
+
+`toSaveRecord` writes card IDs and order for the hand, deck and discard pile, and card ID plus cell for the field. `fromSaveRecord` resolves those IDs against the mode's starting deck and the run's `boughtCards` ledger. A normal starting deck is rebuilt from `standardDeck`: each ID maps to its current rank and suit, with paper as its default material. A mode's `materialDeck` step rebuilds its material mix from the saved deck seed using `makeDevDeck`; the seed, rather than each starting card's material, is serialized. With the same deck definitions and seed, the card in each zone returns with the same rank, suit and material. The field copy loses only its selectable trait.
+
+Newly bought cards differ: `boughtCards` serializes each card's ID, rank, suit and material in full. Card shop stock also saves these four fields through its offer kind; a passive offer saves its own definition and ID. `restoreCard` rebuilds a card from the saved rank, suit and material definition. Unknown ranks, suits or materials invalidate the save rather than silently changing the card. `fromSaveRecord` also rejects unknown or duplicate card IDs and requires every owned card to appear in exactly one of field, hand, deck or discard pile. Old borrowed-card offers saved only by ID are returned to the deck and removed from stock on load.
+
+The starting deck's rank and suit mapping and the material assignment algorithm are **current code**, not frozen in the record. Changing either while retaining an ID can change a starting card after Continue. A material-deck record with no valid seed is accepted for compatibility, but `run-controller.ts` then builds a fresh material mix; that legacy or malformed record can return a card with a different material ([#216](https://github.com/trebizondoculpepper/poker_blocks/issues/216)). A focused regression guardrail should compare ID, rank, suit and material for every owned zone and every card offer after a JSON save/load round trip, including a seeded material run and bought cards. The missing-seed case needs an explicit compatibility policy before it can claim identity preservation.
 
 ## Modes, scenes and traits
 
