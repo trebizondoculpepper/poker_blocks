@@ -67,6 +67,22 @@ const spread = 5.5;
  */
 export const lensClearance = 2.8;
 
+/** One full back-and-forth of the camera's roll, in seconds. */
+export const cameraRollPeriod = 140;
+/**
+ * How far the camera rolls each way from level: one revolution, so each sweep from one
+ * extreme to the other turns the view through two full revolutions before it reverses.
+ */
+export const cameraRollAmplitude = Math.PI * 2;
+
+/**
+ * The camera's roll about its line of sight after `seconds`: simple harmonic motion, so it
+ * turns fastest through level, eases to a stop at each extreme and reverses (#203).
+ */
+export function cameraRoll(seconds: number): number {
+  return cameraRollAmplitude * Math.sin((2 * Math.PI * seconds) / cameraRollPeriod);
+}
+
 /** No card is slower than this, however its speed is dealt, so none stalls in the field. */
 const minimumSpeed = 1.2;
 
@@ -432,6 +448,8 @@ export function createAttractScene(
     cards.push(card);
   }
 
+  /** Seconds the sequence has run, for the camera's slow roll. */
+  let elapsed = 0;
   /** Scratch for a card's normalised spin axis each frame. */
   const spinAxis = new THREE.Vector3();
 
@@ -476,6 +494,9 @@ export function createAttractScene(
     },
     update(delta) {
       sinceSpawn -= delta;
+      elapsed += delta;
+      // Looking down -z, so a turn about z rolls the view around the cards' line of travel.
+      camera.rotation.set(0, 0, cameraRoll(elapsed));
       // Touching cards knock each other about, and the lens lane turns them away.
       const bodies = cards.map(({ cube, velocity, angular }) => ({
         position: cube.position,
