@@ -45,8 +45,22 @@ describe("game modes composed from traits", () => {
       "dev8",
       "dev9",
       "dev10",
+      "dev11",
       "dev12",
     ]);
+  });
+
+  it("opens dev11 straight onto the title audition scene: background, title and music only", () => {
+    const mode = gameModeFor("dev11");
+    expect(mode.traits.onLoad).toBe("scene");
+    expect(mode.startScene).toBe("title-audition");
+    const scene = mode.scenes.find(({ id }) => id.endsWith("/title-audition"));
+    expect(scene?.traits).toMatchObject({
+      attractBackground: {},
+      blockTitle: { text: "Poker Blocks", scale: 1 },
+      musicCue: { cue: "title" },
+    });
+    expect(scene?.traits).not.toHaveProperty("titleScreen");
   });
 
   it("opens a mode from ?mode=, falling back to the legacy ?room= alias", () => {
