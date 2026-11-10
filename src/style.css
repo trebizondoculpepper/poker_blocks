@@ -515,6 +515,18 @@ body,
   backdrop-filter: blur(3px);
 }
 
+/*
+ * A menu covered by another one (Settings over the pause menu, say; src/menus.ts makes it inert)
+ * sits under the front menu's wash, so it reads dimmed and blurred behind it as before, while the
+ * active block title stays between the front wash and the front panel.
+ */
+.menu-overlay[inert]::before {
+  z-index: 1;
+}
+.menu-overlay[inert] > * {
+  z-index: 2;
+}
+
 .block-title {
   position: absolute;
   inset: 0;
