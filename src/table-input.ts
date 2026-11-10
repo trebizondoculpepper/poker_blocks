@@ -10,7 +10,15 @@
  */
 import { Registry } from "./core/registry";
 import {
+  DragDropManager as DndKitManager,
+  type Draggable,
+  PointerActivationConstraints,
+  PointerSensor,
+} from "@dnd-kit/dom";
+import {
   createDragDropManager,
+  type DragSource,
+  type DragSourceConfig,
   type DropHit,
   type DropTarget,
   type DropTargetConfig,
@@ -85,6 +93,11 @@ export type TableInput = {
    * that disallows it again.
    */
   enableDropTarget(config: DropTargetConfig): () => void;
+  /**
+   * Allow a drag source while a scene shows (the `dragSource` trait, #282); returns a function
+   * that disallows it again.
+   */
+  enableDragSource(config: DragSourceConfig): () => void;
   /** A shop scene composes the same target as Sell, without exposing Discard. */
   sellBinEntered(entered: boolean): void;
   /** The selected block ids (hand and field). */
@@ -123,8 +136,6 @@ type Drag = {
   source: RenderedBlock;
   grabOffset: THREE.Vector3;
   pointerId: number;
-  startX: number;
-  startY: number;
   active: boolean;
   candidate: Candidate | null;
   /** The last drop target the trace reported, so it reports only changes. */
@@ -230,7 +241,38 @@ export function createTableInput(options: {
     describe: (verdict) =>
       verdict === "accept" ? "the bin" : "none: over the bin with no discards left",
   });
-  const dragDrop = createDragDropManager(dropTargetKinds);
+  /**
+   * Drag sources (#282): what can be picked up. The hand gives up the draggable block under the
+   * pointer while the scene in front takes plays.
+   */
+  const dragSourceKinds = new Registry<DragSource>("drag source");
+  dragSourceKinds.register("hand", {
+    pick(clientX, clientY) {
+      const source = pickBlock(clientX, clientY, reachableHand());
+      return fieldActive && source && blockCanDrag(source.block) ? source : null;
+    },
+  });
+  /**
+   * dnd-kit (#282) runs the drag: its pointer sensor starts one only after the pointer moves
+   * 8px (so a press released sooner is a click, which selects), captures the pointer, and
+   * finishes on the release wherever it lands, so losing capture can't strand a drag (#267).
+   * No plugins: the dragged blocks are 3D, and this service moves them.
+   */
+  const dnd = new DndKitManager({
+    plugins: [],
+    sensors: [
+      PointerSensor.configure({
+        // A fresh constraint per press: a constraint keeps that press's state (#282).
+        activationConstraints: () => [new PointerActivationConstraints.Distance({ value: 8 })],
+        preventActivation: (event, draggable) =>
+          !dragDrop.canStart(draggable, event.clientX, event.clientY),
+      }),
+    ],
+  });
+  const dragDrop = createDragDropManager(dropTargetKinds, dnd, {
+    kinds: dragSourceKinds,
+    surface: canvas,
+  });
   let selected: Selection = new Set();
   /** Whether the scene in front lets blocks be played onto the field. */
   let fieldActive = false;
@@ -413,9 +455,6 @@ export function createTableInput(options: {
       if (hit?.verdict === "reject") hit.target.reject();
       cameraView.changeMotionRate(normalMotionRate);
       suppressClickUntil = performance.now() + 250;
-      if (canvas.hasPointerCapture(activeDrag.pointerId)) {
-        canvas.releasePointerCapture(activeDrag.pointerId);
-      }
       // Model first (#272): the drop commits now, even while earlier plays are still being
       // shown; their animations and this one catch up with the model.
       commitDrop(activeDrag, candidate, hit, drop);
@@ -484,6 +523,85 @@ export function createTableInput(options: {
     }
   }
 
+  // ----- The hand drag, run by dnd-kit (#282) -----
+
+  /** Cancel the hand drag dnd-kit is running, if any; its dragend puts the blocks back. */
+  function cancelHandDrag(reason: string): void {
+    if (dnd.dragOperation.status.idle) return;
+    trace("drag ended", reason);
+    dnd.actions.stop({ canceled: true });
+  }
+
+  dnd.monitor.addEventListener("beforedragstart", (event) => {
+    // A hold (inspect) or a second finger (a pinch) has already claimed this pointer.
+    if (hold.holding || pinch) event.preventDefault();
+  });
+  dnd.monitor.addEventListener("dragstart", ({ operation }) => {
+    const activator = operation.activatorEvent as PointerEvent | null;
+    const { x, y } = operation.position.current;
+    const press = operation.source && dragDrop.pressed(operation.source as Draggable);
+    if (!press) {
+      dnd.actions.stop({ canceled: true });
+      return;
+    }
+    const source = press.picked;
+    // The grab is where the press went down on the block, not where the drag began.
+    pointRay(press.clientX, press.clientY, cameraView.handCamera);
+    const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
+      ? source.cube.position.clone().sub(dragPoint)
+      : new THREE.Vector3();
+    // Dragging a selected block carries the rest of the hand selection with it.
+    const group = selected.has(source.block.id)
+      ? hand.selected(selected).filter((rendered) => rendered !== source)
+      : [];
+    drag = {
+      source,
+      grabOffset,
+      pointerId: activator?.pointerId ?? -1,
+      lastX: x,
+      lastY: y,
+      active: true,
+      candidate: null,
+      hit: null,
+      group,
+      reorderSlot: null,
+    };
+    const carried = group.length + 1;
+    trace(
+      "drag started",
+      `carrying ${carried} block${carried === 1 ? "" : "s"}${carried > 1 ? " (the dragged one is selected, so the whole selection comes)" : ""}${rules.busy() ? ", while an animation is running" : ""}`,
+    );
+    for (const rendered of [source, ...group]) options.setDragLayer(rendered.cube, true);
+    cameraView.changeMotionRate(normalMotionRate / 10);
+    playSfx("card.pickup");
+    options.overlays().hideTooltip();
+    moveDraggedBlock();
+    updateCandidate();
+  });
+  dnd.monitor.addEventListener("dragmove", ({ operation, to }) => {
+    if (!drag?.active) return;
+    const { x, y } = to ?? operation.position.current;
+    drag.lastX = x;
+    drag.lastY = y;
+    options.overlays().hideTooltip();
+    moveDraggedBlock();
+    updateCandidate();
+    canvas.style.cursor = "grabbing";
+  });
+  dnd.monitor.addEventListener("dragend", ({ canceled, nativeEvent }) => {
+    const release = nativeEvent as PointerEvent | undefined;
+    if (release?.pointerType === "touch") touches.delete(release.pointerId);
+    if (!drag?.active) return;
+    if (release && !canceled) {
+      drag.lastX = release.clientX;
+      drag.lastY = release.clientY;
+      moveDraggedBlock();
+    }
+    if (!canceled) trace("drag ended", "button released");
+    finishDrag(!canceled);
+    canvas.style.cursor = "default";
+  });
+
   // ----- Hand cards and the board -----
 
   const onPointerDown = (event: PointerEvent) => {
@@ -494,8 +612,7 @@ export function createTableInput(options: {
       if (touches.size >= 2) {
         // A second finger changes the gesture, never places or discards a card.
         hold.cancel();
-        if (drag?.active) trace("drag ended", "a second finger touched (a pinch)");
-        if (drag) finishDrag(false);
+        cancelHandDrag("a second finger touched (a pinch)");
         if (boardDrag) finishBoardDrag();
         pinch = { zoom: cameraView.zoom, distance: touchSpread() };
         for (const id of touches.keys()) canvas.setPointerCapture(id);
@@ -508,37 +625,19 @@ export function createTableInput(options: {
     }
     options.overlays().hideTooltip();
     const source = pickBlock(event.clientX, event.clientY, reachableHand());
+    const pickedUp = dragDrop.pickUp(event.clientX, event.clientY);
     trace(
       "pointer down",
-      !source
-        ? "on no hand block"
-        : !fieldActive
-          ? "on a hand block, but this scene doesn't take plays"
-          : blockCanDrag(source.block)
-            ? "on a hand block: can drag"
+      pickedUp
+        ? "on a hand block: can drag"
+        : !source
+          ? "on no hand block"
+          : !fieldActive
+            ? "on a hand block, but this scene doesn't take plays"
             : "on a hand block that can't be dragged",
     );
-    if (fieldActive && source && blockCanDrag(source.block)) {
-      pointRay(event.clientX, event.clientY, cameraView.handCamera);
-      const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
-        ? source.cube.position.clone().sub(dragPoint)
-        : new THREE.Vector3();
-      drag = {
-        source,
-        grabOffset,
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        lastX: event.clientX,
-        lastY: event.clientY,
-        active: false,
-        candidate: null,
-        hit: null,
-        group: [],
-        reorderSlot: null,
-      };
-      return;
-    }
+    // A drag source's pointer belongs to dnd-kit, which starts the drag once it moves (#282).
+    if (pickedUp) return;
     if (!pickBlock(event.clientX, event.clientY, field.blocks())) return;
     boardDrag = {
       pointerId: event.pointerId,
@@ -559,38 +658,6 @@ export function createTableInput(options: {
       finger.y = event.clientY;
       if (pinch) {
         if (touches.size >= 2) cameraView.zoomWithPinch(pinch.zoom, pinch.distance, touchSpread());
-        return;
-      }
-    }
-    if (drag?.pointerId === event.pointerId) {
-      drag.lastX = event.clientX;
-      drag.lastY = event.clientY;
-      if (
-        !drag.active &&
-        Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8
-      ) {
-        drag.active = true;
-        const carried = selected.has(drag.source.block.id) ? hand.selected(selected).length : 1;
-        trace(
-          "drag started",
-          `carrying ${carried} block${carried === 1 ? "" : "s"}${carried > 1 ? " (the dragged one is selected, so the whole selection comes)" : ""}${rules.busy() ? ", while an animation is running" : ""}`,
-        );
-        // Dragging a selected block carries the rest of the hand selection with it.
-        if (selected.has(drag.source.block.id)) {
-          const source = drag.source;
-          drag.group = hand.selected(selected).filter((rendered) => rendered !== source);
-        }
-        for (const rendered of [drag.source, ...drag.group])
-          options.setDragLayer(rendered.cube, true);
-        canvas.setPointerCapture(event.pointerId);
-        cameraView.changeMotionRate(normalMotionRate / 10);
-        playSfx("card.pickup");
-      }
-      if (drag.active) {
-        options.overlays().hideTooltip();
-        moveDraggedBlock();
-        updateCandidate();
-        canvas.style.cursor = "grabbing";
         return;
       }
     }
@@ -628,10 +695,6 @@ export function createTableInput(options: {
     canvas.style.cursor = "default";
   };
 
-  /** How long a drag that lost its capture waits for its release before it is cancelled. */
-  const releaseGraceMs = 250;
-  let releaseGrace = 0;
-
   const onPointerUp = (event: PointerEvent) => {
     if (hold.up(event.pointerId)) {
       // A hold only inspects: lifting it neither taps, plays nor rotates.
@@ -649,13 +712,6 @@ export function createTableInput(options: {
       }
     }
     const wasDragging = Boolean(drag?.active || boardDrag?.active);
-    if (drag?.pointerId === event.pointerId) {
-      drag.lastX = event.clientX;
-      drag.lastY = event.clientY;
-      moveDraggedBlock();
-      if (drag.active) trace("drag ended", "button released");
-      finishDrag(true);
-    }
     if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
     canvas.style.cursor = "default";
     const hovered = pickAny(event.clientX, event.clientY);
@@ -676,10 +732,6 @@ export function createTableInput(options: {
         return;
       }
     }
-    if (drag?.pointerId === event.pointerId) {
-      if (drag.active) trace("drag ended", `cancelled (${event.type})`);
-      finishDrag(false);
-    }
     if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
     options.overlays().hideTooltip();
     canvas.style.cursor = "default";
@@ -691,8 +743,7 @@ export function createTableInput(options: {
     if (!target) return;
     const { pointerId, clientX, clientY } = event;
     hold.down(pointerId, clientX, clientY, () => {
-      if (drag?.pointerId === pointerId && drag.active) trace("drag ended", "held still: inspect");
-      if (drag?.pointerId === pointerId) finishDrag(false);
+      cancelHandDrag("held still: inspect");
       if (boardDrag?.pointerId === pointerId) finishBoardDrag();
       // Above the finger, so the label never sits under it or over the card.
       showInspection(target.block, clientX, clientY - holdLabelLift);
@@ -704,53 +755,18 @@ export function createTableInput(options: {
     if (document.hidden) onBlur();
   };
 
-  /** Capture taken away mid-gesture (by the browser or system) counts as a cancel. */
   /**
-   * Capture taken away mid-gesture. A browser can take capture away a few milliseconds *before*
-   * the pointerup of the same release (seen in dev10's action history), so for a hand drag this
-   * is not yet a cancel: the drag stays alive and finishes on that pointer's release, which no
-   * longer reaches the canvas and is caught on the window instead. If no release comes within
-   * `releaseGraceMs`, or a real cancel or blur does, the drag is cancelled as before. A board
-   * drag (turning the structure) is cancelled at once; it has nothing to drop.
+   * Capture taken away mid-gesture. Hand drags are dnd-kit's, which finishes them on their
+   * release wherever it lands (#267, #282). A board drag (turning the structure) is cancelled.
    */
   const onLostCapture = (event: PointerEvent) => {
-    if (drag?.pointerId === event.pointerId && drag.active) {
-      trace("pointer capture lost", "mid-drag: waiting for the release");
-      const waiting = drag;
-      window.clearTimeout(releaseGrace);
-      releaseGrace = window.setTimeout(() => {
-        if (drag !== waiting) return;
-        trace("drag ended", `no release ${releaseGraceMs}ms after capture was lost: cancelled`);
-        // The same cleanup as a cancel: the finger is no longer tracked as down.
-        hold.cancel();
-        touches.delete(waiting.pointerId);
-        finishDrag(false);
-      }, releaseGraceMs);
-      return;
-    }
-    trace(
-      "pointer capture lost",
-      drag?.pointerId === event.pointerId ? "on a pressed hand block (no drag yet)" : "no drag",
-    );
-    if (drag?.pointerId === event.pointerId || boardDrag?.pointerId === event.pointerId)
-      onPointerCancel(event);
+    trace("pointer capture lost", drag?.active ? "dnd-kit has the drag" : "no drag");
+    if (boardDrag?.pointerId === event.pointerId) onPointerCancel(event);
   };
 
-  /** A release that lost its capture: finish the hand drag it belongs to as a drop. */
+  /** Any finger that lifts is no longer down, wherever its release lands (never a pinch). */
   const onWindowPointerUp = (event: PointerEvent) => {
-    // Any finger that lifts is no longer down, wherever its release lands and whether or not a
-    // drag is still waiting for it, so the next single touch is never taken for a second finger
-    // (a pinch). The canvas's handler does the same when the release reaches it.
     if (event.pointerType === "touch") touches.delete(event.pointerId);
-    // The canvas's own handler ran first if the release reached it, and finished the drag.
-    if (drag?.pointerId !== event.pointerId || !drag.active) return;
-    window.clearTimeout(releaseGrace);
-    hold.up(event.pointerId);
-    drag.lastX = event.clientX;
-    drag.lastY = event.clientY;
-    moveDraggedBlock();
-    trace("drag ended", "button released after capture was lost: dropped");
-    finishDrag(true);
   };
 
   const onClick = (event: MouseEvent) => {
@@ -775,8 +791,7 @@ export function createTableInput(options: {
   const onBlur = () => {
     hold.cancel();
     options.overlays().hideTooltip();
-    if (drag?.active) trace("drag ended", "the window lost focus");
-    if (drag) finishDrag(false);
+    cancelHandDrag("the window lost focus");
     if (boardDrag) finishBoardDrag();
     touches.clear();
     pinch = null;
@@ -949,6 +964,7 @@ export function createTableInput(options: {
       handScenes = Math.max(0, handScenes + (entered ? 1 : -1));
     },
     enableDropTarget: (config) => dragDrop.enable(config),
+    enableDragSource: (config) => dragDrop.enableSource(config),
     discardBinEntered(entered) {
       discardBinScenes = Math.max(0, discardBinScenes + (entered ? 1 : -1));
       discardArea.hidden = discardBinScenes + sellBinScenes === 0;
@@ -1012,7 +1028,7 @@ export function createTableInput(options: {
         canvas.removeEventListener(type, listener as EventListener);
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("pointerup", onWindowPointerUp);
-      window.clearTimeout(releaseGrace);
+      dnd.destroy();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     },
   };

@@ -53,6 +53,10 @@ function recordingHost() {
           calls.push(`target:${target}:on`);
           return () => void calls.push(`target:${target}:off`);
         },
+        enableDragSource: ({ source }) => {
+          calls.push(`source:${source}:on`);
+          return () => void calls.push(`source:${source}:off`);
+        },
         setFieldActive: (active) => calls.push(`fieldActive:${active}`),
         cancelGestures: () => void calls.push("gestures:cancel"),
         discardBinEntered: (entered) => void calls.push(`bin:${entered}`),

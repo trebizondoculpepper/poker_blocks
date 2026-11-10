@@ -1,4 +1,4 @@
-import type { DropTargetConfig } from "./drag-drop";
+import type { DragSourceConfig, DropTargetConfig } from "./drag-drop";
 import type { DevDropInspectorConfig } from "./scene-traits/dev-drop-inspector";
 import type { ActionHistoryConfig } from "./scene-traits/action-history";
 import type { FirstPlayPromptConfig } from "./scene-traits/first-play-prompt";
@@ -50,6 +50,11 @@ export type SceneTraits = {
    * decision and hover feedback.
    */
   dropTarget: { targets: readonly DropTargetConfig[] };
+  /**
+   * Drag sources in this scene (#282): things that can be picked up, each a registered drag
+   * source kind. dnd-kit starts a drag where one picks something up.
+   */
+  dragSource: { sources: readonly DragSourceConfig[] };
   /** The ghost cube that invites a stage's first play, and how it looks and responds. */
   firstPlayPrompt: FirstPlayPromptConfig;
   /** The passive rack is shown while this scene is on the stack (#187). */
@@ -181,6 +186,8 @@ const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
   // The bin takes discards dropped on it; asked before the grid, since it sits over the table.
   dropTarget: { targets: [{ target: "discard", priority: 10 }] },
+  // Hand blocks can be picked up and dragged to play, discard or reorder them.
+  dragSource: { sources: [{ source: "hand" }] },
   firstPlayPrompt: {
     colour: 0x65f4dd,
     pulseSeconds: 1.8,
