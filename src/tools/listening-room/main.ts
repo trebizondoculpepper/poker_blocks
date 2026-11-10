@@ -1,6 +1,8 @@
 // Development page for auditioning every registered sound effect. Served at /sfx.html.
 import "./style.css";
 import { sfxFileNames, soundEffects, withSfxDefaults } from "../../audio/sfx-registry";
+// How many places use each sound: the registry's record (npm run sfx:usage).
+import usage from "../../audio/sfx-usage.json";
 
 const urls = import.meta.glob<string>("../../assets/sfx/*.mp3", {
   eager: true,
@@ -54,11 +56,33 @@ function play(url: string, row: HTMLElement | null, rate = 1): Promise<void> {
   });
 }
 
-type Entry = { row: HTMLLIElement; takes: string[] };
+/** Show a short confirmation on a button, then put its label back. */
+function flash(button: HTMLButtonElement, text: string): void {
+  const label = button.textContent;
+  button.textContent = text;
+  setTimeout(() => (button.textContent = label), 1200);
+}
+
+type Entry = { id: string; row: HTMLLIElement; takes: string[] };
 const entries: Entry[] = [];
 
-for (const [index, effect] of soundEffects.entries()) {
-  const takes = sfxFileNames(effect).flatMap((name) => urlByFile.get(name) ?? []);
+/** A sound's own takes. */
+const ownTakes = (id: string) => {
+  const effect = soundEffects.find((candidate) => candidate.id === id);
+  return effect ? sfxFileNames(effect).flatMap((name) => urlByFile.get(name) ?? []) : [];
+};
+
+// Families in the order they first appear in the registry, each family's sounds together.
+const families = [...new Set(soundEffects.map(({ family }) => family))];
+const ordered = families.flatMap((family) =>
+  soundEffects.filter((effect) => effect.family === family),
+);
+let lastFamily: string | null = null;
+for (const [index, effect] of ordered.entries()) {
+  const own = ownTakes(effect.id);
+  // With no audio of its own, a sound plays its placeholder in the game (#232), so here too.
+  const standIn = own.length === 0 && effect.placeholder ? ownTakes(effect.placeholder) : [];
+  const takes = own.length > 0 ? own : standIn;
   const row = document.createElement("li");
   row.className = "sound";
   if (takes.length === 0) row.classList.add("missing");
@@ -71,12 +95,16 @@ for (const [index, effect] of soundEffects.entries()) {
     <span class="sound-key">${key}</span>
     <span class="sound-text">
       <span class="sound-id"></span>
+      <span class="sound-name"></span>
       <span class="sound-trigger"></span>
       <span class="sound-prompt"></span>
     </span>
-    <span class="sound-meta"></span>`;
+    <span class="sound-meta"></span>
+    <span class="sound-audio"></span>
+    <span class="sound-usage"></span>`;
   main.querySelector(".sound-id")!.textContent = effect.id;
-  main.querySelector(".sound-trigger")!.textContent = effect.trigger;
+  main.querySelector(".sound-name")!.textContent = effect.name;
+  main.querySelector(".sound-trigger")!.textContent = effect.description;
   main.querySelector(".sound-prompt")!.textContent = effect.prompt
     ? `“${effect.prompt}”`
     : "No prompt yet";
@@ -86,12 +114,53 @@ for (const [index, effect] of soundEffects.entries()) {
       : effect.prompt
         ? "not generated"
         : "needs prompt";
+  const used = (usage as Record<string, { uses: number; files: Record<string, number> }>)[
+    effect.id
+  ] ?? { uses: 0, files: {} };
+  const badge = main.querySelector<HTMLElement>(".sound-usage")!;
+  badge.textContent = used.uses > 0 ? `used ×${used.uses}` : "unused";
+  badge.title =
+    used.uses > 0
+      ? Object.entries(used.files)
+          .map(([file, count]) => `${file} ×${count}`)
+          .join("\n")
+      : "No code or data names this sound";
+  row.classList.add(used.uses > 0 ? "used" : "unused");
+  // Whether the game hears it: its own audio, a placeholder's, or nothing at all.
+  const audio = main.querySelector<HTMLElement>(".sound-audio")!;
+  if (own.length === 0 && standIn.length > 0) {
+    row.classList.add("stand-in");
+    audio.textContent = `plays ${effect.placeholder}`;
+    audio.title = "No audio of its own yet: the game plays its placeholder instead";
+  } else if (own.length === 0) {
+    row.classList.add("silent");
+    audio.textContent = effect.placeholder
+      ? `silent (${effect.placeholder} has no audio)`
+      : "silent";
+    audio.title = "No audio and no working placeholder: the game plays nothing";
+  }
   main.disabled = takes.length === 0;
   main.addEventListener("click", () => {
     const take = takes[Math.floor(Math.random() * takes.length)];
     void play(take, row);
   });
-  row.append(main);
+  // Copy the sound's id, to paste into a ticket, a chat or `playSfx("…")`.
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = "sound-copy";
+  copy.textContent = "Copy";
+  copy.title = `Copy “${effect.id}”`;
+  copy.setAttribute("aria-label", `Copy the id ${effect.id}`);
+  copy.addEventListener("click", () => {
+    void navigator.clipboard.writeText(effect.id).then(
+      () => flash(copy, "Copied"),
+      () => flash(copy, "Copy failed"),
+    );
+  });
+  const head = document.createElement("div");
+  head.className = "sound-head";
+  head.append(main, copy);
+  row.append(head);
 
   if (takes.length > 1) {
     const variants = document.createElement("div");
@@ -106,8 +175,17 @@ for (const [index, effect] of soundEffects.entries()) {
     row.append(variants);
   }
 
+  // Rows are grouped under a heading for each family, in registry order.
+  if (lastFamily !== effect.family) {
+    lastFamily = effect.family;
+    const heading = document.createElement("li");
+    heading.className = "family-heading";
+    heading.textContent = effect.family;
+    list.append(heading);
+  }
+  row.dataset.family = effect.family;
   list.append(row);
-  entries.push({ row, takes });
+  entries.push({ id: effect.id, row, takes });
 }
 
 element("play-all").addEventListener("click", async () => {
@@ -125,11 +203,27 @@ element("play-all").addEventListener("click", async () => {
 
 element("stop").addEventListener("click", stopAll);
 
+// Show all sounds, only the ones the game uses, or only the unused ones.
+const usageFilter = element<HTMLSelectElement>("usage-filter");
+usageFilter.addEventListener("change", () => {
+  list.dataset.show = usageFilter.value;
+  // A family heading shows only while one of its sounds does.
+  for (const heading of list.querySelectorAll<HTMLElement>(".family-heading")) {
+    let next = heading.nextElementSibling as HTMLElement | null;
+    let visible = false;
+    while (next && !next.classList.contains("family-heading")) {
+      if (getComputedStyle(next).display !== "none") visible = true;
+      next = next.nextElementSibling as HTMLElement | null;
+    }
+    heading.hidden = !visible;
+  }
+});
+
 // Preview of a chain: one registered sound repeated at rising pitch, two semitones apart. The
 // sound is chosen from the registry, and `?sound=<id>` in the URL preselects it (#71).
 const chainSound = element("chain-sound") as HTMLSelectElement;
 for (const effect of soundEffects) {
-  chainSound.append(new Option(`${effect.id} — ${effect.trigger}`, effect.id));
+  chainSound.append(new Option(`${effect.id} — ${effect.description}`, effect.id));
 }
 chainSound.value = new URLSearchParams(location.search).get("sound") ?? chainSound.value;
 chainSound.addEventListener("change", () => {
@@ -139,7 +233,7 @@ chainSound.addEventListener("change", () => {
 });
 
 element("chain").addEventListener("click", async () => {
-  const entry = entries[soundEffects.findIndex(({ id }) => id === chainSound.value)];
+  const entry = entries.find(({ id }) => id === chainSound.value);
   if (!entry || entry.takes.length === 0) return;
   stopAll();
   const run = sequence;

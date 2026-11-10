@@ -10,6 +10,7 @@
     "check": "vp check",
     "test": "vp test run --passWithNoTests",
     "sfx": "node --env-file-if-exists=.env scripts/generate-sfx.ts",
+    "sfx:usage": "node scripts/sfx-usage.ts",
     "release": "node scripts/release.ts",
     "version-guard": "node scripts/version-guard.ts"
   },

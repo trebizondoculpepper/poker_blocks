@@ -147,3 +147,83 @@ button:focus-visible {
   gap: 6px;
   padding: 6px 0 0 44px;
 }
+
+/* How many places use each sound (src/audio/sfx-usage.json). */
+.sound-usage {
+  align-self: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #1f6f4a;
+  color: #e9fff3;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sound.unused .sound-usage {
+  background: #7a2f2f;
+  color: #ffecec;
+}
+.sounds[data-show="used"] .sound.unused,
+.sounds[data-show="unused"] .sound.used {
+  display: none;
+}
+
+/* Each row: the play button, then a button that copies the sound's id. */
+.sound-head {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.sound-head .sound-main {
+  flex: 1;
+  min-width: 0;
+}
+.sound-copy {
+  flex: none;
+  padding: 0 14px;
+}
+
+/* Sounds without their own audio: playing a placeholder, or silent in the game. */
+.sound-audio:empty {
+  display: none;
+}
+.sound-audio {
+  align-self: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.sound.stand-in .sound-audio {
+  background: #6b5418;
+  color: #fff6dc;
+}
+.sound.silent .sound-audio {
+  background: #4a4f5c;
+  color: #f0f2f6;
+}
+.sound.stand-in .sound-main {
+  opacity: 1;
+  cursor: pointer;
+}
+.sounds[data-show="no-audio"] .sound:not(.stand-in, .silent),
+.sounds[data-show="silent"] .sound:not(.silent) {
+  display: none;
+}
+
+/* A sound's human name beside its id, and a heading per family. */
+.sound-name {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.family-heading {
+  list-style: none;
+  margin: 18px 0 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.family-heading[hidden] {
+  display: none;
+}

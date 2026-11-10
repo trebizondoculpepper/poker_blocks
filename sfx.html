@@ -34,6 +34,16 @@
             <select id="chain-sound" aria-label="Sound to preview as a rising chain"></select>
           </label>
           <button type="button" id="chain">Chain ×5</button>
+          <label>
+            Show
+            <select id="usage-filter" aria-label="Show used or unused sounds">
+              <option value="all">All sounds</option>
+              <option value="used">Used</option>
+              <option value="unused">Unused</option>
+              <option value="no-audio">No audio of its own</option>
+              <option value="silent">Silent in game</option>
+            </select>
+          </label>
         </div>
       </header>
       <ol id="sounds" class="sounds"></ol>

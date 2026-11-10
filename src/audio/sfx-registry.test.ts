@@ -16,7 +16,28 @@ describe("sound-effect registry", () => {
   });
 
   it("describes when each sound plays", () => {
-    for (const effect of soundEffects) expect(effect.trigger.trim()).not.toBe("");
+    for (const effect of soundEffects) expect(effect.description.trim()).not.toBe("");
+  });
+
+  it("names each sound and puts it in a family", () => {
+    for (const effect of soundEffects) {
+      expect(effect.name.trim(), effect.id).not.toBe("");
+      expect(effect.family, effect.id).toMatch(/^[a-z]+$/);
+    }
+  });
+
+  it("only uses registered sounds with audio of their own as stand-ins", () => {
+    const byId = new Map(soundEffects.map((effect) => [effect.id, effect]));
+    for (const { id, placeholder } of soundEffects) {
+      if (!placeholder) continue;
+      expect(byId.has(placeholder), `${id} → ${placeholder}`).toBe(true);
+      expect(placeholder, id).not.toBe(id);
+      const standIn = byId.get(placeholder)!;
+      expect(
+        sfxFileNames(standIn).some((name) => files.includes(name)),
+        `${placeholder} has audio`,
+      ).toBe(true);
+    }
   });
 
   it("keeps durations within the generator's range", () => {
