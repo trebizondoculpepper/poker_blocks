@@ -105,6 +105,7 @@ type TraitContext = {
     rack: { viewEntered(entered: boolean, capacity: number): void };
     deckView: DeckView;
     devShopBalanceEditor: ShopBalanceEditor;
+    devObjectBrowser: ShopBalanceEditor;
     version: string;
     sound: (id: SoundEffectId) => void;
   };
@@ -114,6 +115,9 @@ const deckView = createDeckView(host);
 // The developer tool has its own build boundary; production never imports its UI or data.
 const devShopBalanceEditor: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/shop-balance-editor")).createShopBalanceEditor(host)
+  : { show() {}, hide() {}, dispose() {} };
+const devObjectBrowser: ShopBalanceEditor = import.meta.env.DEV
+  ? (await import("./tools/object-browser")).createObjectBrowser(host)
   : { show() {}, hide() {}, dispose() {} };
 const traitContext: TraitContext = {
   host,
@@ -152,6 +156,7 @@ const traitContext: TraitContext = {
     },
     deckView,
     devShopBalanceEditor,
+    devObjectBrowser,
     sound: (id) => playSfx(id),
     version: appVersion,
   },
@@ -336,6 +341,7 @@ if (import.meta.hot) {
     passiveRackView.dispose();
     shopView.dispose();
     devShopBalanceEditor.dispose();
+    devObjectBrowser.dispose();
     view.dispose();
   });
 }

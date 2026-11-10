@@ -1,0 +1,126 @@
+/* The developer object browser (dev9, src/tools/object-browser.ts). */
+.object-browser {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "header header"
+    "categories categories"
+    "list page";
+  background: #101a24f5;
+  color: #f4f0e8;
+  font:
+    14px system-ui,
+    sans-serif;
+}
+.object-browser[hidden] {
+  display: none;
+}
+.object-browser a {
+  color: inherit;
+}
+.object-browser-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: #1d2b3b;
+}
+.object-browser-header h1 {
+  margin: 0;
+  font-size: 19px;
+}
+.object-browser-categories {
+  grid-area: categories;
+  display: flex;
+  gap: 6px;
+  padding: 8px 18px;
+  border-bottom: 1px solid #2c3d52;
+}
+.object-browser-categories a {
+  padding: 5px 12px;
+  border-radius: 999px;
+  text-decoration: none;
+  background: #1d2b3b;
+}
+.object-browser-categories a.is-current {
+  background: #3d6a96;
+}
+.object-browser-list {
+  grid-area: list;
+  margin: 0;
+  padding: 8px 0;
+  overflow: auto;
+  list-style: none;
+  border-right: 1px solid #2c3d52;
+}
+.object-browser-list a {
+  display: block;
+  padding: 6px 18px;
+  text-decoration: none;
+}
+.object-browser-list a.is-current {
+  background: #2c3d52;
+}
+.object-browser-page {
+  grid-area: page;
+  overflow: auto;
+  padding: 18px 24px;
+}
+.object-browser-page h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.object-browser-id {
+  margin: 2px 0 10px;
+  color: #a8b9c9;
+  font-family: ui-monospace, monospace;
+}
+.object-browser-note {
+  margin: 0 0 10px;
+  color: #f2c14e;
+}
+.object-browser-preview canvas {
+  display: block;
+  width: 320px;
+  height: 320px;
+  max-width: 100%;
+}
+.object-browser-properties {
+  margin-top: 12px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.object-browser-properties th,
+.object-browser-properties td {
+  padding: 3px 12px 3px 0;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #22334a;
+}
+.object-browser-properties th {
+  color: #a8b9c9;
+  font-weight: 500;
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}
+.object-browser-properties td {
+  font-family: ui-monospace, monospace;
+  word-break: break-word;
+}
+@media (max-width: 700px) {
+  .object-browser {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-areas: "header" "categories" "list" "page";
+  }
+  .object-browser-list {
+    display: flex;
+    overflow-x: auto;
+    border-right: 0;
+  }
+}

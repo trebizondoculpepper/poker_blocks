@@ -53,6 +53,10 @@ function recordingHost() {
         show: () => void calls.push("balance:show"),
         hide: () => void calls.push("balance:hide"),
       },
+      devObjectBrowser: {
+        show: (backTo) => void calls.push(`browser:show:${backTo}`),
+        hide: () => void calls.push("browser:hide"),
+      },
       rack: {
         viewEntered: (entered, capacity) => void calls.push(`rack:${entered}:${capacity}`),
       },
@@ -183,6 +187,17 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toContain("balance:show");
     scenes.switchTo("table");
     expect(calls).toContain("balance:hide");
+  });
+
+  it("mounts the object browser only while its developer scene is active (dev9)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("browser", { devObjectBrowser: { backTo: "game" } }));
+    scenes.register(scene("table", {}));
+    scenes.switchTo("browser");
+    expect(calls).toContain("browser:show:game");
+    scenes.switchTo("table");
+    expect(calls).toContain("browser:hide");
   });
 
   it("lists the deck read-only and goes back from its Back button (#175)", () => {
