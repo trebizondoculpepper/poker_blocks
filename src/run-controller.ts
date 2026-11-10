@@ -47,6 +47,7 @@ import type { RunSetupServices, RunSetupStep } from "./run-setup";
 import {
   loadSettings,
   prefersReducedMotion,
+  resolveLayout,
   resolveShadowQuality,
   saveSettings,
   type Settings,
@@ -77,7 +78,7 @@ export type RunServices = {
   readonly rack: PassiveRackView;
   readonly shop: ShopView;
   /** The shared HUD frame, laid out from the Layout setting (#119). */
-  readonly frame: Pick<HudFrame, "setLayout">;
+  readonly frame: Pick<HudFrame, "layout" | "setLayout">;
 };
 
 export type RunController = {
@@ -190,6 +191,10 @@ export function createRunController<Context>(options: {
   const systemMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const onSystemMotion = () => applySettings(settings);
+  // Automatic layout follows the viewport's shape as it resizes or turns (#120).
+  const viewport = () => ({ width: window.innerWidth, height: window.innerHeight });
+  const onViewportChange = () =>
+    services.frame.setLayout(resolveLayout(settings.layout, viewport(), services.frame.layout));
 
   /** Declared, not assigned, so anything above it may call it without an ordering trap. */
   function setupServices(): RunSetupServices {
@@ -261,7 +266,7 @@ export function createRunController<Context>(options: {
     services.audio.applySettings(next);
     reducedMotion = prefersReducedMotion(next.motion, systemMotionQuery.matches);
     services.renderer.setShadowQuality(resolveShadowQuality(next.shadows, coarsePointer));
-    services.frame.setLayout(next.layout);
+    services.frame.setLayout(resolveLayout(next.layout, viewport(), services.frame.layout));
   }
 
   function updateHud(): void {
@@ -692,6 +697,7 @@ export function createRunController<Context>(options: {
       enterMode(currentMode, false);
       applySettings(settings);
       systemMotionQuery.addEventListener("change", onSystemMotion);
+      window.addEventListener("resize", onViewportChange);
       // Browsers keep audio silent until the player interacts; start music on the first gesture.
       services.audio.start();
     },
@@ -775,6 +781,7 @@ export function createRunController<Context>(options: {
     },
     dispose() {
       systemMotionQuery.removeEventListener("change", onSystemMotion);
+      window.removeEventListener("resize", onViewportChange);
     },
   };
 }

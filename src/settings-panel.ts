@@ -15,6 +15,7 @@ const shadowLabels: Record<ShadowSetting, string> = {
 };
 
 const layoutLabels: Record<LayoutSetting, string> = {
+  auto: "Automatic",
   landscape: "Landscape",
   portrait: "Portrait",
 };
