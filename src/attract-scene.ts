@@ -1,3 +1,4 @@
+import { cardFaceArt } from "./visual/face-art";
 /**
  * The title screen's attract sequence (#147): a slow field of card cubes drifting toward the
  * camera on a black background, with no table under them.
@@ -370,7 +371,7 @@ export function createAttractScene(
   function makeCard(): AttractCard {
     const { identity, material } = randomCard(random, tuning.materialWeights);
     const definition = getMaterialDefinition(material);
-    const appearance = createBlockAppearance(identity, definition, cubeSize);
+    const appearance = createBlockAppearance(cardFaceArt(identity), definition, cubeSize);
     // Whatever trails the card's material lists, each built by its registered effect.
     const trails = (definition.appearance.trails ?? []).map((trail) =>
       trailEffects.get(trail.effect)(trail, scene, random),

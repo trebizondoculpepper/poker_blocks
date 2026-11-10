@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { cardFaceArt } from "./face-art";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { standardDeck } from "../cards";
 import type { MaterialDefinition } from "../materials";
@@ -27,7 +29,11 @@ describe("composed material appearance", () => {
       },
     };
     try {
-      const appearance = createBlockAppearance(standardDeck[0].traits.identity, definition, 2.4);
+      const appearance = createBlockAppearance(
+        cardFaceArt(standardDeck[0].traits.identity),
+        definition,
+        2.4,
+      );
       expect(appearance.materials).toHaveLength(6);
       expect(appearance.textures).toHaveLength(1);
       expect(appearance.edgeColor).toBe(0x123456);
@@ -39,5 +45,10 @@ describe("composed material appearance", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("guardrail (#292): the renderer knows face art only through FaceArt, never a card's fields", () => {
+    const source = readFileSync(new URL("./block-appearance.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/\bIdentityTrait\b|\.rank\b|\.suit\b|from "\.\.\/cards"/);
   });
 });

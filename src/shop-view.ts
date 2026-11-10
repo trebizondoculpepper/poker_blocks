@@ -1,3 +1,4 @@
+import { cardFaceArt } from "./visual/face-art";
 import { createScatterPlacer } from "./shop-scatter";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
@@ -88,7 +89,7 @@ function passiveCube(block: PassiveBlock): OfferCube {
 /** A card offer's cube: the same appearance as a card on the table. */
 function cardCube(block: CardBlock): OfferCube {
   const appearance = createBlockAppearance(
-    block.traits.identity,
+    cardFaceArt(block.traits.identity),
     getMaterialDefinition(materialOf(block)),
     1.35,
   );

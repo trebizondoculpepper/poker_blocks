@@ -546,3 +546,17 @@ A HUD style is data: a registered entry in `src/hud-styles.ts` listing the `--hu
 ### The deck view (#175)
 
 The deck view is its own scene, `deck`, pushed by the `openDeck` navigation action and popped by `back`. It composes `deckView` (shows `src/deck-view.ts`'s overlay with the run's deck, read-only), `pausesBelow` and an Escape `keyAction`. The deck counter opens it through data: the play scenes compose `deckPanel: { opens: "openDeck" }`, and the HUD dispatches whatever action its panel config names, so the HUD knows nothing about the deck view.
+
+### Shared block face artwork (#292)
+
+`createBlockAppearance` takes a `FaceArt` provider with a stable seed and a `paint(context, pen)` function. Material assemblies ask this provider to draw colour, relief and transparent skin artwork using the layer’s ink pen. Card callers supply `cardFaceArt(identity)`, preserving the existing centred rank/suit and fonts. New face artwork can reuse geometry and material appearance without adding kind branches to the builder.
+
+## Block faces (#292, epic #291)
+
+A block's **geometry and material** come from its material definition; what is **printed on its faces** is its **face art** (`src/visual/face-art.ts`), passed to `createBlockAppearance`. The renderer never knows what the art is (a guardrail test checks it names no card fields). It asks the art to paint itself, centred on a face, for each layer a material needs:
+
+- the **colour** print, in the material's ink;
+- the **relief** stamp pressed into height maps (steel, wood, gold);
+- the **skin** of see-through materials (fire, ice, crystal), on front faces.
+
+A pen turns an **ink tone** (`red`, `black`) into the layer's colour: the art picks the tone (a card takes it from its suit's `tone` data), the material picks the colour. The art's `seed` also seeds the material's noise, so a block looks the same every time. Cards use `cardFaceArt` (rank above suit, centred; owner decision: everything centred for now). Letter blocks (#293) add their own face art without touching the renderer.
