@@ -41,8 +41,10 @@ export function writtenBlock(
           materials.add(material);
       });
       for (const material of materials) {
-        for (const value of Object.values(material))
-          if (value instanceof THREE.Texture) textures.add(value);
+        // Face maps (including per-face extra clones) belong to this visual.
+        // Environment maps are borrowed from the scene and must survive its disposal.
+        const faceMap = (material as THREE.MeshStandardMaterial).map;
+        if (faceMap) textures.add(faceMap);
         material.dispose();
       }
       textures.forEach((texture) => texture.dispose());
