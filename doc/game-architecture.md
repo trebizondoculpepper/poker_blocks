@@ -150,7 +150,7 @@ Material appearance is defined on each material definition in `src/materials.ts`
 - **What a dance may change:** the dancer decides. Usually that's its appearance, but not always. The floor never asks what a dancer is.
 - **Shapes:** pure functions of phase, from 0 to 1, in a registry keyed by name (`src/dance/beat-shapes.ts`): `sine`, `pulse`, `bounce`, `gate` and `saw`.
 - **Resting:** with no music, or with reduced motion, `energy` is 0, so dancers settle.
-- **The first dancer is the ghost cube.** `firstPlayPrompt`'s `dance` data (cycle, shape, offset, swell) makes its prompt join the floor. Its idle pulse blends from its own period onto the beat as the energy rises, and it swells slightly at the top of each bob. A prompt without `dance` never joins.
+- **The first dancer is the ghost cube.** `firstPlayPrompt`'s `dance` data (cycle, shape, offset, swell) makes its prompt join the floor. For now a dance affects only the ghost's **size**: a sawtooth over the bar, growing steadily through each bar and dropping back to its base size on the downbeat (`{ cycle: "bar", shape: "saw", swell: 0.12 }`). Its glow keeps its own idle pulse. A prompt without `dance` never joins.
 
 ## Field visual effects (proposal)
 
