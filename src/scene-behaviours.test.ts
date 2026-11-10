@@ -48,6 +48,10 @@ function recordingHost() {
         show: (panel) => void (shown.add(panel), calls.push(`show:${panel}`)),
         hide: (panel) => void (shown.delete(panel), calls.push(`hide:${panel}`)),
       },
+      bin: {
+        discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
+        sellBinEntered: (entered) => void calls.push(`sellBin:${entered}`),
+      },
       input: {
         enableDropTarget: ({ target }) => {
           calls.push(`target:${target}:on`);
@@ -62,9 +66,6 @@ function recordingHost() {
           return () => void calls.push("board:off");
         },
         cancelGestures: () => void calls.push("gestures:cancel"),
-        discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
-        sellBinEntered: (entered) => void calls.push(`sellBin:${entered}`),
-        handEntered: (entered) => void calls.push(`handInput:${entered}`),
       },
       deckView: {
         show: (blocks: readonly unknown[], close: () => void) => {
@@ -178,7 +179,8 @@ describe("scene traits own their behaviour", () => {
     scenes.register(scene("title", {}));
 
     scenes.switchTo("stage");
-    expect(calls).toEqual(["hand:true", "handInput:true", "bin:true"]);
+    // The input reaches the hand through the renderer's handShown (#278): no switch of its own.
+    expect(calls).toEqual(["hand:true", "bin:true"]);
     calls.length = 0;
     scenes.push("menu");
     scenes.pop();
@@ -187,7 +189,6 @@ describe("scene traits own their behaviour", () => {
     expect(calls.filter((call) => /^(hand|handInput|bin):/.test(call)).sort()).toEqual([
       "bin:false",
       "hand:false",
-      "handInput:false",
     ]);
   });
 

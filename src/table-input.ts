@@ -9,6 +9,7 @@
  * supplies them through `TableRules`. Each gesture plays its sound here, as it happens.
  */
 import { Gesture } from "@use-gesture/vanilla";
+import type { BinView } from "./bin-view";
 import { Registry } from "./core/registry";
 import {
   DragDropManager as DndKitManager,
@@ -83,17 +84,6 @@ type RackDragTarget = {
 
 export type TableInput = {
   /**
-   * A scene composing `handView` came to the front, or left (#183). The hand can be hovered,
-   * selected and dragged only while any such scene is on the stack; drawing it is the
-   * renderer's half of the same trait.
-   */
-  handEntered(entered: boolean): void;
-  /**
-   * A scene composing `discardBin` came to the front, or left (#183). The bin, which is also
-   * the passives' sell target, is shown while any such scene is on the stack.
-   */
-  discardBinEntered(entered: boolean): void;
-  /**
    * Allow a drop target while a scene shows (the `dropTarget` trait, #273); returns a function
    * that disallows it again.
    */
@@ -111,8 +101,6 @@ export type TableInput = {
    * a function that unbinds them.
    */
   enableBoardGestures(): () => void;
-  /** A shop scene composes the same target as Sell, without exposing Discard. */
-  sellBinEntered(entered: boolean): void;
   /** The selected block ids (hand and field). */
   readonly selection: Selection;
   /** Forget these blocks from the selection (they were played or discarded). */
@@ -202,6 +190,10 @@ export function createTableInput(options: {
   overlays(): Overlays;
   audio: Pick<AudioService, "zoomed">;
   rack: RackDragTarget;
+  /** The bin's presentation (Discard or Sell, shown or hidden; #278). */
+  bin: BinView;
+  /** Whether a scene shows the hand: its blocks can be clicked and inspected only then. */
+  handShown(): boolean;
   cubeSize: number;
   setDragLayer: DragLayer;
   /** The selection changed (highlight it). */
@@ -388,9 +380,8 @@ export function createTableInput(options: {
   }
 
   /** How many scenes in front compose `handView`; the hand takes input only while any does. */
-  let handScenes = 0;
   /** The hand's blocks the pointer can reach: none while no scene in front shows the hand. */
-  const reachableHand = () => (handScenes > 0 ? hand.blocks : []);
+  const reachableHand = () => (options.handShown() ? hand.blocks : []);
 
   const pickAny = (clientX: number, clientY: number) =>
     pickBlock(clientX, clientY, reachableHand()) ?? pickBlock(clientX, clientY, field.blocks());
@@ -872,7 +863,7 @@ export function createTableInput(options: {
   /** Click or tap the bin: discard the selected hand blocks as one discard. */
   const onDiscardClick = () => {
     // While it reads Sell (a passive is being dragged) the target never discards.
-    if (passiveDrag || discardArea.classList.contains("is-sell")) return;
+    if (passiveDrag || options.bin.selling) return;
     // Model first (#272): a discard commits at once, even while earlier plays are shown.
     if (drag?.active || !rules.inStage()) {
       trace("discard ignored", drag?.active ? "a drag is active" : "not in a stage");
@@ -896,15 +887,6 @@ export function createTableInput(options: {
     slot: number | null;
   } | null = null;
 
-  /** The shared lower-screen target reads Sell in the shop or while a passive is dragged. */
-  function showSellTarget(selling: boolean): void {
-    const showSell = selling || sellBinScenes > 0;
-    discardArea.classList.toggle("is-sell", showSell);
-    discardArea.setAttribute("aria-label", showSell ? "Sell area" : "Discard area");
-    discardArea.querySelector(".discard-label")!.textContent = showSell ? "SELL" : "DISCARD";
-    if (!selling) discardArea.classList.remove("is-target", "is-refused");
-  }
-
   /**
    * The rack (#277), a drag source run by dnd-kit like the hand: a passive pressed and moved is
    * lifted out as a token under the pointer. Dropped inside the rack it moves to that slot (a
@@ -924,7 +906,7 @@ export function createTableInput(options: {
       document.body.append(floating);
       passiveDrag = { block, floating, slot: null };
       rack.lift(block.id);
-      showSellTarget(true);
+      options.bin.carrying(true);
       trace("drag started", "a passive from the rack");
       playSfx("passive.pickup");
       rackSource.move(at);
@@ -953,7 +935,7 @@ export function createTableInput(options: {
       const { block, floating, slot } = passiveDrag;
       passiveDrag = null;
       floating.remove();
-      showSellTarget(false);
+      options.bin.carrying(false);
       rack.lift(null);
       rack.preview(null);
       // A drop inside the rack reorders it: not a sale, and nothing else changes.
@@ -1017,27 +999,11 @@ export function createTableInput(options: {
   window.addEventListener("blur", onBlur);
   document.addEventListener("visibilitychange", onVisibilityChange);
 
-  /** How many scenes in front compose `discardBin`; the bin is shown while any does. */
-  let discardBinScenes = 0;
-  let sellBinScenes = 0;
-
   return {
-    handEntered(entered) {
-      handScenes = Math.max(0, handScenes + (entered ? 1 : -1));
-    },
     enableDropTarget: (config) => dragDrop.enable(config),
     enableDragSource: (config) => dragDrop.enableSource(config),
     registerDragSource: (name, source) => dragSourceKinds.register(name, source),
     enableBoardGestures: bindBoardGestures,
-    discardBinEntered(entered) {
-      discardBinScenes = Math.max(0, discardBinScenes + (entered ? 1 : -1));
-      discardArea.hidden = discardBinScenes + sellBinScenes === 0;
-    },
-    sellBinEntered(entered) {
-      sellBinScenes = Math.max(0, sellBinScenes + (entered ? 1 : -1));
-      discardArea.hidden = discardBinScenes + sellBinScenes === 0;
-      showSellTarget(false);
-    },
     fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
     get selection() {
       return selected;

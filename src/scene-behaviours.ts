@@ -10,6 +10,7 @@
  * Each trait brings its own behaviour, so a scene composes the panels and permissions it
  * wants and nothing has to ask which scene is in front.
  */
+import type { BinView } from "./bin-view";
 import { devDropInspector } from "./scene-traits/dev-drop-inspector";
 import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
 import type { ActionLog } from "./action-log";
@@ -48,15 +49,11 @@ export type SceneHost = {
     /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
     renderer: Pick<TableRenderer, "tableEntered" | "handEntered">;
     hud: Pick<HudPanels, "show" | "hide">;
+    /** The bin: shown while a scene composing `discardBin` or `sellBin` is on the stack (#278). */
+    bin: Pick<BinView, "discardBinEntered" | "sellBinEntered">;
     input: Pick<
       TableInput,
-      | "cancelGestures"
-      | "discardBinEntered"
-      | "sellBinEntered"
-      | "handEntered"
-      | "enableDropTarget"
-      | "enableDragSource"
-      | "enableBoardGestures"
+      "cancelGestures" | "enableDropTarget" | "enableDragSource" | "enableBoardGestures"
     >;
     shop: ShopView;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
@@ -187,14 +184,12 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // The hand and the discard bin, like the table, exist while a scene that wants them is on the
   // stack (#183): a menu pushed over a stage leaves them, and the title composes neither.
   behaviours.register("handView", {
-    // Drawn and reachable together: a scene without the hand can neither see nor touch it.
+    // Drawn and reachable together: the input reaches hand blocks only while the renderer shows them.
     enter({ services }) {
       services.renderer.handEntered(true);
-      services.input.handEntered(true);
     },
     exit({ services }) {
       services.renderer.handEntered(false);
-      services.input.handEntered(false);
     },
   });
   behaviours.register("firstPlayPrompt", firstPlayPrompt<Context>());
@@ -250,12 +245,12 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
   });
   behaviours.register("discardBin", {
-    enter: ({ services }) => services.input.discardBinEntered(true),
-    exit: ({ services }) => services.input.discardBinEntered(false),
+    enter: ({ services }) => services.bin.discardBinEntered(true),
+    exit: ({ services }) => services.bin.discardBinEntered(false),
   });
   behaviours.register("sellBin", {
-    enter: ({ services }) => services.input.sellBinEntered(true),
-    exit: ({ services }) => services.input.sellBinEntered(false),
+    enter: ({ services }) => services.bin.sellBinEntered(true),
+    exit: ({ services }) => services.bin.sellBinEntered(false),
   });
   behaviours.register("deckView", {
     // Read-only: it shows the deck and its Back button goes back; it never changes the deck.

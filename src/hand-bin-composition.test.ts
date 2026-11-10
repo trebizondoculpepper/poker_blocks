@@ -24,6 +24,13 @@ describe("hand and Discard bin composition (#185)", () => {
     expect(behaviours).toMatch(/register\("discardBin"[\s\S]*?discardBinEntered\(true\)/);
   });
 
+  it("guardrail (#278): the input service holds no scene switches or scene counters", () => {
+    const input = read("./table-input.ts");
+    expect(input).not.toMatch(/\b\w+Entered\s*\(/);
+    expect(input).not.toMatch(/\b(let|const)\s+\w+Scenes\b/);
+    expect(input).not.toMatch(/\bsetFieldActive\b|\bfieldActive\b/);
+  });
+
   it("start hidden: the bin is built hidden and main.ts never reveals it", () => {
     expect(read("./table-input.ts")).toMatch(
       /function createDiscardTarget[\s\S]*?discardArea\.hidden = true;/,

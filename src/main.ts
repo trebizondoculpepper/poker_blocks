@@ -38,6 +38,7 @@ import { sceneBehaviours } from "./scene-behaviours";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView, type ShopView } from "./shop-view";
 import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
+import { createBinView, type BinView } from "./bin-view";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
 import { createHudFrame } from "./hud-frame";
@@ -56,6 +57,7 @@ const cubeSize = 2.4;
 const backgrounds = createBackgroundLayers(host);
 const hud: HudPanels = createHudPanels(host);
 const discardArea = createDiscardTarget(host);
+const bin = createBinView(discardArea);
 const view: TableRenderer = createTableRenderer(host, backgrounds);
 const render = () => view.render(cameraView.camera, cameraView.handCamera);
 const cameraView: CameraViewService = createCameraViewService({
@@ -100,6 +102,7 @@ const audio: AudioService = createAudioService({
 type TraitContext = {
   host: HTMLElement;
   services: {
+    bin: BinView;
     renderer: TableRenderer;
     cameraView: CameraViewService;
     audio: AudioService;
@@ -136,6 +139,7 @@ const devObjectBrowser: ShopBalanceEditor = import.meta.env.DEV
 const traitContext: TraitContext = {
   host,
   services: {
+    bin,
     renderer: view,
     cameraView,
     audio,
@@ -298,6 +302,8 @@ const input: TableInput = createTableInput({
   overlays: () => overlays,
   audio,
   rack: passiveRackView,
+  bin,
+  handShown: () => view.handShown(),
   cubeSize,
   setDragLayer: (cube, dragging) => view.setDragLayer(cube, dragging),
   onSelectionChange: () => run.showSelection(),
