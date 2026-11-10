@@ -84,6 +84,12 @@ export type SceneHost = {
       show(config: SceneTraits["devWordCubeRoom"]): void;
       hide(): void;
     };
+    /** Shows the dialogs scenes compose; each `add` returns a function that takes it away. */
+    dialogs: { add(config: SceneTraits["titleMenuDialog"]): () => void };
+    devDialogRoom: {
+      show(config: SceneTraits["devDialogRoom"]): void;
+      hide(): void;
+    };
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
     run: Pick<
       RunController,
@@ -454,6 +460,28 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("devBlockDesigner", {
     enter: ({ services }, { backTo }) => services.devBlockDesigner.show(backTo),
     exit: ({ services }) => services.devBlockDesigner.hide(),
+  });
+  // Each dialog is its own trait with its own data; all of them hand that data to the dialogs
+  // service while their scene is on the stack, so none needs code of its own.
+  for (const name of [
+    "titleMenuDialog",
+    "newGameDialog",
+    "pauseDialog",
+    "stageWonDialog",
+    "gameOverDialog",
+  ] as const) {
+    const shown = new WeakMap<object, () => void>();
+    behaviours.register(name, {
+      enter: ({ services }, config) => void shown.set(config, services.dialogs.add(config)),
+      exit: (_context, config) => {
+        shown.get(config)?.();
+        shown.delete(config);
+      },
+    });
+  }
+  behaviours.register("devDialogRoom", {
+    enter: ({ services }, config) => services.devDialogRoom.show(config),
+    exit: ({ services }) => services.devDialogRoom.hide(),
   });
   behaviours.register("devWordCubeRoom", {
     enter: ({ services }, config) => services.devWordCubeRoom.show(config),

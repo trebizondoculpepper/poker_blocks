@@ -48,6 +48,7 @@ describe("game modes composed from traits", () => {
       "dev11",
       "dev12",
       "dev13",
+      "dev14",
     ]);
   });
 
@@ -84,6 +85,21 @@ describe("game modes composed from traits", () => {
     expect(disabled).toHaveLength(1);
     expect(disabled[0]?.description).toBeTruthy();
     expect(new Set(room?.items.map(({ action }) => action)).size).toBe(room?.items.length);
+  });
+
+  it("opens dev14 on the dialog room, composing every game dialog as its own trait (#347)", () => {
+    const mode = gameModeFor("dev14");
+    expect(mode.startScene).toBe("dialogs");
+    const traits = mode.scenes.find(({ id }) => id.endsWith("/dialogs"))?.traits;
+    expect(traits?.devDialogRoom?.seconds).toBeGreaterThan(0);
+    expect(traits?.newGameDialog?.items.map(({ label }) => label)).toEqual(["Start", "Cancel"]);
+    expect(traits?.pauseDialog?.items.map(({ label }) => label)).toEqual([
+      "Resume",
+      "Settings",
+      "Quit",
+    ]);
+    for (const dialog of [traits?.titleMenuDialog, traits?.stageWonDialog, traits?.gameOverDialog])
+      expect(dialog?.items.length).toBeGreaterThan(0);
   });
 
   it("opens a mode from ?mode=, falling back to the legacy ?room= alias", () => {
