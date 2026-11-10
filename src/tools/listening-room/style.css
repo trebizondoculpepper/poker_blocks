@@ -209,3 +209,21 @@ button:focus-visible {
 .sounds[data-show="silent"] .sound:not(.silent) {
   display: none;
 }
+
+/* A sound's human name beside its id, and a heading per family. */
+.sound-name {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.family-heading {
+  list-style: none;
+  margin: 18px 0 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.family-heading[hidden] {
+  display: none;
+}

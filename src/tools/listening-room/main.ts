@@ -63,7 +63,7 @@ function flash(button: HTMLButtonElement, text: string): void {
   setTimeout(() => (button.textContent = label), 1200);
 }
 
-type Entry = { row: HTMLLIElement; takes: string[] };
+type Entry = { id: string; row: HTMLLIElement; takes: string[] };
 const entries: Entry[] = [];
 
 /** A sound's own takes. */
@@ -72,7 +72,13 @@ const ownTakes = (id: string) => {
   return effect ? sfxFileNames(effect).flatMap((name) => urlByFile.get(name) ?? []) : [];
 };
 
-for (const [index, effect] of soundEffects.entries()) {
+// Families in the order they first appear in the registry, each family's sounds together.
+const families = [...new Set(soundEffects.map(({ family }) => family))];
+const ordered = families.flatMap((family) =>
+  soundEffects.filter((effect) => effect.family === family),
+);
+let lastFamily: string | null = null;
+for (const [index, effect] of ordered.entries()) {
   const own = ownTakes(effect.id);
   // With no audio of its own, a sound plays its placeholder in the game (#232), so here too.
   const standIn = own.length === 0 && effect.placeholder ? ownTakes(effect.placeholder) : [];
@@ -89,6 +95,7 @@ for (const [index, effect] of soundEffects.entries()) {
     <span class="sound-key">${key}</span>
     <span class="sound-text">
       <span class="sound-id"></span>
+      <span class="sound-name"></span>
       <span class="sound-trigger"></span>
       <span class="sound-prompt"></span>
     </span>
@@ -96,7 +103,8 @@ for (const [index, effect] of soundEffects.entries()) {
     <span class="sound-audio"></span>
     <span class="sound-usage"></span>`;
   main.querySelector(".sound-id")!.textContent = effect.id;
-  main.querySelector(".sound-trigger")!.textContent = effect.trigger;
+  main.querySelector(".sound-name")!.textContent = effect.name;
+  main.querySelector(".sound-trigger")!.textContent = effect.description;
   main.querySelector(".sound-prompt")!.textContent = effect.prompt
     ? `“${effect.prompt}”`
     : "No prompt yet";
@@ -167,8 +175,17 @@ for (const [index, effect] of soundEffects.entries()) {
     row.append(variants);
   }
 
+  // Rows are grouped under a heading for each family, in registry order.
+  if (lastFamily !== effect.family) {
+    lastFamily = effect.family;
+    const heading = document.createElement("li");
+    heading.className = "family-heading";
+    heading.textContent = effect.family;
+    list.append(heading);
+  }
+  row.dataset.family = effect.family;
   list.append(row);
-  entries.push({ row, takes });
+  entries.push({ id: effect.id, row, takes });
 }
 
 element("play-all").addEventListener("click", async () => {
@@ -190,13 +207,23 @@ element("stop").addEventListener("click", stopAll);
 const usageFilter = element<HTMLSelectElement>("usage-filter");
 usageFilter.addEventListener("change", () => {
   list.dataset.show = usageFilter.value;
+  // A family heading shows only while one of its sounds does.
+  for (const heading of list.querySelectorAll<HTMLElement>(".family-heading")) {
+    let next = heading.nextElementSibling as HTMLElement | null;
+    let visible = false;
+    while (next && !next.classList.contains("family-heading")) {
+      if (getComputedStyle(next).display !== "none") visible = true;
+      next = next.nextElementSibling as HTMLElement | null;
+    }
+    heading.hidden = !visible;
+  }
 });
 
 // Preview of a chain: one registered sound repeated at rising pitch, two semitones apart. The
 // sound is chosen from the registry, and `?sound=<id>` in the URL preselects it (#71).
 const chainSound = element("chain-sound") as HTMLSelectElement;
 for (const effect of soundEffects) {
-  chainSound.append(new Option(`${effect.id} — ${effect.trigger}`, effect.id));
+  chainSound.append(new Option(`${effect.id} — ${effect.description}`, effect.id));
 }
 chainSound.value = new URLSearchParams(location.search).get("sound") ?? chainSound.value;
 chainSound.addEventListener("change", () => {
@@ -206,7 +233,7 @@ chainSound.addEventListener("change", () => {
 });
 
 element("chain").addEventListener("click", async () => {
-  const entry = entries[soundEffects.findIndex(({ id }) => id === chainSound.value)];
+  const entry = entries.find(({ id }) => id === chainSound.value);
   if (!entry || entry.takes.length === 0) return;
   stopAll();
   const run = sequence;

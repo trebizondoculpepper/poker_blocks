@@ -41,7 +41,7 @@ const jobs = selected
 
 if (needsPrompt.length > 0) {
   console.log("Needs a prompt before audio can be generated:");
-  for (const effect of needsPrompt) console.log(`  ${effect.id}: ${effect.trigger}`);
+  for (const effect of needsPrompt) console.log(`  ${effect.id}: ${effect.description}`);
 }
 if (listOnly) {
   console.log(
