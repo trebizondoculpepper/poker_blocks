@@ -187,8 +187,11 @@ Material appearance is defined on each material definition in `src/materials.ts`
 - **Model first** (#272). Input commits to the model immediately; animation catches up. No input is held back for an animation.
 - **Browser behaviour** (#267, #283).
   - Pointer capture can be lost before the release arrives, so a drag that loses capture waits briefly for its release before cancelling. That has to stay true through both libraries: #282 checks dnd-kit's pointer sensor, and #275 checks use-gesture.
-  - The game surface sets `touch-action: none`, suppresses native `dragstart`, and has no text selection or long-press callouts.
-  - Pinch zoom is logarithmic.
+  - **The game surface is not a document** (audited in #283):
+    - `touch-action: none` is on the canvases and the draggable DOM (rack items, shop offers);
+    - `.scene` has `user-select: none`, `-webkit-touch-callout: none` and `-webkit-user-drag: none`, while text fields keep selection;
+    - the input service cancels native `dragstart` on the surface (a native drag fires `pointercancel` and stops the pointer stream) and the long-press `contextmenu` on the table.
+  - **Zoom is logarithmic:** a pinch multiplies the zoom by the finger-spacing ratio, and the wheel by `exp(step)`, so equal gestures zoom by equal factors at every level (`view-zoom.test.ts`).
 - **Debugging.** The action history (dev10, `actionHistory` trait) traces every input decision with timestamps. It's the regression tool for input changes: capture the same gestures before and after a change and compare the decisions.
 
 ## Field visual effects (proposal)
