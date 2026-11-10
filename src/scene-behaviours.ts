@@ -24,6 +24,7 @@ import {
   type BlockDestroyerBoard,
 } from "./scene-traits/dev-manual-block-destroyer";
 import { SceneTraitRegistry } from "./scenes";
+import type { DeckView } from "./deck-view";
 import { devHudStyleAudition, hudStyle } from "./scene-traits/hud-style";
 import type { SoundEffectId } from "./audio/sfx-registry";
 
@@ -44,11 +45,14 @@ export type SceneHost = {
     shop: ShopView;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
     rack: { viewEntered(entered: boolean, capacity: number): void };
+    /** The read-only deck view (#175). */
+    deckView: Pick<DeckView, "show" | "hide">;
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
     run: Pick<
       RunController,
       | "rackCapacity"
       | "shopStock"
+      | "deckBlocks"
       | "dispatch"
       | "hasSave"
       | "runStats"
@@ -185,6 +189,15 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("discardBin", {
     enter: ({ services }) => services.input.discardBinEntered(true),
     exit: ({ services }) => services.input.discardBinEntered(false),
+  });
+  behaviours.register("deckView", {
+    // Read-only: it shows the deck and its Back button goes back; it never changes the deck.
+    enter: ({ services }) =>
+      services.deckView.show(services.run.deckBlocks(), () => {
+        services.sound("ui.back");
+        services.run.dispatch("back");
+      }),
+    exit: ({ services }) => services.deckView.hide(),
   });
   behaviours.register("devAttractTuning", {
     // Testing only: the panel drives the attract background's live tuning (#166).

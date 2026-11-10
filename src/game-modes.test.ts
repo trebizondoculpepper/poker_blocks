@@ -110,7 +110,7 @@ describe("game modes composed from traits", () => {
       expect(traitsOf("game", stage)).toMatchObject({
         tableBackground: {},
         roundPanel: {},
-        deckPanel: {},
+        deckPanel: { opens: "openDeck" },
         fieldPlacement: {},
       });
       expect(traitsOf("game", stage)).not.toHaveProperty("coinsPanel");
@@ -206,7 +206,7 @@ describe("game modes composed from traits", () => {
       tableBackground: {},
       handView: {},
       discardBin: {},
-      deckPanel: {},
+      deckPanel: { opens: "openDeck" },
       fieldPlacement: {},
       runInPlay: {},
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },

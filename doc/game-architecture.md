@@ -456,3 +456,7 @@ A HUD style is data: a registered entry in `src/hud-styles.ts` listing the `--hu
 ### The hand and the Discard bin are composed by scenes (#185)
 
 `src/main.ts` builds the services behind the hand (`createHandView`, the renderer's hand pass, the input's hand gestures) and the Discard bin (`createDiscardTarget`), but it never shows them. The bin is built hidden, and the hand is neither drawn nor reachable by input until a scene asks for it. A scene asks by composing the `handView` scene trait (the hand is drawn and can be picked and dragged while such a scene is on the stack) and the `discardBin` trait (the bin, which is also the passives' sell target, is shown). Each service counts the scenes that entered it, so stacked scenes compose cleanly. The play scenes compose both traits; the title and the menus compose neither; another scene can reuse or omit them with no special case. `src/hand-bin-composition.test.ts` holds the rule: only those traits reveal the hand or bin, the bin starts hidden, and the composition root never reveals it.
+
+### The deck view (#175)
+
+The deck view is its own scene, `deck`, pushed by the `openDeck` navigation action and popped by `back`. It composes `deckView` (shows `src/deck-view.ts`'s overlay with the run's deck, read-only), `pausesBelow` and an Escape `keyAction`. The deck counter opens it through data: the play scenes compose `deckPanel: { opens: "openDeck" }`, and the HUD dispatches whatever action its panel config names, so the HUD knows nothing about the deck view.

@@ -23,7 +23,7 @@ export type ShopExitConfig = { label: string };
 /** What each panel is configured with by the scene showing it. */
 export type HudPanelConfigs = {
   round: RoundPanelConfig;
-  deck: Record<never, never>;
+  deck: { opens?: string };
   coins: Record<never, never>;
   shopExit: ShopExitConfig;
 };
@@ -57,6 +57,8 @@ export type HudPanels = {
   render(view: HudView): void;
   /** Run when the player presses the HUD's next-action button or the shop exit. */
   onAction(handler: () => void): void;
+  /** Run with a panel's configured action when the player selects that panel (#175). */
+  onOpen(handler: (action: string) => void): void;
   dispose(): void;
 };
 
@@ -130,6 +132,11 @@ export function createHudPanels(host: HTMLElement): HudPanels {
   deckHud.className = "deck-hud";
   deckHud.innerHTML =
     '<span>DECK</span><strong data-stat="deck"></strong><small>cards left</small>';
+  // Selecting the counter opens what its scene configures (the deck view, #175).
+  deckHud.dataset.interactive = "";
+  deckHud.tabIndex = 0;
+  deckHud.setAttribute("role", "button");
+  deckHud.setAttribute("aria-label", "View your deck");
   host.append(deckHud);
   const coinHud = document.createElement("aside");
   coinHud.className = "coin-hud";
@@ -161,6 +168,15 @@ export function createHudPanels(host: HTMLElement): HudPanels {
   const runAction = () => handlers.forEach((handler) => handler());
   actionButton.addEventListener("click", runAction);
   shopExitButton.addEventListener("click", runAction);
+  const openers: ((action: string) => void)[] = [];
+  const openDeck = (event: Event) => {
+    if (event instanceof KeyboardEvent && event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    for (const action of [composed.deck?.opens ?? []].flat())
+      openers.forEach((open) => open(action));
+  };
+  deckHud.addEventListener("click", openDeck);
+  deckHud.addEventListener("keydown", openDeck);
 
   return {
     element: (panel) => elements[panel],
@@ -186,6 +202,9 @@ export function createHudPanels(host: HTMLElement): HudPanels {
     },
     onAction(handler) {
       handlers.push(handler);
+    },
+    onOpen(handler) {
+      openers.push(handler);
     },
     dispose() {
       actionButton.removeEventListener("click", runAction);

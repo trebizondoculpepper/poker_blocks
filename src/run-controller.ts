@@ -123,6 +123,8 @@ export type RunController = {
   rackCapacity(): number;
   /** What the shop is showing while its scene is in front. */
   shopStock(): readonly ShopOffer[];
+  /** The run's deck, for the read-only deck view (#175). */
+  deckBlocks(): readonly CardBlock[];
   /** The won stage's paid rewards, which the stage-won pop-up shows; null before payment. */
   stageReward(): StageReward | null;
   /** The run's totals so far, which the game over screen shows. */
@@ -693,6 +695,7 @@ export function createRunController<Context>(options: {
     takeNextAction,
     offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),
     shopStock: () => game.state.shopStock ?? [],
+    deckBlocks: () => game.state.deck,
     runStats: () => game.stats,
     // A run with no rack limit shows exactly the passives it holds.
     rackCapacity: () =>

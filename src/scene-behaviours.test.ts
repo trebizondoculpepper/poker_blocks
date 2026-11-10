@@ -9,6 +9,7 @@ import type { ShopOffer } from "./shop-stock";
 function recordingHost() {
   const calls: string[] = [];
   const shown = new Set<HudPanel>();
+  let deckClose = () => {};
   const host: SceneHost = {
     host: { dataset: {} } as HTMLElement,
     services: {
@@ -39,6 +40,13 @@ function recordingHost() {
         discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
         handEntered: (entered) => void calls.push(`handInput:${entered}`),
       },
+      deckView: {
+        show: (blocks: readonly unknown[], close: () => void) => {
+          calls.push(`deck:${blocks.length}`);
+          deckClose = close;
+        },
+        hide: () => void calls.push("deck:hide"),
+      },
       rack: {
         viewEntered: (entered, capacity) => void calls.push(`rack:${entered}:${capacity}`),
       },
@@ -54,6 +62,7 @@ function recordingHost() {
         rackCapacity: () => 5,
         seed: () => 4242,
         shopStock: () => [{ kind: "card", block: {} as never }],
+        deckBlocks: () => [],
         dispatch: (action) => void calls.push(`action:${action}`),
         reducedMotion: false,
         runStats: () => ({
@@ -103,7 +112,7 @@ function recordingHost() {
       sound: (id) => void calls.push(`sound:${id}`),
     },
   };
-  return { host, calls, shown };
+  return { host, calls, shown, closeDeck: () => deckClose() };
 }
 
 const scene = (id: string, traits: Partial<SceneTraits>) => ({ id, traits });
@@ -144,6 +153,20 @@ describe("scene traits own their behaviour", () => {
       "hand:false",
       "handInput:false",
     ]);
+  });
+
+  it("lists the deck read-only and goes back from its Back button (#175)", () => {
+    const { host, calls, closeDeck } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("table", {}));
+    scenes.register(scene("deck", { deckView: {} }));
+    scenes.switchTo("table");
+    scenes.push("deck");
+    expect(calls).toEqual(["deck:0"]);
+    closeDeck();
+    expect(calls).toContain("action:back");
+    scenes.switchTo("table");
+    expect(calls).toContain("deck:hide");
   });
 
   it("shows the won stage's paid rewards with its next action, and closes on exit (#91)", () => {
