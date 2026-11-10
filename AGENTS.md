@@ -50,11 +50,12 @@ The primary review question is whether this PR moves the code toward the **targe
 ### Input ownership
 
 - Compare input changes with "Input" in [doc/game-architecture.md](doc/game-architecture.md). Flag:
-  - an input decision (what can be picked up, where something can be dropped, what a gesture becomes) made outside a drag source, drop target or gesture recognizer;
-  - a branch in the drag-and-drop manager or the gesture arena on an owner, scene or block kind;
+  - an input decision (what can be picked up, where something can be dropped, what a gesture does) made outside a drag source, drop target or board-gesture handler;
+  - a branch in the input adapter (`src/drag-drop.ts`, the dnd-kit and use-gesture wiring) on an owner, scene or block kind;
+  - drag handling written by hand where dnd-kit (drag and drop) or use-gesture (pinch, rotate, wheel, board drag) should do it;
   - input held back or ignored because an animation is running (model first, #272);
   - a capture, cancel or lost-capture path that doesn't reach every owner;
-  - non-standard names for these pieces: use drag source, drop target, hit test, hover, drop, reject, gesture arena, recognizer, and began / changed / ended / cancelled.
+  - non-standard names for these pieces: use drag source, drop target, draggable, droppable, sensor, collision detection, hit test, hover, drop, reject, and began / changed / ended / cancelled.
 
 ### State and presentation
 
