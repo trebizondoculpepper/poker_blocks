@@ -1,3 +1,4 @@
+import type { BlockTitleConfig } from "./scene-traits/block-title";
 import type { DragSourceConfig, DropTargetConfig } from "./drag-drop";
 import type { DevDropInspectorConfig } from "./scene-traits/dev-drop-inspector";
 import type { ActionHistoryConfig } from "./scene-traits/action-history";
@@ -76,6 +77,8 @@ export type SceneTraits = {
    * It is cosmetic: it draws no game state and its randomness is not the session's.
    */
   attractBackground: Record<never, never>;
+  /** Reusable, scaled music-reactive words made of letter blocks. */
+  blockTitle: BlockTitleConfig;
   /**
    * The room and table are drawn while this scene is in front. The title does not compose it,
    * so no table appears there (#147); every scene played on the table does.
