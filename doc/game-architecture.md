@@ -109,6 +109,8 @@ A registered dealer reads `GameState` to decide whether a move is legal and retu
 
 ## Placement and card appearance
 
+**Model first (owner rule, 2026-11-10).** User input commits to the model immediately, and animation catches up. An animation can take seconds, but the play has already happened: presentation never gates or delays a rule outcome. This applies to every input (plays, discards, purchases, sales). #272 implemented it for drops, discards and passive sales, replacing the #167 rule in which a drop waited for the last animation. The epic #271 restructures input so each thing handles its own input (a gesture router plus input owners registered by traits), following this rule.
+
 **The drop contract (#167, #272).** A hand card, with any selected cards it carries, can be picked up at any time, including while earlier plays or discards are still animating. When it's dropped, each carried card ends up exactly once: played at the candidate, discarded, moved within the hand, or put back.
 
 - **A drop commits at once (model first, #272).** It goes to the rules immediately, even while earlier plays are still being shown. Their animations and this one catch up with the model: the presenter keeps every play and discard in flight in a list. Each play's scoring lines are captured when it commits and queued behind any still being shown (`queueScoreSteps`), so plays that land close together score one after another. A stage outcome's pop-up waits until all of it has been shown.
