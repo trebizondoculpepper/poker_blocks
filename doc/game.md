@@ -161,6 +161,8 @@ The playable `?mode=dev0` experiment (formerly `?room=dev`) assigns a random vis
 - **Ice:** frosted glass-like blue with surface condensation.
 - **Meat:** marbled flesh tones and gently rounded corners.
 
+**Attachment sounds (#232):** when a block lands, the softer of the two materials that meet chooses the sound, so meat on steel sounds like meat. Hardness and each material's sound are data on the material; the proposed order and placeholder ids are in doc/sound_design.md. Attachment is the only material sound; there is no collision sound.
+
 These prototypes have no material-specific rules yet. **Jelly** is excluded until its motion and attachment behavior are designed.
 
 ### Basic scoring materials (planned)

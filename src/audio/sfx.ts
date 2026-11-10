@@ -12,11 +12,19 @@ const urlByFile = new Map(
   ).map(([path, url]) => [path.slice(path.lastIndexOf("/") + 1), url]),
 );
 
-const takesById = new Map(
+const ownTakes = new Map(
   soundEffects.map((effect) => [
     effect.id,
     sfxFileNames(effect).flatMap((name) => urlByFile.get(name) ?? []),
   ]),
+);
+// A sound with no audio yet plays its placeholder's takes, if it names one (#232).
+const takesById = new Map(
+  soundEffects.map((effect) => {
+    const own = ownTakes.get(effect.id) ?? [];
+    const stand = effect.placeholder ? (ownTakes.get(effect.placeholder) ?? []) : [];
+    return [effect.id, own.length > 0 ? own : stand];
+  }),
 );
 
 export type PlayOptions = {

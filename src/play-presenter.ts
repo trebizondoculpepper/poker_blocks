@@ -8,6 +8,8 @@
  * While a play or its scoring is being presented the HUD hides the outcome and the table
  * takes no new gestures.
  */
+import { landingSounds } from "./attachment-sound";
+import { getMaterialDefinition, materialOf } from "./materials";
 import * as THREE from "three";
 import { playSfx } from "./audio/sfx";
 import type { CameraViewService } from "./camera-view";
@@ -195,7 +197,15 @@ export function createPlayPresenter(options: {
       }
     }
     options.moved();
-    playSfx("card.attach");
+    // The softer material where each block meets the structure decides its sound (#232).
+    const placed = game().state.field;
+    const landed = action.flights.flatMap(
+      (flight) => placed.find(({ block }) => block.id === flight.source.block.id) ?? [],
+    );
+    for (const id of landingSounds(landed, placed, (block) =>
+      getMaterialDefinition(materialOf(block)),
+    ))
+      playSfx(id);
     announceScore(now);
     cameraView.scheduleCameraMove();
     options.refill();
