@@ -85,6 +85,8 @@ export type TableInput = {
   readonly dragging: boolean;
   /** The cell a dragged block would be played into right now, if any. */
   readonly candidateCell: Cell | null;
+  /** A drop is held, waiting for the last animation to finish before it commits (#167). */
+  readonly dropHeld: boolean;
   /** The scene in front allows (or no longer allows) blocks to be played onto the field. */
   setFieldActive(active: boolean): void;
   /**
@@ -184,7 +186,13 @@ export function createTableInput(options: {
   onSelectionChange(): void;
   /** Offer an event to the scene stack first; true when a scene consumed it. */
   routeToScenes(event: Event): boolean;
+  /**
+   * Developer tracing (the dev10 drop inspector): told each decision the input makes about a
+   * drag or drop, and why. The game passes nothing; tracing never changes what happens.
+   */
+  trace?: (event: string, detail?: string) => void;
 }): TableInput {
+  const trace = options.trace ?? (() => {});
   const { host, canvas, discardArea, rules, cameraView, hand, field, rack, cubeSize } = options;
   const discardCount = discardArea.querySelector<HTMLElement>(".discard-count")!;
   let selected: Selection = new Set();
@@ -367,6 +375,7 @@ export function createTableInput(options: {
       // would start a second animation over the first.
       if ((candidate || discard) && rules.busy()) {
         pendingDrop = { drag: activeDrag, candidate, discard };
+        trace("drop held", "the last play or discard is still animating; the model waits");
         return;
       }
       commitDrop(activeDrag, candidate, discard, drop);
@@ -393,6 +402,11 @@ export function createTableInput(options: {
       : candidate
         ? rules.play(playOrder(activeDrag), candidate)
         : false;
+    const blocks = 1 + activeDrag.group.length;
+    trace(
+      accepted ? (discard ? "discarded" : "played") : candidate || discard ? "refused" : "returned",
+      `${blocks} block${blocks === 1 ? "" : "s"}${candidate ? " onto the field" : discard ? " to the bin" : ""}`,
+    );
     const from = rules.hand().indexOf(activeDrag.source.block);
     if (!accepted && reorderSlot !== null && reorderSlot !== from) {
       // A drop inside the hand reorders it: not a play or discard, and nothing refills.
@@ -432,7 +446,10 @@ export function createTableInput(options: {
   const onPointerDown = (event: PointerEvent) => {
     // A card can be picked up while the last play is still landing (#167); only a drop still
     // waiting to commit holds new gestures back.
-    if (pendingDrop) return;
+    if (pendingDrop) {
+      trace("pointer ignored", "a held drop is still waiting to commit");
+      return;
+    }
     if (event.pointerType === "touch") {
       touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (touches.size >= 2) {
@@ -451,6 +468,16 @@ export function createTableInput(options: {
     }
     options.overlays().hideTooltip();
     const source = pickBlock(event.clientX, event.clientY, reachableHand());
+    trace(
+      "pointer down",
+      !source
+        ? "on no hand block"
+        : !fieldActive
+          ? "on a hand block, but this scene doesn't take plays"
+          : blockCanDrag(source.block)
+            ? "on a hand block: can drag"
+            : "on a hand block that can't be dragged",
+    );
     if (fieldActive && source && blockCanDrag(source.block)) {
       pointRay(event.clientX, event.clientY, cameraView.handCamera);
       const grabOffset = raycaster.ray.intersectPlane(dragPlane, dragPoint)
@@ -504,6 +531,7 @@ export function createTableInput(options: {
         Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8
       ) {
         drag.active = true;
+        trace("drag started", rules.busy() ? "while an animation is running" : "");
         // Dragging a selected block carries the rest of the hand selection with it.
         if (selected.has(drag.source.block.id)) {
           const source = drag.source;
@@ -674,7 +702,17 @@ export function createTableInput(options: {
   const onDiscardClick = () => {
     // While it reads Sell (a passive is being dragged) the target never discards.
     if (passiveDrag || discardArea.classList.contains("is-sell")) return;
-    if (rules.busy() || drag?.active || !rules.inStage()) return;
+    if (rules.busy() || drag?.active || !rules.inStage()) {
+      trace(
+        "discard ignored",
+        rules.busy()
+          ? "an animation is running"
+          : drag?.active
+            ? "a drag is active"
+            : "not in a stage",
+      );
+      return;
+    }
     const chosen = hand.selected(selected);
     if (!chosen.length) return;
     if (!rules.canDiscard() || !rules.discard(chosen)) {
@@ -845,6 +883,9 @@ export function createTableInput(options: {
     get dragging() {
       return Boolean(drag?.active);
     },
+    get dropHeld() {
+      return pendingDrop !== null;
+    },
     get candidateCell() {
       return drag?.active ? (drag.candidate?.cell ?? null) : null;
     },
@@ -877,6 +918,7 @@ export function createTableInput(options: {
       if (pendingDrop && !rules.busy()) {
         const waiting = pendingDrop;
         pendingDrop = null;
+        trace("held drop committing", "the animation finished");
         commitDrop(waiting.drag, waiting.candidate, waiting.discard, true);
       }
     },

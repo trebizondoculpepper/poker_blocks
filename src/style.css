@@ -1340,3 +1340,51 @@ body,
 .deck-hud[data-interactive] {
   cursor: pointer;
 }
+
+/* The dev10 drop inspector (src/scene-traits/dev-drop-inspector.ts). Never in the normal game. */
+.dev-drop-inspector {
+  position: absolute;
+  z-index: 50;
+  top: 230px;
+  left: 16px;
+  width: 320px;
+  max-height: 55vh;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid #f2c14e;
+  border-radius: 8px;
+  background: #101a24ee;
+  color: #f4f0e8;
+  font:
+    12px ui-monospace,
+    monospace;
+  pointer-events: none;
+}
+.dev-drop-inspector h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #f2c14e;
+}
+.dev-drop-state {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 8px;
+}
+.dev-drop-state .is-on {
+  color: #ff8a65;
+  font-weight: 700;
+}
+.dev-drop-trace {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dev-drop-trace li {
+  padding: 2px 0;
+  border-top: 1px solid #22334a;
+}
+.dev-drop-trace time {
+  display: inline-block;
+  width: 44px;
+  color: #a8b9c9;
+}

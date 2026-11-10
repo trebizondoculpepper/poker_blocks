@@ -5,6 +5,8 @@
  * table-input; presentation in view services and scene traits. Keep mode, phase and
  * scene decisions out of this file. See doc/game-architecture.md.
  */
+import { createActionLog, type ActionLog } from "./action-log";
+import type { ActionWatch } from "./scene-traits/action-history";
 import { createDanceFloor } from "./dance/dance-floor";
 import { createBeatSignal } from "./audio/beat-signal";
 import type { FirstPlayTable } from "./scene-traits/first-play-prompt";
@@ -78,6 +80,8 @@ const field: FieldView = createFieldView({
 });
 const musicPlayer = createMusicPlayer(musicTracks);
 // Where the heard music is, as a phase visuals can follow (#255); presentation only.
+// Interaction events and callbacks, recorded while a scene composes `actionHistory`.
+const actionLog = createActionLog(100);
 const beat = createBeatSignal(() => musicPlayer.position(performance.now()));
 // Things that move with the music join the dance floor (#256). Reduced motion stills them.
 const danceFloor = createDanceFloor(beat, () => run.reducedMotion);
@@ -104,6 +108,8 @@ type TraitContext = {
     hand: HandView;
     field: FieldView;
     firstPlay: FirstPlayTable;
+    actionLog: ActionLog;
+    actionWatch: ActionWatch;
     presenter: PlayPresenter;
     input: TableInput;
     run: RunController;
@@ -156,6 +162,25 @@ const traitContext: TraitContext = {
       destroy: (blockId, cause) => run.destroyBlock(blockId, cause),
     },
     attract,
+    // The action log records only while a scene composing `actionHistory` shows (dev10).
+    actionLog,
+    actionWatch: {
+      state: () => ({
+        animating: presenter.busy,
+        presenting: presenter.presenting,
+        dragging: input.dragging,
+        dropHeld: input.dropHeld,
+        modelBlocks: run.fieldCount(),
+        drawnBlocks: field.cells().length,
+      }),
+      header: () => [
+        ["version", appVersion],
+        ["mode", new URLSearchParams(window.location.search).get("mode") ?? "game"],
+        ["screen", `${window.innerWidth}×${window.innerHeight} @${window.devicePixelRatio}x`],
+        ["scenes", sceneManager.stack.map(({ id }) => id).join(" > ")],
+        ["userAgent", navigator.userAgent],
+      ],
+    },
     // What the first-play prompt trait asks of the table, the run and the input.
     firstPlay: {
       firstPlayCell: () => run.firstPlayCell(),
@@ -280,6 +305,7 @@ const input: TableInput = createTableInput({
   setDragLayer: (cube, dragging) => view.setDragLayer(cube, dragging),
   onSelectionChange: () => run.showSelection(),
   routeToScenes: (event) => sceneManager.dispatch(event),
+  trace: (event, detail) => actionLog.record("input", event, detail),
   rules: run.rules,
 });
 run.begin();
@@ -324,6 +350,7 @@ let lastTime = 0;
 const animate = (time: number) => {
   const delta = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
   lastTime = time;
+  actionLog.tick();
   beat.update(delta);
   danceFloor.update();
   cameraView.update(time, delta);
