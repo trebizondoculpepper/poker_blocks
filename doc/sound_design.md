@@ -194,7 +194,6 @@ These already happen in the game, but have no dedicated id:
 - **Passives:** picking up a passive from the rack, and selling a passive, plays `reward.coin`, but there is no pickup sound.
 - **Layout change (#119/#120):** changing it plays `ui.click`, which is fine and needs nothing new.
 
-
 ### Produced since the audit (#236)
 
 - **Generated:** priority 1 is done. `shop.buy`, `shop.stock.toss`, `shop.stock.land`, `shop.stock.burn`, `block.destroyed`, and `passive.activate.scoring`, `.economy`, `.effect` and `.retrigger` now have generated audio. So do the nine gameplay `material.attach.*` sounds from #232, which no longer fall back to `card.attach`.
