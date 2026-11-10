@@ -325,6 +325,15 @@ export const sceneDefinitions = [
         { name: "balance-editor", traits: {} },
         { name: "object-browser", traits: {} },
         { name: "block-designer", traits: {} },
+        {
+          // The block title over the flying-block background, nothing else (#295): an audition.
+          name: "title-audition",
+          traits: {
+            attractBackground: {},
+            blockTitle: { text: "Poker Blocks", scale: 1 },
+            musicCue: { cue: "title" },
+          },
+        },
       ] as const)
     : []),
   {
@@ -760,6 +769,21 @@ const gameModes: GameMode[] = [
             save: { key: "poker-blocks.dev10-run" },
             console: { name: "dev10" },
             restartable: { param: "restart" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // The block title, bouncing to the title music over the flying blocks (#295).
+          id: "dev11",
+          scenes: composeScenes("dev11", []),
+          startScene: "title-audition",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev11-run" },
+            console: { name: "dev11" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,
