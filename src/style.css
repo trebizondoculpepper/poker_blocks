@@ -1078,6 +1078,8 @@ body,
 :root {
   --hud-hand-clear: 0px;
   --hud-rack-clear: 0px;
+  /* The portrait layout's rack band: the full-size rack, or the compact one on a phone. */
+  --hud-rack-band: 136px;
 }
 @media (max-aspect-ratio: 1/1) {
   :root {
@@ -1087,6 +1089,7 @@ body,
 @media (max-width: 700px) {
   :root {
     --hud-rack-clear: 66px;
+    --hud-rack-band: 76px;
   }
 }
 .scene
@@ -1105,7 +1108,7 @@ body,
  */
 .scene .hud-frame[data-layout="portrait"] {
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: var(--hud-rack-band, 76px) auto 1fr auto var(
+  grid-template-rows: var(--hud-rack-band) auto 1fr auto var(
       --hud-hand-band,
       max(96px, calc(22vw + 12px))
     );
