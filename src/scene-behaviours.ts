@@ -11,6 +11,7 @@ import { blockTitle, type BlockTitles } from "./scene-traits/block-title";
  * Each trait brings its own behaviour, so a scene composes the panels and permissions it
  * wants and nothing has to ask which scene is in front.
  */
+import type { SelectionBadge } from "./selection-badge";
 import type { BinView } from "./bin-view";
 import { devDropInspector } from "./scene-traits/dev-drop-inspector";
 import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
@@ -53,6 +54,8 @@ export type SceneHost = {
     hud: Pick<HudPanels, "show" | "hide">;
     /** The bin: shown while a scene composing `discardBin` or `sellBin` is on the stack (#278). */
     bin: Pick<BinView, "discardBinEntered" | "sellBinEntered">;
+    /** The selection badge shows only while the hand does (#305). */
+    selectionBadge: Pick<SelectionBadge, "handEntered">;
     input: Pick<
       TableInput,
       | "cancelGestures"
@@ -195,9 +198,11 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     // Drawn and reachable together: the input reaches hand blocks only while the renderer shows them.
     enter({ services }) {
       services.renderer.handEntered(true);
+      services.selectionBadge.handEntered(true);
     },
     exit({ services }) {
       services.renderer.handEntered(false);
+      services.selectionBadge.handEntered(false);
     },
   });
   behaviours.register("firstPlayPrompt", firstPlayPrompt<Context>());
