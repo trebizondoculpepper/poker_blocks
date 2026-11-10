@@ -3,6 +3,7 @@ import "./style.css";
 import { sfxFileNames, soundEffects, withSfxDefaults } from "../../audio/sfx-registry";
 // How many places use each sound: the registry's record (npm run sfx:usage).
 import usage from "../../audio/sfx-usage.json";
+import { soundFamilies } from "../../audio/sfx-families";
 
 const urls = import.meta.glob<string>("../../assets/sfx/*.mp3", {
   eager: true,
@@ -72,11 +73,33 @@ const ownTakes = (id: string) => {
   return effect ? sfxFileNames(effect).flatMap((name) => urlByFile.get(name) ?? []) : [];
 };
 
-// Families in the order they first appear in the registry, each family's sounds together.
-const families = [...new Set(soundEffects.map(({ family }) => family))];
-const ordered = families.flatMap((family) =>
-  soundEffects.filter((effect) => effect.family === family),
+// Magnitude families (#235): which family each member belongs to, and the band it starts at.
+const bands = new Map<string, { name: string; from: number }>(
+  Object.entries(soundFamilies).flatMap(([name, family]) =>
+    family.variants.map(({ from, id }) => [id, { name, from }] as const),
+  ),
 );
+
+// Families in the order they first appear in the registry, each family's sounds together. Within
+// a family, a magnitude family's members sit together, smallest band first, where its first
+// member would be.
+const families = [...new Set(soundEffects.map(({ family }) => family))];
+const ordered = families.flatMap((family) => {
+  const members = soundEffects.filter((effect) => effect.family === family);
+  const placed = new Set<string>();
+  return members.flatMap((effect) => {
+    if (placed.has(effect.id)) return [];
+    const band = bands.get(effect.id);
+    const group = band
+      ? members
+          .filter(({ id }) => bands.get(id)?.name === band.name)
+          .sort((a, b) => bands.get(a.id)!.from - bands.get(b.id)!.from)
+      : [effect];
+    group.forEach(({ id }) => placed.add(id));
+    return group;
+  });
+});
+let lastBandFamily: string | null = null;
 let lastFamily: string | null = null;
 for (const [index, effect] of ordered.entries()) {
   const own = ownTakes(effect.id);
@@ -184,6 +207,21 @@ for (const [index, effect] of ordered.entries()) {
     list.append(heading);
   }
   row.dataset.family = effect.family;
+  // A magnitude family's members are introduced once, and each shows the band it starts at.
+  const band = bands.get(effect.id);
+  if (band && band.name !== lastBandFamily) {
+    const subheading = document.createElement("li");
+    subheading.className = "family-subheading";
+    subheading.textContent = `${band.name}: one sound per magnitude band`;
+    list.append(subheading);
+  }
+  lastBandFamily = band?.name ?? null;
+  if (band) {
+    const from = document.createElement("span");
+    from.className = "sound-band";
+    from.textContent = `from ${band.from.toLocaleString()}`;
+    main.querySelector(".sound-text")!.prepend(from);
+  }
   list.append(row);
   entries.push({ id: effect.id, row, takes });
 }
@@ -212,7 +250,8 @@ usageFilter.addEventListener("change", () => {
     let next = heading.nextElementSibling as HTMLElement | null;
     let visible = false;
     while (next && !next.classList.contains("family-heading")) {
-      if (getComputedStyle(next).display !== "none") visible = true;
+      if (next.classList.contains("sound") && getComputedStyle(next).display !== "none")
+        visible = true;
       next = next.nextElementSibling as HTMLElement | null;
     }
     heading.hidden = !visible;
