@@ -633,6 +633,19 @@ export function createTableInput(options: {
    * presses the structure and no drag source (dnd-kit's) picks anything up; a pinch cancels a
    * hand drag or a hold, since a second finger changes the gesture.
    */
+  /**
+   * End a board drag now: its release may never come (focus lost, a menu opened) or a pinch
+   * takes the pointer over. Later moves of that drag are ignored.
+   */
+  function endBoardDrag(reason: string): void {
+    if (!boardDragging) return;
+    trace("board drag", `ended: ${reason}`);
+    boardDragging = false;
+    cameraView.changeMotionRate(normalMotionRate);
+    suppressClickUntil = performance.now() + 250;
+    canvas.style.cursor = "default";
+  }
+
   function bindBoardGestures(): () => void {
     /** Radians per pixel of twist, matched to `rotateBy`'s 0.005 per pixel of drag. */
     const twistPixelsPerDegree = Math.PI / 180 / 0.005;
@@ -668,13 +681,7 @@ export function createTableInput(options: {
           if (!boardDragging) return;
           cameraView.rotateBy(dx, dy);
           canvas.style.cursor = "grabbing";
-          if (last) {
-            trace("board drag", "ended");
-            boardDragging = false;
-            cameraView.changeMotionRate(normalMotionRate);
-            suppressClickUntil = performance.now() + 250;
-            canvas.style.cursor = "default";
-          }
+          if (last) endBoardDrag("released");
         },
         onPinch: ({ first, last, da: [distance, angle], memo }) => {
           const start = (memo ?? { zoom: cameraView.zoom, distance, angle }) as {
@@ -685,6 +692,7 @@ export function createTableInput(options: {
           if (first) {
             trace("pinch", "started: zooming and twisting the board");
             pinching = true;
+            endBoardDrag("a second finger touched (a pinch)");
             hold.cancel();
             cancelHandDrag("a second finger touched (a pinch)");
             options.audio.zoomed();
@@ -713,7 +721,7 @@ export function createTableInput(options: {
     );
     return () => {
       gesture.destroy();
-      boardDragging = false;
+      endBoardDrag("the board's scene left");
       pinching = false;
     };
   }
@@ -817,6 +825,8 @@ export function createTableInput(options: {
     hold.cancel();
     options.overlays().hideTooltip();
     cancelHandDrag("the window lost focus");
+    endBoardDrag("the window lost focus");
+    pinching = false;
   };
 
   // ----- The discard (and sell) target -----
