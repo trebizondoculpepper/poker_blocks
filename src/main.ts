@@ -1,3 +1,4 @@
+import type { WordCubeRoom } from "./tools/word-cube-room";
 import type { TuningControl } from "./attract-tuning-panel";
 import { createBlockTitles } from "./block-title-view";
 import type { BlockTitles } from "./scene-traits/block-title";
@@ -136,6 +137,7 @@ type TraitContext = {
     devShopBalanceEditor: ShopBalanceEditor;
     devObjectBrowser: ShopBalanceEditor;
     devBlockDesigner: ShopBalanceEditor;
+    devWordCubeRoom: WordCubeRoom;
     version: string;
     sound: (id: SoundEffectId) => void;
   };
@@ -149,6 +151,9 @@ const devShopBalanceEditor: ShopBalanceEditor = import.meta.env.DEV
   : { show() {}, hide() {}, dispose() {} };
 const devBlockDesigner: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/block-designer")).createBlockDesigner(host)
+  : { show() {}, hide() {}, dispose() {} };
+const devWordCubeRoom: WordCubeRoom = import.meta.env.DEV
+  ? (await import("./tools/word-cube-room")).createWordCubeRoom(host)
   : { show() {}, hide() {}, dispose() {} };
 const devObjectBrowser: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/object-browser")).createObjectBrowser(host)
@@ -225,6 +230,7 @@ const traitContext: TraitContext = {
     devShopBalanceEditor,
     devObjectBrowser,
     devBlockDesigner,
+    devWordCubeRoom,
     sound: (id) => playSfx(id),
     version: appVersion,
   },
@@ -419,6 +425,7 @@ if (import.meta.hot) {
     devShopBalanceEditor.dispose();
     devObjectBrowser.dispose();
     devBlockDesigner.dispose();
+    devWordCubeRoom.dispose();
     view.dispose();
   });
 }
