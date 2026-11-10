@@ -12,7 +12,7 @@ import type { PassiveDefinition } from "./passives";
 import { defaultShop } from "./game-modes";
 import { passiveFrequencies, validateWeightCurve, weightAt } from "./offer-weights";
 import { createPassiveBlock, passiveDefinitions } from "./passives";
-import { materialDefinitions } from "./materials";
+import { blockMaterials, materialDefinitions } from "./materials";
 import { validateMaterialBalance, validatePassiveBalance } from "./balance";
 import { offerKind } from "./offer-kinds";
 import { getMaterialDefinition, materialOf, type BlockMaterial } from "./materials";
@@ -178,9 +178,11 @@ describe("card offers (#143)", () => {
 
   it("records the agreed material prices", () => {
     const price = (id: string) => getMaterialDefinition(id as BlockMaterial).shop?.basePrice;
+    // Paper is never sold: every run starts with it.
     expect(
-      ["paper", "wood", "steel", "meat", "ice", "fire", "gold", "prismatic"].map(price),
-    ).toEqual([1, 3, 4, 6, 2, 4, 8, 12]);
+      ["paper", "wood", "steel", "terracotta", "meat", "ice", "fire", "custard", "gold"].map(price),
+    ).toEqual([undefined, 3, 4, 3, 6, 2, 4, 3, 8]);
+    expect(price("prismatic")).toBe(12);
   });
 });
 
@@ -227,27 +229,47 @@ describe("stock by round and weight (#145)", () => {
       }
   });
 
-  it("offers only unlocked materials, and no paper from round 8", () => {
+  it("offers only unlocked materials, and never paper", () => {
     const seen = (round: number) =>
       new Set(Array.from({ length: 60 }, (_, seed) => materials(stockAt(round, seed + 1))).flat());
-    expect([...seen(1)].sort()).toEqual(["paper", "wood"]);
+    expect([...seen(1)]).toEqual(["wood"]);
     expect(seen(2).has("steel")).toBe(true);
-    expect(seen(2).has("meat")).toBe(false);
-    expect(seen(4).has("gold")).toBe(true);
-    expect(seen(4).has("prismatic")).toBe(false);
-    expect(seen(8).has("paper")).toBe(false);
+    expect(seen(2).has("terracotta")).toBe(false);
+    expect(seen(5).has("custard")).toBe(true);
+    expect(seen(5).has("gold")).toBe(false);
+    expect(seen(6).has("prismatic")).toBe(false);
+    expect(seen(7).has("prismatic")).toBe(true);
+    for (const round of [1, 4, 8]) expect(seen(round).has("paper")).toBe(false);
     expect(seen(8).has("wood")).toBe(true);
+  });
+
+  it("makes one material (three in round 4) the most common in each round, in the agreed order", () => {
+    const weightIn = (id: string, round: number) =>
+      weightAt(getMaterialDefinition(id as BlockMaterial).shop?.weights ?? [[1, 0]], round);
+    const leaders = (round: number) => {
+      const top = Math.max(...blockMaterials.map((id) => weightIn(id, round)));
+      return blockMaterials.filter((id) => weightIn(id, round) === top).sort();
+    };
+    expect([1, 2, 3, 4, 5, 6, 7].map(leaders)).toEqual([
+      ["wood"],
+      ["steel"],
+      ["terracotta"],
+      ["fire", "ice", "meat"],
+      ["custard"],
+      ["gold"],
+      ["prismatic"],
+    ]);
   });
 
   it("follows the agreed weight curves", () => {
     const curve = (id: string) => getMaterialDefinition(id as BlockMaterial).shop!.weights;
-    expect([1, 4, 8].map((round) => weightAt(curve("paper"), round))).toEqual([4, 4 - 12 / 7, 0]);
-    expect([1, 2, 3, 8, 12].map((round) => weightAt(curve("wood"), round))).toEqual([
-      1, 2, 2, 0.25, 0.25,
+    // Each material leads its own round at 4, falls to 1.5 the next, then stays at 1.
+    expect([1, 2, 3, 12].map((round) => weightAt(curve("wood"), round))).toEqual([4, 1.5, 1, 1]);
+    expect([1, 2, 3, 4].map((round) => weightAt(curve("steel"), round))).toEqual([0, 4, 1.5, 1]);
+    expect([3, 4, 5].map((round) => weightAt(curve("fire"), round))).toEqual([0, 4, 1.5]);
+    expect([6, 7, 8, 9].map((round) => weightAt(curve("prismatic"), round))).toEqual([
+      0, 4, 1.5, 1,
     ]);
-    expect([1, 2, 3, 4].map((round) => weightAt(curve("steel"), round))).toEqual([0, 0.5, 0.75, 1]);
-    expect([2, 3, 4].map((round) => weightAt(curve("fire"), round))).toEqual([0, 0.75, 1]);
-    expect([5, 6].map((round) => weightAt(curve("prismatic"), round))).toEqual([0.25, 0.5]);
     const passive = (name: string) => passiveFrequencies.get(name);
     expect([1, 3, 5, 7].map((r) => weightAt(passive("additiveScoring"), r))).toEqual([4, 1, 2, 2]);
     expect([1, 3, 5, 7].map((r) => weightAt(passive("multiplicativeScoring"), r))).toEqual([
@@ -299,13 +321,13 @@ describe("material-bound passives (#165)", () => {
       for (const material of materialsNamedBy(passive))
         expect(passiveUnlockRound(passive)).toBeGreaterThanOrEqual(materialUnlockRound(material));
     }
-    // A passive naming meat (round 3) can't come earlier even if its data says round 1.
+    // A passive naming meat (round 4) can't come earlier even if its data says round 1.
     const early = {
       ...definition("woodworker"),
       shop: { ...definition("woodworker").shop!, unlockRound: 1 },
       eventRules: [{ when: { id: "material-is", config: { material: "meat" } } }],
     } as unknown as PassiveDefinition;
-    expect(passiveUnlockRound(early)).toBe(3);
+    expect(passiveUnlockRound(early)).toBe(4);
     expect(passiveWeight(early, 2)).toBe(0);
     expect(validatePassiveBalance([early])).toContain(
       "woodworker: unlocks before meat, which it names",
