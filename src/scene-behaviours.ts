@@ -57,6 +57,7 @@ export type SceneHost = {
       | "handEntered"
       | "enableDropTarget"
       | "enableDragSource"
+      | "enableBoardGestures"
     >;
     shop: ShopView;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
@@ -227,6 +228,17 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit(_context, config) {
       sourcesEnabled.get(config)?.forEach((disable) => disable());
       sourcesEnabled.delete(config);
+    },
+  });
+  // While a scene shows, the board's gestures are bound (#275).
+  const gesturesBound = new WeakMap<object, () => void>();
+  behaviours.register("boardGestures", {
+    enter({ services }, config) {
+      gesturesBound.set(config, services.input.enableBoardGestures());
+    },
+    exit(_context, config) {
+      gesturesBound.get(config)?.();
+      gesturesBound.delete(config);
     },
   });
   behaviours.register("passiveRackView", {

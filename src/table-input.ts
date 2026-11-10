@@ -8,6 +8,7 @@
  * The rules decide whether a gesture is allowed and what it does to the run; the game
  * supplies them through `TableRules`. Each gesture plays its sound here, as it happens.
  */
+import { Gesture } from "@use-gesture/vanilla";
 import { Registry } from "./core/registry";
 import {
   DragDropManager as DndKitManager,
@@ -98,6 +99,12 @@ export type TableInput = {
    * that disallows it again.
    */
   enableDragSource(config: DragSourceConfig): () => void;
+  /**
+   * Bind the board gestures while a scene shows (the `boardGestures` trait, #275): dragging the
+   * structure turns it, a pinch zooms and a two-finger twist turns it, the wheel zooms. Returns
+   * a function that unbinds them.
+   */
+  enableBoardGestures(): () => void;
   /** A shop scene composes the same target as Sell, without exposing Discard. */
   sellBinEntered(entered: boolean): void;
   /** The selected block ids (hand and field). */
@@ -148,15 +155,6 @@ type Drag = {
   reorderSlot: number | null;
   lastX: number;
   lastY: number;
-};
-
-type BoardDrag = {
-  pointerId: number;
-  startX: number;
-  startY: number;
-  lastX: number;
-  lastY: number;
-  active: boolean;
 };
 
 const normalMotionRate = 1;
@@ -277,10 +275,11 @@ export function createTableInput(options: {
   /** Whether the scene in front lets blocks be played onto the field. */
   let fieldActive = false;
   let drag: Drag | null = null;
-  let boardDrag: BoardDrag | null = null;
+  /** Whether the board is being turned by a drag (use-gesture, #275). */
+  let boardDragging = false;
+  /** Whether two fingers are pinching (use-gesture, #275). */
+  let pinching = false;
   let suppressClickUntil = 0;
-  const touches = new Map<number, { x: number; y: number }>();
-  let pinch: { zoom: number; distance: number } | null = null;
   /** Touch has no hover: press and hold a block to read its inspection text. */
   const hold = createHoldGesture();
 
@@ -290,11 +289,6 @@ export function createTableInput(options: {
   const fanOffset = new THREE.Vector3();
   const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
   const dragPoint = new THREE.Vector3();
-
-  function touchSpread(): number {
-    const [first, second] = [...touches.values()];
-    return first && second ? Math.hypot(second.x - first.x, second.y - first.y) : 0;
-  }
 
   function showInspection(block: CardBlock | undefined, clientX: number, clientY: number): void {
     options.overlays().inspect((block && inspectBlock(block)) || null, clientX, clientY);
@@ -511,18 +505,6 @@ export function createTableInput(options: {
     }
   }
 
-  function finishBoardDrag(): void {
-    if (!boardDrag) return;
-    const finished = boardDrag;
-    boardDrag = null;
-    if (!finished.active) return;
-    cameraView.changeMotionRate(normalMotionRate);
-    suppressClickUntil = performance.now() + 250;
-    if (canvas.hasPointerCapture(finished.pointerId)) {
-      canvas.releasePointerCapture(finished.pointerId);
-    }
-  }
-
   // ----- The hand drag, run by dnd-kit (#282) -----
 
   /** Cancel the hand drag dnd-kit is running, if any; its dragend puts the blocks back. */
@@ -539,7 +521,7 @@ export function createTableInput(options: {
     // A hold (inspect) or a second finger (a pinch) has already claimed this pointer.
     // A press that was cancelled (forgotten) never becomes a drag.
     const source = event.operation.source as Draggable | null;
-    if (hold.holding || pinch || !source || !dragDrop.pressed(source)) event.preventDefault();
+    if (hold.holding || pinching || !source || !dragDrop.pressed(source)) event.preventDefault();
   });
   dnd.monitor.addEventListener("dragstart", ({ operation }) => {
     const activator = operation.activatorEvent as PointerEvent | null;
@@ -588,21 +570,27 @@ export function createTableInput(options: {
     const { x, y } = to ?? operation.position.current;
     drag.lastX = x;
     drag.lastY = y;
-    // dnd-kit stops the canvas seeing this finger's moves; keep its position current, so a
-    // second finger starts a pinch from where this one really is.
-    const finger = touches.get(drag.pointerId);
-    if (finger) {
-      finger.x = x;
-      finger.y = y;
-    }
     options.overlays().hideTooltip();
     moveDraggedBlock();
     updateCandidate();
     canvas.style.cursor = "grabbing";
   });
-  dnd.monitor.addEventListener("dragend", ({ canceled, nativeEvent }) => {
+  dnd.monitor.addEventListener("dragend", ({ operation, canceled, nativeEvent }) => {
     const release = nativeEvent as PointerEvent | undefined;
-    if (release?.pointerType === "touch") touches.delete(release.pointerId);
+    // dnd-kit stops the release from reaching anything else, so use-gesture (#275), which saw
+    // the press, would still think it held: tell it the pointer is up.
+    const pressed = operation.activatorEvent as PointerEvent | null;
+    if (pressed) {
+      window.dispatchEvent(
+        new PointerEvent("pointerup", {
+          pointerId: pressed.pointerId,
+          pointerType: pressed.pointerType,
+          isPrimary: pressed.isPrimary,
+          clientX: release?.clientX ?? pressed.clientX,
+          clientY: release?.clientY ?? pressed.clientY,
+        }),
+      );
+    }
     window.clearTimeout(releaseGrace);
     if (!drag?.active) return;
     if (release && !canceled) {
@@ -624,39 +612,127 @@ export function createTableInput(options: {
    * A release usually follows within milliseconds (#267), so wait briefly, then cancel.
    */
   const onBodyLostCapture = (event: PointerEvent) => {
+    // Only the body's own loss counts: the canvas losing a touch's capture to the body (as
+    // dnd-kit takes it) bubbles up here too, and that drag is very much alive.
+    if (event.target !== document.body) return;
     if (!drag?.active || drag.pointerId !== event.pointerId) return;
     trace("pointer capture lost", "mid-drag: waiting for the release");
     const waiting = drag;
     window.clearTimeout(releaseGrace);
     releaseGrace = window.setTimeout(() => {
       if (drag !== waiting) return;
-      touches.delete(waiting.pointerId);
       cancelHandDrag(`no release ${releaseGraceMs}ms after capture was lost: cancelled`);
     }, releaseGraceMs);
   };
   document.body.addEventListener("lostpointercapture", onBodyLostCapture);
+
+  // ----- Board gestures, run by use-gesture (#275) -----
+
+  /**
+   * Turning, pinching and wheeling the board. A board drag claims a pointer only where it
+   * presses the structure and no drag source (dnd-kit's) picks anything up; a pinch cancels a
+   * hand drag or a hold, since a second finger changes the gesture.
+   */
+  /**
+   * End a board drag now: its release may never come (focus lost, a menu opened) or a pinch
+   * takes the pointer over. Later moves of that drag are ignored.
+   */
+  function endBoardDrag(reason: string): void {
+    if (!boardDragging) return;
+    trace("board drag", `ended: ${reason}`);
+    boardDragging = false;
+    cameraView.changeMotionRate(normalMotionRate);
+    suppressClickUntil = performance.now() + 250;
+    canvas.style.cursor = "default";
+  }
+
+  function bindBoardGestures(): () => void {
+    /** Radians per pixel of twist, matched to `rotateBy`'s 0.005 per pixel of drag. */
+    const twistPixelsPerDegree = Math.PI / 180 / 0.005;
+    const gesture = new Gesture(
+      canvas,
+      {
+        onDrag: ({
+          first,
+          last,
+          initial: [x0, y0],
+          delta: [dx, dy],
+          cancel,
+          touches: fingers,
+          buttons,
+        }) => {
+          if (first) {
+            const claims =
+              buttons !== 0 &&
+              fingers <= 1 &&
+              !pinching &&
+              !hold.holding &&
+              !dragDrop.pickUp(x0, y0) &&
+              Boolean(pickBlock(x0, y0, field.blocks()));
+            if (!claims) {
+              trace("board drag", "not claimed: not on the structure, or a drag source has it");
+              return cancel();
+            }
+            trace("board drag", "turning the structure");
+            boardDragging = true;
+            cameraView.changeMotionRate(0);
+            options.overlays().hideTooltip();
+          }
+          if (!boardDragging) return;
+          cameraView.rotateBy(dx, dy);
+          canvas.style.cursor = "grabbing";
+          if (last) endBoardDrag("released");
+        },
+        onPinch: ({ first, last, da: [distance, angle], memo }) => {
+          const start = (memo ?? { zoom: cameraView.zoom, distance, angle }) as {
+            zoom: number;
+            distance: number;
+            angle: number;
+          };
+          if (first) {
+            trace("pinch", "started: zooming and twisting the board");
+            pinching = true;
+            endBoardDrag("a second finger touched (a pinch)");
+            hold.cancel();
+            cancelHandDrag("a second finger touched (a pinch)");
+            options.audio.zoomed();
+          }
+          cameraView.zoomWithPinch(start.zoom, start.distance, distance);
+          cameraView.rotateBy((angle - start.angle) * twistPixelsPerDegree, 0);
+          suppressClickUntil = performance.now() + 400;
+          if (last) {
+            trace("pinch", `ended at zoom ${cameraView.zoom.toFixed(2)}`);
+            pinching = false;
+          }
+          return { ...start, angle };
+        },
+        onWheel: ({ event }) => {
+          if (options.overlays().isOpen) return;
+          event.preventDefault();
+          cameraView.zoomWithWheel(event.deltaY, event.deltaMode);
+          trace("wheel", `zoom ${cameraView.zoom.toFixed(2)}`);
+          options.audio.zoomed();
+        },
+      },
+      {
+        drag: { threshold: 8, filterTaps: true, pointer: { capture: false } },
+        wheel: { eventOptions: { passive: false } },
+      },
+    );
+    return () => {
+      gesture.destroy();
+      endBoardDrag("the board's scene left");
+      pinching = false;
+    };
+  }
 
   // ----- Hand cards and the board -----
 
   const onPointerDown = (event: PointerEvent) => {
     // A card can be picked up at any time, while earlier plays are still being shown (#167,
     // #272): input always commits to the model at once.
-    if (event.pointerType === "touch") {
-      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (touches.size >= 2) {
-        // A second finger changes the gesture, never places or discards a card.
-        hold.cancel();
-        cancelHandDrag("a second finger touched (a pinch)");
-        if (boardDrag) finishBoardDrag();
-        pinch = { zoom: cameraView.zoom, distance: touchSpread() };
-        for (const id of touches.keys()) canvas.setPointerCapture(id);
-        suppressClickUntil = performance.now() + 400;
-        options.audio.zoomed();
-        return;
-      }
-      if (pinch) return;
-      startHold(event);
-    }
+    // Touch has no hover: a finger held still inspects instead (a pinch cancels it).
+    if (event.pointerType === "touch" && !pinching) startHold(event);
     options.overlays().hideTooltip();
     const source = pickBlock(event.clientX, event.clientY, reachableHand());
     const pickedUp = dragDrop.pickUp(event.clientX, event.clientY);
@@ -670,51 +746,14 @@ export function createTableInput(options: {
             ? "on a hand block, but this scene doesn't take plays"
             : "on a hand block that can't be dragged",
     );
-    // A drag source's pointer belongs to dnd-kit, which starts the drag once it moves (#282).
-    if (pickedUp) return;
-    if (!pickBlock(event.clientX, event.clientY, field.blocks())) return;
-    boardDrag = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      lastX: event.clientX,
-      lastY: event.clientY,
-      active: false,
-    };
+    // A drag source's pointer belongs to dnd-kit, which starts the drag once it moves (#282);
+    // turning the board is use-gesture's (#275).
   };
 
   const onPointerMove = (event: PointerEvent) => {
     hold.move(event.pointerId, event.clientX, event.clientY);
     if (hold.holding) return;
-    const finger = touches.get(event.pointerId);
-    if (finger) {
-      finger.x = event.clientX;
-      finger.y = event.clientY;
-      if (pinch) {
-        if (touches.size >= 2) cameraView.zoomWithPinch(pinch.zoom, pinch.distance, touchSpread());
-        return;
-      }
-    }
-    if (boardDrag?.pointerId === event.pointerId) {
-      const dx = event.clientX - boardDrag.lastX;
-      const dy = event.clientY - boardDrag.lastY;
-      boardDrag.lastX = event.clientX;
-      boardDrag.lastY = event.clientY;
-      if (
-        !boardDrag.active &&
-        Math.hypot(event.clientX - boardDrag.startX, event.clientY - boardDrag.startY) > 8
-      ) {
-        boardDrag.active = true;
-        canvas.setPointerCapture(event.pointerId);
-        cameraView.changeMotionRate(0);
-      }
-      if (boardDrag.active) {
-        options.overlays().hideTooltip();
-        cameraView.rotateBy(dx, dy);
-        canvas.style.cursor = "grabbing";
-        return;
-      }
-    }
+    if (boardDragging || pinching) return;
     const hovered = pickAny(event.clientX, event.clientY);
     canvas.style.cursor = blockCursor(hovered?.block);
     showInspection(
@@ -732,21 +771,12 @@ export function createTableInput(options: {
   const onPointerUp = (event: PointerEvent) => {
     if (hold.up(event.pointerId)) {
       // A hold only inspects: lifting it neither taps, plays nor rotates.
-      touches.delete(event.pointerId);
       options.overlays().hideTooltip();
       suppressClickUntil = performance.now() + 400;
       return;
     }
-    if (event.pointerType === "touch") {
-      touches.delete(event.pointerId);
-      if (pinch) {
-        suppressClickUntil = performance.now() + 400;
-        if (touches.size === 0) pinch = null;
-        return;
-      }
-    }
-    const wasDragging = Boolean(drag?.active || boardDrag?.active);
-    if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
+    if (pinching) return;
+    const wasDragging = Boolean(drag?.active || boardDragging);
     canvas.style.cursor = "default";
     const hovered = pickAny(event.clientX, event.clientY);
     showInspection(
@@ -756,17 +786,8 @@ export function createTableInput(options: {
     );
   };
 
-  const onPointerCancel = (event: PointerEvent) => {
+  const onPointerCancel = () => {
     hold.cancel();
-    if (event.pointerType === "touch") {
-      touches.delete(event.pointerId);
-      if (pinch) {
-        suppressClickUntil = performance.now() + 400;
-        if (touches.size === 0) pinch = null;
-        return;
-      }
-    }
-    if (boardDrag?.pointerId === event.pointerId) finishBoardDrag();
     options.overlays().hideTooltip();
     canvas.style.cursor = "default";
   };
@@ -778,7 +799,6 @@ export function createTableInput(options: {
     const { pointerId, clientX, clientY } = event;
     hold.down(pointerId, clientX, clientY, () => {
       cancelHandDrag("held still: inspect");
-      if (boardDrag?.pointerId === pointerId) finishBoardDrag();
       // Above the finger, so the label never sits under it or over the card.
       showInspection(target.block, clientX, clientY - holdLabelLift);
     });
@@ -787,20 +807,6 @@ export function createTableInput(options: {
   /** The app was hidden or lost focus mid-gesture: nothing completes. */
   const onVisibilityChange = () => {
     if (document.hidden) onBlur();
-  };
-
-  /**
-   * Capture taken away mid-gesture. Hand drags are dnd-kit's, which finishes them on their
-   * release wherever it lands (#267, #282). A board drag (turning the structure) is cancelled.
-   */
-  const onLostCapture = (event: PointerEvent) => {
-    trace("pointer capture lost", drag?.active ? "dnd-kit has the drag" : "no drag");
-    if (boardDrag?.pointerId === event.pointerId) onPointerCancel(event);
-  };
-
-  /** Any finger that lifts is no longer down, wherever its release lands (never a pinch). */
-  const onWindowPointerUp = (event: PointerEvent) => {
-    if (event.pointerType === "touch") touches.delete(event.pointerId);
   };
 
   const onClick = (event: MouseEvent) => {
@@ -815,20 +821,12 @@ export function createTableInput(options: {
     refreshDiscardTarget();
   };
 
-  const onWheel = (event: WheelEvent) => {
-    if (options.overlays().isOpen) return;
-    event.preventDefault();
-    cameraView.zoomWithWheel(event.deltaY, event.deltaMode);
-    options.audio.zoomed();
-  };
-
   const onBlur = () => {
     hold.cancel();
     options.overlays().hideTooltip();
     cancelHandDrag("the window lost focus");
-    if (boardDrag) finishBoardDrag();
-    touches.clear();
-    pinch = null;
+    endBoardDrag("the window lost focus");
+    pinching = false;
   };
 
   // ----- The discard (and sell) target -----
@@ -973,9 +971,7 @@ export function createTableInput(options: {
     ["pointerleave", onPointerLeave],
     ["pointerup", onPointerUp],
     ["pointercancel", onPointerCancel],
-    ["lostpointercapture", onLostCapture],
     ["click", onClick],
-    ["wheel", onWheel, { passive: false }],
   ];
   window.addEventListener("pointermove", movePassive);
   window.addEventListener("pointerup", onPassiveUp);
@@ -986,7 +982,6 @@ export function createTableInput(options: {
   for (const [type, listener, listenerOptions] of canvasListeners)
     canvas.addEventListener(type, listener as EventListener, listenerOptions);
   window.addEventListener("blur", onBlur);
-  window.addEventListener("pointerup", onWindowPointerUp);
   document.addEventListener("visibilitychange", onVisibilityChange);
 
   /** How many scenes in front compose `discardBin`; the bin is shown while any does. */
@@ -999,6 +994,7 @@ export function createTableInput(options: {
     },
     enableDropTarget: (config) => dragDrop.enable(config),
     enableDragSource: (config) => dragDrop.enableSource(config),
+    enableBoardGestures: bindBoardGestures,
     discardBinEntered(entered) {
       discardBinScenes = Math.max(0, discardBinScenes + (entered ? 1 : -1));
       discardArea.hidden = discardBinScenes + sellBinScenes === 0;
@@ -1061,7 +1057,6 @@ export function createTableInput(options: {
       for (const [type, listener] of canvasListeners)
         canvas.removeEventListener(type, listener as EventListener);
       window.removeEventListener("blur", onBlur);
-      window.removeEventListener("pointerup", onWindowPointerUp);
       dnd.destroy();
       window.clearTimeout(releaseGrace);
       document.body.removeEventListener("lostpointercapture", onBodyLostCapture);

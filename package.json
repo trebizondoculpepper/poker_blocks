@@ -19,6 +19,7 @@
     "@dnd-kit/collision": "0.5.3",
     "@dnd-kit/dom": "0.5.3",
     "@dnd-kit/geometry": "0.5.3",
+    "@use-gesture/vanilla": "10.3.1",
     "html-to-image": "^1.11.13",
     "three": "^0.187.0"
   },
