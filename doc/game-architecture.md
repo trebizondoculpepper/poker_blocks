@@ -556,6 +556,7 @@ The deck view is its own scene, `deck`, pushed by the `openDeck` navigation acti
 `createLetterBlock(character, { material?, random?, size? })` creates one grapheme on every face. `createWord(text, options)` returns a rigid group of letters and reserves space for whitespace. Material selection enumerates the registered material pool (including experiments); callers can supply a seeded scene random source. Each choice is retained on the created letter and never rerolled during rendering. Dispose the returned visual on scene exit.
 
 Material definitions own `lettering` font/fallback/weight data. Fonts are bundled under `src/assets/fonts/` with licenses and loaded before canvas painting. Card faces keep their existing typography. The shared `textFaceArt` uses measured multi-line layout for colour, relief and transparent skin layers. Glyphs beyond the bundled Latin fonts use platform fallback.
+
 ## Block faces (#292, epic #291)
 
 A block's **geometry and material** come from its material definition; what is **printed on its faces** is its **face art** (`src/visual/face-art.ts`), passed to `createBlockAppearance`. The renderer never knows what the art is (a guardrail test checks it names no card fields). It asks the art to paint itself, centred on a face, for each layer a material needs:
