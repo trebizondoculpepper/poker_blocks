@@ -55,6 +55,11 @@ export type SceneTraits = {
    * source kind. dnd-kit starts a drag where one picks something up.
    */
   dragSource: { sources: readonly DragSourceConfig[] };
+  /**
+   * The board's own gestures while this scene shows (#275): dragging the structure turns it, a
+   * pinch zooms and a two-finger twist turns it, the wheel zooms.
+   */
+  boardGestures: Record<never, never>;
   /** The ghost cube that invites a stage's first play, and how it looks and responds. */
   firstPlayPrompt: FirstPlayPromptConfig;
   /** The passive rack is shown while this scene is on the stack (#187). */
@@ -188,6 +193,8 @@ const playSceneTraits: Partial<SceneTraits> = {
   dropTarget: { targets: [{ target: "discard", priority: 10 }] },
   // Hand blocks can be picked up and dragged to play, discard or reorder them.
   dragSource: { sources: [{ source: "hand" }] },
+  // The board can be turned and zoomed.
+  boardGestures: {},
   firstPlayPrompt: {
     colour: 0x65f4dd,
     pulseSeconds: 1.8,

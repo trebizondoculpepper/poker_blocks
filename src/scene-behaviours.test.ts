@@ -57,6 +57,10 @@ function recordingHost() {
           calls.push(`source:${source}:on`);
           return () => void calls.push(`source:${source}:off`);
         },
+        enableBoardGestures: () => {
+          calls.push("board:on");
+          return () => void calls.push("board:off");
+        },
         setFieldActive: (active) => calls.push(`fieldActive:${active}`),
         cancelGestures: () => void calls.push("gestures:cancel"),
         discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
@@ -210,6 +214,21 @@ describe("scene traits own their behaviour", () => {
       sources().filter((call) => call.endsWith(":off")).length,
     );
     expect(sources().at(-1)).toBe("source:hand:off");
+  });
+
+  it("binds the board gestures while its scene shows, through menus, and unbinds them (#275)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("stage", { boardGestures: {} }));
+    scenes.register(scene("menu", { pausesBelow: { input: true, update: true } }));
+    scenes.register(scene("title", {}));
+    const board = () => calls.filter((call) => call.startsWith("board:"));
+    scenes.switchTo("stage");
+    scenes.push("menu");
+    scenes.pop();
+    expect(board()).toEqual(["board:on"]);
+    scenes.switchTo("title");
+    expect(board()).toEqual(["board:on", "board:off"]);
   });
 
   it("composes Sell in the shop without exposing the Discard bin", () => {

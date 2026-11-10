@@ -249,6 +249,7 @@ describe("game modes composed from traits", () => {
       tableBackground: {},
       dropTarget: { targets: [{ target: "discard", priority: 10 }] },
       dragSource: { sources: [{ source: "hand" }] },
+      boardGestures: {},
       firstPlayPrompt: expect.objectContaining({ colour: 0x65f4dd }),
       handView: {},
       discardBin: {},
