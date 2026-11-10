@@ -92,6 +92,11 @@ export type SceneTraits = {
   devObjectBrowser: { backTo: string };
   /** Developer tool: the block design room, auditioning letter-block materials and fonts (dev12). */
   devBlockDesigner: { backTo: string };
+  /**
+   * Developer tool: the menu block audition room (dev13, #303). Each item becomes a word cube
+   * made by the real creator; activating one shows its action rather than running it.
+   */
+  devWordCubeRoom: { backTo: string; items: readonly MenuBlockItem[] };
   /** Developer tool: a live panel of drag-and-drop state and input decisions (dev10). */
   devDropInspector: DevDropInspectorConfig;
   /**
@@ -213,13 +218,12 @@ const playSceneTraits: Partial<SceneTraits> = {
   boardGestures: {},
   firstPlayPrompt: {
     colour: 0x65f4dd,
-    pulseSeconds: 1.8,
+    // A steady glow: the laser edges and the dance give it life, so it never flashes.
+    glow: 0.8,
     armed: { beatSeconds: 0.52, scale: [1.04, 1.09], opacity: [0.3, 0.42] },
-    // The first dancer (#256): it grows through each bar and drops back to its base size on
-    // the downbeat (the owner's sawtooth).
-    dance: { cycle: "bar", shape: "saw", offset: 0, swell: 0.12 },
-    // Its glow flashes on each beat while music plays, a touch early so it reads as on time.
-    flash: { cycle: "beat", shape: "pulse", offset: 0.04 },
+    // The first dancer (#256): a raised-cosine swell peaking on each bar's downbeat and flat
+    // for the rest of the bar, as the block title bounces.
+    dance: { cycle: "bar", shape: "sine", offset: 0, swell: 0.12, window: 0.2 },
     release: { seconds: 0.55, growth: 0.6 },
   },
   handView: {},
@@ -233,6 +237,15 @@ const playSceneTraits: Partial<SceneTraits> = {
 
 /** A lost stage can be ended from the HUD; a won one moves on from its Stage Won pop-up. */
 const stageActions: RoundPanelConfig["actions"] = { lost: "End game" };
+
+/** One menu item auditioned as a word cube (#303): its label, action and state. */
+export type MenuBlockItem = {
+  label: string;
+  action: string;
+  enabled?: boolean;
+  /** Shown when the cube is hovered or tapped (its inspectable trait). */
+  description?: string;
+};
 
 /** The pause menu: the same menu from the title and from play (#87). */
 const pauseMenu: SceneTraits["menu"] = {
@@ -252,6 +265,28 @@ export const projectLinks: readonly PanelLink[] = [
   { label: "Get source code", href: projectHome },
   { label: "Report a bug", href: `${projectHome}/issues/new` },
 ];
+
+/**
+ * The game's block title, on the title and pause menus, as tuned in dev7: a 6 s precession,
+ * the two words 67° apart in it, no tilt on the beat, and one quick raised-cosine bump each
+ * bar (a fifth of the bar long) around the downbeat.
+ */
+const titleBlocks: BlockTitleConfig = {
+  text: "Poker Blocks",
+  scale: 0.85,
+  precession: { seconds: 6, angle: 8.5, phaseDegrees: 67 },
+  dance: {
+    bounceCycle: "bar",
+    bounceShape: "sine",
+    bounceWindow: 0.2,
+    bounceAttack: 0.2,
+    bounce: 0.034,
+    bounceTimeSpread: 0.03,
+    bounceAngleSpread: 5.5,
+    restAngleSpread: 0.8,
+    tilt: 0,
+  },
+};
 
 /**
  * The scene definitions every mode composes by reference (see doc/game-architecture.md,
@@ -274,7 +309,7 @@ export const sceneDefinitions = [
           { id: "openSettings", label: "Settings" },
         ],
       },
-      blockTitle: { text: "Poker Blocks", scale: 1 },
+      blockTitle: titleBlocks,
       // After `titleScreen`, so the panel is already showing when the footer is added to it.
       panelFooter: { links: projectLinks },
       attractBackground: {},
@@ -289,7 +324,7 @@ export const sceneDefinitions = [
     traits: {
       tableBackground: {},
       menu: pauseMenu,
-      blockTitle: { text: "Poker Blocks", scale: 1 },
+      blockTitle: titleBlocks,
       panelFooter: { links: projectLinks },
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "lowpass" },
@@ -325,6 +360,7 @@ export const sceneDefinitions = [
         { name: "balance-editor", traits: {} },
         { name: "object-browser", traits: {} },
         { name: "block-designer", traits: {} },
+        { name: "menu-blocks", traits: {} },
         {
           // The block title over the flying-block background, nothing else (#295): an audition.
           name: "title-audition",
@@ -801,6 +837,45 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev12-run" },
             console: { name: "dev12" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // The menu items as word cubes, auditioned before the real menus move to blocks
+          // (#303). Their actions are the production menus' own ids; the room only shows them.
+          id: "dev13",
+          scenes: composeScenes("dev13", [
+            {
+              scenes: ["menu-blocks"],
+              traits: {
+                devWordCubeRoom: {
+                  backTo: "game",
+                  items: [
+                    {
+                      label: "Continue",
+                      action: "continue",
+                      enabled: false,
+                      description: "There is no saved game to continue.",
+                    },
+                    { label: "New game", action: "new" },
+                    { label: "Settings", action: "openSettings" },
+                    { label: "Start", action: "confirmNewGame" },
+                    { label: "Cancel", action: "cancelNewGame" },
+                    { label: "Resume", action: "resume" },
+                    { label: "Quit", action: "quitToTitle" },
+                  ],
+                },
+              },
+            },
+          ]),
+          startScene: "menu-blocks",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev13-run" },
+            console: { name: "dev13" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,

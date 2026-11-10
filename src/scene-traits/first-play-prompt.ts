@@ -3,8 +3,8 @@ import { createLaserOutline, type LaserOutlineConfig } from "../visual/laser-out
  * The first-play prompt (#203): the ghost cube that invites a stage's first play. Everything it
  * does lives here, configured by the scene's `firstPlayPrompt` data:
  *
- * - **Idle:** while the field is empty and a play can be made, the ghost pulses in the first
- *   play's cell; with `flash` configured, its glow flashes on the beat while music plays.
+ * - **Idle:** while the field is empty and a play can be made, the ghost glows steadily in the
+ *   first play's cell, its laser edges alive, and dances with the music when `dance` is set.
  * - **Armed:** while a dragged block is over that cell, it brightens and breathes larger and
  *   quicker, so the drop target clearly responds.
  * - **Release:** when the first block is played, an outline grows and fades from that cell
@@ -16,7 +16,7 @@ import { createLaserOutline, type LaserOutlineConfig } from "../visual/laser-out
  */
 import * as THREE from "three";
 import type { SceneTraitBehaviour } from "../scenes";
-import { beatShapes } from "../dance/beat-shapes";
+import { beatShapes, bouncePhase } from "../dance/beat-shapes";
 import type { DanceFloor } from "../dance/dance-floor";
 import type { Cell } from "../traits/attachable";
 
@@ -24,21 +24,8 @@ export type FirstPlayPromptConfig = {
   /** The ghost's colour (hex). */
   colour: number;
   laser?: Partial<LaserOutlineConfig>;
-  /** The idle pulse's period, in seconds: the glow's own rhythm while no music plays. */
-  pulseSeconds: number;
-  /**
-   * Flash with the music: while music plays, the idle glow follows this cycle, shaped by a
-   * registered beat shape, blending in from its own pulse as the music's energy rises. Leave it
-   * out and the glow keeps its own pulse.
-   */
-  flash?: {
-    /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`. */
-    cycle: string;
-    /** A registered beat shape: `sine`, `pulse`, `bounce`, `gate`, `saw`. */
-    shape: string;
-    /** Beats to shift the flash by (negative lands a little early, which reads as on time). */
-    offset: number;
-  };
+  /** The idle ghost's steady brightness, 0 to 1: it never pulses or flashes. */
+  glow: number;
   /** While a dragged block is over the cell. */
   armed: {
     /** The breathing period, in seconds. */
@@ -50,18 +37,24 @@ export type FirstPlayPromptConfig = {
   };
   /**
    * Dance with the music (#256): while music plays, the ghost's size follows this cycle, shaped
-   * by a registered beat shape; its glow keeps its own idle pulse. Leave it out and the ghost
+   * by a registered beat shape; its glow stays steady. Leave it out and the ghost
    * never dances.
    */
   dance?: {
-    /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`. */
+    /** A registered dance cycle: `halfBeat`, `beat`, `bar`, `twoBars`, `fourBars`. */
     cycle: string;
-    /** A registered beat shape: `sine`, `pulse`, `bounce`, `gate`. */
+    /** A registered beat shape: `sine`, `pulse`, `bounce`, `gate`, `saw`, `envelope`. */
     shape: string;
     /** Beats to shift the move by (negative peaks a little early, which reads as on time). */
     offset: number;
     /** How much larger the ghost grows at the top of the move, as a fraction of a cell. */
     swell: number;
+    /**
+     * Squeeze the shape into this fraction of the cycle, peaking on the cycle's start (the
+     * beat) and flat the rest of the time, as the block title's bounce does. Leave it out and
+     * the shape fills the cycle.
+     */
+    window?: number;
   };
   /** When the first block is played. */
   release: {
@@ -131,8 +124,6 @@ type PromptState = {
   burst: { ghost: Ghost; elapsed: number } | null;
   /** The ghost's dance (#256): the shaped move and the music's energy, from the dance floor. */
   move: { level: number; energy: number };
-  /** The glow's flash with the music, from the dance floor, the same way. */
-  flash: { level: number; energy: number };
   leaveFloor: Array<() => void>;
 };
 
@@ -164,15 +155,18 @@ export function firstPlayPrompt<
         time: 0,
         burst: null,
         move: { level: 0, energy: 0 },
-        flash: { level: 0, energy: 0 },
         leaveFloor: [],
       };
       states.set(config, state);
-      // The ghost dances by joining the floor: its size and its glow each follow a cycle, and
-      // each dance records its shaped level, which the idle state below blends towards as the
-      // music's energy rises.
+      // The ghost dances by joining the floor: its size follows a cycle, and its dance records
+      // the shaped level, which the idle state below scales by the music's energy.
       const join = (
-        { cycle, shape, offset }: { cycle: string; shape: string; offset: number },
+        {
+          cycle,
+          shape,
+          offset,
+          window,
+        }: { cycle: string; shape: string; offset: number; window?: number },
         record: (move: { level: number; energy: number }) => void,
       ) => {
         const shaped = beatShapes.get(shape);
@@ -180,12 +174,12 @@ export function firstPlayPrompt<
           firstPlay.danceFloor.join({
             cycle,
             offset,
-            dance: ({ phase, energy }) => record({ level: shaped(phase), energy }),
+            dance: ({ phase, energy }) =>
+              record({ level: shaped(bouncePhase(phase, window)), energy }),
           }),
         );
       };
       for (const dance of [config.dance ?? []].flat()) join(dance, (move) => (state.move = move));
-      for (const flash of [config.flash ?? []].flat()) join(flash, (move) => (state.flash = move));
     },
     exit({ services: { firstPlay } }, config) {
       const state = states.get(config);
@@ -246,15 +240,12 @@ export function firstPlayPrompt<
         ghost.edges.material.opacity = 1;
         return;
       }
-      // Idle: its own slow pulse in the glow, giving way to the flash as the music plays; the
-      // dance, when the music plays, moves its size.
-      const ownPulse = (1 + Math.cos((state.time * Math.PI * 2) / config.pulseSeconds)) / 2;
-      const { flash } = state;
-      const pulse = still ? 0.8 : ownPulse + (flash.level - ownPulse) * flash.energy;
+      // Idle: a steady glow, with the laser edges' own noise for life; the dance, when the music
+      // plays, moves its size.
       const { level, energy } = state.move;
       ghost.mesh.scale.setScalar(1 + (config.dance?.swell ?? 0) * level * energy);
-      ghost.fill.opacity = 0.18 * pulse;
-      ghost.edges.material.opacity = pulse;
+      ghost.fill.opacity = 0.18 * config.glow;
+      ghost.edges.material.opacity = config.glow;
     },
   };
 }

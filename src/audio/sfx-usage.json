@@ -70,8 +70,9 @@
     }
   },
   "action.denied": {
-    "uses": 8,
+    "uses": 9,
     "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
       "menus.ts": 2,
       "run-controller.ts": 2,
       "table-input.ts": 3,
@@ -166,6 +167,12 @@
     }
   },
   "shop.buy": {
+    "uses": 1,
+    "files": {
+      "run-controller.ts": 1
+    }
+  },
+  "shop.buy.denied": {
     "uses": 1,
     "files": {
       "run-controller.ts": 1

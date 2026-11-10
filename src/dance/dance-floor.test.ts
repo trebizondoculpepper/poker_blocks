@@ -24,7 +24,7 @@ describe("dance floor (#256)", () => {
   it("gives each dancer its phase through its own cycle, with its offset", () => {
     const floor = createDanceFloor(signal({ beat: 6.5 }), () => false);
     const moves: Record<string, DanceMove> = {};
-    for (const cycle of ["halfBeat", "beat", "bar", "twoBars"])
+    for (const cycle of ["halfBeat", "beat", "bar", "twoBars", "fourBars"])
       floor.join({ cycle, dance: (move) => (moves[cycle] = move) });
     let early: DanceMove | undefined;
     floor.join({ cycle: "beat", offset: -0.25, dance: (move) => (early = move) });
@@ -33,6 +33,7 @@ describe("dance floor (#256)", () => {
     expect(moves.beat!.phase).toBeCloseTo(0.5);
     expect(moves.bar!.phase).toBeCloseTo(6.5 / 4 - 1);
     expect(moves.twoBars!.phase).toBeCloseTo(6.5 / 8);
+    expect(moves.fourBars!.phase).toBeCloseTo(6.5 / 16);
     expect(early!.phase).toBeCloseTo(0.25);
     expect(moves.beat!.energy).toBe(1);
   });

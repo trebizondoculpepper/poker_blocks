@@ -46,10 +46,14 @@ describe("offer kinds (#67)", () => {
     expect(run.state.shopStock).toEqual([]);
   });
 
-  it("refuses it when the run can't afford it", () => {
+  it("refuses it when the run can't afford it, and says so before the attempt", () => {
     const run = shopWithPouch(1);
+    // The shop asks first, so a refusal for want of coins gets its own sound.
+    expect(run.canAfford("pouch.1")).toBe(false);
     expect(run.buyShopOffer("pouch.1", "hand")).toBeNull();
     expect(run.state.coins).toBe(1);
+    expect(shopWithPouch(2).canAfford("pouch.1")).toBe(true);
+    expect(shopWithPouch(2).canAfford("no-such-offer")).toBe(false);
   });
 
   it("saves and restores it through its own kind", () => {

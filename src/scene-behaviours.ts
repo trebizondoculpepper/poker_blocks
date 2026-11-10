@@ -1,3 +1,5 @@
+import { beatShapes } from "./dance/beat-shapes";
+import { danceCycles } from "./dance/dance-floor";
 import type { TuningControl } from "./attract-tuning-panel";
 import { blockTitle, type BlockTitles } from "./scene-traits/block-title";
 /**
@@ -78,6 +80,10 @@ export type SceneHost = {
     devShopBalanceEditor: Pick<ShopBalanceEditor, "show" | "hide">;
     devObjectBrowser: Pick<ShopBalanceEditor, "show" | "hide">;
     devBlockDesigner: Pick<ShopBalanceEditor, "show" | "hide">;
+    devWordCubeRoom: {
+      show(config: SceneTraits["devWordCubeRoom"]): void;
+      hide(): void;
+    };
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
     run: Pick<
       RunController,
@@ -321,6 +327,121 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
             services.blockTitles.retune(tuning);
           },
         },
+        {
+          label: "Precession angle (degrees)",
+          min: 0,
+          max: 30,
+          step: 0.5,
+          value: tuning.precessionAngle,
+          onChange: (precessionAngle) => {
+            tuning = { ...tuning, precessionAngle };
+            services.blockTitles.retune(tuning);
+          },
+        },
+        {
+          label: "Precession period (s)",
+          min: 2,
+          max: 120,
+          step: 1,
+          value: tuning.precessionSeconds,
+          onChange: (precessionSeconds) => {
+            tuning = { ...tuning, precessionSeconds };
+            services.blockTitles.retune(tuning);
+          },
+        },
+        {
+          label: "Bounce",
+          min: 0,
+          max: 0.3,
+          step: 0.002,
+          value: tuning.bounce,
+          onChange: (bounce) => {
+            tuning = { ...tuning, bounce };
+            services.blockTitles.retune(tuning);
+          },
+        },
+        {
+          // The registered dance cycles, in order, picked by position.
+          label: "Bounce cycle",
+          min: 0,
+          max: danceCycles.names().length - 1,
+          step: 1,
+          value: Math.max(0, danceCycles.names().indexOf(tuning.bounceCycle)),
+          format: (index) => danceCycles.names()[index] ?? "",
+          onChange: (index) => {
+            tuning = { ...tuning, bounceCycle: danceCycles.names()[index] ?? tuning.bounceCycle };
+            services.blockTitles.retune(tuning);
+          },
+        },
+        {
+          // The registered beat shapes, in order, picked by position.
+          label: "Bounce shape",
+          min: 0,
+          max: beatShapes.names().length - 1,
+          step: 1,
+          value: Math.max(0, beatShapes.names().indexOf(tuning.bounceShape)),
+          format: (index) => beatShapes.names()[index] ?? "",
+          onChange: (index) => {
+            tuning = { ...tuning, bounceShape: beatShapes.names()[index] ?? tuning.bounceShape };
+            services.blockTitles.retune(tuning);
+          },
+        },
+        {
+          label: "Bounce window (share of cycle)",
+          min: 0.05,
+          max: 1,
+          step: 0.05,
+          value: tuning.bounceWindow,
+          onChange: (bounceWindow) => {
+            tuning = { ...tuning, bounceWindow };
+            services.blockTitles.retune(tuning);
+          },
+        },
+        {
+          label: "Bounce attack (envelope: share of the bump spent rising)",
+          min: 0.05,
+          max: 0.95,
+          step: 0.05,
+          value: tuning.bounceAttack,
+          onChange: (bounceAttack) => {
+            tuning = { ...tuning, bounceAttack };
+            services.blockTitles.retune(tuning);
+          },
+        },
+        {
+          label: "Bounce time messiness (std dev, beats)",
+          min: 0,
+          max: 0.5,
+          step: 0.01,
+          value: tuning.bounceTimeSpread,
+          onChange: (bounceTimeSpread) => {
+            tuning = { ...tuning, bounceTimeSpread };
+            services.blockTitles.retune(tuning);
+          },
+        },
+        {
+          label: "Bounce angle messiness (std dev, degrees)",
+          min: 0,
+          max: 30,
+          step: 0.5,
+          value: tuning.bounceAngleSpread,
+          onChange: (bounceAngleSpread) => {
+            tuning = { ...tuning, bounceAngleSpread };
+            services.blockTitles.retune(tuning);
+          },
+        },
+        {
+          // Blocks 1.1 apart start to touch at about 3° each, so the range stays small.
+          label: "Initial angle messiness (std dev, degrees)",
+          min: 0,
+          max: 10,
+          step: 0.1,
+          value: tuning.restAngleSpread,
+          onChange: (restAngleSpread) => {
+            tuning = { ...tuning, restAngleSpread };
+            services.blockTitles.retune(tuning);
+          },
+        },
       ]);
     },
     // The panel belongs to this scene, so leaving it takes the panel with it (#166).
@@ -333,6 +454,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("devBlockDesigner", {
     enter: ({ services }, { backTo }) => services.devBlockDesigner.show(backTo),
     exit: ({ services }) => services.devBlockDesigner.hide(),
+  });
+  behaviours.register("devWordCubeRoom", {
+    enter: ({ services }, config) => services.devWordCubeRoom.show(config),
+    exit: ({ services }) => services.devWordCubeRoom.hide(),
   });
   behaviours.register("devObjectBrowser", {
     enter: ({ services }, { backTo }) => services.devObjectBrowser.show(backTo),

@@ -17,6 +17,7 @@ danceCycles.register("halfBeat", () => 0.5);
 danceCycles.register("beat", () => 1);
 danceCycles.register("bar", (beatsPerBar) => beatsPerBar);
 danceCycles.register("twoBars", (beatsPerBar) => beatsPerBar * 2);
+danceCycles.register("fourBars", (beatsPerBar) => beatsPerBar * 4);
 
 export type DanceMove = {
   /** 0 to 1 through the dancer's cycle, with its `offset` applied. */

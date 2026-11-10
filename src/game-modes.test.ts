@@ -47,6 +47,7 @@ describe("game modes composed from traits", () => {
       "dev10",
       "dev11",
       "dev12",
+      "dev13",
     ]);
   });
 
@@ -61,6 +62,28 @@ describe("game modes composed from traits", () => {
       musicCue: { cue: "title" },
     });
     expect(scene?.traits).not.toHaveProperty("titleScreen");
+  });
+
+  it("opens dev13 on the menu block room, auditioning the game's menu items as word cubes (#303)", () => {
+    const mode = gameModeFor("dev13");
+    expect(mode.traits.onLoad).toBe("scene");
+    expect(mode.startScene).toBe("menu-blocks");
+    const scene = mode.scenes.find(({ id }) => id.endsWith("/menu-blocks"));
+    const room = scene?.traits.devWordCubeRoom;
+    expect(room?.items.map(({ label }) => label)).toEqual([
+      "Continue",
+      "New game",
+      "Settings",
+      "Start",
+      "Cancel",
+      "Resume",
+      "Quit",
+    ]);
+    // One disabled example, explaining itself through its inspectable description.
+    const disabled = room?.items.filter(({ enabled }) => enabled === false) ?? [];
+    expect(disabled).toHaveLength(1);
+    expect(disabled[0]?.description).toBeTruthy();
+    expect(new Set(room?.items.map(({ action }) => action)).size).toBe(room?.items.length);
   });
 
   it("opens a mode from ?mode=, falling back to the legacy ?room= alias", () => {
@@ -199,7 +222,22 @@ describe("game modes composed from traits", () => {
           },
         ],
       },
-      blockTitle: { text: "Poker Blocks", scale: 1 },
+      blockTitle: {
+        text: "Poker Blocks",
+        scale: 0.85,
+        precession: { seconds: 6, angle: 8.5, phaseDegrees: 67 },
+        dance: {
+          bounceCycle: "bar",
+          bounceShape: "sine",
+          bounceWindow: 0.2,
+          bounceAttack: 0.2,
+          bounce: 0.034,
+          bounceTimeSpread: 0.03,
+          bounceAngleSpread: 5.5,
+          restAngleSpread: 0.8,
+          tilt: 0,
+        },
+      },
       titleScreen: {
         items: [
           {

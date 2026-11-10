@@ -377,6 +377,14 @@ export class GameRun {
     };
   }
 
+  /** Whether the coins held cover this shop offer's price (false for an offer not in stock). */
+  canAfford(id: string): boolean {
+    const offer = this.currentState.shopStock?.find(({ block }) => block.id === id);
+    if (!offer) return false;
+    const price = offerKind(offer).price(offer.block, this.offerRun);
+    return Number.isSafeInteger(price) && price >= 0 && this.currentState.coins >= price;
+  }
+
   /**
    * Buy an offer into the place its kind goes (the hand or the rack). Refused, leaving the state
    * untouched, when dropped elsewhere, unaffordable, or when it doesn't fit there.

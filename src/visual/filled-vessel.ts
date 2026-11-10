@@ -18,6 +18,7 @@
  * levels move it along its normal in proportion. Exact volume is not kept as the block tilts.
  */
 import * as THREE from "three";
+import { additiveSheen } from "./additive-light";
 import { sharedSimulations, type Simulation } from "./shared-simulation";
 
 export type VesselConfig = {
@@ -37,6 +38,12 @@ export type VesselConfig = {
   shellOpacity: number;
   /** The inner skin's scale, relative to the outer: the wall's thickness. */
   wall: number;
+  /**
+   * The strength of a gloss layer over the shell: its reflections at full strength, however
+   * clear the shell is (a transparent material's own reflections are scaled down by its low
+   * opacity, so clear plastic alone looks dull). Leave it out for no gloss layer.
+   */
+  gloss?: number;
 };
 
 const fluidVertex = /* glsl */ `
@@ -161,7 +168,32 @@ export function createFilledVessel(
     shared.simulation.localNormals(own, uniforms.surfaceNormal.value, uniforms.traceNormal.value);
   };
   fluid.material.addEventListener("dispose", () => shared.release());
-  return { shell, extras: [inner, fluid, trace] };
+
+  // Additive and black-based, so it only adds reflected light and never hides the fluid; drawn
+  // last, over everything inside. Marked `reflective`, so a renderer with its own environment
+  // (the block title) points it there as it does the block's faces.
+  const glosses = [config.gloss ?? []].flat().map((intensity) => {
+    const gloss = new THREE.Mesh(
+      geometry,
+      new THREE.MeshPhysicalMaterial({
+        color: 0x000000,
+        metalness: 0,
+        roughness: 0.05,
+        clearcoat: 1,
+        clearcoatRoughness: 0.03,
+        envMap: environment,
+        envMapIntensity: intensity,
+        transparent: true,
+        ...additiveSheen,
+        depthWrite: false,
+      }),
+    );
+    gloss.material.userData.reflective = true;
+    gloss.scale.setScalar(1.002);
+    gloss.renderOrder = 4;
+    return gloss;
+  });
+  return { shell, extras: [inner, fluid, trace, ...glosses] };
 }
 
 /**

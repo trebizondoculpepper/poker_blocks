@@ -103,13 +103,6 @@ export const materialDefinitions = [
     name: "Paper",
     acoustics: { character: "flimsy", hardness: 2, attach: "material.attach.paper" },
     traits: {},
-    shop: {
-      basePrice: 1,
-      weights: [
-        [1, 4],
-        [8, 0],
-      ],
-    },
     appearance: {
       pattern: "cardSheet",
       assembly: "sixFaces",
@@ -131,10 +124,9 @@ export const materialDefinitions = [
     shop: {
       basePrice: 3,
       weights: [
-        [1, 1],
-        [2, 2],
-        [3, 2],
-        [8, 0.25],
+        [1, 4],
+        [2, 1.5],
+        [3, 1],
       ],
     },
     scoringModifier: { additive: 1 },
@@ -160,7 +152,8 @@ export const materialDefinitions = [
     shop: {
       basePrice: 4,
       weights: [
-        [2, 0.5],
+        [2, 4],
+        [3, 1.5],
         [4, 1],
       ],
     },
@@ -187,8 +180,9 @@ export const materialDefinitions = [
     shop: {
       basePrice: 12,
       weights: [
-        [5, 0.25],
-        [6, 0.5],
+        [7, 4],
+        [8, 1.5],
+        [9, 1],
       ],
     },
     scoringModifier: { exponential: 1.1 },
@@ -233,7 +227,14 @@ export const materialDefinitions = [
     name: "Gold",
     acoustics: { character: "dense", hardness: 7, attach: "material.attach.gold" },
     traits: {},
-    shop: { basePrice: 8, weights: [[4, 1]] },
+    shop: {
+      basePrice: 8,
+      weights: [
+        [6, 4],
+        [7, 1.5],
+        [8, 1],
+      ],
+    },
     scoringModifier: { additive: 1 },
     activation: { effect: { id: "pulse", colour: "#f3c85e" }, sfx: "material.activate.gold" },
     handReward: { coinsPerCard: 2 },
@@ -255,6 +256,14 @@ export const materialDefinitions = [
     name: "Terracotta",
     acoustics: { character: "dry", hardness: 6, attach: "material.attach.terracotta" },
     traits: {},
+    shop: {
+      basePrice: 3,
+      weights: [
+        [3, 4],
+        [4, 1.5],
+        [5, 1],
+      ],
+    },
     appearance: {
       pattern: "crackedClay",
       assembly: "sixFaces",
@@ -276,8 +285,9 @@ export const materialDefinitions = [
     shop: {
       basePrice: 2,
       weights: [
-        [3, 0.75],
-        [4, 1],
+        [4, 4],
+        [5, 1.5],
+        [6, 1],
       ],
     },
     appearance: {
@@ -301,8 +311,9 @@ export const materialDefinitions = [
     shop: {
       basePrice: 6,
       weights: [
-        [3, 0.75],
-        [4, 1],
+        [4, 4],
+        [5, 1.5],
+        [6, 1],
       ],
     },
     appearance: {
@@ -326,8 +337,9 @@ export const materialDefinitions = [
     shop: {
       basePrice: 4,
       weights: [
-        [3, 0.75],
-        [4, 1],
+        [4, 4],
+        [5, 1.5],
+        [6, 1],
       ],
     },
     appearance: {
@@ -342,16 +354,6 @@ export const materialDefinitions = [
       endGrainFaces: noEnds,
     },
   },
-] as const satisfies readonly MaterialDefinition[];
-
-/**
- * Visual experiments (#227): materials that exist only to be looked at in a developer mode.
- * They are not in `materialDefinitions`, so no shop, reward or attract sequence ever deals
- * them. A developer mode deals one only by asking: the `uniformMaterialDeck` run setup step, or
- * `materialDeck` with the `registered` pool (dev0, dev1).
- * They have no scoring, prices or rewards.
- */
-export const experimentalMaterials = [
   {
     id: "custard",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -359,6 +361,14 @@ export const experimentalMaterials = [
     // Plastic, between wood and ice (#232).
     acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
     traits: { transparent: {} },
+    shop: {
+      basePrice: 3,
+      weights: [
+        [5, 4],
+        [6, 1.5],
+        [7, 1],
+      ],
+    },
     appearance: {
       pattern: "cardSheet",
       assembly: "filledVessel",
@@ -378,14 +388,23 @@ export const experimentalMaterials = [
         traceOpacity: 0.45,
         shellOpacity: 0.16,
         wall: 0.92,
+        // The shell's reflections at full strength, so the plastic catches the light.
+        gloss: 1.6,
       },
     },
   },
 ] as const satisfies readonly MaterialDefinition[];
 
-export type BlockMaterial =
-  | (typeof materialDefinitions)[number]["id"]
-  | (typeof experimentalMaterials)[number]["id"];
+/**
+ * Visual experiments (#227): materials that exist only to be looked at in a developer mode.
+ * They are not in `materialDefinitions`, so no shop, reward or attract sequence ever deals
+ * them. A developer mode deals one only by asking: the `uniformMaterialDeck` run setup step, or
+ * `materialDeck` with the `registered` pool (dev0, dev1). None at the moment: custard, the
+ * first, became a gameplay material when the shop began to sell it.
+ */
+export const experimentalMaterials: readonly MaterialDefinition[] = [];
+
+export type BlockMaterial = (typeof materialDefinitions)[number]["id"];
 export const blockMaterials: readonly BlockMaterial[] = materialDefinitions.map(({ id }) => id);
 const materialRegistry = new Map<string, MaterialDefinition>(
   [...materialDefinitions, ...experimentalMaterials].map((item) => [item.id, item]),

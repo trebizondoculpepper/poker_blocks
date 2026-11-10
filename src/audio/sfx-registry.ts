@@ -327,6 +327,16 @@ const entries = [
     prompt: "Cheerful short cash register ding with a coin clink, a purchase made",
   },
   {
+    id: "shop.buy.denied",
+    name: "Can't afford",
+    family: "shop",
+    description: "An offer dropped on BUY costs more coins than the player holds",
+    prompt:
+      "Cash register refusing a sale: a short flat electronic buzz and the hollow clunk of an empty till drawer, no coins",
+    durationSeconds: 0.7,
+    placeholder: "action.denied",
+  },
+  {
     id: "shop.stock.burn",
     name: "Stock burn",
     family: "shop",
