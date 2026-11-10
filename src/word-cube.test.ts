@@ -79,7 +79,7 @@ describe("wordCube menu traits", () => {
     expect(inner.position.toArray()).toEqual([0, 0, 0]);
     block.dispose();
   });
-  it("desaturates disabled materials through a reusable filter and restores their shader hook", () => {
+  it("dithers disabled materials to black and white through a reusable filter, and restores their shader hook", () => {
     const block = menu(false);
     block.add(disabledAppearance);
     const material = new THREE.MeshBasicMaterial();
@@ -93,20 +93,18 @@ describe("wordCube menu traits", () => {
         "void main() { if (!gl_FrontFacing) { gl_FragColor = vec4(1.0); return; } gl_FragColor = vec4(0.5); }",
     };
     material.onBeforeCompile(shader as never, {} as never);
-    expect(shader.fragmentShader).toContain("interactionSaturation");
+    expect(shader.fragmentShader).toContain("interactionDisabled");
     expect(shader.fragmentShader).toContain("void interactionOriginalMain()");
     expect(shader.fragmentShader).toMatch(/void main\(\)\s*\{\s*interactionOriginalMain\(\);/);
     expect(shader.fragmentShader.match(/void main\(/g)).toHaveLength(1);
-    // Luminance-only scaling preserves zero RGB and premultiplied transparent coverage.
-    expect(shader.fragmentShader).not.toContain("+ 0.12");
-    expect(shader.fragmentShader).toContain("0.0722)) * 0.65)");
-    expect(
-      (shader.uniforms as Record<string, { value: number }>).interactionSaturation!.value,
-    ).toBe(0);
+    // One bit: each pixel's brightness against a noise threshold gives pure black or white.
+    expect(shader.fragmentShader).toContain("vec3(step(threshold, luma))");
+    expect(shader.fragmentShader).toContain("gl_FragCoord.xy / interactionDitherPixel");
+    const uniforms = shader.uniforms as Record<string, { value: number }>;
+    expect(uniforms.interactionDisabled!.value).toBe(1);
+    expect(uniforms.interactionDitherPixel!.value).toBe(2);
     block.emit("input.enabled", true);
-    expect(
-      (shader.uniforms as Record<string, { value: number }>).interactionSaturation!.value,
-    ).toBe(1);
+    expect(uniforms.interactionDisabled!.value).toBe(0);
     block.dispose();
     // oxlint-disable-next-line typescript/unbound-method -- comparing hook identity only
     expect(material.onBeforeCompile).toBe(original);

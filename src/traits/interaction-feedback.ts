@@ -44,15 +44,24 @@ export const interactionFeedback = defineTrait({
   },
 });
 
-/** A reusable post-lighting saturation filter; material textures and scene state stay intact. */
+/**
+ * A reusable post-lighting filter for a disabled block: its final colour is dithered to pure
+ * black and white, one-bit, like an old screen. Floyd–Steinberg's error diffusion is serial
+ * (each pixel's error passes to the next), so it can't run per pixel on the GPU; instead each
+ * pixel's brightness is compared with a threshold from interleaved gradient noise, a fine,
+ * irregular pattern that reads like error diffusion with no visible grid. The pattern is fixed
+ * to the screen in cells of `pixelSize` device pixels. Material textures and scene state stay
+ * intact.
+ */
 export const disabledAppearance = defineTrait({
   name: "disabledAppearance",
-  defaults: { saturation: 0 },
+  defaults: { pixelSize: 2 },
   setup({ block, settings }) {
-    const uniform = { value: 1 };
+    const disabled = { value: 0 };
+    const pixel = { value: settings.pixelSize };
     const restore: (() => void)[] = [];
     const stopState = block.on("interaction.state", (payload) => {
-      uniform.value = (payload as InteractionState).enabled ? 1 : settings.saturation;
+      disabled.value = (payload as InteractionState).enabled ? 0 : 1;
     });
     const stopMount = block.on("presentation.mount", (payload) => {
       for (const material of (payload as PresentationMount).materials) {
@@ -63,7 +72,8 @@ export const disabledAppearance = defineTrait({
         const key = cache.call(material);
         material.onBeforeCompile = (shader, renderer) => {
           compile.call(material, shader, renderer);
-          shader.uniforms.interactionSaturation = uniform;
+          shader.uniforms.interactionDisabled = disabled;
+          shader.uniforms.interactionDitherPixel = pixel;
           // Wrap main rather than appending to it: shader returns must still reach the filter.
           shader.fragmentShader =
             shader.fragmentShader.replace(
@@ -71,14 +81,20 @@ export const disabledAppearance = defineTrait({
               "void interactionOriginalMain()",
             ) +
             `
-            uniform float interactionSaturation;
+            uniform float interactionDisabled;
+            uniform float interactionDitherPixel;
             void main() {
               interactionOriginalMain();
-              gl_FragColor.rgb = mix(vec3(dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722)) * 0.65), gl_FragColor.rgb, interactionSaturation);
+              // Interleaved gradient noise: a threshold per screen cell, in [0, 1).
+              vec2 cell = floor(gl_FragCoord.xy / interactionDitherPixel);
+              float threshold = fract(52.9829189 * fract(dot(cell, vec2(0.06711056, 0.00583715))));
+              float luma = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+              // One bit: white where the brightness clears the threshold, black elsewhere.
+              gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(step(threshold, luma)), interactionDisabled);
             }
           `;
         };
-        material.customProgramCacheKey = () => key + "|interaction-saturation";
+        material.customProgramCacheKey = () => key + "|interaction-dither";
         material.needsUpdate = true;
         restore.push(() => {
           material.onBeforeCompile = compile;
