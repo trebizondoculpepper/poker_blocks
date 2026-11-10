@@ -47,6 +47,15 @@ The primary review question is whether this PR moves the code toward the **targe
 
 - Compare changed gameplay with the linked issue and the applicable rules in [doc/game.md](doc/game.md). Flag behavior that contradicts an agreed rule or misses a stated acceptance criterion. A PR may intentionally change a rule if it updates the design document in the same change and explains the decision.
 
+### Input ownership
+
+- Compare input changes with "Input" in [doc/game-architecture.md](doc/game-architecture.md). Flag:
+  - an input decision (what can be picked up, where something can be dropped, what a gesture becomes) made outside a drag source, drop target or gesture recognizer;
+  - a branch in the drag-and-drop manager or the gesture arena on an owner, scene or block kind;
+  - input held back or ignored because an animation is running (model first, #272);
+  - a capture, cancel or lost-capture path that doesn't reach every owner;
+  - non-standard names for these pieces: use drag source, drop target, hit test, hover, drop, reject, gesture arena, recognizer, and began / changed / ended / cancelled.
+
 ### State and presentation
 
 - Check that scoring, purchases, rewards, and other gameplay outcomes come from game state and rules, while animations, tinting, audio, and camera movement only present those outcomes. Flag a presentation effect that decides or mutates gameplay results. Pure visual changes do not need a game-rules document update.

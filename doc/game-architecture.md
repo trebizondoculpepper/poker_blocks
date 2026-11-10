@@ -162,6 +162,24 @@ Material appearance is defined on each material definition in `src/materials.ts`
 - **The drop inspector:** **`devDropInspector`** is a live panel of the same state and the newest entries.
 - **Where they're composed:** both traits are composed only into dev10, a development-only sandbox room. Composing `actionHistory` into a main mode's scenes would record there too.
 
+## Input (#284, epic #271)
+
+**Each thing handles its own input.** Pointer, touch and wheel input is turned into intents by a generic layer, and every decision about what those intents _mean_ belongs to the thing they're aimed at, through traits composed into scenes. The vocabulary is the industry's: HTML5 drag and drop and React DnD for dragging, Flutter and UIKit for gestures.
+
+- **Gesture arena and recognizers** (#282). When a pointer goes down, every **gesture recognizer** that could claim it joins the **gesture arena**: a tap (select), a drag from a drag source, a rotation of the grid, and a pinch with a second finger. Each **withdraws** when movement rules it out, or **declares victory** when its own rule is met (moved past its threshold, a second finger arrived, held long enough). The last one standing wins. Thresholds and priorities are recognizer data. **Gesture recognition comes from a library** (owner decision, 2026-11-10): `@use-gesture/vanilla` (framework-free use-gesture) supplies drag, pinch, wheel and move recognition, thresholds and the gesture lifecycle. The arena that decides between owners, and the ownership rules, are ours, layered on top. The winner receives the **gesture lifecycle**: **began, changed, ended, cancelled**. Every owner must handle **cancelled** by putting its things back.
+- **Drag sources** (`dragSource` trait, #276, #277): things that can be picked up (the hand, the passive rack, the shop stock). A drag source says what is picked up under a pointer and what comes with it (the selection, say).
+- **Drop targets** (`dropTarget` trait, #273): places dragged things can be dropped (the grid, the bin, the hand for reordering, the rack, the shop's BUY). While something is dragged, the **drag-and-drop manager** (`src/drag-drop.ts`) **hit-tests** the drop targets a scene allows, in priority order:
+  - `canDrop` answers **accept**, **reject** (the point is the target's, but it won't take them) or nothing (ask the next target);
+  - the target shows **hover** feedback;
+  - on **drop**, the target commits to the model; a rejected drop triggers the target's **reject** feedback.
+- **The input service** (`src/table-input.ts`) is only the manager and the arena: pointer tracking, capture, touch, carrying and hit-testing. It never names an owner, a scene or a kind of block. What a scene allows is exactly the set of owners its traits register. The remaining on/off switches (`setFieldActive`, `handEntered`, `discardBinEntered`, `sellBinEntered`) are retired by #278.
+- **Model first** (#272). Input commits to the model immediately; animation catches up. No input is held back for an animation.
+- **Browser behaviour** (#267, #283).
+  - Pointer capture can be lost before the release arrives, so a drag that loses capture waits briefly for its release before cancelling, and that applies to every owner.
+  - The game surface sets `touch-action: none`, suppresses native `dragstart`, and has no text selection or long-press callouts.
+  - Pinch zoom is logarithmic.
+- **Debugging.** The action history (dev10, `actionHistory` trait) traces every input decision with timestamps. It's the regression tool for input changes: capture the same gestures before and after a change and compare the decisions.
+
 ## Field visual effects (proposal)
 
 Field visual effects are presentation behaviors, separate from gameplay effects such as adding score or destroying blocks. The current `tintRow` effect temporarily colors a scoring line gold. A future field effect registry could resolve named requests with target block IDs and visual parameters such as color, intensity, duration, and easing. The same mechanism could later draw glows, bursts, or explosions for unrelated game events.
