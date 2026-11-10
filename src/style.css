@@ -479,7 +479,7 @@ body,
   place-items: center;
   padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
     max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  background: #0b1018cc;
+  background: #0b1018f0;
   backdrop-filter: blur(3px);
   font-family: system-ui, sans-serif;
 }
@@ -1180,4 +1180,93 @@ body,
 /* Hidden while the New Game confirmation stands alone (#197). */
 .menu-buttons[hidden] {
   display: none;
+}
+
+/* The in-run deck view (#175): a read-only list of the deck by rank. */
+.deck-view {
+  position: absolute;
+  z-index: 12;
+  inset: 0;
+  display: grid;
+  /* Safe: when the deck overflows a short screen, it starts at the top and scrolls. */
+  align-content: safe center;
+  justify-items: center;
+  gap: 12px;
+  padding: max(24px, env(safe-area-inset-top)) 16px 24px;
+  overflow-y: auto;
+  background: #0b1018f0;
+  color: #f6f0e3;
+  font-family: system-ui, sans-serif;
+}
+
+.deck-view[hidden] {
+  display: none;
+}
+
+.deck-view-heading {
+  margin: 0;
+  color: #9ce6d7;
+  font-size: 15px;
+  letter-spacing: 0.18em;
+}
+
+.deck-view-details {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 14px;
+}
+
+.deck-view-ranks {
+  display: grid;
+  gap: 6px;
+  width: min(760px, 100%);
+}
+
+.deck-view-rank {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.deck-view-rank-label {
+  width: 2.2em;
+  color: #9ce6d7;
+  font-weight: 800;
+  text-align: right;
+}
+
+.deck-view-block {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 6px;
+  border: 1px solid #8191a777;
+  border-radius: 6px;
+  background: #f6f0e3;
+  font:
+    800 15px system-ui,
+    sans-serif;
+  cursor: help;
+}
+
+.deck-view-block:focus-visible {
+  outline: 2px solid #9ce6d7;
+  outline-offset: 2px;
+}
+
+.deck-view-back {
+  min-width: 120px;
+  min-height: 44px;
+  border: 1px solid #9ce6d7;
+  border-radius: 6px;
+  background: #9ce6d7;
+  color: #10202b;
+  font:
+    700 14px system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.deck-hud[data-interactive] {
+  cursor: pointer;
 }

@@ -106,6 +106,8 @@ export function createOverlays(
     menus: MenuCallbacks;
     scenes: ScreenScenes;
     reducedMotion(): boolean;
+    /** Other full-screen panels (the deck view, #175) that hold a pending outcome while open. */
+    panels?: readonly { readonly isOpen: boolean }[];
   },
 ): Overlays {
   const { scenes } = options;
@@ -132,7 +134,7 @@ export function createOverlays(
       return screen;
     },
     get isOpen() {
-      return menus.isOpen;
+      return menus.isOpen || (options.panels ?? []).some((panel) => panel.isOpen);
     },
     showTitle: (items) => menus.showTitle(items),
     hideTitle: () => menus.hideTitle(),

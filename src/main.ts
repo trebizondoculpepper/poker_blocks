@@ -20,6 +20,7 @@ import type { SoundEffectId } from "./audio/sfx-registry";
 import { createFieldView, type FieldView } from "./field-view";
 import { createHandView, type HandView } from "./hand-view";
 import { createHudPanels, type HudPanels } from "./hud-panels";
+import { createDeckView, type DeckView } from "./deck-view";
 import { createOverlays, type Overlays } from "./overlays";
 import { createPassiveRack } from "./passive-rack";
 import { createPlayPresenter, type PlayPresenter } from "./play-presenter";
@@ -101,11 +102,13 @@ type TraitContext = {
     attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
     shop: ShopView;
     rack: { viewEntered(entered: boolean, capacity: number): void };
+    deckView: DeckView;
     version: string;
     sound: (id: SoundEffectId) => void;
   };
 };
 const attract = createAttractBackground(backgrounds);
+const deckView = createDeckView(host);
 const traitContext: TraitContext = {
   host,
   services: {
@@ -141,6 +144,7 @@ const traitContext: TraitContext = {
     get rack() {
       return passiveRackView;
     },
+    deckView,
     sound: (id) => playSfx(id),
     version: appVersion,
   },
@@ -247,6 +251,8 @@ const overlays: Overlays = createOverlays(host, {
   reducedMotion: () => run.reducedMotion,
   scenes: run.screenScenes,
   menus: run.menus,
+  // A won or lost stage waits while the deck view is open, like a menu (#175).
+  panels: [deckView],
 });
 // The shared HUD frame (#116): each HUD element goes in its zone (src/hud-layout.ts, #117).
 const hudFrame = createHudFrame(host);
@@ -269,6 +275,7 @@ const unbindScreenshot = bindScreenshotShortcut(
   render,
 );
 hud.onAction(() => run.takeNextAction());
+hud.onOpen((action) => run.dispatch(action));
 // Developer console: ~ (or `) drops it down.
 const devConsole = createConsoleHost(run.consoleApp, audio);
 cameraView.start();

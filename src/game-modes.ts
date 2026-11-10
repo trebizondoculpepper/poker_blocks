@@ -27,7 +27,10 @@ export type SceneTraits = {
    * exit names its button.
    */
   roundPanel: RoundPanelConfig;
-  deckPanel: Record<never, never>;
+  /** The deck counter; selecting it dispatches `opens` (the deck view, #175). */
+  deckPanel: { opens?: string };
+  /** The run's deck is listed, read-only, while this scene is in front (#175). */
+  deckView: Record<never, never>;
   coinsPanel: Record<never, never>;
   shopExit: ShopExitConfig;
   /** The hand is laid out and drawn while this scene is on the stack (#183). */
@@ -153,7 +156,7 @@ const playSceneTraits: Partial<SceneTraits> = {
   firstPlayPrompt: {},
   handView: {},
   discardBin: {},
-  deckPanel: {},
+  deckPanel: { opens: "openDeck" },
   fieldPlacement: {},
   runInPlay: {},
   ...escapeOpensPause,
@@ -218,6 +221,17 @@ export const sceneDefinitions = [
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "lowpass" },
       keyAction: { key: "Escape", action: "resume", sfx: "ui.back" },
+    },
+  },
+  {
+    // The in-run deck view (#175), pushed over play from the deck counter.
+    name: "deck",
+    traits: {
+      tableBackground: {},
+      deckView: {},
+      enterSound: { sfx: "ui.click" },
+      pausesBelow: { input: true, update: true },
+      keyAction: { key: "Escape", action: "back", sfx: "ui.back" },
     },
   },
   {
@@ -403,12 +417,13 @@ export type GameMode = {
 };
 
 /** The menu actions that only move between scenes; the flow data says how. */
-export type NavigationAction = "openPause" | "openSettings" | "back" | "resume";
+export type NavigationAction = "openPause" | "openSettings" | "openDeck" | "back" | "resume";
 
 /** Shared default navigation: menus push over what is in front and pop back to it. */
 export const standardNavigation: GameFlow<NavigationAction, SceneName> = {
   openPause: { operation: "push", scene: "pause" },
   openSettings: { operation: "push", scene: "settings" },
+  openDeck: { operation: "push", scene: "deck" },
   back: { operation: "pop" },
   resume: { operation: "pop" },
 };
