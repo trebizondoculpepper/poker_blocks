@@ -82,6 +82,10 @@ jobs:
           fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "publish=true" >> "$GITHUB_OUTPUT"
+      # An itch.io retry checked out the last release's tag: install that release's dependencies,
+      # not the ones setup-vp installed for the commit the run started on.
+      - if: inputs.itch_only
+        run: npm ci
       - if: steps.version.outputs.publish != 'skip'
         run: vp check
       - if: steps.version.outputs.publish != 'skip'
