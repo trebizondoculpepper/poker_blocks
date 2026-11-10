@@ -1,3 +1,4 @@
+import { blockTitle, type BlockTitles } from "./scene-traits/block-title";
 /**
  * The behaviour each scene trait installs (see doc/game-architecture.md, "Trait").
  * `screen` marks the host with the scene in front, for styling and tests; `pausesBelow`
@@ -45,6 +46,7 @@ export type SceneHost = {
     actionLog: ActionLog;
     actionWatch: ActionWatch;
     /** The title's attract sequence: started and stopped by a scene trait (#147). */
+    blockTitles: Pick<BlockTitles, "show">;
     attract: { start(): void; stop(): void; showTuning(): void; hideTuning(): void };
     /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
     renderer: Pick<TableRenderer, "tableEntered" | "handEntered">;
@@ -174,6 +176,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       stockSources.delete(config);
     },
   });
+  behaviours.register("blockTitle", blockTitle<Context>());
   behaviours.register("attractBackground", {
     // Start the attract sequence as the scene enters; stop it on exit so the table is the only
     // thing drawn during play (#147).

@@ -18,6 +18,7 @@ function recordingHost() {
         tableEntered: (entered) => void calls.push(`table:${entered}`),
         handEntered: (entered) => void calls.push(`hand:${entered}`),
       },
+      blockTitles: { show: () => () => {} },
       attract: {
         start: () => void calls.push("attract:start"),
         stop: () => void calls.push("attract:stop"),

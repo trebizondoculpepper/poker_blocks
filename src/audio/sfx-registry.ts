@@ -272,7 +272,9 @@ const entries = [
     name: "Cleared",
     family: "round",
     description: "The running total reaches the target score",
-    prompt: "Short triumphant celebratory flourish of bells and sparkles, uplifting",
+    // A cheeky meme-style "rizz" sting (#315): original audio, in the spirit of the memed clip.
+    prompt:
+      "Cheeky smug meme sound effect: a smooth funky slap bass riff sliding up, then a twangy cartoon boing and a sparkly wink chime, confident, cocky, playful and comedic",
     durationSeconds: 2.5,
     promptInfluence: 0.5,
     variants: 1,

@@ -185,6 +185,7 @@ describe("game modes composed from traits", () => {
           },
         ],
       },
+      blockTitle: { text: "Poker Blocks", scale: 1 },
       titleScreen: {
         items: [
           {
