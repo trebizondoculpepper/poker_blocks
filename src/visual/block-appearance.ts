@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { IdentityTrait } from "../cards";
 import type { MaterialDefinition } from "../materials";
+import { additiveSheen } from "./additive-light";
 import { createCrystalFire } from "./crystal-fire";
 import { createFilledVessel } from "./filled-vessel";
 import { createFireCore } from "./fire-core";
@@ -1096,7 +1097,7 @@ function glassPanes(geometry: THREE.BufferGeometry): THREE.Mesh {
     envMap: reflectionEnvironment,
     envMapIntensity: 1.2,
     transparent: true,
-    blending: THREE.AdditiveBlending,
+    ...additiveSheen,
     depthWrite: false,
   });
   const panes = new THREE.Mesh(geometry, glass);
