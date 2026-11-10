@@ -14,6 +14,9 @@ import type { Selection } from "./traits/selectable";
 import type { Cell } from "./traits/attachable";
 import { createBlockAppearance } from "./visual/block-appearance";
 
+/** The outline colour of a selected block (#305): the game's accent cyan. */
+const selectionOutline = 0x65f4dd;
+
 export type RenderedBlock = {
   block: CardBlock;
   cube: THREE.Mesh;
@@ -28,6 +31,8 @@ export type RenderedBlock = {
   extras: THREE.Mesh[];
   edgeGeometry: THREE.EdgesGeometry;
   edgeMaterial: THREE.LineBasicMaterial;
+  /** The edge colour and opacity its material gives it, restored when it's deselected. */
+  edgeLook: { color: number; opacity: number };
   location: "board" | "hand";
   cell: Cell | null;
   baseY: number;
@@ -108,6 +113,7 @@ export function createBlockViews(parents: {
         extras,
         edgeGeometry,
         edgeMaterial,
+        edgeLook: { color: edgeColor, opacity: edgeOpacity },
         location,
         cell: null,
         baseY: 0,
@@ -123,12 +129,17 @@ export function createBlockViews(parents: {
       for (const rendered of all.slice()) dispose(rendered);
     },
     highlight(selected) {
-      all.forEach(({ block, materials }) => {
+      all.forEach(({ block, materials, edgeMaterial, edgeLook }) => {
         const active = blockHighlighted(block, selected);
         new Set(materials).forEach((material) => {
           material.emissive.setHex(0xffffff);
           material.emissiveIntensity = active ? 0.28 : 0;
         });
+        // A selected block is outlined (#305): its edges turn the selection colour, fully opaque.
+        edgeMaterial.color.setHex(active ? selectionOutline : edgeLook.color);
+        edgeMaterial.opacity = active ? 1 : edgeLook.opacity;
+        edgeMaterial.transparent = edgeMaterial.opacity < 1;
+        edgeMaterial.needsUpdate = true;
       });
     },
   };

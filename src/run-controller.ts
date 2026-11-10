@@ -303,6 +303,16 @@ export function createRunController<Context>(options: {
     const selectedNames = views.all
       .filter(({ block }) => selected.has(block.id))
       .map(({ block }) => cardName(block.traits.identity));
+    // With two or more hand blocks selected, a badge over the hand says how many (#305), so a
+    // drag that will carry the whole selection is never a surprise.
+    const inHand = game.state.hand.filter((block) => selected.has(block.id)).length;
+    const badge =
+      host.querySelector<HTMLElement>(".selection-badge") ??
+      host.appendChild(
+        Object.assign(document.createElement("div"), { className: "selection-badge" }),
+      );
+    badge.textContent = `${inHand} selected`;
+    badge.hidden = inHand < 2;
     host.setAttribute(
       "aria-label",
       `${game.state.field.length} blocks in play. Hand: ${game.state.hand.map((block) => cardName(block.traits.identity)).join(", ")}. ${game.state.deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,

@@ -55,6 +55,8 @@ export type HandView = {
 
 /** Seconds between cards drawn into the hand, one after another. */
 const drawStagger = 1 / 3;
+/** How far a selected hand cube lifts above the others (#305), in world units. */
+const selectedLift = 0.32;
 const slotSpacing = 1.2;
 
 export function createHandView(options: {
@@ -222,6 +224,12 @@ export function createHandView(options: {
       for (const rendered of blocks) {
         if (isDragged(rendered) || rendered.handX === undefined) continue;
         rendered.cube.position.x += (rendered.handX - rendered.cube.position.x) * step;
+      }
+      // A selected hand cube lifts a little above the rest (#305), easing up and back down.
+      for (const rendered of blocks) {
+        if (isDragged(rendered)) continue;
+        const target = rendered.baseY + (selection.has(rendered.block.id) ? selectedLift : 0);
+        rendered.cube.position.y += (target - rendered.cube.position.y) * step;
       }
       // Hand cubes rock gently; a selected one eases into a quick, small vibration.
       for (const rendered of blocks) {
