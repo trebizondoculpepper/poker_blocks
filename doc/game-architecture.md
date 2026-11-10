@@ -152,7 +152,11 @@ Material appearance is defined on each material definition in `src/materials.ts`
 - **What a dance may change:** the dancer decides. Usually that's its appearance, but not always. The floor never asks what a dancer is.
 - **Shapes:** pure functions of phase, from 0 to 1, in a registry keyed by name (`src/dance/beat-shapes.ts`): `sine`, `pulse`, `bounce`, `gate` and `saw`.
 - **Resting:** with no music, or with reduced motion, `energy` is 0, so dancers settle.
-- **The first dancer is the ghost cube.** `firstPlayPrompt`'s `dance` data (cycle, shape, offset, swell) makes its prompt join the floor. For now a dance affects only the ghost's **size**: a sawtooth over the bar, growing steadily through each bar and dropping back to its base size on the downbeat (`{ cycle: "bar", shape: "saw", swell: 0.12 }`). Its glow keeps its own idle pulse. A prompt without `dance` never joins.
+- **The first dancer is the ghost cube.** `firstPlayPrompt`'s `dance` data (cycle, shape, offset, swell) makes its prompt join the floor. Its **size** and its **glow** each join the floor independently, from their own data:
+  - **`dance` (size):** a sawtooth over the bar, growing steadily through each bar and dropping back to its base size on the downbeat (`{ cycle: "bar", shape: "saw", swell: 0.12 }`).
+  - **`flash` (glow, #324):** a pulse on every beat, a touch early so it reads as on time (`{ cycle: "beat", shape: "pulse", offset: 0.04 }`).
+
+  Each records its shaped level and the music's energy, and the prompt **blends by energy**: with no music (energy 0) the size rests and the glow keeps its own slow idle pulse; as the music's energy rises, the size follows the dance and the glow gives way to the flash. A prompt composes either, both or neither; one with neither never joins the floor.
 
 **Action history and the drop inspector (dev10).**
 
