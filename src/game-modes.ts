@@ -39,6 +39,8 @@ export type SceneTraits = {
   shopExit: ShopExitConfig;
   /** The hand is laid out and drawn while this scene is on the stack (#183). */
   handView: Record<never, never>;
+  /** What a click selects in this scene (#276), asked in order: each a registered select source. */
+  selectable: { sources: readonly { source: string }[] };
   /** The discard bin (also the passives' sell target) is shown while this scene is on the stack. */
   discardBin: Record<never, never>;
   /** The shared lower-left target presents Sell, and accepts installed passives only. */
@@ -214,6 +216,8 @@ const playSceneTraits: Partial<SceneTraits> = {
     release: { seconds: 0.55, growth: 0.6 },
   },
   handView: {},
+  // A click selects a hand block, or else a table block.
+  selectable: { sources: [{ source: "hand" }, { source: "field" }] },
   discardBin: {},
   deckPanel: { opens: "openDeck" },
   runInPlay: {},
@@ -346,6 +350,7 @@ export const sceneDefinitions = [
       tableBackground: {},
       // The shop keeps the hand in view; its own drop targets handle purchases and sales.
       handView: {},
+      selectable: { sources: [{ source: "hand" }, { source: "field" }] },
       sellBin: {},
       coinsPanel: {},
       shopExit: { label: "Continue" },

@@ -93,6 +93,11 @@ export type TableInput = {
    * that disallows it again.
    */
   enableDragSource(config: DragSourceConfig): () => void;
+  /**
+   * Allow clicking to select from a source while a scene shows (the `selectable` trait, #276);
+   * returns a function that disallows it again.
+   */
+  enableSelectSource(config: { source: string }): () => void;
   /** Register a drag source kind that lives outside the table (the shop's stock, #277). */
   registerDragSource(name: string, source: DragSource): void;
   /**
@@ -382,6 +387,28 @@ export function createTableInput(options: {
   /** How many scenes in front compose `handView`; the hand takes input only while any does. */
   /** The hand's blocks the pointer can reach: none while no scene in front shows the hand. */
   const reachableHand = () => (options.handShown() ? hand.blocks : []);
+
+  /**
+   * Select sources (#276): what a click selects. Each answers the block under a point; the
+   * `selectable` trait enables them, in its order, while a scene shows.
+   */
+  const selectSourceKinds = new Registry<{
+    pick(clientX: number, clientY: number): RenderedBlock | undefined;
+  }>("select source");
+  selectSourceKinds.register("hand", {
+    pick: (clientX, clientY) => pickBlock(clientX, clientY, reachableHand()),
+  });
+  selectSourceKinds.register("field", {
+    pick: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks()),
+  });
+  const selectSourcesEnabled: { source: string }[] = [];
+  function selectableAt(clientX: number, clientY: number): RenderedBlock | undefined {
+    for (const { source } of selectSourcesEnabled) {
+      const picked = selectSourceKinds.get(source).pick(clientX, clientY);
+      if (picked) return picked;
+    }
+    return undefined;
+  }
 
   const pickAny = (clientX: number, clientY: number) =>
     pickBlock(clientX, clientY, reachableHand()) ?? pickBlock(clientX, clientY, field.blocks());
@@ -830,7 +857,7 @@ export function createTableInput(options: {
 
   const onClick = (event: MouseEvent) => {
     if (performance.now() < suppressClickUntil) return;
-    const target = pickAny(event.clientX, event.clientY);
+    const target = selectableAt(event.clientX, event.clientY);
     if (!target) return;
     const wasSelected = selected.has(target.block.id);
     selected = toggleBlockSelection(selected, target.block);
@@ -1002,6 +1029,15 @@ export function createTableInput(options: {
   return {
     enableDropTarget: (config) => dragDrop.enable(config),
     enableDragSource: (config) => dragDrop.enableSource(config),
+    enableSelectSource(config) {
+      selectSourceKinds.get(config.source);
+      const entry = { ...config };
+      selectSourcesEnabled.push(entry);
+      return () => {
+        const at = selectSourcesEnabled.indexOf(entry);
+        if (at >= 0) selectSourcesEnabled.splice(at, 1);
+      };
+    },
     registerDragSource: (name, source) => dragSourceKinds.register(name, source),
     enableBoardGestures: bindBoardGestures,
     fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
