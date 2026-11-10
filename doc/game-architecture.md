@@ -164,18 +164,29 @@ Material appearance is defined on each material definition in `src/materials.ts`
 
 ## Input (#284, epic #271)
 
-**Each thing handles its own input.** Pointer, touch and wheel input is turned into intents by a generic layer, and every decision about what those intents _mean_ belongs to the thing they're aimed at, through traits composed into scenes. The vocabulary is the industry's: HTML5 drag and drop and React DnD for dragging, Flutter and UIKit for gestures.
+**Each thing handles its own input.** Two libraries turn pointer, touch, keyboard and wheel input into intents, and every decision about what those intents _mean_ belongs to the thing they're aimed at, through traits composed into scenes. The vocabulary is the industry's: HTML5 drag and drop and dnd-kit for dragging, use-gesture for gestures.
 
-- **Gesture arena and recognizers** (#282). When a pointer goes down, every **gesture recognizer** that could claim it joins the **gesture arena**: a tap (select), a drag from a drag source, a rotation of the grid, and a pinch with a second finger. Each **withdraws** when movement rules it out, or **declares victory** when its own rule is met (moved past its threshold, a second finger arrived, held long enough). The last one standing wins. Thresholds and priorities are recognizer data. **Gesture recognition comes from a library** (owner decision, 2026-11-10): `@use-gesture/vanilla` (framework-free use-gesture) supplies drag, pinch, wheel and move recognition, thresholds and the gesture lifecycle. The arena that decides between owners, and the ownership rules, are ours, layered on top. The winner receives the **gesture lifecycle**: **began, changed, ended, cancelled**. Every owner must handle **cancelled** by putting its things back.
-- **Drag sources** (`dragSource` trait, #276, #277): things that can be picked up (the hand, the passive rack, the shop stock). A drag source says what is picked up under a pointer and what comes with it (the selection, say).
-- **Drop targets** (`dropTarget` trait, #273): places dragged things can be dropped (the grid, the bin, the hand for reordering, the rack, the shop's BUY). While something is dragged, the **drag-and-drop manager** (`src/drag-drop.ts`) **hit-tests** the drop targets a scene allows, in priority order:
+- **Libraries** (owner decisions on #286, 2026-11-10). Each is pinned to an exact version: dnd-kit is pre-1.0.
+  - **dnd-kit** (`@dnd-kit/dom`, the framework-free core) owns **drag and drop**: its `DragDropManager`, **sensors**, **draggables**, **droppables** and **collision detection**. The pointer sensor's **activation constraints** (minimum distance, delay) settle a tap (select) against a drag. Its keyboard sensor gives keyboard drag and drop. #282 adopts it.
+  - **use-gesture** (`@use-gesture/vanilla`) owns the **board gestures** dnd-kit doesn't have:
+    - dragging empty board to turn the structure;
+    - **pinch** zoom, mapped logarithmically, with two-finger **twist** to rotate;
+    - **wheel** zoom.
+
+    #275 adopts it.
+
+  - **Who takes a pointer:** where it lands decides, never a branch on what's there. A pointer that starts on a drag source is dnd-kit's; one on empty board, or a second finger, is use-gesture's.
+- **The gesture lifecycle.** Whichever library takes a pointer drives its owner through **began, changed, ended, cancelled** (dnd-kit's drag start, move, end and cancel; use-gesture's `first`, active and `last` states). Every owner must handle **cancelled** by putting its things back.
+- **Drag sources** (`dragSource` trait, #276, #277): things that can be picked up (the hand, the passive rack, the shop stock), registered as dnd-kit draggables. A drag source says what is picked up under a pointer and what comes with it (the selection, say).
+- **Drop targets** (`dropTarget` trait, #273): places dragged things can be dropped (the grid, the bin, the hand for reordering, the rack, the shop's BUY), registered as dnd-kit droppables. While something is dragged, the targets a scene allows are **hit-tested** in priority order:
+  - the **3D grid** uses a custom collision detector over the existing raycasting; DOM targets (the bin) use dnd-kit's own;
   - `canDrop` answers **accept**, **reject** (the point is the target's, but it won't take them) or nothing (ask the next target);
   - the target shows **hover** feedback;
   - on **drop**, the target commits to the model; a rejected drop triggers the target's **reject** feedback.
-- **The input service** (`src/table-input.ts`) is only the manager and the arena: pointer tracking, capture, touch, carrying and hit-testing. It never names an owner, a scene or a kind of block. What a scene allows is exactly the set of owners its traits register. The remaining on/off switches (`setFieldActive`, `handEntered`, `discardBinEntered`, `sellBinEntered`) are retired by #278.
+- **Our code is a thin adapter.** `src/drag-drop.ts` (the drag-and-drop manager today; an adapter over dnd-kit after #282) and `src/table-input.ts` turn traits into dnd-kit draggables and droppables, and the board into use-gesture handlers. They never name an owner, a scene or a kind of block: what a scene allows is exactly the set of owners its traits register. The remaining on/off switches (`setFieldActive`, `handEntered`, `discardBinEntered`, `sellBinEntered`) are retired by #278.
 - **Model first** (#272). Input commits to the model immediately; animation catches up. No input is held back for an animation.
 - **Browser behaviour** (#267, #283).
-  - Pointer capture can be lost before the release arrives, so a drag that loses capture waits briefly for its release before cancelling, and that applies to every owner.
+  - Pointer capture can be lost before the release arrives, so a drag that loses capture waits briefly for its release before cancelling. That has to stay true through both libraries: #282 checks dnd-kit's pointer sensor, and #275 checks use-gesture.
   - The game surface sets `touch-action: none`, suppresses native `dragstart`, and has no text selection or long-press callouts.
   - Pinch zoom is logarithmic.
 - **Debugging.** The action history (dev10, `actionHistory` trait) traces every input decision with timestamps. It's the regression tool for input changes: capture the same gestures before and after a change and compare the decisions.
