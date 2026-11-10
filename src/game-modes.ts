@@ -503,7 +503,9 @@ const gameModes: GameMode[] = [
     flow: standardGameFlow,
     navigation: standardNavigation,
     aliases: ["dev"],
-    runSetup: [{ step: "materialDeck" }],
+    // Every registered material on a random card, visual experiments included: dev0 is for
+    // seeing how all the materials look and meet.
+    runSetup: [{ step: "materialDeck", pool: "registered" }],
     traits: {
       onLoad: "title",
       save: { key: "poker-blocks.dev-run" },

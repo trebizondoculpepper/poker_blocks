@@ -26,7 +26,10 @@ export type RunSetupStepConfigs = {
    * Every card gets a random material, dealt from a fresh seed that the run records, so
    * Continue rebuilds the same mix and a new run gets a new one.
    */
-  materialDeck: Record<never, never>;
+  materialDeck: {
+    /** The `materialPools` entry to deal from: `gameplay` (the default) or `registered`. */
+    pool?: string;
+  };
   /** Every card is made of this one material: how a mode shows a visual experiment (#227). */
   uniformMaterialDeck: { material: BlockMaterial };
   /** The run begins on a structure holding one block of every material. */
