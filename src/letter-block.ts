@@ -7,7 +7,7 @@ import {
 } from "./materials";
 import { defaultLettering, graphemes, loadLettering } from "./visual/lettering";
 import { textFaceArt } from "./visual/text-face-art";
-import { writtenBlock } from "./visual/written-block";
+import { writtenBlock, type Finish } from "./visual/written-block";
 
 export type WritingOptions = {
   material?: BlockMaterial;
@@ -18,6 +18,8 @@ export type WritingOptions = {
    * being auditioned (#296).
    */
   definition?: MaterialDefinition;
+  /** Which materials the block wears; the hand's unless given (src/visual/written-block.ts). */
+  finish?: Finish;
 };
 /** All registered materials are eligible; choose once and retain the actual definition. */
 export function writingMaterial(options: WritingOptions): MaterialDefinition {
@@ -36,7 +38,12 @@ export async function createLetterBlock(character: string, options: WritingOptio
   const material = writingMaterial(options);
   const lettering = material.lettering ?? defaultLettering;
   await loadLettering(lettering, character);
-  const visual = writtenBlock(textFaceArt(character, lettering), material, options.size ?? 1);
+  const visual = writtenBlock(
+    textFaceArt(character, lettering),
+    material,
+    options.size ?? 1,
+    options.finish,
+  );
   return { ...visual, material, character };
 }
 

@@ -61,6 +61,8 @@ export type TuningControl = {
   max: number;
   step: number;
   value: number;
+  /** How the readout shows a value; the number itself when left out. */
+  format?(value: number): string;
   onChange(value: number): void;
 };
 
@@ -126,11 +128,17 @@ export function createAttractTuningPanel(options: {
     element.append(row);
   }
 
+  // Each extra control's current value, by label, for the export: its readout when it names one.
+  const extras: Record<string, number | string> = {};
   for (const control of options.controls ?? []) {
     const row = document.createElement("div");
     row.className = "attract-knob";
     const readout = document.createElement("output");
-    readout.textContent = `${control.label}: ${control.value}`;
+    const show = (value: number) => {
+      extras[control.label] = control.format?.(value) ?? value;
+      readout.textContent = `${control.label}: ${extras[control.label]}`;
+    };
+    show(control.value);
     const input = slider(
       control.label,
       control.min,
@@ -138,7 +146,7 @@ export function createAttractTuningPanel(options: {
       control.step,
       control.value,
       (value) => {
-        readout.textContent = `${control.label}: ${value}`;
+        show(value);
         control.onChange(value);
       },
     );
@@ -151,8 +159,9 @@ export function createAttractTuningPanel(options: {
   reset.type = "button";
   reset.textContent = "Copy values";
   reset.addEventListener("click", () => {
-    // Paste these into `defaultAttractTuning` when the feel is right.
-    const text = JSON.stringify(tuning, null, 2);
+    // Paste these into `defaultAttractTuning` (and the composing trait's own defaults, for the
+    // extra controls) when the feel is right.
+    const text = JSON.stringify({ ...tuning, controls: extras }, null, 2);
     void navigator.clipboard?.writeText(text);
     reset.textContent = "Copied";
     window.setTimeout(() => (reset.textContent = "Copy values"), 1200);

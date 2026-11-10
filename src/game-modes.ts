@@ -254,14 +254,25 @@ export const projectLinks: readonly PanelLink[] = [
 ];
 
 /**
- * The game's block title, on the title and pause menus. Its motion is slow: a smooth 32 s
- * precession, no tilt on the beat, and one brief pulse up each bar, on the downbeat.
+ * The game's block title, on the title and pause menus, as tuned in dev7: a 6 s precession,
+ * the two words 67° apart in it, no tilt on the beat, and one quick raised-cosine bump each
+ * bar (a fifth of the bar long) around the downbeat.
  */
 const titleBlocks: BlockTitleConfig = {
   text: "Poker Blocks",
-  scale: 1,
-  precession: { seconds: 32 },
-  dance: { bounceCycle: "bar", bounceShape: "pulse", bounce: 0.008, tilt: 0 },
+  scale: 0.85,
+  precession: { seconds: 6, angle: 8.5, phaseDegrees: 67 },
+  dance: {
+    bounceCycle: "bar",
+    bounceShape: "sine",
+    bounceWindow: 0.2,
+    bounceAttack: 0.2,
+    bounce: 0.034,
+    bounceTimeSpread: 0.03,
+    bounceAngleSpread: 5.5,
+    restAngleSpread: 0.8,
+    tilt: 0,
+  },
 };
 
 /**

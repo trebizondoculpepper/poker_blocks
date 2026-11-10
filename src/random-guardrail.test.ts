@@ -24,6 +24,8 @@ const allowed: Readonly<Record<string, string>> = {
   "src/tools/listening-room/main.ts": "a developer tool outside the game",
   "src/attract-scene.ts":
     "the title's cosmetic attract sequence: must not touch the session stream",
+  "src/block-title-view.ts":
+    "the block title's cosmetic bounce messiness: presentation, must not touch the session stream",
   // These take an injected `random` and the session always supplies its own stream. The
   // default only covers a caller that has no session (a test fixture, a scratch dealer).
   "src/deal.ts": "default for a caller with no session; the game passes the stream",
