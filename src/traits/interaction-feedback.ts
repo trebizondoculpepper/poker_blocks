@@ -56,7 +56,9 @@ export const disabledAppearance = defineTrait({
     });
     const stopMount = block.on("presentation.mount", (payload) => {
       for (const material of (payload as PresentationMount).materials) {
+        // oxlint-disable-next-line typescript/unbound-method -- explicitly called with material and restored on disposal
         const compile = material.onBeforeCompile;
+        // oxlint-disable-next-line typescript/unbound-method -- explicitly called with material and restored on disposal
         const cache = material.customProgramCacheKey;
         const key = cache.call(material);
         material.onBeforeCompile = (shader, renderer) => {

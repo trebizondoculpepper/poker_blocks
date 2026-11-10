@@ -556,6 +556,7 @@ The deck view is its own scene, `deck`, pushed by the `openDeck` navigation acti
 `createLetterBlock(character, { material?, random?, size? })` creates one grapheme on every face. `createWord(text, options)` returns a rigid group of letters and reserves space for whitespace. Material selection enumerates the registered material pool (including experiments); callers can supply a seeded scene random source. Each choice is retained on the created letter and never rerolled during rendering. Dispose the returned visual on scene exit.
 
 Material definitions own `lettering` font/fallback/weight data. Fonts are bundled under `src/assets/fonts/` with licenses and loaded before canvas painting. Card faces keep their existing typography. The shared `textFaceArt` uses measured multi-line layout for colour, relief and transparent skin layers. Glyphs beyond the bundled Latin fonts use platform fallback.
+
 ## Block faces (#292, epic #291)
 
 A block's **geometry and material** come from its material definition; what is **printed on its faces** is its **face art** (`src/visual/face-art.ts`), passed to `createBlockAppearance`. The renderer never knows what the art is (a guardrail test checks it names no card fields). It asks the art to paint itself, centred on a face, for each layer a material needs:
@@ -565,3 +566,11 @@ A block's **geometry and material** come from its material definition; what is *
 - the **skin** of see-through materials (fire, ice, crystal), on front faces.
 
 A pen turns an **ink tone** (`red`, `black`) into the layer's colour: the art picks the tone (a card takes it from its suit's `tone` data), the material picks the colour. The art's `seed` also seeds the material's noise, so a block looks the same every time. Cards use `cardFaceArt` (rank above suit, centred; owner decision: everything centred for now). Letter blocks (#293) add their own face art without touching the renderer.
+
+### Menu word cubes (#302)
+
+`createWordCube(label, { id, action, material?, random?, size?, enabled?, description?, feedback? })` returns an outer scene-owned group, a core `Block`, the retained material, and a disposer. Labels share the text-face provider and material fonts with letter blocks, wrap/resize to fit, and appear identically on six faces. Geometry is a cube. This factory does not bind DOM listeners or implement a menu scene.
+
+Compose `menuAction`, `interactionFeedback`, `disabledAppearance`, and `inspectableTrait` to obtain the behavior. An input owner hit-tests the cube and emits `input.enter/leave/press/release/cancel`; `input.enabled` changes availability and cancels an in-progress press. Only a completed enabled press/release emits `menu.action` with the configured opaque action. The scene listens and dispatches it. Hover/tap inspection uses the existing inspectable capability and emits `inspection` text. A disabled tap reports denial and can still be inspected. No label or action string chooses behavior in generic code.
+
+The scene updates the core block each frame. Feedback modifies only an inner group, leaving the outer scene animation intact. Reduced motion suppresses hover/press transforms through feedback configuration. Disabled presentation desaturates the rendered colour through a shared material filter; it changes no material definition or source texture. Dispose on scene exit to remove listeners and free rendering resources. The separate developer audition room is #303.

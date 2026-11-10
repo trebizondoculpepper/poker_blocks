@@ -18,7 +18,7 @@ export const graphemes = (text: string): string[] =>
     (s) => s.segment,
   );
 
-/** Wrap explicit lines and long words to the available width at the current font size. */
+/** Wrap explicit lines at word boundaries to the available width at the current font size. */
 export function wrapText(
   g: Pick<CanvasRenderingContext2D, "measureText">,
   text: string,
@@ -27,11 +27,11 @@ export function wrapText(
   return text.split("\n").flatMap((paragraph) => {
     const lines: string[] = [];
     let line = "";
-    for (const character of graphemes(paragraph)) {
-      const next = line + character;
+    for (const word of paragraph.trim().split(/\s+/u)) {
+      const next = line ? `${line} ${word}` : word;
       if (line && g.measureText(next).width > width) {
-        lines.push(line.trimEnd());
-        line = character.trimStart();
+        lines.push(line);
+        line = word;
       } else line = next;
     }
     lines.push(line);

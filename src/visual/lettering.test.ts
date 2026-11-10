@@ -20,6 +20,17 @@ describe("block lettering", () => {
       expect(result.lines.every((line) => g.measureText(line).width <= 208)).toBe(true);
     }
   });
+  it("shrinks a single word instead of splitting it", () => {
+    const g = {
+      font: "",
+      measureText(text: string) {
+        return { width: text.length * parseFloat(this.font.split(" ")[1]!) * 0.7 };
+      },
+    };
+    expect(fitText(g as CanvasRenderingContext2D, "Cancel", defaultLettering).lines).toEqual([
+      "Cancel",
+    ]);
+  });
   it("includes every registered material with a default font", () => {
     const materials = materialPools.get("registered")();
     materials.forEach((definition, index) => {
