@@ -1178,7 +1178,8 @@ body,
   z-index: 12;
   inset: 0;
   display: grid;
-  align-content: center;
+  /* Safe: when the deck overflows a short screen, it starts at the top and scrolls. */
+  align-content: safe center;
   justify-items: center;
   gap: 12px;
   padding: max(24px, env(safe-area-inset-top)) 16px 24px;

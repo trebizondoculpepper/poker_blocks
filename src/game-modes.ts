@@ -226,6 +226,7 @@ export const sceneDefinitions = [
     traits: {
       tableBackground: {},
       deckView: {},
+      enterSound: { sfx: "ui.click" },
       pausesBelow: { input: true, update: true },
       keyAction: { key: "Escape", action: "back", sfx: "ui.back" },
     },
