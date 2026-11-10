@@ -1109,9 +1109,10 @@ body,
 .scene .hud-frame[data-layout="portrait"] {
   /* minmax(0, …) so wide content in one column never pushes the other off screen. */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  /* Both bands are capped by the height, so a short screen still fits status and controls. */
+  /* Both bands are capped by the height, so a short screen still fits status and controls; the
+     rack band never drops below the compact rack (about 80px below the frame edge). */
   grid-template-rows:
-    min(var(--hud-rack-band), 20vh) auto 1fr auto
+    min(var(--hud-rack-band), max(20vh, 80px)) auto 1fr auto
     min(max(96px, calc(22vw + 12px)), 24vh);
   grid-template-areas:
     "top-center top-center"
@@ -1125,9 +1126,6 @@ body,
 .scene .hud-frame[data-layout="portrait"] .hud-zone {
   flex-wrap: wrap;
   min-width: 0;
-}
-.scene .hud-frame[data-layout="portrait"] :is([data-zone="top-right"], [data-zone="bottom-right"]) {
-  flex-wrap: wrap-reverse;
 }
 
 /*
