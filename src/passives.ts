@@ -120,6 +120,44 @@ const coinsPerBlock = (on: string, where: HandlerConfig, amount: number): EventR
   effects: [{ id: "add-coins-per-selected", config: { amount } }],
 });
 
+/**
+ * A die (#97): a scoring passive whose amount is a registered `roll` value source, added to every
+ * scored line after the zero clamp. Faces read 1 to `sides` (pips on a six-sided die), so
+ * opposite faces sum to `sides + 1`.
+ */
+function die(options: {
+  id: string;
+  name: string;
+  sides: number;
+  shape: string;
+  unlockRound: number;
+  basePrice: number;
+  pips?: boolean;
+}): PassiveDefinition {
+  const { id, name, sides, shape, unlockRound, basePrice, pips } = options;
+  return {
+    id,
+    shop: { basePrice, unlockRound, frequency: "additiveScoring" },
+    categoryTrait: { scoringCategory: { operations: ["additive"] } },
+    name,
+    symbol: name,
+    description: `Rolls 1–${sides} once each time lines score, and adds the roll to every scored line. Unlimited use.`,
+    traitId: "passive.event-rules",
+    shape,
+    faces: Array.from({ length: sides }, (_, index) =>
+      pips ? { label: String(index + 1), pips: index + 1 } : { label: String(index + 1) },
+    ),
+    eventRules: [
+      {
+        on: "score.afterLineClamp",
+        select: { id: "scored-line", config: {} },
+        where: { id: "always", config: {} },
+        effects: [{ id: "add-line-score", config: { amount: { valueSource: "roll", sides } } }],
+      },
+    ],
+  };
+}
+
 const definitions: PassiveDefinition[] = [
   {
     id: "do-nothing",
@@ -277,6 +315,12 @@ const definitions: PassiveDefinition[] = [
       },
     ],
   },
+  // Dice (#97): scoring passives whose amount is a roll. Each rolls once per scoring
+  // resolution, and the same result is added to every scored line after its zero clamp.
+  die({ id: "d6", name: "D6", sides: 6, shape: "cube", unlockRound: 1, basePrice: 4, pips: true }),
+  die({ id: "d8", name: "D8", sides: 8, shape: "octahedron", unlockRound: 2, basePrice: 5 }),
+  die({ id: "d10", name: "D10", sides: 10, shape: "d10", unlockRound: 3, basePrice: 6 }),
+  die({ id: "d20", name: "D20", sides: 20, shape: "icosahedron", unlockRound: 4, basePrice: 9 }),
 ];
 for (const definition of definitions) passiveDefinitions.register(definition.id, definition);
 

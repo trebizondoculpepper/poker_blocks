@@ -43,6 +43,12 @@ const cardSource = (
  */
 const linePhases = ["score.lineMultiply", "score.linePower", "score.beforeLineFinalized"];
 
+/**
+ * After a line's score is clamped at zero: a flat bonus here (a die's roll, #97) is added to
+ * every scored line and can never rescue a negative one.
+ */
+const afterClampPhase = "score.afterLineClamp";
+
 /** Each source's event rules subscribed to `on`, in source order then listed order. */
 function subscribedRules(
   sources: readonly RuleSource[],
@@ -88,9 +94,18 @@ export function scoreFieldWithPassives(
   field: readonly PlacedBlock[],
   rack: readonly PassiveBlock[],
   rulesForCard: (block: CardBlock) => EventRule[] = cardScoringRules,
+  random: () => number = noRandomSource,
 ): PassiveScoredLine[] {
   const lines = findScoringLines(field);
-  const passives = rack.map(passiveSource);
+  // One resolution: each passive's value sources (a die's roll) resolve once, here, before any
+  // candidate hand is evaluated, and the same values apply to every line (#97).
+  const passives = rack.map((passive) => {
+    const source = passiveSource(passive);
+    return {
+      ...source,
+      rules: source.rules.map((rule) => ruleHandlers.resolveValues(rule, random)),
+    };
+  });
   return lines.map((line) => {
     const intersections = crossingCells(line, lines);
     // Evaluate: a block's value is the same in every candidate, so each is worked out once.
@@ -119,19 +134,32 @@ export function scoreFieldWithPassives(
       },
       { value: result.points, activations: [] as RuleActivation[] },
     );
+    // The line is clamped at zero, then the after-clamp phase adds its flat bonuses.
+    const clamped = Math.max(0, phases.value);
+    const after = evaluateRules(
+      subscribedRules(sources, afterClampPhase),
+      { type: afterClampPhase, score: { line, intersections } },
+      clamped,
+    );
     // Commit: the chosen hand's contributing blocks, then the line phases.
     const activations = [
       ...result.contributingIds.flatMap((id) => evaluated.get(id)!.activations),
       ...phases.activations,
+      ...after.activations,
     ];
     return {
       line,
       blockIds: line.blocks.map(({ id }) => id),
       ...result,
-      points: Math.max(0, Math.round(phases.value)),
+      points: Math.max(0, Math.round(after.value)),
       activations,
     };
   });
+}
+
+/** For callers without the run's random source: fine until a rule tries to draw from it. */
+function noRandomSource(): number {
+  throw new Error("This rule draws a random value: pass the run's random source");
 }
 
 /** How many of a line's cells another line on a different axis also passes through. */
