@@ -53,7 +53,11 @@ export type SceneHost = {
     bin: Pick<BinView, "discardBinEntered" | "sellBinEntered">;
     input: Pick<
       TableInput,
-      "cancelGestures" | "enableDropTarget" | "enableDragSource" | "enableBoardGestures"
+      | "cancelGestures"
+      | "enableDropTarget"
+      | "enableDragSource"
+      | "enableSelectSource"
+      | "enableBoardGestures"
     >;
     shop: ShopView;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
@@ -233,6 +237,20 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
   });
   const rackSources = new WeakMap<object, () => void>();
+  // While a scene shows, a click selects from the sources its `selectable` data names (#276).
+  const selectEnabled = new WeakMap<object, (() => void)[]>();
+  behaviours.register("selectable", {
+    enter({ services }, config) {
+      selectEnabled.set(
+        config,
+        config.sources.map((source) => services.input.enableSelectSource(source)),
+      );
+    },
+    exit(_context, config) {
+      selectEnabled.get(config)?.forEach((disable) => disable());
+      selectEnabled.delete(config);
+    },
+  });
   behaviours.register("passiveRackView", {
     enter({ services }, config) {
       services.rack.viewEntered(true, services.run.rackCapacity());

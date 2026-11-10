@@ -184,6 +184,7 @@ Material appearance is defined on each material definition in `src/materials.ts`
   - the target shows **hover** feedback;
   - on **drop**, the target commits to the model; a rejected drop triggers the target's **reject** feedback.
 - **Our code is a thin adapter.** `src/drag-drop.ts` (the drag-and-drop manager today; an adapter over dnd-kit after #282) and `src/table-input.ts` turn traits into dnd-kit draggables and droppables, and the board into use-gesture handlers. They never name an owner, a scene or a kind of block: what a scene allows is exactly the set of owners its traits register. The input holds **no scene switches** (#278, guarded by `hand-bin-composition.test.ts`): it reaches hand blocks only while the renderer shows the hand (`handShown`), and the bin's presentation (shown, Discard or Sell) is `src/bin-view.ts`, driven by the `discardBin` and `sellBin` traits. `setFieldActive` and the `fieldPlacement` trait went with #274.
+- **Selection** (`selectable` trait, #276): what a click selects. The trait names **select sources** in order (play scenes and the shop: `hand`, then `field`); each answers the block under a point, and the block's own traits decide whether it toggles. Dragging a selected hand block carries the whole selection.
 - **Model first** (#272). Input commits to the model immediately; animation catches up. No input is held back for an animation.
 - **Browser behaviour** (#267, #283).
   - Pointer capture can be lost before the release arrives, so a drag that loses capture waits briefly for its release before cancelling. That has to stay true through both libraries: #282 checks dnd-kit's pointer sensor, and #275 checks use-gesture.
@@ -555,3 +556,12 @@ The deck view is its own scene, `deck`, pushed by the `openDeck` navigation acti
 `createLetterBlock(character, { material?, random?, size? })` creates one grapheme on every face. `createWord(text, options)` returns a rigid group of letters and reserves space for whitespace. Material selection enumerates the registered material pool (including experiments); callers can supply a seeded scene random source. Each choice is retained on the created letter and never rerolled during rendering. Dispose the returned visual on scene exit.
 
 Material definitions own `lettering` font/fallback/weight data. Fonts are bundled under `src/assets/fonts/` with licenses and loaded before canvas painting. Card faces keep their existing typography. The shared `textFaceArt` uses measured multi-line layout for colour, relief and transparent skin layers. Glyphs beyond the bundled Latin fonts use platform fallback.
+## Block faces (#292, epic #291)
+
+A block's **geometry and material** come from its material definition; what is **printed on its faces** is its **face art** (`src/visual/face-art.ts`), passed to `createBlockAppearance`. The renderer never knows what the art is (a guardrail test checks it names no card fields). It asks the art to paint itself, centred on a face, for each layer a material needs:
+
+- the **colour** print, in the material's ink;
+- the **relief** stamp pressed into height maps (steel, wood, gold);
+- the **skin** of see-through materials (fire, ice, crystal), on front faces.
+
+A pen turns an **ink tone** (`red`, `black`) into the layer's colour: the art picks the tone (a card takes it from its suit's `tone` data), the material picks the colour. The art's `seed` also seeds the material's noise, so a block looks the same every time. Cards use `cardFaceArt` (rank above suit, centred; owner decision: everything centred for now). Letter blocks (#293) add their own face art without touching the renderer.
