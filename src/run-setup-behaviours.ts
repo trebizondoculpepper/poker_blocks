@@ -27,9 +27,9 @@ export function createRunSetupRegistry(
     requiresSavedSeed: true,
     // A new run deals from a fresh seed, which it records; Continue passes that seed back,
     // so a resumed run gets the same mix.
-    deck: (context, _config, services) => {
+    deck: (context, { pool }, services) => {
       const seed = context.seed ?? services.newSeed();
-      return { deck: makeDevDeck(seed), seed };
+      return { deck: makeDevDeck(seed, pool), seed };
     },
   });
 

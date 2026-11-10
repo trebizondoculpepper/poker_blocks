@@ -54,3 +54,22 @@ describe("filled vessel (#227)", () => {
     }
   });
 });
+
+describe("experimental materials in developer decks", () => {
+  it("are dealt from the registered pool (dev0), never from the gameplay pool", async () => {
+    const { makeDevDeck } = await import("../materials");
+    const { gameModeFor } = await import("../game-modes");
+    const kinds = (deck: readonly { traits: { material?: { kind: string } } }[]) =>
+      new Set(deck.map(({ traits }) => traits.material?.kind));
+    expect(kinds(makeDevDeck(7)).has("custard")).toBe(false);
+    const registered = kinds(makeDevDeck(7, "registered"));
+    for (const { id } of [...materialDefinitions, ...experimentalMaterials])
+      expect(registered.has(id), id).toBe(true);
+    expect(gameModeFor("dev0").runSetup).toContainEqual({
+      step: "materialDeck",
+      pool: "registered",
+    });
+    // The normal game deals no developer deck at all.
+    expect(gameModeFor("game").runSetup.some(({ step }) => step === "materialDeck")).toBe(false);
+  });
+});
