@@ -53,6 +53,17 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | `round.cleared`                                     | The running total reaches the target score                                                                                             | generated |
 | `round.failed`                                      | Plays run out before the target is reached                                                                                             | generated |
 
+### Sound families by magnitude (#235)
+
+Some sounds come in sizes. Each size is still its own registered sound (its own id, prompt and files), and `src/audio/sfx-families.ts` groups them into a **family**. A caller asks for a family at a magnitude: `familySfx("score.magnitude", points)`. The resolver is generic and never names a family.
+
+- **Variants:** each variant covers magnitudes from its `from` up to the next variant's `from`. The variants are in ascending order, and the top one is open-ended (+Infinity takes it).
+- **Outside the family:** a magnitude below the first variant's `from`, or NaN, resolves to `null`, which means no sound.
+- **Checks:** every variant must be a registered sound id, in ascending order. `src/audio/sfx-families.test.ts` checks each family's boundaries and the outside rule.
+- **One-off sounds:** these stay plain registry entries, played with `playSfx(id)` as before.
+
+The first family is `score.magnitude` (#1). Its bands start at 1, 10, 100, 1,000, 10,000, 100,000 and 1,000,000 points, keep the same ids and generated audio, and are what `magnitudeSfxFor` now resolves through.
+
 ## Modifiers and materials
 
 | Id                            | Plays when                                                                   | Status                    |

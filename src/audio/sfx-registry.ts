@@ -9,6 +9,10 @@
  * A `prompt` is welcome if one comes to mind; otherwise it is written when audio is made.
  * Reuse an existing id when the action should sound the same (e.g. `action.denied`).
  *
+ * FAMILIES: related sounds that differ by size (score bands, say) are still registered here one
+ * by one, and grouped as a family in `src/audio/sfx-families.ts`; callers then ask for
+ * `familySfx(family, magnitude)` and get the right id back (#235).
+ *
  * Audio lives in `src/assets/sfx/<id>.<take>.mp3` and is committed. See doc/sound_design.md.
  */
 export type SoundEffect = {
