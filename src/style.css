@@ -1448,3 +1448,26 @@ body,
   cursor: pointer;
   pointer-events: auto;
 }
+
+/* How many hand blocks are selected, while a drag would carry more than one (#305). */
+.selection-badge {
+  position: absolute;
+  left: 50%;
+  bottom: 168px;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border: 2px solid #65f4dd;
+  border-radius: 999px;
+  background: #10201ae6;
+  color: #e9fffb;
+  font:
+    700 14px/1.2 system-ui,
+    sans-serif;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.selection-badge[hidden] {
+  display: none;
+}

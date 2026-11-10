@@ -49,6 +49,7 @@ function recordingHost() {
         show: (panel) => void (shown.add(panel), calls.push(`show:${panel}`)),
         hide: (panel) => void (shown.delete(panel), calls.push(`hide:${panel}`)),
       },
+      selectionBadge: { handEntered: (entered) => void calls.push(`badge:${entered}`) },
       bin: {
         discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
         sellBinEntered: (entered) => void calls.push(`sellBin:${entered}`),
@@ -186,7 +187,7 @@ describe("scene traits own their behaviour", () => {
 
     scenes.switchTo("stage");
     // The input reaches the hand through the renderer's handShown (#278): no switch of its own.
-    expect(calls).toEqual(["hand:true", "bin:true"]);
+    expect(calls).toEqual(["hand:true", "badge:true", "bin:true"]);
     calls.length = 0;
     scenes.push("menu");
     scenes.pop();
@@ -196,6 +197,8 @@ describe("scene traits own their behaviour", () => {
       "bin:false",
       "hand:false",
     ]);
+    // The selection badge leaves with the hand (#305).
+    expect(calls).toContain("badge:false");
   });
 
   it("enables its drag sources while its scene shows, through menus, and never leaks one (#282)", () => {

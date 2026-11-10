@@ -1,3 +1,4 @@
+import { createLaserOutline, type LaserOutlineConfig } from "../visual/laser-outline";
 /**
  * The first-play prompt (#203): the ghost cube that invites a stage's first play. Everything it
  * does lives here, configured by the scene's `firstPlayPrompt` data:
@@ -22,6 +23,7 @@ import type { Cell } from "../traits/attachable";
 export type FirstPlayPromptConfig = {
   /** The ghost's colour (hex). */
   colour: number;
+  laser?: Partial<LaserOutlineConfig>;
   /** The idle pulse's period, in seconds. */
   pulseSeconds: number;
   /** While a dragged block is over the cell. */
@@ -78,17 +80,16 @@ export type FirstPlayTable = {
 type Ghost = {
   mesh: THREE.Mesh;
   fill: THREE.MeshBasicMaterial;
-  edges: THREE.LineBasicMaterial;
+  edges: ReturnType<typeof createLaserOutline>;
   dispose(): void;
 };
 
-function createGhost(size: number, colour: number): Ghost {
+function createGhost(size: number, colour: number, laser?: Partial<LaserOutlineConfig>): Ghost {
   const geometry = new THREE.BoxGeometry(size, size, size);
-  const edgeGeometry = new THREE.EdgesGeometry(geometry);
   const fill = new THREE.MeshBasicMaterial({ color: colour, transparent: true, depthWrite: false });
-  const edges = new THREE.LineBasicMaterial({ color: colour, transparent: true });
+  const edges = createLaserOutline(geometry, colour, size, laser);
   const mesh = new THREE.Mesh(geometry, fill);
-  mesh.add(new THREE.LineSegments(edgeGeometry, edges));
+  mesh.add(edges.object);
   mesh.renderOrder = 11;
   return {
     mesh,
@@ -96,7 +97,6 @@ function createGhost(size: number, colour: number): Ghost {
     edges,
     dispose() {
       geometry.dispose();
-      edgeGeometry.dispose();
       fill.dispose();
       edges.dispose();
     },
@@ -142,7 +142,7 @@ export function firstPlayPrompt<
   return {
     enter({ services: { firstPlay } }, config) {
       const state: PromptState = {
-        ghost: createGhost(firstPlay.cubeSize, config.colour),
+        ghost: createGhost(firstPlay.cubeSize, config.colour, config.laser),
         cell: null,
         lastCell: null,
         fieldCount: firstPlay.fieldCount(),
@@ -180,12 +180,15 @@ export function firstPlayPrompt<
       if (!state) return;
       state.time += dt;
       const still = firstPlay.reducedMotion();
+      state.ghost.edges.update(state.time, still);
+      state.burst?.ghost.edges.update(state.time, still);
 
       // Release: the field has just gained its first block where the prompt was.
       const count = firstPlay.fieldCount();
       if (state.fieldCount === 0 && count > 0 && state.lastCell) {
         endBurst(firstPlay, state);
-        const ghost = createGhost(firstPlay.cubeSize, config.colour);
+        const ghost = createGhost(firstPlay.cubeSize, config.colour, config.laser);
+        ghost.edges.update(state.time, still);
         firstPlay.placeObject(ghost.mesh, state.lastCell);
         state.burst = { ghost, elapsed: 0 };
         state.lastCell = null;
@@ -197,7 +200,7 @@ export function firstPlayPrompt<
         const eased = 1 - (1 - progress) ** 3;
         state.burst.ghost.mesh.scale.setScalar(still ? 1 : 1 + config.release.growth * eased);
         state.burst.ghost.fill.opacity = config.armed.opacity[1] * (1 - progress);
-        state.burst.ghost.edges.opacity = 1 - progress;
+        state.burst.ghost.edges.material.opacity = 1 - progress;
         if (progress >= 1) endBurst(firstPlay, state);
       }
 
@@ -219,7 +222,7 @@ export function firstPlayPrompt<
         const [dim, bright] = config.armed.opacity;
         ghost.mesh.scale.setScalar(still ? 1 : low + (high - low) * beat);
         ghost.fill.opacity = dim + (bright - dim) * beat;
-        ghost.edges.opacity = 1;
+        ghost.edges.material.opacity = 1;
         return;
       }
       // Idle: its own slow pulse in the glow; the dance, when the music plays, moves its size.
@@ -229,7 +232,7 @@ export function firstPlayPrompt<
       const { level, energy } = state.move;
       ghost.mesh.scale.setScalar(1 + (config.dance?.swell ?? 0) * level * energy);
       ghost.fill.opacity = 0.18 * pulse;
-      ghost.edges.opacity = pulse;
+      ghost.edges.material.opacity = pulse;
     },
   };
 }

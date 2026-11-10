@@ -69,7 +69,7 @@ A block with the `selectable` trait can respond to a player click or tap. The tr
 
 The current serialized block shape uses trait keys. `block-trait-behaviours.ts` resolves those keys through registered behavior objects owned by the trait modules. Selection, cursor, drag eligibility, attachable faces, destruction causes, and transparency handover call the resulting capabilities without inspecting which trait provided them. A new trait can register a capability without changing those consumers. This is a transition toward the definition-object model above; the trait key is only a registry lookup, never a branch in the caller.
 
-The current visual cue is face illumination only. Selection does not change a block's size or position, so connected cubes remain aligned. True bloom remains an option if a softer glow is wanted later.
+The visual cues (owner decision on #305) are face illumination and an **outline**: a selected block's edges turn the accent cyan. A selected **hand** block also **lifts** a little above the others (instantly under reduced motion), and with two or more hand blocks selected a "N selected" badge shows over the hand, so a drag that carries the whole selection is never a surprise. Selection never changes a block's size, and a **table** block never moves, so connected cubes remain aligned; only loose hand blocks lift. True bloom remains an option if a softer glow is wanted later.
 
 What an operation does to the selected cards is still to be decided.
 
@@ -586,3 +586,9 @@ Each row joins the existing dance floor with a configured beat cycle and phase o
 ### Title and pause composition (#310)
 
 The title and pause scene definitions compose `blockTitle` with identical text and scale 1. The composition root supplies the scene host as the mounting surface, outside the HTML menu overlay. CSS stacks the menu wash, block-title canvas, and menu panels/footer in that order, with the menu in front of the blocks. Only the last mounted title is visible when scenes stack. The menu markup no longer draws the old text headings. The block view supplies a labelled heading and an aria-hidden decorative canvas. Neither menu services nor the title renderer branch on the scene to choose a title or scale.
+
+### Smoke-modulated laser outlines (#318)
+
+`createLaserOutline(geometry, colour, size, config?)` is a reusable presentation effect, composed into the first-play prompt and placement-preview visuals. It builds a narrow core and wider soft halo from merged edge tubes. Both passes share uniforms, and placement-preview clones share their geometry/materials. There is no particle or fluid simulation and no gameplay state in the effect.
+
+A four-dimensional gradient-noise field uses quintic interpolation. Its three spatial coordinates drift through the block-local edge positions while its fourth coordinate advances independently: the bright smoke patches evolve even with drift set to zero. Two octaves modulate brightness. Configuration controls frequency, drift velocity, evolution speed, and core/halo radii relative to object size. The caller supplies elapsed seconds and its existing opacity; reduced motion freezes noise time while opacity and placement feedback continue. The effect owns its generated tube geometry and shader materials and leaves its input geometry alone. Release fades and scene cleanup dispose the effect through its existing owner.

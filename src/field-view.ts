@@ -1,3 +1,4 @@
+import { createLaserOutline } from "./visual/laser-outline";
 /**
  * Field service: the blocks placed on the table and what is drawn around them. It keeps
  * each placed cube in its cell and the structure's centre of mass (the board rotates about
@@ -132,9 +133,8 @@ export function createFieldView(options: {
   const ghost = new THREE.Mesh(ghostGeometry, ghostMaterial);
   ghost.visible = false;
   assembly.add(ghost);
-  const ghostEdgeGeometry = new THREE.EdgesGeometry(ghostGeometry);
-  const ghostEdgeMaterial = new THREE.LineBasicMaterial({ color: 0x65f4dd, transparent: true });
-  ghost.add(new THREE.LineSegments(ghostEdgeGeometry, ghostEdgeMaterial));
+  const ghostEdges = createLaserOutline(ghostGeometry, 0x65f4dd, cubeSize);
+  ghost.add(ghostEdges.object);
   /** Extra outlines for the rest of a line being placed (the first cell uses `ghost`). */
   const lineGhosts: THREE.Mesh[] = [];
 
@@ -298,6 +298,7 @@ export function createFieldView(options: {
       }
     },
     update(now, reducedMotion = false) {
+      ghostEdges.update(now / 1000, reducedMotion);
       for (let index = tints.length - 1; index >= 0; index--) {
         const tint = tints[index];
         const progress = Math.min(1, (now - tint.startedAt) / 1000 / tintSeconds);
@@ -337,8 +338,7 @@ export function createFieldView(options: {
     dispose() {
       ghostGeometry.dispose();
       ghostMaterial.dispose();
-      ghostEdgeGeometry.dispose();
-      ghostEdgeMaterial.dispose();
+      ghostEdges.dispose();
       faceGeometry.dispose();
       faceMaterial.dispose();
     },
