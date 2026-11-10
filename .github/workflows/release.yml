@@ -56,6 +56,14 @@ jobs:
             echo "The commit to release is not on main; release only ever follows main" >&2
             exit 1
           fi
+          # A draft left by an interrupted publish isn't a release: remove it (and its tag) and
+          # publish again, before deciding whether this commit is already released.
+          for tag in $(git tag --points-at HEAD --list 'v[0-9]*'); do
+            if [ "$(gh release view "$tag" --json isDraft -q .isDraft 2>/dev/null)" = "true" ]; then
+              gh release delete "$tag" --yes --cleanup-tag
+              git tag -d "$tag" >/dev/null
+            fi
+          done
           last="$(git describe --tags --first-parent --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' HEAD 2>/dev/null || true)"
           if [ "$ITCH_ONLY" = "true" ]; then
             [ -n "$last" ] || { echo "No release to push to itch.io" >&2; exit 1; }
@@ -72,12 +80,18 @@ jobs:
           base="${last#v}"
           [ -n "$base" ] || base="$(node -p "require('./package.json').version")"
           version="$(node --input-type=module -e "import { releaseVersion } from './scripts/versioning.ts'; console.log(releaseVersion(process.argv[1], process.argv[2]))" "$base" "$LEVEL")"
-          # A draft left by an interrupted publish isn't a release: remove it and publish again.
           if [ "$(gh release view "v${version}" --json isDraft -q .isDraft 2>/dev/null)" = "true" ]; then
             gh release delete "v${version}" --yes --cleanup-tag
+            git tag -d "v${version}" >/dev/null 2>&1 || true
           fi
           if gh release view "v${version}" >/dev/null 2>&1; then
             echo "v${version} is already released from another commit" >&2
+            exit 1
+          fi
+          # A bare tag elsewhere would make gh release create attach this build to another commit.
+          if git rev-parse -q --verify "refs/tags/v${version}" >/dev/null &&
+            [ "$(git rev-parse "v${version}^{commit}")" != "$(git rev-parse HEAD)" ]; then
+            echo "Tag v${version} already exists on another commit" >&2
             exit 1
           fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
