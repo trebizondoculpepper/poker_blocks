@@ -8,10 +8,11 @@ import type { BlockMaterial } from "./materials";
 export const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"] as const;
 
 export const suits = [
-  { name: "spades", symbol: "♠", color: "#1c2433" },
-  { name: "hearts", symbol: "♥", color: "#bd3651" },
-  { name: "diamonds", symbol: "♦", color: "#bd3651" },
-  { name: "clubs", symbol: "♣", color: "#1c2433" },
+  // `tone` is the ink a suit is printed in; each material gives each tone its colour.
+  { name: "spades", symbol: "♠", color: "#1c2433", tone: "black" },
+  { name: "hearts", symbol: "♥", color: "#bd3651", tone: "red" },
+  { name: "diamonds", symbol: "♦", color: "#bd3651", tone: "red" },
+  { name: "clubs", symbol: "♣", color: "#1c2433", tone: "black" },
 ] as const;
 
 export type IdentityTrait = {

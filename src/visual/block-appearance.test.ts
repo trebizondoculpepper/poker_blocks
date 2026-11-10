@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { cardFaceArt } from "./face-art";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { standardDeck } from "../cards";
@@ -44,5 +45,10 @@ describe("composed material appearance", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("guardrail (#292): the renderer knows face art only through FaceArt, never a card's fields", () => {
+    const source = readFileSync(new URL("./block-appearance.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/\bIdentityTrait\b|\.rank\b|\.suit\b|from "\.\.\/cards"/);
   });
 });

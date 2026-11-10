@@ -28,7 +28,7 @@ export type FaceArt = {
 
 /** A card's rank above its suit, centred, in its suit's tone. */
 export function cardFaceArt(identity: IdentityTrait): FaceArt {
-  const tone: InkTone = identity.suit.color === "#bd3651" ? "red" : "black";
+  const tone: InkTone = identity.suit.tone;
   return {
     seed: `${identity.rank}-${identity.suit.name}`,
     paint(g, pen) {
