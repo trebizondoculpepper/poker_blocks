@@ -11,6 +11,7 @@
   "beat_tracker_bpm": 68.6,
   "measured_tempo_bpm": 68.7,
   "beats": 224,
-  "tempo_bpm": 137.3896,
-  "note": "Beat tracker read half-time; doubled to the felt tempo."
+  "tempo_bpm": 137.3895,
+  "note": "Beat tracker read half-time; doubled to the felt tempo.",
+  "first_beat_seconds": 0.4425
 }

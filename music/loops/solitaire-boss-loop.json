@@ -11,5 +11,6 @@
   "beat_tracker_bpm": 137.2,
   "measured_tempo_bpm": 138.23,
   "beats": 256,
-  "tempo_bpm": 138.2223
+  "tempo_bpm": 138.2223,
+  "first_beat_seconds": 0.4457
 }
