@@ -25,6 +25,12 @@ export type MaterialDefinition = {
   name: string;
   traits: { transparent?: Record<string, never> };
   /**
+   * How the material sounds when blocks meet (#232). The softer of two materials meeting
+   * decides the attachment sound: `hardness` orders them (higher is harder), `attach` is the
+   * sound, and `character` says in words how it sounds.
+   */
+  acoustics: { character: string; hardness: number; attach: SoundEffectId };
+  /**
    * How the material changes a line it contributes to (#141). Left out until the material's
    * scoring is designed: meat, fire and ice wait on #104–#106.
    */
@@ -87,6 +93,7 @@ export const materialDefinitions = [
   {
     id: "paper",
     name: "Paper",
+    acoustics: { character: "flimsy", hardness: 2, attach: "material.attach.paper" },
     traits: {},
     shop: {
       basePrice: 1,
@@ -110,6 +117,7 @@ export const materialDefinitions = [
   {
     id: "wood",
     name: "Wood",
+    acoustics: { character: "knocking", hardness: 3, attach: "material.attach.wood" },
     traits: {},
     shop: {
       basePrice: 3,
@@ -137,6 +145,7 @@ export const materialDefinitions = [
   {
     id: "steel",
     name: "Steel",
+    acoustics: { character: "clanking", hardness: 8, attach: "material.attach.steel" },
     traits: {},
     shop: {
       basePrice: 4,
@@ -162,6 +171,7 @@ export const materialDefinitions = [
   {
     id: "prismatic",
     name: "Prismatic Crystal",
+    acoustics: { character: "ringing", hardness: 10, attach: "material.attach.prismatic" },
     traits: { transparent: {} },
     shop: {
       basePrice: 12,
@@ -209,6 +219,7 @@ export const materialDefinitions = [
   {
     id: "gold",
     name: "Gold",
+    acoustics: { character: "dense", hardness: 7, attach: "material.attach.gold" },
     traits: {},
     shop: { basePrice: 8, weights: [[4, 1]] },
     scoringModifier: { additive: 1 },
@@ -229,6 +240,7 @@ export const materialDefinitions = [
   {
     id: "terracotta",
     name: "Terracotta",
+    acoustics: { character: "dry", hardness: 6, attach: "material.attach.terracotta" },
     traits: {},
     appearance: {
       pattern: "crackedClay",
@@ -245,6 +257,7 @@ export const materialDefinitions = [
   {
     id: "ice",
     name: "Ice",
+    acoustics: { character: "clinking", hardness: 5, attach: "material.attach.ice" },
     traits: { transparent: {} },
     shop: {
       basePrice: 2,
@@ -268,6 +281,7 @@ export const materialDefinitions = [
   {
     id: "meat",
     name: "Meat",
+    acoustics: { character: "squishy", hardness: 1, attach: "material.attach.meat" },
     traits: {},
     shop: {
       basePrice: 6,
@@ -291,6 +305,7 @@ export const materialDefinitions = [
   {
     id: "fire",
     name: "Fire",
+    acoustics: { character: "rattling", hardness: 9, attach: "material.attach.fire" },
     traits: { transparent: {} },
     shop: {
       basePrice: 4,

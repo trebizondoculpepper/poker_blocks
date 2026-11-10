@@ -28,6 +28,11 @@ export type SoundEffect = {
   promptInfluence?: number;
   /** How many takes to generate, so frequent sounds can vary. Default 1. */
   variants?: number;
+  /**
+   * Another sound's id to play until this one has audio of its own (#232), so a new, more
+   * specific sound never makes the game quieter than before.
+   */
+  placeholder?: string;
 };
 
 export const sfxDefaults = { durationSeconds: 0.7, promptInfluence: 0.5, variants: 1 } as const;
@@ -319,6 +324,69 @@ const entries = [
     prompt: "A light, clean porcelain chime, single soft ding, short and bright",
   },
   {
+    id: "material.attach.meat",
+    trigger: "A block lands where meat is the softer of the two materials meeting (#232)",
+    prompt: "Wet, squishy slap of raw meat pressed onto a block, soft and fleshy",
+    durationSeconds: 0.6,
+    placeholder: "card.attach",
+  },
+  {
+    id: "material.attach.paper",
+    trigger: "A block lands where paper is the softer of the two materials meeting (#232)",
+    prompt: "Flimsy papery tap, a stiff card pressed lightly onto a block",
+    durationSeconds: 0.6,
+    placeholder: "card.attach",
+  },
+  {
+    id: "material.attach.wood",
+    trigger: "A block lands where wood is the softer of the two materials meeting (#232)",
+    prompt: "Solid wooden block snapping firmly into place, satisfying chunky click",
+    durationSeconds: 0.6,
+    placeholder: "card.attach",
+  },
+  {
+    id: "material.attach.ice",
+    trigger: "A block lands where ice is the softer of the two materials meeting (#232)",
+    prompt: "Crisp icy clink of a frozen cube set against another block",
+    durationSeconds: 0.6,
+    placeholder: "card.attach",
+  },
+  {
+    id: "material.attach.terracotta",
+    trigger: "A block lands where terracotta is the softer of the two materials meeting (#232)",
+    prompt: "Dry clay knock, a fired pot tile set down firmly",
+    durationSeconds: 0.6,
+    placeholder: "card.attach",
+  },
+  {
+    id: "material.attach.gold",
+    trigger: "A block lands where gold is the softer of the two materials meeting (#232)",
+    prompt: "Dense, warm metallic thunk of a heavy gold ingot settling",
+    durationSeconds: 0.6,
+    placeholder: "card.attach",
+  },
+  {
+    id: "material.attach.steel",
+    trigger: "A block lands where steel is the softer of the two materials meeting (#232)",
+    prompt: "Bright clanking steel plate locking into place",
+    durationSeconds: 0.6,
+    placeholder: "card.attach",
+  },
+  {
+    id: "material.attach.fire",
+    trigger: "A block lands where fire is the softer of the two materials meeting (#232)",
+    prompt: "Iron frame clank with a faint crackle of flame",
+    durationSeconds: 0.6,
+    placeholder: "card.attach",
+  },
+  {
+    id: "material.attach.prismatic",
+    trigger: "A block lands where prismatic is the softer of the two materials meeting (#232)",
+    prompt: "Bright glassy crystal ting, a gem set into a hard setting",
+    durationSeconds: 0.6,
+    placeholder: "card.attach",
+  },
+  {
     id: "material.activate.wood",
     trigger: "A wood card's scoring modifier activates as its line is presented",
   },
@@ -370,6 +438,7 @@ export function sfxFileNames(effect: Pick<SoundEffect, "id" | "variants">): stri
 /** An entry with every generation setting filled in. */
 export function withSfxDefaults(
   effect: SoundEffect,
-): Required<Omit<SoundEffect, "prompt">> & Pick<SoundEffect, "prompt"> {
+): Required<Omit<SoundEffect, "prompt" | "placeholder">> &
+  Pick<SoundEffect, "prompt" | "placeholder"> {
   return { ...sfxDefaults, ...effect };
 }

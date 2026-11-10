@@ -26,7 +26,7 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | `card.drag.snap`   | A valid attachment face comes under the dragged block               | generated |
 | `card.drag.return` | A dragged block is dropped on nothing and returns to the hand       | generated |
 | `card.place.fly`   | A placed block flies to its cell, growing to full size              | generated |
-| `card.attach`      | A placed block lands and locks into its cell                        | generated |
+| `card.attach`      | Placeholder for every `material.attach.*` sound until it has audio  | generated |
 | `discard.hover`    | A dragged block moves over the discard bin                          | generated |
 | `card.discard`     | A block is dropped in the discard bin and dissolves                 | generated |
 | `hand.reorder`     | A hand card or passive is dropped into a new position in its rack   | generated |
@@ -34,6 +34,32 @@ Status: **generated** means the file exists. **Registered** means the entry exis
 | `action.denied`    | An action is refused: no plays or discards left, or an invalid drop | generated |
 | `board.rotate`     | The player drags to rotate the structure (quiet, optional)          | planned   |
 | `card.inspect`     | The hover tooltip opens (very subtle, optional)                     | planned   |
+
+### Attachment sounds by material (#232)
+
+When a block lands, the **softer** of the two materials that meet decides the sound: the landed block's own material, or its softest neighbour's if that is softer. On an empty table the block meets only itself. Each material's `acoustics` data (in `src/materials.ts`) gives a `hardness` (higher is harder), the `attach` sound, and a `character` word. `attachmentSound` in `src/attachment-sound.ts` is the generic resolver and never names a material. When several blocks land together, each distinct sound plays once. Every `material.attach.*` id names `card.attach` as its `placeholder` and plays that sound until its own audio is generated (`npm run sfx -- material.attach.<material>`).
+
+Proposed palette, softest first:
+
+| Hardness | Material   | Character | Sound id                     | Prompt idea                                 |
+| -------- | ---------- | --------- | ---------------------------- | ------------------------------------------- |
+| 1        | Meat       | squishy   | `material.attach.meat`       | wet, squishy slap                           |
+| 2        | Paper      | flimsy    | `material.attach.paper`      | flimsy papery tap                           |
+| 3        | Wood       | knocking  | `material.attach.wood`       | chunky wooden click (today's `card.attach`) |
+| 5        | Ice        | clinking  | `material.attach.ice`        | crisp icy clink                             |
+| 6        | Terracotta | dry       | `material.attach.terracotta` | dry clay knock                              |
+| 7        | Gold       | dense     | `material.attach.gold`       | heavy, warm metallic thunk                  |
+| 8        | Steel      | clanking  | `material.attach.steel`      | bright steel clank                          |
+| 9        | Fire       | rattling  | `material.attach.fire`       | iron frame clank with a faint crackle       |
+| 10       | Crystal    | ringing   | `material.attach.prismatic`  | bright glassy ting                          |
+
+Hardness 4 is kept for **plastic**, which the owner places between wood and gold. That is the custard vessel from #227; it gets its acoustics when that experiment merges.
+
+**For owner review:**
+
+- **Wood (3), below plastic:** as directed.
+- **Ice (5) and terracotta (6):** these are proposals. Both sit between plastic and gold, and either could reasonably be harder than gold.
+- **Fire (9):** sits above steel because its block is an iron frame.
 
 ## Scoring and rounds
 
