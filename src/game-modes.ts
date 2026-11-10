@@ -1,3 +1,4 @@
+import type { DropZoneConfig } from "./drop-zones";
 import type { DevDropInspectorConfig } from "./scene-traits/dev-drop-inspector";
 import type { ActionHistoryConfig } from "./scene-traits/action-history";
 import type { FirstPlayPromptConfig } from "./scene-traits/first-play-prompt";
@@ -43,6 +44,11 @@ export type SceneTraits = {
   /** The shared lower-left target presents Sell, and accepts installed passives only. */
   sellBin: Record<never, never>;
   /** The pulsing outline inviting a stage's first play is shown while this scene is on the stack. */
+  /**
+   * Places carried blocks can be dropped in this scene (#273): each a registered drop zone kind
+   * with a priority (higher is asked first). The zone owns its own decision and preview.
+   */
+  canDragTo: { zones: readonly DropZoneConfig[] };
   /** The ghost cube that invites a stage's first play, and how it looks and responds. */
   firstPlayPrompt: FirstPlayPromptConfig;
   /** The passive rack is shown while this scene is on the stack (#187). */
@@ -172,6 +178,8 @@ const escapeOpensPause: Partial<SceneTraits> = {
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
 const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
+  // The bin takes discards dropped on it; asked before the grid, since it sits over the table.
+  canDragTo: { zones: [{ zone: "discard", priority: 10 }] },
   firstPlayPrompt: {
     colour: 0x65f4dd,
     pulseSeconds: 1.8,

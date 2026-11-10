@@ -50,7 +50,12 @@ export type SceneHost = {
     hud: Pick<HudPanels, "show" | "hide">;
     input: Pick<
       TableInput,
-      "setFieldActive" | "cancelGestures" | "discardBinEntered" | "sellBinEntered" | "handEntered"
+      | "setFieldActive"
+      | "cancelGestures"
+      | "discardBinEntered"
+      | "sellBinEntered"
+      | "handEntered"
+      | "enableDropZone"
     >;
     shop: ShopView;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
@@ -195,6 +200,20 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
   });
   behaviours.register("firstPlayPrompt", firstPlayPrompt<Context>());
+  // While a scene shows, the drop zones its `canDragTo` data names are allowed (#273).
+  const zonesEnabled = new WeakMap<object, (() => void)[]>();
+  behaviours.register("canDragTo", {
+    enter({ services }, config) {
+      zonesEnabled.set(
+        config,
+        config.zones.map((zone) => services.input.enableDropZone(zone)),
+      );
+    },
+    exit(_context, config) {
+      zonesEnabled.get(config)?.forEach((disable) => disable());
+      zonesEnabled.delete(config);
+    },
+  });
   behaviours.register("passiveRackView", {
     enter: ({ services }) => services.rack.viewEntered(true, services.run.rackCapacity()),
     exit: ({ services }) => services.rack.viewEntered(false, services.run.rackCapacity()),
