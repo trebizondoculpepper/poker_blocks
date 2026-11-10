@@ -61,7 +61,7 @@ describe("experimental materials in developer decks", () => {
     const { gameModeFor } = await import("../game-modes");
     const kinds = (deck: readonly { traits: { material?: { kind: string } } }[]) =>
       new Set(deck.map(({ traits }) => traits.material?.kind));
-    expect(kinds(makeDevDeck(7)).has("custard")).toBe(false);
+    for (const { id } of experimentalMaterials) expect(kinds(makeDevDeck(7)).has(id)).toBe(false);
     const registered = kinds(makeDevDeck(7, "registered"));
     for (const { id } of [...materialDefinitions, ...experimentalMaterials])
       expect(registered.has(id), id).toBe(true);

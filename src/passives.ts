@@ -195,7 +195,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "gold-standard",
-    shop: { basePrice: 5, unlockRound: 4, frequency: "even" },
+    shop: { basePrice: 5, unlockRound: 6, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Gold Standard",
     symbol: "$",
@@ -207,7 +207,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "carnivore",
-    shop: { basePrice: 3, unlockRound: 3, frequency: "multiplicativeScoring" },
+    shop: { basePrice: 3, unlockRound: 4, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "Carnivore",
     symbol: "◈",

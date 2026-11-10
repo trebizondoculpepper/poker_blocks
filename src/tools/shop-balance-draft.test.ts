@@ -38,7 +38,7 @@ describe("shop balance draft", () => {
 
   it("keeps passive unlocks aligned with edited material curves", () => {
     const draft = currentShopBalanceDraft();
-    draft.materials.gold!.weights = [[6, 1]];
+    draft.materials.gold!.weights = [[8, 1]];
     expect(validateShopBalanceDraft(draft)).toContainEqual(
       expect.objectContaining({ path: "passives.gold-standard.unlockRound" }),
     );
