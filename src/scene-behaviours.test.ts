@@ -86,6 +86,7 @@ function recordingHost() {
       },
       shop: {
         buyTarget: {} as HTMLElement,
+        dragSource: { pick: () => null, begin: () => {}, move: () => {}, end: () => {} },
         render: (offers: readonly ShopOffer[], visible: boolean) =>
           calls.push(`shop:${visible}:${offers.length}`),
         burnUnsold: () => Promise.resolve(),
@@ -362,7 +363,7 @@ describe("scene traits own their behaviour", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
     scenes.register(scene("stage", { roundPanel: { stage: "S" } }));
-    scenes.register(scene("shop", { shopStock: {} }));
+    scenes.register(scene("shop", { shopStock: { source: "shop" } }));
 
     scenes.switchTo("shop");
     scenes.switchTo("stage");
