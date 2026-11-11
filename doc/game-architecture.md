@@ -367,6 +367,19 @@ Within one card, the material rule runs before the state rule. That invents no o
 
 **Guardrails for #365:** a test that a state bonus leaves rank, suit and hand evaluation unchanged; that a second state replaces the first; that a non-contributing card's bonus does nothing; that the bonus survives the field → deck return, and survives save → Continue; that an unknown saved bonus is rejected; and that no generic code names a state bonus (guardrail scan, as for materials).
 
+### Triggers (#433)
+
+A block can be **triggered**, and responds with configured actions. `src/triggers.ts` holds the contract; it knows nothing about bombs or any other user.
+
+- **Responses** are data on the block's material definition: `triggerable: { responses }`, a list of registered rule commands. A saved card restores them with its material. A block with none ignores a trigger and emits nothing.
+- **Dispatch** is one more rule command, `trigger-block { blockId, cause, path? }`, committed through the shared `commitCommands` path like reactions and passive effects. There is no separate trigger queue.
+- **Snapshot before removal:** before any response runs, the target's block and cell are captured as `trigger.source` and passed to every response, with the `cause` and the chain `path`. A response that removes the block (a future self-destruct, #435), and the responses after it, still know what and where it was.
+- **Order:** responses commit in their listed order. A response that triggers another block does so depth-first, in place, through the same command (propagation is #435).
+- **Cancellation:** a target no longer in the hand or on the table does nothing.
+- **Repeats:** a block already in the chain's `path` is not triggered again by that chain, so a chain never loops. A separate, later trigger starts a new chain.
+- **Events:** each trigger that runs emits `block.triggered` (with its `trigger` context) before its responses' own follow-up events. Presentation listens; it never decides what a trigger does.
+- **Persistence:** a trigger resolves inside one model step, so nothing is pending across a save.
+
 ### Permanent material change (#387)
 
 `changeCardMaterial(state, cardId, material)` in `src/card-material.ts` (and `GameRun.changeCardMaterial`) gives one card a new material for the rest of the run. It finds the card wherever it is (hand, field, deck, discard pile, and the bought-card ledger) and replaces it with a copy carrying the new material, with the same id, rank and suit. `rematerial` first removes the traits the old material's definition brought (a transparent card turned to wood is no longer transparent), then applies the new definition. It returns null and changes nothing when the card isn't in the run or already has that material, so a transmogrifier can refuse such a drop without spending a use.
