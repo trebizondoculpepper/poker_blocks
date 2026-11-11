@@ -161,6 +161,13 @@ const entries = [
     durationSeconds: 0.6,
   },
   {
+    id: "block.self_destruct",
+    name: "Self-destruct",
+    family: "block",
+    description: "A triggered block removes itself from the table (a self-destruct response, #435)",
+    placeholder: "block.destroyed",
+  },
+  {
     id: "action.denied",
     name: "Denied",
     family: "action",

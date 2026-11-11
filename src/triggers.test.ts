@@ -68,6 +68,7 @@ describe("triggerable blocks (#433)", () => {
       cause: "test",
       source: { block: a, cell: at(0) },
       path: [a.id],
+      visited: new Set([a.id]),
     });
   });
 
@@ -134,11 +135,17 @@ describe("triggerable blocks (#433)", () => {
 
   it("carries the chain through the registered command, so a self-trigger can't loop (#475 review)", () => {
     const source = { block: a, cell: at(0) };
-    const parent: TriggerContext = { cause: "test", source, path: [a.id] };
+    const parent: TriggerContext = {
+      cause: "test",
+      source,
+      path: [a.id],
+      visited: new Set([a.id]),
+    };
     expect(inheritedTrigger({ blockId: a.id, cause: "again", trigger: parent })).toEqual({
       blockId: a.id,
       cause: "again",
       path: [a.id],
+      visited: parent.visited,
     });
     // A response on A that triggers A again, through the registered command: A is in its own
     // chain, so the nested trigger does nothing and returns.
