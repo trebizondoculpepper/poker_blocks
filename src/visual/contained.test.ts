@@ -106,7 +106,8 @@ describe("contained components (#330)", () => {
     }
     expect(a.capabilities.liquidSurface!.normal.y).toBeLessThan(0.99);
     expect(b.capabilities.liquidSurface!.normal.y).toBeCloseTo(1, 5);
-    expect(a.capabilities.liquidSurface!.wet(new THREE.Vector3(0, -0.4, 0))).toBeDefined();
+    expect(a.capabilities.liquidSurface!.wet(new THREE.Vector3(0, -0.4, 0))).toBe(true);
+    expect(a.capabilities.liquidSurface!.wet(new THREE.Vector3(0, 0.4, 0))).toBe(false);
   });
 
   it("ordinary atomic materials stay atomic", () => {
