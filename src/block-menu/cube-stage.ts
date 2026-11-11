@@ -70,6 +70,8 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
     cubes.forEach((cube) => cube.dispose());
     cubes = [];
     router.forget();
+    // Blank the canvas too, so a hidden menu leaves no last frame behind (#532 review).
+    renderer.clear();
   }
 
   /** Back the camera off until every position fits, with a cube's margin around them. */
