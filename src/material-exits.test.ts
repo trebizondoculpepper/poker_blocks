@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { fluidLooks } from "./visual/filled-vessel";
 import { containedContents, createInteriorBoundary } from "./visual/contained";
 import "./visual/cloud";
 import { createFireCore } from "./visual/fire-core";
@@ -280,5 +281,27 @@ describe("material exits (#438)", () => {
     expect(mesh.material.fragmentShader).toContain("alpha * opacity");
     mesh.material.opacity = 0.25;
     expect(mesh.material.uniforms.opacity!.value).toBe(0.25);
+  });
+
+  it("earth: the shell breaks apart and earth bursts out in falling particles (#456)", () => {
+    release.mockClear();
+    const v = container();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "earth" }, v, exitOf("earth"));
+    expect(v.root.children.some((child) => child instanceof THREE.Points)).toBe(true);
+    expect(v.root.children.length).toBeGreaterThanOrEqual(2 + 8 + 1);
+    runner.update(0.1);
+    expect((v.contentsMesh.material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.1);
+    // Earth's real soil shader honours its material's opacity, so the fade reaches it.
+    const soil = fluidLooks.get("opaqueFluid")(
+      { surfaceNormal: { value: new THREE.Vector3(0, 1, 0) }, height: { value: 1 } } as never,
+      { fill: 0x5b3a22, surface: 0x6e4a2c },
+    ).material as THREE.ShaderMaterial;
+    expect(soil.fragmentShader).toContain("fill * light, opacity");
+    soil.opacity = 0.2;
+    expect(soil.uniforms.opacity!.value).toBe(0.2);
+    for (let frame = 0; frame < 90; frame++) runner.update(1 / 60);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
   });
 });

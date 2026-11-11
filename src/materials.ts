@@ -487,6 +487,34 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // The shell breaks apart and the earth inside bursts outward in earth-coloured particles that fall on parabolic paths (#456).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                target: "shell",
+                config: { pieces: "shards", colour: 0xe8eef2, opacity: 0.35, life: 0.9, fade: 0.4 },
+              },
+              {
+                effect: "burst",
+                target: "contents",
+                config: {
+                  count: 60,
+                  speed: [1, 2.4],
+                  lift: 1.4,
+                  gravity: 5,
+                  life: 1,
+                  size: 0.07,
+                  colour: 0x6b4a2e,
+                },
+              },
+              { effect: "fade", target: "contents", config: { seconds: 0.08 } },
+            ],
+          },
+        ],
+      },
       pattern: "cardSheet",
       assembly: "contained",
       surface: "clear",
