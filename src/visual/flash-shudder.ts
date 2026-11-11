@@ -4,9 +4,9 @@
  * registered exit effect (src/visual/exit-presentation.ts) for a block that leaves. They decide
  * nothing: the model already has.
  *
- * - **flash { colour, intensity, seconds }:** the target's materials glow toward `colour` and back,
- *   through their emissive colour where they have one. It changes the materials in place and puts
- *   every emissive colour and intensity back exactly when it ends or is stopped.
+ * - **flash { colour, intensity, seconds }:** the target glows `colour` and back, drawn as an
+ *   additive overlay of each mesh's own geometry, so no material is changed, whatever its kind.
+ *   The overlays go when it is disposed.
  * - **shudder { amplitude, seconds, frequency }:** the target object shakes about its own position,
  *   decaying to rest. Only its visual transform moves, never its grid cell; it puts the position
  *   back exactly when it ends or is stopped.
@@ -19,58 +19,61 @@ import { exitEffects, type ExitEffectInstance } from "./exit-presentation";
 export type FlashConfig = { colour?: number; intensity?: number; seconds?: number };
 export type ShudderConfig = { amplitude?: number; seconds?: number; frequency?: number };
 
-/** A material that can glow: one with an emissive colour. */
-type Glowing = THREE.Material & { emissive: THREE.Color; emissiveIntensity: number };
-const glows = (material: THREE.Material): material is Glowing =>
-  (material as Partial<Glowing>).emissive instanceof THREE.Color;
-
-/** Flash the materials under `targets`; restores them exactly when it ends or is disposed. */
+/**
+ * Flash `targets`: each mesh under them gets an overlay, its own geometry drawn again in one shared
+ * additive material whose opacity pulses up and back. Nothing about the original materials changes,
+ * whatever kind they are; ending or disposing removes the overlays and frees the one material.
+ */
 export function createFlash(
   targets: readonly THREE.Object3D[],
   raw: FlashConfig = {},
   reducedMotion = false,
 ): ExitEffectInstance {
-  const colour = new THREE.Color(raw.colour ?? 0xffffff);
-  const intensity = raw.intensity ?? 1.5;
   const seconds = Math.max(raw.seconds ?? 0.25, 1e-3);
-  const saved = new Map<Glowing, { emissive: THREE.Color; emissiveIntensity: number }>();
+  const peak = Math.min(Math.max(raw.intensity ?? 0.8, 0), 1);
+  const glow = new THREE.MeshBasicMaterial({
+    color: raw.colour ?? 0xffffff,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const meshes: THREE.Mesh[] = [];
   for (const target of targets)
     target.traverse((child) => {
-      for (const material of [(child as THREE.Mesh).material ?? []].flat())
-        if (glows(material) && !saved.has(material))
-          saved.set(material, {
-            emissive: material.emissive.clone(),
-            emissiveIntensity: material.emissiveIntensity,
-          });
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) meshes.push(mesh);
     });
+  const overlays = reducedMotion
+    ? []
+    : meshes.map((mesh) => {
+        const overlay = new THREE.Mesh(mesh.geometry, glow);
+        overlay.renderOrder = mesh.renderOrder + 1;
+        mesh.add(overlay);
+        return overlay;
+      });
   let elapsed = reducedMotion ? seconds : 0;
-  const restore = () => {
-    for (const [material, before] of saved) {
-      material.emissive.copy(before.emissive);
-      material.emissiveIntensity = before.emissiveIntensity;
-    }
-  };
-  const show = () => {
-    // Up and back down: a single soft pulse.
-    const glow = Math.sin(Math.PI * Math.min(elapsed / seconds, 1));
-    for (const [material, before] of saved) {
-      material.emissive.copy(before.emissive).lerp(colour, glow);
-      material.emissiveIntensity =
-        before.emissiveIntensity + (intensity - before.emissiveIntensity) * glow;
-    }
+  let removed = false;
+  const remove = () => {
+    if (removed) return;
+    removed = true;
+    overlays.forEach((overlay) => overlay.removeFromParent());
+    glow.dispose();
   };
   return {
     update(delta) {
       if (elapsed >= seconds) return false;
       elapsed = Math.min(elapsed + delta, seconds);
-      show();
+      // Up and back down: a single soft pulse.
+      glow.opacity = peak * Math.sin(Math.PI * (elapsed / seconds));
       return elapsed < seconds;
     },
     finish() {
       elapsed = seconds;
-      restore();
+      glow.opacity = 0;
     },
-    dispose: restore,
+    dispose: remove,
   };
 }
 

@@ -5,39 +5,51 @@ import { createFlash, createShudder } from "./flash-shudder";
 
 const lit = () => new THREE.MeshStandardMaterial({ emissive: 0x112233, emissiveIntensity: 0.2 });
 
+const overlay = (mesh: THREE.Mesh) => mesh.children[0] as THREE.Mesh | undefined;
+
 describe("flash (#441)", () => {
-  it("glows toward its colour and back, then restores every emissive exactly", () => {
+  it("pulses an additive overlay of the mesh up and back, never touching its material", () => {
     const material = lit();
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(), material);
-    const flash = createFlash([mesh], { colour: 0xffffff, intensity: 2, seconds: 1 });
+    const flash = createFlash([mesh], { colour: 0xff0000, intensity: 1, seconds: 1 });
+    const glow = overlay(mesh)!;
+    expect(glow.geometry).toBe(mesh.geometry);
     flash.update(0.5);
-    expect(material.emissiveIntensity).toBeCloseTo(2);
-    expect(material.emissive.getHex()).toBe(0xffffff);
+    const shown = glow.material as THREE.MeshBasicMaterial;
+    expect(shown.opacity).toBeCloseTo(1);
+    expect(shown.color.getHex()).toBe(0xff0000);
     while (flash.update(0.1));
+    expect(shown.opacity).toBeCloseTo(0);
+    expect(mesh.material).toBe(material);
     expect(material.emissive.getHex()).toBe(0x112233);
-    expect(material.emissiveIntensity).toBeCloseTo(0.2);
   });
 
-  it("restores when stopped part-way, and leaves materials that can't glow alone", () => {
-    const material = lit();
-    const plain = new THREE.MeshBasicMaterial({ color: 0x445566 });
+  it("removes its overlays and frees its one material when disposed, whatever the meshes wear", () => {
+    const shaded = new THREE.ShaderMaterial();
     const group = new THREE.Group();
-    group.add(
-      new THREE.Mesh(new THREE.BoxGeometry(), material),
-      new THREE.Mesh(new THREE.BoxGeometry(), plain),
-    );
+    const [a, b] = [
+      new THREE.Mesh(new THREE.BoxGeometry(), lit()),
+      new THREE.Mesh(new THREE.BoxGeometry(), shaded),
+    ];
+    group.add(a, b);
     const flash = createFlash([group], { seconds: 1 });
+    const glow = overlay(a)!.material as THREE.Material;
+    expect(overlay(b)!.material).toBe(glow);
+    const freed = vi.spyOn(glow, "dispose");
     flash.update(0.3);
     flash.dispose();
-    expect(material.emissive.getHex()).toBe(0x112233);
-    expect(plain.color.getHex()).toBe(0x445566);
+    flash.dispose();
+    expect(a.children).toEqual([]);
+    expect(b.children).toEqual([]);
+    expect(freed).toHaveBeenCalledTimes(1);
   });
 
-  it("doesn't pulse under reduced motion", () => {
-    const material = lit();
-    const flash = createFlash([new THREE.Mesh(new THREE.BoxGeometry(), material)], {}, true);
+  it("adds nothing and doesn't pulse under reduced motion", () => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(), lit());
+    const flash = createFlash([mesh], {}, true);
+    expect(mesh.children).toEqual([]);
     expect(flash.update(0.016)).toBe(false);
-    expect(material.emissiveIntensity).toBeCloseTo(0.2);
+    flash.dispose();
   });
 });
 
@@ -86,10 +98,12 @@ describe("flash and shudder as exit effects (#441)", () => {
         },
       ],
     });
+    const mesh = root.children[0] as THREE.Mesh;
     runner.update(0.1);
-    expect(material.emissiveIntensity).not.toBeCloseTo(0.2);
+    expect(mesh.children).toHaveLength(1);
     for (let frame = 0; frame < 10; frame++) runner.update(0.05);
     expect(runner.active).toBe(0);
+    expect(mesh.children).toEqual([]);
     expect(material.emissiveIntensity).toBeCloseTo(0.2);
     expect(root.position.toArray()).toEqual([0, 0, 0]);
   });
