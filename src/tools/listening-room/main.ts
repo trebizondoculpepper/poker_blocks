@@ -128,7 +128,8 @@ auditions.register("sample", (_effect, takes, row) =>
   takes.length ? play(takes[Math.floor(Math.random() * takes.length)]!, row) : Promise.resolve(),
 );
 auditions.register("synth", (effect, _takes, row) => {
-  playSfx(effect.id as SoundEffectId);
+  // The room's pitch slider applies here too, through the same option a sample uses (#534 review).
+  playSfx(effect.id as SoundEffectId, { rate: Number(pitch.value) });
   row.classList.add("playing");
   return new Promise((resolve) =>
     window.setTimeout(() => {
