@@ -181,3 +181,32 @@ export function createExitRunner(reducedMotion: () => boolean = () => false) {
     },
   };
 }
+
+/**
+ * The bounds of `targets` in the departing block's own space: measured in the root's local
+ * coordinates, so neither its world scale nor its rotation changes them. Empty when the targets
+ * hold no geometry (a solid block's contents).
+ */
+export function localBounds(visual: ExitVisual, targets: readonly THREE.Object3D[]): THREE.Box3 {
+  visual.root.updateWorldMatrix(true, true);
+  const toLocal = new THREE.Matrix4().copy(visual.root.matrixWorld).invert();
+  const bounds = new THREE.Box3();
+  const part = new THREE.Box3();
+  for (const target of targets)
+    target.traverse((child) => {
+      const geometry = (child as THREE.Mesh).geometry;
+      if (!geometry) return;
+      geometry.computeBoundingBox();
+      part
+        .copy(geometry.boundingBox!)
+        .applyMatrix4(new THREE.Matrix4().multiplyMatrices(toLocal, child.matrixWorld));
+      bounds.union(part);
+    });
+  return bounds;
+}
+
+/** A departing block's size in its own space: the largest side of the whole block's bounds. */
+export function localBlockSize(visual: ExitVisual): number {
+  const bounds = localBounds(visual, [visual.root]);
+  return bounds.isEmpty() ? 1 : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
+}
