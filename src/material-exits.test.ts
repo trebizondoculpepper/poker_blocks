@@ -7,6 +7,7 @@ const all: readonly MaterialDefinition[] = [...materialDefinitions, ...experimen
 const exitOf = (id: string) => all.find((material) => material.id === id)!.appearance.exit!;
 
 const release = vi.fn();
+
 function visual(): ExitVisual {
   const root = new THREE.Group();
   const body = new THREE.Mesh(
@@ -69,6 +70,32 @@ describe("material exits (#438)", () => {
     expect(shards[0]!.material.opacity).toBeGreaterThan(0);
     expect(shards[0]!.material.opacity).toBeLessThan(0.6);
     runner.update(0.3);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("air: its own components tumble apart and fade as they go (#454)", () => {
+    release.mockClear();
+    const root = new THREE.Group();
+    const housing = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial(),
+    );
+    const fan = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.3, 0.3, 0.05),
+      new THREE.MeshStandardMaterial(),
+    );
+    fan.position.x = 0.52;
+    root.add(housing, fan);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [housing, fan], contents: [], release };
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "air" }, v, exitOf("airVent"));
+    const fanStart = fan.position.clone();
+    runner.update(0.3);
+    expect(fan.position.distanceTo(fanStart)).toBeGreaterThan(0.05);
+    expect((fan.material as THREE.MeshStandardMaterial).opacity).toBeLessThan(1);
+    runner.update(0.7);
     expect(runner.active).toBe(0);
     expect(release).toHaveBeenCalledOnce();
   });
