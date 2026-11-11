@@ -73,6 +73,20 @@ describe("material exits (#438)", () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
+  it("paper bursts into torn scraps that flutter and fade as the sheet vanishes (#447)", () => {
+    release.mockClear();
+    const v = visual();
+    const body = v.root.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "p" }, v, exitOf("paper"));
+    expect(v.root.children.slice(1)).toHaveLength(28);
+    for (let frame = 0; frame < 6; frame++) runner.update(1 / 60);
+    expect(body.material.opacity).toBeLessThan(0.5);
+    for (let frame = 0; frame < 240; frame++) runner.update(1 / 60);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
   it("ice cracks into five translucent predefined pieces that scatter and fade (#449)", () => {
     release.mockClear();
     const v = visual();
