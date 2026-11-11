@@ -19,6 +19,7 @@ import { createActivationPulse, type ActivationPulse } from "./activation-pulse"
 import { cardLook } from "./card-look";
 import { cosmeticRandom, createBlockEffects, type BlockEffect } from "./visual/block-effects";
 import "./visual/smoke";
+import "./visual/dust";
 import { cellKey, faceFromDirection, faceNormal, type Cell, type Face } from "./traits/attachable";
 
 /** A block a drop can attach to: one on the table, or one played and still flying in. */
