@@ -389,11 +389,11 @@ export const materialDefinitions = [
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Terracotta",
     acoustics: { character: "dry", hardness: 6, attach: "material.attach.terracotta" },
-    // Only ever made by a reaction: flame bakes earth into it (#371). Never sold. Its
-    // transmogrifier keeps its old price at zero weight, so saved ones still load but no shop
-    // offers a new one (#429 review).
+    // Only ever made by a reaction: flame bakes earth into it (#371). It keeps its price at zero
+    // weight, so no shop draws it (as a card or a transmogrifier), but a saved offer or item
+    // still loads and is priced (#429 review).
     traits: {},
-    transmogrifier: { price: 6, weights: [[1, 0]] },
+    shop: { basePrice: 3, weights: [[1, 0]] },
     appearance: {
       pattern: "crackedClay",
       assembly: "sixFaces",
