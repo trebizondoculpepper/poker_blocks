@@ -12,7 +12,7 @@
   "beats": 208,
   "first_beat_seconds": 0.9497,
   "review": {
-    "reason": "Beat fit prefers 99.0 BPM over the current 132.0 (fit score 0.83); check by ear (#257).",
+    "reason": "Default chosen, to audition (#257): kept 132.0 BPM. The fit also likes 99.0 (about 3/4 of it, a swing or triplet feel); keeping the tempo leaves the track-switch glide unchanged and stays in the usual 90-160 BPM dance range. Retune with fit_beats.py --write --near <BPM>.",
     "candidate_bpm": 99.0,
     "issue": 257
   }

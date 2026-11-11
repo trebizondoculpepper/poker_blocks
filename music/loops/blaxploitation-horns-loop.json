@@ -4,18 +4,18 @@
   "loop_start_seconds": 13.536,
   "loop_end_seconds": 144.032,
   "loop_seconds": 130.496,
-  "bars": 106,
+  "bars": 53,
   "match_score": 1.0039,
   "crossfade_seconds": 0.05,
   "sample_rate": 48000,
   "beat_tracker_bpm": 130.81,
-  "tempo_bpm": 194.9485,
+  "tempo_bpm": 97.4742,
   "measured_tempo_bpm": 141.86,
-  "beats": 424,
-  "first_beat_seconds": 0.4065,
+  "beats": 212,
+  "first_beat_seconds": 0.0987,
   "review": {
-    "reason": "Beat fit prefers 97.5 BPM over the current 194.9 (fit score 1.45); check by ear (#257).",
-    "candidate_bpm": 97.5,
+    "reason": "Default chosen, to audition (#257): halved from 194.9 to 97.5 BPM, the fit's strongest grid and a conventional dance pulse; the old grid was double time. Retune with fit_beats.py --write --near <BPM>.",
+    "candidate_bpm": 194.9,
     "issue": 257
   }
 }
