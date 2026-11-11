@@ -54,33 +54,43 @@ export type FragmentConfig = {
 
 export const maxFragments = 64;
 
-/** A departing block's size in its own space, unchanged by its world scale or rotation. */
-function blockSize(visual: ExitVisual): number {
+/**
+ * The bounds of `targets`, in the departing block's own space (unchanged by its world scale or
+ * rotation): where fragments start and how big they are. Empty when the targets hold nothing.
+ */
+function targetBounds(visual: ExitVisual, targets: readonly THREE.Object3D[]): THREE.Box3 {
   visual.root.updateWorldMatrix(true, true);
   const toLocal = new THREE.Matrix4().copy(visual.root.matrixWorld).invert();
   const bounds = new THREE.Box3();
   const part = new THREE.Box3();
-  visual.root.traverse((child) => {
-    const geometry = (child as THREE.Mesh).geometry;
-    if (!geometry) return;
-    geometry.computeBoundingBox();
-    bounds.union(
-      part
-        .copy(geometry.boundingBox!)
-        .applyMatrix4(new THREE.Matrix4().multiplyMatrices(toLocal, child.matrixWorld)),
-    );
-  });
-  return bounds.isEmpty() ? 1 : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
+  for (const target of targets)
+    target.traverse((child) => {
+      const geometry = (child as THREE.Mesh).geometry;
+      if (!geometry) return;
+      geometry.computeBoundingBox();
+      bounds.union(
+        part
+          .copy(geometry.boundingBox!)
+          .applyMatrix4(new THREE.Matrix4().multiplyMatrices(toLocal, child.matrixWorld)),
+      );
+    });
+  return bounds;
 }
 
 /** Emit fragments from a departing block: the shared machinery behind shred and splinter. */
 export function emitFragments(
   visual: ExitVisual,
+  targets: readonly THREE.Object3D[],
   config: FragmentConfig,
   reducedMotion: boolean,
 ): ExitEffectInstance {
-  const size = blockSize(visual);
-  const count = reducedMotion ? 0 : Math.max(0, Math.min(maxFragments, Math.round(config.count)));
+  // Fragments come from the configured targets only (the whole block, its shell or its contents):
+  // an empty target, such as a solid block's contents, emits nothing (#513 review).
+  const bounds = targetBounds(visual, targets);
+  const size = bounds.isEmpty() ? 0 : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
+  const centre = bounds.isEmpty() ? new THREE.Vector3() : bounds.getCenter(new THREE.Vector3());
+  const count =
+    reducedMotion || size === 0 ? 0 : Math.max(0, Math.min(maxFragments, Math.round(config.count)));
   const material = new THREE.MeshStandardMaterial({
     color: config.colour,
     side: THREE.DoubleSide,
@@ -91,9 +101,9 @@ export function emitFragments(
     const mesh = new THREE.Mesh(geometry, material);
     mesh.scale.setScalar(size);
     mesh.position.set(
-      (Math.random() - 0.5) * size * 0.6,
-      (Math.random() - 0.5) * size * 0.6,
-      (Math.random() - 0.5) * size * 0.6,
+      centre.x + (Math.random() - 0.5) * size * 0.6,
+      centre.y + (Math.random() - 0.5) * size * 0.6,
+      centre.z + (Math.random() - 0.5) * size * 0.6,
     );
     mesh.quaternion.random();
     visual.root.add(mesh);
@@ -165,12 +175,18 @@ export const splinterDefaults: FragmentConfig = {
   colour: 0xa0703c,
 };
 
-exitEffects.register("shred", ({ visual, reducedMotion }, raw) =>
-  emitFragments(visual, { ...shredDefaults, ...(raw as Partial<FragmentConfig>) }, reducedMotion),
-);
-exitEffects.register("splinter", ({ visual, reducedMotion }, raw) =>
+exitEffects.register("shred", ({ visual, targets, reducedMotion }, raw) =>
   emitFragments(
     visual,
+    targets,
+    { ...shredDefaults, ...(raw as Partial<FragmentConfig>) },
+    reducedMotion,
+  ),
+);
+exitEffects.register("splinter", ({ visual, targets, reducedMotion }, raw) =>
+  emitFragments(
+    visual,
+    targets,
     { ...splinterDefaults, ...(raw as Partial<FragmentConfig>) },
     reducedMotion,
   ),

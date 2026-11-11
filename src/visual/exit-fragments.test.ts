@@ -5,9 +5,10 @@ import { maxFragments, shredDefaults, splinterDefaults } from "./exit-fragments"
 
 function visual(): ExitVisual {
   const root = new THREE.Group();
-  root.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial()));
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+  root.add(body);
   new THREE.Group().add(root);
-  return { root, shell: [], contents: [], release: vi.fn() };
+  return { root, shell: [body], contents: [], release: vi.fn() };
 }
 const fragments = (v: ExitVisual) => v.root.children.slice(1) as THREE.Mesh[];
 const start = (v: ExitVisual, effect: string, config: object = {}, reduced = false) => {
@@ -72,5 +73,23 @@ describe("shred and splinter (#443)", () => {
     expect(fragments(v)).toEqual([]);
     runner.update(0.016);
     expect(runner.active).toBe(0);
+  });
+
+  it("emits only from its configured target: a solid block's empty contents throw nothing (#513 review)", () => {
+    const v = visual();
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [{ effects: [{ effect: "shred", target: "contents" }] }],
+    });
+    expect(fragments(v)).toEqual([]);
+    runner.update(0.016);
+    expect(runner.active).toBe(0);
+    const shell = visual();
+    const other = createExitRunner();
+    other.start({ blockId: "c" }, shell, {
+      steps: [{ effects: [{ effect: "shred", target: "shell" }] }],
+    });
+    expect(fragments(shell)).toHaveLength(shredDefaults.count);
+    other.dispose();
   });
 });
