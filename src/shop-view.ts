@@ -37,6 +37,11 @@ export type ShopView = {
    * and moved follows the pointer, and dropped on BUY it's bought.
    */
   readonly dragSource: DragSource<DisplayedOffer>;
+  /**
+   * While an offer is dragged (#499): its drop targets and why a drop there would be refused
+   * right now, or null reason when it would succeed. Null when nothing is being dragged.
+   */
+  dragVerdict(): { targets: readonly HTMLElement[]; reason: string | null } | null;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
   burnUnsold(reducedMotion: boolean): Promise<void>;
   frame(): void;
@@ -187,6 +192,8 @@ export function createShopView(
   onEntranceDone: () => void,
   deckSize: () => number,
   reducedMotion: () => boolean,
+  /** Why buying would be refused now, without buying (`GameRun.purchaseVerdict`, #499). */
+  verdict: (id: string, destination: OfferDestination) => { reason: string } | null,
 ): ShopView {
   const stock = document.createElement("section");
   stock.className = "shop-stock";
@@ -426,6 +433,8 @@ export function createShopView(
 
   function frame(): void {
     if (renderer.domElement.hidden) return;
+    // Coins, rack space or stock may change mid-drag: the verdict follows them (#499).
+    refreshGuidance();
     clearRack();
     if (burn) {
       const now = performance.now();
@@ -518,6 +527,22 @@ export function createShopView(
 
   /** The offer being dragged and where its press went down. */
   let dragging: { entry: DisplayedOffer; press: Point } | null = null;
+  /** The live verdict for the dragged offer (#499), refreshed every frame while it is dragged. */
+  let guidance: { targets: HTMLElement[]; reason: string | null } | null = null;
+  function refreshGuidance(): void {
+    if (!dragging) return;
+    const { offer } = dragging.entry;
+    const targets = offerViews.get(offer.kind).dropTargets.flatMap((name) => dropTargets[name]);
+    const reason = verdict(offer.block.id, offerKind(offer).destination)?.reason ?? null;
+    guidance = { targets, reason };
+    for (const target of targets)
+      if (reason) target.dataset.refusal = reason;
+      else delete target.dataset.refusal;
+  }
+  function clearGuidance(): void {
+    for (const target of guidance?.targets ?? []) delete target.dataset.refusal;
+    guidance = null;
+  }
   const dragSource: DragSource<DisplayedOffer> = {
     surface: stock,
     pick(clientX, clientY) {
@@ -533,6 +558,7 @@ export function createShopView(
         press: { clientX: press.clientX - here.x, clientY: press.clientY - here.y },
       };
       entry.item.classList.add("is-dragging");
+      refreshGuidance();
     },
     move({ clientX, clientY }) {
       if (!dragging) return;
@@ -543,6 +569,7 @@ export function createShopView(
       if (!dragging) return;
       const { entry } = dragging;
       dragging = null;
+      clearGuidance();
       // Refused or let go off every target, the offer flies back to its slot (#482).
       const putBack = () => {
         entry.item.classList.remove("is-dragging");
@@ -566,6 +593,7 @@ export function createShopView(
   return {
     buyTarget,
     dragSource,
+    dragVerdict: () => guidance && { targets: [...guidance.targets], reason: guidance.reason },
     render,
     burnUnsold,
     frame,

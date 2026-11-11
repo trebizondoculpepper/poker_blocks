@@ -191,6 +191,34 @@ const darkInk = { red: "#a32536", black: "#422716", onDark: true };
 /** Pale ink with a dark shadow, for prints on saturated wrapping foil. */
 const foilInk = { red: "#ffe3e6", black: "#fffaf0", onDark: true };
 const box = { shape: "box", segments: 0, radius: 0, scale: 1 };
+
+/**
+ * The shared container blast response (#438): the shell cracks, then falls to shards that
+ * scatter and fade while the contents fade away. Composed on each container material with
+ * its own shell colour; contents never inspect what shell they were in.
+ */
+const containerBreak = (shell: { colour: number; opacity: number }): ExitSequence => ({
+  steps: [
+    { effects: [{ effect: "crack", target: "shell", config: { seconds: 0.2, colour: 0x1a1a1a } }] },
+    {
+      effects: [
+        {
+          effect: "fracture",
+          target: "shell",
+          config: {
+            pieces: "shards",
+            colour: shell.colour,
+            opacity: shell.opacity,
+            speed: [0.6, 1.5],
+            life: 0.9,
+            fade: 0.4,
+          },
+        },
+        { effect: "fade", target: "contents", config: { seconds: 0.8 } },
+      ],
+    },
+  ],
+});
 const noEnds: readonly number[] = [];
 
 /**
@@ -357,6 +385,32 @@ export const materialDefinitions = [
       sfx: "material.activate.prismatic",
     },
     appearance: {
+      // Appears to crack, then with a flash instantly bursts into a cloud of stars that
+      // dissipate (#451): the shared crack, flash and star burst. The block is hidden at once
+      // (not faded: its shader-driven fire ignores opacity).
+      exit: {
+        steps: [
+          { effects: [{ effect: "crack", config: { seconds: 0.25, colour: 0xf4f0ff } }] },
+          {
+            effects: [
+              { effect: "flash", config: { colour: 0xffffff, intensity: 1.2, seconds: 0.18 } },
+              {
+                effect: "burst",
+                config: {
+                  count: 70,
+                  speed: [0.8, 2.2],
+                  lift: 0.4,
+                  gravity: 0.6,
+                  life: 1.1,
+                  size: 0.1,
+                  stars: true,
+                },
+              },
+              { effect: "hide" },
+            ],
+          },
+        ],
+      },
       pattern: "rainbowCrystal",
       assembly: "refractiveCrystal",
       surface: "clear",
@@ -440,6 +494,34 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // The shell breaks apart and the earth inside bursts outward in earth-coloured particles that fall on parabolic paths (#456).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                target: "shell",
+                config: { pieces: "shards", colour: 0xe8eef2, opacity: 0.35, life: 0.9, fade: 0.4 },
+              },
+              {
+                effect: "burst",
+                target: "contents",
+                config: {
+                  count: 60,
+                  speed: [1, 2.4],
+                  lift: 1.4,
+                  gravity: 5,
+                  life: 1,
+                  size: 0.07,
+                  colour: 0x6b4a2e,
+                },
+              },
+              { effect: "fade", target: "contents", config: { seconds: 0.08 } },
+            ],
+          },
+        ],
+      },
       pattern: "cardSheet",
       assembly: "contained",
       surface: "clear",
@@ -599,6 +681,26 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // Breaks into a few soft chunks rather than sharp fragments, which tumble and fade (#450).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: {
+                  pieces: "chunks",
+                  colour: 0xa3384a,
+                  speed: [0.5, 1.2],
+                  spin: 4,
+                  life: 0.9,
+                  fade: 0.35,
+                },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "marbledFlesh",
       assembly: "sixFaces",
       surface: "matte",
@@ -647,6 +749,9 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // The shared container response (#452): its framed glass cracks and falls to pieces as
+      // the flame fades.
+      exit: containerBreak({ colour: 0x3a4046, opacity: 0.85 }),
       pattern: "ironFrame",
       assembly: "contained",
       surface: "iron",
@@ -776,6 +881,8 @@ export const materialDefinitions = [
     scoringEligibility: "rowPresence",
     activation: { effect: { id: "pulse", colour: "#f4f7fb" }, sfx: "material.activate.cloud" },
     appearance: {
+      // Simply fades away: no billow, fracture or burst (#459).
+      exit: { steps: [{ effects: [{ effect: "fade", config: { seconds: 0.6 } }] }] },
       pattern: "cardSheet",
       assembly: "contained",
       surface: "clear",
@@ -867,6 +974,34 @@ export const materialDefinitions = [
     scoringModifier: { additive: 1, multiplicative: 2, exponential: 1.2 },
     activation: { effect: { id: "pulse", colour: "#fff1cc" }, sfx: "material.activate.magic" },
     appearance: {
+      // The shell breaks apart and releases its stars outward before they fade (#458).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                target: "shell",
+                config: { pieces: "shards", colour: 0xe8eef2, opacity: 0.35, life: 0.9, fade: 0.4 },
+              },
+              {
+                effect: "burst",
+                target: "contents",
+                config: {
+                  count: 50,
+                  speed: [0.6, 1.6],
+                  lift: 0.3,
+                  gravity: 0.4,
+                  life: 1.2,
+                  size: 0.09,
+                  stars: true,
+                },
+              },
+              { effect: "fade", target: "contents", config: { seconds: 0.1 } },
+            ],
+          },
+        ],
+      },
       pattern: "cardSheet",
       assembly: "contained",
       surface: "clear",
@@ -1186,6 +1321,26 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     ],
     traits: {},
     appearance: {
+      // Experimental: the fan and vent assembly breaks into a few tumbling pieces (two fans and four vent slats) that fade as they go (#454).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: {
+                  pieces: "ventParts",
+                  colour: 0x8a959c,
+                  speed: [0.6, 1.4],
+                  spin: 6,
+                  life: 0.9,
+                  fade: 0.5,
+                },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "ventHousing",
       assembly: "sixFaces",
       surface: "matte",
