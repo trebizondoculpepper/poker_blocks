@@ -4,6 +4,7 @@
  * A new effect module adds its import here.
  */
 import "./exit-burst";
+import "./exit-fade";
 import "./exit-fracture";
 import "./exit-fragments";
 import "./flash-shudder";
