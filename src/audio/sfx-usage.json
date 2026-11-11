@@ -70,6 +70,10 @@
       "run-controller.ts": 1
     }
   },
+  "block.dazzle_pop": {
+    "uses": 0,
+    "files": {}
+  },
   "block.self_destruct": {
     "uses": 0,
     "files": {}
@@ -209,10 +213,10 @@
     }
   },
   "ui.click": {
-    "uses": 34,
+    "uses": 35,
     "files": {
       "attract-tuning-panel.ts": 1,
-      "audio/sfx-registry.ts (placeholder)": 1,
+      "audio/sfx-registry.ts (placeholder)": 2,
       "game-modes.ts": 2,
       "menus.ts": 7,
       "run-controller.ts": 1,

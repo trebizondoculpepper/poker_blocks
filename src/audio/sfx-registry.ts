@@ -167,6 +167,28 @@ const entries = [
     durationSeconds: 0.6,
   },
   {
+    id: "block.dazzle_pop",
+    name: "Dazzle pop",
+    family: "block",
+    description:
+      "One bright discharge pops (#519): a short report over a low thump, synthesised live so rapid pops vary",
+    placeholder: "ui.click",
+    source: {
+      provider: "synth",
+      config: {
+        recipe: "pop",
+        config: {
+          band: 1400,
+          q: 0.6,
+          decay: 0.07,
+          level: 0.4,
+          thump: [110, 0.09],
+          spread: { band: 0.08, decay: 0.15, level: 0.12, thump: 0.06 },
+        },
+      },
+    },
+  },
+  {
     id: "block.self_destruct",
     name: "Self-destruct",
     family: "block",
