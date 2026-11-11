@@ -156,4 +156,26 @@ describe("material exits (#438)", () => {
     expect(runner.active).toBe(0);
     expect(release).toHaveBeenCalledOnce();
   });
+
+  it("crystal cracks, then flashes and bursts into dissipating stars (#451)", () => {
+    release.mockClear();
+    const v = visual();
+    const body = v.root.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "c" }, v, exitOf("prismatic"));
+    const own = body.material;
+    // First the crack lines, the block still whole.
+    expect(v.root.children.length).toBeGreaterThan(1);
+    expect(v.root.children.some((child) => child instanceof THREE.Points)).toBe(false);
+    runner.update(0.3);
+    // Then the flash and the star burst, the block gone at once.
+    expect(v.root.children.some((child) => child instanceof THREE.Points)).toBe(true);
+    // Hidden at once, whatever its shader: its own material is swapped for an invisible one.
+    expect(body.material.visible).toBe(false);
+    for (let frame = 0; frame < 120; frame++) runner.update(1 / 60);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+    // Its own material is back for the owner's release.
+    expect(body.material).toBe(own);
+  });
 });
