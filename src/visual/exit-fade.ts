@@ -17,12 +17,63 @@ export type FadeConfig = { seconds?: number };
 
 const defaultSeconds = 0.4;
 
+/**
+ * Shared per-material fade state (#490 review): overlapping fades compose instead of overwriting.
+ * The material's original settings are saved once, by the first fade to touch it; its opacity is
+ * that original times every active fade's remaining share; the original settings come back only
+ * when the last fade holding it is disposed.
+ */
+type Shared = {
+  saved: { opacity: number; transparent: boolean; depthWrite: boolean };
+  shares: Map<object, number>;
+};
+const shared = new WeakMap<THREE.Material, Shared>();
+
+function hold(material: THREE.Material, holder: object): void {
+  let state = shared.get(material);
+  if (!state) {
+    state = {
+      saved: {
+        opacity: material.opacity,
+        transparent: material.transparent,
+        depthWrite: material.depthWrite,
+      },
+      shares: new Map(),
+    };
+    shared.set(material, state);
+    material.transparent = true;
+    material.depthWrite = false;
+    material.needsUpdate = true;
+  }
+  state.shares.set(holder, 1);
+}
+
+/** The material's opacity: its original times each holder's remaining share. */
+function apply(material: THREE.Material, state: Shared): void {
+  let opacity = state.saved.opacity;
+  for (const share of state.shares.values()) opacity *= share;
+  material.opacity = opacity;
+}
+
+function setShare(material: THREE.Material, holder: object, share: number): void {
+  const state = shared.get(material)!;
+  state.shares.set(holder, share);
+  apply(material, state);
+}
+
+function release(material: THREE.Material, holder: object): void {
+  const state = shared.get(material);
+  if (!state?.shares.delete(holder)) return;
+  if (state.shares.size) return apply(material, state);
+  shared.delete(material);
+  Object.assign(material, state.saved);
+  material.needsUpdate = true;
+}
+
 exitEffects.register("fade", ({ targets, reducedMotion, ownsObject }, raw) => {
   const seconds = Math.max((raw as FadeConfig | undefined)?.seconds ?? defaultSeconds, 1e-3);
-  const faded = new Map<
-    THREE.Material,
-    { opacity: number; transparent: boolean; depthWrite: boolean }
-  >();
+  const self = {};
+  const faded = new Set<THREE.Material>();
   for (const target of targets)
     target.traverse((child) => {
       // Only the departing block's own materials fade, never a sibling effect's overlay or
@@ -31,19 +82,13 @@ exitEffects.register("fade", ({ targets, reducedMotion, ownsObject }, raw) => {
       const material = (child as THREE.Mesh).material;
       for (const each of [material ?? []].flat()) {
         if (faded.has(each)) continue;
-        faded.set(each, {
-          opacity: each.opacity,
-          transparent: each.transparent,
-          depthWrite: each.depthWrite,
-        });
-        each.transparent = true;
-        each.depthWrite = false;
-        each.needsUpdate = true;
+        faded.add(each);
+        hold(each, self);
       }
     });
   let elapsed = 0;
   const show = (fraction: number) => {
-    for (const [material, { opacity }] of faded) material.opacity = opacity * (1 - fraction);
+    for (const material of faded) setShare(material, self, 1 - fraction);
   };
   const finish = () => {
     elapsed = seconds;
@@ -59,10 +104,7 @@ exitEffects.register("fade", ({ targets, reducedMotion, ownsObject }, raw) => {
     },
     finish,
     dispose() {
-      for (const [material, saved] of faded) {
-        Object.assign(material, saved);
-        material.needsUpdate = true;
-      }
+      for (const material of faded) release(material, self);
     },
   };
 });

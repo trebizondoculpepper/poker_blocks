@@ -124,3 +124,32 @@ describe("fade beside another effect's output (#490 review)", () => {
     }
   });
 });
+
+describe("overlapping fades (#490 review)", () => {
+  it("compose: a shorter fade finishing never lets the target reappear, and settings restore once", () => {
+    const { v, shellMaterial } = visual();
+    shellMaterial.depthWrite = true;
+    const runner = createExitRunner();
+    runner.start(snapshot, v, {
+      steps: [
+        {
+          effects: [
+            { effect: "fade", config: { seconds: 0.2 } },
+            { effect: "fade", target: "shell", config: { seconds: 1 } },
+          ],
+        },
+      ],
+    });
+    runner.update(0.1);
+    const halfway = shellMaterial.opacity;
+    runner.update(0.2);
+    expect(shellMaterial.opacity).toBe(0);
+    runner.update(0.3);
+    expect(shellMaterial.opacity).toBe(0);
+    expect(halfway).toBeLessThan(0.5);
+    runner.dispose();
+    expect(shellMaterial.opacity).toBe(1);
+    expect(shellMaterial.depthWrite).toBe(true);
+    expect(shellMaterial.transparent).toBe(false);
+  });
+});
