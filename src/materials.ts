@@ -1,7 +1,12 @@
 import type { ChopSettings } from "./visual/chopped-geometry";
 import type { Lettering } from "./visual/lettering";
 import { Registry } from "./core/registry";
-import type { ContainerConfig, ContentsConfig, ResidueConfig } from "./visual/contained";
+import type {
+  ContainerConfig,
+  ContentsConfig,
+  ResidueConfig,
+  InclusionConfig,
+} from "./visual/contained";
 import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
@@ -104,6 +109,8 @@ export type MaterialDefinition = {
     contents?: ContentsConfig;
     /** Optional residue on the wall, reading what the contents publish (#332). */
     residue?: ResidueConfig;
+    /** Optional inclusions suspended in the contents, e.g. rising bubbles (#353). */
+    inclusions?: readonly InclusionConfig[];
     optics?: {
       tint: number;
       handIor: number;
@@ -592,6 +599,28 @@ const clearWater = {
   },
 };
 
+/** Very slow bubbles (#353): hot water's, sparse and lazy. Boiling water (#354) is the same, faster. */
+const slowBubbles = {
+  effect: "risingBubbles",
+  config: {
+    count: 14,
+    rise: 0.06,
+    wobble: 0.02,
+    size: 0.07,
+    rest: 1.6,
+    colour: 0xeaf6ff,
+    opacity: 0.7,
+  },
+};
+
+/** A material with inclusions suspended in its contents (#353). */
+function withInclusions(
+  material: MaterialDefinition,
+  inclusions: readonly InclusionConfig[],
+): MaterialDefinition {
+  return { ...material, appearance: { ...material.appearance, inclusions } };
+}
+
 /** A soft drifting cloud (#336): contents with no liquid surface. */
 const softCloud = {
   effect: "cloud",
@@ -655,6 +684,8 @@ function plasticFluidExperiments(): MaterialDefinition[] {
   });
   return [
     plastic("waterInPlastic", "Water in plastic", clearWater),
+    // Hot water (#353): the same water, with very slowly rising bubbles as an inclusion.
+    withInclusions(plastic("hotWaterInPlastic", "Hot water in plastic", clearWater), [slowBubbles]),
     plastic("darkFluid", "Dark fluid", darkFluid),
     plastic("cloudInPlastic", "Cloud in plastic", softCloud),
     plastic("magicLock", "Magic Lock", magicStars),
