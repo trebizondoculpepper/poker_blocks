@@ -4,7 +4,15 @@ import type { GameEvent, PassiveBlock } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
 import { cardScoringRules } from "./materials";
 import type { CardBlock } from "./cards";
-import { evaluateLine, findScoringLines, type Line, type ScoredLine } from "./scoring";
+import {
+  evaluateLine,
+  findScoringLines,
+  handMultipliers,
+  type Line,
+  type ScoredLine,
+} from "./scoring";
+import { scoringEligibilities } from "./scoring-eligibility";
+import { scoringEligibilityOf } from "./materials";
 import { cellKey } from "./traits/attachable";
 import { scorableValue } from "./traits/scorable";
 
@@ -120,9 +128,32 @@ export function scoreFieldWithPassives(
       ]),
     );
     const result = evaluateLine(line.blocks, (block) => evaluated.get(block.id)!.value);
-    // Only the chosen hand's cards bring their own line rules.
+    // The chosen hand's cards bring their own line rules. Each other card in the line takes part
+    // as its material's registered scoring eligibility says (#423): by default, not at all.
     const contributing = line.blocks.filter(({ id }) => result.contributingIds.includes(id));
-    const sources = [...contributing.map((block) => cardSource(block, rulesForCard)), ...passives];
+    const others = line.blocks
+      .filter(({ id }) => !result.contributingIds.includes(id))
+      .map((block) => {
+        const own = evaluateRules(
+          subscribedRules([cardSource(block, rulesForCard)], "score.beforeBlockValue"),
+          { type: "score.beforeBlockValue", score: { line, intersections, block } },
+          scorableValue(block),
+        );
+        const share = scoringEligibilities.get(scoringEligibilityOf(block))(
+          block,
+          own.value - scorableValue(block),
+          handMultipliers[result.hand],
+        );
+        return { block, share, activations: own.activations };
+      });
+    const joining = others.filter(({ share }) => share.joinsLinePhases);
+    const sources = [
+      ...[...contributing, ...joining.map(({ block }) => block)].map((block) =>
+        cardSource(block, rulesForCard),
+      ),
+      ...passives,
+    ];
+    const sharedPoints = others.reduce((sum, { share }) => sum + share.points, 0);
     const phases = linePhases.reduce(
       (previous, phase) => {
         const next = evaluateRules(
@@ -132,7 +163,7 @@ export function scoreFieldWithPassives(
         );
         return { value: next.value, activations: [...previous.activations, ...next.activations] };
       },
-      { value: result.points, activations: [] as RuleActivation[] },
+      { value: result.points + sharedPoints, activations: [] as RuleActivation[] },
     );
     // The line is clamped at zero, then the after-clamp phase adds its flat bonuses.
     const clamped = Math.max(0, phases.value);
@@ -144,6 +175,7 @@ export function scoreFieldWithPassives(
     // Commit: the chosen hand's contributing blocks, then the line phases.
     const activations = [
       ...result.contributingIds.flatMap((id) => evaluated.get(id)!.activations),
+      ...joining.flatMap(({ activations }) => activations),
       ...phases.activations,
       ...after.activations,
     ];

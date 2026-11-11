@@ -59,6 +59,11 @@ export type MaterialDefinition = {
    * read by the `neighbour-heat` matcher. Flame has it; anything else may declare it.
    */
   heat?: Record<string, never>;
+  /**
+   * How a card of this material takes part in a scored line it isn't in the chosen hand of: a
+   * registered scoring eligibility (src/scoring-eligibility.ts). Default `contributing`.
+   */
+  scoringEligibility?: string;
   /** The material its cards become when a round ends, e.g. gelato back to custard (#383). */
   roundEndMaterial?: string;
   /** Doneness steps, first (raw) to last, for a material that cooks (#372). */
@@ -584,6 +589,33 @@ export const materialDefinitions = [
     },
   },
   {
+    // Cloud (#423): only ever made by a reaction (air beside boiling water, #425), never sold.
+    // +2 and ×1.5, and it always applies to a scored line it is in, chosen hand or not
+    // (`rowPresence`): it enhances the hand without changing it, and is never a wildcard.
+    // Its look is #336's contained cloud.
+    id: "cloud",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
+    name: "Cloud",
+    acoustics: { character: "soft", hardness: 0.5, attach: "material.attach.meat" },
+    traits: { transparent: {} },
+    scoringModifier: { additive: 2, multiplicative: 1.5 },
+    scoringEligibility: "rowPresence",
+    activation: { effect: { id: "pulse", colour: "#f4f7fb" }, sfx: "material.activate.cloud" },
+    appearance: {
+      pattern: "cardSheet",
+      assembly: "contained",
+      surface: "clear",
+      height: "none",
+      ink: lightInk,
+      edge: { color: 0xe8eef2, opacity: 0.3 },
+      geometry: { shape: "rounded", segments: 1, radius: 0.08, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: noEnds,
+      container: { shell: "plasticShell", config: { opacity: 0.16, inset: 0.92, gloss: 1.6 } },
+      contents: { effect: "cloud", config: { colour: 0xf4f7fb, density: 1.2, drift: 0.08 } },
+    },
+  },
+  {
     // Water (#367): only ever made by a reaction (ice melting), never sold or unlocked, so it
     // has no shop price. A clear blue fluid in custard's plastic vessel until #333 gives it
     // refractive optics.
@@ -993,6 +1025,11 @@ export function materialOf(block: CardBlock): BlockMaterial {
 }
 
 /** The scoring rules a card brings with it: its material's scoring modifier, expanded. */
+/** The scoring eligibility a card's material names (#423): `contributing` unless it says otherwise. */
+export function scoringEligibilityOf(block: CardBlock): string {
+  return getMaterialDefinition(materialOf(block)).scoringEligibility ?? "contributing";
+}
+
 export function cardScoringRules(block: CardBlock): EventRule[] {
   // Its material's rules, then its state bonus's (#365): same phases, and the order within
   // one card changes nothing (sums and products commute; successive powers multiply).

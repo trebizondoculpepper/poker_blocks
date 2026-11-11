@@ -632,6 +632,13 @@ const entries = [
     placeholder: "passive.activate.scoring",
   },
   {
+    id: "material.activate.cloud",
+    name: "Activate cloud",
+    family: "material",
+    description: "A cloud's scoring package applies to the line it is in as that line is presented",
+    placeholder: "passive.activate.scoring",
+  },
+  {
     id: "material.activate.gelato",
     name: "Activate gelato",
     family: "material",
