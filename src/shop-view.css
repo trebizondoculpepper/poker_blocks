@@ -102,7 +102,8 @@
   touch-action: none;
 }
 
-.shop-offer.is-dragging {
+.shop-offer.is-dragging,
+.shop-offer.is-returning {
   z-index: 10;
   cursor: grabbing;
 }
