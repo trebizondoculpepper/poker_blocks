@@ -99,6 +99,11 @@ export type PassiveDefinition = {
    * round it can be stocked. Absent only on a retired passive.
    */
   shop?: PassiveShopBalance;
+  /**
+   * Replaces a material's field reward rate while installed (Le Chef: 3 coins per steak
+   * instead of 1, #373). The highest installed override for a material applies.
+   */
+  fieldRewardOverride?: { material: string; coinsPerCard: number };
   /** Excluded from new draws; kept so a save that names it still resolves. */
   retired?: boolean;
 };
@@ -218,6 +223,19 @@ const definitions: PassiveDefinition[] = [
     eventRules: [
       coinsPerBlock("stage.won", { id: "material-is", config: { material: "gold" } }, 1),
     ],
+  },
+  {
+    // Le Chef (#104, #373): steak on the table at settlement pays 3 coins each instead of 1.
+    id: "le-chef",
+    shop: { basePrice: 5, unlockRound: 3, frequency: "even" },
+    categoryTrait: { economyCategory: {} },
+    name: "Le Chef",
+    symbol: "♨",
+    description:
+      "After each stage, each Bloody, Rare or Medium Rare steak on the table pays 3 coins instead of 1.",
+    traitId: "passive.event-rules",
+    eventRules: [],
+    fieldRewardOverride: { material: "meat", coinsPerCard: 3 },
   },
   {
     id: "carnivore",

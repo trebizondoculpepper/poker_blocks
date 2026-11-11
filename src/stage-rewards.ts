@@ -2,6 +2,7 @@
  * Stage rewards (issue #12): what a won stage pays, as an itemised ledger. Pure: the
  * session applies the coins once per stage, and the stage-won screen shows the rows.
  */
+import { donenessSteps } from "./cooking";
 import type { GameState } from "./game-state";
 import { passiveActivations } from "./passive-effects";
 import { commitCommands } from "./rule-commands";
@@ -36,6 +37,7 @@ export function stageRewardLedger(
     { source: "stage.complete", label: "Stage complete bonus", coins: bonus },
     ...unusedPlayEntries(state),
     ...materialHandRewardEntries(state),
+    ...materialFieldRewardEntries(state),
   ];
   for (const passive of state.passiveRack) {
     const coins = stageWonCoins(state, passive, stage);
@@ -69,6 +71,41 @@ export function materialHandRewardEntries(state: GameState): RewardEntry[] {
     const count = state.hand.filter((card) => materialOf(card) === id).length;
     return rate && count
       ? [{ source: `material.${id}`, label: `${name} held in hand`, coins: count * rate }]
+      : [];
+  });
+}
+
+/**
+ * Rewards configured on materials left on the field at settlement (#373, steak), on wins and
+ * losses alike: cards of the material at a qualifying doneness. An installed passive's
+ * `fieldRewardOverride` for the material replaces the rate (the highest applies).
+ */
+export function materialFieldRewardEntries(state: GameState): RewardEntry[] {
+  return materialDefinitions.flatMap(({ id }) => {
+    const reward = getMaterialDefinition(id).fieldReward;
+    if (!reward) return [];
+    const count = state.field.filter(
+      ({ block }) =>
+        materialOf(block) === id &&
+        reward.doneness.includes(donenessSteps(block).at(block.traits.doneness?.step ?? 0) ?? ""),
+    ).length;
+    const overrides = state.passiveRack.flatMap(({ definitionId }) =>
+      [passiveDefinitions.has(definitionId) ? passiveDefinitions.get(definitionId) : []]
+        .flat()
+        .flatMap((definition) => [definition.fieldRewardOverride ?? []])
+        .flat()
+        .filter(({ material }) => material === id)
+        .map(({ coinsPerCard }) => coinsPerCard),
+    );
+    const rate = Math.max(reward.coinsPerCard, ...overrides);
+    return count && rate
+      ? [
+          {
+            source: `material.${id}.field`,
+            label: `${reward.label} (${count})`,
+            coins: count * rate,
+          },
+        ]
       : [];
   });
 }
