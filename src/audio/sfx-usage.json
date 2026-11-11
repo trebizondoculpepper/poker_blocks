@@ -260,8 +260,9 @@
     }
   },
   "passive.activate.scoring": {
-    "uses": 1,
+    "uses": 2,
     "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
       "passive-categories.ts": 1
     }
   },
