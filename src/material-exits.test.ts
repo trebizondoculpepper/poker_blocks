@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { fluidLooks } from "./visual/filled-vessel";
+import { containedContents, createInteriorBoundary } from "./visual/contained";
+import "./visual/cloud";
+import { createFireCore } from "./visual/fire-core";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { experimentalMaterials, materialDefinitions, type MaterialDefinition } from "./materials";
 import { createExitRunner, exitEffects, exitTargets, type ExitVisual } from "./visual/exit-effects";
@@ -210,6 +213,74 @@ describe("material exits (#438)", () => {
     runner.update(0.4);
     expect(runner.active).toBe(0);
     expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("flame: the shared container break cracks the shell, then shards fall as the contents fade (#452)", () => {
+    release.mockClear();
+    const v = container();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "f" }, v, exitOf("fire"));
+    // Crack lines first, over the shell; nothing thrown yet.
+    const before = v.root.children.length;
+    expect(before).toBeGreaterThan(2);
+    runner.update(0.25);
+    // Then shards fly (the shell's own mesh hidden) and the contents fade.
+    expect(v.root.children.length).toBeGreaterThanOrEqual(2 + 8);
+    runner.update(0.5);
+    const contents = v.contentsMesh.material as THREE.MeshStandardMaterial;
+    expect(contents.opacity).toBeLessThan(0.6);
+    runner.update(0.5);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("the real flame fades with its contents: its shader follows its material's opacity (#452)", () => {
+    release.mockClear();
+    const root = new THREE.Group();
+    const shellMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial(),
+    );
+    const flame = createFireCore(1);
+    root.add(shellMesh, flame);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [shellMesh], contents: [flame], release };
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "fire" }, v, exitOf("fire"));
+    const shader = flame.material as THREE.ShaderMaterial;
+    expect(shader.fragmentShader).toContain("* opacity");
+    runner.update(0.25);
+    runner.update(0.5);
+    expect(shader.uniforms.opacity!.value).toBeLessThan(0.6);
+    expect(shader.uniforms.opacity!.value).toBe(shader.opacity);
+    runner.dispose();
+  });
+
+  it("cloud simply fades away, with no debris (#459)", () => {
+    release.mockClear();
+    const v = container();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "cloud" }, v, exitOf("cloud"));
+    expect(v.root.children).toHaveLength(2);
+    runner.update(0.3);
+    expect((v.shellMesh.material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.7);
+    expect((v.contentsMesh.material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.7);
+    expect(v.root.children).toHaveLength(2);
+    runner.update(0.4);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("the real cloud fades: its shader follows its material's opacity (#459)", () => {
+    const { appearance } = all.find(({ id }) => id === "cloud")!;
+    const contents = containedContents.get(appearance.contents!.effect)(
+      createInteriorBoundary(new THREE.BoxGeometry(1, 1, 1), 1, 0.92),
+      appearance.contents!.config,
+    );
+    const mesh = contents.meshes[0] as THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+    expect(mesh.material.fragmentShader).toContain("alpha * opacity");
+    mesh.material.opacity = 0.25;
+    expect(mesh.material.uniforms.opacity!.value).toBe(0.25);
   });
 
   it("earth: the shell breaks apart and earth bursts out in falling particles (#456)", () => {

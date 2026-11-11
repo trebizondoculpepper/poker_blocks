@@ -163,6 +163,14 @@ The first family is `score.magnitude` (#1). Its bands start at 1, 10, 100, 1,000
 | `ui.settings.enter` | The settings screen opens (stand-in: `card.select`)                                | stand-in   |
 | `ui.settings.exit`  | The settings screen closes, by Back or Escape (stand-in: `ui.back`)                | stand-in   |
 
+## Celebrations (#494)
+
+A celebration is a pop plus one to three party whistles, played together with slightly different pitches and small start offsets, so several whistles sound a little discordant rather than like one louder whistle. `playCelebration(config)` in `src/audio/celebration.ts` plays it through the ordinary registered-sound path (`playSfx` with a `rate`). Settings, mute and volume apply; nothing is synthesised for it.
+
+- **Config:** `{ pop, whistle, whistles, pitchSpread, stagger }`. The pop and whistle are registered sound ids (`celebration.pop`, `celebration.whistle`, placeholders until their audio is generated). `whistles` is 1 to 3. Each whistle's pitch is spread across `±pitchSpread` (default 0.08) and its start is offset by up to `stagger` seconds (default 0.12).
+- **Who decides how many whistles:** the material definition carries `celebration: { whistles }`. The default is one; crystal (prismatic) and Magic have three (owner decision, #497). There is no material-name switch: the player reads the number off the definition.
+- Each whistle starts on its own short timer and nothing is left running afterwards. A celebration's sounds play once per call.
+
 ## Coverage audit (#234, 2026-11-10)
 
 Snapshot of `main` at the audit. It compares `src/audio/sfx-registry.ts` (48 entries), the call sites in `src/`, the committed audio under `src/assets/sfx/`, and the tables above. Two open PRs change this picture: #237 adds the `material.attach.*` sounds and #240 adds sound families. No code or registry entry is changed by this audit.
