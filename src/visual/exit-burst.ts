@@ -13,7 +13,7 @@
  * - Its randomness is cosmetic (`Math.random`), never the run's seeded stream. Presentation only.
  */
 import * as THREE from "three";
-import { exitEffects } from "./exit-presentation";
+import { exitEffects, localBlockSize } from "./exit-presentation";
 import { starTexture } from "./star-particles";
 import { keepWorldSize } from "./world-sized-points";
 
@@ -50,14 +50,9 @@ const defaults: Required<BurstConfig> = {
 
 exitEffects.register("burst", ({ visual, reducedMotion }, raw) => {
   const config = { ...defaults, ...(raw as BurstConfig | undefined) };
-  // Speeds and sizes are in block sizes: measure the block once, in its own space.
-  const bounds = new THREE.Box3().setFromObject(visual.root);
-  const blockSize = bounds.isEmpty()
-    ? 1
-    : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
-  // The block's size in its own (local) space: velocities, gravity and particle size all live
-  // there, and keepWorldSize applies the world scale itself (#509 review).
-  const scale = blockSize / Math.max(visual.root.getWorldScale(new THREE.Vector3()).x, 1e-6);
+  // Speeds and sizes are in block sizes: the block's size in its own (local) space, unchanged by
+  // its world scale or rotation (#509 review); keepWorldSize applies the world scale itself.
+  const scale = localBlockSize(visual);
   const count = reducedMotion ? 0 : Math.max(0, Math.min(maxParticles, Math.round(config.count)));
   const positions = new Float32Array(count * 3);
   const velocities = new Float32Array(count * 3);

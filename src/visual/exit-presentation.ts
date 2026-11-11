@@ -181,3 +181,24 @@ export function createExitRunner(reducedMotion: () => boolean = () => false) {
     },
   };
 }
+
+/**
+ * A departing block's size in its own space: the largest side of its meshes' bounds, measured in
+ * the root's local coordinates, so neither its world scale nor its rotation changes it.
+ */
+export function localBlockSize(visual: ExitVisual): number {
+  visual.root.updateWorldMatrix(true, true);
+  const toLocal = new THREE.Matrix4().copy(visual.root.matrixWorld).invert();
+  const bounds = new THREE.Box3();
+  const part = new THREE.Box3();
+  visual.root.traverse((child) => {
+    const geometry = (child as THREE.Mesh).geometry;
+    if (!geometry) return;
+    geometry.computeBoundingBox();
+    part
+      .copy(geometry.boundingBox!)
+      .applyMatrix4(new THREE.Matrix4().multiplyMatrices(toLocal, child.matrixWorld));
+    bounds.union(part);
+  });
+  return bounds.isEmpty() ? 1 : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
+}

@@ -92,4 +92,16 @@ describe("particle burst exit effect (#444)", () => {
     expect((points(v)!.material as THREE.PointsMaterial).size).toBeCloseTo(0.2);
     runner.dispose();
   });
+
+  it("measures the block in its own space, so turning it changes nothing (#509 review)", () => {
+    const v = visual();
+    v.root.parent!.rotation.y = Math.PI / 4;
+    v.root.parent!.updateMatrixWorld(true);
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [{ effects: [{ effect: "burst", config: { size: 0.1 } }] }],
+    });
+    expect((points(v)!.material as THREE.PointsMaterial).size).toBeCloseTo(0.2);
+    runner.dispose();
+  });
 });
