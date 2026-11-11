@@ -1,3 +1,4 @@
+import type { ActivationConfig } from "./activation-pulse";
 import "./visual/chef-toque";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import { passiveFrequencies } from "./offer-weights";
@@ -28,6 +29,8 @@ export type PassiveBlock = {
     transmogrifier?: { material: BlockMaterial };
     /** Removes the card it is used on from the run (#156). */
     nothingifier?: Record<string, never>;
+    /** Its own activation look (#485); without it, its category's is used. */
+    activationPulse?: ActivationConfig;
   };
 };
 

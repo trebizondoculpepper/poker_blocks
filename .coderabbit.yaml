@@ -76,6 +76,11 @@ reviews:
              a decision in the same PR that implements it (documentation first: the
              decision merges in its own PR beforehand), or adds a concept (new kind of
              scene, trait family, save field) that the docs do not describe.
+             Require an already merged pattern for new/changed behavior, including its
+             owner, configuration, lifecycle and composition. When multiple object kinds
+             share behavior, require a common composable capability, not separate cases.
+             Research is conditional on uncertainty; do not demand redundant research or
+             a fresh design PR when accurate merged documentation already covers it.
           7. A save-format change lacks a version bump and an explicit migration.
           9. Services and controller traits ("Services and controller traits" in
              doc/game-architecture.md): a service learns a scene, mode, material or item
