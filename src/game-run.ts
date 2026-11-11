@@ -100,6 +100,7 @@ export class GameRun {
   private scoredLines: PassiveScoredLine[] = [];
   /** The rules that fired during the last discard, in the order they resolved (#81). */
   private discardActivations: RuleActivation[] = [];
+  private discardEvents: readonly GameEvent[] = [];
   private rewarded: { stage: string; reward: StageReward } | null = null;
   private randomCursor: RandomCursor | undefined;
   private runSeed: number | undefined;
@@ -212,6 +213,11 @@ export class GameRun {
   /** Final results from the last play, shared by the stage total and presentation. */
   get lastScoredLines(): readonly PassiveScoredLine[] {
     return this.scoredLines;
+  }
+
+  /** What the last discard committed, in order: the events presentation plays (#538). */
+  get lastDiscardEvents(): readonly GameEvent[] {
+    return this.discardEvents;
   }
 
   /** The rules that fired during the last discard, for presentation (#81). */
@@ -498,7 +504,8 @@ export class GameRun {
     const chosen = randomPassiveDefinitions(1, this.random, owned)[0];
     if (!chosen) return [];
     const id = this.freePassiveId();
-    this.installPassive(createPassiveBlock(chosen.id, id));
+    // A full rack refuses it: nothing was installed, so nothing is reported (#566 review).
+    if (!this.installPassive(createPassiveBlock(chosen.id, id))) return [];
     return [{ type: "passive.installed", blockId: id }];
   }
 
@@ -588,7 +595,7 @@ export class GameRun {
       });
       // Each listener's fired rules are committed as they resolve, left to right (#170).
       this.discardActivations = [];
-      this.passiveEvents.drain(128, (block, event) => {
+      this.discardEvents = this.passiveEvents.drain(128, (block, event) => {
         const fired = passiveActivations(block, event);
         this.discardActivations.push(...fired);
         return commitCommands(

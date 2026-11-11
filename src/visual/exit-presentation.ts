@@ -49,6 +49,12 @@ export type ExitContext = {
   /** The objects this effect acts on, from its configured target. */
   targets: readonly THREE.Object3D[];
   reducedMotion: boolean;
+  /**
+   * Whether an object is part of the departing block itself, as it was handed over, rather than
+   * something an effect added (a burst's particles, a crack overlay): so one effect never treats
+   * another's output as the block (#512 review).
+   */
+  ownsObject: (object: THREE.Object3D) => boolean;
 };
 
 /** One running effect. `update` returns false once it has finished. */
@@ -91,6 +97,8 @@ class Exit {
   readonly snapshot: ExitSnapshot;
   private readonly visual: ExitVisual;
   private readonly reducedMotion: () => boolean;
+  /** Everything that made up the block when it was handed over. */
+  private readonly own = new Set<THREE.Object3D>();
 
   constructor(
     snapshot: ExitSnapshot,
@@ -101,6 +109,7 @@ class Exit {
     this.snapshot = snapshot;
     this.visual = visual;
     this.reducedMotion = reducedMotion;
+    visual.root.traverse((object) => void this.own.add(object));
     this.remaining = [...sequence.steps];
     this.next();
   }
@@ -119,6 +128,7 @@ class Exit {
           visual: this.visual,
           targets: exitTargets.get(target)(this.visual),
           reducedMotion: this.reducedMotion(),
+          ownsObject: (object) => this.own.has(object),
         },
         config,
       ),
