@@ -899,7 +899,7 @@ Some looks keep emitting while a block is on the table: smoke from fire or sizzl
 - **Composition:** a material's appearance lists them, `effects: [{ effect: "smoke", ...config }]`. Each names a handler in the `blockEffects` registry (`src/visual/block-effects.ts`) and carries that handler's serializable configuration. The view never names an effect or a material: it builds whatever the block's look lists. Fire, meat and Earth are consumers (#466), not cases inside a handler.
 - **Contract:** `blockEffects.get(name)(config, { random, size })` returns `{ object, update(delta, block, reducedMotion), dispose() }`.
   - `object` is added to a **world-space** layer the host owns, never to the block, so particles already emitted stay where they are when the block moves or turns, leaving a trail.
-  - `update` is given the block's live `Object3D` and reads its world matrix, so only *new* particles start from its current pose.
+  - `update` is given the block's live `Object3D` and reads its world matrix, so only _new_ particles start from its current pose.
   - `size` is the block's edge length in world units. Configured distances and speeds are in block sizes, so an effect looks the same at any table scale.
 - **Hosting:** the field view creates a block's effects when the block is drawn on the table and disposes them when it leaves (removed, cleared, redrawn as another material), updating them each frame from its `update`. Nothing else starts or stops them. When a rule should start or stop one (meat starts to sizzle), it changes the block's look, and the host rebuilds the block's effects from the new look.
 - **Bounds and resources:** each emitter has a fixed pool, `ceil(frequency × lifetime) + margin` particles, and recycles the oldest. Its geometry and material are its own and are freed on dispose. Immutable textures (the soft puff) are built once, shared, and never disposed. One `THREE.Points` per emitter, with `frustumCulled` off because its particles roam beyond the block.
@@ -907,6 +907,7 @@ Some looks keep emitting while a block is on the table: smoke from fire or sizzl
 - **Reduced motion:** nothing new is emitted, and existing particles finish fading.
 
 **Smoke (#464)** (`src/visual/smoke.ts`, effect `smoke { colour, size, frequency, rise, lifetime, turbulence, opacity }`):
+
 - Emits `frequency` puffs per second from the block's current centre, resolved into world space. Fractional amounts carry over between frames, so low rates aren't rounded away.
 - Each puff rises along **world up** at `rise` block sizes per second (±20% each), whatever the block's orientation.
 - `turbulence` (block sizes) is a cheap bounded swirl: two sine waves per puff, at their own phases and rates, push it sideways while it keeps rising. The sideways offset never exceeds `turbulence`, and the upward speed is never reduced. There is no fluid simulation.
