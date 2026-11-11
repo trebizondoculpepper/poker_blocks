@@ -12,6 +12,8 @@ Two documents hold the project's decisions. [doc/game-architecture.md](doc/game-
 
 `npm run lint` lints the project (`npm run check` adds formatting and type checks, as CI runs them). `npm install` installs a pre-commit hook (`.vite-hooks/pre-commit`) that formats and lints the staged files with `vp staged` and stops the commit if a problem can't be fixed automatically. Don't skip it with `--no-verify`.
 
+**Document the pattern before implementation.** Research is required only when the existing behavior, reusable architecture or library choice needs investigation; it is not a mandatory extra mission for every change. Before implementing new or changed behavior, cite an accurate, already merged architectural pattern describing its ownership, configuration, lifecycle and composition. If that pattern is missing or changing, document and merge it first. When different kinds of things share a behavior, define a common composable capability rather than separate implementations or identity checks. Existing accurate documentation satisfies the gate; do not create redundant research or design work merely to repeat it. See "Documented behavioral patterns" in [doc/game-architecture.md](doc/game-architecture.md).
+
 ## No special cases (read this first)
 
 **The hard rule: no special cases, and no if/else chains, in generic code.** Generic code (the event queue, the scorer, the run controller, services, registries and their runners) never asks what something is. It dispatches to the handler registered for it. The point of the game is that unexpected behaviour emerges from composing traits, and every special case makes that harder.

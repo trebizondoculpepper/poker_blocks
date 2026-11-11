@@ -85,6 +85,12 @@ Every open ticket that isn't claimed has exactly one readiness label: `status:re
 - **After merging:** remove the `agent:` label from a finished issue, close it, and tell anyone waiting on it.
 - **Documentation first, always:** a rule or design change is its own PR to `doc/game.md` or `doc/game-architecture.md` (and, where it affects agents or review, `AGENTS.md` and `.coderabbit.yaml`), merged before any implementation starts. The implementing ticket is blocked on the documentation ticket. A behaviour-preserving fix that matches an accurate document cites the section instead of changing it. Example: #537 (service and controller architecture, documentation and review policy) merges before #538 (aligning the code), and #545 before the queue implementation in #546–#549.
 
+### Documented pattern gate
+
+Before implementation starts, the ticket identifies the already merged documentation for the behavioral pattern it will use. The pattern describes the behavior's owner, configuration, lifecycle and composition. Research comes first when evidence or architectural choices are uncertain; it is not required when an existing documented pattern already answers those questions. If the pattern is absent or needs to change, create a documentation/architecture mission and block implementation until that documentation merges. Do not require a fresh research or documentation PR simply to reuse an accurate existing pattern.
+
+When multiple kinds of objects need the same behavior (for example ordinary cards and unopened Presents being discardable), first document the common reusable composable capability. Implementing each kind separately and extracting a trait afterwards does not satisfy this gate. Technical research establishes the facts; documentation establishes the contract; implementation follows the merged contract.
+
 ## Agents working side by side
 
 - **Shared checkout:** check `git status` and the issue before editing; never overwrite another agent's uncommitted files. Use a separate worktree only when sharing the checkout would collide.
