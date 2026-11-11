@@ -604,6 +604,21 @@ const entries = [
     placeholder: "material.attach.ice",
   },
   {
+    id: "reaction.freeze",
+    name: "Freeze",
+    family: "material",
+    description:
+      "Custard beside ice, with no heat beside it, freezes into gelato as a play settles",
+    placeholder: "material.attach.ice",
+  },
+  {
+    id: "reaction.thaw",
+    name: "Thaw",
+    family: "material",
+    description: "Gelato beside a source of heat thaws back into custard as a play settles",
+    placeholder: "material.attach.fire",
+  },
+  {
     id: "material.activate.prismatic",
     name: "Activate prismatic",
     family: "material",
@@ -614,6 +629,13 @@ const entries = [
     name: "Activate magic",
     family: "material",
     description: "A Magic card's scoring modifier activates as its line is presented",
+    placeholder: "passive.activate.scoring",
+  },
+  {
+    id: "material.activate.gelato",
+    name: "Activate gelato",
+    family: "material",
+    description: "A gelato card's scoring modifier activates as its line is presented",
     placeholder: "passive.activate.scoring",
   },
   {

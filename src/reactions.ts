@@ -59,13 +59,26 @@ reactionMatchers.register("neighbour-state", (_block, neighbours, config) => {
 // A neighbour made of a given material (flame beside ice, say), unless the block already holds
 // one of the listed state bonuses (boiling water stays boiling beside ordinary flame, #368).
 reactionMatchers.register("neighbour-material", (block, neighbours, config) => {
-  const { material, unlessState = [] } = config as {
+  const {
+    material,
+    unlessState = [],
+    unlessNeighbour = [],
+  } = config as {
     material: BlockMaterial;
     unlessState?: readonly string[];
+    /** Other matchers that, if any accepts the same neighbours, prevent it (#383: no freezing beside heat). */
+    unlessNeighbour?: readonly HandlerRef[];
   };
   if (unlessState.includes(block.traits.stateBonus?.id ?? "")) return false;
+  if (unlessNeighbour.some(({ id, config }) => reactionMatchers.get(id)(block, neighbours, config)))
+    return false;
   return neighbours.some((neighbour) => materialOf(neighbour) === material);
 });
+
+// A neighbour whose material is a source of heat (#383): flame, or any material declaring `heat`.
+reactionMatchers.register("neighbour-heat", (_block, neighbours) =>
+  neighbours.some((neighbour) => getMaterialDefinition(materialOf(neighbour)).heat !== undefined),
+);
 
 // Become another material and/or take a state bonus.
 reactionResults.register("transform", (block, config) => [
