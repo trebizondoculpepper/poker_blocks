@@ -107,4 +107,19 @@ describe("material exits (#438)", () => {
     expect(runner.active).toBe(0);
     expect(release).toHaveBeenCalledOnce();
   });
+
+  it("custard composes the shared container break (#453)", () => {
+    release.mockClear();
+    const v = container();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "custard" }, v, exitOf("custard"));
+    expect(
+      exitOf("custard").steps.map(({ effects }) => effects.map(({ effect }) => effect)),
+    ).toEqual(exitOf("fire").steps.map(({ effects }) => effects.map(({ effect }) => effect)));
+    for (let frame = 0; frame < 45; frame++) runner.update(1 / 60);
+    expect((v.contentsMesh.material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.6);
+    for (let frame = 0; frame < 60; frame++) runner.update(1 / 60);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
 });
