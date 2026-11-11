@@ -58,7 +58,7 @@ export const maxFragments = 64;
  * The bounds of `targets`, in the departing block's own space (unchanged by its world scale or
  * rotation): where fragments start and how big they are. Empty when the targets hold nothing.
  */
-function targetBounds(visual: ExitVisual, targets: readonly THREE.Object3D[]): THREE.Box3 {
+export function targetBounds(visual: ExitVisual, targets: readonly THREE.Object3D[]): THREE.Box3 {
   visual.root.updateWorldMatrix(true, true);
   const toLocal = new THREE.Matrix4().copy(visual.root.matrixWorld).invert();
   const bounds = new THREE.Box3();

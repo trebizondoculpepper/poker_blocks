@@ -17,6 +17,7 @@
 import * as THREE from "three";
 import { Registry } from "../core/registry";
 import { exitEffects, type ExitEffectInstance, type ExitVisual } from "./exit-presentation";
+import { targetBounds } from "./exit-fragments";
 
 /** A recipe for crack lines on a unit cube's faces: segment end points, in growth order. */
 export const crackPatterns = new Registry<(random: () => number) => readonly THREE.Vector3[]>(
@@ -145,21 +146,26 @@ function localSize(visual: ExitVisual): number {
 
 export type CrackConfig = { pattern?: string; seconds?: number; colour?: number };
 
-exitEffects.register("crack", ({ visual, reducedMotion }, raw): ExitEffectInstance => {
+exitEffects.register("crack", ({ visual, targets, reducedMotion }, raw): ExitEffectInstance => {
   const config = raw as CrackConfig | undefined;
   const seconds = Math.max(config?.seconds ?? 0.3, 1e-3);
-  const size = localSize(visual);
-  const points = reducedMotion
-    ? []
-    : crackPatterns
-        .get(config?.pattern ?? "radial")(Math.random)
-        .map((p) => p.clone().multiplyScalar(size));
+  // Cracks run over the configured target only: an empty target, such as a solid block's
+  // contents, gets none (#512 review).
+  const bounds = targetBounds(visual, targets);
+  const size = bounds.isEmpty() ? new THREE.Vector3() : bounds.getSize(new THREE.Vector3());
+  const centre = bounds.isEmpty() ? new THREE.Vector3() : bounds.getCenter(new THREE.Vector3());
+  const points =
+    reducedMotion || bounds.isEmpty()
+      ? []
+      : crackPatterns
+          .get(config?.pattern ?? "radial")(Math.random)
+          .map((p) => p.clone().multiply(size).add(centre));
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   geometry.setDrawRange(0, 0);
   const material = new THREE.LineBasicMaterial({ color: config?.colour ?? 0x1a1a1a });
   const lines = new THREE.LineSegments(geometry, material);
   visual.root.add(lines);
-  let elapsed = reducedMotion ? seconds : 0;
+  let elapsed = reducedMotion || !points.length ? seconds : 0;
   const reveal = () =>
     geometry.setDrawRange(0, Math.floor((points.length / 2) * (elapsed / seconds)) * 2);
   return {
@@ -211,9 +217,13 @@ exitEffects.register("fracture", ({ visual, targets, reducedMotion }, raw): Exit
         size,
         colour: config?.colour ?? 0xcccccc,
       });
-  const thrown = new Set<THREE.Object3D>(source.pieces);
-  // Whatever isn't itself a flying piece hides while they fly, and shows again on dispose.
-  const hidden = reducedMotion ? [] : originals.filter((each) => each.visible && !thrown.has(each));
+  // A flying piece and every ancestor it hangs from stay visible (a group wrapping component
+  // meshes must not hide them, #512 review); the rest hides while they fly, and shows again on
+  // dispose.
+  const shown = new Set<THREE.Object3D>();
+  for (const piece of source.pieces)
+    for (let node: THREE.Object3D | null = piece; node; node = node.parent) shown.add(node);
+  const hidden = reducedMotion ? [] : originals.filter((each) => each.visible && !shown.has(each));
   hidden.forEach((each) => (each.visible = false));
   const motion = source.pieces.map(() => ({
     velocity: new THREE.Vector3(Math.random() - 0.5, Math.random(), Math.random() - 0.5)

@@ -87,3 +87,41 @@ describe("fracture (#442)", () => {
     expect(() => pieceSources.get("no-such-set")).toThrow();
   });
 });
+
+describe("targets and grouped components (#512 review)", () => {
+  it("cracks only its configured target: a solid block's empty contents get no cracks", () => {
+    const { v, root } = visual();
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [{ effects: [{ effect: "crack", target: "contents" }] }],
+    });
+    const lines = root.children.find(
+      (child): child is THREE.LineSegments => child instanceof THREE.LineSegments,
+    )!;
+    expect(lines.geometry.attributes.position?.count ?? 0).toBe(0);
+    runner.update(0.016);
+    expect(runner.active).toBe(0);
+  });
+
+  it("keeps a group wrapping flying components visible, so its pieces can be seen", () => {
+    const root = new THREE.Group();
+    const wrapper = new THREE.Group();
+    const blade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.1, 0.1),
+      new THREE.MeshBasicMaterial(),
+    );
+    wrapper.add(blade);
+    root.add(wrapper);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [wrapper], contents: [], release: vi.fn() };
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        { effects: [{ effect: "fracture", target: "shell", config: { pieces: "components" } }] },
+      ],
+    });
+    expect(wrapper.visible).toBe(true);
+    expect(blade.visible).toBe(true);
+    runner.dispose();
+  });
+});
