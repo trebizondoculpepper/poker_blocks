@@ -1,6 +1,6 @@
 /**
  * The vessels built by the contained-components proof (#346): the custard baseline, made by
- * the game's own `createFilledVessel`, and the proof's glass + refractive water + fading film.
+ * the game's own `composeContained`, and the proof's glass + refractive water + fading film.
  * Both are registered by name, so the room only looks one up.
  *
  * The proof composes the parts #329 describes, in its render-layer order:
@@ -14,7 +14,8 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { materialPools } from "../../materials";
-import { createFilledVessel, createSettler } from "../../visual/filled-vessel";
+import { composeContained, containedLayers } from "../../visual/contained";
+import { createSettler } from "../../visual/filled-vessel";
 import { coatingStorages, type CoatingConfig, type LiquidSurface } from "./coating";
 
 export type VesselOptions = {
@@ -73,16 +74,21 @@ function printSkin(): THREE.Mesh {
   return skin;
 }
 
-/** The custard baseline: the game's filled vessel, exactly as the game builds it. */
+/** The custard baseline: the game's contained block, exactly as the game builds it. */
 const custard: VesselBuilder = ({ environment }) => {
-  const config = materialPools
+  const material = materialPools
     .get("registered")()
-    .map((material) => material.appearance.vessel)
-    .find((vessel) => vessel !== undefined);
-  if (!config) throw new Error("No registered material has vessel data for the baseline");
-  const { shell, extras } = createFilledVessel(blockGeometry, 1, config, environment);
+    .find(({ appearance }) => appearance.contents !== undefined);
+  if (!material?.appearance.container)
+    throw new Error("No registered material has contents for the baseline");
+  const { faces: shell, extras } = composeContained(
+    { geometry: blockGeometry, size: 1, environment },
+    material.appearance.container,
+    material.appearance.contents,
+  );
   const object = new THREE.Group();
   const outer = new THREE.Mesh(blockGeometry, shell);
+  outer.renderOrder = containedLayers.shellFront;
   const print = printSkin();
   object.add(outer, ...extras, print);
   return {

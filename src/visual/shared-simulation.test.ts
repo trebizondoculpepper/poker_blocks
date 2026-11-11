@@ -93,7 +93,7 @@ describe("shared visual simulations (#230)", () => {
 
   it("guardrail: an effect gets its simulation from the shared registry, never per block", () => {
     const vessel = readFileSync(new URL("./filled-vessel.ts", import.meta.url), "utf8");
-    const factory = vessel.slice(vessel.indexOf("export function createFilledVessel"));
+    const factory = vessel.slice(vessel.indexOf("export function createVesselFluid"));
     const body = factory.slice(0, factory.indexOf("\n}\n"));
     expect(body).toContain("sharedSimulations.acquire(");
     // The per-block factory never builds a settler or simulation of its own.
