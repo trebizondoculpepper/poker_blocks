@@ -693,7 +693,7 @@ function drawMeatCrossSection(g: CanvasRenderingContext2D, random: () => number)
 }
 
 /** The face art, in the colours of the material's ink. */
-function drawPrint(
+export function drawPrint(
   g: CanvasRenderingContext2D,
   art: FaceArt,
   appearance: MaterialDefinition["appearance"],
