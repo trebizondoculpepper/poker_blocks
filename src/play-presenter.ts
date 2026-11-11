@@ -269,11 +269,16 @@ export function createPlayPresenter(options: {
       // Reactions (#366, #367) changed blocks already on the table, or made new ones (#425):
       // model first, so draw each now as the model has it, and play each reaction's sound. A
       // reacted block still landing is drawn as the model has it when it lands.
+      // A block on screen is redrawn; one not on screen is added only if nothing is in or
+      // expected in its cell (a new block), so a card still in flight lands as before.
       const landingIds = new Set(ids);
+      const known = new Set(field.occupiedCells().map(cellKey));
       for (const { blockId } of game().lastReactions) {
         const now = next.field.find(({ block }) => block.id === blockId);
         if (!now || landingIds.has(blockId)) continue;
-        if (field.blocks().some(({ block }) => block.id === blockId)) field.remove(blockId);
+        const shown = field.blocks().some(({ block }) => block.id === blockId);
+        if (!shown && known.has(cellKey(now.cell))) continue;
+        if (shown) field.remove(blockId);
         field.add(now.block, now.cell);
       }
       for (const sound of new Set(

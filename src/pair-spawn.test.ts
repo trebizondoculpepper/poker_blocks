@@ -118,4 +118,20 @@ describe("air + boiling water makes a cloud (#425)", () => {
       clouds(applyReactions(table(at(card("5", "hearts", "airVent"), 0), at(hot, 1))).state),
     ).toHaveLength(0);
   });
+
+  it("ignores water that only boils this play: it reads the play's snapshot (#428 review)", () => {
+    // Aggressive flame boils the water at x = -1 this play; it precedes the air in field order.
+    const flame = withStateBonus(card("2", "diamonds", "fire"), "aggressive");
+    const state = table(
+      at(flame, -1, 1),
+      at(card("6", "spades", "water", "soon"), -1),
+      at(card("5", "hearts", "airVent"), 0),
+      at(boiling("9", "clubs"), 1),
+    );
+    const after = applyReactions(state).state;
+    expect(after.field.find(({ block }) => block.id === "soon")!.block.traits.stateBonus?.id).toBe(
+      "boiled",
+    );
+    expect(clouds(after)).toHaveLength(1);
+  });
 });

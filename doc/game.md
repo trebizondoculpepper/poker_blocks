@@ -189,6 +189,7 @@ Only blocks that **contribute to the selected scoring hand** activate these mate
 **Cloud (#423).** A cloud scores **+2** and **×1.5**, and unlike other materials it always applies to a scored line it's in, whether or not it's part of the chosen hand. It enhances the hand without changing it, so a high card beside a cloud is still a high card, worth more; a cloud is never a wildcard. Its +2 joins the line's points at the hand's multiplier, and its ×1.5 joins the line phases. Its own rank value doesn't count unless it's part of the hand. Clouds stack: two give ×2.25. Clouds are never sold; they're made by air beside boiling water (#425).
 
 **Air and boiling water make a cloud (#425).** When a play settles, each air block sharing a face with boiling water (water holding `boiled`) may make one **Cloud**, as a new block.
+
 - **Placement:** only the two cells immediately beyond the pair, on its shared axis, can take it. If neither is free, nothing happens. If both are, the cloud goes where its lines would score more, judged without committing anything or rolling; on a tie it goes beyond the boiling water.
 - **Its card:** the higher input's suit and the rank above it, capped at Ace. On equal ranks it takes the boiling water's suit.
 - **The inputs** are unchanged.

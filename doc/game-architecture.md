@@ -261,6 +261,7 @@ When the placed card lands, the scene presents each scoring line from lowest to 
 **Card ownership (#424).** A card's `owner` trait names a registered owner in `cardOwners` (`src/card-ownership.ts`); without one, its owner is the deck. When a stage's table clears, `GameRun.clearTable` hands each field card to its owner's `atTableClear` and never asks what the card is. `deck` puts it back in the deck. `field` (a card made during play, `asGenerated`) takes it out of play and out of `GameState.generatedCards`, the list a save writes in full so Continue can rebuild cards that aren't in the starting deck. Generated cards never join the deck or a later draw.
 
 **Spawning beyond a pair (#425).** A reaction result, `spawn-beyond-pair` (`src/pair-spawn.ts`), configured on the reacting material with its `partner` (material and optional state bonus), the new block's `material` and a `sound`. Air's definition carries it, for boiling water and cloud. Its rule command:
+
 - for each matching face neighbour, takes the two axis-end cells that are free;
 - scores each with the run's own scorer on a copy of the field (passives' value sources use their no-roll default);
 - places the card made by `spawnedIdentity`, owned by the field (`asGenerated`), and adds it to `generatedCards`;

@@ -41,7 +41,12 @@ export type ReactionMatcher = (
  * What a reaction asks for, as rule commands (#363): a result handler only collects them; they
  * are committed afterwards through the shared `commitCommands` path, never here.
  */
-export type ReactionResult = (block: CardBlock, config: unknown) => RuleCommand[];
+export type ReactionResult = (
+  block: CardBlock,
+  config: unknown,
+  /** The block's face neighbours in the play's snapshot, before any reaction commits (#428). */
+  neighbours: readonly CardBlock[],
+) => RuleCommand[];
 
 export const reactionMatchers = new Registry<ReactionMatcher>("reaction matcher");
 export const reactionResults = new Registry<ReactionResult>("reaction result");
@@ -177,7 +182,7 @@ export function resolveReactions(
       reactionMatchers.get(when.id)(placed.block, neighbours, when.config),
     );
     return (reaction?.results ?? []).flatMap((result) =>
-      reactionResults.get(result.id)(placed.block, result.config),
+      reactionResults.get(result.id)(placed.block, result.config, neighbours),
     );
   });
 }

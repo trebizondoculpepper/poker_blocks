@@ -79,13 +79,25 @@ function freshId(state: GameState, base: string): string {
   return `${base}.${n}`;
 }
 
-reactionResults.register("spawn-beyond-pair", (block, config) => [
-  { id: "spawn-beyond-pair", config: { ...(config as object), blockId: block.id } },
-]);
+// Partners are chosen from the play's snapshot, so a neighbour that changes this play (water
+// that boils now) can't make a cloud until the next play (#428 review).
+reactionResults.register("spawn-beyond-pair", (block, config, neighbours) => {
+  const { partner } = config as PairSpawnConfig;
+  const partnerIds = neighbours
+    .filter(
+      (mate) =>
+        materialOf(mate) === partner.material &&
+        (partner.stateBonus === undefined || mate.traits.stateBonus?.id === partner.stateBonus),
+    )
+    .map(({ id }) => id);
+  return [
+    { id: "spawn-beyond-pair", config: { ...(config as object), blockId: block.id, partnerIds } },
+  ];
+});
 
-registerRuleCommand<PairSpawnConfig & { blockId: string }>(
+registerRuleCommand<PairSpawnConfig & { blockId: string; partnerIds: readonly string[] }>(
   "spawn-beyond-pair",
-  ({ blockId, partner, material, sound }, target) => {
+  ({ blockId, partnerIds, material, sound }, target) => {
     const events: GameEvent[] = [];
     const origin = target.state.field.find(({ block }) => block.id === blockId);
     for (const face of origin ? faces : []) {
@@ -93,11 +105,8 @@ registerRuleCommand<PairSpawnConfig & { blockId: string }>(
       const axis = faceNormal(face) as Cell;
       const near = add(origin!.cell, axis);
       const mate = state.field.find(({ cell }) => cellKey(cell) === cellKey(near))?.block;
-      const matches =
-        mate !== undefined &&
-        materialOf(mate) === partner.material &&
-        (partner.stateBonus === undefined || mate.traits.stateBonus?.id === partner.stateBonus);
-      if (!matches) continue;
+      // Only partners chosen from the snapshot; their cells and the free cells are read live.
+      if (!partnerIds.includes(mate?.id ?? "")) continue;
       const occupied = new Set(state.field.map(({ cell }) => cellKey(cell)));
       // Beyond the partner first, so a tie keeps that cell.
       const candidates = [add(origin!.cell, axis, 2), add(origin!.cell, axis, -1)].filter(
