@@ -344,12 +344,11 @@ export function createPlayPresenter(options: {
     },
     discard(sources) {
       const session = game();
-      const coinsBefore = session.state.coins;
-      const passivesBefore = session.state.passiveRack.length;
       if (!sources.length || !session.discard(sources.map(({ block }) => block.id))) return false;
       hand.settle(sources);
-      if (session.state.coins > coinsBefore) playSfx("passive.coins");
-      if (session.state.passiveRack.length > passivesBefore) playSfx("passive.granted");
+      // Each committed outcome plays the sound its configuration named; nothing is inferred
+      // from comparing state (#538).
+      for (const { sound } of session.lastDiscardEvents) if (sound) playSfx(sound);
       options.rackChanged();
       options.activated([
         ...new Set(session.lastDiscardActivations.map(({ sourceId }) => sourceId)),

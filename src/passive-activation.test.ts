@@ -27,6 +27,23 @@ describe("passive activation feedback (#81)", () => {
     },
   );
 
+  it("reports a discard's coins as an event carrying its sound, not a state difference (#538)", () => {
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
+    game.installPassive(createPassiveBlock("scrapper", "passive.1"));
+    const hand = [card("2", "clubs"), card("3", "hearts")];
+    const run = GameRun.fromSnapshot(
+      dealerRegistry,
+      sandboxRunRules(demoRunRules),
+      standardDeck,
+      { ...game.snapshot(), state: { ...game.state, hand } },
+      () => 0,
+    );
+    run.discard([hand[0]!.id]);
+    expect(run.lastDiscardEvents.filter(({ sound }) => sound)).toEqual([
+      { type: "coins.gained", amount: 1, sound: "passive.coins" },
+    ]);
+  });
+
   it("records which passives' rules fired in the last discard, and only that discard", () => {
     const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
     game.installPassive(createPassiveBlock("scrapper", "passive.1"));

@@ -61,8 +61,13 @@ export type GameEvent = {
   trigger?: TriggerContext;
   /** On `block.removed` and `block.resisted` (#437): what destroyed it, or what it resisted. */
   cause?: string;
-  /** On `block.removed` (#435): the sound its configuration names, for presentation to play. */
+  /**
+   * The sound the committing configuration names, for presentation to play: on `block.removed`
+   * (#435), `coins.gained` and a granted `passive.installed` (#538).
+   */
   sound?: SoundEffectId;
+  /** On `coins.gained` (#538): how many coins were added. */
+  amount?: number;
   /** On `reward.finalized`: the coins paid, and the balance before and after. */
   reward?: { coins: number; balanceBefore: number; balance: number };
 };
