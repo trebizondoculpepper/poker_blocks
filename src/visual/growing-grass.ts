@@ -7,7 +7,9 @@
  * Lifecycle:
  * - **Turning clears it.** When the block's world rotation moves by more than `turnDegrees`
  *   from where the grass started, every blade vanishes at once and the stillness timer resets.
- *   Camera movement doesn't change the block's rotation, and jitter stays under the tolerance.
+ *   Camera movement doesn't change the block's rotation. The tolerance sits above the board's
+ *   automatic presentation wobble (8–12°) and far below a deliberate quarter turn (90°), so
+ *   only a real turn counts (#419 review).
  * - **Only on a settled top.** The timer counts stillness from the end of the last turn, but no
  *   blade is born until the surface's normal is within `settledDegrees` of world up (seen from
  *   the block), so grass never grows on an obsolete, still-moving top. With slow contents the
@@ -102,7 +104,14 @@ export const growingGrass: InclusionHandler = {
     /** A place on the current top, inside the walls; false if none was found. */
     const place = (i: number): boolean => {
       const n = surface.normal;
-      u.set(n.y, n.z, n.x).cross(n).normalize();
+      // A tangent from the axis least aligned with the normal, so no normal (a diagonal one
+      // included) gives a degenerate basis.
+      const ax = Math.abs(n.x),
+        ay = Math.abs(n.y),
+        az = Math.abs(n.z);
+      u.set(ax <= ay && ax <= az ? 1 : 0, ay < ax && ay <= az ? 1 : 0, az < ax && az < ay ? 1 : 0)
+        .cross(n)
+        .normalize();
       v.crossVectors(n, u);
       for (let attempt = 0; attempt < 8; attempt++) {
         point

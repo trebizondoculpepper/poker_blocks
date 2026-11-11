@@ -13,8 +13,8 @@ const config: GrowingGrassConfig = {
   width: 0.025,
   base: 0x2f6b22,
   tip: 0x8fd16a,
-  turnDegrees: 2,
-  settledDegrees: 4,
+  turnDegrees: 30,
+  settledDegrees: 20,
 };
 
 function vessel() {
@@ -120,5 +120,29 @@ describe("growing grass (#358)", () => {
     v.mesh.geometry.addEventListener("dispose", () => (released = true));
     (v.mesh.material as THREE.Material).dispose();
     expect(released).toBe(true);
+  });
+
+  it("survives the board's automatic wobble, which is not a turn (#419 review)", () => {
+    const v = vessel();
+    const axis = new THREE.Vector3(1, 0, 0);
+    for (let t = 0; t < 8; t += 1 / 30) {
+      v.rotation.setFromAxisAngle(axis, THREE.MathUtils.degToRad(12 * Math.sin(t * 1.3)));
+      v.run(1 / 30);
+    }
+    expect(v.blades().length).toBeGreaterThan(0);
+  });
+
+  it("grows real blades on a diagonal top (#419 review)", () => {
+    const v = vessel();
+    v.normal.set(1, 1, 1).normalize();
+    // World up seen from the block is the diagonal too, so the top counts as settled.
+    v.rotation.setFromUnitVectors(
+      new THREE.Vector3(1, 1, 1).normalize(),
+      new THREE.Vector3(0, 1, 0),
+    );
+    v.run(7);
+    const blades = v.blades();
+    expect(blades.length).toBeGreaterThan(1);
+    expect(blades[0]!.base.distanceTo(blades[1]!.base)).toBeGreaterThan(1e-6);
   });
 });

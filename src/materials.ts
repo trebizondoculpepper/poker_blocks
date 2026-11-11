@@ -650,8 +650,8 @@ const grass = {
     width: 0.025,
     base: 0x2f6b22,
     tip: 0x8fd16a,
-    turnDegrees: 2,
-    settledDegrees: 4,
+    turnDegrees: 30,
+    settledDegrees: 20,
   },
 };
 

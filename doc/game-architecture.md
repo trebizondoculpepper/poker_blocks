@@ -929,8 +929,8 @@ A contained block may list **inclusions**: things suspended in its contents, reg
 
 **`growingGrass`** (`src/visual/growing-grass.ts`) is an inclusion reading `liquidSurface` and the shared frame's rotation:
 
-- **Turning:** the block's world rotation moving more than `turnDegrees` (2°) from where the grass started clears every blade at once and resets the stillness timer. Camera motion doesn't change the block's rotation, and jitter stays under the tolerance.
-- **Surface readiness:** stillness is timed from the end of the last turn. No blade is born until the published surface normal is within `settledDegrees` (4°) of world up seen from the block, so grass never grows on an obsolete top. The first blade therefore appears at whichever comes later: `delay` (5 s) of stillness, or the earth settling. After a quarter turn at `settleSeconds: 5`, settling to 4° takes about 16 s.
+- **Turning:** the block's world rotation moving more than `turnDegrees` (30°) from where the grass started clears every blade at once and resets the stillness timer. Camera motion doesn't change the block's rotation. The tolerance sits above the board's automatic wobble (8–12°), which would otherwise reset it forever, and far below a deliberate quarter turn (90°).
+- **Surface readiness:** stillness is timed from the end of the last turn. No blade is born until the published surface normal is within `settledDegrees` (20°) of world up seen from the block, so grass never grows on an obsolete top. The first blade therefore appears at whichever comes later: `delay` (5 s) of stillness, or the earth settling. After a quarter turn at `settleSeconds: 5`, settling to 20° takes about 7.5 s.
 - **Growth:** one blade at a time, about `interval` (0.12 s) apart with jitter, at random places on the top inside the walls. Each tip draws up from its base over `growSeconds` (0.8 s), and earlier blades stay. The pool is bounded (90 blades).
 - **Rendering:** one opaque mesh of triangles, in the contents' opaque layer.
 - **Reduced motion:** blades appear at full height instead of growing.
