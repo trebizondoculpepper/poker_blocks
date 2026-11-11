@@ -99,6 +99,77 @@ function drawWood(g: CanvasRenderingContext2D, random: () => number, endGrain: b
  * shading comes from the material's anisotropic reflections, so nothing is baked in but
  * the grain, the rim and the rivets.
  */
+/**
+ * Air (#357): a powder-coated housing. The material's two variant faces (its
+ * `endGrainFaces`, chosen opposite each other) carry a PC fan: a square frame with corner
+ * screws, a round shroud and seven swept blades around a hub. The other four faces carry
+ * louvred slats. Both are kept pale and low-contrast, so the rank and suit printed over them
+ * stay legible.
+ */
+function drawVentHousing(g: CanvasRenderingContext2D, fan: boolean): void {
+  g.fillStyle = "#d9dee2";
+  g.fillRect(0, 0, SIZE, SIZE);
+  border(g, "#7d8890", 10);
+  border(g, "#f4f7f9aa", 2);
+  const centre = SIZE / 2;
+  if (fan) {
+    // The shroud: a dark well the blades sit in.
+    g.fillStyle = "#b9c2c8";
+    g.beginPath();
+    g.arc(centre, centre, 104, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = "#8b969d";
+    g.lineWidth = 4;
+    g.stroke();
+    // Seven swept blades.
+    g.fillStyle = "#e7ebee";
+    g.strokeStyle = "#9aa5ab";
+    g.lineWidth = 2;
+    for (let blade = 0; blade < 7; blade++) {
+      const angle = (blade / 7) * Math.PI * 2;
+      g.save();
+      g.translate(centre, centre);
+      g.rotate(angle);
+      g.beginPath();
+      g.moveTo(22, -6);
+      g.quadraticCurveTo(70, -40, 98, -12);
+      g.quadraticCurveTo(70, 4, 22, 10);
+      g.closePath();
+      g.fill();
+      g.stroke();
+      g.restore();
+    }
+    // The hub.
+    g.fillStyle = "#c6ced3";
+    g.beginPath();
+    g.arc(centre, centre, 24, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    // Corner screws.
+    for (const x of [30, SIZE - 30])
+      for (const y of [30, SIZE - 30]) {
+        g.fillStyle = "#8b969d";
+        g.beginPath();
+        g.arc(x, y, 9, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = "#eef1f3";
+        g.beginPath();
+        g.arc(x - 1, y - 1, 5, 0, Math.PI * 2);
+        g.fill();
+      }
+    return;
+  }
+  // Louvres: angled slats, each with a lit top edge and a shadow beneath.
+  for (let y = 34; y < SIZE - 30; y += 22) {
+    g.fillStyle = "#a9b3b9";
+    g.fillRect(28, y + 8, SIZE - 56, 8);
+    g.fillStyle = "#eef2f4";
+    g.fillRect(28, y, SIZE - 56, 8);
+    g.fillStyle = "#c3cbd0";
+    g.fillRect(28, y + 6, SIZE - 56, 2);
+  }
+}
+
 function drawSteel(g: CanvasRenderingContext2D, random: () => number, angle: number): void {
   g.fillStyle = "#959ca1";
   g.fillRect(0, 0, SIZE, SIZE);
@@ -627,6 +698,7 @@ const patternRegistry = new Map<string, PatternHandler>([
   ["crackedClay", (g, random, art) => drawTerracotta(g, random, potteryCracks(art))],
   ["frostedIce", (g, random) => drawIce(g, random)],
   ["marbledFlesh", (g, random, _identity, endGrain) => drawMeat(g, random, endGrain)],
+  ["ventHousing", (g, _random, _identity, endGrain) => drawVentHousing(g, endGrain)],
 ]);
 
 function faceTexture(
