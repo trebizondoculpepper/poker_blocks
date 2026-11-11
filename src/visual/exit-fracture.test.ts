@@ -148,3 +148,19 @@ describe("targets and grouped components (#512 review)", () => {
     empty.dispose();
   });
 });
+
+describe("fracture beside other effects (#512 review)", () => {
+  it("never hides a sibling effect's particles: a burst alongside stays visible", async () => {
+    await import("./exit-burst");
+    const { v, root } = visual();
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        { effects: [{ effect: "burst" }, { effect: "fracture", config: { pieces: "slabs" } }] },
+      ],
+    });
+    const particles = root.children.find((child) => child instanceof THREE.Points)!;
+    expect(particles.visible).toBe(true);
+    runner.dispose();
+  });
+});

@@ -196,68 +196,74 @@ export type FractureConfig = {
   colour?: number;
 };
 
-exitEffects.register("fracture", ({ visual, targets, reducedMotion }, raw): ExitEffectInstance => {
-  const config = raw as FractureConfig | undefined;
-  const life = Math.max(config?.life ?? 0.8, 1e-3);
-  const [slow, fast] = config?.speed ?? [0.8, 1.8];
-  const spin = config?.spin ?? 8;
-  // Measured in the block's own space, from the selected target (#512 review).
-  const bounds = targetBounds(visual, targets);
-  const size = bounds.isEmpty() ? 0 : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
-  const gravity = (config?.gravity ?? 4) * size;
-  // The block's own meshes under the targets: broken up or hidden while the pieces fly.
-  const originals: THREE.Object3D[] = [];
-  for (const target of targets)
-    target.traverse((child) => {
-      if (child !== visual.root) originals.push(child);
-    });
-  const source = reducedMotion
-    ? { pieces: [], release: () => {} }
-    : pieceSources.get(config?.pieces ?? "components")({
-        visual,
-        originals,
-        bounds,
-        colour: config?.colour ?? 0xcccccc,
+exitEffects.register(
+  "fracture",
+  ({ visual, targets, reducedMotion, ownsObject }, raw): ExitEffectInstance => {
+    const config = raw as FractureConfig | undefined;
+    const life = Math.max(config?.life ?? 0.8, 1e-3);
+    const [slow, fast] = config?.speed ?? [0.8, 1.8];
+    const spin = config?.spin ?? 8;
+    // Measured in the block's own space, from the selected target (#512 review).
+    const bounds = targetBounds(visual, targets);
+    const size = bounds.isEmpty() ? 0 : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
+    const gravity = (config?.gravity ?? 4) * size;
+    // The block's own meshes under the targets: broken up or hidden while the pieces fly.
+    const originals: THREE.Object3D[] = [];
+    for (const target of targets)
+      target.traverse((child) => {
+        // Only the block's own objects: never a sibling effect's particles or overlays.
+        if (child !== visual.root && ownsObject(child)) originals.push(child);
       });
-  // A flying piece and every ancestor it hangs from stay visible (a group wrapping component
-  // meshes must not hide them, #512 review); the rest hides while they fly, and shows again on
-  // dispose.
-  const shown = new Set<THREE.Object3D>();
-  for (const piece of source.pieces)
-    for (let node: THREE.Object3D | null = piece; node; node = node.parent) shown.add(node);
-  const hidden = reducedMotion ? [] : originals.filter((each) => each.visible && !shown.has(each));
-  hidden.forEach((each) => (each.visible = false));
-  const motion = source.pieces.map(() => ({
-    velocity: new THREE.Vector3(Math.random() - 0.5, Math.random(), Math.random() - 0.5)
-      .normalize()
-      .multiplyScalar((slow + Math.random() * (fast - slow)) * size),
-    axis: new THREE.Vector3(
-      Math.random() - 0.5,
-      Math.random() - 0.5,
-      Math.random() - 0.5,
-    ).normalize(),
-  }));
-  let elapsed = reducedMotion ? life : 0;
-  const turn = new THREE.Quaternion();
-  return {
-    update(delta) {
-      if (elapsed >= life) return false;
-      const step = Math.min(delta, life - elapsed);
-      elapsed += step;
-      source.pieces.forEach((piece, i) => {
-        const { velocity, axis } = motion[i]!;
-        velocity.y -= gravity * step;
-        piece.position.addScaledVector(velocity, step);
-        piece.quaternion.premultiply(turn.setFromAxisAngle(axis, spin * step));
-      });
-      return elapsed < life;
-    },
-    finish() {
-      elapsed = life;
-    },
-    dispose() {
-      source.release();
-      hidden.forEach((each) => (each.visible = true));
-    },
-  };
-});
+    const source = reducedMotion
+      ? { pieces: [], release: () => {} }
+      : pieceSources.get(config?.pieces ?? "components")({
+          visual,
+          originals,
+          bounds,
+          colour: config?.colour ?? 0xcccccc,
+        });
+    // A flying piece and every ancestor it hangs from stay visible (a group wrapping component
+    // meshes must not hide them, #512 review); the rest hides while they fly, and shows again on
+    // dispose.
+    const shown = new Set<THREE.Object3D>();
+    for (const piece of source.pieces)
+      for (let node: THREE.Object3D | null = piece; node; node = node.parent) shown.add(node);
+    const hidden = reducedMotion
+      ? []
+      : originals.filter((each) => each.visible && !shown.has(each));
+    hidden.forEach((each) => (each.visible = false));
+    const motion = source.pieces.map(() => ({
+      velocity: new THREE.Vector3(Math.random() - 0.5, Math.random(), Math.random() - 0.5)
+        .normalize()
+        .multiplyScalar((slow + Math.random() * (fast - slow)) * size),
+      axis: new THREE.Vector3(
+        Math.random() - 0.5,
+        Math.random() - 0.5,
+        Math.random() - 0.5,
+      ).normalize(),
+    }));
+    let elapsed = reducedMotion ? life : 0;
+    const turn = new THREE.Quaternion();
+    return {
+      update(delta) {
+        if (elapsed >= life) return false;
+        const step = Math.min(delta, life - elapsed);
+        elapsed += step;
+        source.pieces.forEach((piece, i) => {
+          const { velocity, axis } = motion[i]!;
+          velocity.y -= gravity * step;
+          piece.position.addScaledVector(velocity, step);
+          piece.quaternion.premultiply(turn.setFromAxisAngle(axis, spin * step));
+        });
+        return elapsed < life;
+      },
+      finish() {
+        elapsed = life;
+      },
+      dispose() {
+        source.release();
+        hidden.forEach((each) => (each.visible = true));
+      },
+    };
+  },
+);
