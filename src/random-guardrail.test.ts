@@ -20,6 +20,8 @@ const allowed: Readonly<Record<string, string>> = {
   "src/motion.ts": "the idle wobble of a block: presentation",
   "src/visual/exit-fragments.ts":
     "where scraps and splinters start and fly (#443): presentation, never the session stream",
+  "src/visual/exit-burst.ts":
+    "which way and how fast a burst particle launches (#444): presentation, never the session stream",
   "src/visual/growing-grass.ts":
     "where a grass blade grows and how it leans (#358): presentation, never the session stream",
   "src/visual/rising-bubbles.ts":
