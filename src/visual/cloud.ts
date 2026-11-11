@@ -1,6 +1,7 @@
 /**
  * A contained cloud (#336): soft, drifting cloud inside a container's interior, as contents.
- * It is a light raymarch through the interior volume (a few steps of soft noise density), in
+ * It is a light raymarch through the interior volume (14 samples of soft noise density over the
+ * ray's full length through the box, at any viewing angle), in
  * the contents' transparent layer, so it never writes depth over the container's other parts.
  * Its drift comes from the block's one contained frame (`update`), not a clock of its own. It
  * publishes nothing: a cloud has no liquid surface, so residue that needs one cannot pair with it.
@@ -64,11 +65,16 @@ const fragmentShader = /* glsl */ `
     // March from where the ray enters the back face, toward the camera, through the box.
     vec3 dir = normalize(vLocal - vOrigin);
     vec3 p = vLocal;
-    float step = halfSize * 2.0 / 14.0;
+    // How far the ray runs through the box back toward the camera (slab method): up to the
+    // full diagonal at oblique angles, so the 14 samples always span the whole visible volume.
+    vec3 toward = -dir;
+    vec3 safe = sign(toward) * max(abs(toward), vec3(1e-5));
+    vec3 exits = (sign(safe) * halfSize - p) / safe;
+    float span = max(min(min(exits.x, exits.y), exits.z), 0.0);
+    float step = span / 14.0;
     float alpha = 0.0;
     for (int i = 0; i < 14; i++) {
       p -= dir * step;
-      if (any(greaterThan(abs(p), vec3(halfSize)))) break;
       float d = cloud(p) * step / halfSize;
       alpha += (1.0 - alpha) * clamp(d, 0.0, 1.0);
       if (alpha > 0.95) break;
