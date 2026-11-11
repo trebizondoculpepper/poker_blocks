@@ -127,3 +127,21 @@ describe("stage target balance (#137)", () => {
     ).toContain("stage kinds must be unique");
   });
 });
+
+describe("transmogrifier balance (#392)", () => {
+  it("is valid as configured, and refuses bad uses or price multiples", async () => {
+    const { gameTuning, validateTransmogrifierBalance } = await import("./balance");
+    expect(validateTransmogrifierBalance(gameTuning.transmogrifier)).toEqual([]);
+    expect(validateTransmogrifierBalance({ uses: 0, priceFactor: 2 })).toHaveLength(1);
+    expect(validateTransmogrifierBalance({ uses: 2, priceFactor: 0 })).toHaveLength(1);
+  });
+
+  it("is carried by the balance editor's draft and validated there", async () => {
+    const { currentShopBalanceDraft, validateShopBalanceDraft } =
+      await import("./tools/shop-balance-draft");
+    const draft = currentShopBalanceDraft();
+    expect(draft.transmogrifier).toEqual({ uses: 2, priceFactor: 2 });
+    draft.transmogrifier.uses = 0;
+    expect(validateShopBalanceDraft(draft).map(({ path }) => path)).toContain("transmogrifier");
+  });
+});

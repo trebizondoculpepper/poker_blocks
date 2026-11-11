@@ -1,5 +1,10 @@
 /** A complete, editable JSON draft of the shop's numeric balance. No edit touches live data. */
-import { gameTuning, validateMaterialBalance, validatePassiveBalance } from "../balance";
+import {
+  validateTransmogrifierBalance,
+  gameTuning,
+  validateMaterialBalance,
+  validatePassiveBalance,
+} from "../balance";
 import { defaultShop } from "../game-modes";
 import { materialDefinitions, type MaterialDefinition } from "../materials";
 import { passiveFrequencies, validateWeightCurve, type WeightCurve } from "../offer-weights";
@@ -18,6 +23,8 @@ export type ShopBalanceDraft = {
     transmogrifierSlots: number;
   };
   cardRankSurcharge: Record<string, number>;
+  /** Transmogrifier uses and price multiple (#392). */
+  transmogrifier: { uses: number; priceFactor: number };
   materials: Record<string, { basePrice: number; weights: DraftCurve } | null>;
   passives: Record<string, { basePrice: number; unlockRound: number; frequency: string } | null>;
   frequencies: Record<string, DraftCurve>;
@@ -40,6 +47,7 @@ export function currentShopBalanceDraft(): ShopBalanceDraft {
       transmogrifierSlots: defaultShop.transmogrifierSlots ?? 1,
     },
     cardRankSurcharge: { ...gameTuning.cardRankSurcharge } as Record<string, number>,
+    transmogrifier: { ...gameTuning.transmogrifier },
     materials: Object.fromEntries(
       (materialDefinitions as readonly MaterialDefinition[]).map(({ id, shop }) => [
         id,
@@ -76,6 +84,7 @@ export function validateShopBalanceDraft(draft: ShopBalanceDraft): DraftError[] 
       "schemaVersion",
       "stock",
       "cardRankSurcharge",
+      "transmogrifier",
       "materials",
       "passives",
       "frequencies",
@@ -96,6 +105,12 @@ export function validateShopBalanceDraft(draft: ShopBalanceDraft): DraftError[] 
     add("stock", "Stock fields must match the configuration schema");
   if (stock)
     for (const { field, message } of validateShopStock(stock)) add(`stock.${field}`, message);
+
+  if (!keysMatch(draft.transmogrifier, ["uses", "priceFactor"]))
+    add("transmogrifier", "Transmogrifier fields must match the configuration schema");
+  else
+    for (const message of validateTransmogrifierBalance(draft.transmogrifier))
+      add("transmogrifier", message);
 
   const rankKeys = Object.keys(gameTuning.cardRankSurcharge);
   if (!keysMatch(draft.cardRankSurcharge, rankKeys))

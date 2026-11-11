@@ -18,13 +18,14 @@
 import { materialDefinitions, type BlockMaterial, type MaterialDefinition } from "./materials";
 import { createPassiveBlock, passiveDefinitions, type PassiveBlock } from "./passives";
 import { weightAt, type WeightCurve } from "./offer-weights";
+import { gameTuning } from "./balance";
 import { blockMaterials } from "./materials";
 import { rackTraitPersistence } from "./rack-trait-persistence";
 
-/** Uses a new transmogrifier has (#384). */
-export const defaultTransmogrifierUses = 2;
-/** Its price is this many times its material's shop base price (#384). */
-export const transmogrifierPriceFactor = 2;
+/** Uses a new transmogrifier has (#384), from the balance config (#392). */
+export const defaultTransmogrifierUses: number = gameTuning.transmogrifier.uses;
+/** Its price is this many times its material's shop base price (#384, #392). */
+export const transmogrifierPriceFactor: number = gameTuning.transmogrifier.priceFactor;
 
 const prefix = "transmogrifier.";
 
@@ -37,7 +38,8 @@ export function transmogrifierBalance(
 ): { price: number; weights: WeightCurve } | null {
   const own = material.transmogrifier;
   const price =
-    own?.price ?? (material.shop ? material.shop.basePrice * transmogrifierPriceFactor : undefined);
+    own?.price ??
+    (material.shop ? Math.round(material.shop.basePrice * transmogrifierPriceFactor) : undefined);
   const weights = own?.weights ?? material.shop?.weights;
   return price === undefined || weights === undefined ? null : { price, weights };
 }

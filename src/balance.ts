@@ -20,7 +20,28 @@ export const gameTuning = {
    * nothing, court cards 1, aces 2.
    */
   cardRankSurcharge: { A: 2, J: 1, Q: 1, K: 1 } as Readonly<Partial<Record<string, number>>>,
+  /**
+   * Transmogrifiers (#384, #392): uses a new one has, and its price as a multiple of its
+   * material's shop base price (no rank surcharge). A material without a base price sets its
+   * own price on its definition, never one invented here.
+   */
+  transmogrifier: { uses: 2, priceFactor: 2 },
 } as const;
+
+/** Everything wrong with the transmogrifier balance. */
+export function validateTransmogrifierBalance(balance: {
+  uses: number;
+  priceFactor: number;
+}): string[] {
+  return [
+    ...(Number.isSafeInteger(balance.uses) && balance.uses >= 1
+      ? []
+      : ["transmogrifier.uses: use a whole number of at least 1"]),
+    ...(Number.isFinite(balance.priceFactor) && balance.priceFactor > 0
+      ? []
+      : ["transmogrifier.priceFactor: use a positive number"]),
+  ];
+}
 
 /** A new card's shop price: its material's base price plus its rank's surcharge (#143). */
 export function cardOfferPrice(rank: string, material: { shop?: { basePrice: number } }): number {
