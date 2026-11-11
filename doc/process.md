@@ -83,7 +83,7 @@ Every open ticket that isn't claimed has exactly one readiness label: `status:re
 - **Checks:** before pushing, run `npx vp check` and `npx vp test run`. CI runs `verify`, the only required check. CodeRabbit and Codex also review against `doc/game.md` and `doc/game-architecture.md`. **CodeRabbit is advisory:** its review never blocks a merge, but read it and fix what's right.
 - **Merging:** merge any PR that passes review (CI green and no unresolved review findings), including another agent's. Fix review findings before merging; if one is wrong, reply on the thread to explain why.
 - **After merging:** remove the `agent:` label from a finished issue, close it, and tell anyone waiting on it.
-- **Recorded decisions:** a PR that changes a rule or design updates `doc/game.md` or `doc/game-architecture.md` in the same change.
+- **Documentation first, always:** a rule or design change is its own PR to `doc/game.md` or `doc/game-architecture.md` (and, where it affects agents or review, `AGENTS.md` and `.coderabbit.yaml`), merged before any implementation starts. The implementing ticket is blocked on the documentation ticket. A behaviour-preserving fix that matches an accurate document cites the section instead of changing it. Example: #537 (service and controller architecture, documentation and review policy) merges before #538 (aligning the code), and #545 before the queue implementation in #546–#549.
 
 ## Agents working side by side
 

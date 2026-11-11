@@ -4,7 +4,10 @@
 
 ## Design and architecture check
 
-<!-- Link the relevant issue and design sections. Explain any intentional change to doc/game.md or doc/game-architecture.md; if neither needs changing, say why. -->
+<!-- Link the relevant issue and the design sections this PR satisfies. Documentation first: a rule or design change is its own documentation PR, merged before implementation. -->
+
+- [ ] This is a documentation PR, **or** every behaviour it implements is already described in the merged doc/game.md / doc/game-architecture.md (cite the sections).
+- [ ] Services stay narrow (no scene, mode, material or item identity; no outcome decisions or state diffing); policy lives in a configured controller trait (see "Services and controller traits").
 
 ## Composition check (required, see AGENTS.md "No special cases")
 
