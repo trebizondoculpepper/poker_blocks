@@ -24,6 +24,8 @@ const fragmentShader = /* glsl */ `
   uniform float halfSize;
   uniform vec3 cameraLocal;
   uniform float intensity;
+  // The material's own opacity, so a shared fade (an exit, #452) dims the flame too.
+  uniform float opacity;
   // World "up" in the block's own space: flames always rise, however the block is turned.
   uniform vec3 upLocal;
   varying vec3 vLocal;
@@ -108,7 +110,7 @@ const fragmentShader = /* glsl */ `
     }
     // Premultiplied light: the glow's own brightness is its coverage, so the transparent front
     // canvas (#116, #190) holds a valid colour wherever the flame is, and nothing where it isn't.
-    vec3 light = min(colour * intensity, vec3(1.0));
+    vec3 light = min(colour * intensity, vec3(1.0)) * opacity;
     gl_FragColor = vec4(light, max(light.r, max(light.g, light.b)));
   }
 `;
@@ -125,6 +127,8 @@ export function createFireCore(size: number): THREE.Mesh {
       cameraLocal: { value: new THREE.Vector3() },
       intensity: { value: 3.2 },
       upLocal: { value: new THREE.Vector3(0, 1, 0) },
+      // Read from the material's own opacity at render (set below), never a copy.
+      opacity: { value: 1 },
     },
     side: THREE.BackSide,
     // Listed with the solid objects (not "transparent"), so glass and crystal on the
@@ -135,6 +139,8 @@ export function createFireCore(size: number): THREE.Mesh {
     ...additiveLight,
     depthWrite: false,
   });
+  // The flame follows its material's opacity, as any material does, so a fade dims it (#452).
+  Object.defineProperty(material.uniforms.opacity!, "value", { get: () => material.opacity });
   const core = new THREE.Mesh(
     new THREE.BoxGeometry(halfSize * 2, halfSize * 2, halfSize * 2),
     material,

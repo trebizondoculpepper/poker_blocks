@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { createFireCore } from "./visual/fire-core";
 import { experimentalMaterials, materialDefinitions, type MaterialDefinition } from "./materials";
 import { createExitRunner, exitEffects, exitTargets, type ExitVisual } from "./visual/exit-effects";
 
@@ -106,5 +107,27 @@ describe("material exits (#438)", () => {
     runner.update(0.5);
     expect(runner.active).toBe(0);
     expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("the real flame fades with its contents: its shader follows its material's opacity (#452)", () => {
+    release.mockClear();
+    const root = new THREE.Group();
+    const shellMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshStandardMaterial(),
+    );
+    const flame = createFireCore(1);
+    root.add(shellMesh, flame);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [shellMesh], contents: [flame], release };
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "fire" }, v, exitOf("fire"));
+    const shader = flame.material as THREE.ShaderMaterial;
+    expect(shader.fragmentShader).toContain("* opacity");
+    runner.update(0.25);
+    runner.update(0.5);
+    expect(shader.uniforms.opacity!.value).toBeLessThan(0.6);
+    expect(shader.uniforms.opacity!.value).toBe(shader.opacity);
+    runner.dispose();
   });
 });
