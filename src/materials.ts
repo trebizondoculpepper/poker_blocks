@@ -470,7 +470,11 @@ export const materialDefinitions = [
           look: { id: "opaqueFluid", config: { fill: 0xf2c84b, surface: 0xfadf7e } },
         },
       },
-      residue: { effect: "wallTrace", config: { fill: 0xf2c84b, seconds: 4, opacity: 0.45 } },
+      // A fading film with local history (#334): wet walls refresh it, exposed patches fade.
+      residue: {
+        effect: "fadingFilm",
+        config: { fill: 0xf2c84b, opacity: 0.45, seconds: 4, resolution: 32 },
+      },
     },
   },
   {
@@ -484,6 +488,12 @@ export const materialDefinitions = [
     // Ordinary flame heats it into hot water: the "heated" +1 bonus replaces any it had, but
     // boiling water stays boiling (#368, #369).
     reactions: [
+      // Aggressive flame boils it: ×2, replacing its bonus. Listed first, so aggressive flame
+      // (which is still fire) boils water rather than merely heating it (#369).
+      {
+        when: { id: "neighbour-state", config: { material: "fire", stateBonus: "aggressive" } },
+        results: [{ id: "transform", config: { stateBonus: "boiled", sound: "reaction.boil" } }],
+      },
       {
         when: { id: "neighbour-material", config: { material: "fire", unlessState: ["boiled"] } },
         results: [{ id: "transform", config: { stateBonus: "heated", sound: "reaction.heat" } }],
@@ -536,8 +546,8 @@ const custardContents = {
 };
 /** Custard's wall trace, shared the same way. */
 const custardResidue = {
-  effect: "wallTrace",
-  config: { fill: 0xf2c84b, seconds: 4, opacity: 0.45 },
+  effect: "fadingFilm",
+  config: { fill: 0xf2c84b, opacity: 0.45, seconds: 4, resolution: 32 },
 };
 
 /** Clear, refracting water (#333): the levelling fluid with the `refractiveFluid` look. */
