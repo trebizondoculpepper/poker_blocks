@@ -576,6 +576,13 @@ const entries = [
     placeholder: "material.attach.fire",
   },
   {
+    id: "reaction.stoke",
+    name: "Stoke",
+    family: "material",
+    description: "Air beside flame stokes it into aggressive flame as a play settles",
+    placeholder: "material.attach.fire",
+  },
+  {
     id: "reaction.melt",
     name: "Melt",
     family: "material",
