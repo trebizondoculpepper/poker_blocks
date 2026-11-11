@@ -253,6 +253,12 @@ After each successful play the base dealer adds the points of every line on the 
 
 When the placed card lands, the scene presents each scoring line from lowest to highest: the reusable `tintRow` effect flashes its blocks gold, the `score.magnitude.*` sound for its points plays (`src/score-presentation.ts`), and its points are added to the displayed score. The stage result and its sound follow the last line.
 
+### Permanent material change (#387)
+
+`changeCardMaterial(state, cardId, material)` in `src/card-material.ts` (and `GameRun.changeCardMaterial`) gives one card a new material for the rest of the run. It finds the card wherever it is (hand, field, deck, discard pile, and the bought-card ledger) and replaces it with a copy carrying the new material, with the same id, rank and suit. `rematerial` first removes the traits the old material's definition brought (a transparent card turned to wood is no longer transparent), then applies the new definition. It returns null and changes nothing when the card isn't in the run or already has that material, so a transmogrifier can refuse such a drop without spending a use.
+
+The run keeps a ledger, `GameState.cardStates` (`{ [cardId]: { material } }`), because a save stores card ids and rebuilds cards from the starting deck and `boughtCards`. The save writes it as the optional `state.cardStates`, and restore applies it to the rebuilt cards. A saved entry naming an unknown material or card rejects the record. Older saves without it stay readable, and `saveVersion` stays 1. The changed card is the same object the dealer moves from field to deck at stage end, so the change also carries through later stages. Material reactions (#366) and state bonuses (#365) are meant to extend this same record.
+
 ## Session controller
 
 `GameRun` (`src/game-run.ts`) controls one run: stage 1 → shop → stage 2 → shop → boss stage → shop → next round. It holds the round number, the phase (a stage, `shop` or `over`), the stage that opened the current shop, the active dealer and the current `GameState`. `advance()` opens a shop after any won stage and sets the phase to `over` on a loss. `leaveShop()` starts the next stage, or stage 1 of the next round after a boss. The shop can be skipped without spending coins. `snapshot()` preserves the completed stage so Continue leaves a restored shop for the right destination; older boss-only shop saves still lead to the next round.
