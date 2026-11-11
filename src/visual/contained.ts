@@ -31,6 +31,10 @@ export type InteriorBoundary = {
   readonly inset: number;
   /** Half the block's size, in block-local units. */
   readonly halfSize: number;
+  /** The scale `volume` meshes carry: their local units times this are block-local. */
+  readonly volumeScale: number;
+  /** The scale `wall` meshes carry. */
+  readonly wallScale: number;
   /** A mesh lying just inside the wall, for wall effects (a trace, a film). */
   wall(material: THREE.Material, layer: ContainedLayer): THREE.Mesh;
   /** A mesh filling the interior, for contents (a fluid, a flame). */
@@ -56,6 +60,8 @@ export function createInteriorBoundary(
     geometry,
     inset,
     halfSize: size / 2,
+    volumeScale: inset * volumeGap,
+    wallScale: inset * wallGap,
     wall: (material, layer) => place(material, layer, inset * wallGap),
     volume: (material, layer) => place(material, layer, inset * volumeGap),
   };

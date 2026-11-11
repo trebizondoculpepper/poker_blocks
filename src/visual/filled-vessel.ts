@@ -197,7 +197,13 @@ export const levellingFluid: ContentsHandler = (boundary, raw) => {
     // Driven by the block's one frame (src/visual/contained.ts), never its own clock.
     update: ({ rotation, seconds }) => settle(rotation, seconds, normal, unused),
     capabilities: {
-      liquidSurface: { normal, height, wet: (point) => point.dot(normal) <= height },
+      // Published in block-local space: the shader's height is in the volume mesh's own
+      // (scaled) units, so it is scaled out here.
+      liquidSurface: {
+        normal,
+        height: height * boundary.volumeScale,
+        wet: (point) => point.dot(normal) <= height * boundary.volumeScale,
+      },
     },
   };
 };
@@ -216,7 +222,8 @@ export const wallTrace: ResidueHandler = {
     const uniforms = {
       surfaceNormal: { value: surface.normal },
       traceNormal: { value: lagging },
-      height: { value: surface.height },
+      // The published height is block-local; the wall mesh's own units are scaled by wallScale.
+      height: { value: surface.height / boundary.wallScale },
       fill: { value: new THREE.Color(config.fill) },
       opacity: { value: config.opacity },
     };

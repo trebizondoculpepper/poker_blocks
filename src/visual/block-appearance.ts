@@ -2,14 +2,14 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
-import { additiveSheen } from "./additive-light";
 import { choppedGeometry, type ChopSettings } from "./chopped-geometry";
 import { createCrystalFire } from "./crystal-fire";
 import { composeContained, containedLayers } from "./contained";
 // Registers the plastic shell and the vessel fluid (#330), and the glass shells (#331).
 import "./filled-vessel";
 import "./glass-shells";
-import { createFireCore } from "./fire-core";
+// Registers the flame contents (#335).
+import "./fire-core";
 
 export type BlockAppearance = {
   geometry: THREE.BufferGeometry;
@@ -1232,44 +1232,6 @@ function refractiveCrystal(context: AssemblyContext): BlockAppearance {
   );
 }
 
-function flameFrame(context: AssemblyContext): BlockAppearance {
-  const { art, definition, geometry, size } = context;
-  const texture = faceTexture(art, definition, false, 0, false);
-  const print = printSkin(art, definition.appearance, geometry);
-  const height = heightFor(texture, art, definition.appearance);
-  const iron = surface(texture, definition.appearance, height);
-  return appearanceBase(
-    context,
-    [texture, ...[height].filter((value) => value !== undefined), print.texture],
-    Array.from({ length: 6 }, () => iron),
-    [createFireCore(size), glassPanes(geometry), print.skin],
-  );
-}
-
-/**
- * Glass in a block's open faces: a clear, glossy sheet that only adds its reflections, so the
- * fire behind it is never dimmed or hidden. Additive, black-based and not depth-writing, it
- * reads as a sheen sliding across the pane as the block turns (#203).
- */
-function glassPanes(geometry: THREE.BufferGeometry): THREE.Mesh {
-  const glass = new THREE.MeshPhysicalMaterial({
-    color: 0x000000,
-    metalness: 0,
-    roughness: 0.04,
-    clearcoat: 1,
-    clearcoatRoughness: 0.02,
-    envMap: reflectionEnvironment,
-    envMapIntensity: 1.2,
-    transparent: true,
-    ...additiveSheen,
-    depthWrite: false,
-  });
-  const panes = new THREE.Mesh(geometry, glass);
-  // Just inside the iron frame's outer surface, so the bars sit proud of the glass.
-  panes.scale.setScalar(0.97);
-  return panes;
-}
-
 function frostedBlock(context: AssemblyContext): BlockAppearance {
   const { art, definition, geometry, size } = context;
   const texture = faceTexture(art, definition, false, 0, false);
@@ -1338,7 +1300,6 @@ const assemblyRegistry = new Map<string, AssemblyHandler>([
   ["sixFaces", sixFaces],
   ["brushedFaces", brushedFaces],
   ["refractiveCrystal", refractiveCrystal],
-  ["flameFrame", flameFrame],
   ["frostedBlock", frostedBlock],
   ["contained", contained],
 ]);

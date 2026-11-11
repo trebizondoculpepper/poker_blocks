@@ -4,6 +4,7 @@ import { getMaterialDefinition, materialPools } from "../materials";
 import { composeContained, containedLayers } from "./contained";
 import "./filled-vessel";
 import "./glass-shells";
+import "./fire-core";
 
 const geometry = new THREE.BoxGeometry(1, 1, 1);
 const build = (id: string) => {
@@ -268,5 +269,46 @@ describe("the shared tick runs before whichever part draws first (#401 review)",
     // Turned 1 rad about x: world up seen from the block is no longer local +y.
     expect(normal.y).toBeLessThan(0.99);
     extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+  });
+});
+
+describe("the flame as contents (#335)", () => {
+  it("burns in the iron frame (fire) and in the lantern by configuration only", () => {
+    for (const id of ["fire", "flameLantern"]) {
+      const { extras } = build(id);
+      // Drawn after the front shell (5) and gloss (6): the glow is never painted over.
+      expect(Math.max(...extras.map(({ renderOrder }) => renderOrder))).toBeGreaterThan(
+        containedLayers.gloss,
+      );
+      extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+    }
+  });
+
+  it("no container code names it (comments aside)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const code = (file: string) =>
+      readFileSync(new URL(file, import.meta.url), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "");
+    for (const file of ["./contained.ts", "./glass-shells.ts", "./filled-vessel.ts"])
+      expect(code(file)).not.toMatch(/flame|fire/i);
+  });
+});
+
+describe("the published surface is block-local (#401 review)", () => {
+  it("matches the drawn fluid surface for a fluid that is not half full", async () => {
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    const { appearance } = materialPools
+      .get("registered")()
+      .find(({ id }) => id === "custard")!;
+    const boundary = createInteriorBoundary(geometry, 1, 0.92);
+    const fluid = containedContents.get("levellingFluid")(boundary, appearance.contents!.config);
+    const surface = fluid.capabilities.liquidSurface!;
+    // The drawn surface: the shader's height in the volume mesh's units, scaled to the block.
+    const shaderHeight = (fluid.meshes[0]!.material as THREE.ShaderMaterial).uniforms.height!.value;
+    const drawn = shaderHeight * boundary.volumeScale;
+    expect(surface.height).toBeCloseTo(drawn, 9);
+    expect(surface.wet(new THREE.Vector3(0, drawn - 0.001, 0))).toBe(true);
+    expect(surface.wet(new THREE.Vector3(0, drawn + 0.001, 0))).toBe(false);
   });
 });
