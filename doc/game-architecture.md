@@ -1211,3 +1211,11 @@ The [library-backed scheduler proposal](visual-scheduler-library-research.md) re
 ## Tweening library direction (#556)
 
 The [tweening research decision](tweening-library-research.md) recommends Tween.js 25.0.0 for finite numeric interpolation behind a narrow service. This is a target integration, not an installed dependency. Controller/effect traits own policy and channels; the service knows no game identities. The shared presentation clock drives explicit updates; the visual-event scheduler owns starts, cancellation and completion scopes. Keep physical spring and ambient simulation behavior separate. Implementers and reviewers must check lifecycle cleanup, transform ownership, reduced motion and model-first input against that decision before migration.
+
+## Documented behavioral patterns (#575)
+
+Every new or changed behavior follows an architectural pattern documented and merged before implementation begins. Describe the behavior's owner, configuration, lifecycle hooks or registered handlers, state boundaries and composition. An accurate existing pattern can be cited and reused directly. Research is conditional: investigate when facts or architectural choices are uncertain; do not impose a research mission on straightforward reuse. When the contract is absent or changing, settle and merge the documentation first in a separate PR.
+
+Shared behavior is a common composable capability, even when its consumers are different kinds of objects. For example, ordinary cards and unopened Presents should compose the same documented discardable behavior, with action-wide allowances separate from per-block capabilities. A generic dealer, controller or input adapter dispatches to that behavior; it does not identify the consumer or check a passive trait flag. This example specifies the architectural direction, not an assertion that the discardable trait is implemented or that its complete interface is settled. #574 remains blocked on its documented contract.
+
+Implementation tickets link the existing pattern or their prerequisite documentation mission. Review checks that the pattern was merged before code began, and that the implementation follows its reusable contract. A fix that restores documented behavior cites it; it need not invent a new design or repeat research.
