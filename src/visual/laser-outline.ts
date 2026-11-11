@@ -81,11 +81,10 @@ export function createLaserOutline(
 ) {
   const edges = new THREE.EdgesGeometry(source);
   const lines = createLaserLines(edges, colour, size, options);
-  const dispose = lines.dispose;
   return {
     ...lines,
     dispose() {
-      dispose();
+      lines.dispose();
       edges.dispose();
     },
   };
