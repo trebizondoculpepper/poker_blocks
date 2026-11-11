@@ -31,6 +31,8 @@ export function createFlash(
   targets: readonly THREE.Object3D[],
   raw: FlashConfig = {},
   reducedMotion = false,
+  /** Only meshes this accepts get an overlay (in an exit: the block's own, #512 review). */
+  include: (object: THREE.Object3D) => boolean = () => true,
 ): ExitEffectInstance {
   const seconds = Math.max(raw.seconds ?? 0.25, 1e-3);
   const peak = Math.min(Math.max(raw.intensity ?? 0.8, 0), 1);
@@ -48,7 +50,7 @@ export function createFlash(
   for (const target of targets)
     target.traverse((child) => {
       const mesh = child as THREE.Mesh;
-      if (mesh.isMesh && !flashOverlays.has(mesh)) found.add(mesh);
+      if (mesh.isMesh && !flashOverlays.has(mesh) && include(mesh)) found.add(mesh);
     });
   const meshes = [...found];
   const overlays = reducedMotion
@@ -85,20 +87,11 @@ export function createFlash(
 }
 
 /**
- * Every object being shuddered: its true home, taken by the first shudder, and each running
- * shudder's own offset. The object sits at home plus the sum of the offsets, so overlapping
- * shudders compose, and it returns exactly home when the last one ends (#511 review).
+ * Shudder `target` about wherever it is: purely additive, so it composes with any other motion
+ * (a fracture's flight, another shudder). Each frame it takes back its last offset and adds its
+ * new one, never resetting the position; when it ends or is disposed it takes back only its own
+ * last offset (#512 review).
  */
-const shaking = new WeakMap<THREE.Object3D, { home: THREE.Vector3; offsets: Set<THREE.Vector3> }>();
-
-function place(target: THREE.Object3D): void {
-  const entry = shaking.get(target);
-  if (!entry) return;
-  target.position.copy(entry.home);
-  for (const offset of entry.offsets) target.position.add(offset);
-}
-
-/** Shudder `target` about its own position; puts it back exactly when it ends or is disposed. */
 export function createShudder(
   target: THREE.Object3D,
   raw: ShudderConfig = {},
@@ -107,30 +100,30 @@ export function createShudder(
   const amplitude = raw.amplitude ?? 0.06;
   const seconds = Math.max(raw.seconds ?? 0.35, 1e-3);
   const frequency = raw.frequency ?? 28;
-  const entry = shaking.get(target) ?? { home: target.position.clone(), offsets: new Set() };
-  shaking.set(target, entry);
-  const offset = new THREE.Vector3();
-  entry.offsets.add(offset);
+  const applied = new THREE.Vector3();
+  const next = new THREE.Vector3();
   let elapsed = reducedMotion ? seconds : 0;
   let ended = false;
+  const apply = (offset: THREE.Vector3) => {
+    target.position.sub(applied).add(offset);
+    applied.copy(offset);
+  };
   const end = () => {
     if (ended) return;
     ended = true;
-    entry.offsets.delete(offset);
-    place(target);
-    if (!entry.offsets.size) shaking.delete(target);
+    apply(next.set(0, 0, 0));
   };
-  if (reducedMotion) end();
   return {
     update(delta) {
       if (elapsed >= seconds) return false;
       elapsed = Math.min(elapsed + delta, seconds);
       const decay = 1 - elapsed / seconds;
       const phase = elapsed * frequency * Math.PI * 2;
-      offset
-        .set(Math.sin(phase), Math.sin(phase * 1.3 + 1), Math.sin(phase * 0.7 + 2))
-        .multiplyScalar(amplitude * decay);
-      place(target);
+      apply(
+        next
+          .set(Math.sin(phase), Math.sin(phase * 1.3 + 1), Math.sin(phase * 0.7 + 2))
+          .multiplyScalar(amplitude * decay),
+      );
       if (elapsed >= seconds) end();
       return elapsed < seconds;
     },
@@ -142,8 +135,9 @@ export function createShudder(
   };
 }
 
-exitEffects.register("flash", ({ targets, reducedMotion }, raw) =>
-  createFlash(targets, raw as FlashConfig, reducedMotion),
+// In an exit, only the block's own meshes flash: never another effect's pieces or particles.
+exitEffects.register("flash", ({ targets, reducedMotion, ownsObject }, raw) =>
+  createFlash(targets, raw as FlashConfig, reducedMotion, ownsObject),
 );
 
 /** In an exit, every target shudders together. */
