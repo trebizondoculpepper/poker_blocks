@@ -7,6 +7,22 @@ const all: readonly MaterialDefinition[] = [...materialDefinitions, ...experimen
 const exitOf = (id: string) => all.find((material) => material.id === id)!.appearance.exit!;
 
 const release = vi.fn();
+
+/** A container block: a shell mesh holding a contents mesh, each with its own material. */
+function container(): ExitVisual & { shellMesh: THREE.Mesh; contentsMesh: THREE.Mesh } {
+  const root = new THREE.Group();
+  const shellMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial(),
+  );
+  const contentsMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8, 0.8, 0.8),
+    new THREE.MeshStandardMaterial(),
+  );
+  root.add(shellMesh, contentsMesh);
+  new THREE.Group().add(root);
+  return { root, shell: [shellMesh], contents: [contentsMesh], release, shellMesh, contentsMesh };
+}
 function visual(): ExitVisual {
   const root = new THREE.Group();
   const body = new THREE.Mesh(
@@ -83,6 +99,60 @@ describe("material exits (#438)", () => {
     for (let frame = 0; frame < 6; frame++) runner.update(1 / 60);
     expect(body.material.opacity).toBeLessThan(0.5);
     for (let frame = 0; frame < 240; frame++) runner.update(1 / 60);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("ice cracks into five translucent predefined pieces that scatter and fade (#449)", () => {
+    release.mockClear();
+    const v = visual();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "i" }, v, exitOf("ice"));
+    const pieces = v.root.children.slice(1) as THREE.Mesh<
+      THREE.BufferGeometry,
+      THREE.MeshStandardMaterial
+    >[];
+    expect(pieces).toHaveLength(5);
+    expect(pieces[0]!.material.transparent).toBe(true);
+    expect(pieces[0]!.material.opacity).toBeCloseTo(0.55);
+    // Shared, predefined geometry: another ice block's pieces reuse it.
+    const other = visual();
+    const second = createExitRunner(() => false);
+    second.start({ blockId: "i2" }, other, exitOf("ice"));
+    expect((other.root.children[1] as THREE.Mesh).geometry).toBe(pieces[0]!.geometry);
+    runner.update(0.75);
+    expect(pieces[0]!.material.opacity).toBeLessThan(0.55);
+    runner.update(0.3);
+    expect(runner.active).toBe(0);
+    second.dispose();
+  });
+
+  it("meat breaks into a few soft chunks that tumble and fade (#450)", () => {
+    release.mockClear();
+    const v = visual();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "m" }, v, exitOf("meat"));
+    const chunks = v.root.children.slice(1) as THREE.Mesh<
+      THREE.SphereGeometry,
+      THREE.MeshStandardMaterial
+    >[];
+    expect(chunks).toHaveLength(5);
+    // Soft, rounded lumps: spheres, not sharp shards.
+    expect(chunks.every(({ geometry }) => geometry.type === "SphereGeometry")).toBe(true);
+    runner.update(0.75);
+    expect(chunks[0]!.material.opacity).toBeLessThan(1);
+    runner.update(0.2);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("magic: the shell breaks apart and releases its stars outward, then they fade (#458)", () => {
+    release.mockClear();
+    const v = container();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "magic" }, v, exitOf("magic"));
+    expect(v.root.children.some((child) => child instanceof THREE.Points)).toBe(true);
+    for (let frame = 0; frame < 90; frame++) runner.update(1 / 60);
     expect(runner.active).toBe(0);
     expect(release).toHaveBeenCalledOnce();
   });
