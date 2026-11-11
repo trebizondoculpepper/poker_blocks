@@ -18,6 +18,7 @@ import { stateBonusRules } from "./state-bonuses";
 import { scoringModifierRules, type ScoringModifier } from "./scoring-modifier";
 import type { TokenEffectConfig } from "./passive-activation-effects";
 import type { SoundEffectId } from "./audio/sfx-registry";
+import type { ExitSequence } from "./visual/exit-presentation";
 
 /** A particle trail: a registered effect (src/attract-trails.ts) and its configuration. */
 export type AppearanceTrail = {
@@ -138,6 +139,12 @@ export type MaterialDefinition = {
      */
     trails?: readonly AppearanceTrail[];
     /**
+     * How a block of this material leaves play when it is destroyed (#438): its exit sequence
+     * of registered exit effects (doc/game-architecture.md, "Block exits"). Presentation only:
+     * the model has already decided it is gone. A material that survives blasts has none.
+     */
+    exit?: ExitSequence;
+    /**
      * For the `contained` assembly (#330): a registered container shell and its configuration,
      * and optionally the registered contents inside it (src/visual/contained.ts).
      */
@@ -255,6 +262,17 @@ export const materialDefinitions = [
     scoringModifier: { additive: 1 },
     activation: { effect: { id: "pulse", colour: "#c88b4c" }, sfx: "material.activate.wood" },
     appearance: {
+      // Splinters into small tumbling wooden fragments as the block itself vanishes (#448).
+      exit: {
+        steps: [
+          {
+            effects: [
+              { effect: "splinter", config: { count: 14, colour: 0xa0703c } },
+              { effect: "fade", config: { seconds: 0.12 } },
+            ],
+          },
+        ],
+      },
       pattern: "timberGrain",
       assembly: "sixFaces",
       surface: "matte",
