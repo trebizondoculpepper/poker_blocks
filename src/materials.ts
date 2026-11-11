@@ -592,6 +592,26 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // Breaks into a few soft chunks rather than sharp fragments, which tumble and fade (#450).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: {
+                  pieces: "chunks",
+                  colour: 0xa3384a,
+                  speed: [0.5, 1.2],
+                  spin: 4,
+                  life: 0.9,
+                  fade: 0.35,
+                },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "marbledFlesh",
       assembly: "sixFaces",
       surface: "matte",

@@ -110,4 +110,23 @@ describe("material exits (#438)", () => {
     expect(runner.active).toBe(0);
     second.dispose();
   });
+
+  it("meat breaks into a few soft chunks that tumble and fade (#450)", () => {
+    release.mockClear();
+    const v = visual();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "m" }, v, exitOf("meat"));
+    const chunks = v.root.children.slice(1) as THREE.Mesh<
+      THREE.SphereGeometry,
+      THREE.MeshStandardMaterial
+    >[];
+    expect(chunks).toHaveLength(5);
+    // Soft, rounded lumps: spheres, not sharp shards.
+    expect(chunks.every(({ geometry }) => geometry.type === "SphereGeometry")).toBe(true);
+    runner.update(0.75);
+    expect(chunks[0]!.material.opacity).toBeLessThan(1);
+    runner.update(0.2);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
 });
