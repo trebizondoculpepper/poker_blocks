@@ -91,6 +91,12 @@ Before implementation starts, the ticket identifies the already merged documenta
 
 When multiple kinds of objects need the same behavior (for example ordinary cards and unopened Presents being discardable), first document the common reusable composable capability. Implementing each kind separately and extracting a trait afterwards does not satisfy this gate. Technical research establishes the facts; documentation establishes the contract; implementation follows the merged contract.
 
+### Evidence reviewers can check
+
+Architecture documentation PRs cite the research or other inspectable evidence supporting their claims and recommendation, with reasoning, relevant alternatives/trade-offs and verification limits. Existing research, source audits, experiments and authoritative versioned documentation can suffice; no new research ticket is required merely for ceremony. Proposals and assumptions are identified explicitly. Implementation PRs cite the corresponding architecture documentation already merged before implementation began.
+
+Reviewers check both directions: architecture changes without corresponding prior documentation, and architecture documentation unsupported by evidence. A finding identifies the specific change or unsupported claim and the missing documentation or evidence. Reusing an accurate established pattern needs neither redundant design documents nor speculative research.
+
 ## Agents working side by side
 
 - **Shared checkout:** check `git status` and the issue before editing; never overwrite another agent's uncommitted files. Use a separate worktree only when sharing the checkout would collide.
