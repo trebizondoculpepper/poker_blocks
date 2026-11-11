@@ -298,9 +298,9 @@
     }
   },
   "material.attach.ice": {
-    "uses": 3,
+    "uses": 4,
     "files": {
-      "audio/sfx-registry.ts (placeholder)": 2,
+      "audio/sfx-registry.ts (placeholder)": 3,
       "materials.ts": 1
     }
   },
@@ -399,6 +399,12 @@
     "uses": 2,
     "files": {
       "materials.ts": 2
+    }
+  },
+  "reaction.condense": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
     }
   },
   "reaction.freeze": {

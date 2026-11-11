@@ -604,6 +604,13 @@ const entries = [
     placeholder: "material.attach.ice",
   },
   {
+    id: "reaction.condense",
+    name: "Condense",
+    family: "material",
+    description: "Air beside boiling water makes a new cloud beyond the pair as a play settles",
+    placeholder: "material.attach.ice",
+  },
+  {
     id: "reaction.freeze",
     name: "Freeze",
     family: "material",

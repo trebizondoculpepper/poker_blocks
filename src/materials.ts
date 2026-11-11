@@ -991,6 +991,22 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     name: "Air",
     // A powder-coated housing: it sounds like steel until it has a sound of its own.
     acoustics: { character: "clanking", hardness: 7, attach: "material.attach.steel" },
+    // Beside boiling water it makes a Cloud beyond the pair (#425), once per play per pair.
+    reactions: [
+      {
+        when: { id: "neighbour-state", config: { material: "water", stateBonus: "boiled" } },
+        results: [
+          {
+            id: "spawn-beyond-pair",
+            config: {
+              partner: { material: "water", stateBonus: "boiled" },
+              material: "cloud",
+              sound: "reaction.condense",
+            },
+          },
+        ],
+      },
+    ],
     traits: {},
     appearance: {
       pattern: "ventHousing",
