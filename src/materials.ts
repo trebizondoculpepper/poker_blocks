@@ -379,12 +379,16 @@ export const materialDefinitions = [
     traits: { transparent: {} },
     shop: {
       basePrice: 3,
+      // Unlocks in round 3 (#381), alongside terracotta.
       weights: [
-        [5, 4],
-        [6, 1.5],
-        [7, 1],
+        [3, 4],
+        [4, 1.5],
+        [5, 1],
       ],
     },
+    // +2 to its base value, then ×1.2 on its line, when it contributes (#381).
+    scoringModifier: { additive: 2, multiplicative: 1.2 },
+    activation: { effect: { id: "pulse", colour: "#f2c84b" }, sfx: "material.activate.custard" },
     appearance: {
       pattern: "cardSheet",
       assembly: "filledVessel",
