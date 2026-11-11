@@ -461,6 +461,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
     id: string,
     name: string,
     contents?: MaterialDefinition["appearance"]["contents"],
+    residue?: MaterialDefinition["appearance"]["residue"],
   ) => ({
     id,
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
@@ -479,13 +480,12 @@ function glassContainerExperiments(): MaterialDefinition[] {
       endGrainFaces: noEnds,
       container: { shell: "stainedLantern", config: { inset: 0.88, tints: lanternTints } },
       ...(contents ? { contents } : {}),
-      // Custard's wall trace reads a liquid surface; a flame has none (#335).
-      ...(contents === custardContents ? { residue: custardResidue } : {}),
+      ...(residue ? { residue } : {}),
     },
   });
   return [
     lantern("emptyLantern", "Empty lantern"),
-    lantern("custardLantern", "Custard in a lantern", custardContents),
+    lantern("custardLantern", "Custard in a lantern", custardContents, custardResidue),
     lantern("flameLantern", "Flame in a lantern", { effect: "flame", config: {} }),
     {
       id: "custardFrame",
