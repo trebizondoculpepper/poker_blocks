@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
+import { fluidLooks } from "./visual/filled-vessel";
 import { experimentalMaterials, materialDefinitions, type MaterialDefinition } from "./materials";
 import { createExitRunner, exitEffects, exitTargets, type ExitVisual } from "./visual/exit-effects";
 
@@ -98,6 +99,14 @@ describe("material exits (#438)", () => {
     expect(v.root.children.length).toBeGreaterThanOrEqual(2 + 8 + 1);
     runner.update(0.1);
     expect((v.contentsMesh.material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.1);
+    // Earth's real soil shader honours its material's opacity, so the fade reaches it.
+    const soil = fluidLooks.get("opaqueFluid")(
+      { surfaceNormal: { value: new THREE.Vector3(0, 1, 0) }, height: { value: 1 } } as never,
+      { fill: 0x5b3a22, surface: 0x6e4a2c },
+    ).material as THREE.ShaderMaterial;
+    expect(soil.fragmentShader).toContain("fill * light, opacity");
+    soil.opacity = 0.2;
+    expect(soil.uniforms.opacity!.value).toBe(0.2);
     for (let frame = 0; frame < 90; frame++) runner.update(1 / 60);
     expect(runner.active).toBe(0);
     expect(release).toHaveBeenCalledOnce();
