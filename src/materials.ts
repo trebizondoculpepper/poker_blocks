@@ -603,10 +603,10 @@ const clearWater = {
 const slowBubbles = {
   effect: "risingBubbles",
   config: {
-    count: 14,
+    count: 20,
     rise: 0.06,
     wobble: 0.02,
-    size: 0.07,
+    size: 0.1,
     rest: 1.6,
     colour: 0xeaf6ff,
     opacity: 0.7,
