@@ -1,11 +1,12 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { experimentalMaterials, materialDefinitions } from "./materials";
+import { experimentalMaterials, materialDefinitions, type MaterialDefinition } from "./materials";
 import { createExitRunner, exitEffects, exitTargets, type ExitVisual } from "./visual/exit-effects";
 
-const all = [...materialDefinitions, ...experimentalMaterials];
+const all: readonly MaterialDefinition[] = [...materialDefinitions, ...experimentalMaterials];
 const exitOf = (id: string) => all.find((material) => material.id === id)!.appearance.exit!;
 
+const release = vi.fn();
 function visual(): ExitVisual {
   const root = new THREE.Group();
   const body = new THREE.Mesh(
@@ -14,7 +15,7 @@ function visual(): ExitVisual {
   );
   root.add(body);
   new THREE.Group().add(root);
-  return { root, shell: [body], contents: [], release: vi.fn() };
+  return { root, shell: [body], contents: [], release };
 }
 
 describe("material exits (#438)", () => {
@@ -28,6 +29,7 @@ describe("material exits (#438)", () => {
   });
 
   it("wood splinters into tumbling fragments as the block vanishes, then cleans up (#448)", () => {
+    release.mockClear();
     const v = visual();
     const body = v.root.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
     const runner = createExitRunner(() => false);
@@ -39,7 +41,7 @@ describe("material exits (#438)", () => {
     for (let frame = 0; frame < 180; frame++) runner.update(1 / 60);
     expect(runner.active).toBe(0);
     expect(v.root.parent).toBeNull();
-    expect(v.release).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledOnce();
   });
 
   it("wood's exit shows no debris and ends at once with reduced motion", () => {
