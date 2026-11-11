@@ -1,4 +1,5 @@
 import type { WordCubeRoom } from "./tools/word-cube-room";
+import type { DialogRoom } from "./tools/dialog-room";
 import type { TuningControl } from "./attract-tuning-panel";
 import { createBlockTitles } from "./block-title-view";
 import type { BlockTitles } from "./scene-traits/block-title";
@@ -139,6 +140,8 @@ type TraitContext = {
     devBlockDesigner: ShopBalanceEditor;
     devContainedProof: ShopBalanceEditor;
     devWordCubeRoom: WordCubeRoom;
+    dialogs: Pick<DialogRoom, "add">;
+    devDialogRoom: DialogRoom;
     version: string;
     sound: (id: SoundEffectId) => void;
   };
@@ -159,6 +162,10 @@ const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
 const devWordCubeRoom: WordCubeRoom = import.meta.env.DEV
   ? (await import("./tools/word-cube-room")).createWordCubeRoom(host)
   : { show() {}, hide() {}, dispose() {} };
+// Until the real menus show dialogs as blocks, only the dialog room (dev14) does.
+const devDialogRoom: DialogRoom = import.meta.env.DEV
+  ? (await import("./tools/dialog-room")).createDialogRoom(host, danceFloor)
+  : { add: () => () => {}, show() {}, hide() {}, dispose() {} };
 const devObjectBrowser: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/object-browser")).createObjectBrowser(host)
   : { show() {}, hide() {}, dispose() {} };
@@ -236,6 +243,8 @@ const traitContext: TraitContext = {
     devBlockDesigner,
     devContainedProof,
     devWordCubeRoom,
+    dialogs: devDialogRoom,
+    devDialogRoom,
     sound: (id) => playSfx(id),
     version: appVersion,
   },
@@ -432,6 +441,7 @@ if (import.meta.hot) {
     devBlockDesigner.dispose();
     devContainedProof.dispose();
     devWordCubeRoom.dispose();
+    devDialogRoom.dispose();
     view.dispose();
   });
 }

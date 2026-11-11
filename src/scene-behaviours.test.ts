@@ -112,6 +112,16 @@ function recordingHost() {
         show: ({ items }) => void calls.push(`cubes:show:${items.length}`),
         hide: () => void calls.push("cubes:hide"),
       },
+      dialogs: {
+        add: ({ title }) => {
+          calls.push(`dialog:add:${title}`);
+          return () => void calls.push(`dialog:remove:${title}`);
+        },
+      },
+      devDialogRoom: {
+        show: ({ seconds }) => void calls.push(`dialogs:show:${seconds}`),
+        hide: () => void calls.push("dialogs:hide"),
+      },
       devObjectBrowser: {
         show: (backTo) => void calls.push(`browser:show:${backTo}`),
         hide: () => void calls.push("browser:hide"),
@@ -304,6 +314,21 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toContain("cubes:show:2");
     scenes.switchTo("table");
     expect(calls).toContain("cubes:hide");
+  });
+
+  it("hands each composed dialog to the dialogs service, and takes it away on exit (#347)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    const pause = { title: "Paused", items: [{ label: "Resume", action: "resume" }] };
+    const newGame = { title: "New game?", items: [{ label: "Start", action: "confirmNewGame" }] };
+    scenes.register(scene("room", { pauseDialog: pause, newGameDialog: newGame }));
+    scenes.register(scene("table", {}));
+    scenes.switchTo("room");
+    expect(calls).toEqual(expect.arrayContaining(["dialog:add:Paused", "dialog:add:New game?"]));
+    scenes.switchTo("table");
+    expect(calls).toEqual(
+      expect.arrayContaining(["dialog:remove:Paused", "dialog:remove:New game?"]),
+    );
   });
 
   it("mounts the object browser only while its developer scene is active (dev9)", () => {

@@ -65,9 +65,9 @@ export function createPassiveRack(host: HTMLElement): {
 } {
   const element = document.createElement("aside");
   element.className = "passive-rack";
-  element.setAttribute("aria-label", "Passive rack");
+  element.setAttribute("aria-label", "Items");
   element.innerHTML =
-    '<span class="passive-rack-title">PASSIVES</span><div class="passive-rack-slots"></div>';
+    '<span class="passive-rack-title">ITEMS</span><div class="passive-rack-slots"></div>';
   // Hidden until a scene composing `passiveRackView` comes to the front (#187).
   element.hidden = true;
   host.append(element);

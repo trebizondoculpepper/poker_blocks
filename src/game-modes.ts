@@ -1,4 +1,5 @@
 import type { BlockTitleConfig } from "./scene-traits/block-title";
+import type { SpringAnchorSettings } from "./traits/spring-anchor";
 import type { DragSourceConfig, DropTargetConfig } from "./drag-drop";
 import type { DevDropInspectorConfig } from "./scene-traits/dev-drop-inspector";
 import type { ActionHistoryConfig } from "./scene-traits/action-history";
@@ -99,6 +100,21 @@ export type SceneTraits = {
    * made by the real creator; activating one shows its action rather than running it.
    */
   devWordCubeRoom: { backTo: string; items: readonly MenuBlockItem[] };
+  /**
+   * The game's dialogs as rows of word cubes, one trait each (#347): what each says and its
+   * buttons. A scene composing one hands it to the `dialogs` service, which shows it; for now
+   * only the dialog room (dev14) does.
+   */
+  titleMenuDialog: DialogConfig;
+  newGameDialog: DialogConfig;
+  pauseDialog: DialogConfig;
+  stageWonDialog: DialogConfig;
+  gameOverDialog: DialogConfig;
+  /**
+   * Developer tool: the dialog room (dev14). It cycles through the dialogs the scene composes,
+   * each a row of word cubes on springs (`springAnchor`), kicked on the beat.
+   */
+  devDialogRoom: DevDialogRoomConfig;
   /** Developer tool: a live panel of drag-and-drop state and input decisions (dev10). */
   devDropInspector: DevDropInspectorConfig;
   /**
@@ -249,6 +265,59 @@ export type MenuBlockItem = {
   description?: string;
 };
 
+/** A dialog: its heading and its buttons, shown side by side. */
+export type DialogConfig = { title: string; items: readonly MenuBlockItem[] };
+
+export type DevDialogRoomConfig = {
+  backTo: string;
+  /** Seconds each dialog shows before the next. */
+  seconds: number;
+  /** The springs' tuning and messiness (src/traits/spring-anchor.ts). */
+  spring: Partial<SpringAnchorSettings>;
+  /** The beat kick: a registered dance cycle, how hard, and beats between neighbours. */
+  beat: { cycle: string; kick: number; stagger: number };
+};
+
+/** The game's dialogs, as data (#347). The dialog room shows them; the menus will follow. */
+export const gameDialogs = {
+  titleMenu: {
+    title: "Poker Blocks",
+    items: [
+      {
+        label: "Continue",
+        action: "continue",
+        enabled: false,
+        description: "There is no saved game to continue.",
+      },
+      { label: "New game", action: "new" },
+      { label: "Settings", action: "openSettings" },
+    ],
+  },
+  newGame: {
+    title: "Start a new game? The game in progress will be lost.",
+    items: [
+      { label: "Start", action: "confirmNewGame" },
+      { label: "Cancel", action: "cancelNewGame" },
+    ],
+  },
+  pause: {
+    title: "Paused",
+    items: [
+      { label: "Resume", action: "resume" },
+      { label: "Settings", action: "openSettings" },
+      { label: "Quit", action: "quitToTitle" },
+    ],
+  },
+  stageWon: { title: "Stage won", items: [{ label: "Visit shop", action: "leaveStage" }] },
+  gameOver: {
+    title: "Game over",
+    items: [
+      { label: "New run", action: "newRun" },
+      { label: "Main menu", action: "quitToTitle" },
+    ],
+  },
+} satisfies Record<string, DialogConfig>;
+
 /** The pause menu: the same menu from the title and from play (#87). */
 const pauseMenu: SceneTraits["menu"] = {
   label: "Paused",
@@ -364,6 +433,7 @@ export const sceneDefinitions = [
         { name: "block-designer", traits: {} },
         { name: "contained-proof", traits: {} },
         { name: "menu-blocks", traits: {} },
+        { name: "dialogs", traits: {} },
         {
           // The block title over the flying-block background, nothing else (#295): an audition.
           name: "title-audition",
@@ -879,6 +949,40 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev13-run" },
             console: { name: "dev13" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // The game's dialogs as springy rows of word cubes, cycling (#347). Each dialog is its
+          // own trait; the room shows whichever the scene composes, in turn.
+          id: "dev14",
+          scenes: composeScenes("dev14", [
+            {
+              scenes: ["dialogs"],
+              traits: {
+                devDialogRoom: {
+                  backTo: "game",
+                  seconds: 6,
+                  spring: { stiffness: 70, damping: 5, restJitter: 0.04, tiltJitter: 2 },
+                  beat: { cycle: "beat", kick: 0.7, stagger: 0.08 },
+                },
+                titleMenuDialog: gameDialogs.titleMenu,
+                newGameDialog: gameDialogs.newGame,
+                pauseDialog: gameDialogs.pause,
+                stageWonDialog: gameDialogs.stageWon,
+                gameOverDialog: gameDialogs.gameOver,
+                musicCue: { cue: "title" },
+              },
+            },
+          ]),
+          startScene: "dialogs",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev14-run" },
+            console: { name: "dev14" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,
