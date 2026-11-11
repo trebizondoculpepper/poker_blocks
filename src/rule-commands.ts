@@ -4,6 +4,7 @@
  * the only code that changes the game, each keyed by its command name. Committing never asks
  * which passive or rule a command came from.
  */
+import type { SoundEffectId } from "./audio/sfx-registry";
 import { Registry } from "./core/registry";
 import type { RuleCommand } from "./event-rules";
 import type { GameState } from "./game-state";
@@ -37,8 +38,20 @@ export function commitCommands(
   return commands.flatMap(({ id, config }) => [...ruleCommands.get(id)(config, target)]);
 }
 
-registerRuleCommand<{ amount: number }>("add-coins", ({ amount }, target) => {
-  target.update({ ...target.state, coins: target.state.coins + amount });
-  return [];
-});
-registerRuleCommand("grant-unowned-passive", (_config, target) => target.grantUnownedPassive());
+// Each command reports what it committed as an event carrying the sound its configuration names
+// (a default when it names none), so presentation plays the outcome instead of inferring it by
+// comparing state before and after (#538, "Services and controller traits").
+registerRuleCommand<{ amount: number; sound?: SoundEffectId }>(
+  "add-coins",
+  ({ amount, sound = "passive.coins" }, target) => {
+    target.update({ ...target.state, coins: target.state.coins + amount });
+    return amount > 0 ? [{ type: "coins.gained", amount, sound }] : [];
+  },
+);
+registerRuleCommand<{ sound?: SoundEffectId } | undefined>(
+  "grant-unowned-passive",
+  (config, target) =>
+    target
+      .grantUnownedPassive()
+      .map((event) => ({ ...event, sound: config?.sound ?? "passive.granted" })),
+);

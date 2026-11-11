@@ -269,13 +269,13 @@
   "passive.coins": {
     "uses": 1,
     "files": {
-      "play-presenter.ts": 1
+      "rule-commands.ts": 1
     }
   },
   "passive.granted": {
     "uses": 1,
     "files": {
-      "play-presenter.ts": 1
+      "rule-commands.ts": 1
     }
   },
   "item.apply": {
