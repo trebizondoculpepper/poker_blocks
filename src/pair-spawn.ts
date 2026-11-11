@@ -9,9 +9,9 @@
  *   one past the reacting block, one past the partner. A cell is free when nothing is in it. If
  *   neither is free, nothing happens.
  * - **Which, when both are free:** the one whose lines would score more with the new block in
- *   them, scored with the run's own scorer on a copy of the field (nothing is committed, no
- *   random roll is taken: the scorer's value sources use their no-roll default). On a tie, the
- *   cell beyond the partner.
+ *   them, scored with the run's own scorer on a copy of the field. Nothing is committed and the
+ *   run's random stream is untouched: any value source (a die) reads a fixed mid-range roll, the
+ *   same for both. On a tie, the cell beyond the partner.
  * - **The new card:** the higher-ranked input's suit, and the rank above the higher input's,
  *   capped at Ace. On equal rank it takes the partner's suit. It is made of `material`, owned by
  *   the field (`asGenerated`, #424), so it leaves with the table and never joins the deck.
@@ -59,7 +59,9 @@ const add = (cell: Cell, offset: Cell, times = 1): Cell => ({
 
 /** The points of every line through `cell`, with `placed` on the field. */
 function linePointsThrough(state: GameState, placed: PlacedBlock): number {
-  return scoreFieldWithPassives([...state.field, placed], state.passiveRack)
+  // A fixed mid-range roll for any value source (a die), so both candidates are judged alike and
+  // the run's random stream is never touched (#428 review).
+  return scoreFieldWithPassives([...state.field, placed], state.passiveRack, undefined, () => 0.5)
     .filter(({ line }) => line.blocks.some(({ id }) => id === placed.block.id))
     .reduce((sum, { points }) => sum + points, 0);
 }

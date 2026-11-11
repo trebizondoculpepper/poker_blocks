@@ -263,7 +263,7 @@ When the placed card lands, the scene presents each scoring line from lowest to 
 **Spawning beyond a pair (#425).** A reaction result, `spawn-beyond-pair` (`src/pair-spawn.ts`), configured on the reacting material with its `partner` (material and optional state bonus), the new block's `material` and a `sound`. Air's definition carries it, for boiling water and cloud. Its rule command:
 
 - for each matching face neighbour, takes the two axis-end cells that are free;
-- scores each with the run's own scorer on a copy of the field (passives' value sources use their no-roll default);
+- scores each with the run's own scorer on a copy of the field (any passive value source, such as a die, reads a fixed mid-range roll, the same for both, and the run's random stream is untouched);
 - places the card made by `spawnedIdentity`, owned by the field (`asGenerated`), and adds it to `generatedCards`;
 - reports `reaction.applied` for the new block.
 

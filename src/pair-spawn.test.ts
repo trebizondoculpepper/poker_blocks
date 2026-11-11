@@ -134,4 +134,13 @@ describe("air + boiling water makes a cloud (#425)", () => {
     );
     expect(clouds(after)).toHaveLength(1);
   });
+
+  it("still spawns with a die in the rack, without throwing (#428 review)", async () => {
+    const { createPassiveBlock } = await import("./passives");
+    const state = {
+      ...table(at(card("5", "hearts", "airVent"), 0), at(boiling("9", "clubs"), 1)),
+      passiveRack: [createPassiveBlock("d6", "rack.d6")],
+    };
+    expect(clouds(applyReactions(state).state)).toHaveLength(1);
+  });
 });
