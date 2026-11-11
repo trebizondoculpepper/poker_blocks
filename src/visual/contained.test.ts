@@ -314,3 +314,41 @@ describe("the published surface is block-local (#401 review)", () => {
     expect(surface.wet(new THREE.Vector3(0, drawn + 0.001, 0))).toBe(false);
   });
 });
+
+describe("fluid looks (#333)", () => {
+  it("custard, refractive water and a dark fluid share one levelling fluid; only the look differs", async () => {
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    const contents = (id: string) =>
+      materialPools
+        .get("registered")()
+        .find((material) => material.id === id)!.appearance.contents!;
+    const fluids = ["custard", "waterInPlastic", "darkFluid"].map((id) => contents(id));
+    expect(new Set(fluids.map(({ effect }) => effect))).toEqual(new Set(["levellingFluid"]));
+    const built = fluids.map(({ config }) =>
+      containedContents.get("levellingFluid")(createInteriorBoundary(geometry, 1, 0.92), config),
+    );
+    expect(built[1]!.meshes[0]!.material).toBeInstanceOf(THREE.MeshPhysicalMaterial);
+    expect((built[1]!.meshes[0]!.material as THREE.MeshPhysicalMaterial).transmission).toBe(1);
+    // Double-sided, so the cut shows a top surface from above rather than a hole (#413 review).
+    expect((built[1]!.meshes[0]!.material as THREE.MeshPhysicalMaterial).side).toBe(
+      THREE.DoubleSide,
+    );
+    for (const fluid of built) expect(fluid.capabilities.liquidSurface).toBeDefined();
+    // Water swaps between plastic and glass by configuration only: the same contents config.
+    expect(contents("waterInLantern")).toEqual(contents("waterInPlastic"));
+  });
+});
+
+describe("every registered material's fluid names a look (#413 review)", () => {
+  it("builds every material's contents without error", async () => {
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    for (const material of materialPools.get("registered")())
+      for (const { effect, config } of [material.appearance.contents ?? []].flat()) {
+        const built = containedContents.get(effect)(
+          createInteriorBoundary(geometry, 1, 0.9),
+          config,
+        );
+        built.meshes.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+      }
+  });
+});

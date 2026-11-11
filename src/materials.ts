@@ -464,7 +464,11 @@ export const materialDefinitions = [
       },
       contents: {
         effect: "levellingFluid",
-        config: { fill: 0xf2c84b, surface: 0xfadf7e, level: 0.45, settleSeconds: 1.4 },
+        config: {
+          level: 0.45,
+          settleSeconds: 1.4,
+          look: { id: "opaqueFluid", config: { fill: 0xf2c84b, surface: 0xfadf7e } },
+        },
       },
       // A fading film with local history (#334): wet walls refresh it, exposed patches fade.
       residue: {
@@ -509,7 +513,22 @@ export const materialDefinitions = [
       container: { shell: "plasticShell", config: { opacity: 0.16, inset: 0.92, gloss: 1.6 } },
       contents: {
         effect: "levellingFluid",
-        config: { fill: 0x5fa8d8, surface: 0x9fd2f0, level: 0.55, settleSeconds: 0.5 },
+        // Clear, refracting water (#333's look), with the same level and settling as before.
+        config: {
+          level: 0.55,
+          settleSeconds: 0.5,
+          look: {
+            id: "refractiveFluid",
+            config: {
+              tint: 0xe8f6ff,
+              ior: 1.33,
+              thickness: 0.6,
+              roughness: 0.04,
+              attenuation: 0x7fc8ee,
+              attenuationDistance: 1.6,
+            },
+          },
+        },
       },
       residue: { effect: "wallTrace", config: { fill: 0x5fa8d8, seconds: 1.5, opacity: 0.3 } },
     },
@@ -519,7 +538,11 @@ export const materialDefinitions = [
 /** Custard's contents, shared by every experiment that shows them in another shell (#331). */
 const custardContents = {
   effect: "levellingFluid",
-  config: { fill: 0xf2c84b, surface: 0xfadf7e, level: 0.45, settleSeconds: 1.4 },
+  config: {
+    level: 0.45,
+    settleSeconds: 1.4,
+    look: { id: "opaqueFluid", config: { fill: 0xf2c84b, surface: 0xfadf7e } },
+  },
 };
 /** Custard's wall trace, shared the same way. */
 const custardResidue = {
@@ -527,8 +550,70 @@ const custardResidue = {
   config: { fill: 0xf2c84b, opacity: 0.45, seconds: 4, resolution: 32 },
 };
 
+/** Clear, refracting water (#333): the levelling fluid with the `refractiveFluid` look. */
+const clearWater = {
+  effect: "levellingFluid",
+  config: {
+    level: 0.55,
+    settleSeconds: 0.5,
+    look: {
+      id: "refractiveFluid",
+      config: {
+        tint: 0xe8f6ff,
+        ior: 1.33,
+        thickness: 0.6,
+        roughness: 0.04,
+        attenuation: 0x7fc8ee,
+        attenuationDistance: 1.6,
+      },
+    },
+  },
+};
+
+/** A dark, oily fluid (#333): custard's look and mechanics with only its colours changed. */
+const darkFluid = {
+  effect: "levellingFluid",
+  config: {
+    level: 0.5,
+    settleSeconds: 2.5,
+    look: { id: "opaqueFluid", config: { fill: 0x1b1712, surface: 0x3a3127 } },
+  },
+};
+
 /** The retired glass block's six pane tints (f99d307), in BoxGeometry face order. */
 const lanternTints = [0xff9aa8, 0xffd27a, 0xf4fbff, 0x8fe3b0, 0x8fb4ff, 0xc9a6ff];
+
+/** Water and a dark fluid in custard's plastic vessel (#333). */
+function plasticFluidExperiments(): MaterialDefinition[] {
+  const plastic = (
+    id: string,
+    name: string,
+    contents: MaterialDefinition["appearance"]["contents"],
+  ): MaterialDefinition => ({
+    id,
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
+    name,
+    acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
+    traits: { transparent: {} },
+    appearance: {
+      pattern: "cardSheet",
+      assembly: "contained",
+      surface: "clear",
+      height: "none",
+      ink: lightInk,
+      edge: { color: 0xe8eef2, opacity: 0.3 },
+      geometry: { shape: "rounded", segments: 1, radius: 0.08, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: noEnds,
+      container: { shell: "plasticShell", config: { opacity: 0.16, inset: 0.92, gloss: 1.6 } },
+      contents,
+    },
+  });
+  return [
+    plastic("waterInPlastic", "Water in plastic", clearWater),
+    plastic("darkFluid", "Dark fluid", darkFluid),
+  ];
+}
 
 /**
  * Glass containers (#331): the stained lantern empty and holding custard, and custard in the
@@ -565,6 +650,8 @@ function glassContainerExperiments(): MaterialDefinition[] {
     lantern("emptyLantern", "Empty lantern"),
     lantern("custardLantern", "Custard in a lantern", custardContents, custardResidue),
     lantern("flameLantern", "Flame in a lantern", { effect: "flame", config: {} }),
+    // Fluid looks (#333): the same levelling fluid, other optics, in either container.
+    lantern("waterInLantern", "Water in a lantern", clearWater),
     {
       id: "custardFrame",
       lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
@@ -640,6 +727,7 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     },
   },
   ...glassContainerExperiments(),
+  ...plasticFluidExperiments(),
 ];
 
 export type BlockMaterial = (typeof materialDefinitions)[number]["id"];
