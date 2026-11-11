@@ -140,6 +140,8 @@ When a passive's rule fires, its rack token plays its category's activation. The
 
 This is presentation only: it shows outcomes the rules already decided, and no gameplay code reads a category.
 
+**The look belongs to the item (#485).** A passive's activation (effect, colour and sound) is its own: a definition may compose an `activationPulse` trait with `{ effect, sfx }` to choose it, and one that doesn't gets its category's activation above as its default. The rack never chooses an effect. It only forwards the activation to the item and lends the item's token as the place to show it; the pulse itself is the shared activation pulse in [game-architecture.md](game-architecture.md), "Activation pulse".
+
 ## Dev mode and verification
 
 On a **fresh** `dev2` run, choose two different definitions from this roster and install one instance of each, in chosen rack order. Reloading a saved run preserves its rack and coin balance rather than drawing again. Give card blocks randomized gameplay materials so Carnivore and Woodworker can actually be tried. A new-game action redraws the pair.
