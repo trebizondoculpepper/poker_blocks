@@ -12,12 +12,12 @@ The exact distributed TinyQueue JavaScript inspected was 1,692 bytes unminified;
 
 ## Alternatives and boundaries
 
-| Candidate | What it supplies | Decision |
-| --- | --- | --- |
-| TinyQueue 3.0.0 | Comparator-based heap, typed ESM; no clock or lifecycle | Recommended primitive; adapt it rather than reimplement heap ordering. |
+| Candidate                                 | What it supplies                                                                             | Decision                                                                                                                                                 |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TinyQueue 3.0.0                           | Comparator-based heap, typed ESM; no clock or lifecycle                                      | Recommended primitive; adapt it rather than reimplement heap ordering.                                                                                   |
 | `@datastructures-js/priority-queue` 6.4.0 | Typed queue with heap dependency and predicate removal; inspected distribution uses CommonJS | Viable larger API. Its predicate removal drains and reinserts entries; it is not constant-time cancellation. No advantage for this narrow interface yet. |
-| `p-queue` 10.0.0 | Promise-task concurrency/rate limiting; current package targets Node >=22 | Wrong abstraction for frame-driven visual starts and active-effect completion. Do not substitute wall-clock task throughput for presentation time. |
-| Tween timelines | Interpolation and authored animation sequences | Useful inside effects, not ownership or backpressure for all game presentation. Tween recommendation is #556. |
+| `p-queue` 10.0.0                          | Promise-task concurrency/rate limiting; current package targets Node >=22                    | Wrong abstraction for frame-driven visual starts and active-effect completion. Do not substitute wall-clock task throughput for presentation time.       |
+| Tween timelines                           | Interpolation and authored animation sequences                                               | Useful inside effects, not ownership or backpressure for all game presentation. Tween recommendation is #556.                                            |
 
 A heap is **not a complete event scheduler**. Library adoption removes priority-queue implementation work, not the game's need to define cancellation, bounded dispatch, snapshot ownership or completion scopes. The adapter supplies those generic lifecycle concerns without naming cards, materials, scenes or modes.
 

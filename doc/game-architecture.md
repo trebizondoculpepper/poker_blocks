@@ -1142,7 +1142,6 @@ Each proof vessel is 6 draw calls (back glass, water top, film, water, front gla
 
 The same boundary contract serves all of them; no content, look or residue knows which shell holds it.
 
-
 ## Visual scheduler library direction (#557)
 
 The [library-backed scheduler proposal](visual-scheduler-library-research.md) recommends `tinyqueue` 3.0.0 as a priority-queue primitive behind a narrow, injected-clock presentation scheduler. It is not the similarly named Node `tinyq` package and is not itself a complete timed scheduler. This supersedes the provisional no-library preference from #543; no runtime dependency is installed by this decision. #541/#545 must define the adapter's scope, cancellation, completion, bounded-load and fallback contracts before #546 implements it. Registered traits bring effect behavior; generic scheduling never mutates gameplay or blocks valid input. Review queue changes against this proposal as well as the finalized interface documentation.
