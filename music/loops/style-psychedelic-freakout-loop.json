@@ -12,8 +12,9 @@
   "measured_tempo_bpm": 149.09,
   "beats": 244,
   "tempo_bpm": 148.7321,
+  "first_beat_seconds": 1.0216,
   "review": {
-    "reason": "Beat fit prefers 112.2 BPM over the current 148.7 (fit score 1.07); check by ear (#257).",
+    "reason": "Default chosen, to audition (#257): kept 148.7 BPM. The fit also likes 112.2 (about 3/4 of it, a swing or triplet feel); keeping the tempo leaves the track-switch glide unchanged and stays in the usual 90-160 BPM dance range. Retune with fit_beats.py --write --near <BPM>.",
     "candidate_bpm": 112.2,
     "issue": 257
   }
