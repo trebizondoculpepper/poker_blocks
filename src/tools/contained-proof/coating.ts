@@ -135,6 +135,7 @@ const textureVertex = /* glsl */ `
  */
 const textureFragment = /* glsl */ `
   uniform sampler2D history;
+  uniform float resolution;
   uniform vec3 surfaceNormal;
   uniform float height;
   uniform vec3 colour;
@@ -148,7 +149,8 @@ const textureFragment = /* glsl */ `
     if (a.x >= a.y && a.x >= a.z) { face = vLocal.x > 0.0 ? 0.0 : 1.0; uv = vLocal.zy / a.x; }
     else if (a.y >= a.z) { face = vLocal.y > 0.0 ? 2.0 : 3.0; uv = vLocal.xz / a.y; }
     else { face = vLocal.z > 0.0 ? 4.0 : 5.0; uv = vLocal.xy / a.z; }
-    uv = uv * 0.5 + 0.5;
+    // Keep within this face's own texel centres, so filtering never blends in the next tile.
+    uv = clamp(uv * 0.5 + 0.5, 0.5 / resolution, 1.0 - 0.5 / resolution);
     float strength = texture2D(history, vec2(uv.x, (face + uv.y) / 6.0)).r * opacity;
     if (strength < 0.01) discard;
     gl_FragColor = vec4(colour, strength);
@@ -167,7 +169,11 @@ function faceTextureCoating(scale: number, config: CoatingConfig): Coating {
   const centres = texelCentres(n);
   const strength = new Float32Array(n * n * 6);
   const geometry = new THREE.BoxGeometry(1, 1, 1);
-  const uniforms = { ...filmUniforms(config), history: { value: texture } };
+  const uniforms = {
+    ...filmUniforms(config),
+    history: { value: texture },
+    resolution: { value: n },
+  };
   const mesh = filmMesh(geometry, scale, uniforms, textureVertex, textureFragment);
   return {
     mesh,
