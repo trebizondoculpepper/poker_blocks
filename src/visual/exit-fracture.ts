@@ -72,7 +72,14 @@ export type PieceSource = (context: {
   /** The selected target's bounds in the block's own space: where and how big pieces are. */
   bounds: THREE.Box3;
   colour: number;
-}) => { pieces: THREE.Object3D[]; release(): void };
+  /** How see-through a source's own pieces start (a piece set's; not the block's components). */
+  opacity?: number;
+}) => {
+  pieces: THREE.Object3D[];
+  /** Fade the source's own pieces to `strength` (1 → 0) of their opacity; components have none. */
+  fade?(strength: number): void;
+  release(): void;
+};
 export const pieceSources = new Registry<PieceSource>("piece source");
 
 /** The block's own component meshes fly apart (a shell breaking up, a fan's parts). */
@@ -113,13 +120,17 @@ export function registerPieceSet(
   recipe: () => readonly THREE.BufferGeometry[],
 ): void {
   let shared: readonly THREE.BufferGeometry[] | null = null;
-  pieceSources.register(name, ({ visual, bounds, colour }) => {
+  pieceSources.register(name, ({ visual, bounds, colour, opacity = 1 }) => {
     // Sized and placed to the selected target; an empty target gets no pieces (#512 review).
     if (bounds.isEmpty()) return { pieces: [], release: () => {} };
     shared ??= recipe();
     const size = bounds.getSize(new THREE.Vector3());
     const centre = bounds.getCenter(new THREE.Vector3());
-    const material = new THREE.MeshStandardMaterial({ color: colour });
+    const material = new THREE.MeshStandardMaterial({
+      color: colour,
+      transparent: opacity < 1,
+      opacity,
+    });
     const pieces = shared.map((geometry) => {
       const piece = new THREE.Mesh(geometry, material);
       piece.scale.copy(size);
@@ -129,6 +140,10 @@ export function registerPieceSet(
     });
     return {
       pieces,
+      fade(strength) {
+        material.transparent = true;
+        material.opacity = opacity * strength;
+      },
       release() {
         pieces.forEach((piece) => piece.removeFromParent());
         material.dispose();
@@ -136,6 +151,19 @@ export function registerPieceSet(
     };
   });
 }
+
+/** A few soft rounded lumps (meat's breakup, #450): low-detail spheres, not sharp shards. */
+registerPieceSet("chunks", () =>
+  [
+    [-0.22, 0.2, 0.12],
+    [0.24, 0.16, -0.1],
+    [-0.08, -0.22, -0.2],
+    [0.18, -0.18, 0.22],
+    [0, 0.02, 0],
+  ].map(([x, y, z], i) =>
+    new THREE.SphereGeometry(0.2 + (i % 2) * 0.04, 7, 5).translate(x!, y!, z!),
+  ),
+);
 
 /** Five horizontal slabs: the stand-in for authored ice pieces. */
 registerPieceSet("slabs", () =>
@@ -238,6 +266,10 @@ export type FractureConfig = {
   gravity?: number;
   life?: number;
   colour?: number;
+  /** A piece set's pieces start this see-through, 0 to 1 (ice). Default 1. */
+  opacity?: number;
+  /** Seconds at the end of `life` over which a piece set's pieces fade out. Default 0. */
+  fade?: number;
 };
 
 exitEffects.register(
@@ -266,7 +298,9 @@ exitEffects.register(
           originals,
           bounds,
           colour: config?.colour ?? 0xcccccc,
+          opacity: Math.min(1, Math.max(0, config?.opacity ?? 1)),
         });
+    const fade = Math.min(life, Math.max(0, config?.fade ?? 0));
     // Every original that draws (a mesh, a written block's outline lines, points) and isn't
     // itself a flying piece stops drawing while the pieces fly: each gets the shared invisible
     // material in place of its own, which comes back on dispose.
@@ -324,6 +358,8 @@ exitEffects.register(
           piece.position.addScaledVector(velocity, step);
           piece.quaternion.premultiply(turn.setFromAxisAngle(axis, spin * step));
         });
+        // Over the last `fade` seconds the pieces fade out rather than vanish at once.
+        if (fade > 0) source.fade?.(Math.min(1, (life - elapsed) / fade));
         return elapsed < life;
       },
       finish() {
@@ -336,3 +372,25 @@ exitEffects.register(
     };
   },
 );
+
+/**
+ * Hide (#451): the target stops drawing at once, through the same shared invisible stand-in
+ * fracture uses, and draws again on dispose. It works whatever a mesh's shader (a crystal's
+ * fire ignores opacity, so a fade can't hide it); only the departing block's own objects.
+ */
+exitEffects.register("hide", ({ targets, ownsObject }): ExitEffectInstance => {
+  const hidden: THREE.Mesh[] = [];
+  for (const target of targets)
+    target.traverse((child) => {
+      if (ownsObject(child) && (child as THREE.Mesh).material !== undefined)
+        hidden.push(child as THREE.Mesh);
+    });
+  hidden.forEach(suppress);
+  return {
+    update: () => false,
+    finish() {},
+    dispose() {
+      hidden.forEach(unsuppress);
+    },
+  };
+});

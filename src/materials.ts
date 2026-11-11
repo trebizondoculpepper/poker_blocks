@@ -240,6 +240,17 @@ export const materialDefinitions = [
     // offered from round 1 at a low weight (a safe default, noted on #388).
     transmogrifier: { price: 2, weights: [[1, 0.5]] },
     appearance: {
+      // Bursts into small torn scraps that scatter, flutter and fade as the sheet vanishes (#447).
+      exit: {
+        steps: [
+          {
+            effects: [
+              { effect: "shred", config: { count: 28 } },
+              { effect: "fade", config: { seconds: 0.1 } },
+            ],
+          },
+        ],
+      },
       pattern: "cardSheet",
       assembly: "sixFaces",
       surface: "cardSheet",
@@ -340,7 +351,8 @@ export const materialDefinitions = [
     },
     appearance: {
       // Appears to crack, then with a flash instantly bursts into a cloud of stars that
-      // dissipate (#451): the shared crack, flash and star burst, the block gone in a blink.
+      // dissipate (#451): the shared crack, flash and star burst. The block is hidden at once
+      // (not faded: its shader-driven fire ignores opacity).
       exit: {
         steps: [
           { effects: [{ effect: "crack", config: { seconds: 0.25, colour: 0xf4f0ff } }] },
@@ -359,7 +371,7 @@ export const materialDefinitions = [
                   stars: true,
                 },
               },
-              { effect: "fade", config: { seconds: 0.05 } },
+              { effect: "hide" },
             ],
           },
         ],
@@ -472,6 +484,19 @@ export const materialDefinitions = [
     traits: {},
     shop: { basePrice: 3, weights: [[1, 0]] },
     appearance: {
+      // Fractures into pottery shards that scatter and fade (#455).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: { pieces: "shards", colour: 0xb4643c, life: 0.9, fade: 0.4 },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "crackedClay",
       assembly: "sixFaces",
       surface: "matte",
