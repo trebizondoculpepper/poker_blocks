@@ -9,6 +9,7 @@ import { withoutSelectable } from "./traits/selectable";
 // Registers the transmogrifier definitions, so saved rack items resolve (#388).
 import "./transmogrifiers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
+import { asGenerated } from "./card-ownership";
 import { type CardState } from "./card-material";
 import { applyCardStates } from "./card-states";
 // Each registers how its saved card state is restored (#387, #365, #372).
@@ -69,6 +70,8 @@ export type SaveRecord = {
     shopStock?: SavedOffer[];
     /** Cards bought this run, saved in full (#143); absent in older saves. */
     boughtCards?: SavedCard[];
+    /** Cards made on the field during play (#424), saved in full; absent when there are none. */
+    generatedCards?: SavedCard[];
     /** Cards whose material changed this run, by id (#387); absent in older saves. */
     cardStates?: Record<string, { material?: string; stateBonus?: string; doneness?: number }>;
     /** Optional so runs saved before the economy was added begin with zero coins. */
@@ -152,6 +155,9 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
           }
         : {}),
       ...(state.boughtCards?.length ? { boughtCards: state.boughtCards.map(saveCard) } : {}),
+      ...(state.generatedCards?.length
+        ? { generatedCards: state.generatedCards.map(saveCard) }
+        : {}),
       ...(state.cardStates && Object.keys(state.cardStates).length
         ? { cardStates: structuredClone(state.cardStates) }
         : {}),
@@ -185,7 +191,13 @@ export function fromSaveRecord(
     const boughtCards = (record.state.boughtCards ?? []).map(restoreCard);
     // Materials changed this run (#387): validated, then applied to the rebuilt cards.
     const cardStates = restoreCardStates(record.state.cardStates);
-    const runCards = [...cards, ...boughtCards].map((card) => applyCardStates(card, cardStates));
+    // Cards made on the field (#424) are rebuilt in full and owned by the field again.
+    const generatedCards = (record.state.generatedCards ?? []).map((saved) =>
+      asGenerated(restoreCard(saved)),
+    );
+    const runCards = [...cards, ...boughtCards, ...generatedCards].map((card) =>
+      applyCardStates(card, cardStates),
+    );
     const byId = new Map(runCards.map((card) => [card.id, card]));
     if (byId.size !== runCards.length) return null;
     if (Object.keys(cardStates ?? {}).some((id) => !byId.has(id))) return null;
@@ -242,6 +254,9 @@ export function fromSaveRecord(
       passiveRack,
       ...(state.shopStock ? { shopStock } : {}),
       ...(boughtCards.length ? { boughtCards: boughtCards.map((card) => byId.get(card.id)!) } : {}),
+      ...(generatedCards.length
+        ? { generatedCards: generatedCards.map((card) => byId.get(card.id)!) }
+        : {}),
       ...(cardStates ? { cardStates } : {}),
       coins: nonnegativeInteger(state.coins ?? 0),
       round: {
