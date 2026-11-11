@@ -543,7 +543,8 @@ The starting deck's rank and suit mapping and the material assignment algorithm 
 - **GameRun**: live mutable state for one playthrough: cards, field, scoring, coins, passives and phase. It remains the same run while the scene stack changes. Its `snapshot()` method produces data that the run controller persists through `save.ts`.
 - **RunRules**: progression and economy rules used to create a run. Mode traits may further configure its save key, starting deck and optional features.
 - **Trait**: reusable behavior plus plain data, attached at a declared scope. A mode trait is not automatically copied onto each scene; composition between scopes must be explicit.
-- **Services**: camera, input, hand, field, HUD, audio, overlays and console, exposed through narrow interfaces to behaviors.
+- **Service**: a narrow capability (camera, input, hand, field, HUD, audio, overlays, console, dazzle, tweening) that owns its technical resources. It does what it is asked and knows no scene, mode, material or item identity; it never decides a gameplay outcome. See "Services and controller traits".
+- **Controller trait**: a composed trait that connects capabilities to game-world events. It subscribes to configured events through lifecycle hooks or registered handlers and asks one or more services to act. It is a trait like any other, with no exemption from "No special cases".
 
 - **Dev trait**: a trait that exists only for testing. Its name begins with `dev` (`devManualBlockDestroyer`), and only dev modes compose it.
 
@@ -558,6 +559,50 @@ RunRules + the mode's run setup ── create ──> GameRun
 ```
 
 The pause menu is a scene pushed over gameplay or the title, and Settings is a scene pushed over either. Popping it resumes the underlying scene. Stage-won is pushed while rewards are presented; the shop is a scene between stages while the same run persists. Title and game-over currently replace the stack. A future victory ending should be represented by a scene as well.
+
+### Services and controller traits (#537)
+
+**Target architecture.** Two kinds of code meet the game world, and they have different jobs.
+
+- A **service** provides a **narrow capability** and owns the technical resources behind it: the audio context and music player, the renderer, a DOM layer, a tween group, a pool of particles. Its interface is mechanics ("play this sound", "fade the music to this filter", "flash a dazzle at this point", "interpolate this value over this time"). It never knows which scene, mode, material, item or block kind asked, never inspects game state to infer what happened, and never decides or delays a gameplay outcome.
+- A **controller trait** owns **policy**: when and why capabilities are used. It is composed onto a scene, mode, block or item with configuration, subscribes to committed game events (or lifecycle hooks), and asks services to act. One controller trait may coordinate several services. All its variation comes from its configuration and from handlers registered by trait or step name, never from identity checks.
+
+```text
+GameRun / rules ── commit outcome ──> committed events (immutable)
+                                          │
+controller traits (composed, configured) ─┤ subscribe; choose policy from config
+                                          ▼
+          services (narrow capabilities, own resources; no identities, no outcomes)
+          audio · music · camera · dazzle · tweens · visual-event scheduler · HUD · overlays
+```
+
+**Rules.**
+
+1. **Model first.** Rules commit the outcome first; controller traits present what was committed. A service or controller trait never awards points, rolls the run's RNG, buys, removes or transforms a card, and never holds input back while it presents.
+2. **Events, not state diffs.** A controller trait reacts to an event that says what happened (for example `block.removed`, with its cause and configured sound). Nothing infers an outcome by comparing state before and after (`coins > coinsBefore`).
+3. **Data lives on the definition.** Which sound, look or effect a thing uses is configuration on that thing's definition or on the controller trait composed onto it, never a table in a service keyed by its identity.
+4. **Coordinate spaces are interfaces.** When a controller needs a position (where a block is on screen), a service exposes it through a narrow interface; nothing branches on which scene's coordinates are in use.
+5. **No exemption.** "Controller" does not license special cases. A controller trait follows "No special cases" exactly as any trait does, and generic code still dispatches to handlers instead of asking what something is.
+6. **`main.ts` is wiring.** It builds services and composes controllers; it holds no policy.
+
+**Examples.**
+
+- _Music:_ the music player and its controller are capabilities: play, fade, filter, wind down. Scene traits (`musicCue`, `musicTrack`, `musicFilter`) are the controllers: the scene's configuration says what to request on enter and exit.
+- _Explosions:_ the dazzle (`createDazzle`), smoke and the SFX player are services that render or play at a supplied location. An `explosionEffects` controller trait consumes a committed detonation (`block.removed` with cause `explosion`) and coordinates dazzle, smoke and sound from its configuration. The removal happened in the model already.
+- _Tweening:_ the Tween.js service (`doc/tweening-library-research.md`, #556) supplies interpolation only; effect and controller traits choose endpoints, easing and interruption, and the visual-event scheduler decides when (#541, #545).
+
+**Naming.** `X` / `XController` names a genuine pair: one object and the controller that drives only it (`MusicPlayer` / `MusicController`). A controller trait that coordinates several services is named for its **responsibility** (`explosionEffects`, `scoringFeedback`), not forced to look like one service's controller. #473 audits existing names against this.
+
+**Current gaps (transitional code).** These are where today's code differs from the target. They are the scope of #538, each to be fixed in a small PR of its own. Untouched legacy code is not a review finding; a PR that changes these lines should move them toward the target.
+
+| Where                             | Today                                                                                                                                                   | Target                                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `src/play-presenter.ts` `discard` | Infers outcomes by diffing state (`coins > coinsBefore` plays `passive.coins`; a longer rack plays `passive.granted`).                                  | The run commits events for coins and grants; a controller trait plays their configured sounds.                               |
+| `src/run-controller.ts`           | Plays presentation sounds inline at outcome sites (`shop.stock.burn`, `shop.leave`, `run.lost`, `block.destroyed`, `round.cleared`).                    | Outcomes are events; sounds come from scene or controller trait configuration (as `enterSound`/`exitSound` already do).      |
+| Block exits                       | `block.removed` / `block.resisted` are emitted, but no controller presents them: the exit effects (#439) and the dazzle (#493) are not wired into play. | An exit/explosion controller trait consumes the committed events and drives the exit runner and dazzle (#510, #520).         |
+| `src/audio/music-controller.ts`   | The controller's API names scene meanings (`switchToBossTrack`, `playTitle`).                                                                           | Cue names come from scene trait configuration; the controller maps a cue to tracks through the music plan, knowing no scene. |
+
+Acceptance for #538 children: the gap's row is gone or rewritten; the behaviour players see and hear is unchanged; tests cover the event and its configured response; the guardrail and production build pass.
 
 ### Example: game progression is a flow
 
@@ -832,7 +877,7 @@ The haze is one small tileable 2D value-noise texture (64×64, two octaves), mad
 
 ## Contained components (#329, epic #328)
 
-**Status: design.** Nothing here is built yet. It records the contracts that #346 (the rendering proof) and #330–#336 and #349 (the extractions) implement. Code follows this section; where a mission learns something that changes it, that mission updates it in the same PR.
+**Status: design.** Nothing here is built yet. It records the contracts that #346 (the rendering proof) and #330–#336 and #349 (the extractions) implement. Code follows this section; where a mission learns something that changes it, the change is recorded here in its own documentation PR first (documentation first, #537).
 
 **Laser lines and drop guides (#498).** `createLaserLines(segments, colour, size, config)` draws the laser beams along any line segments (pairs of points); `createLaserOutline` is now its outline's edges as segments. `createDropGuide({ shape, colour, laser })` (`src/visual/drop-guide.ts`) uses it to show where a dragged offer can go or that it can't. Shapes are registered segment recipes on a width × height rectangle (`dropGuideShapes`): `rectangle`, the target's outline, and `cross`, a large X across it. `setBounds(width, height)` fits the guide to a target's live size, rebuilding its beams only when the size changes; an empty size shows nothing. The guide is never hit-tested, so it can't intercept input. It is presentation only, holds its haze still under reduced motion, and frees everything on `dispose`. Placing it over a DOM drop area, and following layout and drag lifecycle, is #500.
 

@@ -72,10 +72,17 @@ reviews:
              a service interface or event should be used; new coupling to src/main.ts.
           8. Identity used as behaviour: a mode or scene id (or a kind, phase or material)
              used as a key into code or data that lives outside that thing's definition.
-          6. The change contradicts the documented design without updating the docs in the
-             same PR, or adds a concept (new kind of scene, trait family, save field) that
-             the docs do not describe.
+          6. The change implements a design or rule the merged docs don't describe, or edits
+             a decision in the same PR that implements it (documentation first: the
+             decision merges in its own PR beforehand), or adds a concept (new kind of
+             scene, trait family, save field) that the docs do not describe.
           7. A save-format change lacks a version bump and an explicit migration.
+          9. Services and controller traits ("Services and controller traits" in
+             doc/game-architecture.md): a service learns a scene, mode, material or item
+             identity, infers an outcome by diffing state, or decides or delays a gameplay
+             outcome; or policy (when or why something plays) lives in a service, the run
+             controller or src/main.ts instead of a configured controller trait. A
+             controller trait has no exemption from "No special cases".
           PASS otherwise. When failing, explain which principle is broken, cite the doc
           section, and propose the architecturally correct shape (which trait, service,
           registry or scene should own it).
@@ -94,8 +101,10 @@ reviews:
           2. Changes game behaviour so it no longer matches doc/game.md: different
              scoring, limits, prices, rewards, ordering, or a rule the document does not
              describe (cite the section and quote the rule).
-          3. Changes either decision deliberately but does not update the document in the
-             same PR. Changing a decision is allowed; doing it silently is not.
+          3. Changes a decision that the merged documents don't yet record. Documentation
+             first: a decision changes in its own documentation PR, merged before the
+             implementation. A behaviour-preserving fix that matches an accurate document
+             needs no document change; it should cite the section.
           4. Adds a new mechanic or architectural concept that neither document mentions,
              without adding it to the right document.
           PASS when the code and both documents agree after the PR. When failing, list each

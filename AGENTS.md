@@ -4,7 +4,9 @@ Instructions for coding agents working in this repository. Project documents liv
 
 ## Recorded decisions
 
-Two documents hold the project's decisions. [doc/game-architecture.md](doc/game-architecture.md) says **how** we implement things; [doc/game.md](doc/game.md) says **what** the game is (its rules). Before changing code, read the sections that apply. If your change conflicts with either, either make the code match or change the document in the same PR and say so; never diverge silently. Code review (CodeRabbit, advisory) checks every PR against both.
+Two documents hold the project's decisions. [doc/game-architecture.md](doc/game-architecture.md) says **how** we implement things; [doc/game.md](doc/game.md) says **what** the game is (its rules). Before changing code, read the sections that apply. If your change conflicts with either, make the code match the documents.
+
+**Documentation first, always.** A new or changed rule or design is recorded in the documents, reviewed and **merged first**, in its own PR; the implementation follows in a later PR that makes the code match. Never change a decision silently, and don't bundle a design change into the PR that implements it. A fix that only brings code into line with an accurate document needs no document change: cite the section it now satisfies. Code review (CodeRabbit and Codex, advisory) checks every PR against both documents and this order.
 
 ## Checks before committing
 
@@ -47,9 +49,13 @@ The primary review question is whether this PR moves the code toward the **targe
 
 - Compare new behavior with the "No special cases" rule above and the target design in [doc/game-architecture.md](doc/game-architecture.md). Flag new or expanded block, scene, mode, dealer, or material-specific branches; trait-presence flags; a mode's or scene's identity used as a key or in a membership test, or a mode named outside `src/game-modes.ts`; side tables or sets keyed by a kind, phase, scene or material (however the special case is spelled); behavior placed on objects instead of traits; and new game logic in `src/main.ts`. The safe path is configured traits, their lifecycle hooks, or shared registries. Do not flag untouched legacy code just because it exists. Treat an exception as agreed only when its `// branch-ok: #<issue>` points to the recorded user decision.
 
+### Services and controller traits
+
+- Compare changes with "Services and controller traits" in [doc/game-architecture.md](doc/game-architecture.md). Flag a service that learns a scene, mode, material or item identity, infers an outcome by diffing state, or decides or delays a gameplay outcome; and policy (when or why something plays) placed in a service, the run controller or `src/main.ts` rather than a configured controller trait. A controller trait gets no exemption from "No special cases". Use `X`/`XController` only for a genuine pair; name a multi-service controller trait for its responsibility.
+
 ### Game rules and intended behavior
 
-- Compare changed gameplay with the linked issue and the applicable rules in [doc/game.md](doc/game.md). Flag behavior that contradicts an agreed rule or misses a stated acceptance criterion. A PR may intentionally change a rule if it updates the design document in the same change and explains the decision.
+- Compare changed gameplay with the linked issue and the applicable rules in [doc/game.md](doc/game.md). Flag behavior that contradicts an agreed rule or misses a stated acceptance criterion. A rule or design change must already be in the merged documents (documentation first); flag an implementation PR that changes behaviour the documents don't yet describe, or that edits a decision alongside the code.
 
 ### Input ownership
 
