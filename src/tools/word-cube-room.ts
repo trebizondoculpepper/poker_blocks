@@ -10,8 +10,9 @@
  * Developer-only: production never imports it (src/main.ts).
  */
 import * as THREE from "three";
+import { setReflectionEnvironment } from "../visual/block-appearance";
 import { gameModeFor, modeLink, type SceneTraits } from "../game-modes";
-import { createCubeStage } from "./cube-stage";
+import { createCubeStage } from "../block-menu/cube-stage";
 import "./word-cube-room.css";
 
 export type WordCubeRoomConfig = SceneTraits["devWordCubeRoom"];
@@ -58,7 +59,10 @@ export function createWordCubeRoom(host: HTMLElement): WordCubeRoom {
   host.append(root);
   const part = <T extends HTMLElement>(name: string) =>
     root.querySelector<T>(`[data-part="${name}"]`)!;
-  const stage = createCubeStage(part("stage"));
+  const stage = createCubeStage(part("stage"), {
+    background: 0x05070b,
+    reflect: setReflectionEnvironment,
+  });
 
   return {
     show(config) {
