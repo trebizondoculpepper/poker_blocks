@@ -5,7 +5,11 @@ import "./filled-vessel";
 import "./fading-film";
 
 const geometry = new THREE.BoxGeometry(1, 1, 1);
-const fluidConfig = { fill: 0xf2c84b, surface: 0xfadf7e, level: 0.45, settleSeconds: 0.01 };
+const fluidConfig = {
+  level: 0.45,
+  settleSeconds: 0.01,
+  look: { id: "opaqueFluid", config: { fill: 0xf2c84b, surface: 0xfadf7e } },
+};
 const filmConfig = { fill: 0xf2c84b, opacity: 0.45, seconds: 1, resolution: 8 };
 
 function vessel() {
