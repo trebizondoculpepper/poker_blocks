@@ -17,7 +17,7 @@ export type FadeConfig = { seconds?: number };
 
 const defaultSeconds = 0.4;
 
-exitEffects.register("fade", ({ targets, reducedMotion }, raw) => {
+exitEffects.register("fade", ({ targets, reducedMotion, ownsObject }, raw) => {
   const seconds = Math.max((raw as FadeConfig | undefined)?.seconds ?? defaultSeconds, 1e-3);
   const faded = new Map<
     THREE.Material,
@@ -25,6 +25,9 @@ exitEffects.register("fade", ({ targets, reducedMotion }, raw) => {
   >();
   for (const target of targets)
     target.traverse((child) => {
+      // Only the departing block's own materials fade, never a sibling effect's overlay or
+      // particles (#490 review; ownership from #512).
+      if (!ownsObject(child)) return;
       const material = (child as THREE.Mesh).material;
       for (const each of [material ?? []].flat()) {
         if (faded.has(each)) continue;

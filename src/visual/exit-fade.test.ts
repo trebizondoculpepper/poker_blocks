@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { createExitRunner, type ExitVisual } from "./exit-presentation";
+import { createExitRunner, exitEffects, type ExitVisual } from "./exit-presentation";
 import "./exit-fade";
 
 function visual() {
@@ -94,5 +94,33 @@ describe("fade exit effect (#440)", () => {
     other.cancel("b1");
     expect(cancelled.shellMaterial.opacity).toBe(1);
     expect(cancelled.released).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("fade beside another effect's output (#490 review)", () => {
+  it("fades only the block's own materials, never what a sibling effect adds, in either order", () => {
+    // A stand-in sibling effect that adds an opaque mesh of its own, as a flash or burst does.
+    exitEffects.register("testSibling", ({ visual }) => {
+      const added = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+      visual.root.add(added);
+      return { update: () => false, finish() {}, dispose: () => void added.removeFromParent() };
+    });
+    for (const order of [
+      [{ effect: "testSibling" }, { effect: "fade" }],
+      [{ effect: "fade" }, { effect: "testSibling" }],
+    ]) {
+      const { v, shellMaterial } = visual();
+      const before = v.root.children.length;
+      const runner = createExitRunner();
+      runner.start(snapshot, v, { steps: [{ effects: order }] });
+      const added = v.root.children.slice(before) as THREE.Mesh[];
+      expect(added).toHaveLength(1);
+      runner.update(0.2);
+      expect(shellMaterial.opacity).toBeLessThan(1);
+      const sibling = added[0]!.material as THREE.Material;
+      expect(sibling.opacity).toBe(1);
+      expect(sibling.transparent).toBe(false);
+      runner.dispose();
+    }
   });
 });
