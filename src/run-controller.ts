@@ -434,7 +434,9 @@ export function createRunController<Context>(options: {
   /** Redraw one card where it is, from the run's state: after its material changes (#389). */
   function redrawCard(cardId: string): void {
     const placed = game.state.field.find(({ block }) => block.id === cardId);
-    if (placed) {
+    // A card still landing is redrawn when it lands, from the state then (play presenter).
+    const shownOnTable = services.field.blocks().some(({ block }) => block.id === cardId);
+    if (placed && shownOnTable) {
       services.field.remove(cardId);
       services.field.add(placed.block, placed.cell);
     }
@@ -580,6 +582,7 @@ export function createRunController<Context>(options: {
     applyRackItem(itemId, cardId) {
       if (!game.applyRackItem(itemId, cardId)) return false;
       redrawCard(cardId);
+      showSelection();
       services.rack.render(game.state.passiveRack);
       autosave();
       return true;
