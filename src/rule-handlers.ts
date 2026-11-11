@@ -6,6 +6,7 @@
  *
  * Adding a rule kind is one registration here (or in a test), with no change to scoring.
  */
+import type { SoundEffectId } from "./audio/sfx-registry";
 import type { CardBlock } from "./cards";
 import { EventRuleRegistry, type RuleFrame } from "./event-rules";
 import type { BlockMaterial } from "./materials";
@@ -143,16 +144,25 @@ const command = (frame: Readonly<RuleFrame>, id: string, config: unknown): RuleF
   ...frame,
   commands: [...frame.commands, { id, config }],
 });
-ruleHandlers.registerEffect<{ amount: number }, unknown>(
+// A coin or grant effect passes on the sound its rule configures, if any; the command falls back
+// to its default (#566 review).
+type Sounded = { sound?: SoundEffectId };
+const withSound = ({ sound }: Sounded) => (sound ? { sound } : {});
+ruleHandlers.registerEffect<{ amount: number } & Sounded, unknown>(
   "add-coins",
-  ({ amount }, _selected, frame) => command(frame, "add-coins", { amount }),
+  (config, _selected, frame) =>
+    command(frame, "add-coins", { amount: config.amount, ...withSound(config) }),
 );
 /** `amount` coins for each selected thing (each matching block, say). */
-ruleHandlers.registerEffect<{ amount: number }, readonly unknown[]>(
+ruleHandlers.registerEffect<{ amount: number } & Sounded, readonly unknown[]>(
   "add-coins-per-selected",
-  ({ amount }, selected, frame) =>
-    command(frame, "add-coins", { amount: amount * selected.length }),
+  (config, selected, frame) =>
+    command(frame, "add-coins", {
+      amount: config.amount * selected.length,
+      ...withSound(config),
+    }),
 );
-ruleHandlers.registerEffect("grant-random-unowned-passive", (_config, _selected, frame) =>
-  command(frame, "grant-unowned-passive", {}),
+ruleHandlers.registerEffect<Sounded | undefined, unknown>(
+  "grant-random-unowned-passive",
+  (config, _selected, frame) => command(frame, "grant-unowned-passive", withSound(config ?? {})),
 );

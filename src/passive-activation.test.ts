@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
+import { ruleHandlers } from "./rule-handlers";
+import { commitCommands } from "./rule-commands";
+import type { RuleFrame } from "./event-rules";
+import type { GameState } from "./game-state";
 import { standardDeck, type CardBlock } from "./cards";
 import { dealerRegistry } from "./dealer";
 import { GameRun } from "./game-run";
@@ -42,6 +46,25 @@ describe("passive activation feedback (#81)", () => {
     expect(run.lastDiscardEvents.filter(({ sound }) => sound)).toEqual([
       { type: "coins.gained", amount: 1, sound: "passive.coins" },
     ]);
+  });
+
+  it("carries a rule's configured sound through to the committed coins event (#566 review)", () => {
+    const blocks = [card("2", "clubs"), card("3", "hearts")];
+    const frame = ruleHandlers.evaluate(
+      {
+        on: "discard.completed",
+        select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+        where: { id: "always", config: {} },
+        effects: [{ id: "add-coins-per-selected", config: { amount: 1, sound: "action.denied" } }],
+      },
+      { event: { type: "discard.completed", blocks }, commands: [] } as unknown as RuleFrame,
+    );
+    const events = commitCommands(frame.commands, {
+      state: { coins: 0 } as GameState,
+      update() {},
+      grantUnownedPassive: () => [],
+    });
+    expect(events).toEqual([{ type: "coins.gained", amount: 2, sound: "action.denied" }]);
   });
 
   it("records which passives' rules fired in the last discard, and only that discard", () => {
