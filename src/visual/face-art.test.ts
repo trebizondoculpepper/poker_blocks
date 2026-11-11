@@ -1,9 +1,20 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { standardDeck } from "../cards";
+import { experimentalMaterials } from "../materials";
 import { cardFaceArt } from "./face-art";
 
 describe("shared face artwork", () => {
+  it("a concealed card face (the Present, #568) prints nothing but keeps the card's seed", () => {
+    const { identity } = standardDeck[0]!.traits;
+    const fillText = vi.fn();
+    const art = cardFaceArt(identity, { face: "concealed" });
+    art.paint({ fillText } as unknown as CanvasRenderingContext2D, (tone) => tone);
+    expect(fillText).not.toHaveBeenCalled();
+    expect(art.seed).toBe(cardFaceArt(identity).seed);
+    expect(experimentalMaterials.find(({ id }) => id === "giftWrap")!.cardFace).toBe("concealed");
+  });
+
   it("preserves card seeds, centred positions, fonts and ink across the deck", () => {
     for (const {
       traits: { identity },

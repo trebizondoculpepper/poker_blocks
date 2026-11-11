@@ -41,6 +41,11 @@ export type MaterialDefinition = {
   name: string;
   /** Default text font for letter and word cubes; does not affect card faces. */
   lettering?: Lettering;
+  /**
+   * How a card of this material shows its rank and suit: a registered card face
+   * (src/visual/face-art.ts). Omitted: `rankAndSuit`. Letter and word blocks don't use it.
+   */
+  cardFace?: string;
   traits: { transparent?: Record<string, never>; resistant?: ResistantTrait };
   /**
    * How the material sounds when blocks meet (#232). The softer of two materials meeting
@@ -1033,10 +1038,13 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
   {
     // The Present's wrapped look (#496, epic #492): a visual experiment for audition only, never
     // dealt or stocked. Foil wrap, a contrasting shiny ribbon and rosette, folds underneath; its
-    // colours come from each block's own art seed. The block's face art (a letter, say) is
-    // printed over the wrap in pale foil ink, which reads on red, green and blue alike (#558).
+    // colours come from each block's own art seed. A letter block's letter is printed over the
+    // wrap in pale foil ink, which reads on red, green and blue alike (#558); a card's rank and
+    // suit never are (its `cardFace` below).
     id: "giftWrap",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
+    // A Present's card never shows its rank or suit (#568); a letter block still shows its letter.
+    cardFace: "concealed",
     name: "Present (gift wrap)",
     acoustics: { character: "papery", hardness: 2, attach: "material.attach.paper" },
     traits: {},

@@ -64,7 +64,7 @@ function materialPage(
     properties: page.properties ?? definition,
     preview(size) {
       const appearance = createBlockAppearance(
-        cardFaceArt(card.traits.identity, options),
+        cardFaceArt(card.traits.identity, { face: definition.cardFace, ...options }),
         definition,
         size,
       );
