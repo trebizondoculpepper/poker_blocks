@@ -370,6 +370,10 @@ The shop draws `transmogrifierSlots` of them after the ordinary stock (`shopPrev
 
 Input follows "Input": the rack drag source decides where a carried item goes. A drop inside the rack reorders it, a drop on a hand or table card (`pickAny`) asks `rules.applyRackItem`, and a drop on the bin sells it. The run controller commits first (model first), then redraws that card in place: the field block is replaced at its cell, and the hand cube is swapped and re-slotted. It then re-renders the rack. A refusal plays `action.denied`; a use plays `item.apply`, which stands in with the scoring chime until it has audio of its own.
 
+### Le Chef's toque (#378)
+
+Le Chef's definition names the `chefToque` visual builder (`src/visual/chef-toque.ts`): a lathe-turned chef's hat (a band, then a puffed crown with seven pleats) in matte white. It's the hat alone, with no enclosing cube, and it fits inside a standard passive cube's bounds, so selection, drag and hit testing keep using the passive's own bounds. The rack outline only draws its strongest creases. The tricolore badge is left as an audition idea.
+
 ### Transmogrifier look (#391)
 
 - **Token:** a passive token's appearance may name a registered **visual builder** (`passiveVisualBuilders` in `src/passive-visual.ts`). `createPassiveVisual` uses it, or the painted shape when none is named, so the rack, the shop and the object browser all follow. Transmogrifier definitions name `materialBlock` (`src/visual/material-token.ts`), which draws the material's own block appearance with blank face art: the material, with no rank or suit. The token carries the block's extra meshes too (`PassiveVisual.extras`: the fire's flame, custard's fluid), which the rack, shop and browser attach, so every transmogrifier shows its whole material. Pulsing (an audition idea in #384) is not built.

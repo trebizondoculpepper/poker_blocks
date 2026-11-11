@@ -1,3 +1,4 @@
+import "./visual/chef-toque";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import { passiveFrequencies } from "./offer-weights";
 import type { BlockMaterial } from "./materials";
@@ -237,6 +238,8 @@ const definitions: PassiveDefinition[] = [
     traitId: "passive.event-rules",
     eventRules: [],
     rewardModifiers: [{ id: "field-rate", config: { material: "meat", coinsPerCard: 3 } }],
+    // A chef's toque, the hat alone within a passive cube's bounds (#378).
+    visual: { builder: "chefToque", config: {} },
   },
   {
     id: "carnivore",
