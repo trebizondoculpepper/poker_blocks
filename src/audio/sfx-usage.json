@@ -308,9 +308,9 @@
     }
   },
   "material.attach.steel": {
-    "uses": 1,
+    "uses": 2,
     "files": {
-      "materials.ts": 1
+      "materials.ts": 2
     }
   },
   "material.attach.fire": {
