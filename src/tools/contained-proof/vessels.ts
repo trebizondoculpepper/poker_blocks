@@ -82,12 +82,23 @@ const custard: VesselBuilder = ({ environment }) => {
   if (!material?.appearance.container)
     throw new Error("No registered material has contents for the baseline");
   const { faces: shell, extras } = composeContained(
-    { geometry: blockGeometry, size: 1, environment },
+    {
+      geometry: blockGeometry,
+      size: 1,
+      environment,
+      // The plastic baseline draws nothing from its material's own artwork.
+      faceTexture: () => {
+        throw new Error("The proof baseline has no face artwork");
+      },
+      ownSurface: () => {
+        throw new Error("The proof baseline has no face artwork");
+      },
+    },
     material.appearance.container,
     material.appearance.contents,
   );
   const object = new THREE.Group();
-  const outer = new THREE.Mesh(blockGeometry, shell);
+  const outer = new THREE.Mesh(blockGeometry, [...shell]);
   outer.renderOrder = containedLayers.shellFront;
   const print = printSkin();
   object.add(outer, ...extras, print);
@@ -97,7 +108,7 @@ const custard: VesselBuilder = ({ environment }) => {
     bytes: 0,
     samples: 0,
     dispose() {
-      shell.dispose();
+      new Set(shell).forEach((material) => material.dispose());
       extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
       (print.material as THREE.Material).dispose();
       (print.userData.texture as THREE.Texture).dispose();
