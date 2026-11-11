@@ -74,17 +74,14 @@ function release(material: THREE.Material, holder: object): void {
   material.needsUpdate = true;
 }
 
-exitEffects.register("fade", ({ visual, targets, reducedMotion, ownsObject }, raw) => {
+exitEffects.register("fade", ({ targets, excluded, reducedMotion, ownsObject }, raw) => {
   const seconds = Math.max((raw as FadeConfig | undefined)?.seconds ?? defaultSeconds, 1e-3);
   const self = {};
   const faded = new Set<THREE.Material>();
-  // The visual's parts this fade wasn't aimed at stay out even when nested inside a target (a
-  // shell-only fade never reaches contents parented under the shell, #490 review).
+  // What the target leaves out stays out even when nested inside it: a shell-only fade never
+  // reaches contents parented under the shell; a whole fade leaves nothing out (#490 review).
   const aimed = new Set(targets);
-  // Aimed at the whole block (none of its listed parts named), everything is in.
-  const parts = [...visual.shell, ...visual.contents];
-  const choosesParts = parts.some((part) => aimed.has(part));
-  const outside = new Set(choosesParts ? parts.filter((part) => !aimed.has(part)) : []);
+  const outside = new Set(excluded.filter((part) => !aimed.has(part)));
   const visit = (object: THREE.Object3D) => {
     if (outside.has(object)) return;
     // Only the departing block's own materials fade, never a sibling effect's overlay or

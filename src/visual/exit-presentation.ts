@@ -55,6 +55,8 @@ export type ExitContext = {
    * another's output as the block (#512 review).
    */
   ownsObject: (object: THREE.Object3D) => boolean;
+  /** Parts of the block this target leaves out even when nested inside it (#490 review). */
+  excluded: readonly THREE.Object3D[];
 };
 
 /** One running effect. `update` returns false once it has finished. */
@@ -76,6 +78,17 @@ export const exitTargets = new Registry<(visual: ExitVisual) => readonly THREE.O
 exitTargets.register("whole", (visual) => [visual.root]);
 exitTargets.register("shell", (visual) => visual.shell);
 exitTargets.register("contents", (visual) => visual.contents);
+/**
+ * What each target leaves out even when it is nested inside it (#490 review): the shell never
+ * includes contents parented under it, and contents never include the shell. The whole block
+ * leaves nothing out, even when its root is also its shell.
+ */
+export const exitTargetExclusions = new Registry<(visual: ExitVisual) => readonly THREE.Object3D[]>(
+  "exit target exclusion",
+);
+exitTargetExclusions.register("whole", () => []);
+exitTargetExclusions.register("shell", (visual) => visual.contents);
+exitTargetExclusions.register("contents", (visual) => visual.shell);
 
 export type ExitEffectConfig = { effect: string; target?: string; config?: unknown };
 export type ExitStep = { effects: readonly ExitEffectConfig[]; maxSeconds?: number };
@@ -127,6 +140,7 @@ class Exit {
           snapshot: this.snapshot,
           visual: this.visual,
           targets: exitTargets.get(target)(this.visual),
+          excluded: exitTargetExclusions.get(target)(this.visual),
           reducedMotion: this.reducedMotion(),
           ownsObject: (object) => this.own.has(object),
         },

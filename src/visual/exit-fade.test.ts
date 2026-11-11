@@ -180,4 +180,19 @@ describe("fade edge cases (#490 review)", () => {
     expect(contentsMaterial.opacity).toBe(0.8);
     runner.dispose();
   });
+
+  it("a whole fade covers contents even when the root is also the shell", () => {
+    const { contents, contentsMaterial } = visual();
+    const root = new THREE.Group();
+    root.add(contents);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [root], contents: [contents], release() {} };
+    const runner = createExitRunner();
+    runner.start(snapshot, v, {
+      steps: [{ effects: [{ effect: "fade", config: { seconds: 1 } }] }],
+    });
+    runner.update(0.5);
+    expect(contentsMaterial.opacity).toBeCloseTo(0.4);
+    runner.dispose();
+  });
 });
