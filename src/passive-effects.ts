@@ -127,33 +127,42 @@ export function scoreFieldWithPassives(
         ),
       ]),
     );
-    const result = evaluateLine(line.blocks, (block) => evaluated.get(block.id)!.value);
-    // The chosen hand's cards bring their own line rules. Each other card in the line takes part
-    // as its material's registered scoring eligibility says (#423): by default, not at all.
-    const contributing = line.blocks.filter(({ id }) => result.contributingIds.includes(id));
-    const others = line.blocks
-      .filter(({ id }) => !result.contributingIds.includes(id))
-      .map((block) => {
+    // Each card's eligibility (#423) says how much of its own bonus it brings whatever hand is
+    // chosen: that part is left out while the hand is chosen, so it can't change the hand, and
+    // is added once below at the hand's multiplier.
+    const guaranteed = new Map(
+      line.blocks.map((block) => {
         const own = evaluateRules(
           subscribedRules([cardSource(block, rulesForCard)], "score.beforeBlockValue"),
           { type: "score.beforeBlockValue", score: { line, intersections, block } },
           scorableValue(block),
         );
-        const share = scoringEligibilities.get(scoringEligibilityOf(block))(
-          block,
-          own.value - scorableValue(block),
-          handMultipliers[result.hand],
-        );
-        return { block, share, activations: own.activations };
-      });
-    const joining = others.filter(({ share }) => share.joinsLinePhases);
-    const sources = [
-      ...[...contributing, ...joining.map(({ block }) => block)].map((block) =>
-        cardSource(block, rulesForCard),
-      ),
-      ...passives,
-    ];
-    const sharedPoints = others.reduce((sum, { share }) => sum + share.points, 0);
+        const eligibility = scoringEligibilities.get(scoringEligibilityOf(block));
+        return [
+          block.id,
+          {
+            amount: eligibility.guaranteed(own.value - scorableValue(block)),
+            joinsWhenOutside: eligibility.joinsWhenOutside,
+            activations: own.activations,
+          },
+        ];
+      }),
+    );
+    const result = evaluateLine(
+      line.blocks,
+      (block) => evaluated.get(block.id)!.value - guaranteed.get(block.id)!.amount,
+    );
+    // The chosen hand's cards bring their own line rules; a card outside it joins only if its
+    // eligibility says so.
+    const contributing = line.blocks.filter(({ id }) => result.contributingIds.includes(id));
+    const joining = line.blocks.filter(
+      ({ id }) => !result.contributingIds.includes(id) && guaranteed.get(id)!.joinsWhenOutside,
+    );
+    const sources = [...contributing, ...joining].map((block) => cardSource(block, rulesForCard));
+    sources.push(...passives);
+    const sharedPoints =
+      [...guaranteed.values()].reduce((sum, { amount }) => sum + amount, 0) *
+      handMultipliers[result.hand];
     const phases = linePhases.reduce(
       (previous, phase) => {
         const next = evaluateRules(
@@ -175,7 +184,7 @@ export function scoreFieldWithPassives(
     // Commit: the chosen hand's contributing blocks, then the line phases.
     const activations = [
       ...result.contributingIds.flatMap((id) => evaluated.get(id)!.activations),
-      ...joining.flatMap(({ activations }) => activations),
+      ...joining.flatMap(({ id }) => guaranteed.get(id)!.activations),
       ...phases.activations,
       ...after.activations,
     ];

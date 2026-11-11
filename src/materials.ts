@@ -1027,7 +1027,8 @@ export function materialOf(block: CardBlock): BlockMaterial {
 /** The scoring rules a card brings with it: its material's scoring modifier, expanded. */
 /** The scoring eligibility a card's material names (#423): `contributing` unless it says otherwise. */
 export function scoringEligibilityOf(block: CardBlock): string {
-  return getMaterialDefinition(materialOf(block)).scoringEligibility ?? "contributing";
+  // A material that isn't registered (a test's own) names none, so it takes the default.
+  return materialRegistry.get(materialOf(block))?.scoringEligibility ?? "contributing";
 }
 
 export function cardScoringRules(block: CardBlock): EventRule[] {

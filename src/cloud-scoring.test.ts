@@ -51,4 +51,19 @@ describe("cloud scoring (#423)", () => {
     expect(getMaterialDefinition("cloud").shop).toBeUndefined();
     expect(getMaterialDefinition("cloud").scoringEligibility).toBe("rowPresence");
   });
+
+  it("can't take high card with its bonus: paper 9 and cloud 8 is (9 + 2) × 1.5 = 17 (#426 review)", () => {
+    const line = scored(row(card("9", "hearts"), card("8", "spades", "cloud")));
+    expect(line.hand).toBe("high-card");
+    expect(line.points).toBe(Math.round((9 + 2 * handMultipliers["high-card"]) * 1.5));
+    // A higher cloud never lowers the score.
+    const lower = scored(row(card("9", "hearts"), card("7", "spades", "cloud")));
+    expect(line.points).toBeGreaterThanOrEqual(lower.points);
+  });
+
+  it("counts its bonus once when it is the hand's own card", () => {
+    const line = scored(row(card("7", "hearts", "cloud"), card("7", "clubs")));
+    expect(line.hand).toBe("pair");
+    expect(line.points).toBe(Math.round((7 + 7 + 2) * 2 * 1.5));
+  });
 });

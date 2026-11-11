@@ -10,29 +10,22 @@
  *   is unchanged: it is not a wildcard. Clouds use it.
  */
 import { Registry } from "./core/registry";
-import type { CardBlock } from "./cards";
 
-export type NonContributingShare = {
-  /** Points added to the line before its phases: the card's own block bonus, at the hand's multiplier. */
-  points: number;
-  /** Whether the card's own rules join the line phases. */
-  joinsLinePhases: boolean;
+export type ScoringEligibility = {
+  /**
+   * The part of a card's own block bonus it brings whatever hand is chosen. It is left out of
+   * the card's value while the hand is chosen (so it can't change which hand that is) and added
+   * to the line once, at the hand's multiplier.
+   */
+  guaranteed: (ownBonus: number) => number;
+  /** Whether the card's own line rules join the line phases when it isn't in the chosen hand. */
+  joinsWhenOutside: boolean;
 };
-
-/**
- * What a non-contributing card in a scored line adds: given its own block bonus (its block value
- * under its own rules, less its plain value) and the chosen hand's multiplier.
- */
-export type ScoringEligibility = (
-  block: CardBlock,
-  ownBonus: number,
-  handMultiplier: number,
-) => NonContributingShare;
 
 export const scoringEligibilities = new Registry<ScoringEligibility>("scoring eligibility");
 
-scoringEligibilities.register("contributing", () => ({ points: 0, joinsLinePhases: false }));
-scoringEligibilities.register("rowPresence", (_block, ownBonus, handMultiplier) => ({
-  points: ownBonus * handMultiplier,
-  joinsLinePhases: true,
-}));
+scoringEligibilities.register("contributing", { guaranteed: () => 0, joinsWhenOutside: false });
+scoringEligibilities.register("rowPresence", {
+  guaranteed: (ownBonus) => ownBonus,
+  joinsWhenOutside: true,
+});
