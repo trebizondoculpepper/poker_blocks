@@ -165,6 +165,31 @@ const magicStars = {
   },
 };
 
+const slowEarth = {
+  effect: "levellingFluid",
+  config: {
+    level: 0.5,
+    settleSeconds: 5,
+    look: { id: "opaqueFluid", config: { fill: 0x5b3a22, surface: 0x6e4a2c } },
+  },
+};
+const grass = {
+  effect: "growingGrass",
+  config: {
+    count: 90,
+    delay: 5,
+    interval: 0.12,
+    growSeconds: 0.8,
+    height: 0.14,
+    width: 0.025,
+    base: 0x2f6b22,
+    tip: 0x8fd16a,
+    turnDegrees: 30,
+    settledDegrees: 20,
+  },
+};
+
+/** A material with inclusions suspended in its contents (#353). */
 export const materialDefinitions = [
   {
     id: "paper",
@@ -323,19 +348,52 @@ export const materialDefinitions = [
     },
   },
   {
+    // Earth (#371): sold from round 2, in terracotta's old place. Beside flame it bakes into
+    // terracotta. Its look is #358's soil with grass, in a plastic vessel.
+    id: "earth",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
+    name: "Earth",
+    acoustics: { character: "dry", hardness: 3.5, attach: "material.attach.terracotta" },
+    reactions: [
+      {
+        when: { id: "neighbour-material", config: { material: "fire" } },
+        results: [{ id: "transform", config: { material: "terracotta", sound: "reaction.bake" } }],
+      },
+    ],
+    traits: { transparent: {} },
+    shop: {
+      basePrice: 3,
+      weights: [
+        [2, 4],
+        [3, 1.5],
+        [4, 1],
+      ],
+    },
+    appearance: {
+      pattern: "cardSheet",
+      assembly: "contained",
+      surface: "clear",
+      height: "none",
+      ink: lightInk,
+      edge: { color: 0xe8eef2, opacity: 0.3 },
+      geometry: { shape: "rounded", segments: 1, radius: 0.08, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: noEnds,
+      container: { shell: "plasticShell", config: { opacity: 0.16, inset: 0.92, gloss: 1.6 } },
+      contents: slowEarth,
+      inclusions: [grass],
+    },
+  },
+  {
     id: "terracotta",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Terracotta",
     acoustics: { character: "dry", hardness: 6, attach: "material.attach.terracotta" },
+    // Only ever made by a reaction: flame bakes earth into it (#371). It keeps its price at zero
+    // weight, so no shop draws it (as a card or a transmogrifier), but a saved offer or item
+    // still loads and is priced (#429 review).
     traits: {},
-    shop: {
-      basePrice: 3,
-      weights: [
-        [3, 4],
-        [4, 1.5],
-        [5, 1],
-      ],
-    },
+    shop: { basePrice: 3, weights: [[1, 0]] },
     appearance: {
       pattern: "crackedClay",
       assembly: "sixFaces",
@@ -506,7 +564,7 @@ export const materialDefinitions = [
     traits: { transparent: {} },
     shop: {
       basePrice: 3,
-      // Unlocks in round 3 (#381), alongside terracotta.
+      // Unlocks in round 3 (#381).
       weights: [
         [3, 4],
         [4, 1.5],
@@ -773,31 +831,6 @@ const fastBubbles = {
  * Earth (#358): brown soil that conforms very slowly to its new base, with no wall residue, and
  * grass that grows on its settled top after about five seconds of stillness.
  */
-const slowEarth = {
-  effect: "levellingFluid",
-  config: {
-    level: 0.5,
-    settleSeconds: 5,
-    look: { id: "opaqueFluid", config: { fill: 0x5b3a22, surface: 0x6e4a2c } },
-  },
-};
-const grass = {
-  effect: "growingGrass",
-  config: {
-    count: 90,
-    delay: 5,
-    interval: 0.12,
-    growSeconds: 0.8,
-    height: 0.14,
-    width: 0.025,
-    base: 0x2f6b22,
-    tip: 0x8fd16a,
-    turnDegrees: 30,
-    settledDegrees: 20,
-  },
-};
-
-/** A material with inclusions suspended in its contents (#353). */
 function withInclusions(
   material: MaterialDefinition,
   inclusions: readonly InclusionConfig[],

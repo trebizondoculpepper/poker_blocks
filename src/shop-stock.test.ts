@@ -15,7 +15,7 @@ import { createPassiveBlock, passiveDefinitions } from "./passives";
 import { blockMaterials, materialDefinitions } from "./materials";
 import { validateMaterialBalance, validatePassiveBalance } from "./balance";
 import { offerKind } from "./offer-kinds";
-import { getMaterialDefinition, materialOf, type BlockMaterial } from "./materials";
+import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
 import { cardOfferPrice } from "./balance";
 
 function shop() {
@@ -181,8 +181,16 @@ describe("card offers (#143)", () => {
     const price = (id: string) => getMaterialDefinition(id as BlockMaterial).shop?.basePrice;
     // Paper is never sold: every run starts with it.
     expect(
-      ["paper", "wood", "steel", "terracotta", "meat", "ice", "fire", "custard", "gold"].map(price),
+      ["paper", "wood", "steel", "earth", "meat", "ice", "fire", "custard", "gold"].map(price),
     ).toEqual([undefined, 3, 4, 3, 6, 2, 4, 3, 8]);
+    // Terracotta is only baked from earth (#371): it keeps its price, at zero weight, so saved
+    // offers stay priced.
+    expect(price("terracotta")).toBe(3);
+    expect(
+      [1, 3, 6, 10].map((round) =>
+        weightAt(getMaterialDefinition("terracotta").shop!.weights, round),
+      ),
+    ).toEqual([0, 0, 0, 0]);
     expect(price("prismatic")).toBe(12);
   });
 });
@@ -235,7 +243,9 @@ describe("stock by round and weight (#145)", () => {
       new Set(Array.from({ length: 60 }, (_, seed) => materials(stockAt(round, seed + 1))).flat());
     expect([...seen(1)]).toEqual(["wood"]);
     expect(seen(2).has("steel")).toBe(true);
-    expect(seen(2).has("terracotta")).toBe(false);
+    expect(seen(2).has("earth")).toBe(true);
+    expect(seen(1).has("earth")).toBe(false);
+    for (const round of [2, 5, 9]) expect(seen(round).has("terracotta")).toBe(false);
     expect(seen(3).has("custard")).toBe(true);
     expect(seen(2).has("custard")).toBe(false);
     expect(seen(5).has("gold")).toBe(false);
@@ -254,8 +264,8 @@ describe("stock by round and weight (#145)", () => {
     };
     expect([1, 2, 3, 4, 5, 6, 7].map(leaders)).toEqual([
       ["wood"],
-      ["steel"],
-      ["custard", "terracotta"],
+      ["earth", "steel"],
+      ["custard"],
       ["fire", "ice", "meat"],
       // Nothing unlocks in round 5 since custard moved to round 3 (#381): round 4's curves lead.
       ["fire", "ice", "meat"],
@@ -346,5 +356,25 @@ describe("material-bound passives (#165)", () => {
     });
     expect(stale.round).toBeLessThan(passiveUnlockRound(definition("carnivore")));
     expect(stale.buyShopOffer(block.id, "passive-rack")).toBeNull();
+  });
+});
+
+describe("a saved terracotta card offer after #371 (#429 review)", () => {
+  it("loads priced and buyable", () => {
+    const game = shop();
+    const card = withMaterial(standardDeck[0]!, getMaterialDefinition("terracotta"));
+    const record = JSON.parse(
+      JSON.stringify(
+        toSaveRecord({
+          ...game.snapshot(),
+          state: { ...game.state, coins: 20, shopStock: [{ kind: "card", block: card }] },
+        }),
+      ),
+    );
+    const restored = fromSaveRecord(record, standardDeck, dealerRegistry)!;
+    const offer = restored.state.shopStock![0]!;
+    expect(cardOfferPrice("2", getMaterialDefinition("terracotta"))).toBe(3);
+    const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, restored);
+    expect(resumed.buyShopOffer(offer.block.id, "hand")).not.toBeNull();
   });
 });

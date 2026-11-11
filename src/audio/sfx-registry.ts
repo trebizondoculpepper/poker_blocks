@@ -597,6 +597,13 @@ const entries = [
     placeholder: "material.attach.meat",
   },
   {
+    id: "reaction.bake",
+    name: "Bake",
+    family: "material",
+    description: "Earth beside flame bakes into terracotta as a play settles",
+    placeholder: "material.attach.terracotta",
+  },
+  {
     id: "reaction.melt",
     name: "Melt",
     family: "material",
