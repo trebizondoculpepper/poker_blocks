@@ -23,38 +23,45 @@ rackItemEffects.register("transmogrifier", (state, item, cardId) =>
 );
 
 /**
- * Apply a rack item to a card: its effects, then one use spent (an item with no uses left
- * leaves the rack for good). Null when the item isn't in the rack, has no effect on cards, or
- * every effect refuses.
+ * What happens to a rack item after it is used, keyed by trait name: the item as it is now, or
+ * null when it is used up and leaves the rack. `limitedUse` wears it down by one use. An item
+ * whose traits register no hook is unchanged by use.
+ */
+export type RackItemUseHook = (item: PassiveBlock) => PassiveBlock | null;
+export const rackItemUseHooks = new Registry<RackItemUseHook>("rack item use hook");
+
+rackItemUseHooks.register("limitedUse", (item) => {
+  const { uses, total } = item.traits.limitedUse!;
+  return uses > 1
+    ? { ...item, traits: { ...item.traits, limitedUse: { uses: uses - 1, total } } }
+    : null;
+});
+
+/** The registered handlers for each of an item's traits that has one. */
+const handlersFor = <T>(item: PassiveBlock, registry: Registry<T>): T[] =>
+  Object.keys(item.traits).flatMap((trait) => (registry.has(trait) ? [registry.get(trait)] : []));
+
+/**
+ * Apply a rack item to a card: its effects, then each of its traits' use hooks (one use spent;
+ * used up, it leaves the rack for good). Null when the item isn't in the rack, has no effect on
+ * cards, or every effect refuses.
  */
 export function applyRackItem(state: GameState, itemId: string, cardId: string): GameState | null {
   const item = state.passiveRack.find(({ id }) => id === itemId);
   if (!item) return null;
-  const effects = Object.keys(item.traits).flatMap((trait) =>
-    rackItemEffects.has(trait) ? [rackItemEffects.get(trait)] : [],
-  );
+  const effects = handlersFor(item, rackItemEffects);
   if (!effects.length) return null;
   let next: GameState | null = state;
   for (const effect of effects) next = next && effect(next, item, cardId);
   if (!next) return null;
-  const limited = item.traits.limitedUse;
-  const left = limited ? limited.uses - 1 : 1;
+  const used = handlersFor(item, rackItemUseHooks).reduce<PassiveBlock | null>(
+    (current, hook) => current && hook(current),
+    item,
+  );
   return {
     ...next,
     passiveRack: next.passiveRack.flatMap((held) =>
-      held.id !== itemId
-        ? [held]
-        : left > 0
-          ? [
-              {
-                ...held,
-                traits: {
-                  ...held.traits,
-                  ...(limited ? { limitedUse: { ...limited, uses: left } } : {}),
-                },
-              },
-            ]
-          : [],
+      held.id === itemId ? [used ?? []].flat() : [held],
     ),
   };
 }

@@ -359,7 +359,7 @@ The shop draws `transmogrifierSlots` of them after the ordinary stock (`shopPrev
 
 ### Using rack items on cards (#389)
 
-`src/rack-item-effects.ts` holds a registry of effects keyed by an item's **trait name**. `applyRackItem(state, itemId, cardId)` runs the effect of every trait the item has that registers one, then spends one use (`limitedUse`), removing the item when none are left. It returns null and changes nothing when the item has no effect on cards or an effect refuses. The `transmogrifier` trait's effect is `changeCardMaterial` (#387). `GameRun.applyRackItem` commits it.
+`src/rack-item-effects.ts` holds a registry of effects keyed by an item's **trait name**. `applyRackItem(state, itemId, cardId)` runs the effect of every trait the item has that registers one, then each of its traits' **use hooks** (`rackItemUseHooks`, also keyed by trait name). `limitedUse`'s hook spends one use and returns null (the item leaves the rack) after the last. The runner never asks which trait makes an item wear out. It returns null and changes nothing when the item has no effect on cards or an effect refuses. The `transmogrifier` trait's effect is `changeCardMaterial` (#387). `GameRun.applyRackItem` commits it.
 
 Input follows "Input": the rack drag source decides where a carried item goes. A drop inside the rack reorders it, a drop on a hand or table card (`pickAny`) asks `rules.applyRackItem`, and a drop on the bin sells it. The run controller commits first (model first), then redraws that card in place: the field block is replaced at its cell, and the hand cube is swapped and re-slotted. It then re-renders the rack. A refusal plays `action.denied`; a use plays `item.apply`, which stands in with the scoring chime until it has audio of its own.
 
