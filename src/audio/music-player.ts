@@ -6,6 +6,7 @@
  * after an optional delay, the tempo eases to B's natural speed like a tape machine.
  * All loops follow one beat clock, so beats stay locked throughout.
  */
+import { sharedAudioContext } from "./audio-context";
 import { createBeatClock, type BeatClock } from "./beat-clock";
 import { fadeCurve, type FadeKind } from "./music-fade";
 import { defaultWind, holdAt, scheduleWindDown, standstill, type WindShape } from "./music-wind";
@@ -134,7 +135,8 @@ export function createMusicPlayer(tracks: readonly MusicTrack[]): MusicPlayer {
 
   function audio(): { context: AudioContext; master: GainNode } {
     if (!context || !master) {
-      context = new AudioContext();
+      // The game's one shared context (#518), so sound effects and music share it.
+      context = sharedAudioContext();
       master = context.createGain();
       master.gain.value = muted ? 0 : volume;
       filter = context.createBiquadFilter();
