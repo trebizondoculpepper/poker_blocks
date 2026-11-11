@@ -1,4 +1,4 @@
-import { resolveReactions, type AppliedReaction } from "./reactions";
+import { commitReactions, type AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
 import type { BlockMaterial } from "./materials";
 import { changeCardMaterial } from "./card-material";
@@ -480,13 +480,12 @@ export class GameRun {
       };
       // Reactions (#366): resolved once, after scoring, so they never score this play; they
       // change the state later plays score.
-      const reacted = resolveReactions(this.currentState);
-      this.currentState = reacted.state;
-      this.lastReactions = reacted.applied;
+      // Committed through the shared command path; only real changes are reported.
+      this.lastReactions = commitReactions(this.commandTarget);
       // The current dealer scores in play(); this is a post-play event until
       // placement and scoring are separated by the gameplay coordinator.
       this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId });
-      for (const { blockId } of reacted.applied)
+      for (const { blockId } of this.lastReactions)
         this.passiveEvents.emit({ type: "reaction.applied", blockId });
       this.passiveEvents.drain();
       this.announceOutcome();

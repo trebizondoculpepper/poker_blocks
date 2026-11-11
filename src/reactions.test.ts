@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { standardDeck, type CardBlock } from "./cards";
 import type { GameState, PlacedBlock } from "./game-state";
 import { materialOf, withMaterial, getMaterialDefinition, type BlockMaterial } from "./materials";
-import { resolveReactions, type Reaction } from "./reactions";
+import { applyReactions, type Reaction } from "./reactions";
 import type { Cell } from "./traits/attachable";
 
 const made = (index: number, material: BlockMaterial): CardBlock =>
@@ -44,7 +44,7 @@ const recipes: Partial<Record<BlockMaterial, readonly Reaction[]>> = {
   ],
 };
 const reactionsFor = (block: CardBlock) => recipes[materialOf(block)] ?? [];
-const run = (s: GameState) => resolveReactions(s, reactionsFor);
+const run = (s: GameState) => applyReactions(s, reactionsFor);
 const find = (s: GameState, id: string) => s.field.find(({ block }) => block.id === id)!.block;
 
 describe("material reactions (#366)", () => {
@@ -92,6 +92,14 @@ describe("material reactions (#366)", () => {
       .applied.map(({ blockId }) => blockId)
       .sort();
     expect(backward).toEqual(forward);
+  });
+
+  it("reports a reaction only when it changes something (#400 review)", () => {
+    // Wood beside steel takes "boiled"; on the next play it already has it, so nothing fires.
+    const wood = made(2, "wood");
+    const first = run(state(at(made(1, "steel"), 0), at(wood, 1)));
+    expect(first.applied.map(({ blockId }) => blockId)).toEqual([wood.id]);
+    expect(run(first.state).applied).toEqual([]);
   });
 
   it("no gameplay material reacts yet: reactions arrive with #367–#371", async () => {

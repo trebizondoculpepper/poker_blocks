@@ -14,10 +14,12 @@
  */
 import { Registry } from "./core/registry";
 import type { CardBlock } from "./cards";
+import type { RuleCommand } from "./event-rules";
 import type { GameState, PlacedBlock } from "./game-state";
 import { changeCardMaterial } from "./card-material";
 import { setCardStateBonus } from "./state-bonuses";
 import { getMaterialDefinition, materialOf, type BlockMaterial } from "./materials";
+import { commitCommands, registerRuleCommand, type CommandTarget } from "./rule-commands";
 import { cellKey, faceNormal, faces } from "./traits/attachable";
 
 /** A configured handler: a registered name and its configuration. */
@@ -33,8 +35,11 @@ export type ReactionMatcher = (
   config: unknown,
 ) => boolean;
 
-/** What a reaction does to its block, applied to the state after resolution. */
-export type ReactionResult = (state: GameState, block: CardBlock, config: unknown) => GameState;
+/**
+ * What a reaction asks for, as rule commands (#363): a result handler only collects them; they
+ * are committed afterwards through the shared `commitCommands` path, never here.
+ */
+export type ReactionResult = (block: CardBlock, config: unknown) => RuleCommand[];
 
 export const reactionMatchers = new Registry<ReactionMatcher>("reaction matcher");
 export const reactionResults = new Registry<ReactionResult>("reaction result");
@@ -45,19 +50,33 @@ reactionMatchers.register("neighbour-material", (_block, neighbours, config) => 
   return neighbours.some((neighbour) => materialOf(neighbour) === material);
 });
 
-// Become another material and/or take a state bonus; a part already in place changes nothing.
-reactionResults.register("transform", (state, block, config) => {
-  const { material, stateBonus } = config as { material?: BlockMaterial; stateBonus?: string };
-  const changed = [material ?? []]
-    .flat()
-    .reduce((current, kind) => changeCardMaterial(current, block.id, kind) ?? current, state);
-  return [stateBonus ?? []]
-    .flat()
-    .reduce((current, id) => setCardStateBonus(current, block.id, id) ?? current, changed);
-});
+// Become another material and/or take a state bonus.
+reactionResults.register("transform", (block, config) => [
+  { id: "transform-block", config: { ...(config as object), blockId: block.id } },
+]);
 
-/** A reaction that fired this play: the block and the reaction's results, for presentation. */
-export type AppliedReaction = { blockId: string; results: readonly HandlerRef[] };
+/**
+ * The command that changes a reacted block: its material and/or state bonus (#387, #365). It
+ * reports `reaction.applied` only when something actually changed, so a reaction that finds
+ * its block already transformed is not presented or rewarded again.
+ */
+registerRuleCommand<{ blockId: string; material?: BlockMaterial; stateBonus?: string }>(
+  "transform-block",
+  ({ blockId, material, stateBonus }, target) => {
+    const before = target.state;
+    const changed = [material ?? []]
+      .flat()
+      .reduce((current, kind) => changeCardMaterial(current, blockId, kind) ?? current, before);
+    const after = [stateBonus ?? []]
+      .flat()
+      .reduce((current, id) => setCardStateBonus(current, blockId, id) ?? current, changed);
+    target.update(after);
+    return after === before ? [] : [{ type: "reaction.applied", blockId }];
+  },
+);
+
+/** A reaction that changed its block this play, for presentation (#366). */
+export type AppliedReaction = { blockId: string };
 
 /** The reactions a block's material lists, in order. */
 export const materialReactions = (block: CardBlock): readonly Reaction[] =>
@@ -79,35 +98,50 @@ function faceNeighbours(placed: PlacedBlock, byCell: ReadonlyMap<string, CardBlo
 }
 
 /**
- * Resolve and commit one play's reactions. Selection reads only the snapshot taken here; the
- * results are then applied in field order. Returns the new state and what fired.
+ * Select one play's reactions from a snapshot of the field: each block's first matching
+ * reaction, in field order. Returns the commands their results ask for; nothing is changed.
  */
 export function resolveReactions(
   state: GameState,
   reactionsFor: (block: CardBlock) => readonly Reaction[] = materialReactions,
-): { state: GameState; applied: AppliedReaction[] } {
-  const snapshot = state.field;
-  const byCell = new Map(snapshot.map(({ block, cell }) => [cellKey(cell), block]));
-  const selected = snapshot.flatMap((placed) => {
+): RuleCommand[] {
+  const byCell = new Map(state.field.map(({ block, cell }) => [cellKey(cell), block]));
+  return state.field.flatMap((placed) => {
     const neighbours = faceNeighbours(placed, byCell);
     const reaction = reactionsFor(placed.block).find(({ when }) =>
       reactionMatchers.get(when.id)(placed.block, neighbours, when.config),
     );
-    return reaction ? [{ block: placed.block, reaction }] : [];
+    return (reaction?.results ?? []).flatMap((result) =>
+      reactionResults.get(result.id)(placed.block, result.config),
+    );
   });
-  const next = selected.reduce(
-    (current, { block, reaction }) =>
-      reaction.results.reduce(
-        (inner, result) => reactionResults.get(result.id)(inner, block, result.config),
-        current,
-      ),
-    state,
-  );
-  return {
-    state: next,
-    applied: selected.map(({ block, reaction }) => ({
-      blockId: block.id,
-      results: reaction.results,
-    })),
+}
+
+/**
+ * Resolve and commit one play's reactions through the shared command path, against `target`
+ * (the run's own, in `GameRun.play`). Returns the reactions that changed something.
+ */
+export function commitReactions(
+  target: CommandTarget,
+  reactionsFor: (block: CardBlock) => readonly Reaction[] = materialReactions,
+): AppliedReaction[] {
+  const events = commitCommands(resolveReactions(target.state, reactionsFor), target);
+  return events.flatMap(({ blockId }) => (blockId ? [{ blockId }] : []));
+}
+
+/** For tests and tools: commit one play's reactions to a bare state. */
+export function applyReactions(
+  state: GameState,
+  reactionsFor: (block: CardBlock) => readonly Reaction[] = materialReactions,
+): { state: GameState; applied: AppliedReaction[] } {
+  let current = state;
+  const target: CommandTarget = {
+    get state() {
+      return current;
+    },
+    update: (next) => void (current = next),
+    grantUnownedPassive: () => [],
   };
+  const applied = commitReactions(target, reactionsFor);
+  return { state: current, applied };
 }
