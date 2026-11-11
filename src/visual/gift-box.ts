@@ -19,7 +19,11 @@
  *   the rosette's geometry goes with its material.
  */
 import * as THREE from "three";
-import type { AssemblyContext, BlockAppearance } from "./block-appearance";
+import {
+  getReflectionEnvironment,
+  type AssemblyContext,
+  type BlockAppearance,
+} from "./block-appearance";
 import type { FaceArt } from "./face-art";
 
 /** Wrapping colours, and ribbon colours that contrast with them. */
@@ -136,6 +140,7 @@ function foil(texture: THREE.CanvasTexture): THREE.MeshPhysicalMaterial {
     roughness: 0.28,
     clearcoat: 0.6,
     clearcoatRoughness: 0.2,
+    envMap: getReflectionEnvironment(),
   });
 }
 
@@ -159,6 +164,7 @@ function rosette(ribbon: number, size: number): THREE.Mesh {
     metalness: 0.35,
     roughness: 0.3,
     clearcoat: 0.8,
+    envMap: getReflectionEnvironment(),
   });
   material.addEventListener("dispose", () => geometry.dispose());
   const mesh = new THREE.Mesh(geometry, material);

@@ -804,6 +804,9 @@ function faceTexture(
 let reflectionEnvironment: THREE.Texture | null = null;
 
 /** Give the shiny materials something to reflect (a PMREM environment map). */
+/** The shared reflection environment, for assemblies built in other modules (#536 review). */
+export const getReflectionEnvironment = (): THREE.Texture | null => reflectionEnvironment;
+
 export function setReflectionEnvironment(texture: THREE.Texture): void {
   reflectionEnvironment = texture;
 }
