@@ -117,7 +117,15 @@ ruleHandlers.registerEffect<{ power: number }, unknown>(
   ({ power }, _selected, frame) => {
     const exponent = (frame.exponent ?? 1) + power - 1;
     const base = frame.powerBase ?? frame.workingValue ?? 0;
-    return { ...frame, workingValue: base ** exponent, exponent, powerBase: base };
+    // A power that has no finite result (a zero line under a negative total exponent) scores
+    // nothing, so a score is always a finite number (#476 review).
+    const raised = base ** exponent;
+    return {
+      ...frame,
+      workingValue: Number.isFinite(raised) ? raised : 0,
+      exponent,
+      powerBase: base,
+    };
   },
 );
 /** Adds `amount` once, or once per crossing cell with `perIntersection`. */

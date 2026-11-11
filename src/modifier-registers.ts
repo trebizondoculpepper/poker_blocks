@@ -118,11 +118,26 @@ export function addCardModifier(
   const card = everyCardIn(state).find(({ id }) => id === cardId);
   if (!card) return null;
   const held = card.traits.modifiers ?? {};
-  const registers = { ...held, [lifetime]: combineModifiers([held[lifetime] ?? {}, modifier]) };
+  const combined = combineModifiers([held[lifetime] ?? {}, modifier]);
+  // Valid parts can combine into an unrepresentable whole (a multiplier underflowing to 0): refuse
+  // it before changing the card or its ledger, so every stored register saves and loads.
+  if (!storable(combined)) throw new Error(`${lifetime} modifier combination out of range`);
+  const registers = { ...held, [lifetime]: combined };
   const next = everyCard(state, (each) =>
     each.id === cardId ? withRegisters(each, registers) : each,
   );
   return { ...next, cardStates: withLedger(next, cardId, registers) };
+}
+
+/**
+ * Whether a register (a combination) can be stored and saved: every field finite, the multiplier
+ * positive. Its exponent may be 0 or below, being 1 plus summed increases.
+ */
+function storable({ additive, multiplicative, exponential }: ScoringModifier): boolean {
+  const finite = [additive, multiplicative, exponential].every(
+    (value) => value === undefined || Number.isFinite(value),
+  );
+  return finite && (multiplicative === undefined || multiplicative > 0);
 }
 
 /** Every card the run holds, wherever it is. */
@@ -173,26 +188,29 @@ export function restoreModifierRegisters(saved: unknown): Record<string, Scoring
   return Object.fromEntries(
     Object.entries(saved).map(([lifetime, raw]) => {
       if (!modifierLifetimes.has(lifetime)) throw new Error("bad card modifier lifetime");
-      const { additive, multiplicative, exponential } = (raw ?? {}) as Record<string, unknown>;
+      // A register is a plain object of known numeric fields; `{}` is a neutral register.
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+        throw new Error("bad card modifier");
+      const fields = raw as Record<string, unknown>;
+      if (
+        Object.keys(fields).some(
+          (key) => !["additive", "multiplicative", "exponential"].includes(key),
+        )
+      )
+        throw new Error("bad card modifier field");
+      const { additive, multiplicative, exponential } = fields;
+      if (
+        ![additive, multiplicative, exponential].every(
+          (value) => value === undefined || typeof value === "number",
+        )
+      )
+        throw new Error("bad card modifier");
       const modifier: ScoringModifier = {
         ...(additive === undefined ? {} : { additive: additive as number }),
         ...(multiplicative === undefined ? {} : { multiplicative: multiplicative as number }),
         ...(exponential === undefined ? {} : { exponential: exponential as number }),
       };
-      const numbers = [additive, multiplicative, exponential].every(
-        (value) => value === undefined || typeof value === "number",
-      );
-      // A register is a combination: its exponent is 1 plus the summed increases, so it may be
-      // 0 or below (0.5 twice is 0); only its multiplier, a product of positives, stays positive.
-      const finite = [additive, multiplicative, exponential].every(
-        (value) => value === undefined || Number.isFinite(value),
-      );
-      if (
-        !numbers ||
-        !finite ||
-        (multiplicative !== undefined && !((multiplicative as number) > 0))
-      )
-        throw new Error("bad card modifier");
+      if (!storable(modifier)) throw new Error("bad card modifier");
       return [lifetime, modifier];
     }),
   );

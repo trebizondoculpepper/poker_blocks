@@ -159,3 +159,37 @@ describe("acquired modifiers follow the card's eligibility (#476 review)", () =>
     expect(points(row(x, y, boosted.hand[2]!))).toBe(plain * 2);
   });
 });
+
+describe("register boundaries (#476 review)", () => {
+  const [a, b] = [card("7", "hearts"), card("7", "clubs")];
+
+  it("refuses a combination that can't be stored, changing nothing", () => {
+    const once = addCardModifier(bare([a]), a.id, "run", { multiplicative: 1e-200 })!;
+    expect(() => addCardModifier(once, a.id, "run", { multiplicative: 1e-200 })).toThrow();
+    expect(once.hand[0]!.traits.modifiers).toEqual({ run: { multiplicative: 1e-200 } });
+  });
+
+  it("refuses malformed saved registers, and accepts an empty one as neutral", async () => {
+    const { restoreModifierRegisters } = await import("./modifier-registers");
+    expect(restoreModifierRegisters({ run: {} })).toEqual({ run: {} });
+    for (const bad of [
+      { run: 5 },
+      { run: [] },
+      { run: null },
+      { run: { additive: "1" } },
+      { run: { power: 2 } },
+    ])
+      expect(() => restoreModifierRegisters(bad)).toThrow();
+  });
+
+  it("scores a line whose power has no finite result as nothing, never Infinity", () => {
+    let state = bare([a, b]);
+    state = addCardModifier(state, a.id, "run", { additive: -100 })!;
+    state = addCardModifier(state, b.id, "run", { exponential: 0.5 })!;
+    state = addCardModifier(state, b.id, "run", { exponential: 0.5 })!;
+    state = addCardModifier(state, b.id, "run", { exponential: 0.4 })!;
+    const scored = points(row(...(state.hand as [CardBlock, CardBlock])));
+    expect(Number.isFinite(scored)).toBe(true);
+    expect(scored).toBeGreaterThanOrEqual(0);
+  });
+});
