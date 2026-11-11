@@ -846,6 +846,8 @@ export const materialDefinitions = [
     scoringEligibility: "rowPresence",
     activation: { effect: { id: "pulse", colour: "#f4f7fb" }, sfx: "material.activate.cloud" },
     appearance: {
+      // Simply fades away: no billow, fracture or burst (#459).
+      exit: { steps: [{ effects: [{ effect: "fade", config: { seconds: 0.6 } }] }] },
       pattern: "cardSheet",
       assembly: "contained",
       surface: "clear",
