@@ -77,6 +77,8 @@ describe("doneness resets through the stage-end registry (#408 review)", () => {
     expect(stageEndResets.has("doneness")).toBe(true);
     const cooked = applyReactions(table(at(made(0, "meat"), 0), at(made(1, "fire"), 1))).state;
     expect(meatOf(resetStageState(cooked)).traits.doneness).toBeUndefined();
+  });
+});
 
 describe("steak payout and Le Chef (#373)", () => {
   it("pays a coin per Bloody, Rare or Medium Rare steak on the table", async () => {
