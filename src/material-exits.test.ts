@@ -52,4 +52,23 @@ describe("material exits (#438)", () => {
     runner.update(1 / 60);
     expect(runner.active).toBe(0);
   });
+
+  it("crystal cracks, then flashes and bursts into dissipating stars (#451)", () => {
+    release.mockClear();
+    const v = visual();
+    const body = v.root.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "c" }, v, exitOf("prismatic"));
+    // First the crack lines, the block still whole.
+    expect(v.root.children.length).toBeGreaterThan(1);
+    expect(v.root.children.some((child) => child instanceof THREE.Points)).toBe(false);
+    runner.update(0.3);
+    // Then the flash and the star burst, the block gone at once.
+    expect(v.root.children.some((child) => child instanceof THREE.Points)).toBe(true);
+    runner.update(0.06);
+    expect(body.material.opacity).toBeLessThan(0.1);
+    for (let frame = 0; frame < 120; frame++) runner.update(1 / 60);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
 });
