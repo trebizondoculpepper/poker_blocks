@@ -703,6 +703,28 @@ function glassContainerExperiments(): MaterialDefinition[] {
     // Magic Lock (#349): the crystal trail's stars, aging white to black, in either container.
     lantern("magicLockLantern", "Magic Lock (lantern)", magicStars),
     {
+      // Aggressive flame (#355): the fire block's own flame, slightly larger and brighter, in the
+      // same iron frame. A visual variant only: configuration of the same flame.
+      id: "aggressiveFlame",
+      lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
+      name: "Aggressive flame",
+      acoustics: { character: "rattling", hardness: 9, attach: "material.attach.fire" as const },
+      traits: { transparent: {} },
+      appearance: {
+        pattern: "ironFrame",
+        assembly: "contained",
+        surface: "iron",
+        height: "frameRelief",
+        ink: { red: "#6e1a1a", black: "#24282c", onDark: false },
+        edge: { color: 0x2a2f34, opacity: 1 },
+        geometry: { ...box, scale: 0.985 },
+        reliefScale: 2.5,
+        endGrainFaces: noEnds,
+        container: { shell: "framedGlass", config: { inset: 0.97, glass: 1.2 } },
+        contents: { effect: "flame", config: { scale: 1.04, brightness: 1.3 } },
+      },
+    },
+    {
       id: "custardFrame",
       lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
       name: "Custard in a frame",

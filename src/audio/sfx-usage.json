@@ -323,10 +323,10 @@
     }
   },
   "material.attach.fire": {
-    "uses": 5,
+    "uses": 6,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 3,
-      "materials.ts": 2
+      "materials.ts": 3
     }
   },
   "material.attach.prismatic": {
