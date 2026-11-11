@@ -41,6 +41,14 @@ describe("materials score through event rules (#141, doc/game.md worked examples
     });
   });
 
+  it("custard in a pair (#381): (7+2) + 7 = 16, x2 = 32, x1.2 = 38.4 -> 38", () => {
+    expect(points(row(card("7", "hearts", "custard"), card("7", "clubs")))).toBe(38);
+    // A custard card left out of the scored hand changes nothing.
+    expect(
+      points(row(card("3", "spades", "custard"), card("7", "hearts"), card("7", "clubs"))),
+    ).toBe(28);
+  });
+
   it("steel in a pair: 28 x 1.25 = 35", () => {
     expect(points(row(card("7", "hearts", "steel"), card("7", "clubs")))).toBe(35);
   });

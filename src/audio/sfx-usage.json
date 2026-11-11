@@ -355,6 +355,12 @@
       "materials.ts": 1
     }
   },
+  "material.activate.custard": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
   "material.activate.prismatic": {
     "uses": 1,
     "files": {
