@@ -255,6 +255,8 @@ When the placed card lands, the scene presents each scoring line from lowest to 
 
 ### Material reactions (proposal, #363, epic #362)
 
+**Heating (#368):** water lists one reaction: beside `fire`, `transform` to the `heated` bonus (sound `reaction.heat`). Its matcher config has `unlessState: ["boiled"]`, a generic `neighbour-material` option that refuses the match when the block already holds a listed bonus, so boiling water is never downgraded.
+
 **First reaction (#367):** ice's definition lists two reactions: beside `fire` (`neighbour-material`), and beside water with the `heated` bonus (the new `neighbour-state` matcher). Both `transform` it to water with the `melted` bonus and name the `reaction.melt` sound. The play presenter redraws reacted blocks already on the table straight after the play and plays each reaction's sound, while a reacted block still landing is drawn from the model when it lands (#389). Water is a gameplay material with no shop price, drawn as custard's vessel with a blue fluid until #333.
 
 **Status: the runner is built (#366)** in `src/reactions.ts`: the `reactions` list on a material definition, the `reactionMatchers` registry (`neighbour-material`), the `reactionResults` registry (`transform`, which uses `changeCardMaterial` and `setCardStateBonus`), and `resolveReactions`, which `GameRun.play` calls after scoring. Each fired reaction emits `reaction.applied` after `play.completed`, and `GameRun.lastReactions` lists them for presentation. No gameplay material has reactions yet: #367–#371 add them as data. `advance-cooking` is registered with the cooking state in #372. The first visible reaction (#367) also adds the play presentation that redraws the reacted blocks and plays a registered reaction sound.

@@ -465,6 +465,14 @@ export const materialDefinitions = [
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Water",
     acoustics: { character: "splashy", hardness: 1.5, attach: "material.attach.custard" },
+    // Ordinary flame heats it into hot water: the "heated" +1 bonus replaces any it had, but
+    // boiling water stays boiling (#368, #369).
+    reactions: [
+      {
+        when: { id: "neighbour-material", config: { material: "fire", unlessState: ["boiled"] } },
+        results: [{ id: "transform", config: { stateBonus: "heated", sound: "reaction.heat" } }],
+      },
+    ],
     traits: { transparent: {} },
     appearance: {
       pattern: "cardSheet",
