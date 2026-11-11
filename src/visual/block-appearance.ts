@@ -18,6 +18,8 @@ import "./contained-stars";
 import "./rising-bubbles";
 // Registers the growing-grass inclusion (#358).
 import "./growing-grass";
+// Registers the settling scoops contents (#382).
+import "./settling-scoops";
 // Registers the flame contents (#335).
 import "./fire-core";
 
