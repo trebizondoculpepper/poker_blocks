@@ -15,6 +15,7 @@ import type { DanceFloor } from "../dance/dance-floor";
 import { gameModeFor, modeLink, type DevDialogRoomConfig, type DialogConfig } from "../game-modes";
 import { springAnchor } from "../traits/spring-anchor";
 import { createCubeStage, type StageCube } from "./cube-stage";
+import { playSfx } from "../audio/sfx";
 import "./dialog-room.css";
 
 export type DialogRoom = {
@@ -137,6 +138,7 @@ export function createDialogRoom(host: HTMLElement, floor: Pick<DanceFloor, "joi
   part("previous").addEventListener("click", () => step(-1));
   part("next").addEventListener("click", () => step(1));
   part("toggle").addEventListener("click", () => {
+    playSfx("ui.click");
     for (const cube of shown) {
       cube.enabled = !cube.enabled;
       cube.block.emit("input.enabled", cube.enabled);
