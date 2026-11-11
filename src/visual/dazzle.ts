@@ -95,6 +95,13 @@ export function bloom(frame: number, frames: number): number {
   return 1 - (1 - k) * (1 - k);
 }
 
+/** Whether a projected point is within the camera's depth range and near the screen. */
+export const inView = (projected: THREE.Vector3): boolean =>
+  projected.z >= -1 &&
+  projected.z <= 1 &&
+  Math.abs(projected.x) <= 1.2 &&
+  Math.abs(projected.y) <= 1.2;
+
 /** A dazzle drawn over `host` (which should cover the canvas), seen through `camera`. */
 export function createDazzle(
   host: HTMLElement,
@@ -164,7 +171,9 @@ export function createDazzle(
     flash(at: THREE.Vector3, { strength = 1 }: { strength?: number } = {}) {
       if (config.sound) playSfx(config.sound);
       seen.copy(at).project(camera);
-      if (seen.z > 1 || Math.abs(seen.x) > 1.2 || Math.abs(seen.y) > 1.2) return;
+      // Only a point inside the camera's depth range dazzles: beyond the far plane or before the
+      // near one (behind an orthographic camera, z < -1) is out of view (#535 review).
+      if (!inView(seen)) return;
       const reduced = reducedMotion();
       const x = ((seen.x + 1) / 2) * 100;
       const y = ((1 - seen.y) / 2) * 100;

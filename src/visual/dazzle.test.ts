@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import { bloom, defaultDazzle, ghostLevel, ghostSeconds, popPattern } from "./dazzle";
+import * as THREE from "three";
+import { bloom, defaultDazzle, ghostLevel, ghostSeconds, inView, popPattern } from "./dazzle";
 
 const sequence = (values: number[]) => {
   let i = 0;
@@ -53,5 +54,14 @@ describe("dazzle (#493)", () => {
     expect(defaultDazzle.glare.reduced).toBeLessThan(defaultDazzle.glare.max / 2);
     expect(defaultDazzle.maxGhosts).toBeGreaterThan(0);
     expect(defaultDazzle.sound).toBe("block.dazzle_pop");
+  });
+
+  it("dazzles only for points inside the camera's depth range (#535 review)", () => {
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 50);
+    camera.updateMatrixWorld();
+    const project = (z: number) => new THREE.Vector3(0, 0, z).project(camera);
+    expect(inView(project(-5))).toBe(true);
+    expect(inView(project(1))).toBe(false);
+    expect(inView(project(-80))).toBe(false);
   });
 });
