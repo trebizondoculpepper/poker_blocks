@@ -142,6 +142,8 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
             handlers.onInspect?.(String(text));
           }),
         );
+        // A choice focused while its cube was still being built is described now (#532 review).
+        if (buttons[index] && buttons[index] === document.activeElement) choiceActions.focus(block);
         const beat = options.beat;
         if (beat && options.floor) {
           let previous = 1;

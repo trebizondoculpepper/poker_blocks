@@ -180,6 +180,9 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
       clear();
       environment.dispose();
       renderer.dispose();
+      // The canvas is the stage's own: it leaves with it, so a host can make a new stage in its
+      // place without stacking canvases (#532 review).
+      canvas.remove();
     },
   };
 }
