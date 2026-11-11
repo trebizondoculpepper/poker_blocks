@@ -85,6 +85,7 @@ function evaluateRules(
       event,
       workingValue: value,
       exponent,
+      powerBase: start,
       commands: [],
     });
     value = frame.workingValue ?? value;

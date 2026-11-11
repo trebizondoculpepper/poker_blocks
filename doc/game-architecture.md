@@ -353,7 +353,7 @@ Reusing `ScoringModifier` means a state bonus can be additive, multiplicative or
 
 and then passives (step 5), the clamp (step 6), after-clamp bonuses (step 7) and rounding (step 8), all unchanged.
 
-Within one card, the material rule runs before the state rule. That invents no order: sums and products commute, and exponents add their increases above 1 (#431: the power phase carries its total exponent in `RuleFrame.exponent`, and each `power-line-score` raises the working value from the old total to the new), so the result is the same either way. `scoreFieldWithPassives` needs no change. It already asks `rulesForCard` and reports activations with the card as source.
+Within one card, the material rule runs before the state rule. That invents no order: sums and products commute, and exponents add their increases above 1 (#431: the power phase carries its total exponent in `RuleFrame.exponent` and its starting value in `RuleFrame.powerBase`, and each `power-line-score` raises that base to the new total, so the order never matters, even when the total passes through 0), so the result is the same either way. `scoreFieldWithPassives` needs no change. It already asks `rulesForCard` and reports activations with the card as source.
 
 **Contributing cards only (default):** like material modifiers, a state bonus applies only while its card contributes to the line's scored hand, because it travels through the same card rules. Question 1 on #364 asks the owner to confirm this.
 

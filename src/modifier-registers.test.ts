@@ -119,4 +119,33 @@ describe("acquired modifier registers (#431)", () => {
     bad.state.cardStates[held.id].modifiers = { forever: { additive: 1 } };
     expect(fromSaveRecord(bad, standardDeck, dealerRegistry)).toBeNull();
   });
+
+  it("scores the same in any order, even when exponents sum through zero (#476 review)", () => {
+    const sevens = [card("7", "hearts"), card("7", "clubs"), card("7", "spades")];
+    const plain = points(row(...sevens));
+    const scoredWith = (powers: number[]) => {
+      let state = bare(sevens);
+      powers.forEach((exponential, index) => {
+        state = addCardModifier(state, sevens[index]!.id, "run", { exponential })!;
+      });
+      return points(row(...(state.hand as CardBlock[])));
+    };
+    const expected = Math.round(plain ** (1 + (0.5 - 1) + (0.5 - 1) + (2 - 1)));
+    expect(scoredWith([0.5, 0.5, 2])).toBe(expected);
+    expect(scoredWith([2, 0.5, 0.5])).toBe(expected);
+    expect(scoredWith([0.5, 2, 0.5])).toBe(expected);
+  });
+
+  it("saves and restores a register whose exponents combine to zero or below (#476 review)", () => {
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    const held = game.state.hand[0]!;
+    let state = addCardModifier(game.state, held.id, "run", { exponential: 0.5 })!;
+    state = addCardModifier(state, held.id, "run", { exponential: 0.5 })!;
+    state = addCardModifier(state, held.id, "run", { exponential: 0.4 })!;
+    const record = JSON.parse(JSON.stringify(toSaveRecord({ ...game.snapshot(), state })));
+    const restored = fromSaveRecord(record, standardDeck, dealerRegistry)!;
+    expect(restored).not.toBeNull();
+    const back = restored.state.hand.find(({ id }) => id === held.id)!;
+    expect(back.traits.modifiers!.run!.exponential).toBeCloseTo(-0.6);
+  });
 });

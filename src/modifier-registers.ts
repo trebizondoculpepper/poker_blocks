@@ -182,7 +182,16 @@ export function restoreModifierRegisters(saved: unknown): Record<string, Scoring
       const numbers = [additive, multiplicative, exponential].every(
         (value) => value === undefined || typeof value === "number",
       );
-      if (!numbers || validateScoringModifier("saved modifier", modifier).length)
+      // A register is a combination: its exponent is 1 plus the summed increases, so it may be
+      // 0 or below (0.5 twice is 0); only its multiplier, a product of positives, stays positive.
+      const finite = [additive, multiplicative, exponential].every(
+        (value) => value === undefined || Number.isFinite(value),
+      );
+      if (
+        !numbers ||
+        !finite ||
+        (multiplicative !== undefined && !((multiplicative as number) > 0))
+      )
         throw new Error("bad card modifier");
       return [lifetime, modifier];
     }),

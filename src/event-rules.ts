@@ -25,6 +25,8 @@ export type RuleFrame = {
    * ^1.3, not ^1.32.
    */
   exponent?: number;
+  /** The working value as the power phase began: each power raises it to the new total. */
+  powerBase?: number;
   commands: readonly RuleCommand[];
   /** Set by `evaluate`: whether the rule's condition matched and its effects ran. */
   fired?: boolean;
