@@ -67,6 +67,23 @@ describe("passive activation feedback (#81)", () => {
     expect(events).toEqual([{ type: "coins.gained", amount: 2, sound: "action.denied" }]);
   });
 
+  it("a grant the full rack refuses reports nothing, so no grant sound plays (#566 review)", () => {
+    const rules = { ...sandboxRunRules(demoRunRules), rackCapacity: 1 };
+    const game = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    game.installPassive(createPassiveBlock("ace-exchange", "passive.1"));
+    const hand = [card("A", "clubs"), card("A", "hearts")];
+    const run = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      { ...game.snapshot(), state: { ...game.state, hand } },
+      () => 0,
+    );
+    run.discard(hand.map(({ id }) => id));
+    expect(run.state.passiveRack).toHaveLength(1);
+    expect(run.lastDiscardEvents.filter(({ sound }) => sound)).toEqual([]);
+  });
+
   it("records which passives' rules fired in the last discard, and only that discard", () => {
     const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
     game.installPassive(createPassiveBlock("scrapper", "passive.1"));

@@ -504,7 +504,8 @@ export class GameRun {
     const chosen = randomPassiveDefinitions(1, this.random, owned)[0];
     if (!chosen) return [];
     const id = this.freePassiveId();
-    this.installPassive(createPassiveBlock(chosen.id, id));
+    // A full rack refuses it: nothing was installed, so nothing is reported (#566 review).
+    if (!this.installPassive(createPassiveBlock(chosen.id, id))) return [];
     return [{ type: "passive.installed", blockId: id }];
   }
 
