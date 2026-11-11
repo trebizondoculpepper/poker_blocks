@@ -266,23 +266,23 @@ export function createPlayPresenter(options: {
         face: candidate.face ?? undefined,
       });
       if (!next) return false;
-      // Reactions (#366, #367) changed blocks already on the table: model first, so redraw them
-      // now with the state they have, and play each reaction's sound. A reacted block still
-      // landing is drawn as the model has it when it lands.
+      // Reactions (#366, #367) changed blocks already on the table, or made new ones (#425):
+      // model first, so draw each now as the model has it, and play each reaction's sound. A
+      // reacted block still landing is drawn as the model has it when it lands.
+      const landingIds = new Set(ids);
       for (const { blockId } of game().lastReactions) {
-        const shown = field.blocks().find(({ block }) => block.id === blockId);
         const now = next.field.find(({ block }) => block.id === blockId);
-        if (shown && now) {
-          field.remove(blockId);
-          field.add(now.block, now.cell);
-        }
+        if (!now || landingIds.has(blockId)) continue;
+        if (field.blocks().some(({ block }) => block.id === blockId)) field.remove(blockId);
+        field.add(now.block, now.cell);
       }
       for (const sound of new Set(
         game().lastReactions.flatMap(({ sound }) => [sound ?? []].flat()),
       ))
         playSfx(sound);
       hand.settle(sources);
-      const landed = next.field.slice(-sources.length);
+      // The cards just played, wherever reactions left them in the field's order.
+      const landed = next.field.filter(({ block }) => landingIds.has(block.id));
       // The field knows these cells now, so a drop made before they land is tested against them.
       for (const { block, cell } of landed) field.expect(block, cell);
       options.deselect(ids);

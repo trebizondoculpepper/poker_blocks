@@ -1,6 +1,8 @@
 import { resetStageState } from "./stage-end";
 import { resetRoundState } from "./round-end";
 import { clearField } from "./card-ownership";
+// Registers the spawn-beyond-pair reaction result (#425).
+import "./pair-spawn";
 // Registers cooking's stage-end reset (#372).
 import "./cooking";
 import { commitReactions, type AppliedReaction } from "./reactions";
