@@ -253,6 +253,53 @@ After each successful play the base dealer adds the points of every line on the 
 
 When the placed card lands, the scene presents each scoring line from lowest to highest: the reusable `tintRow` effect flashes its blocks gold, the `score.magnitude.*` sound for its points plays (`src/score-presentation.ts`), and its points are added to the displayed score. The stage result and its sound follow the last line.
 
+### State bonuses (proposal, #364, epic #362)
+
+**Status: research proposal.** Nothing is built. #365 implements it once the owner questions on #364 are answered.
+
+A **state bonus** is a scoring bonus a card gains from a reaction (ice melted into water: +1; water heated: +1; water boiled: ×2). It never changes the card's rank, suit or poker-hand identity. A new state **replaces** the old one rather than adding to it. Bonuses on different cards in a scored line still combine, as material modifiers do.
+
+**Representation.** A card has at most one state bonus, in one trait slot:
+
+```ts
+// On CardBlock.traits
+stateBonus?: { id: string };   // a registered state bonus, e.g. "melted", "heated", "boiled"
+```
+
+The numbers live once, in a registry of state-bonus definitions (`src/state-bonuses.ts`), not on the card. They are validated like a material's numbers:
+
+```ts
+type StateBonusDefinition = {
+  name: string; // shown by the inspector: "Boiled (×2)"
+  modifier: ScoringModifier; // the existing type: additive / multiplicative / exponential
+  activation: MaterialActivationCue; // pulse accent and registered sound when it fires
+};
+```
+
+Reusing `ScoringModifier` means a state bonus can be additive, multiplicative or exponential with no new arithmetic. Replacing is a plain overwrite of the trait (`{ ...card, traits: { ...card.traits, stateBonus: { id } } }`), so the old bonus can never stack with the new one. Removing the trait returns the card to no bonus.
+
+**Exactly where it applies in scoring.** `cardScoringRules(block)` in `src/materials.ts` is the single place a card's own rules are collected. It becomes the material's rules followed by the state bonus's rules (`scoringModifierRules(definition.modifier)`). They enter the scorer as the same card's rules, so they run in the phases and order already agreed in `doc/game.md` ("Order of operations"):
+
+1. additive on `score.beforeBlockValue` (step 1, with the material's additive, before passives);
+2. multiplicative on `score.lineMultiply` (step 3);
+3. exponential on `score.linePower` (step 4);
+
+and then passives (step 5), the clamp (step 6), after-clamp bonuses (step 7) and rounding (step 8), all unchanged.
+
+Within one card, the material rule runs before the state rule. That invents no order: sums and products commute, and successive powers multiply exponents ((x^a)^b = x^(ab)), so the result is the same either way. `scoreFieldWithPassives` needs no change. It already asks `rulesForCard` and reports activations with the card as source.
+
+**Contributing cards only (default):** like material modifiers, a state bonus applies only while its card contributes to the line's scored hand, because it travels through the same card rules. Question 1 on #364 asks the owner to confirm this.
+
+**Presentation:** an activation from a card is presented with that card's material cue today. A state bonus needs its own cue (the "Boiled" pulse and sound), so a `RuleActivation` gains an optional `cue` naming which of the card's rule groups fired: its material, or its state bonus. The presenter looks the cue up in that group's definition, and nothing branches on which group it is. The new sound gets a registered id with a placeholder (`score.state-bonus`).
+
+**Persistence.**
+
+- **Within a run:** a reaction replaces the card object in `state.field` with a new object of the same id (model first). At stage end the field's blocks return to the deck as those same objects (`dealer.ts`, `game-run.ts`), so the bonus follows the card through hand, deck, discard and later stages with no extra work.
+- **Save and Continue:** the save stores card ids and rebuilds each card from the starting deck and `boughtCards`, so a state bonus would be lost. The save gains an optional `cardStates?: Record<cardId, { stateBonus?: string }>`, written for cards with a bonus and applied after the cards are rebuilt. An unknown bonus id rejects the record, as a malformed card does. It is optional, so older saves stay readable, and `saveVersion` stays 1. The same record later carries a reaction's material change (#363, #366), so both are restored together.
+- **Across runs:** none. A new run deals fresh cards (`dealer.ts`), so no bonus carries over.
+
+**Guardrails for #365:** a test that a state bonus leaves rank, suit and hand evaluation unchanged; that a second state replaces the first; that a non-contributing card's bonus does nothing; that the bonus survives the field → deck return, and survives save → Continue; that an unknown saved bonus is rejected; and that no generic code names a state bonus (guardrail scan, as for materials).
+
 ## Session controller
 
 `GameRun` (`src/game-run.ts`) controls one run: stage 1 → shop → stage 2 → shop → boss stage → shop → next round. It holds the round number, the phase (a stage, `shop` or `over`), the stage that opened the current shop, the active dealer and the current `GameState`. `advance()` opens a shop after any won stage and sets the phase to `over` on a loss. `leaveShop()` starts the next stage, or stage 1 of the next round after a boss. The shop can be skipped without spending coins. `snapshot()` preserves the completed stage so Continue leaves a restored shop for the right destination; older boss-only shop saves still lead to the next round.
