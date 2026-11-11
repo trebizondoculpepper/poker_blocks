@@ -389,6 +389,10 @@ Input follows "Input": the rack drag source decides where a carried item goes. A
 
 Le Chef's definition names the `chefToque` visual builder (`src/visual/chef-toque.ts`): a lathe-turned chef's hat (a band, then a puffed crown with seven pleats) in matte white. It's the hat alone, with no enclosing cube, and it fits inside a standard passive cube's bounds, so selection, drag and hit testing keep using the passive's own bounds. The rack outline only draws its strongest creases. The tricolore badge is left as an audition idea.
 
+### Card looks from card state (#376)
+
+A card is drawn from `cardLook(card)` (`src/card-look.ts`): its material's definition, adjusted by each of its traits that has a handler in the `cardLookAdjusters` registry, keyed by trait name. Drawing code (`rendered-blocks.ts`, the shop view) asks for the look and never names a trait or material. Cooking registers `doneness`: the step's entry in `cookable.looks` on the material definition becomes `appearance.tint`, which the face texture washes over the pattern under the print (`drawTint`). The look follows the authoritative state (a reacted block is redrawn from the model); it never advances cooking or decides a reward. A future state that changes how a card is drawn registers its own adjuster and configures its looks on the definition.
+
 ### Transmogrifier look (#391)
 
 - **Token:** a passive token's appearance may name a registered **visual builder** (`passiveVisualBuilders` in `src/passive-visual.ts`). `createPassiveVisual` uses it, or the painted shape when none is named, so the rack, the shop and the object browser all follow. Transmogrifier definitions name `materialBlock` (`src/visual/material-token.ts`), which draws the material's own block appearance with blank face art: the material, with no rank or suit. The token carries the block's extra meshes too (`PassiveVisual.extras`: the fire's flame, custard's fluid), which the rack, shop and browser attach, so every transmogrifier shows its whole material. Pulsing (an audition idea in #384) is not built.

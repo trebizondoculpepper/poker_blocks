@@ -31,6 +31,9 @@ export type AppearanceTrail = {
 };
 
 /** Data on each material definition, consumed by reusable appearance handlers. */
+/** A colour laid over a face's pattern at a strength from 0 (none) to 1 (solid). */
+export type FaceTint = { colour: string; strength: number };
+
 export type MaterialDefinition = {
   id: string;
   name: string;
@@ -66,8 +69,12 @@ export type MaterialDefinition = {
   scoringEligibility?: string;
   /** The material its cards become when a round ends, e.g. gelato back to custard (#383). */
   roundEndMaterial?: string;
-  /** Doneness steps, first (raw) to last, for a material that cooks (#372). */
-  cookable?: { steps: readonly string[] };
+  /**
+   * Doneness steps, first (raw) to last, for a material that cooks (#372), and optionally the
+   * face tint each step shows (#376), in the same order; a missing or null entry keeps the
+   * material's own look.
+   */
+  cookable?: { steps: readonly string[]; looks?: readonly (FaceTint | null)[] };
   /**
    * Its transmogrifier's balance, where the default (twice the shop base price, drawn by the
    * material's own weight curve) does not apply or there is no shop price (#388).
@@ -108,6 +115,8 @@ export type MaterialDefinition = {
     };
     reliefScale: number;
     endGrainFaces: readonly number[];
+    /** A colour washed over the face pattern, under the print (#376: meat browning). */
+    tint?: FaceTint;
     /**
      * Particle trails a block of this material leaves as it moves, where a scene shows them
      * (the title's attract sequence). Each names a registered trail effect and configures it.
@@ -462,7 +471,19 @@ export const materialDefinitions = [
     // Raw each stage (#372).
     // A coin per steak left on the table at settlement: Bloody, Rare or Medium Rare (#373).
     fieldReward: { coinsPerCard: 1, doneness: ["Bloody", "Rare", "Medium Rare"], label: "Steak" },
-    cookable: { steps: ["Raw", "Bloody", "Rare", "Medium Rare", "Well Done", "Overcooked"] },
+    // Each step shows less pink and more browning: Raw is meat's own look, Well Done fully
+    // brown, Overcooked dark brown (#376). Starting shades, for audition.
+    cookable: {
+      steps: ["Raw", "Bloody", "Rare", "Medium Rare", "Well Done", "Overcooked"],
+      looks: [
+        null,
+        { colour: "#8a3b2c", strength: 0.18 },
+        { colour: "#7f4128", strength: 0.36 },
+        { colour: "#764528", strength: 0.52 },
+        { colour: "#6a4326", strength: 0.78 },
+        { colour: "#3a2414", strength: 0.88 },
+      ],
+    },
     reactions: [
       {
         when: { id: "neighbour-material", config: { material: "fire" } },

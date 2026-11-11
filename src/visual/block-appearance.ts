@@ -761,6 +761,20 @@ const patternRegistry = new Map<string, PatternHandler>([
   ["leadedGlass", (g, random) => drawLeadedGlass(g, random)],
 ]);
 
+/** Wash a tint over the pattern, keeping its transparency, under the print (#376). */
+export function drawTint(
+  g: CanvasRenderingContext2D,
+  tint: MaterialDefinition["appearance"]["tint"],
+): void {
+  if (!tint || tint.strength <= 0) return;
+  g.save();
+  g.globalCompositeOperation = "source-atop";
+  g.globalAlpha = Math.min(tint.strength, 1);
+  g.fillStyle = tint.colour;
+  g.fillRect(0, 0, g.canvas.width, g.canvas.height);
+  g.restore();
+}
+
 function faceTexture(
   art: FaceArt,
   definition: MaterialDefinition,
@@ -777,6 +791,7 @@ function faceTexture(
   const pattern = patternRegistry.get(definition.appearance.pattern);
   if (!pattern) throw new Error(`Unknown face pattern: ${definition.appearance.pattern}`);
   pattern(g, randomFor(art, definition.id, endGrain), art, endGrain, brushAngle);
+  drawTint(g, definition.appearance.tint);
   if (print) drawPrint(g, art, definition.appearance);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;

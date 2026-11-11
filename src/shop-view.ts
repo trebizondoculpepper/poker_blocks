@@ -1,11 +1,11 @@
 import { cardFaceArt } from "./visual/face-art";
+import { cardLook } from "./card-look";
 import { createScatterPlacer } from "./shop-scatter";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { clamp01, easeInOutCubic, lerp } from "./easing";
 import { playSfx } from "./audio/sfx";
 import { cardName } from "./cards";
-import { getMaterialDefinition, materialOf } from "./materials";
 import { createPassiveVisual } from "./passive-visual";
 import { passiveAppearance, passiveDefinitions } from "./passives";
 import type { ShopOffer } from "./shop-stock";
@@ -99,7 +99,7 @@ function passiveCube(block: PassiveBlock): OfferCube {
 function cardCube(block: CardBlock): OfferCube {
   const appearance = createBlockAppearance(
     cardFaceArt(block.traits.identity),
-    getMaterialDefinition(materialOf(block)),
+    cardLook(block),
     1.35,
   );
   const mesh = new THREE.Mesh(appearance.geometry, appearance.materials);
