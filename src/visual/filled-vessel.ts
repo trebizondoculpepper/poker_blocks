@@ -24,12 +24,13 @@ import { additiveSheen } from "./additive-light";
 import {
   containedContents,
   containedLayers,
+  containedResidues,
   containerShells,
   type ContentsHandler,
-  type InteriorBoundary,
+  type ResidueHandler,
   type ShellHandler,
 } from "./contained";
-import { sharedSimulations, type Simulation } from "./shared-simulation";
+import type { Simulation } from "./shared-simulation";
 
 /** The plastic shell (#227, extracted in #330): clear skins and an optional gloss. */
 export type PlasticShellConfig = {
@@ -45,8 +46,8 @@ export type PlasticShellConfig = {
   gloss?: number;
 };
 
-/** The fluid inside (#227): its colours, level, settling and wall trace. */
-export type VesselFluidConfig = {
+/** A levelling fluid (#227, #332): its colours, how full, and how slowly it settles. */
+export type LevellingFluidConfig = {
   /** The fluid's colour (hex). */
   fill: number;
   /** The fluid's top surface, a little lighter where light catches it. */
@@ -55,10 +56,16 @@ export type VesselFluidConfig = {
   level: number;
   /** Time constant, in seconds, of the fluid levelling after the block turns. */
   settleSeconds: number;
-  /** Time constant, in seconds, of the wall trace fading. */
-  traceSeconds: number;
-  /** The wall trace's opacity where it is freshest. */
-  traceOpacity: number;
+};
+
+/** The wall trace (#227): where the fluid was, fading as its own lagging plane catches up. */
+export type WallTraceConfig = {
+  /** Its colour (hex): the fluid's, usually. */
+  fill: number;
+  /** Time constant, in seconds, of the trace fading. */
+  seconds: number;
+  /** Its opacity where it is freshest. */
+  opacity: number;
 };
 
 const fluidVertex = /* glsl */ `
@@ -158,26 +165,21 @@ export const plasticShell: ShellHandler = ({ geometry, environment }, raw) => {
 };
 
 /**
- * The fluid and its wall trace, inside a boundary. The fluid fills the boundary's volume, cut by
- * its surface; the trace lies on the boundary's wall. Their surface comes from the shared
- * simulation for this configuration (#230).
+ * A levelling fluid (#332): it fills the boundary's volume, cut by a surface that eases toward
+ * world "up" as its block turns, and publishes that surface (`liquidSurface`) for anything on
+ * the wall to sample. Each fluid keeps its own surface, so independently moving vessels level
+ * by their own motion (#329, sharing decision in doc/game-architecture.md).
  */
-export const vesselFluid: ContentsHandler = (boundary, raw) => ({
-  meshes: createVesselFluid(boundary, raw as VesselFluidConfig),
-});
-
-export function createVesselFluid(
-  boundary: InteriorBoundary,
-  config: VesselFluidConfig,
-): THREE.Mesh[] {
+export const levellingFluid: ContentsHandler = (boundary, raw) => {
+  const config = raw as LevellingFluidConfig;
+  const normal = new THREE.Vector3(0, 1, 0);
+  // In the fluid's own (unscaled) space: half the block is `halfSize`.
+  const height = (config.level - 0.5) * boundary.halfSize * 2;
   const uniforms = {
-    surfaceNormal: { value: new THREE.Vector3(0, 1, 0) },
-    traceNormal: { value: new THREE.Vector3(0, 1, 0) },
-    // In the fluid mesh's own (unscaled) space: half the block is `halfSize`.
-    height: { value: (config.level - 0.5) * boundary.halfSize * 2 },
+    surfaceNormal: { value: normal },
+    height: { value: height },
     fill: { value: new THREE.Color(config.fill) },
     surfaceColour: { value: new THREE.Color(config.surface) },
-    opacity: { value: config.traceOpacity },
   };
   const fluid = boundary.volume(
     new THREE.ShaderMaterial({
@@ -188,41 +190,83 @@ export function createVesselFluid(
     }),
     "contentsOpaque",
   );
-  const trace = boundary.wall(
-    new THREE.ShaderMaterial({
-      uniforms,
-      vertexShader: fluidVertex,
-      fragmentShader: traceFragment,
-      side: THREE.BackSide,
-      transparent: true,
-      depthWrite: false,
-    }),
-    "residue",
-  );
-
-  // One simulation per fluid configuration, shared by every block made from it (#230). It
-  // keeps the fluid's surface in world space; each block turns that into its own space.
-  const shared = sharedSimulations.acquire(config, () => createVesselSimulation(config));
-  const own = new THREE.Quaternion();
-  fluid.onBeforeRender = () => {
-    fluid.getWorldQuaternion(own);
-    shared.simulation.step(frameSeconds(), { rotation: own, driver: fluid });
-    shared.simulation.localNormals(own, uniforms.surfaceNormal.value, uniforms.traceNormal.value);
+  const settle = createSettler({ settleSeconds: config.settleSeconds, traceSeconds: 1 });
+  const unused = new THREE.Vector3();
+  return {
+    meshes: [fluid],
+    // Driven by the block's one frame (src/visual/contained.ts), never its own clock.
+    update: ({ rotation, seconds }) => settle(rotation, seconds, normal, unused),
+    capabilities: {
+      // Published in block-local space: the shader's height is in the volume mesh's own
+      // (scaled) units, so it is scaled out here.
+      liquidSurface: {
+        normal,
+        height: height * boundary.volumeScale,
+        wet: (point) => point.dot(normal) <= height * boundary.volumeScale,
+      },
+    },
   };
-  (fluid.material as THREE.Material).addEventListener("dispose", () => shared.release());
-  return [fluid, trace];
-}
+};
+
+/**
+ * The wall trace as residue (#332, an adapter for the old trace until #334's richer residue):
+ * it keeps its own plane, easing toward the published surface with `seconds`, and tints the
+ * wall between the two. The fluid never knows it is there.
+ */
+export const wallTrace: ResidueHandler = {
+  requires: "liquidSurface",
+  build(boundary, { liquidSurface }, raw) {
+    const config = raw as WallTraceConfig;
+    const surface = liquidSurface!;
+    const lagging = new THREE.Vector3(0, 1, 0);
+    const uniforms = {
+      surfaceNormal: { value: surface.normal },
+      traceNormal: { value: lagging },
+      // The published height is block-local; the wall mesh's own units are scaled by wallScale.
+      height: { value: surface.height / boundary.wallScale },
+      fill: { value: new THREE.Color(config.fill) },
+      opacity: { value: config.opacity },
+    };
+    const trace = boundary.wall(
+      new THREE.ShaderMaterial({
+        uniforms,
+        vertexShader: fluidVertex,
+        fragmentShader: traceFragment,
+        side: THREE.BackSide,
+        transparent: true,
+        depthWrite: false,
+      }),
+      "residue",
+    );
+    return {
+      meshes: [trace],
+      // After the contents in the block's one frame: on the first frame the trace starts at the
+      // published surface (no false wet band on a vessel first seen tilted), then lags it.
+      update: ({ first, delta }) => {
+        if (first) lagging.copy(surface.normal);
+        else lagging.lerp(surface.normal, 1 - Math.exp(-delta / config.seconds)).normalize();
+      },
+    };
+  },
+};
 
 containerShells.register("plasticShell", plasticShell);
-containedContents.register("vesselFluid", vesselFluid);
+containedContents.register("levellingFluid", levellingFluid);
+containedResidues.register("wallTrace", wallTrace);
 
 /**
  * Eases the fluid's surface (and, more slowly, its trace) toward level, given the block's world
  * rotation. Pure apart from the vectors it updates, so it can be tested without rendering.
  */
-export function createSettler(
-  config: Pick<VesselFluidConfig, "settleSeconds" | "traceSeconds">,
-): (rotation: THREE.Quaternion, now: number, surface: THREE.Vector3, trace: THREE.Vector3) => void {
+export function createSettler(config: {
+  settleSeconds: number;
+  traceSeconds: number;
+}): (
+  rotation: THREE.Quaternion,
+  now: number,
+  surface: THREE.Vector3,
+  trace: THREE.Vector3,
+) => void {
   let last: number | null = null;
   const up = new THREE.Vector3();
   const inverse = new THREE.Quaternion();
@@ -254,9 +298,10 @@ export type VesselSimulation = Simulation<{ rotation: THREE.Quaternion; driver: 
   localNormals(own: THREE.Quaternion, surface: THREE.Vector3, trace: THREE.Vector3): void;
 };
 
-export function createVesselSimulation(
-  config: Pick<VesselFluidConfig, "settleSeconds" | "traceSeconds">,
-): VesselSimulation {
+export function createVesselSimulation(config: {
+  settleSeconds: number;
+  traceSeconds: number;
+}): VesselSimulation {
   // The state is kept in world space, so it never depends on which block drives it.
   const surfaceWorld = new THREE.Vector3(0, 1, 0);
   const traceWorld = new THREE.Vector3(0, 1, 0);
@@ -289,10 +334,4 @@ export function createVesselSimulation(
       trace.copy(traceWorld).applyQuaternion(inverse);
     },
   };
-}
-
-/** The current frame's time, in seconds: the same for every block drawn in one frame. */
-function frameSeconds(): number {
-  const time = typeof document === "undefined" ? null : document.timeline?.currentTime;
-  return (typeof time === "number" ? time : performance.now()) / 1000;
 }

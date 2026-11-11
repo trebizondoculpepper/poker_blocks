@@ -31,6 +31,10 @@ export type InteriorBoundary = {
   readonly inset: number;
   /** Half the block's size, in block-local units. */
   readonly halfSize: number;
+  /** The scale `volume` meshes carry: their local units times this are block-local. */
+  readonly volumeScale: number;
+  /** The scale `wall` meshes carry. */
+  readonly wallScale: number;
   /** A mesh lying just inside the wall, for wall effects (a trace, a film). */
   wall(material: THREE.Material, layer: ContainedLayer): THREE.Mesh;
   /** A mesh filling the interior, for contents (a fluid, a flame). */
@@ -56,6 +60,8 @@ export function createInteriorBoundary(
     geometry,
     inset,
     halfSize: size / 2,
+    volumeScale: inset * volumeGap,
+    wallScale: inset * wallGap,
     wall: (material, layer) => place(material, layer, inset * wallGap),
     volume: (material, layer) => place(material, layer, inset * volumeGap),
   };
@@ -85,19 +91,66 @@ export type ShellContext = {
 
 export type ShellHandler = (context: ShellContext, config: unknown) => ContainerShell;
 
-/** What contents add inside a boundary: their meshes (each releases its own resources). */
+/**
+ * A liquid's top, published by contents that have one (#332), in the boundary's block-local,
+ * unscaled space: a point p is inside the liquid where dot(p, normal) <= height. It is live:
+ * the contents update it each frame, before any consumer draws.
+ */
+export type LiquidSurface = {
+  readonly normal: THREE.Vector3;
+  readonly height: number;
+  wet(point: THREE.Vector3): boolean;
+};
+
+/** What contents publish for others to read (#329): only what they genuinely have. */
+export type Capabilities = { liquidSurface?: LiquidSurface };
+
+/**
+ * One frame of a contained block (#329 "Lifecycle and ownership"), built once per block per
+ * frame by `composeContained` and handed to its parts in order: contents, then residue. No part
+ * reads the clock or the block's rotation itself.
+ */
+export type ContainedFrame = {
+  /** Seconds since the block's first frame (frame time, the same for every part). */
+  readonly seconds: number;
+  /** Seconds since its previous frame, capped; 0 on the first frame. */
+  readonly delta: number;
+  /** True on the block's first frame: parts start from their resting state. */
+  readonly first: boolean;
+  /** The block's world rotation this frame. */
+  readonly rotation: THREE.Quaternion;
+};
+
+/** What contents add inside a boundary: their meshes, what they publish, their frame update. */
 export type ContentsHandler = (
   boundary: InteriorBoundary,
   config: unknown,
-) => { meshes: THREE.Mesh[] };
+) => { meshes: THREE.Mesh[]; capabilities: Capabilities; update?: (frame: ContainedFrame) => void };
+
+/**
+ * Optional residue on the wall (#332, #334): it samples what the contents publish and keeps its
+ * own history; the contents never know it exists. It names the capability it needs, so a
+ * composition that cannot supply it fails when the material is built.
+ */
+export type ResidueHandler = {
+  requires: keyof Capabilities;
+  build(
+    boundary: InteriorBoundary,
+    capabilities: Capabilities,
+    config: unknown,
+  ): { meshes: THREE.Mesh[]; update?: (frame: ContainedFrame) => void };
+};
 
 export const containerShells = new Registry<ShellHandler>("container shell");
 export const containedContents = new Registry<ContentsHandler>("contained contents");
+export const containedResidues = new Registry<ResidueHandler>("contained residue");
 
 /** A material's container data: a registered shell and its configuration. */
 export type ContainerConfig = { shell: string; config: unknown };
 /** A material's contents data: a registered contents handler and its configuration. */
 export type ContentsConfig = { effect: string; config: unknown };
+/** A material's residue data: a registered residue handler and its configuration. */
+export type ResidueConfig = { effect: string; config: unknown };
 
 /**
  * Build a contained block: the shell, then its interior boundary, then the contents (if any)
@@ -107,16 +160,61 @@ export function composeContained(
   context: ShellContext & { size: number },
   container: ContainerConfig,
   contents: ContentsConfig | undefined,
+  residue?: ResidueConfig,
 ): { faces: readonly THREE.Material[]; extras: THREE.Mesh[] } {
   const shell = containerShells.get(container.shell)(context, container.config);
   const boundary = createInteriorBoundary(context.geometry, context.size, shell.inset);
   // No contents is an empty container: the same composition with nothing inside.
   const inside = [contents ?? []]
     .flat()
-    .flatMap(({ effect, config }) => containedContents.get(effect)(boundary, config).meshes);
+    .map(({ effect, config }) => containedContents.get(effect)(boundary, config));
+  const capabilities: Capabilities = Object.assign({}, ...inside.map((part) => part.capabilities));
+  // Residue reads what the contents publish; it never reaches into them.
+  const wall = [residue ?? []].flat().map(({ effect, config }) => {
+    const handler = containedResidues.get(effect);
+    if (!capabilities[handler.requires])
+      throw new Error(`Residue "${effect}" needs contents that publish ${handler.requires}`);
+    return handler.build(boundary, capabilities, config);
+  });
+  const parts = [...inside, ...wall];
+  const meshes = parts.flatMap((part) => part.meshes);
+  // One frame per block: contents update before residue, from one clock and one rotation.
+  // Three.js draws opaque and transparent meshes in separate queues whatever their render
+  // order, so the tick is on every contained mesh: whichever draws first in a frame runs it,
+  // before any part draws, and the rest of that frame it does nothing.
+  const updates = parts.flatMap((part) => [part.update ?? []].flat());
+  const rotation = new THREE.Quaternion();
+  let start: number | null = null;
+  let last: number | null = null;
+  const tick = (mesh: THREE.Mesh) => {
+    const now = frameSeconds();
+    if (now === last) return;
+    start ??= now;
+    const frame: ContainedFrame = {
+      seconds: now - start,
+      delta: last === null ? 0 : Math.min(now - last, 0.1),
+      first: last === null,
+      rotation: mesh.getWorldQuaternion(rotation),
+    };
+    last = now;
+    for (const update of updates) update(frame);
+  };
+  for (const mesh of [...shell.meshes, ...meshes]) {
+    const previous = mesh.onBeforeRender.bind(mesh);
+    mesh.onBeforeRender = (...args) => {
+      tick(mesh);
+      previous(...args);
+    };
+  }
   const faces = [shell.faces].flat();
   return {
     faces: Array.from({ length: 6 }, (_, face) => faces[face % faces.length]!),
-    extras: [...shell.meshes, ...inside],
+    extras: [...shell.meshes, ...meshes],
   };
+}
+
+/** The current frame's time, in seconds: the same for every block drawn in one frame. */
+function frameSeconds(): number {
+  const time = typeof document === "undefined" ? null : document.timeline?.currentTime;
+  return (typeof time === "number" ? time : performance.now()) / 1000;
 }

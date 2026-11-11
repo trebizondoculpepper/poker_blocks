@@ -1282,6 +1282,7 @@ function contained(context: AssemblyContext): BlockAppearance {
     },
     container,
     definition.appearance.contents,
+    definition.appearance.residue,
   );
   return {
     ...appearanceBase(

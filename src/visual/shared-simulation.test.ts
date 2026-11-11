@@ -91,12 +91,12 @@ describe("shared visual simulations (#230)", () => {
     expect(world.y).toBeCloseTo(1, 3);
   });
 
-  it("guardrail: an effect gets its simulation from the shared registry, never per block", () => {
+  it("guardrail (#332): each levelling fluid keeps its own surface, so vessels level by their own motion", () => {
     const vessel = readFileSync(new URL("./filled-vessel.ts", import.meta.url), "utf8");
-    const factory = vessel.slice(vessel.indexOf("export function createVesselFluid"));
-    const body = factory.slice(0, factory.indexOf("\n}\n"));
-    expect(body).toContain("sharedSimulations.acquire(");
-    // The per-block factory never builds a settler or simulation of its own.
-    expect(body).not.toMatch(/createSettler\(|createVesselSimulation\(config\)\s*;/);
+    const factory = vessel.slice(vessel.indexOf("export const levellingFluid"));
+    const body = factory.slice(0, factory.indexOf("\n};\n"));
+    // Per-block mutable state (#329 policy, decision on #332): no shared live simulation.
+    expect(body).toContain("createSettler(");
+    expect(body).not.toContain("sharedSimulations.acquire(");
   });
 });
