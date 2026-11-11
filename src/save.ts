@@ -10,6 +10,7 @@ import { withoutSelectable } from "./traits/selectable";
 import "./transmogrifiers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
 import { applyCardStates, type CardState } from "./card-material";
+import { stateBonuses } from "./state-bonuses";
 import { blockMaterials, type BlockMaterial } from "./materials";
 import { parseRunStats, type RunStats } from "./run-stats";
 import { createPassiveBlock, passiveDefinitions, type PassiveBlock } from "./passives";
@@ -64,7 +65,7 @@ export type SaveRecord = {
     /** Cards bought this run, saved in full (#143); absent in older saves. */
     boughtCards?: SavedCard[];
     /** Cards whose material changed this run, by id (#387); absent in older saves. */
-    cardStates?: Record<string, { material: string }>;
+    cardStates?: Record<string, { material?: string; stateBonus?: string }>;
     /** Optional so runs saved before the economy was added begin with zero coins. */
     coins?: number;
     round: GameState["round"];
@@ -411,16 +412,32 @@ export function clearRun(storage: SaveStorage | null, key = saveKey): void {
   }
 }
 
-/** A saved ledger of changed materials, checked: every entry must name a gameplay material. */
+/** A saved ledger of card states, checked: a gameplay material and/or a registered bonus. */
 function restoreCardStates(saved: unknown): Record<string, CardState> | undefined {
   if (saved === undefined) return undefined;
   if (typeof saved !== "object" || saved === null || Array.isArray(saved))
     throw new Error("bad card states");
   return Object.fromEntries(
     Object.entries(saved).map(([id, state]) => {
-      const material = (state as { material?: unknown })?.material;
-      if (!blockMaterials.includes(material as BlockMaterial)) throw new Error("bad card state");
-      return [id, { material: material as BlockMaterial }];
+      const { material, stateBonus } = (state ?? {}) as {
+        material?: unknown;
+        stateBonus?: unknown;
+      };
+      if (material === undefined && stateBonus === undefined) throw new Error("bad card state");
+      if (material !== undefined && !blockMaterials.includes(material as BlockMaterial))
+        throw new Error("bad card state material");
+      if (
+        stateBonus !== undefined &&
+        (typeof stateBonus !== "string" || !stateBonuses.has(stateBonus))
+      )
+        throw new Error("bad card state bonus");
+      return [
+        id,
+        {
+          ...(material === undefined ? {} : { material: material as BlockMaterial }),
+          ...(stateBonus === undefined ? {} : { stateBonus: stateBonus as string }),
+        },
+      ];
     }),
   );
 }

@@ -33,6 +33,8 @@ export type CardBlock = {
     transparent?: TransparentTrait;
     /** Can be destroyed, and by what; see traits/destructible.ts. */
     destructible?: DestructibleTrait;
+    /** A scoring bonus from its state, one at a time (src/state-bonuses.ts, #365). */
+    stateBonus?: { id: string };
   };
 };
 

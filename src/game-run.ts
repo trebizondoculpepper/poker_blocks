@@ -1,3 +1,4 @@
+import { setCardStateBonus } from "./state-bonuses";
 import type { BlockMaterial } from "./materials";
 import { changeCardMaterial } from "./card-material";
 import type { CardBlock } from "./cards";
@@ -489,6 +490,16 @@ export class GameRun {
    */
   changeCardMaterial(cardId: string, material: BlockMaterial): GameState | null {
     const next = changeCardMaterial(this.currentState, cardId, material);
+    if (next) this.currentState = next;
+    return next;
+  }
+
+  /**
+   * Give one card a state bonus (#365), replacing any it had, kept through later stages and
+   * saves. Null, changing nothing, when the card isn't in the run or already has it.
+   */
+  setCardStateBonus(cardId: string, bonusId: string): GameState | null {
+    const next = setCardStateBonus(this.currentState, cardId, bonusId);
     if (next) this.currentState = next;
     return next;
   }

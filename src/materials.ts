@@ -6,6 +6,7 @@ import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
 import type { EventRule } from "./event-rules";
+import { stateBonusRules } from "./state-bonuses";
 import { scoringModifierRules, type ScoringModifier } from "./scoring-modifier";
 import type { TokenEffectConfig } from "./passive-activation-effects";
 import type { SoundEffectId } from "./audio/sfx-registry";
@@ -501,7 +502,12 @@ export function materialOf(block: CardBlock): BlockMaterial {
 
 /** The scoring rules a card brings with it: its material's scoring modifier, expanded. */
 export function cardScoringRules(block: CardBlock): EventRule[] {
-  return scoringModifierRules(getMaterialDefinition(materialOf(block)).scoringModifier);
+  // Its material's rules, then its state bonus's (#365): same phases, and the order within
+  // one card changes nothing (sums and products commute; successive powers multiply).
+  return [
+    ...scoringModifierRules(getMaterialDefinition(materialOf(block)).scoringModifier),
+    ...stateBonusRules(block),
+  ];
 }
 
 function seededRandom(seed: number): () => number {
