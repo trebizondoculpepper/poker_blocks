@@ -137,3 +137,58 @@ describe("wordCube menu traits", () => {
     material.dispose();
   });
 });
+
+describe("disabled appearance, production checks (#461)", () => {
+  const compiled = (material: THREE.Material) => {
+    const shader = { uniforms: {}, fragmentShader: "void main() { gl_FragColor = vec4(0.5); }" };
+    material.onBeforeCompile(shader as never, {} as never);
+    return shader;
+  };
+  const disabledOf = (shader: { uniforms: object }) =>
+    (shader.uniforms as Record<string, { value: number }>).interactionDisabled!.value;
+
+  it("disabling one block never changes another's look or its materials", () => {
+    const [a, b] = [menu(), menu()];
+    const [first, second] = [new THREE.MeshBasicMaterial(), new THREE.MeshBasicMaterial()];
+    a.add(disabledAppearance);
+    b.add(disabledAppearance);
+    a.emit("presentation.mount", { object: new THREE.Group(), materials: [first] });
+    b.emit("presentation.mount", { object: new THREE.Group(), materials: [second] });
+    const [shaderA, shaderB] = [compiled(first), compiled(second)];
+    a.emit("input.enabled", false);
+    expect(disabledOf(shaderA)).toBe(1);
+    expect(disabledOf(shaderB)).toBe(0);
+    // Its definition stays: the colour and map are untouched, only the hook wraps them.
+    expect(first.color.getHex()).toBe(0xffffff);
+    a.dispose();
+    b.dispose();
+  });
+
+  it("follows availability back and forth, and restores the original look when enabled", () => {
+    const block = menu();
+    block.add(disabledAppearance);
+    const material = new THREE.MeshBasicMaterial();
+    block.emit("presentation.mount", { object: new THREE.Group(), materials: [material] });
+    const shader = compiled(material);
+    for (const enabled of [false, true, false, true]) {
+      block.emit("input.enabled", enabled);
+      expect(disabledOf(shader)).toBe(enabled ? 0 : 1);
+    }
+    block.dispose();
+  });
+
+  it("filters a material once however often the block is mounted, and unwraps it fully", () => {
+    const block = menu(false);
+    block.add(disabledAppearance);
+    const material = new THREE.MeshBasicMaterial();
+    // oxlint-disable-next-line typescript/unbound-method -- comparing hook identity only
+    const original = material.onBeforeCompile;
+    const mount = { object: new THREE.Group(), materials: [material] };
+    block.emit("presentation.mount", mount);
+    block.emit("presentation.mount", mount);
+    expect(compiled(material).fragmentShader.match(/void main\(/g)).toHaveLength(1);
+    block.dispose();
+    // oxlint-disable-next-line typescript/unbound-method -- comparing hook identity only
+    expect(material.onBeforeCompile).toBe(original);
+  });
+});

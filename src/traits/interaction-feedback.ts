@@ -63,8 +63,13 @@ export const disabledAppearance = defineTrait({
     const stopState = block.on("interaction.state", (payload) => {
       disabled.value = (payload as InteractionState).enabled ? 0 : 1;
     });
+    // Each material is filtered once, however often the block is mounted: wrapping it twice
+    // would nest the filter and leave a stale hook behind on disposal.
+    const filtered = new Set<THREE.Material>();
     const stopMount = block.on("presentation.mount", (payload) => {
       for (const material of (payload as PresentationMount).materials) {
+        if (filtered.has(material)) continue;
+        filtered.add(material);
         // oxlint-disable-next-line typescript/unbound-method -- explicitly called with material and restored on disposal
         const compile = material.onBeforeCompile;
         // oxlint-disable-next-line typescript/unbound-method -- explicitly called with material and restored on disposal
