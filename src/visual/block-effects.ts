@@ -46,3 +46,102 @@ export function createBlockEffects(
 ): BlockEffect[] {
   return effects.map((config) => blockEffects.get(config.effect)(config, context));
 }
+
+/** Shared by every emitter: immutable, built once, never freed. */
+let puffTexture: THREE.DataTexture | null = null;
+
+/** A soft round puff, dense in the middle and fading to nothing at the rim. Shared, never freed. */
+function puff(): THREE.DataTexture {
+  if (puffTexture) return puffTexture;
+  const n = 32;
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const r = Math.hypot(x + 0.5 - n / 2, y + 0.5 - n / 2) / (n / 2);
+      const alpha = r >= 1 ? 0 : (1 - r * r) ** 2;
+      data.set([255, 255, 255, Math.round(alpha * 255)], (y * n + x) * 4);
+    }
+  puffTexture = new THREE.DataTexture(data, n, n);
+  puffTexture.magFilter = puffTexture.minFilter = THREE.LinearFilter;
+  puffTexture.needsUpdate = true;
+  return puffTexture;
+}
+
+const vertex = /* glsl */ `
+  attribute float puffSize;
+  attribute float puffAlpha;
+  varying float vAlpha;
+  uniform float scale;
+  void main() {
+    vAlpha = puffAlpha;
+    vec4 view = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * view;
+    gl_PointSize = puffSize * scale / -view.z;
+  }
+`;
+const fragment = /* glsl */ `
+  uniform sampler2D map;
+  uniform vec3 colour;
+  varying float vAlpha;
+  void main() {
+    float a = texture2D(map, gl_PointCoord).a * vAlpha;
+    if (a < 0.003) discard;
+    gl_FragColor = vec4(colour, a);
+  }
+`;
+
+/**
+ * One emitter's particles: a pool of `capacity` soft round points, each with its own world
+ * position, world size and opacity, in one colour. The emitter writes the arrays and calls
+ * `commit` each frame. Its geometry and material are its own; the texture is shared.
+ */
+export function createParticles(capacity: number, colour: number) {
+  const positions = new Float32Array(capacity * 3);
+  const sizes = new Float32Array(capacity);
+  const alphas = new Float32Array(capacity);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("puffSize", new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute("puffAlpha", new THREE.BufferAttribute(alphas, 1));
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: puff() },
+      colour: { value: new THREE.Color(colour) },
+      scale: { value: 1 },
+    },
+    vertexShader: vertex,
+    fragmentShader: fragment,
+    transparent: true,
+    depthWrite: false,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.frustumCulled = false;
+  // Sized in world units under the table's perspective camera: scale by the drawing buffer's
+  // height (device pixels, as gl_PointSize is) and the lens.
+  const buffer = new THREE.Vector2();
+  points.onBeforeRender = (renderer, _scene, camera) => {
+    const height = renderer.getDrawingBufferSize(buffer).y;
+    const lens = camera.projectionMatrix.elements[5] ?? 1;
+    material.uniforms.scale!.value = (height / 2) * lens;
+  };
+  return {
+    points,
+    positions,
+    sizes,
+    alphas,
+    commit: () => {
+      geometry.attributes.position!.needsUpdate = true;
+      geometry.attributes.puffSize!.needsUpdate = true;
+      geometry.attributes.puffAlpha!.needsUpdate = true;
+    },
+    dispose: () => {
+      geometry.dispose();
+      material.dispose();
+    },
+  };
+}
+
+/** A bounded sideways swirl: two slow sines, each at most half of `turbulence`. */
+export function swirl(age: number, phase: number, rate: number): number {
+  return 0.5 * Math.sin(age * rate + phase);
+}
