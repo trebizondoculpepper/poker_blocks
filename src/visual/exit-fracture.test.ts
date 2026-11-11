@@ -467,3 +467,25 @@ describe("flash beside a fracture (#512 review)", () => {
     }
   });
 });
+
+describe("fracture gravity on a turned block (#512 review)", () => {
+  it("pieces fall down in the world when the block itself is turned on its side", () => {
+    const { v, root } = visual();
+    root.rotation.z = Math.PI / 2;
+    root.updateMatrixWorld(true);
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        { effects: [{ effect: "fracture", config: { pieces: "slabs", speed: [0, 0], spin: 0 } }] },
+      ],
+    });
+    const before = root.children.length;
+    const slab = root.children[before - 1]!;
+    const start = slab.getWorldPosition(new THREE.Vector3());
+    for (let frame = 0; frame < 20; frame++) runner.update(1 / 60);
+    const moved = slab.getWorldPosition(new THREE.Vector3()).sub(start);
+    expect(moved.y).toBeLessThan(-0.05);
+    expect(Math.abs(moved.x)).toBeLessThan(Math.abs(moved.y) * 0.05);
+    runner.dispose();
+  });
+});

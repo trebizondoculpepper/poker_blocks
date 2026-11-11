@@ -286,6 +286,12 @@ exitEffects.register(
     // space, so a piece inside a scaled or turned group still flies and falls true (#512 review).
     visual.root.updateWorldMatrix(true, true);
     const fromRoot = new THREE.Matrix4().copy(visual.root.matrixWorld).invert();
+    // Gravity pulls down in the world, whatever way the block is turned: world-down expressed in
+    // the block's own space, at the configured strength in block units (#512 review).
+    const down = new THREE.Vector3(0, -1, 0)
+      .applyMatrix3(new THREE.Matrix3().setFromMatrix4(fromRoot))
+      .normalize()
+      .multiplyScalar(gravity);
     const motion = source.pieces.map((piece) => {
       const toParent = new THREE.Matrix3().setFromMatrix4(
         new THREE.Matrix4()
@@ -297,7 +303,7 @@ exitEffects.register(
           .normalize()
           .multiplyScalar((slow + Math.random() * (fast - slow)) * size)
           .applyMatrix3(toParent),
-        fall: new THREE.Vector3(0, -gravity, 0).applyMatrix3(toParent),
+        fall: down.clone().applyMatrix3(toParent),
         axis: new THREE.Vector3(
           Math.random() - 0.5,
           Math.random() - 0.5,
