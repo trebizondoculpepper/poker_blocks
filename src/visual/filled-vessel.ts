@@ -1,7 +1,9 @@
 /**
  * A hollow, clear vessel part-filled with a viscous fluid (#227): a lightweight visual
- * approximation, not a fluid simulation. Configured by a material's `appearance.vessel` data,
- * so any material can be a filled vessel without a branch on its name.
+ * approximation, not a fluid simulation. Since #330 it is two contained components
+ * (src/visual/contained.ts): the `plasticShell` container and the `vesselFluid` contents,
+ * configured by a material's `appearance.container` and `appearance.contents` data, so any
+ * material can be a filled vessel, or an empty one, without a branch on its name.
  *
  * - **Shell:** a clear plastic outer skin plus a slightly smaller inner skin drawn from the back,
  *   so the walls show their thickness.
@@ -19,9 +21,32 @@
  */
 import * as THREE from "three";
 import { additiveSheen } from "./additive-light";
+import {
+  containedContents,
+  containedLayers,
+  containerShells,
+  type ContentsHandler,
+  type InteriorBoundary,
+  type ShellHandler,
+} from "./contained";
 import { sharedSimulations, type Simulation } from "./shared-simulation";
 
-export type VesselConfig = {
+/** The plastic shell (#227, extracted in #330): clear skins and an optional gloss. */
+export type PlasticShellConfig = {
+  /** The shell's opacity: low for clear plastic. */
+  opacity: number;
+  /** The inner skin's scale, relative to the outer: the wall's thickness. */
+  inset: number;
+  /**
+   * The strength of a gloss layer over the shell: its reflections at full strength, however
+   * clear the shell is (a transparent material's own reflections are scaled down by its low
+   * opacity, so clear plastic alone looks dull). Leave it out for no gloss layer.
+   */
+  gloss?: number;
+};
+
+/** The fluid inside (#227): its colours, level, settling and wall trace. */
+export type VesselFluidConfig = {
   /** The fluid's colour (hex). */
   fill: number;
   /** The fluid's top surface, a little lighter where light catches it. */
@@ -34,16 +59,6 @@ export type VesselConfig = {
   traceSeconds: number;
   /** The wall trace's opacity where it is freshest. */
   traceOpacity: number;
-  /** The shell's opacity: low for clear plastic. */
-  shellOpacity: number;
-  /** The inner skin's scale, relative to the outer: the wall's thickness. */
-  wall: number;
-  /**
-   * The strength of a gloss layer over the shell: its reflections at full strength, however
-   * clear the shell is (a transparent material's own reflections are scaled down by its low
-   * opacity, so clear plastic alone looks dull). Leave it out for no gloss layer.
-   */
-  gloss?: number;
 };
 
 const fluidVertex = /* glsl */ `
@@ -95,13 +110,9 @@ const traceFragment = /* glsl */ `
   }
 `;
 
-/** The vessel's shell materials and the meshes inside it. */
-export function createFilledVessel(
-  geometry: THREE.BufferGeometry,
-  size: number,
-  config: VesselConfig,
-  environment: THREE.Texture | null,
-): { shell: THREE.MeshPhysicalMaterial; extras: THREE.Mesh[] } {
+/** The plastic shell: a clear outer skin, an inner skin drawn from the back, and a gloss. */
+export const plasticShell: ShellHandler = ({ geometry, environment }, raw) => {
+  const config = raw as PlasticShellConfig;
   const plastic = (side: THREE.Side) =>
     new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
@@ -112,66 +123,16 @@ export function createFilledVessel(
       envMap: environment,
       envMapIntensity: 1.1,
       transparent: true,
-      opacity: config.shellOpacity,
+      opacity: config.opacity,
       depthWrite: false,
       side,
     });
-  const shell = plastic(THREE.FrontSide);
   const inner = new THREE.Mesh(geometry, plastic(THREE.BackSide));
-  inner.scale.setScalar(config.wall);
-  inner.renderOrder = 2;
-
-  const fluidScale = config.wall * 0.97;
-  const uniforms = {
-    surfaceNormal: { value: new THREE.Vector3(0, 1, 0) },
-    traceNormal: { value: new THREE.Vector3(0, 1, 0) },
-    // In the fluid mesh's own (unscaled) space: half the block is size / 2.
-    height: { value: (config.level - 0.5) * size },
-    fill: { value: new THREE.Color(config.fill) },
-    surfaceColour: { value: new THREE.Color(config.surface) },
-    opacity: { value: config.traceOpacity },
-  };
-  const fluid = new THREE.Mesh(
-    geometry,
-    new THREE.ShaderMaterial({
-      uniforms,
-      vertexShader: fluidVertex,
-      fragmentShader: fluidFragment,
-      side: THREE.DoubleSide,
-    }),
-  );
-  fluid.scale.setScalar(fluidScale);
-  fluid.renderOrder = 1;
-
-  const trace = new THREE.Mesh(
-    geometry,
-    new THREE.ShaderMaterial({
-      uniforms,
-      vertexShader: fluidVertex,
-      fragmentShader: traceFragment,
-      side: THREE.BackSide,
-      transparent: true,
-      depthWrite: false,
-    }),
-  );
-  // Just inside the inner wall, so the trace sits on it.
-  trace.scale.setScalar(config.wall * 0.995);
-  trace.renderOrder = 3;
-
-  // One simulation per vessel configuration, shared by every block made from it (#230). It
-  // keeps the fluid's surface in world space; each block turns that into its own space.
-  const shared = sharedSimulations.acquire(config, () => createVesselSimulation(config));
-  const own = new THREE.Quaternion();
-  fluid.onBeforeRender = () => {
-    fluid.getWorldQuaternion(own);
-    shared.simulation.step(frameSeconds(), { rotation: own, driver: fluid });
-    shared.simulation.localNormals(own, uniforms.surfaceNormal.value, uniforms.traceNormal.value);
-  };
-  fluid.material.addEventListener("dispose", () => shared.release());
-
-  // Additive and black-based, so it only adds reflected light and never hides the fluid; drawn
-  // last, over everything inside. Marked `reflective`, so a renderer with its own environment
-  // (the block title) points it there as it does the block's faces.
+  inner.scale.setScalar(config.inset);
+  inner.renderOrder = containedLayers.shellBack;
+  // Additive and black-based, so it only adds reflected light and never hides the contents;
+  // drawn last, over everything inside. Marked `reflective`, so a renderer with its own
+  // environment (the block title) points it there as it does the block's faces.
   const glosses = [config.gloss ?? []].flat().map((intensity) => {
     const gloss = new THREE.Mesh(
       geometry,
@@ -190,18 +151,77 @@ export function createFilledVessel(
     );
     gloss.material.userData.reflective = true;
     gloss.scale.setScalar(1.002);
-    gloss.renderOrder = 4;
+    gloss.renderOrder = containedLayers.gloss;
     return gloss;
   });
-  return { shell, extras: [inner, fluid, trace, ...glosses] };
+  return { faces: plastic(THREE.FrontSide), meshes: [inner, ...glosses], inset: config.inset };
+};
+
+/**
+ * The fluid and its wall trace, inside a boundary. The fluid fills the boundary's volume, cut by
+ * its surface; the trace lies on the boundary's wall. Their surface comes from the shared
+ * simulation for this configuration (#230).
+ */
+export const vesselFluid: ContentsHandler = (boundary, raw) => ({
+  meshes: createVesselFluid(boundary, raw as VesselFluidConfig),
+});
+
+export function createVesselFluid(
+  boundary: InteriorBoundary,
+  config: VesselFluidConfig,
+): THREE.Mesh[] {
+  const uniforms = {
+    surfaceNormal: { value: new THREE.Vector3(0, 1, 0) },
+    traceNormal: { value: new THREE.Vector3(0, 1, 0) },
+    // In the fluid mesh's own (unscaled) space: half the block is `halfSize`.
+    height: { value: (config.level - 0.5) * boundary.halfSize * 2 },
+    fill: { value: new THREE.Color(config.fill) },
+    surfaceColour: { value: new THREE.Color(config.surface) },
+    opacity: { value: config.traceOpacity },
+  };
+  const fluid = boundary.volume(
+    new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader: fluidVertex,
+      fragmentShader: fluidFragment,
+      side: THREE.DoubleSide,
+    }),
+    "contentsOpaque",
+  );
+  const trace = boundary.wall(
+    new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader: fluidVertex,
+      fragmentShader: traceFragment,
+      side: THREE.BackSide,
+      transparent: true,
+      depthWrite: false,
+    }),
+    "residue",
+  );
+
+  // One simulation per fluid configuration, shared by every block made from it (#230). It
+  // keeps the fluid's surface in world space; each block turns that into its own space.
+  const shared = sharedSimulations.acquire(config, () => createVesselSimulation(config));
+  const own = new THREE.Quaternion();
+  fluid.onBeforeRender = () => {
+    fluid.getWorldQuaternion(own);
+    shared.simulation.step(frameSeconds(), { rotation: own, driver: fluid });
+    shared.simulation.localNormals(own, uniforms.surfaceNormal.value, uniforms.traceNormal.value);
+  };
+  (fluid.material as THREE.Material).addEventListener("dispose", () => shared.release());
+  return [fluid, trace];
 }
+
+containerShells.register("plasticShell", plasticShell);
+containedContents.register("vesselFluid", vesselFluid);
 
 /**
  * Eases the fluid's surface (and, more slowly, its trace) toward level, given the block's world
  * rotation. Pure apart from the vectors it updates, so it can be tested without rendering.
  */
 export function createSettler(
-  config: Pick<VesselConfig, "settleSeconds" | "traceSeconds">,
+  config: Pick<VesselFluidConfig, "settleSeconds" | "traceSeconds">,
 ): (rotation: THREE.Quaternion, now: number, surface: THREE.Vector3, trace: THREE.Vector3) => void {
   let last: number | null = null;
   const up = new THREE.Vector3();
@@ -235,7 +255,7 @@ export type VesselSimulation = Simulation<{ rotation: THREE.Quaternion; driver: 
 };
 
 export function createVesselSimulation(
-  config: Pick<VesselConfig, "settleSeconds" | "traceSeconds">,
+  config: Pick<VesselFluidConfig, "settleSeconds" | "traceSeconds">,
 ): VesselSimulation {
   // The state is kept in world space, so it never depends on which block drives it.
   const surfaceWorld = new THREE.Vector3(0, 1, 0);

@@ -5,7 +5,9 @@ import type { MaterialDefinition } from "../materials";
 import { additiveSheen } from "./additive-light";
 import { choppedGeometry, type ChopSettings } from "./chopped-geometry";
 import { createCrystalFire } from "./crystal-fire";
-import { createFilledVessel } from "./filled-vessel";
+import { composeContained } from "./contained";
+// Registers the plastic shell and the vessel fluid (#330).
+import "./filled-vessel";
 import { createFireCore } from "./fire-core";
 
 export type BlockAppearance = {
@@ -1168,19 +1170,26 @@ function frostedBlock(context: AssemblyContext): BlockAppearance {
 }
 
 /**
- * A hollow clear vessel part-filled with fluid (#227), configured by the material's
- * `appearance.vessel` data (src/visual/filled-vessel.ts). The rank and suit sit on a print skin.
+ * A contained block (#330, contracts #329): a registered container shell with optional
+ * registered contents inside its interior, from the material's `appearance.container` and
+ * `appearance.contents` data (src/visual/contained.ts). Custard is a plastic shell holding a
+ * fluid; an empty vessel is the same shell with no contents. The rank and suit sit on a print
+ * skin.
  */
-function filledVessel(context: AssemblyContext): BlockAppearance {
+function contained(context: AssemblyContext): BlockAppearance {
   const { art, definition, geometry, size } = context;
-  const vessel = definition.appearance.vessel;
-  if (!vessel) throw new Error("A filled vessel needs vessel data");
+  const container = definition.appearance.container;
+  if (!container) throw new Error("A contained block needs container data");
   const print = printSkin(art, definition.appearance, geometry);
-  const { shell, extras } = createFilledVessel(geometry, size, vessel, reflectionEnvironment);
+  const { faces, extras } = composeContained(
+    { geometry, size, environment: reflectionEnvironment },
+    container,
+    definition.appearance.contents,
+  );
   return appearanceBase(
     context,
     [print.texture],
-    Array.from({ length: 6 }, () => shell),
+    Array.from({ length: 6 }, () => faces as THREE.MeshStandardMaterial),
     [...extras, print.skin],
   );
 }
@@ -1191,7 +1200,7 @@ const assemblyRegistry = new Map<string, AssemblyHandler>([
   ["refractiveCrystal", refractiveCrystal],
   ["flameFrame", flameFrame],
   ["frostedBlock", frostedBlock],
-  ["filledVessel", filledVessel],
+  ["contained", contained],
 ]);
 
 /** A chopped shape's cuts and dents when its material gives none. */

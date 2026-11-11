@@ -1,0 +1,111 @@
+/**
+ * Contained components (#330; contracts in doc/game-architecture.md, "Contained components",
+ * #329). A contained block is a **shell** (what you see), an **interior boundary** (where
+ * contents live) and optional **contents**, each named by a material's appearance data and
+ * built by a handler registered here. Nothing here asks which shell or contents it holds.
+ *
+ * This slice extracts custard's plastic shell and keeps its fluid and wall trace as one
+ * contents handler; separating fluid, look and residue is #332–#334.
+ */
+import * as THREE from "three";
+import { Registry } from "../core/registry";
+
+/** Render order inside a contained block (#329): parts ask for a layer, never a number. */
+export const containedLayers = {
+  shellBack: 1,
+  contentsOpaque: 2,
+  residue: 3,
+  contentsTransparent: 4,
+  shellFront: 5,
+  gloss: 6,
+} as const;
+export type ContainedLayer = keyof typeof containedLayers;
+
+/**
+ * Where contents live: the block's own geometry, scaled to the inside of the wall. Coordinates
+ * are block-local and unscaled; the meshes it makes carry the scale.
+ */
+export type InteriorBoundary = {
+  readonly geometry: THREE.BufferGeometry;
+  /** Scale from the block's outer surface to the inside of its wall (0–1). */
+  readonly inset: number;
+  /** Half the block's size, in block-local units. */
+  readonly halfSize: number;
+  /** A mesh lying just inside the wall, for wall effects (a trace, a film). */
+  wall(material: THREE.Material, layer: ContainedLayer): THREE.Mesh;
+  /** A mesh filling the interior, for contents (a fluid, a flame). */
+  volume(material: THREE.Material, layer: ContainedLayer): THREE.Mesh;
+};
+
+/** How far inside the wall's inner face wall effects and contents sit (from custard, #227). */
+const wallGap = 0.995;
+const volumeGap = 0.97;
+
+export function createInteriorBoundary(
+  geometry: THREE.BufferGeometry,
+  size: number,
+  inset: number,
+): InteriorBoundary {
+  const place = (material: THREE.Material, layer: ContainedLayer, scale: number) => {
+    const made = new THREE.Mesh(geometry, material);
+    made.scale.setScalar(scale);
+    made.renderOrder = containedLayers[layer];
+    return made;
+  };
+  return {
+    geometry,
+    inset,
+    halfSize: size / 2,
+    wall: (material, layer) => place(material, layer, inset * wallGap),
+    volume: (material, layer) => place(material, layer, inset * volumeGap),
+  };
+}
+
+/** What a shell gives the block: its outer face material, extra meshes and its interior. */
+export type ContainerShell = {
+  /** The material on the block's six outer faces. */
+  faces: THREE.Material;
+  /** Its other meshes (an inner wall, a gloss layer), placed in their layers. */
+  meshes: THREE.Mesh[];
+  /** Scale from the outer surface to the inside of its wall: where its interior starts. */
+  inset: number;
+};
+
+export type ShellContext = {
+  geometry: THREE.BufferGeometry;
+  environment: THREE.Texture | null;
+};
+
+export type ShellHandler = (context: ShellContext, config: unknown) => ContainerShell;
+
+/** What contents add inside a boundary: their meshes (each releases its own resources). */
+export type ContentsHandler = (
+  boundary: InteriorBoundary,
+  config: unknown,
+) => { meshes: THREE.Mesh[] };
+
+export const containerShells = new Registry<ShellHandler>("container shell");
+export const containedContents = new Registry<ContentsHandler>("contained contents");
+
+/** A material's container data: a registered shell and its configuration. */
+export type ContainerConfig = { shell: string; config: unknown };
+/** A material's contents data: a registered contents handler and its configuration. */
+export type ContentsConfig = { effect: string; config: unknown };
+
+/**
+ * Build a contained block: the shell, then its interior boundary, then the contents (if any)
+ * inside it. Each part's meshes carry their own materials, which the block disposes.
+ */
+export function composeContained(
+  context: ShellContext & { size: number },
+  container: ContainerConfig,
+  contents: ContentsConfig | undefined,
+): { faces: THREE.Material; extras: THREE.Mesh[] } {
+  const shell = containerShells.get(container.shell)(context, container.config);
+  const boundary = createInteriorBoundary(context.geometry, context.size, shell.inset);
+  // No contents is an empty container: the same composition with nothing inside.
+  const inside = [contents ?? []]
+    .flat()
+    .flatMap(({ effect, config }) => containedContents.get(effect)(boundary, config).meshes);
+  return { faces: shell.faces, extras: [...shell.meshes, ...inside] };
+}

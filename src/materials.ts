@@ -1,7 +1,7 @@
 import type { ChopSettings } from "./visual/chopped-geometry";
 import type { Lettering } from "./visual/lettering";
 import { Registry } from "./core/registry";
-import type { VesselConfig } from "./visual/filled-vessel";
+import type { ContainerConfig, ContentsConfig } from "./visual/contained";
 import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
@@ -76,8 +76,12 @@ export type MaterialDefinition = {
      * (the title's attract sequence). Each names a registered trail effect and configures it.
      */
     trails?: readonly AppearanceTrail[];
-    /** A hollow vessel part-filled with fluid, for the `filledVessel` assembly (#227). */
-    vessel?: VesselConfig;
+    /**
+     * For the `contained` assembly (#330): a registered container shell and its configuration,
+     * and optionally the registered contents inside it (src/visual/contained.ts).
+     */
+    container?: ContainerConfig;
+    contents?: ContentsConfig;
     optics?: {
       tint: number;
       handIor: number;
@@ -387,7 +391,7 @@ export const materialDefinitions = [
     },
     appearance: {
       pattern: "cardSheet",
-      assembly: "filledVessel",
+      assembly: "contained",
       surface: "clear",
       height: "none",
       ink: lightInk,
@@ -395,17 +399,21 @@ export const materialDefinitions = [
       geometry: { shape: "rounded", segments: 1, radius: 0.08, scale: 1 },
       reliefScale: 0,
       endGrainFaces: noEnds,
-      vessel: {
-        fill: 0xf2c84b,
-        surface: 0xfadf7e,
-        level: 0.45,
-        settleSeconds: 1.4,
-        traceSeconds: 4,
-        traceOpacity: 0.45,
-        shellOpacity: 0.16,
-        wall: 0.92,
-        // The shell's reflections at full strength, so the plastic catches the light.
-        gloss: 1.6,
+      container: {
+        shell: "plasticShell",
+        // The shell's reflections at full strength (gloss), so the plastic catches the light.
+        config: { opacity: 0.16, inset: 0.92, gloss: 1.6 },
+      },
+      contents: {
+        effect: "vesselFluid",
+        config: {
+          fill: 0xf2c84b,
+          surface: 0xfadf7e,
+          level: 0.45,
+          settleSeconds: 1.4,
+          traceSeconds: 4,
+          traceOpacity: 0.45,
+        },
       },
     },
   },
@@ -416,9 +424,31 @@ export const materialDefinitions = [
  * They are not in `materialDefinitions`, so no shop, reward or attract sequence ever deals
  * them. A developer mode deals one only by asking: the `uniformMaterialDeck` run setup step, or
  * `materialDeck` with the `registered` pool (dev0, dev1). None at the moment: custard, the
- * first, became a gameplay material when the shop began to sell it.
+ * first, became a gameplay material when the shop began to sell it. The empty vessel (#330) is custard's container with no contents.
  */
-export const experimentalMaterials: readonly MaterialDefinition[] = [];
+export const experimentalMaterials: readonly MaterialDefinition[] = [
+  {
+    // An empty plastic vessel (#330): custard's container with nothing inside, composed rather
+    // than special-cased. A visual experiment only.
+    id: "emptyVessel",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
+    name: "Empty vessel",
+    acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
+    traits: { transparent: {} },
+    appearance: {
+      pattern: "cardSheet",
+      assembly: "contained",
+      surface: "clear",
+      height: "none",
+      ink: lightInk,
+      edge: { color: 0xe8eef2, opacity: 0.3 },
+      geometry: { shape: "rounded", segments: 1, radius: 0.08, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: noEnds,
+      container: { shell: "plasticShell", config: { opacity: 0.16, inset: 0.92, gloss: 1.6 } },
+    },
+  },
+];
 
 export type BlockMaterial = (typeof materialDefinitions)[number]["id"];
 export const blockMaterials: readonly BlockMaterial[] = materialDefinitions.map(({ id }) => id);
