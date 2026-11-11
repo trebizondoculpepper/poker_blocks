@@ -4,7 +4,15 @@ import type { GameEvent, PassiveBlock } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
 import { cardScoringRules } from "./materials";
 import type { CardBlock } from "./cards";
-import { evaluateLine, findScoringLines, type Line, type ScoredLine } from "./scoring";
+import {
+  evaluateLine,
+  findScoringLines,
+  handMultipliers,
+  type Line,
+  type ScoredLine,
+} from "./scoring";
+import { scoringEligibilities } from "./scoring-eligibility";
+import { scoringEligibilityOf } from "./materials";
 import { cellKey } from "./traits/attachable";
 import { scorableValue } from "./traits/scorable";
 
@@ -119,10 +127,42 @@ export function scoreFieldWithPassives(
         ),
       ]),
     );
-    const result = evaluateLine(line.blocks, (block) => evaluated.get(block.id)!.value);
-    // Only the chosen hand's cards bring their own line rules.
+    // Each card's eligibility (#423) says how much of its own bonus it brings whatever hand is
+    // chosen: that part is left out while the hand is chosen, so it can't change the hand, and
+    // is added once below at the hand's multiplier.
+    const guaranteed = new Map(
+      line.blocks.map((block) => {
+        const own = evaluateRules(
+          subscribedRules([cardSource(block, rulesForCard)], "score.beforeBlockValue"),
+          { type: "score.beforeBlockValue", score: { line, intersections, block } },
+          scorableValue(block),
+        );
+        const eligibility = scoringEligibilities.get(scoringEligibilityOf(block));
+        return [
+          block.id,
+          {
+            amount: eligibility.guaranteed(own.value - scorableValue(block)),
+            joinsWhenOutside: eligibility.joinsWhenOutside,
+            activations: own.activations,
+          },
+        ];
+      }),
+    );
+    const result = evaluateLine(
+      line.blocks,
+      (block) => evaluated.get(block.id)!.value - guaranteed.get(block.id)!.amount,
+    );
+    // The chosen hand's cards bring their own line rules; a card outside it joins only if its
+    // eligibility says so.
     const contributing = line.blocks.filter(({ id }) => result.contributingIds.includes(id));
-    const sources = [...contributing.map((block) => cardSource(block, rulesForCard)), ...passives];
+    const joining = line.blocks.filter(
+      ({ id }) => !result.contributingIds.includes(id) && guaranteed.get(id)!.joinsWhenOutside,
+    );
+    const sources = [...contributing, ...joining].map((block) => cardSource(block, rulesForCard));
+    sources.push(...passives);
+    const sharedPoints =
+      [...guaranteed.values()].reduce((sum, { amount }) => sum + amount, 0) *
+      handMultipliers[result.hand];
     const phases = linePhases.reduce(
       (previous, phase) => {
         const next = evaluateRules(
@@ -132,7 +172,7 @@ export function scoreFieldWithPassives(
         );
         return { value: next.value, activations: [...previous.activations, ...next.activations] };
       },
-      { value: result.points, activations: [] as RuleActivation[] },
+      { value: result.points + sharedPoints, activations: [] as RuleActivation[] },
     );
     // The line is clamped at zero, then the after-clamp phase adds its flat bonuses.
     const clamped = Math.max(0, phases.value);
@@ -144,6 +184,7 @@ export function scoreFieldWithPassives(
     // Commit: the chosen hand's contributing blocks, then the line phases.
     const activations = [
       ...result.contributingIds.flatMap((id) => evaluated.get(id)!.activations),
+      ...joining.flatMap(({ id }) => guaranteed.get(id)!.activations),
       ...phases.activations,
       ...after.activations,
     ];
