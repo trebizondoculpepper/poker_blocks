@@ -104,7 +104,8 @@ function withLedger(
 
 /**
  * Add `modifier` to one card's `lifetime` register, combining with what it holds, and record it
- * for saves. Null when no card has that id.
+ * for saves. Null when no card has that id. Throws on an invalid modifier, or one that would
+ * combine into an unstorable register.
  */
 export function addCardModifier(
   state: GameState,
@@ -115,13 +116,31 @@ export function addCardModifier(
   modifierLifetimes.get(lifetime);
   const errors = validateScoringModifier(`${lifetime} modifier`, modifier);
   if (errors.length) throw new Error(errors.join("; "));
+  if (!everyCardIn(state).some(({ id }) => id === cardId)) return null;
+  const next = addCombinedModifier(state, cardId, lifetime, modifier);
+  // Valid parts can combine into an unrepresentable whole (a multiplier underflowing to 0): refuse
+  // it before changing the card or its ledger, so every stored register saves and loads.
+  if (!next) throw new Error(`${lifetime} modifier combination out of range`);
+  return next;
+}
+
+/**
+ * Combine an already-combined modifier (another register, a transferred bonus, #436) into one
+ * card's `lifetime` register. Its exponent may be 0 or below, as any register's may. Null when
+ * no card has that id or the result couldn't be stored; nothing changes then.
+ */
+export function addCombinedModifier(
+  state: GameState,
+  cardId: string,
+  lifetime: string,
+  modifier: ScoringModifier,
+): GameState | null {
+  modifierLifetimes.get(lifetime);
   const card = everyCardIn(state).find(({ id }) => id === cardId);
   if (!card) return null;
   const held = card.traits.modifiers ?? {};
   const combined = combineModifiers([held[lifetime] ?? {}, modifier]);
-  // Valid parts can combine into an unrepresentable whole (a multiplier underflowing to 0): refuse
-  // it before changing the card or its ledger, so every stored register saves and loads.
-  if (!storable(combined)) throw new Error(`${lifetime} modifier combination out of range`);
+  if (!storable(combined)) return null;
   const registers = { ...held, [lifetime]: combined };
   const next = everyCard(state, (each) =>
     each.id === cardId ? withRegisters(each, registers) : each,

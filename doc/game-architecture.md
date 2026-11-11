@@ -405,6 +405,14 @@ A block can be **triggered**, and responds with configured actions. `src/trigger
 - **`destroy-targets { select, cause, removal, sound? }`** (`src/trigger-responses.ts`) is the reusable blast response. It selects targets as `trigger-targets` does, from the source's snapshot, and checks each before removal. A block resisting `cause` stays, with its identity and acquired bonuses, and emits `block.resisted`. Any other block is removed through the configured removal mode and emits `block.removed` with the cause. Presentation reflects those events.
 - **Scope:** resistance applies only to destruction that names its cause. The Nothingifier, a block's own `self-destruct` and manual destruction are unchanged.
 
+### Bonus transfer (#436)
+
+`transfer-bonuses { select, lifetime, from? }` (`src/trigger-responses.ts`) is a trigger response by which the triggered block passes its acquired bonuses on (#431 registers).
+
+- **What moves:** only acquired registers, never the material's own values. They come from the trigger's snapshot, so a block that has already removed itself still passes on what it had. `from` names which registers (default: all), combined with the shared rules (sums, products, exponent increases summed above 1).
+- **Where it goes:** each recipient from the configured selector (`triggerTargetSelectors`) gets the combination added once to its `lifetime` register (`run` promotes stage and round bonuses), through `addCombinedModifier`. That stores any combination that can be saved, since a register's exponent may be 0 or below, and records it in the card-state ledger. This chooses no reward policy; bombs (#24) will choose their recipients by configuration.
+- **Once:** a trigger runs once per chain, so a recipient is never paid twice by one blast. A recipient's own bonuses combine with what it receives. `bonus.transferred` is emitted per recipient.
+
 ### Block exits (#439)
 
 How a block leaving play is presented: the shared lifecycle the per-material blast responses (#438) and the exit effects (#440 fade, #441 flash and shudder, #442 crack and fracture, #443 shred and splinter, #444 particle bursts) build on. `src/visual/exit-presentation.ts`.
