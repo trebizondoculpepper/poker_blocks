@@ -14,7 +14,7 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { materialPools } from "../../materials";
-import { composeContained } from "../../visual/contained";
+import { composeContained, containedLayers } from "../../visual/contained";
 import { createSettler } from "../../visual/filled-vessel";
 import { coatingStorages, type CoatingConfig, type LiquidSurface } from "./coating";
 
@@ -88,6 +88,7 @@ const custard: VesselBuilder = ({ environment }) => {
   );
   const object = new THREE.Group();
   const outer = new THREE.Mesh(blockGeometry, shell);
+  outer.renderOrder = containedLayers.shellFront;
   const print = printSkin();
   object.add(outer, ...extras, print);
   return {

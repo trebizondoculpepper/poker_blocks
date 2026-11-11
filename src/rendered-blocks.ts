@@ -91,6 +91,7 @@ export function createBlockViews(parents: {
       const boardMaterials = appearance.boardMaterials ?? handMaterials;
       const materials = location === "board" ? boardMaterials : handMaterials;
       const cube = new THREE.Mesh(geometry, materials);
+      cube.renderOrder = appearance.faceLayer ?? 0;
       cube.castShadow = cube.receiveShadow = true;
       const edgeGeometry = new THREE.EdgesGeometry(geometry);
       const edgeMaterial = new THREE.LineBasicMaterial({

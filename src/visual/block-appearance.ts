@@ -5,7 +5,7 @@ import type { MaterialDefinition } from "../materials";
 import { additiveSheen } from "./additive-light";
 import { choppedGeometry, type ChopSettings } from "./chopped-geometry";
 import { createCrystalFire } from "./crystal-fire";
-import { composeContained } from "./contained";
+import { composeContained, containedLayers } from "./contained";
 // Registers the plastic shell and the vessel fluid (#330).
 import "./filled-vessel";
 import { createFireCore } from "./fire-core";
@@ -21,6 +21,11 @@ export type BlockAppearance = {
   boardMaterials?: THREE.MeshStandardMaterial[];
   edgeColor: number;
   edgeOpacity: number;
+  /**
+   * The render order of the block's own faces, where it must sit among its extras (a contained
+   * block's front shell, #330); the default order when absent.
+   */
+  faceLayer?: number;
   /** Extra meshes to add inside the block (the crystal's fire); dispose their materials. */
   extras?: THREE.Mesh[];
 };
@@ -1258,12 +1263,16 @@ function contained(context: AssemblyContext): BlockAppearance {
     container,
     definition.appearance.contents,
   );
-  return appearanceBase(
-    context,
-    [print.texture],
-    Array.from({ length: 6 }, () => faces as THREE.MeshStandardMaterial),
-    [...extras, print.skin],
-  );
+  return {
+    ...appearanceBase(
+      context,
+      [print.texture],
+      Array.from({ length: 6 }, () => faces as THREE.MeshStandardMaterial),
+      [...extras, print.skin],
+    ),
+    // The front skin draws after the contents and residue, before the gloss (#329 layers).
+    faceLayer: containedLayers.shellFront,
+  };
 }
 
 const assemblyRegistry = new Map<string, AssemblyHandler>([

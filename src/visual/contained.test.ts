@@ -55,3 +55,39 @@ describe("contained components (#330)", () => {
     expect(getMaterialDefinition("steel").appearance.assembly).not.toBe("contained");
   });
 });
+
+describe("the assembled contained block (#330 review)", () => {
+  it("draws its front skin after the inner wall, contents and residue, and before the gloss", async () => {
+    const { vi } = await import("vite-plus/test");
+    const { createBlockAppearance } = await import("./block-appearance");
+    const { cardFaceArt } = await import("./face-art");
+    const { standardDeck } = await import("../cards");
+    const context = new Proxy(
+      {},
+      { get: (target, key) => (key in target ? Reflect.get(target, key) : () => ({ width: 0 })) },
+    );
+    vi.stubGlobal("document", {
+      createElement: () => ({ width: 0, height: 0, getContext: () => context }),
+    });
+    try {
+      const custard = materialPools
+        .get("registered")()
+        .find(({ id }) => id === "custard")!;
+      const appearance = createBlockAppearance(
+        cardFaceArt(standardDeck[0]!.traits.identity),
+        custard,
+        1,
+      );
+      const front = appearance.faceLayer!;
+      expect(front).toBe(containedLayers.shellFront);
+      const orders = (appearance.extras ?? []).map(({ renderOrder }) => renderOrder);
+      for (const layer of ["shellBack", "contentsOpaque", "residue"] as const)
+        expect(orders).toContain(containedLayers[layer]);
+      expect(orders.filter((order) => order < front)).toHaveLength(3);
+      expect(Math.min(...orders.filter((order) => order > front))).toBe(containedLayers.gloss);
+      (appearance.extras ?? []).forEach((mesh) => (mesh.material as THREE.Material).dispose());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
