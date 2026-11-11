@@ -420,9 +420,31 @@ export const materialDefinitions = [
  * They are not in `materialDefinitions`, so no shop, reward or attract sequence ever deals
  * them. A developer mode deals one only by asking: the `uniformMaterialDeck` run setup step, or
  * `materialDeck` with the `registered` pool (dev0, dev1). None at the moment: custard, the
- * first, became a gameplay material when the shop began to sell it.
+ * first, became a gameplay material when the shop began to sell it. Air (#357) is the current one.
  */
-export const experimentalMaterials: readonly MaterialDefinition[] = [];
+export const experimentalMaterials: readonly MaterialDefinition[] = [
+  {
+    // Air (#357): a visual experiment only. A fan on two opposite faces (its variant faces,
+    // +x and −x), louvred vents on the other four. No airflow, scoring, price or reward.
+    id: "airVent",
+    lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
+    name: "Air",
+    // A powder-coated housing: it sounds like steel until it has a sound of its own.
+    acoustics: { character: "clanking", hardness: 7, attach: "material.attach.steel" },
+    traits: {},
+    appearance: {
+      pattern: "ventHousing",
+      assembly: "sixFaces",
+      surface: "matte",
+      height: "none",
+      ink: { red: "#a3202f", black: "#1f2c38", onDark: false },
+      edge: { color: 0x6f7a82, opacity: 1 },
+      geometry: { shape: "rounded", segments: 2, radius: 0.06, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: [0, 1],
+    },
+  },
+];
 
 export type BlockMaterial = (typeof materialDefinitions)[number]["id"];
 export const blockMaterials: readonly BlockMaterial[] = materialDefinitions.map(({ id }) => id);
