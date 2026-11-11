@@ -8,6 +8,7 @@ import "./cooking";
 // Registers the `trigger-block` rule command (#433).
 import "./triggers";
 import { commitReactions, type AppliedReaction } from "./reactions";
+import { commitCountdowns } from "./trigger-countdown";
 import { setCardStateBonus } from "./state-bonuses";
 import { applyRackItem } from "./rack-item-effects";
 import type { BlockMaterial } from "./materials";
@@ -496,11 +497,17 @@ export class GameRun {
       // change the state later plays score.
       // Committed through the shared command path; only real changes are reported.
       this.lastReactions = commitReactions(this.commandTarget);
+      // Countdowns (#434): only a committed play counts; a block reaching zero is triggered.
+      const counted = commitCountdowns(
+        this.commandTarget,
+        new Set([action.cardId, ...(action.cardIds ?? [])]),
+      );
       // The current dealer scores in play(); this is a post-play event until
       // placement and scoring are separated by the gameplay coordinator.
       this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId });
       for (const { blockId, from, to } of this.lastReactions)
         this.passiveEvents.emit({ type: "reaction.applied", blockId, reaction: { from, to } });
+      for (const event of counted) this.passiveEvents.emit(event);
       this.passiveEvents.drain();
       this.announceOutcome();
     }

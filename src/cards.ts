@@ -39,6 +39,8 @@ export type CardBlock = {
     doneness?: { step: number };
     /** Who owns it: a registered card owner (src/card-ownership.ts, #424); the deck if absent. */
     owner?: { id: string };
+    /** Plays left before it triggers itself (src/trigger-countdown.ts, #434). */
+    countdown?: { left: number };
   };
 };
 

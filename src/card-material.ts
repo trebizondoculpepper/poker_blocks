@@ -23,7 +23,13 @@ export const materialScopedStates = new Registry<true>("material-scoped card sta
 import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
 
 /** What the run remembers about a card beyond its definition: its changed material. */
-export type CardState = { material?: BlockMaterial; stateBonus?: string; doneness?: number };
+export type CardState = {
+  material?: BlockMaterial;
+  stateBonus?: string;
+  doneness?: number;
+  /** Plays left before its countdown triggers it (#434). */
+  countdown?: number;
+};
 
 /**
  * The card with `material` in place of its current one: the traits its old material brought are
