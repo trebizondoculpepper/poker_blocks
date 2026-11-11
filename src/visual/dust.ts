@@ -100,7 +100,9 @@ export function createDust(raw: AppearanceEffect, { random, size }: BlockEffectC
           owed -= 1;
           const grain = grains[next]!;
           const sample = samples[Math.floor(random() * samples.length)]!;
-          surface.copy(sample).multiplyScalar(size).applyMatrix4(block.matrixWorld);
+          // `size` is already the block's world edge length, so only its turn and place apply:
+          // a block drawn small and scaled up (one played from the hand) isn't scaled twice.
+          surface.copy(sample).multiplyScalar(size).applyQuaternion(orientation).add(centre);
           grain.age = 0;
           grain.position.copy(surface);
           grain.velocity

@@ -125,4 +125,21 @@ describe("dust block effect (#465)", () => {
     dust!.dispose();
     still!.dispose();
   });
+
+  it("emits from the surface of a block drawn small and scaled up (one played from the hand)", () => {
+    const [dust] = createBlockEffects([{ ...config, lifetime: 100, launch: 0 }], {
+      random,
+      size: 1,
+    });
+    const block = new THREE.Object3D();
+    block.scale.setScalar(3);
+    block.position.set(0, 5, 0);
+    block.updateMatrixWorld(true);
+    dust!.update(1 / 60, block, false);
+    spin(dust!, block, new THREE.Vector3(0, 1, 0), 6, 1);
+    const born = live(dust!.object as THREE.Points);
+    expect(born.length).toBeGreaterThan(0);
+    for (const p of born) expect(p.distanceTo(block.position)).toBeLessThanOrEqual(0.87);
+    dust!.dispose();
+  });
 });
