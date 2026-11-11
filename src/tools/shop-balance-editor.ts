@@ -265,11 +265,24 @@ export function createShopBalanceEditor(host: HTMLElement): ShopBalanceEditor {
           "maxOffers",
           "guaranteedPassives",
           "guaranteedCards",
+          "transmogrifierSlots",
         ] as const)
           fields.append(
             field(key, `stock.${key}`, draft.stock[key], (value) => {
               draft.stock[key] = value;
             }),
+          );
+        // Transmogrifiers (#392): uses a new one has, and its price multiple.
+        for (const key of ["uses", "priceFactor"] as const)
+          fields.append(
+            field(
+              `transmogrifier ${key}`,
+              `transmogrifier.${key}`,
+              draft.transmogrifier[key],
+              (value) => {
+                draft.transmogrifier[key] = value;
+              },
+            ),
           );
         for (const rank of Object.keys(draft.cardRankSurcharge))
           fields.append(
