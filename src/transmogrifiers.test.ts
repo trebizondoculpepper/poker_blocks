@@ -182,3 +182,45 @@ describe("transmogrifier resale (#390)", () => {
     expect(defaultResale(1)).toBe(1);
   });
 });
+
+describe("terracotta transmogrifiers after #371", () => {
+  it("are never offered, now terracotta is only baked from earth", () => {
+    for (let seed = 1; seed <= 40; seed++)
+      for (const round of [1, 3, 6, 10]) {
+        const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, mulberry(seed));
+        const stock = shopPreviewState(game.state, 99, mulberry(seed), defaultShop, round);
+        expect(
+          stock
+            .shopStock!.filter(({ kind }) => kind === "transmogrifier")
+            .map(({ block }) => (block as PassiveBlock).traits.transmogrifier?.material),
+        ).not.toContain("terracotta");
+      }
+  });
+
+  it("still load from a save, in the rack and in the shop", () => {
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    const rackItem = createTransmogrifier("terracotta", "rack.terracotta", 6, 1, 2);
+    const offer = createTransmogrifier("terracotta", "shop.transmogrifier.1", 6);
+    const record = JSON.parse(
+      JSON.stringify(
+        toSaveRecord({
+          ...game.snapshot(),
+          phase: "shop",
+          state: {
+            ...game.state,
+            passiveRack: [rackItem],
+            shopStock: [{ kind: "transmogrifier", block: offer }],
+          },
+        }),
+      ),
+    );
+    const restored = fromSaveRecord(record, standardDeck, dealerRegistry)!;
+    expect(restored.state.passiveRack[0]!.traits).toMatchObject({
+      transmogrifier: { material: "terracotta" },
+      limitedUse: { uses: 1, total: 2 },
+    });
+    expect((restored.state.shopStock![0]!.block as PassiveBlock).traits.transmogrifier).toEqual({
+      material: "terracotta",
+    });
+  });
+});
