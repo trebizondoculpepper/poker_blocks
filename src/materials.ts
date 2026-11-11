@@ -592,6 +592,12 @@ const clearWater = {
   },
 };
 
+/** A soft drifting cloud (#336): contents with no liquid surface. */
+const softCloud = {
+  effect: "cloud",
+  config: { colour: 0xf4f7fb, density: 1.2, drift: 0.08 },
+};
+
 /** A dark, oily fluid (#333): custard's look and mechanics with only its colours changed. */
 const darkFluid = {
   effect: "levellingFluid",
@@ -634,6 +640,7 @@ function plasticFluidExperiments(): MaterialDefinition[] {
   return [
     plastic("waterInPlastic", "Water in plastic", clearWater),
     plastic("darkFluid", "Dark fluid", darkFluid),
+    plastic("cloudInPlastic", "Cloud in plastic", softCloud),
   ];
 }
 
@@ -674,6 +681,8 @@ function glassContainerExperiments(): MaterialDefinition[] {
     lantern("flameLantern", "Flame in a lantern", { effect: "flame", config: {} }),
     // Fluid looks (#333): the same levelling fluid, other optics, in either container.
     lantern("waterInLantern", "Water in a lantern", clearWater),
+    // A contained cloud (#336): the same contents in either container.
+    lantern("cloudInLantern", "Cloud in a lantern", softCloud),
     {
       id: "custardFrame",
       lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },

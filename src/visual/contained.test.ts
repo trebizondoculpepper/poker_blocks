@@ -6,6 +6,7 @@ import "./filled-vessel";
 import "./glass-shells";
 import "./fire-core";
 import "./fading-film";
+import "./cloud";
 
 const geometry = new THREE.BoxGeometry(1, 1, 1);
 const build = (id: string) => {
@@ -350,5 +351,26 @@ describe("every registered material's fluid names a look (#413 review)", () => {
         );
         built.meshes.forEach((mesh) => (mesh.material as THREE.Material).dispose());
       }
+  });
+});
+
+describe("a contained cloud (#336)", () => {
+  it("sits in plastic or the lantern by configuration, publishes no surface, and drifts on the shared frame", async () => {
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    const contents = (id: string) =>
+      materialPools
+        .get("registered")()
+        .find((material) => material.id === id)!.appearance.contents!;
+    expect(contents("cloudInPlastic")).toEqual(contents("cloudInLantern"));
+    const cloud = containedContents.get("cloud")(
+      createInteriorBoundary(geometry, 1, 0.92),
+      contents("cloudInPlastic").config,
+    );
+    expect(cloud.capabilities).toEqual({});
+    expect(cloud.meshes[0]!.renderOrder).toBe(containedLayers.contentsTransparent);
+    const uniforms = (cloud.meshes[0]!.material as THREE.ShaderMaterial).uniforms;
+    cloud.update!({ seconds: 2.5, delta: 0.1, first: false, rotation: new THREE.Quaternion() });
+    expect(uniforms.time!.value).toBe(2.5);
+    cloud.meshes.forEach((mesh) => (mesh.material as THREE.Material).dispose());
   });
 });
