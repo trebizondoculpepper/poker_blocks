@@ -6,6 +6,7 @@ import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
 import type { EventRule } from "./event-rules";
+import { stateBonusRules } from "./state-bonuses";
 import { scoringModifierRules, type ScoringModifier } from "./scoring-modifier";
 import type { TokenEffectConfig } from "./passive-activation-effects";
 import type { SoundEffectId } from "./audio/sfx-registry";
@@ -41,6 +42,11 @@ export type MaterialDefinition = {
    * scoring is designed: meat, fire and ice wait on #104–#106.
    */
   scoringModifier?: ScoringModifier;
+  /**
+   * Its transmogrifier's balance, where the default (twice the shop base price, drawn by the
+   * material's own weight curve) does not apply or there is no shop price (#388).
+   */
+  transmogrifier?: { price?: number; weights?: WeightCurve };
   /** Coins per card still held at settlement, on both a win and a loss. */
   handReward?: { coinsPerCard: number };
   /** Presentation when one of this material's scoring rules fires. */
@@ -115,6 +121,9 @@ export const materialDefinitions = [
     name: "Paper",
     acoustics: { character: "flimsy", hardness: 2, attach: "material.attach.paper" },
     traits: {},
+    // Never sold as a card, so its transmogrifier sets its own price (#384: 2 coins) and is
+    // offered from round 1 at a low weight (a safe default, noted on #388).
+    transmogrifier: { price: 2, weights: [[1, 0.5]] },
     appearance: {
       pattern: "cardSheet",
       assembly: "sixFaces",
@@ -565,7 +574,12 @@ export function materialOf(block: CardBlock): BlockMaterial {
 
 /** The scoring rules a card brings with it: its material's scoring modifier, expanded. */
 export function cardScoringRules(block: CardBlock): EventRule[] {
-  return scoringModifierRules(getMaterialDefinition(materialOf(block)).scoringModifier);
+  // Its material's rules, then its state bonus's (#365): same phases, and the order within
+  // one card changes nothing (sums and products commute; successive powers multiply).
+  return [
+    ...scoringModifierRules(getMaterialDefinition(materialOf(block)).scoringModifier),
+    ...stateBonusRules(block),
+  ];
 }
 
 function seededRandom(seed: number): () => number {

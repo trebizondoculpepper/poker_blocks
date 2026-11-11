@@ -1,3 +1,5 @@
+import { passiveFrequencies } from "./offer-weights";
+import type { BlockMaterial } from "./materials";
 import { Registry } from "./core/registry";
 import { categoryPalette, type PassiveCategoryTraits } from "./passive-categories";
 import type { EventRule, HandlerConfig } from "./event-rules";
@@ -17,6 +19,10 @@ export type PassiveBlock = {
     inspectable: InspectableTrait;
     /** What it cost in the shop, before modifiers; the resale policy reads it (#103). */
     priced?: { basePrice: number };
+    /** Uses left of its total, for an item that wears out (a transmogrifier, #388). */
+    limitedUse?: { uses: number; total: number };
+    /** The material a transmogrifier turns a card into (#388). */
+    transmogrifier?: { material: BlockMaterial };
   };
 };
 
@@ -78,6 +84,8 @@ export type PassiveDefinition = {
   shape?: string;
   /** Artwork per face in logical order: face `i` sits opposite face `count - 1 - i`. */
   faces?: readonly PassiveFaceDesign[];
+  /** A registered visual builder for a token not drawn as a painted shape (#391). */
+  visual?: { builder: string; config: unknown };
   /** Its event rules: named, configured handlers from `src/rule-handlers.ts` (#139, #170). */
   eventRules: readonly EventRule[];
   /**
@@ -338,6 +346,7 @@ export function passiveAppearance(block: PassiveBlock): PassiveTokenAppearance {
       palette: passivePalette(definition()),
       shape: definition().shape,
       faces: definition().faces,
+      visual: definition().visual,
     }
   );
 }
@@ -356,6 +365,7 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
         palette: passivePalette(definition),
         shape: definition.shape,
         faces: definition.faces,
+        visual: definition.visual,
       },
       passive: {
         traitId: definition.traitId,
@@ -425,7 +435,16 @@ export function randomPassiveDefinitions(
   const available = passiveDefinitions
     .names()
     .filter((name) => !excluded.includes(name) && !passiveDefinitions.get(name).retired)
-    .map((name) => passiveDefinitions.get(name));
+    .map((name) => passiveDefinitions.get(name))
+    // Only what the passive shop could ever offer: an item stocked by its own dedicated slots
+    // (a transmogrifier, #388) is made complete there, never granted as a bare passive.
+    .filter(({ shop }) =>
+      [shop ?? []]
+        .flat()
+        .every(({ frequency }) =>
+          passiveFrequencies.get(frequency).some(([, weight]) => weight > 0),
+        ),
+    );
   const picked: PassiveDefinition[] = [];
   while (picked.length < count && available.length) {
     picked.push(

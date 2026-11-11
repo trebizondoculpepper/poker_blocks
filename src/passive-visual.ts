@@ -21,6 +21,12 @@ export type PassiveTokenAppearance = {
   palette: PassivePalette;
   shape?: string;
   faces?: readonly PassiveFaceDesign[];
+  /**
+   * A registered visual builder and its configuration (#391), for a token drawn some other way
+   * than a painted shape (a transmogrifier is a plain block of its material). The painted
+   * token when absent.
+   */
+  visual?: { builder: string; config: unknown };
 };
 
 /** A registered token shape: its own geometry, and nothing else. */
@@ -247,11 +253,38 @@ export type PassiveVisual = {
   dispose(): void;
 };
 
-/** A token's geometry and per-face materials, shared by the rack and the shop previews. */
+/** Builds a token's visual some other way than the painted shape (#391), by name. */
+export type PassiveVisualBuilder = (
+  appearance: PassiveTokenAppearance,
+  size: number,
+  config: unknown,
+) => PassiveVisual;
+export const passiveVisualBuilders = new Registry<PassiveVisualBuilder>("passive visual builder");
+
+/**
+ * A token's geometry and per-face materials, shared by the rack, the shop and the browser: its
+ * appearance's registered builder, or the painted shape.
+ */
 export function createPassiveVisual(
   appearance: PassiveTokenAppearance,
   size: number,
   paint: PassiveFacePainter = paintPassiveFace,
+): PassiveVisual {
+  return (
+    [appearance.visual ?? []]
+      .flat()
+      .reduce<PassiveVisual | null>(
+        (_, { builder, config }) => passiveVisualBuilders.get(builder)(appearance, size, config),
+        null,
+      ) ?? paintedVisual(appearance, size, paint)
+  );
+}
+
+/** The painted token: a registered shape with artwork on each face (#125). */
+function paintedVisual(
+  appearance: PassiveTokenAppearance,
+  size: number,
+  paint: PassiveFacePainter,
 ): PassiveVisual {
   const shape = passiveShapes.get(appearance.shape ?? defaultPassiveShape);
   const geometry = shape.geometry();
