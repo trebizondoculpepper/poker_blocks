@@ -431,6 +431,25 @@ export function createRunController<Context>(options: {
     );
   }
 
+  /** Redraw one card where it is, from the run's state: after its material changes (#389). */
+  function redrawCard(cardId: string): void {
+    const placed = game.state.field.find(({ block }) => block.id === cardId);
+    // A card still landing is redrawn when it lands, from the state then (play presenter).
+    const shownOnTable = services.field.blocks().some(({ block }) => block.id === cardId);
+    if (placed && shownOnTable) {
+      services.field.remove(cardId);
+      services.field.add(placed.block, placed.cell);
+    }
+    const held = game.state.hand.find(({ id }) => id === cardId);
+    const shown = services.hand.blocks.find(({ block }) => block.id === cardId);
+    if (held && shown) {
+      services.hand.remove([shown]);
+      services.views.dispose(shown);
+      services.hand.add(held);
+      services.hand.sync(game.state.hand);
+    }
+  }
+
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
   function startRun(session: GameRun): void {
     const { rack, cameraView, audio } = services;
@@ -556,6 +575,15 @@ export function createRunController<Context>(options: {
       if (game.sellPassive(id) === null) return false;
       services.rack.render(game.state.passiveRack);
       updateHud();
+      autosave();
+      return true;
+    },
+    // Model first (#272): the change commits at once, then the card is redrawn in its place.
+    applyRackItem(itemId, cardId) {
+      if (!game.applyRackItem(itemId, cardId)) return false;
+      redrawCard(cardId);
+      showSelection();
+      services.rack.render(game.state.passiveRack);
       autosave();
       return true;
     },

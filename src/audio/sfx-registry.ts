@@ -423,6 +423,14 @@ const entries = [
     description: "A passive grants and installs another passive block",
   },
   {
+    id: "item.apply",
+    name: "Use item",
+    family: "passive",
+    description:
+      "A rack item is dropped on a card and used on it (a transmogrifier changes its material)",
+    placeholder: "passive.activate.scoring",
+  },
+  {
     id: "passive.activate.scoring",
     name: "Activate scoring",
     family: "passive",
