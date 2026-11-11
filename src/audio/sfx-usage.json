@@ -75,11 +75,12 @@
     "files": {}
   },
   "action.denied": {
-    "uses": 10,
+    "uses": 11,
     "files": {
-      "audio/sfx-registry.ts (placeholder)": 1,
+      "audio/sfx-registry.ts (placeholder)": 2,
       "menus.ts": 2,
-      "run-controller.ts": 2,
+      "purchase-refusals.ts": 1,
+      "run-controller.ts": 1,
       "table-input.ts": 4,
       "traits/menu-action.ts": 1
     }
@@ -180,7 +181,13 @@
   "shop.buy.denied": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "purchase-refusals.ts": 1
+    }
+  },
+  "shop.rack_full": {
+    "uses": 1,
+    "files": {
+      "purchase-refusals.ts": 1
     }
   },
   "shop.stock.burn": {

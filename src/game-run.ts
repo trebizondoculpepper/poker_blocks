@@ -410,15 +410,41 @@ export class GameRun {
    * Buy an offer into the place its kind goes (the hand or the rack). Refused, leaving the state
    * untouched, when dropped elsewhere, unaffordable, or when it doesn't fit there.
    */
+  /**
+   * Why buying this offer by dropping it on `destination` would be refused (#481), or null when it
+   * would succeed. Side-effect free, from the same rules `buyShopOffer` applies, in this order,
+   * the first that applies winning: `closed` (not in the shop), `unknown-offer`,
+   * `wrong-destination`, `unaffordable`, then the offer kind's own reason (`rack-full`,
+   * `already-owned`, `locked`), else `refused`.
+   */
+  purchaseVerdict(id: string, destination: OfferDestination): { reason: string } | null {
+    const offer = this.inShop
+      ? this.currentState.shopStock?.find(({ block }) => block.id === id)
+      : undefined;
+    const kind = offer && offerKind(offer);
+    const run = this.offerRun;
+    const price = offer && kind ? kind.price(offer.block, run) : Number.NaN;
+    const checks: (() => string | null)[] = [
+      () => (this.inShop ? null : "closed"),
+      () => (offer ? null : "unknown-offer"),
+      () => (destination === kind!.destination ? null : "wrong-destination"),
+      () =>
+        Number.isSafeInteger(price) && price >= 0 && this.currentState.coins >= price
+          ? null
+          : "unaffordable",
+      () => kind!.refusal?.(this.currentState, offer!.block, run) ?? null,
+      () => (kind!.receive(this.currentState, offer!.block, run) ? null : "refused"),
+    ];
+    const reason = checks.reduce<string | null>((found, check) => found ?? check(), null);
+    return reason ? { reason } : null;
+  }
+
   buyShopOffer(id: string, destination: OfferDestination): ShopOffer | null {
-    if (!this.inShop) return null;
-    const offer = this.currentState.shopStock?.find(({ block }) => block.id === id);
-    if (!offer) return null;
+    if (this.purchaseVerdict(id, destination)) return null;
+    const offer = this.currentState.shopStock!.find(({ block }) => block.id === id)!;
     const kind = offerKind(offer);
-    if (destination !== kind.destination) return null;
     const run = this.offerRun;
     const price = kind.price(offer.block, run);
-    if (!Number.isSafeInteger(price) || price < 0 || this.currentState.coins < price) return null;
     const received = kind.receive(this.currentState, offer.block, run);
     if (!received) return null;
     this.currentState = {

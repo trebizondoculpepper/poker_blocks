@@ -48,6 +48,11 @@ export type OfferKind<Block extends OfferBlock> = {
   price(block: Block, run: OfferRun): number;
   /** The run's state with the bought block added, or null when it doesn't fit. */
   receive(state: GameState, block: Block, run: OfferRun): GameState | null;
+  /**
+   * Why it can't be received now (#481), from the same rules as `receive`: a reason such as
+   * `rack-full`, or null when it fits. A kind without one never refuses for its own reasons.
+   */
+  refusal?(state: GameState, block: Block, run: OfferRun): string | null;
   /** What leaving the shop does with it unbought. */
   unbought(state: GameState, block: Block): GameState;
   save(block: Block): SavedOffer;
@@ -99,6 +104,26 @@ function text(value: unknown): string {
   return value;
 }
 
+/**
+ * The Items rack's own refusals, in order (#481): one reason per check, the first that applies
+ * wins. Rack-bound kinds use these for both `refusal` and `receive`, so they never disagree.
+ */
+type RackCheck = (state: GameState, block: PassiveBlock, run: OfferRun) => string | null;
+const alreadyOwned: RackCheck = (state, block) =>
+  state.passiveRack.some(({ id }) => id === block.id) ? "already-owned" : null;
+const rackFull: RackCheck = (state, _block, { rackCapacity }) =>
+  state.passiveRack.length >= rackCapacity ? "rack-full" : null;
+const firstRefusal =
+  (...checks: readonly RackCheck[]): RackCheck =>
+  (state, block, run) =>
+    checks.reduce<string | null>((found, check) => found ?? check(state, block, run), null);
+/** A rack-bound kind's `refusal` and `receive`, from its checks. */
+const rackBound = (refusal: RackCheck) => ({
+  refusal,
+  receive: (state: GameState, block: PassiveBlock, run: OfferRun) =>
+    refusal(state, block, run) ? null : { ...state, passiveRack: [...state.passiveRack, block] },
+});
+
 // A playable card: a new card of some material (#143), costing its material's base price plus
 // its rank's surcharge. Dropped on the shop's buy target, it joins the run's deck and its
 // ledger of bought cards; an unbought one simply goes.
@@ -122,12 +147,14 @@ registerOfferKind<PassiveBlock>("passive", {
   destination: "passive-rack",
   price: (block) => block.traits.priced?.basePrice ?? Number.NaN,
   // Refused before the passive is available (#165), even from a stale or early offer.
-  receive: (state, block, { rackCapacity, round }) =>
-    round < passiveUnlockRound(passiveDefinitions.get(block.definitionId)) ||
-    state.passiveRack.length >= rackCapacity ||
-    state.passiveRack.some(({ id }) => id === block.id)
-      ? null
-      : { ...state, passiveRack: [...state.passiveRack, block] },
+  ...rackBound(
+    firstRefusal(
+      (_state, block, { round }) =>
+        round < passiveUnlockRound(passiveDefinitions.get(block.definitionId)) ? "locked" : null,
+      alreadyOwned,
+      rackFull,
+    ),
+  ),
   unbought: (state) => state,
   save: (block) => ({ kind: "passive", id: block.id, definitionId: block.definitionId }),
   restore: (saved, restore) => {
@@ -142,10 +169,7 @@ registerOfferKind<PassiveBlock>("passive", {
 registerOfferKind<PassiveBlock>("transmogrifier", {
   destination: "passive-rack",
   price: (block) => block.traits.priced?.basePrice ?? Number.NaN,
-  receive: (state, block, { rackCapacity }) =>
-    state.passiveRack.length >= rackCapacity || state.passiveRack.some(({ id }) => id === block.id)
-      ? null
-      : { ...state, passiveRack: [...state.passiveRack, block] },
+  ...rackBound(firstRefusal(alreadyOwned, rackFull)),
   unbought: (state) => state,
   save: (block) => ({
     kind: "transmogrifier",
@@ -169,10 +193,7 @@ registerOfferKind<PassiveBlock>("transmogrifier", {
 registerOfferKind<PassiveBlock>("nothingifier", {
   destination: "passive-rack",
   price: (block) => block.traits.priced?.basePrice ?? Number.NaN,
-  receive: (state, block, { rackCapacity }) =>
-    state.passiveRack.length >= rackCapacity || state.passiveRack.some(({ id }) => id === block.id)
-      ? null
-      : { ...state, passiveRack: [...state.passiveRack, block] },
+  ...rackBound(firstRefusal(alreadyOwned, rackFull)),
   unbought: (state) => state,
   save: (block) => ({ kind: "nothingifier", id: block.id, price: block.traits.priced?.basePrice }),
   restore: (saved, restore) => {

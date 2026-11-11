@@ -344,6 +344,16 @@ const entries = [
     placeholder: "action.denied",
   },
   {
+    id: "shop.rack_full",
+    name: "Rack full",
+    family: "shop",
+    description: "An item or passive can't be bought because the Items rack has no free slot",
+    prompt:
+      "A small wooden drawer pushed shut that will not take one more thing: two quick dull knocks against a full shelf, short and muffled, no buzz and no coins",
+    durationSeconds: 0.6,
+    placeholder: "action.denied",
+  },
+  {
     id: "shop.stock.burn",
     name: "Stock burn",
     family: "shop",
