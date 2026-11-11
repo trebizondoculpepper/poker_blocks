@@ -19,6 +19,7 @@ import { scoringModifierRules, type ScoringModifier } from "./scoring-modifier";
 import type { TokenEffectConfig } from "./passive-activation-effects";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { ExitSequence } from "./visual/exit-presentation";
+import type { AppearanceEffect } from "./visual/block-effects";
 
 /** A particle trail: a registered effect (src/attract-trails.ts) and its configuration. */
 export type AppearanceTrail = {
@@ -144,6 +145,11 @@ export type MaterialDefinition = {
      * the model has already decided it is gone. A material that survives blasts has none.
      */
     exit?: ExitSequence;
+    /**
+     * Ongoing effects a block of this look keeps up while it is on the table, such as smoke
+     * (#464): each names a registered block effect (src/visual/block-effects.ts) and configures it.
+     */
+    effects?: readonly AppearanceEffect[];
     /**
      * For the `contained` assembly (#330): a registered container shell and its configuration,
      * and optionally the registered contents inside it (src/visual/contained.ts).

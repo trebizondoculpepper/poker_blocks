@@ -16,6 +16,9 @@ import { addCell, centerOfGravity, removeCell, type MassCenter } from "./center-
 import type { BlockViews, RenderedBlock } from "./rendered-blocks";
 import { getMaterialDefinition, materialOf, type MaterialDefinition } from "./materials";
 import { createActivationPulse, type ActivationPulse } from "./activation-pulse";
+import { cardLook } from "./card-look";
+import { cosmeticRandom, createBlockEffects, type BlockEffect } from "./visual/block-effects";
+import "./visual/smoke";
 import { cellKey, faceFromDirection, faceNormal, type Cell, type Face } from "./traits/attachable";
 
 /** A block a drop can attach to: one on the table, or one played and still flying in. */
@@ -95,6 +98,11 @@ export function createFieldView(options: {
   cubeSize: number;
   /** The structure's centre of mass moved: the board's rotation centre follows it. */
   onCenter(center: { x: number; y: number; z: number }): void;
+  /**
+   * The world-space layer ongoing block effects (#464) live in, so what they emit stays put as
+   * the structure moves. Without one, blocks show no ongoing effects.
+   */
+  world?: THREE.Object3D;
   /** Allows another material registry to supply definitions without changing the presenter. */
   resolveMaterial?: (block: CardBlock) => MaterialDefinition;
   sound?: (id: SoundEffectId) => void;
@@ -114,6 +122,36 @@ export function createFieldView(options: {
   const resolveMaterial =
     options.resolveMaterial ?? ((block: CardBlock) => getMaterialDefinition(materialOf(block)));
   const sound = options.sound ?? playSfx;
+  /** Each drawn table block's ongoing effects (#464), keyed by the cube they follow. */
+  const ongoing = new Map<THREE.Object3D, BlockEffect[]>();
+  let lastUpdate: number | null = null;
+  /** Build effects for blocks newly on the table; drop those whose block has gone or redrawn. */
+  function reconcileEffects(): void {
+    const world = options.world;
+    if (!world) return;
+    const drawn = new Set<THREE.Object3D>();
+    for (const rendered of placed.values()) {
+      drawn.add(rendered.cube);
+      if (ongoing.has(rendered.cube)) continue;
+      const effects = createBlockEffects(cardLook(rendered.block).appearance.effects ?? [], {
+        random: cosmeticRandom,
+        size: cubeSize,
+      });
+      effects.forEach(({ object }) => world.add(object));
+      ongoing.set(rendered.cube, effects);
+    }
+    for (const [cube, effects] of ongoing) {
+      if (drawn.has(cube)) continue;
+      endEffects(effects);
+      ongoing.delete(cube);
+    }
+  }
+  function endEffects(effects: readonly BlockEffect[]): void {
+    for (const effect of effects) {
+      effect.object.removeFromParent();
+      effect.dispose();
+    }
+  }
 
   const ghostGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
   const ghostMaterial = new THREE.MeshBasicMaterial({
@@ -289,6 +327,11 @@ export function createFieldView(options: {
     },
     update(now, reducedMotion = false) {
       ghostEdges.update(now / 1000, reducedMotion);
+      reconcileEffects();
+      const delta = Math.min(0.1, Math.max(0, (now - (lastUpdate ?? now)) / 1000));
+      lastUpdate = now;
+      for (const [cube, effects] of ongoing)
+        for (const effect of effects) effect.update(delta, cube, reducedMotion);
       for (let index = tints.length - 1; index >= 0; index--) {
         const tint = tints[index];
         const progress = Math.min(1, (now - tint.startedAt) / 1000 / tintSeconds);
@@ -307,6 +350,8 @@ export function createFieldView(options: {
     },
     clear() {
       placed.clear();
+      ongoing.forEach(endEffects);
+      ongoing.clear();
       for (const { cube } of expected.values()) assembly.remove(cube);
       expected.clear();
       tints.length = 0;
@@ -315,6 +360,8 @@ export function createFieldView(options: {
       massCenter = { count: 0, sum: { x: 0, y: 0, z: 0 } };
     },
     dispose() {
+      ongoing.forEach(endEffects);
+      ongoing.clear();
       ghostGeometry.dispose();
       ghostMaterial.dispose();
       ghostEdges.dispose();
