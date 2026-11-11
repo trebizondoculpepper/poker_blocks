@@ -32,6 +32,9 @@ export type ScoreEventContext = { line: Line; intersections: number; block?: Car
 /** Which stage a lifecycle event belongs to, so a trait can match a moment by condition. */
 export type StageContext = { round: number; kind: StageKind; dealer: string };
 
+/** What a reaction changes about a block: its material and its state bonus, if any. */
+export type ReactionState = { material: string; stateBonus?: string };
+
 export type GameEvent = {
   type: string;
   blockId?: string;
@@ -47,6 +50,8 @@ export type GameEvent = {
   blocks?: readonly CardBlock[];
   /** On `stage.won`: which stage of the round was won. */
   stageKind?: StageKind;
+  /** On `reaction.applied` (#366): the block's material and state bonus before and after. */
+  reaction?: { from: ReactionState; to: ReactionState };
   /** On `reward.finalized`: the coins paid, and the balance before and after. */
   reward?: { coins: number; balanceBefore: number; balance: number };
 };
