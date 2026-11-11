@@ -20,6 +20,8 @@ import { createPassiveBlock, passiveDefinitions, type PassiveBlock } from "./pas
 import { weightAt, type WeightCurve } from "./offer-weights";
 import { blockMaterials } from "./materials";
 import { rackTraitPersistence } from "./rack-trait-persistence";
+// Registers the material-block token visual (#391).
+import "./visual/material-token";
 
 /** Uses a new transmogrifier has (#384). */
 export const defaultTransmogrifierUses = 2;
@@ -64,6 +66,8 @@ for (const { material, price, weights } of transmogrifierMaterials())
     traitId: "passive.event-rules",
     categoryTrait: { effectCategory: {} },
     eventRules: [],
+    // Drawn as a plain block of its material: no rank or suit (#391).
+    visual: { builder: "materialBlock", config: { material: material.id } },
     // Stocked only by its dedicated slots: the "dedicated" curve never draws it as a passive.
     shop: {
       basePrice: price,

@@ -363,6 +363,11 @@ The shop draws `transmogrifierSlots` of them after the ordinary stock (`shopPrev
 
 Input follows "Input": the rack drag source decides where a carried item goes. A drop inside the rack reorders it, a drop on a hand or table card (`pickAny`) asks `rules.applyRackItem`, and a drop on the bin sells it. The run controller commits first (model first), then redraws that card in place: the field block is replaced at its cell, and the hand cube is swapped and re-slotted. It then re-renders the rack. A refusal plays `action.denied`; a use plays `item.apply`, which stands in with the scoring chime until it has audio of its own.
 
+### Transmogrifier look (#391)
+
+- **Token:** a passive token's appearance may name a registered **visual builder** (`passiveVisualBuilders` in `src/passive-visual.ts`). `createPassiveVisual` uses it, or the painted shape when none is named, so the rack, the shop and the object browser all follow. Transmogrifier definitions name `materialBlock` (`src/visual/material-token.ts`), which draws the material's own block appearance with blank face art: the material, with no rank or suit. Limitation: the token shows only the block's faces, not its extras, so a custard transmogrifier shows the plastic shell without its fluid. Pulsing (an audition idea in #384) is not built.
+- **Charge dial:** a rack item shows **badges** registered per trait name (`rackBadges` in `src/passive-rack.ts`), redrawn on every render. `limitedUse` draws a clock-like conic dial of uses left: full when unused, a half-moon after one of two uses. It shows charges, not a cooldown.
+
 ## Session controller
 
 `GameRun` (`src/game-run.ts`) controls one run: stage 1 → shop → stage 2 → shop → boss stage → shop → next round. It holds the round number, the phase (a stage, `shop` or `over`), the stage that opened the current shop, the active dealer and the current `GameState`. `advance()` opens a shop after any won stage and sets the phase to `over` on a loss. `leaveShop()` starts the next stage, or stage 1 of the next round after a boss. The shop can be skipped without spending coins. `snapshot()` preserves the completed stage so Continue leaves a restored shop for the right destination; older boss-only shop saves still lead to the next round.
