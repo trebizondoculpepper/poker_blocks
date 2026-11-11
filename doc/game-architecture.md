@@ -824,6 +824,8 @@ The haze is one small tileable 2D value-noise texture (64×64, two octaves), mad
 
 **Status: design.** Nothing here is built yet. It records the contracts that #346 (the rendering proof) and #330–#336 and #349 (the extractions) implement. Code follows this section; where a mission learns something that changes it, that mission updates it in the same PR.
 
+**Laser lines and drop guides (#498).** `createLaserLines(segments, colour, size, config)` draws the laser beams along any line segments (pairs of points); `createLaserOutline` is now its outline's edges as segments. `createDropGuide({ shape, colour, laser })` (`src/visual/drop-guide.ts`) uses it to show where a dragged offer can go or that it can't. Shapes are registered segment recipes on a width × height rectangle (`dropGuideShapes`): `rectangle`, the target's outline, and `cross`, a large X across it. `setBounds(width, height)` fits the guide to a target's live size, rebuilding its beams only when the size changes; an empty size shows nothing. The guide is never hit-tested, so it can't intercept input. It is presentation only, holds its haze still under reduced motion, and frees everything on `dispose`. Placing it over a DOM drop area, and following layout and drag lifecycle, is #500.
+
 ### What exists today
 
 | Piece               | Where                                                                                                                           | What it is                                                                                                                                                                                                                                                                    |
