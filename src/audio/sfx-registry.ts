@@ -43,6 +43,12 @@ export type SoundEffect = {
    * specific sound never makes the game quieter than before.
    */
   placeholder?: string;
+  /**
+   * Where its audio comes from (#518): a registered provider and its configuration. Omitted, it
+   * is a pre-generated `sample`. A `synth` sound names a registered recipe and its settings,
+   * `{ provider: "synth", config: { recipe, config } }`, and is played live.
+   */
+  source?: { provider: string; config?: unknown };
 };
 
 export const sfxDefaults = { durationSeconds: 0.7, promptInfluence: 0.5, variants: 1 } as const;
@@ -752,7 +758,7 @@ export function sfxFileNames(effect: Pick<SoundEffect, "id" | "variants">): stri
 /** An entry with every generation setting filled in. */
 export function withSfxDefaults(
   effect: SoundEffect,
-): Required<Omit<SoundEffect, "prompt" | "placeholder">> &
-  Pick<SoundEffect, "prompt" | "placeholder"> {
+): Required<Omit<SoundEffect, "prompt" | "placeholder" | "source">> &
+  Pick<SoundEffect, "prompt" | "placeholder" | "source"> {
   return { ...sfxDefaults, ...effect };
 }
