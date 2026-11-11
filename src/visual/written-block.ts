@@ -31,7 +31,9 @@ export function writtenBlock(
   const appearance = createBlockAppearance(art, definition, size);
   const object = new THREE.Group();
   const faces = finish(appearance);
-  object.add(new THREE.Mesh(appearance.geometry, faces));
+  const body = new THREE.Mesh(appearance.geometry, faces);
+  body.renderOrder = appearance.faceLayer ?? 0;
+  object.add(body);
   const surfaces = [
     ...faces,
     ...(appearance.extras ?? [])

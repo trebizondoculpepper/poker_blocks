@@ -127,7 +127,7 @@ A discarded hand cube dissolves with the same shader over one second before its 
 
 Material appearance is defined on each material definition in `src/materials.ts`: printed ink, face pattern, relief, surface, geometry, edges, optical settings and the transparent trait attachment. `src/visual/block-appearance.ts` is a generic builder that dispatches named pattern, surface, relief, geometry and assembly handlers from that configuration. The same definition is used by blocks in hand, in the field and in the shop. A new material may combine existing handlers without changing the builder; a genuinely new visual technique gets one new registered handler. Material gameplay effects remain separate and are tracked in #8 and #63.
 
-**Filled vessels and visual experiments (#227).** The `filledVessel` assembly (`src/visual/filled-vessel.ts`) draws a hollow, clear vessel part-filled with a viscous fluid, configured entirely by a material's `appearance.vessel` data. That data sets the fill and surface colours, the level, a settle time constant, a trace time constant and opacity, the shell's opacity and the wall thickness. No code names the material. Custard is the first such material: it began as a visual experiment and is now a gameplay material, sold in the shop from round 5 (#342).
+**Filled vessels and visual experiments (#227, #330).** A filled vessel is a **contained block** (see "Contained components"): the generic `contained` assembly builds a registered container shell from the material's `appearance.container` data and, optionally, registered contents from `appearance.contents` (`src/visual/contained.ts`). Custard is the `plasticShell` (opacity, wall `inset`, gloss) holding the `vesselFluid` contents (fill and surface colours, level, a settle time constant, and a trace time constant and opacity), both registered in `src/visual/filled-vessel.ts`. The contents are placed through the shell's interior boundary: the fluid in its volume and the trace on its wall. They never see the shell. An **empty vessel** (`emptyVessel`, an experiment) is the same shell with no `contents`: a composition, not a special case. No code names the material. Custard is the first such material: it began as a visual experiment and is now a gameplay material, sold in the shop from round 5 (#342).
 
 - **How it works:** it is a lightweight approximation, not a fluid simulation. A copy of the block's shape is cut by a flat surface: fragments above it are discarded, and back faces seen through the cut are shaded flat, so the cut reads as the fluid's top. Each frame, the surface's normal eases toward "up" in the block's own space (the world's up, turned back by the block's rotation), using an exponential with the settle time constant. The fluid therefore levels slowly, without splashing or overshooting.
 - **Wall trace:** a second normal follows the surface more slowly. Inner wall that lies below that old surface but above the current one is tinted faintly. As the old surface catches up, the band shrinks to nothing, so the trace fades. Exact volume is not preserved as the block tilts.
@@ -252,6 +252,98 @@ Tuning numbers live on the definition they belong to, never in a side table keye
 After each successful play the base dealer adds the points of every line on the field to the running total. `roundOutcome` reports the stage as won once the total reaches the target and lost when plays run out short of it; the dealer then refuses further plays and discards. The formula and its provisional edge rules are in `doc/game.md`.
 
 When the placed card lands, the scene presents each scoring line from lowest to highest: the reusable `tintRow` effect flashes its blocks gold, the `score.magnitude.*` sound for its points plays (`src/score-presentation.ts`), and its points are added to the displayed score. The stage result and its sound follow the last line.
+
+### Material reactions (proposal, #363, epic #362)
+
+**Status: research proposal.** Nothing is built. #366 implements the contract; #367–#372 add individual reactions as data.
+
+**What is agreed** (#362): only blocks that share a face interact; edge or corner contact does not. Reactions advance once per play, never in real time. Rank and suit never change; a transformation changes the card's material and/or its state bonus (see "State bonuses (proposal)"). Discards, camera motion and elapsed time are never plays.
+
+**The authoritative event.** A reaction happens only in `GameRun.play`, after the dealer has committed the placement (`activeDealer.play` returned the next state). That is the one moment a play is real. Nothing else runs reactions: not placement previews, not hit tests, not the speculative scoring of candidate hands (`scoreFieldWithPassives` stays pure and never sees them), not presentation frames, and not `discard`, `refillHand` or stage advance.
+
+**The contract.** A reaction is data on the reacting material's definition, in the same shape as event rules, so generic code never names a material:
+
+```ts
+// On a MaterialDefinition
+reactions?: readonly {
+  /** What must share a face with this block, as a registered matcher and its config. */
+  when: { id: string; config: unknown };      // e.g. { id: "neighbour-material", config: { material: "flame" } }
+  /** What happens to this block: registered results, each with its configuration. */
+  results: readonly { id: string; config: unknown }[];
+  // e.g. [{ id: "transform", config: { material: "water", stateBonus: "melted" } }]
+  //      [{ id: "advance-cooking", config: { steps: 1 } }]
+}[];
+```
+
+- **Matchers** are a registry keyed by handler name (`neighbour-material`, later `neighbour-state`). A matcher gets the block and its face neighbours from a snapshot and answers yes or no. Adding a reaction kind means registering a matcher, not adding a branch.
+- **Neighbours** are the six face offsets already defined in `src/traits/attachable.ts` (`faceNormal`), looked up in a cell map of the field. Edge and corner cells are never consulted.
+- **Results** are a registry keyed by handler name, like matchers. `transform` turns its config into a `transform-block { blockId, material?, stateBonus? }` command. `advance-cooking` turns its config into an `advance-cooking { blockId, steps }` command, so meat asks to cook through data on its own definition (`when` a heat source, `results: [{ id: "advance-cooking", config: { steps: 1 } }]`) with no branch on meat. A new kind of outcome is a new registered result handler. Commands are committed through the existing `commitCommands` path, as discard rules are. A reaction never edits state directly.
+
+**Reactions never score (owner, 2026-11-11).** A reaction does not add to the score of the play that caused it, or of any play. The play is scored on the field as placed, and its reactions are resolved and committed afterwards. What a reaction changes is the state of the game (a material, a state bonus), and that raises what later plays can score. A later modifier may subscribe to `reaction.applied` and award points for the reaction itself, but that would be an ordinary rule on that event, not part of the reaction.
+
+**One step per play, with no cascades.** The resolver works on a **snapshot** of the field taken once, after placement:
+
+1. Every block on the field is checked against its own material's reactions, with its neighbours read **from the snapshot**. Every block is checked, not only the one just placed, so meat keeps cooking on each later play while it stays beside heat.
+2. Each block takes **at most one** reaction per play (all of that reaction's results): the **first** of its material's reactions whose matcher accepts, in the order listed on the definition. That listed order is the conflict rule, and it is deterministic. A block next to both flame and aggressive flame takes whichever reaction its material lists first.
+3. All transformations are committed together, after resolution. Because everything read the snapshot, a block changed this play cannot trigger its neighbours until the **next** play. Air makes flame aggressive on one play, and that aggressive flame boils water on a later play, never both at once. That is what "one step per play" means here, and it also rules out repeated rewards from one play.
+4. Blocks are visited in a fixed order (field order, which is placement order), so the commands, events and presentation are reproducible. Which reactions are selected does not depend on that order, because of the snapshot. Anything that subscribes to the resulting `reaction.applied` events (a passive with limited uses, say) sees them in that field order, and its own outcome may depend on it.
+
+**Events and presentation.** Each committed transformation emits a `reaction.applied { blockId, from, to }` event after `play.completed`. The play presenter uses it to restyle the block and to play the reaction's registered sound, which is configured on the reaction and has a placeholder until its audio exists. Presentation never decides whether a reaction happened (model first).
+
+**Persistence.** A transformed card is a new object with the same id, so it follows the card through deck and stages, as in "State bonuses (proposal)". The save's optional `cardStates` record from that section carries `material` as well as `stateBonus`, and a cooking step for meat, so both are restored on Continue.
+
+**Rule change to record when #366 lands:** `doc/game.md` currently says every card has exactly one material and that "changing a card's material is a distant-future idea". Reactions make material changes real. Each card still has exactly one material at a time, but a reaction may replace it. #366 updates that rule in the same PR.
+
+**Out of scope here:** creating new blocks (cloud from air and boiling water, #374) is identity creation, not a transformation, and gets its own contract. So do container visuals (#328): a reaction changes the model, and the material's appearance follows.
+
+**Guardrails for #366:** a test that edge or corner contact never reacts; that a block changes at most once per play; that a two-step chain (air → aggressive flame → boiling water) takes two plays; that discards, refills and stage advance never react; that candidate-hand scoring is unchanged by pending reactions; that the same reactions are selected whatever order the blocks are visited in (events are still dispatched in field order); that a transformation survives save and Continue; and the guardrail scan, so that no generic code names a material.
+
+### State bonuses (proposal, #364, epic #362)
+
+**Status: research proposal.** Nothing is built. #365 implements it once the owner questions on #364 are answered.
+
+A **state bonus** is a scoring bonus a card gains from a reaction (ice melted into water: +1; water heated: +1; water boiled: ×2). It never changes the card's rank, suit or poker-hand identity. A new state **replaces** the old one rather than adding to it. Bonuses on different cards in a scored line still combine, as material modifiers do.
+
+**Representation.** A card has at most one state bonus, in one trait slot:
+
+```ts
+// On CardBlock.traits
+stateBonus?: { id: string };   // a registered state bonus, e.g. "melted", "heated", "boiled"
+```
+
+The numbers live once, in a registry of state-bonus definitions (`src/state-bonuses.ts`), not on the card. They are validated like a material's numbers:
+
+```ts
+type StateBonusDefinition = {
+  name: string; // shown by the inspector: "Boiled (×2)"
+  modifier: ScoringModifier; // the existing type: additive / multiplicative / exponential
+  activation: MaterialActivationCue; // pulse accent and registered sound when it fires
+};
+```
+
+Reusing `ScoringModifier` means a state bonus can be additive, multiplicative or exponential with no new arithmetic. Replacing is a plain overwrite of the trait (`{ ...card, traits: { ...card.traits, stateBonus: { id } } }`), so the old bonus can never stack with the new one. Removing the trait returns the card to no bonus.
+
+**Exactly where it applies in scoring.** `cardScoringRules(block)` in `src/materials.ts` is the single place a card's own rules are collected. It becomes the material's rules followed by the state bonus's rules (`scoringModifierRules(definition.modifier)`). They enter the scorer as the same card's rules, so they run in the phases and order already agreed in `doc/game.md` ("Order of operations"):
+
+1. additive on `score.beforeBlockValue` (step 1, with the material's additive, before passives);
+2. multiplicative on `score.lineMultiply` (step 3);
+3. exponential on `score.linePower` (step 4);
+
+and then passives (step 5), the clamp (step 6), after-clamp bonuses (step 7) and rounding (step 8), all unchanged.
+
+Within one card, the material rule runs before the state rule. That invents no order: sums and products commute, and successive powers multiply exponents ((x^a)^b = x^(ab)), so the result is the same either way. `scoreFieldWithPassives` needs no change. It already asks `rulesForCard` and reports activations with the card as source.
+
+**Contributing cards only (default):** like material modifiers, a state bonus applies only while its card contributes to the line's scored hand, because it travels through the same card rules. Question 1 on #364 asks the owner to confirm this.
+
+**Presentation:** an activation from a card is presented with that card's material cue today. A state bonus needs its own cue (the "Boiled" pulse and sound), so a `RuleActivation` gains an optional `cue` naming which of the card's rule groups fired: its material, or its state bonus. The presenter looks the cue up in that group's definition, and nothing branches on which group it is. The new sound gets a registered id with a placeholder (`score.state-bonus`).
+
+**Persistence.**
+
+- **Within a run:** a reaction replaces the card object in `state.field` with a new object of the same id (model first). At stage end the field's blocks return to the deck as those same objects (`dealer.ts`, `game-run.ts`), so the bonus follows the card through hand, deck, discard and later stages with no extra work.
+- **Save and Continue:** the save stores card ids and rebuilds each card from the starting deck and `boughtCards`, so a state bonus would be lost. #387 has since built the per-card ledger for changed materials (`GameState.cardStates`, saved as the optional `state.cardStates`; see "Permanent material change" below). #365 extends each entry with an optional `stateBonus` id, validated against the state-bonus registry on restore. An unknown id rejects the record, and older saves stay readable.
+- **Across runs:** none. A new run deals fresh cards (`dealer.ts`), so no bonus carries over.
+
+**Guardrails for #365:** a test that a state bonus leaves rank, suit and hand evaluation unchanged; that a second state replaces the first; that a non-contributing card's bonus does nothing; that the bonus survives the field → deck return, and survives save → Continue; that an unknown saved bonus is rejected; and that no generic code names a state bonus (guardrail scan, as for materials).
 
 ### Permanent material change (#387)
 
@@ -623,12 +715,12 @@ A four-dimensional gradient-noise field uses quintic interpolation. Its three sp
 
 ### What exists today
 
-| Piece               | Where                                                                         | What it is                                                                                                                                                                                                                                                                    |
-| ------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Plastic vessel      | `src/visual/filled-vessel.ts`, the `filledVessel` assembly                    | Clear plastic outer skin, inner skin drawn from the back for wall thickness, a fluid mesh cut by a plane, a wall-trace mesh and an optional additive gloss. One function builds shell, fluid and trace together, configured by `appearance.vessel`.                           |
-| Framed glass        | `flameFrame` and `glassPanes` in `src/visual/block-appearance.ts`             | An open iron frame (`frameRelief`), an additive glass sheen at 0.97 scale, and the raymarched flame (`src/visual/fire-core.ts`) inside.                                                                                                                                       |
-| Retired glass block | Removed in `f99d307` (2026-11-08); history in `9b23a60`, `c9779cf`, `b10308e` | A stained-glass lantern panel on each face: lead-and-steel came standing proud of six panes, each pane its own tint, refracting on the table. It was removed because it "looked too much like fire and prismatic crystal". Its code is recoverable from that commit's parent. |
-| Shared simulation   | `src/visual/shared-simulation.ts` (#230)                                      | One simulation per configuration object, stepped once per frame, driven by the first block drawn.                                                                                                                                                                             |
+| Piece               | Where                                                                                                                           | What it is                                                                                                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plastic vessel      | `src/visual/filled-vessel.ts`, the `filledVessel` assembly (now the `contained` assembly: `plasticShell` + `vesselFluid`, #330) | Clear plastic outer skin, inner skin drawn from the back for wall thickness, a fluid mesh cut by a plane, a wall-trace mesh and an optional additive gloss. One function builds shell, fluid and trace together, configured by `appearance.vessel`.                           |
+| Framed glass        | `flameFrame` and `glassPanes` in `src/visual/block-appearance.ts`                                                               | An open iron frame (`frameRelief`), an additive glass sheen at 0.97 scale, and the raymarched flame (`src/visual/fire-core.ts`) inside.                                                                                                                                       |
+| Retired glass block | Removed in `f99d307` (2026-11-08); history in `9b23a60`, `c9779cf`, `b10308e`                                                   | A stained-glass lantern panel on each face: lead-and-steel came standing proud of six panes, each pane its own tint, refracting on the table. It was removed because it "looked too much like fire and prismatic crystal". Its code is recoverable from that commit's parent. |
+| Shared simulation   | `src/visual/shared-simulation.ts` (#230)                                                                                        | One simulation per configuration object, stepped once per frame, driven by the first block drawn.                                                                                                                                                                             |
 
 Custard mixes three things the epic wants apart: a container (plastic shell and its inner wall), contents (a levelling fluid and its colours) and residue (the wall trace). Fire mixes a container (frame and panes) with contents (the flame).
 
@@ -766,6 +858,10 @@ The amended rule has three tiers:
 Stateless shaders of the clock (the flame core, cloud) need no simulation and are unaffected.
 
 **Cost and evidence.** A simulation step is a few vector operations: well under 0.01 ms. With cohorts there are at most (configurations × cohorts) steps per frame: one for the table, plus one per free contained block (a hand of 8 and a shop of 4 would add 12 tiny steps). The real cost is per-block residue history and transparent overdraw, which #346 measures.
+
+### Extraction status (#330)
+
+The plastic container is extracted. `src/visual/contained.ts` holds the layer table (`containedLayers`), the interior boundary (`createInteriorBoundary`: `wall` and `volume` meshes at the shell's `inset`), the shell and contents registries, and `composeContained`, which builds shell → boundary → contents. The `contained` assembly in `block-appearance.ts` uses it. As planned for this slice, custard's fluid and wall trace stay together as one contents handler, `vesselFluid`. Separating fluid dynamics, look and residue is #332–#334. The per-frame context and capability publishing described above come with those missions. Today the fluid still drives itself from `onBeforeRender` and the shared simulation (#230).
 
 ### The rendering proof (#346): results and decision
 

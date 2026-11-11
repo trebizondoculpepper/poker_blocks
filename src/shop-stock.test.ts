@@ -236,7 +236,8 @@ describe("stock by round and weight (#145)", () => {
     expect([...seen(1)]).toEqual(["wood"]);
     expect(seen(2).has("steel")).toBe(true);
     expect(seen(2).has("terracotta")).toBe(false);
-    expect(seen(5).has("custard")).toBe(true);
+    expect(seen(3).has("custard")).toBe(true);
+    expect(seen(2).has("custard")).toBe(false);
     expect(seen(5).has("gold")).toBe(false);
     expect(seen(6).has("prismatic")).toBe(false);
     expect(seen(7).has("prismatic")).toBe(true);
@@ -244,7 +245,7 @@ describe("stock by round and weight (#145)", () => {
     expect(seen(8).has("wood")).toBe(true);
   });
 
-  it("makes one material (three in round 4) the most common in each round, in the agreed order", () => {
+  it("makes each round's newly unlocked materials the most common, in the agreed order", () => {
     const weightIn = (id: string, round: number) =>
       weightAt(getMaterialDefinition(id as BlockMaterial).shop?.weights ?? [[1, 0]], round);
     const leaders = (round: number) => {
@@ -254,9 +255,10 @@ describe("stock by round and weight (#145)", () => {
     expect([1, 2, 3, 4, 5, 6, 7].map(leaders)).toEqual([
       ["wood"],
       ["steel"],
-      ["terracotta"],
+      ["custard", "terracotta"],
       ["fire", "ice", "meat"],
-      ["custard"],
+      // Nothing unlocks in round 5 since custard moved to round 3 (#381): round 4's curves lead.
+      ["fire", "ice", "meat"],
       ["gold"],
       ["prismatic"],
     ]);
