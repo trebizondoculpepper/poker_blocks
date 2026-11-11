@@ -34,7 +34,7 @@ export type ScoreEventContext = { line: Line; intersections: number; block?: Car
 export type StageContext = { round: number; kind: StageKind; dealer: string };
 
 /** What a reaction changes about a block: its material and its state bonus, if any. */
-export type ReactionState = { material: string; stateBonus?: string };
+export type ReactionState = { material: string; stateBonus?: string; doneness?: string };
 
 export type GameEvent = {
   type: string;

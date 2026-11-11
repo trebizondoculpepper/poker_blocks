@@ -9,7 +9,12 @@ import { withoutSelectable } from "./traits/selectable";
 // Registers the transmogrifier definitions, so saved rack items resolve (#388).
 import "./transmogrifiers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
-import { applyCardStates, type CardState } from "./card-material";
+import { type CardState } from "./card-material";
+import { applyCardStates } from "./card-states";
+// Each registers how its saved card state is restored (#387, #365, #372).
+import "./card-material";
+import "./state-bonuses";
+import "./cooking";
 import { stateBonuses } from "./state-bonuses";
 import { blockMaterials, type BlockMaterial } from "./materials";
 import { parseRunStats, type RunStats } from "./run-stats";
@@ -65,7 +70,7 @@ export type SaveRecord = {
     /** Cards bought this run, saved in full (#143); absent in older saves. */
     boughtCards?: SavedCard[];
     /** Cards whose material changed this run, by id (#387); absent in older saves. */
-    cardStates?: Record<string, { material?: string; stateBonus?: string }>;
+    cardStates?: Record<string, { material?: string; stateBonus?: string; doneness?: number }>;
     /** Optional so runs saved before the economy was added begin with zero coins. */
     coins?: number;
     round: GameState["round"];
@@ -419,11 +424,15 @@ function restoreCardStates(saved: unknown): Record<string, CardState> | undefine
     throw new Error("bad card states");
   return Object.fromEntries(
     Object.entries(saved).map(([id, state]) => {
-      const { material, stateBonus } = (state ?? {}) as {
+      const { material, stateBonus, doneness } = (state ?? {}) as {
         material?: unknown;
         stateBonus?: unknown;
+        doneness?: unknown;
       };
-      if (material === undefined && stateBonus === undefined) throw new Error("bad card state");
+      if (material === undefined && stateBonus === undefined && doneness === undefined)
+        throw new Error("bad card state");
+      if (doneness !== undefined && (!Number.isSafeInteger(doneness) || (doneness as number) < 0))
+        throw new Error("bad card state doneness");
       if (material !== undefined && !blockMaterials.includes(material as BlockMaterial))
         throw new Error("bad card state material");
       if (
@@ -436,6 +445,7 @@ function restoreCardStates(saved: unknown): Record<string, CardState> | undefine
         {
           ...(material === undefined ? {} : { material: material as BlockMaterial }),
           ...(stateBonus === undefined ? {} : { stateBonus: stateBonus as string }),
+          ...(doneness === undefined ? {} : { doneness: doneness as number }),
         },
       ];
     }),
