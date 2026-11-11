@@ -147,6 +147,17 @@ describe("the Nothingifier in the shop (#156)", () => {
     expect(rack.traits).toMatchObject({ nothingifier: {}, limitedUse: { uses: 1, total: 1 } });
   });
 
+  it("never reuses a removed card's id for a later offer (#470 review)", () => {
+    const state = { ...fresh().state, removedCards: ["shop.card.1", "shop.card.2"] };
+    for (let seed = 1; seed <= 20; seed++) {
+      const ids = (shopPreviewState(state, 99, mulberry(seed), defaultShop, 3).shopStock ?? []).map(
+        ({ block }) => block.id,
+      );
+      expect(ids).not.toContain("shop.card.1");
+      expect(ids).not.toContain("shop.card.2");
+    }
+  });
+
   it("is never granted or offered as a bare passive", async () => {
     const { randomPassiveDefinitions } = await import("./passives");
     for (const roll of [0, 0.25, 0.5, 0.75, 0.999])

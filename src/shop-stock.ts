@@ -38,6 +38,8 @@ export function shopPreviewState(
   const usedIds = new Set([
     ...[...deck, ...state.discardPile].map(({ id }) => id),
     ...state.passiveRack.map(({ id }) => id),
+    // A card removed for the run (#156) still owns its id: saves account for it.
+    ...(state.removedCards ?? []),
   ]);
   let serial = 0;
   const nextOfferId = (prefix: string) => {

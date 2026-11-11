@@ -443,6 +443,9 @@ export function createRunController<Context>(options: {
       services.field.remove(cardId);
       if (placed) services.field.add(placed.block, placed.cell);
     }
+    // A card that left play while still landing loses its stand-in now; its flight lands to
+    // nothing (the play presenter reconciles with the model).
+    if (!placed && !shownOnTable) services.field.remove(cardId);
     const held = game.state.hand.find(({ id }) => id === cardId);
     const shown = services.hand.blocks.find(({ block }) => block.id === cardId);
     if (shown) {
