@@ -1,0 +1,58 @@
+/* The dialog room (dev14, src/tools/dialog-room.ts). */
+.dialog-room {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  background: #05070b;
+  color: #f4f0e8;
+  font:
+    14px system-ui,
+    sans-serif;
+}
+.dialog-room[hidden] {
+  display: none;
+}
+.dialog-room-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: #1d2b3b;
+}
+.dialog-room-header h1 {
+  margin: 0;
+  font-size: 19px;
+}
+.dialog-room a {
+  color: inherit;
+}
+.dialog-room-title {
+  margin: 28px 16px 0;
+  font-size: clamp(18px, 3vw, 30px);
+  text-align: center;
+}
+.dialog-room-stage {
+  min-height: 0;
+}
+.dialog-room-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.dialog-room-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 10px 18px;
+  background: #1d2b3b;
+}
+.dialog-room-controls p {
+  margin: 0;
+}
+.dialog-room-controls output {
+  font-weight: 600;
+}
