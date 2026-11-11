@@ -14,6 +14,8 @@ import "./fading-film";
 import "./cloud";
 // Registers the contained star field (#349).
 import "./contained-stars";
+// Registers the rising-bubbles inclusion (#353).
+import "./rising-bubbles";
 // Registers the flame contents (#335).
 import "./fire-core";
 
@@ -1289,6 +1291,7 @@ function contained(context: AssemblyContext): BlockAppearance {
     container,
     definition.appearance.contents,
     definition.appearance.residue,
+    definition.appearance.inclusions,
   );
   return {
     ...appearanceBase(

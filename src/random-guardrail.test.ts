@@ -18,6 +18,8 @@ const allowed: Readonly<Record<string, string>> = {
   "src/letter-block.ts":
     "cosmetic writing materials; callers can inject a scene seed without consuming the run stream",
   "src/motion.ts": "the idle wobble of a block: presentation",
+  "src/visual/rising-bubbles.ts":
+    "where a bubble is born and how fast it rises (#353): presentation, never the session stream",
   "src/visual/contained-stars.ts":
     "where a contained star is born and how it drifts (#349): presentation, never the session stream",
   "src/audio/music-plan.ts": "which track plays: presentation",

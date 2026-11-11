@@ -154,12 +154,20 @@ export type ResidueHandler = {
     boundary: InteriorBoundary,
     capabilities: Capabilities,
     config: unknown,
-  ): { meshes: THREE.Mesh[]; update?: (frame: ContainedFrame) => void };
+  ): { meshes: ContainedPart[]; update?: (frame: ContainedFrame) => void };
 };
+
+/**
+ * Optional inclusions inside the contents (#353): something suspended in them, such as bubbles,
+ * that reads what the contents publish exactly as residue does, but lives in the volume rather
+ * than on the wall. Removing one changes nothing else.
+ */
+export type InclusionHandler = ResidueHandler;
 
 export const containerShells = new Registry<ShellHandler>("container shell");
 export const containedContents = new Registry<ContentsHandler>("contained contents");
 export const containedResidues = new Registry<ResidueHandler>("contained residue");
+export const containedInclusions = new Registry<InclusionHandler>("contained inclusion");
 
 /** A material's container data: a registered shell and its configuration. */
 export type ContainerConfig = { shell: string; config: unknown };
@@ -167,6 +175,8 @@ export type ContainerConfig = { shell: string; config: unknown };
 export type ContentsConfig = { effect: string; config: unknown };
 /** A material's residue data: a registered residue handler and its configuration. */
 export type ResidueConfig = { effect: string; config: unknown };
+/** A material's inclusions data: registered inclusion handlers and their configuration. */
+export type InclusionConfig = { effect: string; config: unknown };
 
 /**
  * Build a contained block: the shell, then its interior boundary, then the contents (if any)
@@ -177,6 +187,7 @@ export function composeContained(
   container: ContainerConfig,
   contents: ContentsConfig | undefined,
   residue?: ResidueConfig,
+  inclusions: readonly InclusionConfig[] = [],
 ): { faces: readonly THREE.Material[]; extras: ContainedPart[] } {
   const shell = containerShells.get(container.shell)(context, container.config);
   const boundary = createInteriorBoundary(context.geometry, context.size, shell.inset);
@@ -185,14 +196,18 @@ export function composeContained(
     .flat()
     .map(({ effect, config }) => containedContents.get(effect)(boundary, config));
   const capabilities: Capabilities = Object.assign({}, ...inside.map((part) => part.capabilities));
-  // Residue reads what the contents publish; it never reaches into them.
-  const wall = [residue ?? []].flat().map(({ effect, config }) => {
-    const handler = containedResidues.get(effect);
-    if (!capabilities[handler.requires])
-      throw new Error(`Residue "${effect}" needs contents that publish ${handler.requires}`);
-    return handler.build(boundary, capabilities, config);
-  });
-  const parts = [...inside, ...wall];
+  // Residue and inclusions read what the contents publish; they never reach into them.
+  const dependent =
+    (registry: Registry<ResidueHandler>, kind: string) =>
+    ({ effect, config }: { effect: string; config: unknown }) => {
+      const handler = registry.get(effect);
+      if (!capabilities[handler.requires])
+        throw new Error(`${kind} "${effect}" needs contents that publish ${handler.requires}`);
+      return handler.build(boundary, capabilities, config);
+    };
+  const wall = [residue ?? []].flat().map(dependent(containedResidues, "Residue"));
+  const suspended = inclusions.map(dependent(containedInclusions, "Inclusion"));
+  const parts = [...inside, ...suspended, ...wall];
   const meshes = parts.flatMap((part) => part.meshes);
   // One frame per block: contents update before residue, from one clock and one rotation.
   // Three.js draws opaque and transparent meshes in separate queues whatever their render

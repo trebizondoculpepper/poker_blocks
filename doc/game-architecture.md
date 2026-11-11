@@ -909,6 +909,18 @@ Experiments: `waterInPlastic` and `waterInLantern` (the same clear water config 
 
 `fadingFilm` (`src/visual/fading-film.ts`) replaces custard's two-plane trace with a **local history**, the representation chosen by the #346 proof. The wall is a six-face atlas, `resolution` texels per edge (32 for custard). The history is kept in 16-bit fixed point and written to the texture as bytes, 18 KB per vessel: 12 KB of history and 6 KB of texture, three times #346's 6 KB budget. That's the price of a fade that's correct at any frame rate. A one-byte history rounded away slow fades at 144–240 fps. The texel centres are shared per resolution. Each frame, through the block's one contained frame, every texel asks the published `liquidSurface.wet()` whether it is under the fluid. A wet texel goes back to full strength, so rewetting refreshes it. A dry one keeps `exp(-delta / seconds)` of its strength, so each exposed patch fades by its own age. The shader shows it only above the current surface, where the fluid doesn't hide the wall, and finds each fragment's face from its local position with no UVs. The fluid has no presence check for residue, and a fluid without residue works unchanged. Colour, opacity and fade time are the film's own configuration. Each vessel keeps its own history, and the texture is released with the film's material. Reduced motion needs nothing extra: the film only presents state, and it moves only when the vessel does.
 
+### Inclusions: rising bubbles (#353)
+
+A contained block may list **inclusions**: things suspended in its contents, registered in `containedInclusions`. Like residue, each names the capability it reads and is refused at build time when the contents don't publish it; unlike residue, it lives in the volume rather than on the wall. Removing one changes nothing else.
+
+**`risingBubbles`** (`src/visual/rising-bubbles.ts`) reads only `liquidSurface`:
+
+- **Pool:** a fixed pool. A bubble is born at a random wet point and rises along the surface normal (world up, as the liquid levels) with a gentle sway. It's retired the moment it reaches the current surface, then rests before rebirth; in an empty vessel it simply keeps resting.
+- **Drawing:** soft rings of constant world size under any camera, using the helper shared with the star field (`src/visual/world-sized-points.ts`).
+- **Reduced motion:** the bubbles hold still.
+
+**Hot water** (`hotWaterInPlastic`, an experiment) is the clear water with slow bubbles: `count: 20, rise: 0.06, size: 0.1, rest: 1.6`. Ordinary water omits the inclusion and settles identically. Boiling water (#354) is meant to reuse the handler with faster, busier configuration.
+
 ### Magic Lock: contained stars (#349)
 
 The proof that the contained-effect contract is reusable. **Magic Lock** (`magicLock` in plastic, `magicLockLantern` in the stained lantern, both experiments) is an existing shell holding the **`stars`** contents (`src/visual/contained-stars.ts`): the crystal title trail's four-pointed star and its lifecycle, extracted into `src/visual/star-particles.ts` and shared with `rainbowStars`, which is unchanged.
