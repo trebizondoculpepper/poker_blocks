@@ -1,3 +1,5 @@
+import type { BlockMaterial } from "./materials";
+import { changeCardMaterial } from "./card-material";
 import type { CardBlock } from "./cards";
 import { resaleValue } from "./resale";
 import { blockCanDestroy } from "./block-trait-behaviours";
@@ -478,6 +480,17 @@ export class GameRun {
       this.announceOutcome();
     }
     return next ? this.currentState : null;
+  }
+
+  /**
+   * Give one card a new material for the rest of the run (#387): in hand, on the field, in the
+   * deck or discard pile, kept through later stages and saves. Null, changing nothing, when
+   * the card isn't in the run or already has that material.
+   */
+  changeCardMaterial(cardId: string, material: BlockMaterial): GameState | null {
+    const next = changeCardMaterial(this.currentState, cardId, material);
+    if (next) this.currentState = next;
+    return next;
   }
 
   /** Discard one card, or several as one discard. */

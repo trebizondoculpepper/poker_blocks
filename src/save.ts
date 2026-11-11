@@ -6,6 +6,8 @@ import type { RandomCursor } from "./random";
 import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
+import { applyCardStates, type CardState } from "./card-material";
+import { blockMaterials, type BlockMaterial } from "./materials";
 import { parseRunStats, type RunStats } from "./run-stats";
 import { createPassiveBlock, passiveDefinitions } from "./passives";
 import {
@@ -58,6 +60,8 @@ export type SaveRecord = {
     shopStock?: SavedOffer[];
     /** Cards bought this run, saved in full (#143); absent in older saves. */
     boughtCards?: SavedCard[];
+    /** Cards whose material changed this run, by id (#387); absent in older saves. */
+    cardStates?: Record<string, { material: string }>;
     /** Optional so runs saved before the economy was added begin with zero coins. */
     coins?: number;
     round: GameState["round"];
@@ -139,6 +143,9 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
           }
         : {}),
       ...(state.boughtCards?.length ? { boughtCards: state.boughtCards.map(saveCard) } : {}),
+      ...(state.cardStates && Object.keys(state.cardStates).length
+        ? { cardStates: structuredClone(state.cardStates) }
+        : {}),
       coins: state.coins,
       round: { ...state.round },
     },
@@ -167,9 +174,12 @@ export function fromSaveRecord(
     if (!dealers.has(record.dealer)) return null;
     // The run's cards: its starting deck plus every card it bought (#143).
     const boughtCards = (record.state.boughtCards ?? []).map(restoreCard);
-    const runCards = [...cards, ...boughtCards];
+    // Materials changed this run (#387): validated, then applied to the rebuilt cards.
+    const cardStates = restoreCardStates(record.state.cardStates);
+    const runCards = [...cards, ...boughtCards].map((card) => applyCardStates(card, cardStates));
     const byId = new Map(runCards.map((card) => [card.id, card]));
     if (byId.size !== runCards.length) return null;
+    if (Object.keys(cardStates ?? {}).some((id) => !byId.has(id))) return null;
     const seen = new Set<string>();
     const resolve = (id: unknown): CardBlock => {
       if (typeof id !== "string" || seen.has(id)) throw new Error("bad card");
@@ -223,7 +233,8 @@ export function fromSaveRecord(
       discardPile: state.discardPile.map(resolve),
       passiveRack,
       ...(state.shopStock ? { shopStock } : {}),
-      ...(boughtCards.length ? { boughtCards } : {}),
+      ...(boughtCards.length ? { boughtCards: boughtCards.map((card) => byId.get(card.id)!) } : {}),
+      ...(cardStates ? { cardStates } : {}),
       coins: nonnegativeInteger(state.coins ?? 0),
       round: {
         score: number(state.round.score),
@@ -396,4 +407,18 @@ export function clearRun(storage: SaveStorage | null, key = saveKey): void {
   } catch {
     // Nothing to clear if storage is unavailable.
   }
+}
+
+/** A saved ledger of changed materials, checked: every entry must name a gameplay material. */
+function restoreCardStates(saved: unknown): Record<string, CardState> | undefined {
+  if (saved === undefined) return undefined;
+  if (typeof saved !== "object" || saved === null || Array.isArray(saved))
+    throw new Error("bad card states");
+  return Object.fromEntries(
+    Object.entries(saved).map(([id, state]) => {
+      const material = (state as { material?: unknown })?.material;
+      if (!blockMaterials.includes(material as BlockMaterial)) throw new Error("bad card state");
+      return [id, { material: material as BlockMaterial }];
+    }),
+  );
 }

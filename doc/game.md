@@ -187,7 +187,7 @@ This section is the target design and supersedes the table above where they diff
 
 #### Agreed model
 
-- Every card has **exactly one** material at a time (`traits.material.kind`; paper when absent). Changing a card's material is a distant-future idea.
+- Every card has **exactly one** material at a time (`traits.material.kind`; paper when absent). A card's material can change during a run (a transmogrifier, #384; later, material reactions, #362). The change is permanent for the rest of the run, keeps the card's identity, rank and suit, and is saved for Continue (#387).
 - First-version material behaviour is **scoring only**, and only when the card **contributes to the scored hand** of its line.
 - A material's effect is a **`scoringModifier` trait** configured in the balance config, with three inputs and their neutral values: `additive` (0), `multiplicative` (1), `exponential` (1).
 - Materials contribute **event rules** exactly as passives do ([#63](https://github.com/trebizondoculpepper/poker_blocks/issues/63)). `scoringModifier` (on the material's own definition in `src/materials.ts`, expanded by `src/scoring-modifier.ts`) brings one rule per non-neutral value: additive on `score.beforeBlockValue`, multiplicative on `score.lineMultiply`, and exponential on `score.linePower`. The line phases run in that order, before the rack's `score.beforeLineFinalized`. In each phase, the contributing cards' own rules run first, then the passives'. The scorer never names a material.
