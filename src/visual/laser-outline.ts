@@ -79,9 +79,30 @@ export function createLaserOutline(
   size: number,
   options: Partial<LaserOutlineConfig> = {},
 ) {
-  const config = { ...defaultLaserOutline, ...options };
   const edges = new THREE.EdgesGeometry(source);
-  const positions = edges.getAttribute("position");
+  const lines = createLaserLines(edges, colour, size, options);
+  return {
+    ...lines,
+    dispose() {
+      lines.dispose();
+      edges.dispose();
+    },
+  };
+}
+
+/**
+ * Laser beams along arbitrary line segments (#498): `segments` holds pairs of points, as an
+ * EdgesGeometry or LineSegments geometry does. The outline above is its edges; a drop guide's
+ * rectangle or cross is its own segments. It leaves `segments` alone.
+ */
+export function createLaserLines(
+  segments: THREE.BufferGeometry,
+  colour: number,
+  size: number,
+  options: Partial<LaserOutlineConfig> = {},
+) {
+  const config = { ...defaultLaserOutline, ...options };
+  const positions = segments.getAttribute("position");
   const uniforms = {
     time: { value: 0 },
     tint: { value: new THREE.Color(colour) },
@@ -171,7 +192,6 @@ export function createLaserOutline(
     dispose() {
       if (disposed) return;
       disposed = true;
-      edges.dispose();
       coreGeometry.dispose();
       glowGeometry.dispose();
       core.dispose();
