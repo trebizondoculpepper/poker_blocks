@@ -77,34 +77,29 @@ export const pieceSources = new Registry<PieceSource>("piece source");
 
 /** The block's own component meshes fly apart (a shell breaking up, a fan's parts). */
 pieceSources.register("components", ({ visual, originals }) => {
-  // The root never flies (it carries everything); its own drawing hides instead.
-  const pieces = originals.filter((each) => each !== visual.root && (each as THREE.Mesh).isMesh);
-  // Each flying piece is lifted into the block's own space, keeping where it is in the world, so
-  // a nested piece neither inherits its parent's flight nor falls twice (#512 review). Its parent,
-  // place among its siblings and local transform come back on release.
+  // The block's outermost meshes fly; a mesh inside another rides along with it, so nothing
+  // moves twice and nothing changes parent (#512 review). The root never flies (it carries
+  // everything); its own drawing hides instead.
+  const meshes = new Set(
+    originals.filter((each) => each !== visual.root && (each as THREE.Mesh).isMesh),
+  );
+  const insideAnother = (mesh: THREE.Object3D) => {
+    for (let node = mesh.parent; node && node !== visual.root; node = node.parent)
+      if (meshes.has(node)) return true;
+    return false;
+  };
+  const pieces = [...meshes].filter((mesh) => !insideAnother(mesh));
   const homes = pieces.map((piece) => ({
-    parent: piece.parent,
-    index: piece.parent?.children.indexOf(piece) ?? -1,
     position: piece.position.clone(),
     quaternion: piece.quaternion.clone(),
-    scale: piece.scale.clone(),
   }));
-  visual.root.updateWorldMatrix(true, true);
-  pieces.forEach((piece) => visual.root.attach(piece));
   return {
     pieces,
     // Back where they were, so the owner's release frees exactly what it made.
     release: () =>
-      [...pieces].reverse().forEach((piece) => {
-        const home = homes[pieces.indexOf(piece)]!;
-        piece.removeFromParent();
-        if (home.parent) {
-          home.parent.children.splice(home.index, 0, piece);
-          piece.parent = home.parent;
-        }
-        piece.position.copy(home.position);
-        piece.quaternion.copy(home.quaternion);
-        piece.scale.copy(home.scale);
+      pieces.forEach((piece, i) => {
+        piece.position.copy(homes[i]!.position);
+        piece.quaternion.copy(homes[i]!.quaternion);
       }),
   };
 });

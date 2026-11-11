@@ -364,3 +364,61 @@ describe("overlapping fractures and nested pieces (#512 review)", () => {
     expect(inner.position.toArray()).toEqual([0.2, 0, 0]);
   });
 });
+
+describe("components keep their places (#512 review)", () => {
+  function wrapped() {
+    const root = new THREE.Group();
+    const wrapper = new THREE.Group();
+    const parts = [0, 1, 2].map((i) => {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.3, 0.3),
+        new THREE.MeshBasicMaterial(),
+      );
+      mesh.position.set(i * 0.4, 0, 0);
+      wrapper.add(mesh);
+      return mesh;
+    });
+    root.add(wrapper);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [wrapper], contents: [], release: vi.fn() };
+    return { v, wrapper, parts };
+  }
+
+  it("never moves a component out of its group, so a parallel effect still finds it", async () => {
+    await import("./flash-shudder");
+    const { v, parts } = wrapped();
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        {
+          effects: [
+            { effect: "fracture", target: "shell" },
+            { effect: "flash", target: "shell" },
+          ],
+        },
+      ],
+    });
+    // The flash, declared after the fracture, still overlays every component.
+    for (const part of parts) expect(part.children).toHaveLength(1);
+    runner.dispose();
+  });
+
+  it("two component fractures over one block leave every part in its group, order and place", () => {
+    const { v, wrapper, parts } = wrapped();
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        {
+          effects: [
+            { effect: "fracture", target: "shell" },
+            { effect: "fracture", target: "shell" },
+          ],
+        },
+      ],
+    });
+    for (let frame = 0; frame < 10; frame++) runner.update(1 / 60);
+    runner.dispose();
+    expect(wrapper.children).toEqual(parts);
+    parts.forEach((part, i) => expect(part.position.toArray()).toEqual([i * 0.4, 0, 0]));
+  });
+});
