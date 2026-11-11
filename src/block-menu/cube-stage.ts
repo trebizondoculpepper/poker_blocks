@@ -151,6 +151,7 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
             ...options(item, index),
           });
           cube.object.position.copy(positions[index]!);
+          useStageReflections(cube.object, environment);
           return { ...cube, index };
         }),
       );
@@ -194,4 +195,20 @@ function isWithin(child: THREE.Object3D, ancestor: THREE.Object3D): boolean {
   for (let node: THREE.Object3D | null = child; node; node = node.parent)
     if (node === ancestor) return true;
   return false;
+}
+
+/**
+ * Point every reflective material in a cube at this stage's own environment (#532 review). The
+ * stage draws with its own WebGL renderer, so the game's global reflection map (made on the game's
+ * renderer) can't be sampled here; the game's global setting itself is left alone.
+ */
+export function useStageReflections(object: THREE.Object3D, environment: THREE.Texture): void {
+  object.traverse((child) => {
+    for (const material of [(child as THREE.Mesh).material ?? []].flat()) {
+      const reflective = material as THREE.MeshStandardMaterial;
+      if (!reflective.envMap) continue;
+      reflective.envMap = environment;
+      reflective.needsUpdate = true;
+    }
+  });
 }
