@@ -63,11 +63,16 @@
     }
   },
   "block.destroyed": {
-    "uses": 2,
+    "uses": 3,
     "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
       "game-run.ts": 1,
       "run-controller.ts": 1
     }
+  },
+  "block.self_destruct": {
+    "uses": 0,
+    "files": {}
   },
   "action.denied": {
     "uses": 10,

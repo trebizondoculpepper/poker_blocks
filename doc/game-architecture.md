@@ -391,6 +391,14 @@ A block can be **triggered**, and responds with configured actions. `src/trigger
 - **Material change** clears the count, trait and ledger (`materialScopedStates`), like doneness: a card made a counting material again starts from its start.
 - **Reset:** the count belongs to the block on the table. A registered stage-end reset returns it to its start when the table clears.
 
+### Trigger responses: self-destruct and target triggers (#435)
+
+`src/trigger-responses.ts` registers two rule commands a material can list in `triggerable.responses`. Neither knows about bombs.
+
+- **`self-destruct { removal, sound? }`:** the triggered block removes itself through a registered removal mode (`removalModes`). `field` takes it off the table into the discard pile, so it returns with the deck like a destroyed block. `run` removes it for good through the shared card-removal service (`removeCardForRun`, as the Nothingifier does). It emits `block.removed` with the trigger and the configured sound (`block.self_destruct` is registered) for presentation to play; removal plays nothing itself, so no explosion sound is wired into removing.
+- **`trigger-targets { select, cause }`:** asks other blocks to run their _own_ responses, through `trigger-block`. Targets come from a registered selector (`triggerTargetSelectors`); `face-neighbours` gives the blocks sharing a face with the source. Selection reads the source's cell from the trigger's snapshot, so it still works once the source has removed itself. Targets go in field order and carry the chain on, so no block is triggered twice in one chain and chains can't loop.
+- **Order:** a block's responses run in their listed order. Listing `trigger-targets` before `self-destruct` lets neighbours respond while the source is still on the table; after it, once it has gone. Either way they see its snapshot.
+
 ### Block exits (#439)
 
 How a block leaving play is presented: the shared lifecycle the per-material blast responses (#438) and the exit effects (#440 fade, #441 flash and shudder, #442 crack and fracture, #443 shred and splinter, #444 particle bursts) build on. `src/visual/exit-presentation.ts`.
