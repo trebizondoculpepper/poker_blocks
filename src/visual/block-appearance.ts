@@ -1301,17 +1301,22 @@ function contained(context: AssemblyContext): BlockAppearance {
   const print = printSkin(art, definition.appearance, geometry);
   // The material's own artwork, made only if its shell draws from it (a frame, leaded panes).
   const own: THREE.CanvasTexture[] = [];
+  const artwork: THREE.CanvasTexture[] = [];
   const { faces, extras } = composeContained(
     {
       geometry,
       size,
       environment: reflectionEnvironment,
       faceTexture: () => {
-        own[0] ??= faceTexture(art, definition, false, 0, false);
-        return own[0];
+        artwork[0] ??= faceTexture(art, definition, false, 0, false);
+        return artwork[0];
       },
-      ownSurface: (texture) =>
-        surface(texture, definition.appearance, heightFor(texture, art, definition.appearance)),
+      ownSurface: (texture) => {
+        // A generated height map (the frame's relief) is the block's to dispose, like the art.
+        const height = heightFor(texture, art, definition.appearance);
+        own.push(...[height ?? []].flat());
+        return surface(texture, definition.appearance, height);
+      },
     },
     container,
     definition.appearance.contents,

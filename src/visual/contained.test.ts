@@ -123,3 +123,37 @@ describe("glass container shells (#331)", () => {
     expect(extras).toEqual([]);
   });
 });
+
+describe("a shell's generated textures are the block's to dispose (#399 review)", () => {
+  it("keeps the frame's height map with the block's textures", async () => {
+    const { vi } = await import("vite-plus/test");
+    const { createBlockAppearance } = await import("./block-appearance");
+    const { cardFaceArt } = await import("./face-art");
+    const { standardDeck } = await import("../cards");
+    const context = new Proxy(
+      {},
+      { get: (target, key) => (key in target ? Reflect.get(target, key) : () => ({ width: 0 })) },
+    );
+    vi.stubGlobal("document", {
+      createElement: () => ({ width: 0, height: 0, getContext: () => context }),
+    });
+    try {
+      const frame = materialPools
+        .get("registered")()
+        .find(({ id }) => id === "custardFrame")!;
+      const appearance = createBlockAppearance(
+        cardFaceArt(standardDeck[0]!.traits.identity),
+        frame,
+        1,
+      );
+      const bumpMaps = new Set(
+        appearance.materials.flatMap((material) => [material.bumpMap ?? []].flat()),
+      );
+      expect(bumpMaps.size).toBeGreaterThan(0);
+      for (const map of bumpMaps) expect(appearance.textures).toContain(map);
+      (appearance.extras ?? []).forEach((mesh) => (mesh.material as THREE.Material).dispose());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
