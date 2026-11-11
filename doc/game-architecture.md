@@ -913,7 +913,13 @@ Some looks keep emitting while a block is on the table: smoke from fire or sizzl
 - `turbulence` (block sizes) is a cheap bounded swirl: two sine waves per puff, at their own phases and rates, push it sideways while it keeps rising. The sideways offset never exceeds `turbulence`, and the upward speed is never reduced. There is no fluid simulation.
 - A puff grows from `size` toward twice that and fades over `lifetime` seconds, in `colour` at most `opacity`. Normal blending, depth-tested but not depth-writing, so smoke sits behind and in front of blocks correctly and never hides them.
 
-Dust (#465) uses the same contract with its own handler: rotation-driven emission, launch along the surface normal, drag toward a terminal fall speed.
+**Dust (#465)** (`src/visual/dust.ts`, effect `dust { colour, size, opacity, lifetime, turbulence, threshold, proportionality, launch, drag, terminal, samples, max }`): grains shaken loose when a block turns.
+
+- **Release:** only rotation releases dust in this version. Each frame the block's **world-space angular speed**, ω in radians per second, is measured from the change in its world quaternion since the last frame, whatever the axis. It counts any turning: the block's own and the board being rotated with it. Grains per second = `proportionality × max(0, ω − threshold)`. So nothing is released at or below `threshold` and more the faster it turns. Fractions carry over between frames. The first frame only records the pose, so a newly drawn block never bursts. Translation and acceleration don't release dust (deferred).
+- **Launch:** from `samples` fixed points on the block's surface, chosen once per emitter (cosmetic random). A grain leaves a random sample, along the line from the block's centre through that point in world space, at `launch` block sizes per second. It may start outward or upward.
+- **Motion** (world space, detached from the block): each axis of the velocity relaxes exponentially, at rate `drag` per second, toward `(0, −terminal, 0)`. So the launch speed dies away quickly and the grain settles into a slow fall at `terminal` block sizes per second. It's a cheap stand-in for gravity plus air drag; there is no ground collision or settling. `turbulence` adds the same bounded sideways swirl as smoke.
+- **Bounds:** at most `max` grains live at once (the pool's size); when full, the oldest is reused. Each grain fades out over the last part of its `lifetime`. Reduced motion releases nothing.
+- The soft round particle texture is shared with smoke (built once, never freed); each emitter owns its geometry and material.
 
 ## Contained components (#329, epic #328)
 
