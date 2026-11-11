@@ -172,30 +172,34 @@ export function composeContained(
   });
   const parts = [...inside, ...wall];
   const meshes = parts.flatMap((part) => part.meshes);
-  // One frame callback for the whole block, on its first contained mesh: contents update
-  // before residue, from one clock and one rotation.
+  // One frame per block: contents update before residue, from one clock and one rotation.
+  // Three.js draws opaque and transparent meshes in separate queues whatever their render
+  // order, so the tick is on every contained mesh: whichever draws first in a frame runs it,
+  // before any part draws, and the rest of that frame it does nothing.
   const updates = parts.flatMap((part) => [part.update ?? []].flat());
-  const [driver] = [...shell.meshes, ...meshes];
-  [driver ?? []].flat().forEach((mesh) => {
-    const rotation = new THREE.Quaternion();
-    let start: number | null = null;
-    let last: number | null = null;
+  const rotation = new THREE.Quaternion();
+  let start: number | null = null;
+  let last: number | null = null;
+  const tick = (mesh: THREE.Mesh) => {
+    const now = frameSeconds();
+    if (now === last) return;
+    start ??= now;
+    const frame: ContainedFrame = {
+      seconds: now - start,
+      delta: last === null ? 0 : Math.min(now - last, 0.1),
+      first: last === null,
+      rotation: mesh.getWorldQuaternion(rotation),
+    };
+    last = now;
+    for (const update of updates) update(frame);
+  };
+  for (const mesh of [...shell.meshes, ...meshes]) {
     const previous = mesh.onBeforeRender.bind(mesh);
     mesh.onBeforeRender = (...args) => {
+      tick(mesh);
       previous(...args);
-      const now = frameSeconds();
-      start ??= now;
-      const frame: ContainedFrame = {
-        seconds: now - start,
-        delta: last === null ? 0 : Math.min(now - last, 0.1),
-        first: last === null,
-        rotation: mesh.getWorldQuaternion(rotation),
-      };
-      if (now === last) return;
-      last = now;
-      for (const update of updates) update(frame);
     };
-  });
+  }
   const faces = [shell.faces].flat();
   return {
     faces: Array.from({ length: 6 }, (_, face) => faces[face % faces.length]!),

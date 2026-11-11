@@ -232,3 +232,41 @@ describe("one frame per contained block (#401 review)", () => {
     expect(uniforms.traceNormal!.value.angleTo(uniforms.surfaceNormal!.value)).toBeCloseTo(0, 6);
   });
 });
+
+describe("the shared tick runs before whichever part draws first (#401 review)", () => {
+  it("updates the fluid when the fluid itself is the first contained mesh drawn", () => {
+    const { appearance } = materialPools
+      .get("registered")()
+      .find(({ id }) => id === "custard")!;
+    const { extras } = composeContained(
+      {
+        geometry,
+        size: 1,
+        environment: null,
+        faceTexture: () => new THREE.Texture() as THREE.CanvasTexture,
+        ownSurface: (texture) => new THREE.MeshStandardMaterial({ map: texture }),
+      },
+      appearance.container!,
+      appearance.contents,
+      appearance.residue,
+    );
+    const block = new THREE.Group();
+    block.rotation.x = 1;
+    block.add(...extras);
+    block.updateMatrixWorld(true);
+    const fluid = extras.find(({ renderOrder }) => renderOrder === containedLayers.contentsOpaque)!;
+    const normal = (fluid.material as THREE.ShaderMaterial).uniforms.surfaceNormal!
+      .value as THREE.Vector3;
+    fluid.onBeforeRender(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    // Turned 1 rad about x: world up seen from the block is no longer local +y.
+    expect(normal.y).toBeLessThan(0.99);
+    extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+  });
+});
