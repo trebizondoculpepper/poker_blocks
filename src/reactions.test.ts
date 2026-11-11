@@ -55,7 +55,13 @@ describe("material reactions (#366)", () => {
     expect(materialOf(melted)).toBe("wood");
     expect(melted.traits.stateBonus).toEqual({ id: "melted" });
     expect(melted.traits.identity).toEqual(ice.traits.identity);
-    expect(applied.map(({ blockId }) => blockId)).toEqual([ice.id]);
+    expect(applied).toEqual([
+      {
+        blockId: ice.id,
+        from: { material: "ice" },
+        to: { material: "wood", stateBonus: "melted" },
+      },
+    ]);
   });
 
   it("never reacts across an edge or a corner", () => {

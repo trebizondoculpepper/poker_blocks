@@ -16,6 +16,7 @@ import { Registry } from "./core/registry";
 import type { CardBlock } from "./cards";
 import type { RuleCommand } from "./event-rules";
 import type { GameState, PlacedBlock } from "./game-state";
+import type { ReactionState } from "./passives";
 import { changeCardMaterial } from "./card-material";
 import { setCardStateBonus } from "./state-bonuses";
 import { getMaterialDefinition, materialOf, type BlockMaterial } from "./materials";
@@ -64,6 +65,7 @@ registerRuleCommand<{ blockId: string; material?: BlockMaterial; stateBonus?: st
   "transform-block",
   ({ blockId, material, stateBonus }, target) => {
     const before = target.state;
+    const from = reactionState(before, blockId);
     const changed = [material ?? []]
       .flat()
       .reduce((current, kind) => changeCardMaterial(current, blockId, kind) ?? current, before);
@@ -71,12 +73,33 @@ registerRuleCommand<{ blockId: string; material?: BlockMaterial; stateBonus?: st
       .flat()
       .reduce((current, id) => setCardStateBonus(current, blockId, id) ?? current, changed);
     target.update(after);
-    return after === before ? [] : [{ type: "reaction.applied", blockId }];
+    return after === before
+      ? []
+      : [
+          {
+            type: "reaction.applied",
+            blockId,
+            reaction: { from: from!, to: reactionState(after, blockId)! },
+          },
+        ];
   },
 );
 
-/** A reaction that changed its block this play, for presentation (#366). */
-export type AppliedReaction = { blockId: string };
+/** A block's material and state bonus, as a reaction event reports them. */
+function reactionState(state: GameState, blockId: string): ReactionState | undefined {
+  const block = state.field.find((placed) => placed.block.id === blockId)?.block;
+  return (
+    block && {
+      material: materialOf(block),
+      ...Object.fromEntries(
+        [block.traits.stateBonus ?? []].flat().map(({ id }) => ["stateBonus", id]),
+      ),
+    }
+  );
+}
+
+/** A reaction that changed its block this play, before and after, for presentation (#366). */
+export type AppliedReaction = { blockId: string; from: ReactionState; to: ReactionState };
 
 /** The reactions a block's material lists, in order. */
 export const materialReactions = (block: CardBlock): readonly Reaction[] =>
@@ -126,7 +149,9 @@ export function commitReactions(
   reactionsFor: (block: CardBlock) => readonly Reaction[] = materialReactions,
 ): AppliedReaction[] {
   const events = commitCommands(resolveReactions(target.state, reactionsFor), target);
-  return events.flatMap(({ blockId }) => (blockId ? [{ blockId }] : []));
+  return events.flatMap(({ blockId, reaction }) =>
+    blockId && reaction ? [{ blockId, ...reaction }] : [],
+  );
 }
 
 /** For tests and tools: commit one play's reactions to a bare state. */

@@ -485,8 +485,8 @@ export class GameRun {
       // The current dealer scores in play(); this is a post-play event until
       // placement and scoring are separated by the gameplay coordinator.
       this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId });
-      for (const { blockId } of this.lastReactions)
-        this.passiveEvents.emit({ type: "reaction.applied", blockId });
+      for (const { blockId, from, to } of this.lastReactions)
+        this.passiveEvents.emit({ type: "reaction.applied", blockId, reaction: { from, to } });
       this.passiveEvents.drain();
       this.announceOutcome();
     }
