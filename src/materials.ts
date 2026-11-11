@@ -165,6 +165,8 @@ export type MaterialDefinition = {
 
 const lightInk = { red: "#bd3651", black: "#182d4a", onDark: false };
 const darkInk = { red: "#a32536", black: "#422716", onDark: true };
+/** Pale ink with a dark shadow, for prints on saturated wrapping foil. */
+const foilInk = { red: "#ffe3e6", black: "#fffaf0", onDark: true };
 const box = { shape: "box", segments: 0, radius: 0, scale: 1 };
 const noEnds: readonly number[] = [];
 
@@ -1031,7 +1033,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
   {
     // The Present's wrapped look (#496, epic #492): a visual experiment for audition only, never
     // dealt or stocked. Foil wrap, a contrasting shiny ribbon and rosette, folds underneath; its
-    // colours come from each block's own art seed. No rank or suit is printed.
+    // colours come from each block's own art seed. The block's face art (a letter, say) is
+    // printed over the wrap in pale foil ink, which reads on red, green and blue alike (#558).
     id: "giftWrap",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Present (gift wrap)",
@@ -1042,7 +1045,7 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
       assembly: "giftBox",
       surface: "matte",
       height: "none",
-      ink: lightInk,
+      ink: foilInk,
       edge: { color: 0x000000, opacity: 0 },
       // Slightly rounded edges, as the owner asked.
       geometry: { shape: "rounded", segments: 3, radius: 0.06, scale: 1 },

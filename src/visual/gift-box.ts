@@ -14,12 +14,16 @@
  *   per box from small shared shapes, in the ribbon's colour.
  * - **Colours:** red, green or blue wrap; a ribbon from a contrasting set that never shares the wrap's
  *   colour. Both come from the block's own art seed: cosmetic, the same every time it's drawn, and
- *   never the run's random stream. No rank or suit is printed.
+ *   never the run's random stream.
+ * - **Print:** the block's face art goes over the wrap on every face, in the material's ink, as on
+ *   any other block: a letter block shows its letter (#558). A rankless Present prints nothing
+ *   because its art has nothing to print, not because the wrap hides it.
  * - **Resources:** the box owns its textures and materials (released by the block's usual cleanup);
  *   the rosette's geometry goes with its material.
  */
 import * as THREE from "three";
 import {
+  drawPrint,
   getReflectionEnvironment,
   type AssemblyContext,
   type BlockAppearance,
@@ -195,16 +199,22 @@ function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 export function giftBox({ art, definition, geometry, size }: AssemblyContext): BlockAppearance {
   const { wrap, ribbon } = giftColours(art);
   const random = seeded(art);
-  const sideTexture = faceCanvas((g) => {
+  // Each face: its wrapping, then the block's own face art on top.
+  const printed = (paint: (g: CanvasRenderingContext2D) => void) =>
+    faceCanvas((g) => {
+      paint(g);
+      drawPrint(g, art, definition.appearance);
+    });
+  const sideTexture = printed((g) => {
     paintFoil(g, wrap, random);
     paintBand(g, ribbon, false);
   });
-  const topTexture = faceCanvas((g) => {
+  const topTexture = printed((g) => {
     paintFoil(g, wrap, random);
     paintBand(g, ribbon, false);
     paintBand(g, ribbon, true);
   });
-  const bottomTexture = faceCanvas((g) => {
+  const bottomTexture = printed((g) => {
     paintFoil(g, wrap, random);
     paintFolds(g);
   });
