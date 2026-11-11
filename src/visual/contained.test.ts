@@ -328,6 +328,10 @@ describe("fluid looks (#333)", () => {
     );
     expect(built[1]!.meshes[0]!.material).toBeInstanceOf(THREE.MeshPhysicalMaterial);
     expect((built[1]!.meshes[0]!.material as THREE.MeshPhysicalMaterial).transmission).toBe(1);
+    // Double-sided, so the cut shows a top surface from above rather than a hole (#413 review).
+    expect((built[1]!.meshes[0]!.material as THREE.MeshPhysicalMaterial).side).toBe(
+      THREE.DoubleSide,
+    );
     for (const fluid of built) expect(fluid.capabilities.liquidSurface).toBeDefined();
     // Water swaps between plastic and glass by configuration only: the same contents config.
     expect(contents("waterInLantern")).toEqual(contents("waterInPlastic"));

@@ -119,7 +119,9 @@ fluidLooks.register("refractiveFluid", (surface, raw) => {
     thickness: config.thickness,
     attenuationColor: new THREE.Color(config.attenuation),
     attenuationDistance: config.attenuationDistance,
-    side: THREE.FrontSide,
+    // Both sides, as the opaque look does: seen from above through the cut, the inner (back)
+    // faces fill the opening and read as the water's top, rather than an open hole.
+    side: THREE.DoubleSide,
   });
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, surface);
