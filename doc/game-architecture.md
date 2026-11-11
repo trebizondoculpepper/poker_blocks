@@ -298,9 +298,9 @@ reactions?: readonly {
 
 **Guardrails for #366:** a test that edge or corner contact never reacts; that a block changes at most once per play; that a two-step chain (air → aggressive flame → boiling water) takes two plays; that discards, refills and stage advance never react; that candidate-hand scoring is unchanged by pending reactions; that the same reactions are selected whatever order the blocks are visited in (events are still dispatched in field order); that a transformation survives save and Continue; and the guardrail scan, so that no generic code names a material.
 
-### State bonuses (proposal, #364, epic #362)
+### State bonuses (#364, built in #365, epic #362)
 
-**Status: research proposal.** Nothing is built. #365 implements it once the owner questions on #364 are answered.
+**Status: built (#365)** as proposed below: `src/state-bonuses.ts` (registry, `stateBonusRules`, `withStateBonus`, `setCardStateBonus`), the `stateBonus` card trait, `cardScoringRules` adding the bonus rules after the material's, and the `cardStates` save entries carrying `stateBonus`. The registered bonuses are `melted` +1, `heated` +1 and `boiled` ×2; nothing assigns them until the reactions (#366–#369). Two owner questions on #364 are taken at their defaults (assumptions on #365): contributing cards only, and ×2 multiplies the whole line, stacking multiplicatively with other multipliers. The separate activation cue (`RuleActivation.cue`) is not built yet: a state bonus's activation presents with its card's material cue until the reactions give it its own.
 
 A **state bonus** is a scoring bonus a card gains from a reaction (ice melted into water: +1; water heated: +1; water boiled: ×2). It never changes the card's rank, suit or poker-hand identity. A new state **replaces** the old one rather than adding to it. Bonuses on different cards in a scored line still combine, as material modifiers do.
 
