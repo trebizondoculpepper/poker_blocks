@@ -424,3 +424,27 @@ describe("components keep their places (#512 review)", () => {
     parts.forEach((part, i) => expect(part.position.toArray()).toEqual([i * 0.4, 0, 0]));
   });
 });
+
+describe("fracture with a parallel shudder (#512 review)", () => {
+  it("components still fly while a shudder shakes them, in either order", async () => {
+    await import("./flash-shudder");
+    for (const order of [
+      [
+        { effect: "fracture", target: "shell", config: { speed: [1, 1], spin: 0 } },
+        { effect: "shudder", target: "shell" },
+      ],
+      [
+        { effect: "shudder", target: "shell" },
+        { effect: "fracture", target: "shell", config: { speed: [1, 1], spin: 0 } },
+      ],
+    ]) {
+      const { v, fan } = visual();
+      const start = fan.position.clone();
+      const runner = createExitRunner();
+      runner.start({ blockId: "b" }, v, { steps: [{ effects: order }] });
+      for (let frame = 0; frame < 20; frame++) runner.update(1 / 60);
+      expect(fan.position.distanceTo(start)).toBeGreaterThan(0.2);
+      runner.dispose();
+    }
+  });
+});
