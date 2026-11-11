@@ -149,3 +149,13 @@ describe("acquired modifier registers (#431)", () => {
     expect(back.traits.modifiers!.run!.exponential).toBeCloseTo(-0.6);
   });
 });
+
+describe("acquired modifiers follow the card's eligibility (#476 review)", () => {
+  it("a cloud's acquired bonus applies in its line as its material's does, chosen hand or not", () => {
+    const cloud = withMaterial(card("3", "spades"), getMaterialDefinition("cloud"));
+    const [x, y] = [card("7", "hearts"), card("7", "clubs")];
+    const plain = points(row(x, y, cloud));
+    const boosted = addCardModifier(bare([x, y, cloud]), cloud.id, "run", { multiplicative: 2 })!;
+    expect(points(row(x, y, boosted.hand[2]!))).toBe(plain * 2);
+  });
+});
