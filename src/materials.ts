@@ -392,6 +392,18 @@ export const materialDefinitions = [
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Fire",
     acoustics: { character: "rattling", hardness: 9, attach: "material.attach.fire" },
+    // Air beside it stokes it into aggressive flame, the same card (#370).
+    reactions: [
+      {
+        when: {
+          id: "neighbour-material",
+          config: { material: "airVent", unlessState: ["aggressive"] },
+        },
+        results: [
+          { id: "transform", config: { stateBonus: "aggressive", sound: "reaction.stoke" } },
+        ],
+      },
+    ],
     traits: { transparent: {} },
     shop: {
       basePrice: 4,

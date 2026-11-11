@@ -28,6 +28,9 @@ export const stateBonuses = new Registry<StateBonusDefinition>("state bonus");
 stateBonuses.register("melted", { name: "Melted (+1)", modifier: { additive: 1 } });
 stateBonuses.register("heated", { name: "Heated (+1)", modifier: { additive: 1 } });
 stateBonuses.register("boiled", { name: "Boiled (×2)", modifier: { multiplicative: 2 } });
+// Air stokes flame into aggressive flame (#370): a state with no score of its own, which
+// boils water beside it (#369).
+stateBonuses.register("aggressive", { name: "Aggressive", modifier: {} });
 
 /** Everything wrong with the registered state bonuses' numbers. */
 export function validateStateBonuses(): string[] {

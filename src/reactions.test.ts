@@ -148,6 +148,17 @@ describe("material reactions (#366)", () => {
     expect(materialOf(field[1]!.block)).toBe("fire");
   });
 
+  it("air stokes flame into aggressive flame, the same card; air is unchanged (#370)", () => {
+    const fire = made(1, "fire");
+    const air = made(0, "airVent" as BlockMaterial);
+    const field = applyReactions(state(at(air, 0), at(fire, 1))).state.field;
+    const stoked = field[1]!.block;
+    expect(materialOf(stoked)).toBe("fire");
+    expect(stoked.traits.stateBonus).toEqual({ id: "aggressive" });
+    expect(stoked.id).toBe(fire.id);
+    expect(materialOf(field[0]!.block)).toBe("airVent");
+  });
+
   it("water is never sold or unlocked: it only comes from reactions", async () => {
     const { getMaterialDefinition } = await import("./materials");
     expect(getMaterialDefinition("water").shop).toBeUndefined();
