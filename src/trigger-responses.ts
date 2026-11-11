@@ -1,5 +1,5 @@
 /**
- * Reusable trigger responses (#435): two registered rule commands a material can list in its
+ * Reusable trigger responses (#435, #437): registered rule commands a material can list in its
  * `triggerable.responses` (src/triggers.ts). Neither knows about bombs.
  *
  * - `self-destruct { removal, sound? }`: the triggered block removes itself. How is a registered
@@ -28,6 +28,7 @@ import type { GameEvent } from "./passives";
 import { faceNeighbours } from "./reactions";
 import { commitCommands, registerRuleCommand } from "./rule-commands";
 import { cellKey } from "./traits/attachable";
+import { blockResists } from "./block-trait-behaviours";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { TriggerContext } from "./triggers";
 
@@ -90,4 +91,32 @@ registerRuleCommand<{ trigger: TriggerContext; select: HandlerConfig; cause: str
         })),
       target,
     ),
+);
+
+/**
+ * `destroy-targets { select, cause, removal, sound? }` (#437): the trigger destroys the selected
+ * blocks (a bomb's blast), each through the configured removal mode, unless one of its traits
+ * resists `cause` (steel and gold resist `explosion`). Every selected block is accounted for:
+ * `block.removed` for one destroyed, `block.resisted` for one left standing, with the trigger and
+ * cause, for presentation. Selection reads the source's snapshot, as `trigger-targets` does.
+ */
+registerRuleCommand<{
+  trigger: TriggerContext;
+  select: HandlerConfig;
+  cause: string;
+  removal: string;
+  sound?: SoundEffectId;
+}>("destroy-targets", ({ trigger, select, cause, removal, sound }, target) =>
+  triggerTargetSelectors
+    .get(select.id)(trigger, target.state, select.config)
+    .flatMap((block): GameEvent[] => {
+      if (blockResists(block, cause))
+        return [{ type: "block.resisted", blockId: block.id, trigger, cause }];
+      const next = removalModes.get(removal)(target.state, block.id);
+      if (!next) return [];
+      target.update(next);
+      return [
+        { type: "block.removed", blockId: block.id, trigger, cause, ...(sound ? { sound } : {}) },
+      ];
+    }),
 );

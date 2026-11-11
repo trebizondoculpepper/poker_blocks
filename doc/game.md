@@ -158,6 +158,7 @@ The playable `?mode=dev0` experiment (formerly `?room=dev`) assigns a random vis
 - **Magic:** a clear plastic vessel holding a fizzing field of the crystal trail's stars, each aging brilliant white, cream, brown, then black (#349).
 - **Fire:** an open iron frame with a raymarched, volumetric flame burning just below the centre; the rank and suit are iron lettering in the frame.
 - **Gold:** warm reflective foil and engraved edges.
+- **Steel and gold resist explosions (#437):** a bomb blast never destroys them. They survive, keeping their bonuses, and can collect bonuses a bomb passes on (#436). Other ways of removing a card, such as the Nothingifier, still work on them.
 - **Terracotta:** rough fired clay with impressed markings. Never sold: flame bakes earth into it (#371).
 - **Earth:** soil in a clear plastic vessel, with grass that grows once it settles. Sold from round 2; beside flame it bakes into terracotta (#371).
 - **Ice:** frosted glass-like blue with surface condensation.

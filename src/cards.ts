@@ -1,5 +1,6 @@
 import type { ScoringModifier } from "./scoring-modifier";
 import type { DestructibleTrait } from "./traits/destructible";
+import type { ResistantTrait } from "./traits/resistant";
 import type { TransparentTrait } from "./traits/transparent";
 import { faces, type AttachableTrait } from "./traits/attachable";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
@@ -34,6 +35,8 @@ export type CardBlock = {
     transparent?: TransparentTrait;
     /** Can be destroyed, and by what; see traits/destructible.ts. */
     destructible?: DestructibleTrait;
+    /** Resists destruction by the causes it names (src/traits/resistant.ts, #437). */
+    resistant?: ResistantTrait;
     /** A scoring bonus from its state, one at a time (src/state-bonuses.ts, #365). */
     stateBonus?: { id: string };
     /** How cooked it is: a step of its material's doneness steps (src/cooking.ts, #372). */

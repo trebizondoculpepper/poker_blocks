@@ -59,6 +59,8 @@ export type GameEvent = {
   reaction?: { from: ReactionState; to: ReactionState; sound?: SoundEffectId };
   /** On `block.triggered` (#433): what triggered it, and the chain it is part of. */
   trigger?: TriggerContext;
+  /** On `block.removed` and `block.resisted` (#437): what destroyed it, or what it resisted. */
+  cause?: string;
   /** On `block.removed` (#435): the sound its configuration names, for presentation to play. */
   sound?: SoundEffectId;
   /** On `reward.finalized`: the coins paid, and the balance before and after. */
