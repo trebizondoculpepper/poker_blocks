@@ -26,6 +26,11 @@ export type GameState = {
    */
   boughtCards?: readonly CardBlock[];
   /**
+   * Cards made on the field during play (#424), while they exist: saved in full so Continue
+   * rebuilds them. They leave with the table and never join the deck. Absent when there are none.
+   */
+  generatedCards?: readonly CardBlock[];
+  /**
    * Cards whose material changed this run (#387), by id: saved so Continue rebuilds them with
    * it (src/card-material.ts). Absent when nothing changed.
    */

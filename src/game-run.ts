@@ -1,5 +1,6 @@
 import { resetStageState } from "./stage-end";
 import { resetRoundState } from "./round-end";
+import { clearField } from "./card-ownership";
 // Registers cooking's stage-end reset (#372).
 import "./cooking";
 import { commitReactions, type AppliedReaction } from "./reactions";
@@ -683,11 +684,9 @@ export class GameRun {
     // Stage-scoped card state (doneness, #372) resets through its registered handlers; the
     // stage's rewards have been read by now.
     const reset = resetStageState(state);
-    const cleared = {
-      ...reset,
-      field: [],
-      deck: [...reset.deck, ...reset.field.map(({ block }) => block)],
-    };
+    // Each field card goes to its owner (#424): the deck's back to the deck, a generated
+    // card out of play.
+    const cleared = clearField(reset);
     return handAtStageEnd[this.config.handAtStageEnd](cleared);
   }
 }

@@ -37,6 +37,8 @@ export type CardBlock = {
     stateBonus?: { id: string };
     /** How cooked it is: a step of its material's doneness steps (src/cooking.ts, #372). */
     doneness?: { step: number };
+    /** Who owns it: a registered card owner (src/card-ownership.ts, #424); the deck if absent. */
+    owner?: { id: string };
   };
 };
 
