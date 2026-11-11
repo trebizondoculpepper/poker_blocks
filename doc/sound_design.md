@@ -124,16 +124,17 @@ The first family is `score.magnitude` (#1). Its bands start at 1, 10, 100, 1,000
 
 ## Coins and shop
 
-| Id                | Plays when                                          | Status     |
-| ----------------- | --------------------------------------------------- | ---------- |
-| `coin.earn`       | Coins are earned, from a stage win or a block       | planned    |
-| `coin.spend`      | Coins are spent                                     | planned    |
-| `shop.open`       | The shop opens after a boss stage                   | generated  |
-| `shop.buy`        | A block is bought                                   | planned    |
-| `shop.stock.burn` | Unbought stock burns away when leaving the shop     | registered |
-| `shop.buy.denied` | The player tries to buy something they can't afford | stand-in   |
-| `deck.add_block`  | A bought block joins the deck                       | planned    |
-| `shop.leave`      | The player leaves the shop for the next round       | planned    |
+| Id                | Plays when                                                               | Status     |
+| ----------------- | ------------------------------------------------------------------------ | ---------- |
+| `coin.earn`       | Coins are earned, from a stage win or a block                            | planned    |
+| `coin.spend`      | Coins are spent                                                          | planned    |
+| `shop.open`       | The shop opens after a boss stage                                        | generated  |
+| `shop.buy`        | A block is bought                                                        | planned    |
+| `shop.stock.burn` | Unbought stock burns away when leaving the shop                          | registered |
+| `shop.buy.denied` | The player tries to buy something they can't afford                      | stand-in   |
+| `shop.rack_full`  | An item or passive can't be bought because the Items rack is full (#481) | generated  |
+| `deck.add_block`  | A bought block joins the deck                                            | planned    |
+| `shop.leave`      | The player leaves the shop for the next round                            | planned    |
 
 ## Bosses and the run
 
@@ -196,7 +197,7 @@ These are rows marked planned in the tables above with no registry entry. Most w
 - **Exists in the game:**
   - **`coin.earn`** is covered in practice by `reward.coin`. Drop the planned row, or rename it.
   - **`coin.spend`** is covered by `shop.buy`.
-  - **`shop.cannot_afford`:** registered as `shop.buy.denied` (the owner found the shared `action.denied` too easy to miss); a refusal for no room still plays `action.denied`.
+  - **`shop.cannot_afford`:** registered as `shop.buy.denied` (the owner found the shared `action.denied` too easy to miss); a full Items rack plays its own `shop.rack_full` (#481); any other refusal plays `action.denied`. Which sound plays is chosen by the refusal's reason (`refusalSounds`, `src/purchase-refusals.ts`).
   - **`deck.add_block`:** a bought card joining the deck (#143), currently silent apart from `shop.buy`.
   - **`shop.leave`:** leaving the shop plays only `ui.click`.
   - **`block.destroy`** is a duplicate of the registered `block.destroyed`; fix the table.

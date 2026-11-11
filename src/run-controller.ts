@@ -13,6 +13,7 @@ import type { HudFrame } from "./hud-frame";
 import type { DestroyCause } from "./traits/destructible";
 import type { AudioService } from "./audio-service";
 import { menuScreenScenes } from "./overlays";
+import { refusalSound } from "./purchase-refusals";
 import { playSfx } from "./audio/sfx";
 import type { CameraViewService } from "./camera-view";
 import { cardName, standardDeck, type CardBlock } from "./cards";
@@ -790,11 +791,10 @@ export function createRunController<Context>(options: {
     seed: () => randomizer.seed,
     dispatch,
     buy(id, destination) {
-      const affordable = game.canAfford(id);
-      const bought = game.buyShopOffer(id, destination);
-      if (!bought) {
-        // Not enough coins has its own sound; any other refusal (no room) is the usual "no".
-        playSfx(affordable ? "action.denied" : "shop.buy.denied");
+      // A refusal sounds like its reason (#481): not enough coins, a full rack, or any other "no".
+      const refusal = game.purchaseVerdict(id, destination);
+      if (refusal || !game.buyShopOffer(id, destination)) {
+        playSfx(refusalSound(refusal?.reason ?? "refused"));
         return false;
       }
       showPurchase();
