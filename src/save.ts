@@ -6,10 +6,12 @@ import type { RandomCursor } from "./random";
 import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
+// Registers the transmogrifier definitions, so saved rack items resolve (#388).
+import "./transmogrifiers";
 import { applyCardStates, type CardState } from "./card-material";
 import { blockMaterials, type BlockMaterial } from "./materials";
 import { parseRunStats, type RunStats } from "./run-stats";
-import { createPassiveBlock, passiveDefinitions } from "./passives";
+import { createPassiveBlock, passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   isOfferKind,
   offerKind,
@@ -55,7 +57,7 @@ export type SaveRecord = {
     deck: string[];
     discardPile: string[];
     /** Optional to keep previously saved runs readable. */
-    passiveRack?: { id: string; definitionId: string }[];
+    passiveRack?: SavedRackItem[];
     /** Each offer as its kind saves it (src/offer-kinds.ts). */
     shopStock?: SavedOffer[];
     /** Cards bought this run, saved in full (#143); absent in older saves. */
@@ -136,7 +138,7 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
       hand: ids(state.hand),
       deck: ids(state.deck),
       discardPile: ids(state.discardPile),
-      passiveRack: state.passiveRack.map(({ id, definitionId }) => ({ id, definitionId })),
+      passiveRack: state.passiveRack.map(saveRackItem),
       ...(state.shopStock
         ? {
             shopStock: state.shopStock.map((offer) => offerKind(offer).save(offer.block)),
@@ -192,14 +194,13 @@ export function fromSaveRecord(
     const passiveIds = new Set<string>();
     // A retired passive has no effect, so an older save that installed one drops it here
     // rather than carrying a dead slot for the rest of the run (doc/game.md).
-    const passiveRack = (state.passiveRack ?? []).flatMap(({ id, definitionId }) => {
+    const passiveRack = (state.passiveRack ?? []).flatMap((saved) => {
+      const { id, definitionId } = saved;
       if (typeof id !== "string" || passiveIds.has(id) || typeof definitionId !== "string") {
         throw new Error("bad passive");
       }
       passiveIds.add(id);
-      return passiveDefinitions.get(definitionId).retired
-        ? []
-        : [createPassiveBlock(definitionId, id)];
+      return passiveDefinitions.get(definitionId).retired ? [] : [restoreRackItem(saved)];
     });
     // Each offer is rebuilt by its own kind; an unknown kind makes the save invalid.
     const restoreOffer: OfferRestore = {
@@ -421,4 +422,51 @@ function restoreCardStates(saved: unknown): Record<string, CardState> | undefine
       return [id, { material: material as BlockMaterial }];
     }),
   );
+}
+
+/**
+ * A rack item as saved: its id and definition, plus, for an item that wears out (a
+ * transmogrifier, #388), its uses left, its total, what it cost and its material.
+ */
+export type SavedRackItem = {
+  id: string;
+  definitionId: string;
+  uses?: number;
+  total?: number;
+  price?: number;
+  material?: string;
+};
+
+function saveRackItem(block: PassiveBlock): SavedRackItem {
+  const { limitedUse, priced, transmogrifier } = block.traits;
+  return {
+    id: block.id,
+    definitionId: block.definitionId,
+    ...(limitedUse ? { uses: limitedUse.uses, total: limitedUse.total } : {}),
+    ...(limitedUse && priced ? { price: priced.basePrice } : {}),
+    ...(transmogrifier ? { material: transmogrifier.material } : {}),
+  };
+}
+
+function restoreRackItem(saved: SavedRackItem): PassiveBlock {
+  const block = createPassiveBlock(saved.definitionId, saved.id);
+  const { uses, total, price, material } = saved;
+  if (uses === undefined && total === undefined && material === undefined) return block;
+  const whole = (value: unknown): value is number =>
+    typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  if (!whole(uses) || !whole(total) || uses < 1 || uses > total || !whole(price))
+    throw new Error("bad rack item uses");
+  if (material !== undefined && !blockMaterials.includes(material as BlockMaterial))
+    throw new Error("bad rack item material");
+  return {
+    ...block,
+    traits: {
+      ...block.traits,
+      limitedUse: { uses, total },
+      priced: { basePrice: price },
+      ...(material === undefined
+        ? {}
+        : { transmogrifier: { material: material as BlockMaterial } }),
+    },
+  };
 }

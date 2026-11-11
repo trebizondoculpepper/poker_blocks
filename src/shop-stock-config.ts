@@ -10,6 +10,10 @@ export function validateShopStock(stock: ShopTrait): ShopStockError[] {
     typeof value === "number" && Number.isSafeInteger(value) && value >= minimum;
   for (const field of ["minOffers", "maxOffers"] as const)
     if (!whole(stock[field], 1)) add(field, "Use a positive whole offer count");
+  if (stock.transmogrifierSlots !== undefined && !whole(stock.transmogrifierSlots, 0))
+    add("transmogrifierSlots", "Use a nonnegative whole slot count");
+  else if ((stock.transmogrifierSlots ?? 1) > 2)
+    add("transmogrifierSlots", "Use at most two transmogrifier slots");
   for (const field of ["guaranteedPassives", "guaranteedCards"] as const)
     if (stock[field] !== undefined && !whole(stock[field], 0))
       add(field, "Use a nonnegative whole guaranteed count");

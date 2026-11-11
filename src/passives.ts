@@ -1,3 +1,4 @@
+import type { BlockMaterial } from "./materials";
 import { Registry } from "./core/registry";
 import { categoryPalette, type PassiveCategoryTraits } from "./passive-categories";
 import type { EventRule, HandlerConfig } from "./event-rules";
@@ -17,6 +18,10 @@ export type PassiveBlock = {
     inspectable: InspectableTrait;
     /** What it cost in the shop, before modifiers; the resale policy reads it (#103). */
     priced?: { basePrice: number };
+    /** Uses left of its total, for an item that wears out (a transmogrifier, #388). */
+    limitedUse?: { uses: number; total: number };
+    /** The material a transmogrifier turns a card into (#388). */
+    transmogrifier?: { material: BlockMaterial };
   };
 };
 

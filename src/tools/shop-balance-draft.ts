@@ -15,6 +15,7 @@ export type ShopBalanceDraft = {
     maxOffers: number;
     guaranteedPassives: number;
     guaranteedCards: number;
+    transmogrifierSlots: number;
   };
   cardRankSurcharge: Record<string, number>;
   materials: Record<string, { basePrice: number; weights: DraftCurve } | null>;
@@ -36,6 +37,7 @@ export function currentShopBalanceDraft(): ShopBalanceDraft {
       maxOffers: defaultShop.maxOffers,
       guaranteedPassives: defaultShop.guaranteedPassives ?? 1,
       guaranteedCards: defaultShop.guaranteedCards ?? 1,
+      transmogrifierSlots: defaultShop.transmogrifierSlots ?? 1,
     },
     cardRankSurcharge: { ...gameTuning.cardRankSurcharge } as Record<string, number>,
     materials: Object.fromEntries(
@@ -83,7 +85,13 @@ export function validateShopBalanceDraft(draft: ShopBalanceDraft): DraftError[] 
   const stock = draft.stock;
   if (
     !stock ||
-    !keysMatch(stock, ["minOffers", "maxOffers", "guaranteedPassives", "guaranteedCards"])
+    !keysMatch(stock, [
+      "minOffers",
+      "maxOffers",
+      "guaranteedPassives",
+      "guaranteedCards",
+      "transmogrifierSlots",
+    ])
   )
     add("stock", "Stock fields must match the configuration schema");
   if (stock)

@@ -41,6 +41,11 @@ export type MaterialDefinition = {
    * scoring is designed: meat, fire and ice wait on #104–#106.
    */
   scoringModifier?: ScoringModifier;
+  /**
+   * Its transmogrifier's balance, where the default (twice the shop base price, drawn by the
+   * material's own weight curve) does not apply or there is no shop price (#388).
+   */
+  transmogrifier?: { price?: number; weights?: WeightCurve };
   /** Coins per card still held at settlement, on both a win and a loss. */
   handReward?: { coinsPerCard: number };
   /** Presentation when one of this material's scoring rules fires. */
@@ -111,6 +116,9 @@ export const materialDefinitions = [
     name: "Paper",
     acoustics: { character: "flimsy", hardness: 2, attach: "material.attach.paper" },
     traits: {},
+    // Never sold as a card, so its transmogrifier sets its own price (#384: 2 coins) and is
+    // offered from round 1 at a low weight (a safe default, noted on #388).
+    transmogrifier: { price: 2, weights: [[1, 0.5]] },
     appearance: {
       pattern: "cardSheet",
       assembly: "sixFaces",
