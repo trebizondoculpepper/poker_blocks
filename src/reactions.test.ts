@@ -131,6 +131,23 @@ describe("material reactions (#366)", () => {
     ).toBe("ice");
   });
 
+  it("flame heats water into hot water +1, replacing its old bonus; boiling water stays (#368)", () => {
+    const heat = (water: CardBlock) =>
+      applyReactions(state(at(water, 0), at(made(1, "fire"), 1))).state.field[0]!.block;
+    const melted = withStateBonus(made(0, "water"), "melted");
+    const hot = heat(melted);
+    expect(materialOf(hot)).toBe("water");
+    expect(hot.traits.stateBonus).toEqual({ id: "heated" });
+    expect(hot.traits.identity).toEqual(melted.traits.identity);
+    expect(heat(withStateBonus(made(0, "water"), "boiled")).traits.stateBonus).toEqual({
+      id: "boiled",
+    });
+    // The flame itself is unchanged.
+    const field = applyReactions(state(at(made(0, "water"), 0), at(made(1, "fire"), 1))).state
+      .field;
+    expect(materialOf(field[1]!.block)).toBe("fire");
+  });
+
   it("water is never sold or unlocked: it only comes from reactions", async () => {
     const { getMaterialDefinition } = await import("./materials");
     expect(getMaterialDefinition("water").shop).toBeUndefined();
