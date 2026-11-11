@@ -108,8 +108,12 @@ describe("Magic Lock's contained stars (#349)", () => {
     const points = stars.meshes[0] as THREE.Points;
     const material = points.material as THREE.PointsMaterial;
     material.map = new THREE.Texture(); // skip the canvas-drawn texture in a headless test
+    // A DPR-2 display: 800 × 600 logical pixels, 1600 × 1200 in the drawing buffer. Three.js
+    // multiplies point size by the pixel ratio itself, so sizing uses the logical height.
     const renderer = {
-      getDrawingBufferSize: (target: THREE.Vector2) => target.set(800, 600),
+      getSize: (target: THREE.Vector2) => target.set(800, 600),
+      getDrawingBufferSize: (target: THREE.Vector2) => target.set(1600, 1200),
+      getPixelRatio: () => 2,
     } as unknown as THREE.WebGLRenderer;
     const ortho = new THREE.OrthographicCamera(-2, 2, 1.5, -1.5);
     points.onBeforeRender(

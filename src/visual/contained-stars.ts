@@ -107,7 +107,8 @@ containedContents.register("stars", (boundary, raw) => {
     const world = config.size * width * points.getWorldScale(worldScale).y;
     const projection = camera.projectionMatrix.elements;
     const perspective = projection[11] !== 0;
-    renderer.getDrawingBufferSize(buffer);
+    // Logical (CSS) pixels: three.js multiplies point size by the pixel ratio itself.
+    renderer.getSize(buffer);
     material.size = perspective ? world : (world * projection[5]! * buffer.y) / 2;
   };
   const down = new THREE.Vector3();
