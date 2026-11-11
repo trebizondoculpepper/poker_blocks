@@ -98,9 +98,10 @@ function passiveCube(block: PassiveBlock): OfferCube {
 
 /** A card offer's cube: the same appearance as a card on the table. */
 function cardCube(block: CardBlock): OfferCube {
+  const look = cardLook(block);
   const appearance = createBlockAppearance(
-    cardFaceArt(block.traits.identity),
-    cardLook(block),
+    cardFaceArt(block.traits.identity, { face: look.cardFace }),
+    look,
     1.35,
   );
   const mesh = new THREE.Mesh(appearance.geometry, appearance.materials);

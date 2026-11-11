@@ -16,8 +16,8 @@
  *   colour. Both come from the block's own art seed: cosmetic, the same every time it's drawn, and
  *   never the run's random stream.
  * - **Print:** the block's face art goes over the wrap on every face, in the material's ink, as on
- *   any other block: a letter block shows its letter (#558). A rankless Present prints nothing
- *   because its art has nothing to print, not because the wrap hides it.
+ *   any other block: a letter block shows its letter (#558). A Present's card prints nothing
+ *   because the material chooses the `concealed` card face (#568), not because the wrap hides it.
  * - **Resources:** the box owns its textures and materials (released by the block's usual cleanup);
  *   the rosette's geometry goes with its material.
  */

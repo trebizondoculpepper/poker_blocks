@@ -81,9 +81,10 @@ export function createBlockViews(parents: {
   return {
     all,
     create(block, size, location) {
+      const look = cardLook(block);
       const appearance = createBlockAppearance(
-        cardFaceArt(block.traits.identity),
-        cardLook(block),
+        cardFaceArt(block.traits.identity, { face: look.cardFace }),
+        look,
         size,
       );
       const { geometry, textures, edgeColor, edgeOpacity } = appearance;
