@@ -1322,10 +1322,12 @@ function contained(context: AssemblyContext): BlockAppearance {
     definition.appearance.contents,
   );
   return {
-    ...appearanceBase(context, [print.texture, ...own], faces as THREE.MeshStandardMaterial[], [
-      ...extras,
-      print.skin,
-    ]),
+    ...appearanceBase(
+      context,
+      [print.texture, ...artwork, ...own],
+      faces as THREE.MeshStandardMaterial[],
+      [...extras, print.skin],
+    ),
     // The front skin draws after the contents and residue, before the gloss (#329 layers).
     faceLayer: containedLayers.shellFront,
   };

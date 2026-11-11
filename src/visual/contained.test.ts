@@ -151,6 +151,9 @@ describe("a shell's generated textures are the block's to dispose (#399 review)"
       );
       expect(bumpMaps.size).toBeGreaterThan(0);
       for (const map of bumpMaps) expect(appearance.textures).toContain(map);
+      // The shell's own artwork (the frame's face texture) is the block's to dispose too.
+      const maps = new Set(appearance.materials.flatMap((material) => [material.map ?? []].flat()));
+      for (const map of maps) expect(appearance.textures).toContain(map);
       (appearance.extras ?? []).forEach((mesh) => (mesh.material as THREE.Material).dispose());
     } finally {
       vi.unstubAllGlobals();
