@@ -7,6 +7,22 @@ const all: readonly MaterialDefinition[] = [...materialDefinitions, ...experimen
 const exitOf = (id: string) => all.find((material) => material.id === id)!.appearance.exit!;
 
 const release = vi.fn();
+
+/** A container block: a shell mesh holding a contents mesh, each with its own material. */
+function container(): ExitVisual & { shellMesh: THREE.Mesh; contentsMesh: THREE.Mesh } {
+  const root = new THREE.Group();
+  const shellMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial(),
+  );
+  const contentsMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8, 0.8, 0.8),
+    new THREE.MeshStandardMaterial(),
+  );
+  root.add(shellMesh, contentsMesh);
+  new THREE.Group().add(root);
+  return { root, shell: [shellMesh], contents: [contentsMesh], release, shellMesh, contentsMesh };
+}
 function visual(): ExitVisual {
   const root = new THREE.Group();
   const body = new THREE.Mesh(
@@ -69,6 +85,21 @@ describe("material exits (#438)", () => {
     expect(shards[0]!.material.opacity).toBeGreaterThan(0);
     expect(shards[0]!.material.opacity).toBeLessThan(0.6);
     runner.update(0.3);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("cloud simply fades away, with no debris (#459)", () => {
+    release.mockClear();
+    const v = container();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "cloud" }, v, exitOf("cloud"));
+    expect(v.root.children).toHaveLength(2);
+    runner.update(0.3);
+    expect((v.shellMesh.material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.7);
+    expect((v.contentsMesh.material as THREE.MeshStandardMaterial).opacity).toBeLessThan(0.7);
+    expect(v.root.children).toHaveLength(2);
+    runner.update(0.4);
     expect(runner.active).toBe(0);
     expect(release).toHaveBeenCalledOnce();
   });
