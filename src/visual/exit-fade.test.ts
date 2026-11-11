@@ -16,71 +16,39 @@ function visual() {
   return { v, shell, contents, shellMaterial, contentsMaterial, released };
 }
 const snapshot = { blockId: "b1" };
-const opacity = (mesh: THREE.Mesh) => (mesh.material as THREE.Material).opacity;
 
 describe("fade exit effect (#440)", () => {
-  it("fades its target to nothing over its configured time, on private copies of its materials", () => {
-    const { v, shell, contents, shellMaterial } = visual();
+  it("fades its target to nothing over its configured time", () => {
+    const { v, shellMaterial, contentsMaterial } = visual();
     const runner = createExitRunner();
     runner.start(snapshot, v, {
       steps: [{ effects: [{ effect: "fade", target: "shell", config: { seconds: 1 } }] }],
     });
-    expect(shell.material).not.toBe(shellMaterial);
     runner.update(0.5);
-    expect(opacity(shell)).toBeCloseTo(0.5);
-    // The shared original and the untargeted contents are untouched.
-    expect(shellMaterial.opacity).toBe(1);
-    expect(opacity(contents)).toBe(0.8);
+    expect(shellMaterial.opacity).toBeCloseTo(0.5);
+    expect(shellMaterial.transparent).toBe(true);
+    // The untargeted contents are untouched.
+    expect(contentsMaterial.opacity).toBe(0.8);
     runner.update(0.5);
     expect(runner.active).toBe(0);
   });
 
   it("can fade only a contained block's contents, from their own opacity", () => {
-    const { v, contents, shell, shellMaterial } = visual();
+    const { v, shellMaterial, contentsMaterial } = visual();
     const runner = createExitRunner();
     runner.start(snapshot, v, {
       steps: [{ effects: [{ effect: "fade", target: "contents", config: { seconds: 1 } }] }],
     });
     runner.update(0.25);
-    expect(opacity(contents)).toBeCloseTo(0.6);
-    expect(shell.material).toBe(shellMaterial);
+    expect(contentsMaterial.opacity).toBeCloseTo(0.6);
+    expect(shellMaterial.opacity).toBe(1);
     runner.dispose();
   });
 
-  it("puts the original materials back and frees its copies when it ends, before the release", () => {
-    const { v, shell, shellMaterial, released } = visual();
-    const runner = createExitRunner();
-    runner.start(snapshot, v, {
-      steps: [{ effects: [{ effect: "fade", config: { seconds: 0.2 } }] }],
-    });
-    const copy = shell.material as THREE.Material;
-    const freed = vi.spyOn(copy, "dispose");
-    runner.update(0.3);
-    expect(shell.material).toBe(shellMaterial);
-    expect(freed).toHaveBeenCalledTimes(1);
-    expect(released).toHaveBeenCalledTimes(1);
-  });
-
-  it("ends at once under reduced motion, and on cancellation", () => {
-    const reduced = visual();
-    const runner = createExitRunner(() => true);
-    runner.start(snapshot, reduced.v, { steps: [{ effects: [{ effect: "fade" }] }] });
-    expect(opacity(reduced.shell)).toBe(0);
-    runner.update(0.016);
-    expect(runner.active).toBe(0);
-    const cancelled = visual();
-    const other = createExitRunner();
-    other.start(snapshot, cancelled.v, { steps: [{ effects: [{ effect: "fade" }] }] });
-    other.cancel("b1");
-    expect(cancelled.shell.material).toBe(cancelled.shellMaterial);
-    expect(cancelled.released).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the original's shader hook, program key and live uniforms on its copy (#490 review)", () => {
+  it("works in place: every material keeps its hooks, program key and live uniforms (#490 review)", () => {
     const { v, shell, shellMaterial } = visual();
     const hook = vi.fn();
     shellMaterial.onBeforeCompile = hook;
-    shellMaterial.customProgramCacheKey = () => "clipped-fluid";
     const shaded = new THREE.ShaderMaterial({ uniforms: { time: { value: 1 } } });
     const extra = new THREE.Mesh(new THREE.BoxGeometry(), shaded);
     v.root.add(extra);
@@ -88,11 +56,43 @@ describe("fade exit effect (#440)", () => {
     runner.start(snapshot, v, {
       steps: [{ effects: [{ effect: "fade", config: { seconds: 1 } }] }],
     });
-    const copy = shell.material as THREE.Material;
-    copy.onBeforeCompile({} as never, {} as never);
-    expect(hook).toHaveBeenCalledTimes(1);
-    expect(copy.customProgramCacheKey()).toBe("clipped-fluid");
-    expect((extra.material as THREE.ShaderMaterial).uniforms).toBe(shaded.uniforms);
+    runner.update(0.5);
+    expect(shell.material).toBe(shellMaterial);
+    // oxlint-disable-next-line typescript/unbound-method -- comparing hook identity only
+    expect(shellMaterial.onBeforeCompile).toBe(hook);
+    expect(extra.material).toBe(shaded);
+    expect(shaded.opacity).toBeCloseTo(0.5);
     runner.dispose();
+  });
+
+  it("restores each material's opacity, transparency and depth writing before the release", () => {
+    const { v, shellMaterial, released } = visual();
+    let restoredFirst = false;
+    released.mockImplementation(() => {
+      restoredFirst =
+        shellMaterial.opacity === 1 && !shellMaterial.transparent && shellMaterial.depthWrite;
+    });
+    const runner = createExitRunner();
+    runner.start(snapshot, v, {
+      steps: [{ effects: [{ effect: "fade", config: { seconds: 0.2 } }] }],
+    });
+    runner.update(0.3);
+    expect(released).toHaveBeenCalledTimes(1);
+    expect(restoredFirst).toBe(true);
+  });
+
+  it("ends at once under reduced motion, and restores on cancellation", () => {
+    const reduced = visual();
+    const runner = createExitRunner(() => true);
+    runner.start(snapshot, reduced.v, { steps: [{ effects: [{ effect: "fade" }] }] });
+    expect(reduced.shellMaterial.opacity).toBe(0);
+    runner.update(0.016);
+    expect(runner.active).toBe(0);
+    const cancelled = visual();
+    const other = createExitRunner();
+    other.start(snapshot, cancelled.v, { steps: [{ effects: [{ effect: "fade" }] }] });
+    other.cancel("b1");
+    expect(cancelled.shellMaterial.opacity).toBe(1);
+    expect(cancelled.released).toHaveBeenCalledTimes(1);
   });
 });
