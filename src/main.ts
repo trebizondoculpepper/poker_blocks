@@ -85,6 +85,7 @@ const blockViews: BlockViews = createBlockViews({
 const field: FieldView = createFieldView({
   views: blockViews,
   assembly: cameraView.assembly,
+  world: view.scene,
   cubeSize,
   onCenter: (center) => cameraView.updateRotationCenter(center),
 });
