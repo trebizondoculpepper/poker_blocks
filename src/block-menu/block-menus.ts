@@ -12,8 +12,8 @@
  * - **Keyboard and screen readers:** each choice also has a visually hidden real `<button>`, so
  *   Tab order and screen-reader semantics are native without drawing a second text menu. Focusing
  *   one focuses its cube (`input.focus`, which describes it); activating one presses and releases
- *   its cube, so activation, sounds and refusals are the cube's own. Arrow keys move between them;
- *   Escape calls the dialog's `onBack`, when it has one.
+ *   its cube, so activation, sounds and refusals are the cube's own. Arrow keys move between them.
+ *   While a menu is shown, Escape anywhere calls its `onBack`, when it has one.
  * - **Availability** comes from the caller's own conditions, live: `setAvailability(action,
  *   { enabled, reason })` updates the cube (`input.enabled`) and its button (`aria-disabled`).
  * - **Lifecycle:** `hide` (or showing another dialog) disposes the cubes, listeners and dancers;
@@ -114,16 +114,23 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
           event.preventDefault();
           buttons[next]?.focus();
         }
-        if (isBackKey(event.key) && handlers.onBack) {
-          event.preventDefault();
-          handlers.onBack();
-        }
       });
       buttons.push(button);
       byAction.set(item.action, { button });
       list.append(button);
     });
 
+    // Escape goes back while this menu is shown, wherever focus is (a cube clicked, or every
+    // choice disabled so none takes focus); removed when the menu hides (#532 review).
+    if (handlers.onBack) {
+      const onKey = (event: KeyboardEvent) => {
+        if (!isBackKey(event.key)) return;
+        event.preventDefault();
+        handlers.onBack?.();
+      };
+      window.addEventListener("keydown", onKey);
+      stops.push(() => window.removeEventListener("keydown", onKey));
+    }
     void stage.show(dialog.items, rowPositions(dialog.items.length)).then((made) => {
       if (mine !== token) return;
       cubes = made;
