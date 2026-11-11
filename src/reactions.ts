@@ -56,9 +56,14 @@ reactionMatchers.register("neighbour-state", (_block, neighbours, config) => {
   );
 });
 
-// A neighbour made of a given material (flame beside ice, say).
-reactionMatchers.register("neighbour-material", (_block, neighbours, config) => {
-  const { material } = config as { material: BlockMaterial };
+// A neighbour made of a given material (flame beside ice, say), unless the block already holds
+// one of the listed state bonuses (boiling water stays boiling beside ordinary flame, #368).
+reactionMatchers.register("neighbour-material", (block, neighbours, config) => {
+  const { material, unlessState = [] } = config as {
+    material: BlockMaterial;
+    unlessState?: readonly string[];
+  };
+  if (unlessState.includes(block.traits.stateBonus?.id ?? "")) return false;
   return neighbours.some((neighbour) => materialOf(neighbour) === material);
 });
 
