@@ -919,7 +919,9 @@ A contained block may list **inclusions**: things suspended in its contents, reg
 - **Drawing:** soft rings of constant world size under any camera, using the helper shared with the star field (`src/visual/world-sized-points.ts`).
 - **Reduced motion:** the bubbles hold still.
 
-**Hot water** (`hotWaterInPlastic`, an experiment) is the clear water with slow bubbles: `count: 20, rise: 0.06, size: 0.1, rest: 1.6`. Ordinary water omits the inclusion and settles identically. Boiling water (#354) is meant to reuse the handler with faster, busier configuration.
+**Hot water** (`hotWaterInPlastic`, an experiment) is the clear water with slow bubbles: `count: 20, rise: 0.06, size: 0.1, rest: 1.6`. Ordinary water omits the inclusion and settles identically. **Boiling water** (`boilingWaterInPlastic`, #354) is the same water and handler, configured fast and busy: `count: 48, rise: 0.6, rest: 0.25`. Ordinary, hot and boiling water differ only in their inclusions.
+
+**Steam was left out** of boiling water (#354, which made it optional). A surface-sourced vapour would be one more additive transparent layer above the liquid, on top of refractive water, which is already the most expensive contents in #346's budget. Its headspace is also small at the water's 0.55 level. The fast bubbles alone make the distinction the ticket requires. Steam could later be its own inclusion reading `liquidSurface`, with no change to the bubbles.
 
 ### Magic Lock: contained stars (#349)
 
