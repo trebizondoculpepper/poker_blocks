@@ -15,6 +15,7 @@ import type { DanceFloor } from "../dance/dance-floor";
 import { gameModeFor, modeLink, type DevDialogRoomConfig, type DialogConfig } from "../game-modes";
 import { springAnchor } from "../traits/spring-anchor";
 import { createCubeStage, type StageCube } from "./cube-stage";
+import { playSfx } from "../audio/sfx";
 import "./dialog-room.css";
 
 export type DialogRoom = {
@@ -57,6 +58,7 @@ export function createDialogRoom(host: HTMLElement, floor: Pick<DanceFloor, "joi
       <output data-part="count"></output>
       <button type="button" data-part="next">Next</button>
       <button type="button" data-part="hold">Hold</button>
+      <button type="button" data-part="toggle">Toggle availability</button>
       <p>Action: <output data-part="action">none yet</output></p>
       <p>Inspect: <output data-part="inspect">hover or tap a block</output></p>
     </footer>`;
@@ -71,6 +73,9 @@ export function createDialogRoom(host: HTMLElement, floor: Pick<DanceFloor, "joi
   let held = false;
   let timer = 0;
   let leaveFloor: (() => void)[] = [];
+  // The cubes on show and whether each is available now, so availability can be toggled live
+  // to audition the disabled look's transitions (#461).
+  let shown: { block: StageCube["block"]; enabled: boolean }[] = [];
 
   function present(): void {
     leaveFloor.forEach((leave) => leave());
@@ -86,9 +91,14 @@ export function createDialogRoom(host: HTMLElement, floor: Pick<DanceFloor, "joi
     part("title").textContent = dialog.title;
     part("count").textContent = `${current + 1} / ${dialogs.length}`;
     const { spring, beat } = config;
-    void stage
-      .show(dialog.items, rowPositions(dialog.items.length))
-      .then((cubes) => cubes.forEach((cube) => mount(cube, spring, beat)));
+    shown = [];
+    void stage.show(dialog.items, rowPositions(dialog.items.length)).then((cubes) => {
+      cubes.forEach((cube) => mount(cube, spring, beat));
+      shown = cubes.map(({ block, index }) => ({
+        block,
+        enabled: dialog.items[index]?.enabled ?? true,
+      }));
+    });
   }
 
   /** Put a cube on its spring, and kick it on its beat, a little after its left neighbour. */
@@ -127,6 +137,13 @@ export function createDialogRoom(host: HTMLElement, floor: Pick<DanceFloor, "joi
   }
   part("previous").addEventListener("click", () => step(-1));
   part("next").addEventListener("click", () => step(1));
+  part("toggle").addEventListener("click", () => {
+    playSfx("ui.click");
+    for (const cube of shown) {
+      cube.enabled = !cube.enabled;
+      cube.block.emit("input.enabled", cube.enabled);
+    }
+  });
   part("hold").addEventListener("click", () => {
     held = !held;
     part("hold").textContent = held ? "Cycle" : "Hold";
