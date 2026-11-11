@@ -100,10 +100,11 @@ export type PassiveDefinition = {
    */
   shop?: PassiveShopBalance;
   /**
-   * Replaces a material's field reward rate while installed (Le Chef: 3 coins per steak
-   * instead of 1, #373). The highest installed override for a material applies.
+   * Settlement reward modifiers it brings while installed (#373): registered handlers by name
+   * (`rewardModifiers` in src/stage-rewards.ts), each with its configuration. Le Chef brings
+   * `field-rate`, raising a material's field reward rate.
    */
-  fieldRewardOverride?: { material: string; coinsPerCard: number };
+  rewardModifiers?: readonly { id: string; config: unknown }[];
   /** Excluded from new draws; kept so a save that names it still resolves. */
   retired?: boolean;
 };
@@ -235,7 +236,7 @@ const definitions: PassiveDefinition[] = [
       "After each stage, each Bloody, Rare or Medium Rare steak on the table pays 3 coins instead of 1.",
     traitId: "passive.event-rules",
     eventRules: [],
-    fieldRewardOverride: { material: "meat", coinsPerCard: 3 },
+    rewardModifiers: [{ id: "field-rate", config: { material: "meat", coinsPerCard: 3 } }],
   },
   {
     id: "carnivore",

@@ -1,3 +1,4 @@
+import { Registry } from "./core/registry";
 /**
  * Stage rewards (issue #12): what a won stage pays, as an itemised ledger. Pure: the
  * session applies the coins once per stage, and the stage-won screen shows the rows.
@@ -75,10 +76,28 @@ export function materialHandRewardEntries(state: GameState): RewardEntry[] {
   });
 }
 
+/** A settlement rate a reward modifier may change: what kind of reward, for what, and its rate. */
+export type RewardRate = { kind: "field"; material: string; rate: number };
+
+/**
+ * Settlement reward modifiers, by handler name (#373): each receives a rate and its configured
+ * data and returns the new rate. Passives list the ones they bring (`rewardModifiers`); the
+ * ledger runs them without knowing what any one does.
+ */
+export const rewardModifiers = new Registry<(rate: RewardRate, config: unknown) => number>(
+  "reward modifier",
+);
+
+// Replaces a material's field reward rate with a higher one (Le Chef: steak at 3, not 1).
+rewardModifiers.register("field-rate", (rate, raw) => {
+  const { material, coinsPerCard } = raw as { material: string; coinsPerCard: number };
+  return rate.material === material ? Math.max(rate.rate, coinsPerCard) : rate.rate;
+});
+
 /**
  * Rewards configured on materials left on the field at settlement (#373, steak), on wins and
  * losses alike: cards of the material at a qualifying doneness. An installed passive's
- * `fieldRewardOverride` for the material replaces the rate (the highest applies).
+ * reward modifiers (registered handlers, configured on the passive) may change the rate.
  */
 export function materialFieldRewardEntries(state: GameState): RewardEntry[] {
   return materialDefinitions.flatMap(({ id }) => {
@@ -89,15 +108,17 @@ export function materialFieldRewardEntries(state: GameState): RewardEntry[] {
         materialOf(block) === id &&
         reward.doneness.includes(donenessSteps(block).at(block.traits.doneness?.step ?? 0) ?? ""),
     ).length;
-    const overrides = state.passiveRack.flatMap(({ definitionId }) =>
-      [passiveDefinitions.has(definitionId) ? passiveDefinitions.get(definitionId) : []]
-        .flat()
-        .flatMap((definition) => [definition.fieldRewardOverride ?? []])
-        .flat()
-        .filter(({ material }) => material === id)
-        .map(({ coinsPerCard }) => coinsPerCard),
-    );
-    const rate = Math.max(reward.coinsPerCard, ...overrides);
+    // Installed passives' reward modifiers, each through its registered handler.
+    const rate = state.passiveRack
+      .flatMap(({ definitionId }) =>
+        [passiveDefinitions.has(definitionId) ? passiveDefinitions.get(definitionId) : []].flat(),
+      )
+      .flatMap((definition) => definition.rewardModifiers ?? [])
+      .reduce(
+        (current, { id: handler, config }) =>
+          rewardModifiers.get(handler)({ kind: "field", material: id, rate: current }, config),
+        reward.coinsPerCard,
+      );
     return count && rate
       ? [
           {
