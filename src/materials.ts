@@ -1029,6 +1029,28 @@ function glassContainerExperiments(): MaterialDefinition[] {
  */
 export const experimentalMaterials: readonly MaterialDefinition[] = [
   {
+    // The Present's wrapped look (#496, epic #492): a visual experiment for audition only, never
+    // dealt or stocked. Foil wrap, a contrasting shiny ribbon and rosette, folds underneath; its
+    // colours come from each block's own art seed. No rank or suit is printed.
+    id: "giftWrap",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
+    name: "Present (gift wrap)",
+    acoustics: { character: "papery", hardness: 2, attach: "material.attach.paper" },
+    traits: {},
+    appearance: {
+      pattern: "cardSheet",
+      assembly: "giftBox",
+      surface: "matte",
+      height: "none",
+      ink: lightInk,
+      edge: { color: 0x000000, opacity: 0 },
+      // Slightly rounded edges, as the owner asked.
+      geometry: { shape: "rounded", segments: 3, radius: 0.06, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: noEnds,
+    },
+  },
+  {
     // An empty plastic vessel (#330): custard's container with nothing inside, composed rather
     // than special-cased. A visual experiment only.
     id: "emptyVessel",
