@@ -177,3 +177,15 @@ describe("material reactions (#366)", () => {
     expect(getMaterialDefinition("water").shop).toBeUndefined();
   });
 });
+
+describe("earth bakes into terracotta (#371)", () => {
+  it("is a reaction on earth's definition: beside flame it becomes terracotta", async () => {
+    const { getMaterialDefinition } = await import("./materials");
+    expect(getMaterialDefinition("earth").reactions).toEqual([
+      {
+        when: { id: "neighbour-material", config: { material: "fire" } },
+        results: [{ id: "transform", config: { material: "terracotta", sound: "reaction.bake" } }],
+      },
+    ]);
+  });
+});

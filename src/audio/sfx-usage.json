@@ -305,9 +305,10 @@
     }
   },
   "material.attach.terracotta": {
-    "uses": 1,
+    "uses": 3,
     "files": {
-      "materials.ts": 1
+      "audio/sfx-registry.ts (placeholder)": 1,
+      "materials.ts": 2
     }
   },
   "material.attach.gold": {
@@ -393,6 +394,12 @@
     "uses": 2,
     "files": {
       "materials.ts": 2
+    }
+  },
+  "reaction.bake": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
     }
   },
   "reaction.melt": {

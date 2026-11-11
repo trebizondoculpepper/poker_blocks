@@ -181,8 +181,10 @@ describe("card offers (#143)", () => {
     const price = (id: string) => getMaterialDefinition(id as BlockMaterial).shop?.basePrice;
     // Paper is never sold: every run starts with it.
     expect(
-      ["paper", "wood", "steel", "terracotta", "meat", "ice", "fire", "custard", "gold"].map(price),
+      ["paper", "wood", "steel", "earth", "meat", "ice", "fire", "custard", "gold"].map(price),
     ).toEqual([undefined, 3, 4, 3, 6, 2, 4, 3, 8]);
+    // Terracotta is only baked from earth (#371).
+    expect(price("terracotta")).toBeUndefined();
     expect(price("prismatic")).toBe(12);
   });
 });
@@ -235,7 +237,9 @@ describe("stock by round and weight (#145)", () => {
       new Set(Array.from({ length: 60 }, (_, seed) => materials(stockAt(round, seed + 1))).flat());
     expect([...seen(1)]).toEqual(["wood"]);
     expect(seen(2).has("steel")).toBe(true);
-    expect(seen(2).has("terracotta")).toBe(false);
+    expect(seen(2).has("earth")).toBe(true);
+    expect(seen(1).has("earth")).toBe(false);
+    for (const round of [2, 5, 9]) expect(seen(round).has("terracotta")).toBe(false);
     expect(seen(3).has("custard")).toBe(true);
     expect(seen(2).has("custard")).toBe(false);
     expect(seen(5).has("gold")).toBe(false);
@@ -254,8 +258,8 @@ describe("stock by round and weight (#145)", () => {
     };
     expect([1, 2, 3, 4, 5, 6, 7].map(leaders)).toEqual([
       ["wood"],
-      ["steel"],
-      ["custard", "terracotta"],
+      ["earth", "steel"],
+      ["custard"],
       ["fire", "ice", "meat"],
       // Nothing unlocks in round 5 since custard moved to round 3 (#381): round 4's curves lead.
       ["fire", "ice", "meat"],
