@@ -17,6 +17,7 @@ import type { CardBlock } from "./cards";
 import type { RuleCommand } from "./event-rules";
 import type { GameState, PlacedBlock } from "./game-state";
 import type { ReactionState } from "./passives";
+import type { SoundEffectId } from "./audio/sfx-registry";
 import { changeCardMaterial } from "./card-material";
 import { setCardStateBonus } from "./state-bonuses";
 import { getMaterialDefinition, materialOf, type BlockMaterial } from "./materials";
@@ -45,6 +46,16 @@ export type ReactionResult = (block: CardBlock, config: unknown) => RuleCommand[
 export const reactionMatchers = new Registry<ReactionMatcher>("reaction matcher");
 export const reactionResults = new Registry<ReactionResult>("reaction result");
 
+// A neighbour made of a given material and, optionally, holding a given state bonus (hot water
+// is water with the "heated" bonus, #367).
+reactionMatchers.register("neighbour-state", (_block, neighbours, config) => {
+  const { material, stateBonus } = config as { material: BlockMaterial; stateBonus: string };
+  return neighbours.some(
+    (neighbour) =>
+      materialOf(neighbour) === material && neighbour.traits.stateBonus?.id === stateBonus,
+  );
+});
+
 // A neighbour made of a given material (flame beside ice, say).
 reactionMatchers.register("neighbour-material", (_block, neighbours, config) => {
   const { material } = config as { material: BlockMaterial };
@@ -61,29 +72,36 @@ reactionResults.register("transform", (block, config) => [
  * reports `reaction.applied` only when something actually changed, so a reaction that finds
  * its block already transformed is not presented or rewarded again.
  */
-registerRuleCommand<{ blockId: string; material?: BlockMaterial; stateBonus?: string }>(
-  "transform-block",
-  ({ blockId, material, stateBonus }, target) => {
-    const before = target.state;
-    const from = reactionState(before, blockId);
-    const changed = [material ?? []]
-      .flat()
-      .reduce((current, kind) => changeCardMaterial(current, blockId, kind) ?? current, before);
-    const after = [stateBonus ?? []]
-      .flat()
-      .reduce((current, id) => setCardStateBonus(current, blockId, id) ?? current, changed);
-    target.update(after);
-    return after === before
-      ? []
-      : [
-          {
-            type: "reaction.applied",
-            blockId,
-            reaction: { from: from!, to: reactionState(after, blockId)! },
+registerRuleCommand<{
+  blockId: string;
+  material?: BlockMaterial;
+  stateBonus?: string;
+  /** The registered sound presenting the change (#367). */
+  sound?: SoundEffectId;
+}>("transform-block", ({ blockId, material, stateBonus, sound }, target) => {
+  const before = target.state;
+  const from = reactionState(before, blockId);
+  const changed = [material ?? []]
+    .flat()
+    .reduce((current, kind) => changeCardMaterial(current, blockId, kind) ?? current, before);
+  const after = [stateBonus ?? []]
+    .flat()
+    .reduce((current, id) => setCardStateBonus(current, blockId, id) ?? current, changed);
+  target.update(after);
+  return after === before
+    ? []
+    : [
+        {
+          type: "reaction.applied",
+          blockId,
+          reaction: {
+            from: from!,
+            to: reactionState(after, blockId)!,
+            ...(sound ? { sound } : {}),
           },
-        ];
-  },
-);
+        },
+      ];
+});
 
 /** A block's material and state bonus, as a reaction event reports them. */
 function reactionState(state: GameState, blockId: string): ReactionState | undefined {
@@ -99,7 +117,13 @@ function reactionState(state: GameState, blockId: string): ReactionState | undef
 }
 
 /** A reaction that changed its block this play, before and after, for presentation (#366). */
-export type AppliedReaction = { blockId: string; from: ReactionState; to: ReactionState };
+export type AppliedReaction = {
+  blockId: string;
+  from: ReactionState;
+  to: ReactionState;
+  /** The registered sound presenting it, if the reaction names one. */
+  sound?: SoundEffectId;
+};
 
 /** The reactions a block's material lists, in order. */
 export const materialReactions = (block: CardBlock): readonly Reaction[] =>

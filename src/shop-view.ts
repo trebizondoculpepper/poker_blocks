@@ -83,6 +83,7 @@ function passiveCube(block: PassiveBlock): OfferCube {
   const appearance = passiveAppearance(block);
   const visual = createPassiveVisual(appearance, 1.35);
   const mesh = new THREE.Mesh(visual.geometry, visual.materials);
+  mesh.add(...(visual.extras ?? []));
   const edgeMaterial = new THREE.LineBasicMaterial({ color: appearance.palette.edge });
   mesh.add(new THREE.LineSegments(visual.edges, edgeMaterial));
   return {

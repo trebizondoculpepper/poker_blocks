@@ -250,6 +250,11 @@ export type PassiveVisual = {
   edges: THREE.EdgesGeometry;
   /** The artwork on each geometry face, in geometry order. */
   faces: readonly PassiveFaceDesign[];
+  /**
+   * Meshes drawn inside the token (a material block's fire core or fluid, #391): consumers
+   * attach them to the token mesh; `dispose` releases them.
+   */
+  extras?: readonly THREE.Mesh[];
   dispose(): void;
 };
 

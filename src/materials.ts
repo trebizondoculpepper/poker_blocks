@@ -311,6 +311,27 @@ export const materialDefinitions = [
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
     name: "Ice",
     acoustics: { character: "clinking", hardness: 5, attach: "material.attach.ice" },
+    // Melts beside flame or hot water into water with a +1 bonus (#367). Rank and suit stay.
+    reactions: [
+      {
+        when: { id: "neighbour-material", config: { material: "fire" } },
+        results: [
+          {
+            id: "transform",
+            config: { material: "water", stateBonus: "melted", sound: "reaction.melt" },
+          },
+        ],
+      },
+      {
+        when: { id: "neighbour-state", config: { material: "water", stateBonus: "heated" } },
+        results: [
+          {
+            id: "transform",
+            config: { material: "water", stateBonus: "melted", sound: "reaction.melt" },
+          },
+        ],
+      },
+    ],
     traits: { transparent: {} },
     shop: {
       basePrice: 2,
@@ -434,6 +455,33 @@ export const materialDefinitions = [
         config: { fill: 0xf2c84b, surface: 0xfadf7e, level: 0.45, settleSeconds: 1.4 },
       },
       residue: { effect: "wallTrace", config: { fill: 0xf2c84b, seconds: 4, opacity: 0.45 } },
+    },
+  },
+  {
+    // Water (#367): only ever made by a reaction (ice melting), never sold or unlocked, so it
+    // has no shop price. A clear blue fluid in custard's plastic vessel until #333 gives it
+    // refractive optics.
+    id: "water",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
+    name: "Water",
+    acoustics: { character: "splashy", hardness: 1.5, attach: "material.attach.custard" },
+    traits: { transparent: {} },
+    appearance: {
+      pattern: "cardSheet",
+      assembly: "contained",
+      surface: "clear",
+      height: "none",
+      ink: lightInk,
+      edge: { color: 0xe8eef2, opacity: 0.3 },
+      geometry: { shape: "rounded", segments: 1, radius: 0.08, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: noEnds,
+      container: { shell: "plasticShell", config: { opacity: 0.16, inset: 0.92, gloss: 1.6 } },
+      contents: {
+        effect: "levellingFluid",
+        config: { fill: 0x5fa8d8, surface: 0x9fd2f0, level: 0.55, settleSeconds: 0.5 },
+      },
+      residue: { effect: "wallTrace", config: { fill: 0x5fa8d8, seconds: 1.5, opacity: 0.3 } },
     },
   },
 ] as const satisfies readonly MaterialDefinition[];

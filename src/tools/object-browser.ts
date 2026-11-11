@@ -98,10 +98,9 @@ const categories: readonly Category[] = [
               passiveAppearance(createPassiveBlock(id, `browser.${id}`)),
               size,
             );
-            return {
-              object: new THREE.Mesh(visual.geometry, visual.materials),
-              dispose: () => visual.dispose(),
-            };
+            const object = new THREE.Mesh(visual.geometry, visual.materials);
+            object.add(...(visual.extras ?? []));
+            return { object, dispose: () => visual.dispose() };
           },
         };
       }),
