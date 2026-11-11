@@ -13,6 +13,9 @@
  * - **Targets.** An effect acts on a registered target (`exitTargets`): the whole block, its
  *   shell, or its contents (a contained block's fluid or flame). A target with nothing in it
  *   gives the effect an empty list, never a special case.
+ * - **Effect lifecycle.** An effect is updated until it reports it has finished, then never
+ *   again; one still running at the step's cap (or on cancellation) is told to `finish`. Every
+ *   effect is disposed exactly once, when its step ends.
  * - **Bounds.** Every step has a time cap (`maxSeconds`, default 2): an effect still running at
  *   the cap is finished there, so no exit lingers. Under reduced motion effects get the flag and
  *   should finish at once or soon; the cap still holds.
@@ -80,6 +83,8 @@ class Exit {
   private remaining: ExitStep[];
   private current: ExitStep | undefined;
   private running: ExitEffectInstance[] = [];
+  /** Effects of this step that have reported they are finished: never updated again. */
+  private finished = new Set<ExitEffectInstance>();
   private elapsed = 0;
   done = false;
 
@@ -103,6 +108,7 @@ class Exit {
   private next(): void {
     this.running.forEach((effect) => effect.dispose());
     this.running = [];
+    this.finished = new Set();
     this.elapsed = 0;
     this.current = this.remaining.shift();
     if (!this.current) return this.end();
@@ -123,15 +129,18 @@ class Exit {
     if (this.done) return;
     this.elapsed += delta;
     const cap = this.current?.maxSeconds ?? defaultStepSeconds;
-    const stillRunning = this.running.map((effect) => effect.update(delta)).some(Boolean);
-    if (stillRunning && this.elapsed < cap) return;
-    this.running.forEach((effect) => effect.finish());
+    for (const effect of this.running.filter((each) => !this.finished.has(each)))
+      if (!effect.update(delta)) this.finished.add(effect);
+    const unfinished = this.running.filter((each) => !this.finished.has(each));
+    if (unfinished.length && this.elapsed < cap) return;
+    // At the cap, anything still running jumps to its end; finished effects are left alone.
+    unfinished.forEach((effect) => effect.finish());
     this.next();
   }
 
   cancel(): void {
     if (this.done) return;
-    this.running.forEach((effect) => effect.finish());
+    this.running.filter((each) => !this.finished.has(each)).forEach((effect) => effect.finish());
     this.running.forEach((effect) => effect.dispose());
     this.running = [];
     this.end();

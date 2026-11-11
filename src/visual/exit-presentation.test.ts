@@ -7,7 +7,8 @@ import {
   type ExitVisual,
 } from "./exit-presentation";
 
-// A stand-in effect: runs for `seconds`, logging what happens to it.
+// A stand-in effect: runs for `seconds`, logging what happens to it (and any update after it
+// has finished, which the runner must never send).
 const log: string[] = [];
 const contexts: ExitContext[] = [];
 exitEffects.register("test-timed", (context, raw) => {
@@ -17,6 +18,7 @@ exitEffects.register("test-timed", (context, raw) => {
   log.push(`${name}:start`);
   return {
     update(delta) {
+      if (left <= 0) log.push(`${name}:late-update`);
       left -= delta;
       return left > 0;
     },
@@ -54,10 +56,11 @@ describe("block exit presentation (#439)", () => {
     runner.update(0.3);
     expect(log).toEqual(["a:start", "b:start"]);
     runner.update(0.2);
-    expect(log.slice(2)).toEqual(["a:finish", "b:finish", "a:dispose", "b:dispose", "c:start"]);
+    // A finished naturally and B ran to its end: neither is told to finish, both are disposed.
+    expect(log.slice(2)).toEqual(["a:dispose", "b:dispose", "c:start"]);
     expect(v.root.parent).toBe(v.parent);
     runner.update(0.2);
-    expect(log.slice(-2)).toEqual(["c:finish", "c:dispose"]);
+    expect(log.slice(-1)).toEqual(["c:dispose"]);
     expect(v.root.parent).toBeNull();
     expect(v.released).toHaveBeenCalledTimes(1);
     expect(runner.active).toBe(0);
@@ -120,5 +123,18 @@ describe("block exit presentation (#439)", () => {
     runner.start(snapshot, v, { steps: [] });
     expect(v.released).toHaveBeenCalledTimes(1);
     expect(runner.active).toBe(0);
+  });
+
+  it("stops updating a parallel effect once it finishes, while the longer one runs on (#477 review)", () => {
+    log.length = 0;
+    const runner = createExitRunner();
+    runner.start(snapshot, visual(), {
+      steps: [{ effects: [timed("short", 0.1), timed("long", 1)] }],
+    });
+    for (let frame = 0; frame < 8; frame++) runner.update(0.1);
+    expect(log).not.toContain("short:late-update");
+    expect(log).not.toContain("short:finish");
+    runner.dispose();
+    expect(log.filter((entry) => entry === "short:dispose")).toHaveLength(1);
   });
 });
