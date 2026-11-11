@@ -590,6 +590,13 @@ const entries = [
     placeholder: "material.attach.fire",
   },
   {
+    id: "reaction.cook",
+    name: "Cook",
+    family: "material",
+    description: "Meat beside flame or boiling water cooks one step as a play settles",
+    placeholder: "material.attach.meat",
+  },
+  {
     id: "reaction.melt",
     name: "Melt",
     family: "material",

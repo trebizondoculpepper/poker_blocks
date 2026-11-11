@@ -35,6 +35,8 @@ export type CardBlock = {
     destructible?: DestructibleTrait;
     /** A scoring bonus from its state, one at a time (src/state-bonuses.ts, #365). */
     stateBonus?: { id: string };
+    /** How cooked it is: a step of its material's doneness steps (src/cooking.ts, #372). */
+    doneness?: { step: number };
   };
 };
 

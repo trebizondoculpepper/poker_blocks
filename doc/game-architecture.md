@@ -256,6 +256,8 @@ When the placed card lands, the scene presents each scoring line from lowest to 
 
 ### Material reactions (proposal, #363, epic #362)
 
+**Cooking (#372):** `src/cooking.ts`. A cookable material lists `cookable.steps` (Raw first), and a card's step is its `doneness` trait. Meat's reactions (beside `fire`, or water holding `boiled`) name the `advance-cooking` result. Its rule command steps the card on the field, saves the step in `cardStates.doneness`, names it in the inspector, and reports `reaction.applied` with the step names before and after, only when something changed. `GameRun.clearTable` calls `resetDoneness`, so doneness lasts one stage. `applyCardStates` moved to `src/card-states.ts`, which avoids an import cycle between card materials, cooking and reactions.
+
 **Heating (#368):** water lists one reaction: beside `fire`, `transform` to the `heated` bonus (sound `reaction.heat`). Its matcher config has `unlessState: ["boiled"]`, a generic `neighbour-material` option that refuses the match when the block already holds a listed bonus, so boiling water is never downgraded.
 
 **First reaction (#367):** ice's definition lists two reactions: beside `fire` (`neighbour-material`), and beside water with the `heated` bonus (the new `neighbour-state` matcher). Both `transform` it to water with the `melted` bonus and name the `reaction.melt` sound. The play presenter redraws reacted blocks already on the table straight after the play and plays each reaction's sound, while a reacted block still landing is drawn from the model when it lands (#389). Water is a gameplay material with no shop price, drawn as custard's vessel with a blue fluid until #333.

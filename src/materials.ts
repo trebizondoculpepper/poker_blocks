@@ -49,6 +49,8 @@ export type MaterialDefinition = {
    * matches taking effect once per play (src/reactions.ts).
    */
   reactions?: readonly Reaction[];
+  /** Doneness steps, first (raw) to last, for a material that cooks (#372). */
+  cookable?: { steps: readonly string[] };
   /**
    * Its transmogrifier's balance, where the default (twice the shop base price, drawn by the
    * material's own weight curve) does not apply or there is no shop price (#388).
@@ -358,6 +360,19 @@ export const materialDefinitions = [
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Meat",
     acoustics: { character: "squishy", hardness: 1, attach: "material.attach.meat" },
+    // Cooks one step per play beside flame or boiling water, stopping at Overcooked; back to
+    // Raw each stage (#372).
+    cookable: { steps: ["Raw", "Bloody", "Rare", "Medium Rare", "Well Done", "Overcooked"] },
+    reactions: [
+      {
+        when: { id: "neighbour-material", config: { material: "fire" } },
+        results: [{ id: "advance-cooking", config: { steps: 1, sound: "reaction.cook" } }],
+      },
+      {
+        when: { id: "neighbour-state", config: { material: "water", stateBonus: "boiled" } },
+        results: [{ id: "advance-cooking", config: { steps: 1, sound: "reaction.cook" } }],
+      },
+    ],
     traits: {},
     shop: {
       basePrice: 6,

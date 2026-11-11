@@ -11,11 +11,10 @@
  */
 import type { CardBlock } from "./cards";
 import type { GameState } from "./game-state";
-import { withStateBonus } from "./state-bonuses";
 import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
 
 /** What the run remembers about a card beyond its definition: its changed material. */
-export type CardState = { material?: BlockMaterial; stateBonus?: string };
+export type CardState = { material?: BlockMaterial; stateBonus?: string; doneness?: number };
 
 /**
  * The card with `material` in place of its current one: the traits its old material brought are
@@ -59,18 +58,4 @@ export function changeCardMaterial(
     ...(state.boughtCards ? { boughtCards: state.boughtCards.map(swap) } : {}),
     cardStates: { ...state.cardStates, [cardId]: { ...state.cardStates?.[cardId], material } },
   };
-}
-
-/** Apply a saved ledger of card states (material, state bonus) to freshly rebuilt cards. */
-export function applyCardStates(
-  card: CardBlock,
-  states: Readonly<Record<string, CardState>> | undefined,
-): CardBlock {
-  const state = states?.[card.id] ?? {};
-  const material = [state.material ?? []]
-    .flat()
-    .reduce((current, kind) => rematerial(current, kind), card);
-  return [state.stateBonus ?? []]
-    .flat()
-    .reduce((current, id) => withStateBonus(current, id), material);
 }

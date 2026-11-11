@@ -273,8 +273,9 @@
     }
   },
   "material.attach.meat": {
-    "uses": 1,
+    "uses": 2,
     "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
       "materials.ts": 1
     }
   },
@@ -386,6 +387,12 @@
     "uses": 1,
     "files": {
       "materials.ts": 1
+    }
+  },
+  "reaction.cook": {
+    "uses": 2,
+    "files": {
+      "materials.ts": 2
     }
   },
   "reaction.melt": {

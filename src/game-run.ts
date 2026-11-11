@@ -1,3 +1,4 @@
+import { resetDoneness } from "./cooking";
 import { commitReactions, type AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
 import { applyRackItem } from "./rack-item-effects";
@@ -671,10 +672,12 @@ export class GameRun {
 
   /** Return the field to the deck, and the hand as the run's hand policy says. */
   private clearTable(state: GameState): GameState {
+    // Doneness lasts one stage (#372): the stage's rewards have been read by now.
+    const reset = resetDoneness(state);
     const cleared = {
-      ...state,
+      ...reset,
       field: [],
-      deck: [...state.deck, ...state.field.map(({ block }) => block)],
+      deck: [...reset.deck, ...reset.field.map(({ block }) => block)],
     };
     return handAtStageEnd[this.config.handAtStageEnd](cleared);
   }
