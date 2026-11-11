@@ -167,8 +167,9 @@ describe("the flame as contents (#335)", () => {
   it("burns in the iron frame (fire) and in the lantern by configuration only", () => {
     for (const id of ["fire", "flameLantern"]) {
       const { extras } = build(id);
-      expect(extras.map(({ renderOrder }) => renderOrder)).toContain(
-        containedLayers.contentsTransparent,
+      // Drawn after the front shell (5) and gloss (6): the glow is never painted over.
+      expect(Math.max(...extras.map(({ renderOrder }) => renderOrder))).toBeGreaterThan(
+        containedLayers.gloss,
       );
       extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
     }

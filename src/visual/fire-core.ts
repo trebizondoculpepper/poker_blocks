@@ -9,7 +9,7 @@
  */
 import * as THREE from "three";
 import { additiveLight } from "./additive-light";
-import { containedContents, containedLayers } from "./contained";
+import { containedContents } from "./contained";
 
 const vertexShader = /* glsl */ `
   varying vec3 vLocal;
@@ -156,11 +156,13 @@ export function createFireCore(size: number): THREE.Mesh {
 
 /**
  * The flame as contained contents (#335): the same raymarched core, sized to the interior of
- * whatever container holds it, drawn in the contents' transparent layer. It publishes nothing:
+ * whatever container holds it, drawn after the frame (its own render order). It publishes nothing:
  * a flame has no liquid surface, so wall residue that needs one cannot be paired with it.
  */
 containedContents.register("flame", (boundary) => {
+  // It keeps the core's own order (drawn last, after the frame): it is an additive, non-depth-
+  // writing material in the opaque queue, so the frame must be drawn first or its rear bars
+  // would paint over the glow. The contained layer table orders the transparent queue only.
   const core = createFireCore(boundary.halfSize * 2 * boundary.inset);
-  core.renderOrder = containedLayers.contentsTransparent;
   return { meshes: [core], capabilities: {} };
 });
