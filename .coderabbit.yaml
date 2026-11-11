@@ -81,6 +81,14 @@ reviews:
              share behavior, require a common composable capability, not separate cases.
              Research is conditional on uncertainty; do not demand redundant research or
              a fresh design PR when accurate merged documentation already covers it.
+             Also review architecture documentation for evidence: flag a factual claim or
+             recommendation unsupported by linked research, a traceable source audit,
+             reproducible experiments or authoritative versioned sources as appropriate.
+             Require reasoning linking evidence to the decision, relevant trade-offs and
+             verification limits; distinguish findings from proposals and assumptions.
+             Identify the concrete unsupported claim or undocumented architectural change.
+             Existing evidence suffices; do not require a new research mission or external
+             search for ordinary reuse of an accurate documented pattern.
           7. A save-format change lacks a version bump and an explicit migration.
           9. Services and controller traits ("Services and controller traits" in
              doc/game-architecture.md): a service learns a scene, mode, material or item
