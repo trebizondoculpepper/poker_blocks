@@ -272,7 +272,10 @@ exitEffects.register(
     // material in place of its own, which comes back on dispose.
     // Only that mesh's own drawing changes, never its children's (flying components, a flash's
     // overlay) and never a material another mesh shares (#512 review).
-    const thrown = new Set<THREE.Object3D>(source.pieces);
+    // A flying piece and everything it carries keep drawing (a mesh nested in a flying
+    // component rides along visibly, #512 review).
+    const thrown = new Set<THREE.Object3D>();
+    for (const piece of source.pieces) piece.traverse((node) => void thrown.add(node));
     const hidden = reducedMotion
       ? []
       : originals

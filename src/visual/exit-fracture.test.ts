@@ -359,6 +359,8 @@ describe("overlapping fractures and nested pieces (#512 review)", () => {
     const outerDrop = outerStart!.y - outer.getWorldPosition(new THREE.Vector3()).y;
     const innerDrop = innerStart!.y - inner.getWorldPosition(new THREE.Vector3()).y;
     expect(innerDrop).toBeCloseTo(outerDrop, 5);
+    // It rides along visibly: its own material is still drawing (#512 review).
+    expect((inner.material as THREE.Material).visible).toBe(true);
     runner.dispose();
     expect(inner.parent).toBe(outer);
     expect(inner.position.toArray()).toEqual([0.2, 0, 0]);
