@@ -202,6 +202,7 @@ export function createContainedProofRoom(host: HTMLElement): ContainedProofRoom 
       playSfx("ui.click");
       rebuild();
     });
+  part("tumble").addEventListener("change", () => playSfx("ui.click"));
   part("measure").addEventListener("click", () => {
     playSfx("ui.click");
     measuring = { frames: [], updates: [], cpu: [], calls: 0, triangles: 0 };
