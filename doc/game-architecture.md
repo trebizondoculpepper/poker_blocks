@@ -367,7 +367,7 @@ Input follows "Input": the rack drag source decides where a carried item goes. A
 
 ### Transmogrifier look (#391)
 
-- **Token:** a passive token's appearance may name a registered **visual builder** (`passiveVisualBuilders` in `src/passive-visual.ts`). `createPassiveVisual` uses it, or the painted shape when none is named, so the rack, the shop and the object browser all follow. Transmogrifier definitions name `materialBlock` (`src/visual/material-token.ts`), which draws the material's own block appearance with blank face art: the material, with no rank or suit. Limitation: the token shows only the block's faces, not its extras, so a custard transmogrifier shows the plastic shell without its fluid. Pulsing (an audition idea in #384) is not built.
+- **Token:** a passive token's appearance may name a registered **visual builder** (`passiveVisualBuilders` in `src/passive-visual.ts`). `createPassiveVisual` uses it, or the painted shape when none is named, so the rack, the shop and the object browser all follow. Transmogrifier definitions name `materialBlock` (`src/visual/material-token.ts`), which draws the material's own block appearance with blank face art: the material, with no rank or suit. The token carries the block's extra meshes too (`PassiveVisual.extras`: the fire's flame, custard's fluid), which the rack, shop and browser attach, so every transmogrifier shows its whole material. Pulsing (an audition idea in #384) is not built.
 - **Charge dial:** a rack item shows **badges** registered per trait name (`rackBadges` in `src/passive-rack.ts`), redrawn on every render. `limitedUse` draws a clock-like conic dial of uses left: full when unused, a half-moon after one of two uses. It shows charges, not a cooldown.
 
 ## Session controller
