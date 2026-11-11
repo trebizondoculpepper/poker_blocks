@@ -3,6 +3,7 @@ import { attachableBehavior, type Cell, type Face } from "./traits/attachable";
 import { destructibleBehavior, type DestroyCause } from "./traits/destructible";
 import { selectableBehavior, type Selection } from "./traits/selectable";
 import { transparentBehavior } from "./traits/transparent";
+import { resistantBehavior } from "./traits/resistant";
 
 /** A configured trait contributes any of these capabilities; callers never inspect its name. */
 export type BlockTraitBehavior = {
@@ -12,6 +13,8 @@ export type BlockTraitBehavior = {
   handover?: (config: unknown, block: CardBlock) => boolean;
   canDestroy?: (config: unknown, block: CardBlock, cause: DestroyCause) => boolean;
   canDrag?: (config: unknown, block: CardBlock) => boolean;
+  /** Whether this trait protects the block from destruction by `cause` (#437). */
+  resists?: (config: unknown, block: CardBlock, cause: string) => boolean;
   attachment?: (
     config: unknown,
     block: CardBlock,
@@ -80,6 +83,15 @@ export function blockCanDestroy(block: CardBlock, cause: DestroyCause): boolean 
   return allowed;
 }
 
+/** Whether any of the block's traits protects it from destruction by `cause` (#437). */
+export function blockResists(block: CardBlock, cause: string): boolean {
+  let resisted = false;
+  eachBehavior(block, (behavior, config) => {
+    resisted = behavior.resists?.(config, block, cause) || resisted;
+  });
+  return resisted;
+}
+
 export function blockCanDrag(block: CardBlock): boolean {
   let allowed = false;
   eachBehavior(block, (behavior, config) => {
@@ -105,3 +117,4 @@ registerBlockTrait("selectable", selectableBehavior);
 registerBlockTrait("transparent", transparentBehavior);
 registerBlockTrait("destructible", destructibleBehavior);
 registerBlockTrait("attachable", attachableBehavior);
+registerBlockTrait("resistant", resistantBehavior);

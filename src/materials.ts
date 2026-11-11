@@ -11,6 +11,7 @@ import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
 import type { EventRule, RuleCommand } from "./event-rules";
+import type { ResistantTrait } from "./traits/resistant";
 import type { Reaction } from "./reactions";
 import { acquiredModifierRules } from "./modifier-registers";
 import { stateBonusRules } from "./state-bonuses";
@@ -40,7 +41,7 @@ export type MaterialDefinition = {
   name: string;
   /** Default text font for letter and word cubes; does not affect card faces. */
   lettering?: Lettering;
-  traits: { transparent?: Record<string, never> };
+  traits: { transparent?: Record<string, never>; resistant?: ResistantTrait };
   /**
    * How the material sounds when blocks meet (#232). The softer of two materials meeting
    * decides the attachment sound: `hardness` orders them (higher is harder), `attach` is the
@@ -263,7 +264,8 @@ export const materialDefinitions = [
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Steel",
     acoustics: { character: "clanking", hardness: 8, attach: "material.attach.steel" },
-    traits: {},
+    // Immune to bomb blasts (#437): it survives to collect transferred bonuses.
+    traits: { resistant: { causes: ["explosion"] } },
     shop: {
       basePrice: 4,
       weights: [
@@ -341,7 +343,8 @@ export const materialDefinitions = [
     lettering: { font: "Tinos", fallback: "serif", weight: 400 },
     name: "Gold",
     acoustics: { character: "dense", hardness: 7, attach: "material.attach.gold" },
-    traits: {},
+    // Immune to bomb blasts, like steel (#437).
+    traits: { resistant: { causes: ["explosion"] } },
     shop: {
       basePrice: 8,
       weights: [

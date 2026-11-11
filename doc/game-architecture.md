@@ -399,6 +399,12 @@ A block can be **triggered**, and responds with configured actions. `src/trigger
 - **`trigger-targets { select, cause }`:** asks other blocks to run their _own_ responses, through `trigger-block`. Targets come from a registered selector (`triggerTargetSelectors`); `face-neighbours` gives the blocks sharing a face with the source. Selection reads the source's cell from the trigger's snapshot, so it still works once the source has removed itself. Targets go in field order and carry the chain's shared record on, so no block is triggered twice in one chain, by any route, and chains can't loop.
 - **Order:** a block's responses run in their listed order. Listing `trigger-targets` before `self-destruct` lets neighbours respond while the source is still on the table; after it, once it has gone. Either way they see its snapshot.
 
+### Explosion resistance and blast destruction (#437)
+
+- **`resistant { causes }`** (`src/traits/resistant.ts`) is a block trait whose registered behaviour `resists(config, block, cause)` protects the block from destruction by the causes it names. `blockResists(block, cause)` asks every trait the block has, as `blockCanDestroy` does; no code names a material. Steel and gold compose `resistant: { causes: ["explosion"] }` on their definitions, so it comes and goes with the material (a steel card turned to paper no longer resists).
+- **`destroy-targets { select, cause, removal, sound? }`** (`src/trigger-responses.ts`) is the reusable blast response. It selects targets as `trigger-targets` does, from the source's snapshot, and checks each before removal. A block resisting `cause` stays, with its identity and acquired bonuses, and emits `block.resisted`. Any other block is removed through the configured removal mode and emits `block.removed` with the cause. Presentation reflects those events.
+- **Scope:** resistance applies only to destruction that names its cause. The Nothingifier, a block's own `self-destruct` and manual destruction are unchanged.
+
 ### Block exits (#439)
 
 How a block leaving play is presented: the shared lifecycle the per-material blast responses (#438) and the exit effects (#440 fade, #441 flash and shudder, #442 crack and fracture, #443 shred and splinter, #444 particle bursts) build on. `src/visual/exit-presentation.ts`.
