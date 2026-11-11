@@ -7,6 +7,8 @@ import "./pair-spawn";
 import "./cooking";
 // Registers the `trigger-block` rule command (#433).
 import "./triggers";
+// Registers the self-destruct and trigger-targets responses (#435).
+import "./trigger-responses";
 import { commitReactions, type AppliedReaction } from "./reactions";
 import { commitCountdowns } from "./trigger-countdown";
 import { setCardStateBonus } from "./state-bonuses";

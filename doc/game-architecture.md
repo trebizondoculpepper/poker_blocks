@@ -376,7 +376,7 @@ A block can be **triggered**, and responds with configured actions. `src/trigger
 - **Snapshot before removal:** before any response runs, the target's block and cell are captured as `trigger.source` and passed to every response, with the `cause` and the chain `path`. A response that removes the block (a future self-destruct, #435), and the responses after it, still know what and where it was.
 - **Order:** responses commit in their listed order. A response that triggers another block does so depth-first, in place, through the same command (propagation is #435).
 - **Cancellation:** a target no longer in the hand or on the table does nothing.
-- **Repeats:** a block already in the chain's `path` is not triggered again by that chain, so a chain never loops. A separate, later trigger starts a new chain.
+- **Repeats:** a chain keeps one shared record of every block it has triggered across all its branches (`trigger.visited`, transient), and never triggers one twice. So it can neither loop nor reach a block by two routes (four blocks in a square run once each). `trigger.path` keeps each block's ancestry. A separate, later trigger starts a new chain.
 - **Events:** each trigger that runs emits `block.triggered` (with its `trigger` context) before its responses' own follow-up events. Presentation listens; it never decides what a trigger does.
 - **Persistence:** a trigger resolves inside one model step, so nothing is pending across a save.
 
@@ -390,6 +390,14 @@ A block can be **triggered**, and responds with configured actions. `src/trigger
 - **Zero fires once:** a count at 0 is never decremented or fired again.
 - **Material change** clears the count, trait and ledger (`materialScopedStates`), like doneness: a card made a counting material again starts from its start.
 - **Reset:** the count belongs to the block on the table. A registered stage-end reset returns it to its start when the table clears.
+
+### Trigger responses: self-destruct and target triggers (#435)
+
+`src/trigger-responses.ts` registers two rule commands a material can list in `triggerable.responses`. Neither knows about bombs.
+
+- **`self-destruct { removal, sound? }`:** the triggered block removes itself through a registered removal mode (`removalModes`). `field` takes it off the table into the discard pile, so it returns with the deck like a destroyed block. `run` removes it for good through the shared card-removal service (`removeCardForRun`, as the Nothingifier does). It emits `block.removed` with the trigger and the configured sound (`block.self_destruct` is registered) for presentation to play; removal plays nothing itself, so no explosion sound is wired into removing.
+- **`trigger-targets { select, cause }`:** asks other blocks to run their _own_ responses, through `trigger-block`. Targets come from a registered selector (`triggerTargetSelectors`); `face-neighbours` gives the blocks sharing a face with the source. Selection reads the source's cell from the trigger's snapshot, so it still works once the source has removed itself. Targets go in field order and carry the chain's shared record on, so no block is triggered twice in one chain, by any route, and chains can't loop.
+- **Order:** a block's responses run in their listed order. Listing `trigger-targets` before `self-destruct` lets neighbours respond while the source is still on the table; after it, once it has gone. Either way they see its snapshot.
 
 ### Block exits (#439)
 
