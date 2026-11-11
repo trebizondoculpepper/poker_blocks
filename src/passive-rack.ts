@@ -5,7 +5,11 @@ import "./passive-rack.css";
 import { passiveAppearance, type PassiveBlock } from "./passives";
 import { createPassiveVisual, type PassiveVisual } from "./passive-visual";
 import { categoryDefaults } from "./passive-categories";
-import { applyGlow, tokenEffects } from "./passive-activation-effects";
+import {
+  createActivationPulse,
+  type ActivationConfig,
+  type ActivationPulse,
+} from "./activation-pulse";
 import { playSfx } from "./audio/sfx";
 
 const slotWidth = 72;
@@ -22,8 +26,8 @@ type RenderedPassive = {
   arrivalAt: number | null;
   item: HTMLElement;
   block: PassiveBlock;
-  /** When its activation effect started, while one is playing. */
-  activatedAt: number | null;
+  /** Its activation pulse (#485), shown on its token. */
+  pulse: ActivationPulse;
 };
 
 /**
@@ -52,17 +56,12 @@ rackBadges.register("limitedUse", (value) => {
   return dial;
 });
 
-/** One frame of a token's activation effect, from its category's config; then back to rest. */
-function activationFrame(entry: RenderedPassive, time: number, reducedMotion: boolean): void {
-  if (entry.activatedAt === null) return;
-  const { effect } = categoryDefaults(entry.block.traits).activation;
-  const handler = tokenEffects.get(effect.id);
-  const progress = (time - entry.activatedAt) / handler.milliseconds;
-  const done = progress >= 1;
-  const { scale, glow } = done ? { scale: 1, glow: 0 } : handler.frame(progress, reducedMotion);
-  entry.mesh.scale.multiplyScalar(scale);
-  applyGlow(entry.visual.materials, effect.colour, glow);
-  if (done) entry.activatedAt = null;
+/**
+ * A passive's activation look (#485): its own `activationPulse` if its definition composes one,
+ * else its category's. The rack only shows it.
+ */
+export function passiveActivation(block: PassiveBlock): ActivationConfig {
+  return block.traits.activationPulse ?? categoryDefaults(block.traits).activation;
 }
 
 /** A fixed screen-space rack with one Three.js scene for all rotating passive blocks. */
@@ -137,6 +136,7 @@ export function createPassiveRack(host: HTMLElement): {
   };
 
   const remove = (entry: RenderedPassive) => {
+    entry.pulse.stop();
     scene.remove(entry.mesh);
     entry.edges.material.dispose();
     entry.visual.dispose();
@@ -204,7 +204,7 @@ export function createPassiveRack(host: HTMLElement): {
             arrivalAt: performance.now() + arrivals++ * 180,
             item,
             block,
-            activatedAt: null,
+            pulse: createActivationPulse({ object: mesh, materials: visual.materials }),
           };
           rendered.set(block.id, entry);
           mesh.scale.setScalar(0.001);
@@ -276,7 +276,7 @@ export function createPassiveRack(host: HTMLElement): {
           );
           if (arrivalAt !== null && (reducedMotion || time - arrivalAt >= 360))
             entry.arrivalAt = null;
-          activationFrame(entry, time, reducedMotion);
+          entry.pulse.frame(time, reducedMotion);
         }
         const angle = reducedMotion ? 0 : time * 0.00028;
         mesh.rotation.set(
@@ -290,8 +290,9 @@ export function createPassiveRack(host: HTMLElement): {
     activate(sourceId) {
       const entry = rendered.get(sourceId);
       if (!entry) return;
-      entry.activatedAt = performance.now();
-      playSfx(categoryDefaults(entry.block.traits).activation.sfx);
+      const activation = passiveActivation(entry.block);
+      entry.pulse.start(activation.effect, performance.now());
+      playSfx(activation.sfx);
     },
     dispose() {
       clear();
