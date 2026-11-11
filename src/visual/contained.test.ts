@@ -313,3 +313,23 @@ describe("the published surface is block-local (#401 review)", () => {
     expect(surface.wet(new THREE.Vector3(0, drawn + 0.001, 0))).toBe(false);
   });
 });
+
+describe("fluid looks (#333)", () => {
+  it("custard, refractive water and a dark fluid share one levelling fluid; only the look differs", async () => {
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    const contents = (id: string) =>
+      materialPools
+        .get("registered")()
+        .find((material) => material.id === id)!.appearance.contents!;
+    const fluids = ["custard", "waterInPlastic", "darkFluid"].map((id) => contents(id));
+    expect(new Set(fluids.map(({ effect }) => effect))).toEqual(new Set(["levellingFluid"]));
+    const built = fluids.map(({ config }) =>
+      containedContents.get("levellingFluid")(createInteriorBoundary(geometry, 1, 0.92), config),
+    );
+    expect(built[1]!.meshes[0]!.material).toBeInstanceOf(THREE.MeshPhysicalMaterial);
+    expect((built[1]!.meshes[0]!.material as THREE.MeshPhysicalMaterial).transmission).toBe(1);
+    for (const fluid of built) expect(fluid.capabilities.liquidSurface).toBeDefined();
+    // Water swaps between plastic and glass by configuration only: the same contents config.
+    expect(contents("waterInLantern")).toEqual(contents("waterInPlastic"));
+  });
+});

@@ -291,9 +291,9 @@
     }
   },
   "material.attach.custard": {
-    "uses": 2,
+    "uses": 3,
     "files": {
-      "materials.ts": 2
+      "materials.ts": 3
     }
   },
   "material.attach.ice": {

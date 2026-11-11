@@ -885,6 +885,15 @@ Both are driven by the block's **one frame**. `composeContained` builds one `Con
 
 **Simulation sharing (decision on #332):** each levelling fluid keeps its own surface, so independently moving vessels (hand cubes rocking, a dragged block, title rows) level by their own motion. Only immutable definitions are shared. This applies #329's per-cohort rule with every block as its own cohort. Nothing in the scene graph yet tells a group apart from individually moving cubes, and a settle step costs a few vector operations (#346). Grouping table blocks into one shared cohort can return if a measurement calls for it. The generic `sharedSimulations` registry (#230) stays available for effects that are genuinely shared.
 
+### Fluid looks (#333)
+
+A levelling fluid's optics are a registered **look** (`fluidLooks` in `src/visual/filled-vessel.ts`), named in its config (`look: { id, config }`), separate from its mechanics (level, settle time). Every look cuts the volume at the same shared surface uniforms, so the surface, the published `liquidSurface` and any residue behave the same whatever the look.
+
+- **`opaqueFluid`:** custard's flat-shaded colour and lighter top (`fill`, `surface`), in the opaque contents layer.
+- **`refractiveFluid`:** a transmissive `MeshPhysicalMaterial` (tint, IOR, thickness, roughness, attenuation). The surface cut is a discard injected into its shader, so it needs no renderer clipping. Per #346, three.js transmission refracts only opaque things behind it, not other glass or fluid, and transmissive objects draw in their own pass before every transparent layer.
+
+Experiments: `waterInPlastic` and `waterInLantern` (the same clear water config in two containers), and `darkFluid` (custard's look and mechanics with only its colours changed). They're in `experimentalMaterials`, out of production pools. Optics never touch gameplay.
+
 ### Flame as contents (#335)
 
 The fire block is now a contained block: the `framedGlass` shell (its own iron-frame artwork, with the glass sheen in its openings) holding the **`flame`** contents, registered in `src/visual/fire-core.ts`. The flame is the same raymarched core, sized to the interior of whichever container holds it. It keeps the core's own render order (drawn last): it's additive and doesn't write depth, in the opaque queue, so the frame must be drawn first. The contained layer table orders only the transparent queue. It publishes nothing, because a flame has no liquid surface. The bundled `flameFrame` assembly and its `glassPanes` are retired. `flameLantern` (an experiment) shows the same flame in the stained lantern by configuration only. No container code names the flame.

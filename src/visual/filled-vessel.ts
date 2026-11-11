@@ -20,6 +20,7 @@
  * levels move it along its normal in proportion. Exact volume is not kept as the block tilts.
  */
 import * as THREE from "three";
+import { Registry } from "../core/registry";
 import { additiveSheen } from "./additive-light";
 import {
   containedContents,
@@ -46,17 +47,97 @@ export type PlasticShellConfig = {
   gloss?: number;
 };
 
-/** A levelling fluid (#227, #332): its colours, how full, and how slowly it settles. */
+/**
+ * A levelling fluid (#227, #332, #333): how full it is and how slowly it settles, and how it
+ * looks, a registered look (`fluidLooks`) with its own configuration. Its mechanics never
+ * depend on its look.
+ */
 export type LevellingFluidConfig = {
-  /** The fluid's colour (hex). */
-  fill: number;
-  /** The fluid's top surface, a little lighter where light catches it. */
-  surface: number;
   /** How full the vessel is, from 0 (empty) to 1 (full). */
   level: number;
   /** Time constant, in seconds, of the fluid levelling after the block turns. */
   settleSeconds: number;
+  /** Its optics: a registered look and its configuration. */
+  look: { id: string; config: unknown };
 };
+
+/** The uniforms every look cuts the fluid with: its surface, in the fluid mesh's own units. */
+export type FluidSurfaceUniforms = {
+  surfaceNormal: { value: THREE.Vector3 };
+  height: { value: number };
+};
+
+/**
+ * How a fluid looks (#333), keyed by name: a material for the fluid volume that discards
+ * everything above the shared surface. The look never moves the surface.
+ */
+export type FluidLook = (
+  surface: FluidSurfaceUniforms,
+  config: unknown,
+) => { material: THREE.Material; layer: "contentsOpaque" | "contentsTransparent" };
+export const fluidLooks = new Registry<FluidLook>("fluid look");
+
+/** Custard's look (#227): flat-shaded colour and a lighter, flat top seen through the cut. */
+fluidLooks.register("opaqueFluid", (surface, raw) => {
+  const { fill, surface: top } = raw as { fill: number; surface: number };
+  return {
+    material: new THREE.ShaderMaterial({
+      uniforms: {
+        ...surface,
+        fill: { value: new THREE.Color(fill) },
+        surfaceColour: { value: new THREE.Color(top) },
+      },
+      vertexShader: fluidVertex,
+      fragmentShader: fluidFragment,
+      side: THREE.DoubleSide,
+    }),
+    layer: "contentsOpaque",
+  };
+});
+
+/**
+ * Clear, refracting fluid (#333): a physical material with transmission and an index of
+ * refraction, cut at the same surface by a discard injected into its shader (so it needs no
+ * renderer clipping). It refracts what is opaque behind it, as three.js transmission does
+ * (#346: it does not refract other glass or fluid).
+ */
+fluidLooks.register("refractiveFluid", (surface, raw) => {
+  const config = raw as {
+    tint: number;
+    ior: number;
+    thickness: number;
+    roughness: number;
+    attenuation: number;
+    attenuationDistance: number;
+  };
+  const material = new THREE.MeshPhysicalMaterial({
+    color: config.tint,
+    metalness: 0,
+    roughness: config.roughness,
+    transmission: 1,
+    ior: config.ior,
+    thickness: config.thickness,
+    attenuationColor: new THREE.Color(config.attenuation),
+    attenuationDistance: config.attenuationDistance,
+    side: THREE.FrontSide,
+  });
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, surface);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vFluidLocal;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFluidLocal = position;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying vec3 vFluidLocal;\nuniform vec3 surfaceNormal;\nuniform float height;",
+      )
+      .replace(
+        "#include <clipping_planes_fragment>",
+        "#include <clipping_planes_fragment>\nif (dot(vFluidLocal, surfaceNormal) > height) discard;",
+      );
+  };
+  return { material, layer: "contentsTransparent" };
+});
 
 /** The wall trace (#227): where the fluid was, fading as its own lagging plane catches up. */
 export type WallTraceConfig = {
@@ -175,21 +256,11 @@ export const levellingFluid: ContentsHandler = (boundary, raw) => {
   const normal = new THREE.Vector3(0, 1, 0);
   // In the fluid's own (unscaled) space: half the block is `halfSize`.
   const height = (config.level - 0.5) * boundary.halfSize * 2;
-  const uniforms = {
-    surfaceNormal: { value: normal },
-    height: { value: height },
-    fill: { value: new THREE.Color(config.fill) },
-    surfaceColour: { value: new THREE.Color(config.surface) },
-  };
-  const fluid = boundary.volume(
-    new THREE.ShaderMaterial({
-      uniforms,
-      vertexShader: fluidVertex,
-      fragmentShader: fluidFragment,
-      side: THREE.DoubleSide,
-    }),
-    "contentsOpaque",
+  const look = fluidLooks.get(config.look.id)(
+    { surfaceNormal: { value: normal }, height: { value: height } },
+    config.look.config,
   );
+  const fluid = boundary.volume(look.material, look.layer);
   const settle = createSettler({ settleSeconds: config.settleSeconds, traceSeconds: 1 });
   const unused = new THREE.Vector3();
   return {
