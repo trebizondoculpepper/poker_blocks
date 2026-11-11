@@ -322,9 +322,9 @@
     }
   },
   "material.attach.fire": {
-    "uses": 4,
+    "uses": 5,
     "files": {
-      "audio/sfx-registry.ts (placeholder)": 2,
+      "audio/sfx-registry.ts (placeholder)": 3,
       "materials.ts": 2
     }
   },
@@ -377,6 +377,12 @@
     }
   },
   "reaction.stoke": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "reaction.boil": {
     "uses": 1,
     "files": {
       "materials.ts": 1

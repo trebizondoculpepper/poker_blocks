@@ -480,6 +480,12 @@ export const materialDefinitions = [
     // Ordinary flame heats it into hot water: the "heated" +1 bonus replaces any it had, but
     // boiling water stays boiling (#368, #369).
     reactions: [
+      // Aggressive flame boils it: ×2, replacing its bonus. Listed first, so aggressive flame
+      // (which is still fire) boils water rather than merely heating it (#369).
+      {
+        when: { id: "neighbour-state", config: { material: "fire", stateBonus: "aggressive" } },
+        results: [{ id: "transform", config: { stateBonus: "boiled", sound: "reaction.boil" } }],
+      },
       {
         when: { id: "neighbour-material", config: { material: "fire", unlessState: ["boiled"] } },
         results: [{ id: "transform", config: { stateBonus: "heated", sound: "reaction.heat" } }],

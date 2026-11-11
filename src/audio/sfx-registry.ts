@@ -583,6 +583,13 @@ const entries = [
     placeholder: "material.attach.fire",
   },
   {
+    id: "reaction.boil",
+    name: "Boil",
+    family: "material",
+    description: "Water beside aggressive flame boils as a play settles",
+    placeholder: "material.attach.fire",
+  },
+  {
     id: "reaction.melt",
     name: "Melt",
     family: "material",

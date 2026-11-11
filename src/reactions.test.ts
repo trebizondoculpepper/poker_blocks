@@ -159,6 +159,19 @@ describe("material reactions (#366)", () => {
     expect(materialOf(field[0]!.block)).toBe("airVent");
   });
 
+  it("aggressive flame boils water ×2, replacing its bonus; boiling water stays boiling (#369)", () => {
+    const aggressive = withStateBonus(made(1, "fire"), "aggressive");
+    const boil = (water: CardBlock) =>
+      applyReactions(state(at(water, 0), at(aggressive, 1))).state.field[0]!.block;
+    const boiled = boil(withStateBonus(made(0, "water"), "heated"));
+    expect(boiled.traits.stateBonus).toEqual({ id: "boiled" });
+    expect(materialOf(boiled)).toBe("water");
+    // Boiled water beside ordinary flame stays boiled (#368's guard).
+    const stays = applyReactions(state(at(boiled, 0), at(made(1, "fire"), 1))).state.field[0]!
+      .block;
+    expect(stays.traits.stateBonus).toEqual({ id: "boiled" });
+  });
+
   it("water is never sold or unlocked: it only comes from reactions", async () => {
     const { getMaterialDefinition } = await import("./materials");
     expect(getMaterialDefinition("water").shop).toBeUndefined();
