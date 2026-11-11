@@ -38,13 +38,16 @@ describe("transmogrifier items (#388)", () => {
       const random = mulberry(seed);
       const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, random);
       const stock = shopPreviewState(game.state, 99, random, defaultShop, 5).shopStock ?? [];
-      const transmogrifiers = stock.filter(({ kind }) => kind === "transmogrifier");
-      expect(transmogrifiers).toHaveLength(defaultShop.transmogrifierSlots ?? 1);
+      // The item slots hold transmogrifiers or a Nothingifier (#156), one offer per slot.
+      const items = stock.filter(
+        ({ kind }) => kind === "transmogrifier" || kind === "nothingifier",
+      );
+      expect(items).toHaveLength(defaultShop.itemSlots ?? 1);
       expect(
         stock
           .filter(({ kind }) => kind === "passive")
           .map(({ block }) => (block as PassiveBlock).definitionId)
-          .filter((id) => id.startsWith("transmogrifier.")),
+          .filter((id) => id.startsWith("transmogrifier.") || id === "nothingifier"),
       ).toEqual([]);
       expect(stock.length).toBeLessThanOrEqual(9);
     }
@@ -152,9 +155,9 @@ describe("transmogrifier shop presentation (#388 review)", () => {
         maxOffers: 9,
         guaranteedCards: 9,
         guaranteedPassives: 0,
-        transmogrifierSlots: 1,
+        itemSlots: 1,
       }).map(({ field }) => field),
-    ).toContain("transmogrifierSlots");
+    ).toContain("itemSlots");
   });
 });
 

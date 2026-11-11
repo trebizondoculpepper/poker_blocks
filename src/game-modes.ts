@@ -580,17 +580,18 @@ export type ShopTrait = {
   guaranteedPassives?: number;
   guaranteedCards?: number;
   /**
-   * Dedicated transmogrifier offers (#388), on top of the ordinary ones. The shop holds at most
+   * Dedicated item offers (transmogrifiers #388, the Nothingifier #156), drawn from one shared
+   * pool, on top of the ordinary ones. The shop holds at most
    * nine offers, so the ordinary draw shrinks to make room when it must. Omitted: one.
    */
-  transmogrifierSlots?: number;
+  itemSlots?: number;
 };
 export const defaultShop: ShopTrait = {
   minOffers: 5,
   maxOffers: 9,
   guaranteedPassives: 1,
   guaranteedCards: 1,
-  transmogrifierSlots: 1,
+  itemSlots: 1,
 };
 
 export type ModeTraits = {

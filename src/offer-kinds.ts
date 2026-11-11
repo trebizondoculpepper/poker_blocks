@@ -1,4 +1,5 @@
 import { createTransmogrifier } from "./transmogrifiers";
+import { createNothingifier } from "./nothingifier";
 /**
  * Offer kinds (#67): what each kind of shop offer means, registered once. A shop offer is plain
  * data, `{ kind, block }`. Pricing, buying, leaving the shop and saving ask the offer's kind
@@ -160,5 +161,23 @@ registerOfferKind<PassiveBlock>("transmogrifier", {
       restore.takePassiveId(saved.id),
       price,
     );
+  },
+});
+
+// The Nothingifier (#156): a one-use Items-rack item, bought into a free rack slot like a
+// transmogrifier, at the price it was offered at (saved, so a saved shop rebuilds it exactly).
+registerOfferKind<PassiveBlock>("nothingifier", {
+  destination: "passive-rack",
+  price: (block) => block.traits.priced?.basePrice ?? Number.NaN,
+  receive: (state, block, { rackCapacity }) =>
+    state.passiveRack.length >= rackCapacity || state.passiveRack.some(({ id }) => id === block.id)
+      ? null
+      : { ...state, passiveRack: [...state.passiveRack, block] },
+  unbought: (state) => state,
+  save: (block) => ({ kind: "nothingifier", id: block.id, price: block.traits.priced?.basePrice }),
+  restore: (saved, restore) => {
+    const price = Number(saved.price);
+    if (!Number.isSafeInteger(price) || price < 0) throw new Error("bad nothingifier offer");
+    return createNothingifier(restore.takePassiveId(saved.id), price);
   },
 });

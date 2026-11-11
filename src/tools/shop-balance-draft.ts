@@ -20,7 +20,7 @@ export type ShopBalanceDraft = {
     maxOffers: number;
     guaranteedPassives: number;
     guaranteedCards: number;
-    transmogrifierSlots: number;
+    itemSlots: number;
   };
   cardRankSurcharge: Record<string, number>;
   /** Transmogrifier uses and price multiple (#392). */
@@ -44,7 +44,7 @@ export function currentShopBalanceDraft(): ShopBalanceDraft {
       maxOffers: defaultShop.maxOffers,
       guaranteedPassives: defaultShop.guaranteedPassives ?? 1,
       guaranteedCards: defaultShop.guaranteedCards ?? 1,
-      transmogrifierSlots: defaultShop.transmogrifierSlots ?? 1,
+      itemSlots: defaultShop.itemSlots ?? 1,
     },
     cardRankSurcharge: { ...gameTuning.cardRankSurcharge } as Record<string, number>,
     transmogrifier: { ...gameTuning.transmogrifier },
@@ -99,7 +99,7 @@ export function validateShopBalanceDraft(draft: ShopBalanceDraft): DraftError[] 
       "maxOffers",
       "guaranteedPassives",
       "guaranteedCards",
-      "transmogrifierSlots",
+      "itemSlots",
     ])
   )
     add("stock", "Stock fields must match the configuration schema");

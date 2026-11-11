@@ -25,6 +25,8 @@ export type PassiveBlock = {
     limitedUse?: { uses: number; total: number };
     /** The material a transmogrifier turns a card into (#388). */
     transmogrifier?: { material: BlockMaterial };
+    /** Removes the card it is used on from the run (#156). */
+    nothingifier?: Record<string, never>;
   };
 };
 

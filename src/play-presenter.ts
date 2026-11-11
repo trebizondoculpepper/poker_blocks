@@ -210,15 +210,16 @@ export function createPlayPresenter(options: {
       }
     }
     // A block changed while it flew (a transmogrifier dropped on it mid-flight, #389) lands as
-    // the model has it now: model first, presentation catches up.
+    // the model has it now, and one removed while it flew (the Nothingifier, #156) doesn't
+    // stay: model first, presentation catches up.
     for (const flight of action.flights) {
       const shown = field
         .blocks()
         .find(({ cell }) => cell && cellKey(cell) === cellKey(flight.cell));
       const now = game().state.field.find(({ cell }) => cellKey(cell) === cellKey(flight.cell));
-      if (shown && now && now.block !== shown.block) {
+      if (shown && now?.block !== shown.block) {
         field.remove(shown.block.id);
-        field.add(now.block, now.cell);
+        if (now) field.add(now.block, now.cell);
       }
     }
     options.moved();
