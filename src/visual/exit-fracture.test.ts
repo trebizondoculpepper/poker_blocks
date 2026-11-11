@@ -448,3 +448,22 @@ describe("fracture with a parallel shudder (#512 review)", () => {
     }
   });
 });
+
+describe("flash beside a fracture (#512 review)", () => {
+  it("flashes only the block, never the fracture's new pieces, in either order", async () => {
+    await import("./flash-shudder");
+    for (const order of [
+      [{ effect: "fracture", config: { pieces: "slabs" } }, { effect: "flash" }],
+      [{ effect: "flash" }, { effect: "fracture", config: { pieces: "slabs" } }],
+    ]) {
+      const { v, root } = visual();
+      const before = root.children.length;
+      const runner = createExitRunner();
+      runner.start({ blockId: "b" }, v, { steps: [{ effects: order }] });
+      const slabs = root.children.slice(before) as THREE.Mesh[];
+      expect(slabs.length).toBeGreaterThan(0);
+      for (const slab of slabs) expect(slab.children).toEqual([]);
+      runner.dispose();
+    }
+  });
+});

@@ -31,6 +31,8 @@ export function createFlash(
   targets: readonly THREE.Object3D[],
   raw: FlashConfig = {},
   reducedMotion = false,
+  /** Only meshes this accepts get an overlay (in an exit: the block's own, #512 review). */
+  include: (object: THREE.Object3D) => boolean = () => true,
 ): ExitEffectInstance {
   const seconds = Math.max(raw.seconds ?? 0.25, 1e-3);
   const peak = Math.min(Math.max(raw.intensity ?? 0.8, 0), 1);
@@ -48,7 +50,7 @@ export function createFlash(
   for (const target of targets)
     target.traverse((child) => {
       const mesh = child as THREE.Mesh;
-      if (mesh.isMesh && !flashOverlays.has(mesh)) found.add(mesh);
+      if (mesh.isMesh && !flashOverlays.has(mesh) && include(mesh)) found.add(mesh);
     });
   const meshes = [...found];
   const overlays = reducedMotion
@@ -133,8 +135,9 @@ export function createShudder(
   };
 }
 
-exitEffects.register("flash", ({ targets, reducedMotion }, raw) =>
-  createFlash(targets, raw as FlashConfig, reducedMotion),
+// In an exit, only the block's own meshes flash: never another effect's pieces or particles.
+exitEffects.register("flash", ({ targets, reducedMotion, ownsObject }, raw) =>
+  createFlash(targets, raw as FlashConfig, reducedMotion, ownsObject),
 );
 
 /** In an exit, every target shudders together. */
