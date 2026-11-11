@@ -261,8 +261,10 @@ export type MenuBlockItem = {
   label: string;
   action: string;
   enabled?: boolean;
-  /** Shown when the cube is hovered or tapped (its inspectable trait). */
+  /** What choosing it does: shown on hover, focus or a long-press (its inspectable trait). */
   description?: string;
+  /** Why it is unavailable, shown with the description while it is disabled (#462). */
+  disabledReason?: string;
 };
 
 /** A dialog: its heading and its buttons, shown side by side. */
@@ -287,33 +289,59 @@ export const gameDialogs = {
         label: "Continue",
         action: "continue",
         enabled: false,
-        description: "There is no saved game to continue.",
+        description: "Carry on with your saved game.",
+        disabledReason: "There is no saved game to continue.",
       },
-      { label: "New game", action: "new" },
-      { label: "Settings", action: "openSettings" },
+      { label: "New game", action: "new", description: "Start a new run from the first stage." },
+      {
+        label: "Settings",
+        action: "openSettings",
+        description: "Change sound, music and other settings.",
+      },
     ],
   },
   newGame: {
     title: "Start a new game? The game in progress will be lost.",
     items: [
-      { label: "Start", action: "confirmNewGame" },
-      { label: "Cancel", action: "cancelNewGame" },
+      {
+        label: "Start",
+        action: "confirmNewGame",
+        description: "Lose the game in progress and start a new one.",
+      },
+      { label: "Cancel", action: "cancelNewGame", description: "Keep the game in progress." },
     ],
   },
   pause: {
     title: "Paused",
     items: [
-      { label: "Resume", action: "resume" },
-      { label: "Settings", action: "openSettings" },
-      { label: "Quit", action: "quitToTitle" },
+      { label: "Resume", action: "resume", description: "Go back to the game." },
+      {
+        label: "Settings",
+        action: "openSettings",
+        description: "Change sound, music and other settings.",
+      },
+      {
+        label: "Quit",
+        action: "quitToTitle",
+        description: "Go to the title screen. Your game is saved.",
+      },
     ],
   },
-  stageWon: { title: "Stage won", items: [{ label: "Visit shop", action: "leaveStage" }] },
+  stageWon: {
+    title: "Stage won",
+    items: [
+      {
+        label: "Visit shop",
+        action: "leaveStage",
+        description: "Collect your winnings and go to the shop.",
+      },
+    ],
+  },
   gameOver: {
     title: "Game over",
     items: [
-      { label: "New run", action: "newRun" },
-      { label: "Main menu", action: "quitToTitle" },
+      { label: "New run", action: "newRun", description: "Start a new run from the first stage." },
+      { label: "Main menu", action: "quitToTitle", description: "Go to the title screen." },
     ],
   },
 } satisfies Record<string, DialogConfig>;
@@ -935,7 +963,8 @@ const gameModes: GameMode[] = [
                       label: "Continue",
                       action: "continue",
                       enabled: false,
-                      description: "There is no saved game to continue.",
+                      description: "Carry on with your saved game.",
+                      disabledReason: "There is no saved game to continue.",
                     },
                     { label: "New game", action: "new" },
                     { label: "Settings", action: "openSettings" },

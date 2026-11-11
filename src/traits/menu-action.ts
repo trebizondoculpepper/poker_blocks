@@ -1,5 +1,6 @@
 import { defineTrait } from "../core/trait";
 import { playSfx } from "../audio/sfx";
+import { availability } from "./availability";
 
 export type InteractionState = { enabled: boolean; hovered: boolean; pressed: boolean };
 /** Actions are opaque data. The scene receives menu.action and dispatches through its own flow. */
@@ -48,7 +49,7 @@ export const menuAction = defineTrait({
         block.emit("menu.action", settings.action);
       }),
       block.on("input.enabled", (value) => {
-        settings.enabled = Boolean(value);
+        settings.enabled = availability(value).enabled;
         pressed = false;
         publish();
       }),

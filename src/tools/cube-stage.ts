@@ -145,6 +145,7 @@ export function createCubeStage(host: HTMLElement): CubeStage {
             action: item.action,
             enabled: item.enabled,
             description: item.description,
+            disabledReason: item.disabledReason,
             feedback: { reducedMotion },
             ...options(item, index),
           });

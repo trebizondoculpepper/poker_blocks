@@ -60,7 +60,7 @@ export function createDialogRoom(host: HTMLElement, floor: Pick<DanceFloor, "joi
       <button type="button" data-part="hold">Hold</button>
       <button type="button" data-part="toggle">Toggle availability</button>
       <p>Action: <output data-part="action">none yet</output></p>
-      <p>Inspect: <output data-part="inspect">hover or tap a block</output></p>
+      <p>Inspect: <output data-part="inspect">hover or long-press a block</output></p>
     </footer>`;
   host.append(root);
   const part = <T extends HTMLElement>(name: string) =>

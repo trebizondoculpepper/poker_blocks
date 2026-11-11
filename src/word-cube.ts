@@ -7,12 +7,15 @@ import { writtenBlock } from "./visual/written-block";
 import { menuAction } from "./traits/menu-action";
 import { interactionFeedback, disabledAppearance } from "./traits/interaction-feedback";
 import { inspectableTrait } from "./traits/inspectable";
+import { longPressInspect } from "./traits/long-press-inspect";
 
 export type WordCubeOptions = WritingOptions & {
   id: string;
   action: string;
   enabled?: boolean;
   description?: string;
+  /** Why it is unavailable, when no live reason comes with `input.enabled` (#462). */
+  disabledReason?: string;
   feedback?: Partial<typeof interactionFeedback.defaults>;
 };
 
@@ -38,7 +41,11 @@ export async function createWordCube(text: string, options: WordCubeOptions) {
   block.add(menuAction, { action: options.action, enabled: options.enabled ?? true });
   block.add(interactionFeedback, options.feedback);
   block.add(disabledAppearance);
-  block.add(inspectableTrait, { description: options.description ?? text });
+  block.add(inspectableTrait, {
+    description: options.description ?? text,
+    disabledReason: options.disabledReason ?? "",
+  });
+  block.add(longPressInspect);
   const materials = new Set<THREE.Material>();
   visual.object.traverse((child) => {
     const mesh = child as THREE.Mesh;
