@@ -26,6 +26,11 @@ export const gameTuning = {
    * own price on its definition, never one invented here.
    */
   transmogrifier: { uses: 2, priceFactor: 2 },
+  /**
+   * The Nothingifier (#156): one use, bought for `price` coins (so it resells unused for half),
+   * drawn into the shop's item slots with a flat `weight` every round.
+   */
+  nothingifier: { price: 4, weight: 1 },
 } as const;
 
 /** Everything wrong with the transmogrifier balance. */

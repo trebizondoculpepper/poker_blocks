@@ -31,6 +31,11 @@ export type GameState = {
    */
   generatedCards?: readonly CardBlock[];
   /**
+   * Cards removed from play for the rest of the run (#156, the Nothingifier), by id: saved so
+   * Continue still accounts for every run card without dealing them again. Absent when none.
+   */
+  removedCards?: readonly string[];
+  /**
    * Cards whose material changed this run (#387), by id: saved so Continue rebuilds them with
    * it (src/card-material.ts). Absent when nothing changed.
    */

@@ -8,6 +8,7 @@ import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
 // Registers the transmogrifier definitions, so saved rack items resolve (#388).
 import "./transmogrifiers";
+import "./nothingifier";
 import { rackTraitPersistence } from "./rack-trait-persistence";
 import { asGenerated } from "./card-ownership";
 import { type CardState } from "./card-material";
@@ -72,6 +73,8 @@ export type SaveRecord = {
     boughtCards?: SavedCard[];
     /** Cards made on the field during play (#424), saved in full; absent when there are none. */
     generatedCards?: SavedCard[];
+    /** Cards removed for the rest of the run (#156), by id; absent when none. */
+    removedCards?: string[];
     /** Cards whose material changed this run, by id (#387); absent in older saves. */
     cardStates?: Record<string, { material?: string; stateBonus?: string; doneness?: number }>;
     /** Optional so runs saved before the economy was added begin with zero coins. */
@@ -161,6 +164,7 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
       ...(state.cardStates && Object.keys(state.cardStates).length
         ? { cardStates: structuredClone(state.cardStates) }
         : {}),
+      ...(state.removedCards?.length ? { removedCards: [...state.removedCards] } : {}),
       coins: state.coins,
       round: { ...state.round },
     },
@@ -246,6 +250,8 @@ export function fromSaveRecord(
         cell: { x: cell.x, y: cell.y, z: cell.z },
       };
     });
+    // A removed card is accounted for here, so it is never dealt again (#156).
+    const removedCards = (state.removedCards ?? []).map((id) => resolve(id).id);
     const restored: GameState = {
       field,
       hand: state.hand.map(resolve),
@@ -258,6 +264,7 @@ export function fromSaveRecord(
         ? { generatedCards: generatedCards.map((card) => byId.get(card.id)!) }
         : {}),
       ...(cardStates ? { cardStates } : {}),
+      ...(removedCards.length ? { removedCards } : {}),
       coins: nonnegativeInteger(state.coins ?? 0),
       round: {
         score: number(state.round.score),

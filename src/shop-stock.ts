@@ -10,6 +10,7 @@ import { validateShopStock } from "./shop-stock-config";
 import { itemOfferPools } from "./item-offers";
 // Registers the transmogrifiers' item offers (#388).
 import "./transmogrifiers";
+import "./nothingifier";
 
 export type { ShopOffer } from "./offer-kinds";
 

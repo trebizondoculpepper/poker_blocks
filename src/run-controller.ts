@@ -431,21 +431,24 @@ export function createRunController<Context>(options: {
     );
   }
 
-  /** Redraw one card where it is, from the run's state: after its material changes (#389). */
+  /**
+   * Show one card as the run's state has it, where it is: redrawn after its material changes
+   * (#389), or taken off the table or out of the hand when it has left play (#156).
+   */
   function redrawCard(cardId: string): void {
     const placed = game.state.field.find(({ block }) => block.id === cardId);
     // A card still landing is redrawn when it lands, from the state then (play presenter).
     const shownOnTable = services.field.blocks().some(({ block }) => block.id === cardId);
-    if (placed && shownOnTable) {
+    if (shownOnTable) {
       services.field.remove(cardId);
-      services.field.add(placed.block, placed.cell);
+      if (placed) services.field.add(placed.block, placed.cell);
     }
     const held = game.state.hand.find(({ id }) => id === cardId);
     const shown = services.hand.blocks.find(({ block }) => block.id === cardId);
-    if (held && shown) {
+    if (shown) {
       services.hand.remove([shown]);
       services.views.dispose(shown);
-      services.hand.add(held);
+      if (held) services.hand.add(held);
       services.hand.sync(game.state.hand);
     }
   }

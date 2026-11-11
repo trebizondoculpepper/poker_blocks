@@ -165,6 +165,17 @@ registerOfferView<PassiveBlock>("transmogrifier", {
   dropTargets: ["buy", "rack"],
 });
 
+// The Nothingifier (#156): an Items-rack item, drawn as its empty dotted cube.
+registerOfferView<PassiveBlock>("nothingifier", {
+  cube: passiveCube,
+  name: (block) => passiveDefinitions.get(block.definitionId).name,
+  describe: (block) => block.traits.inspectable.inspect(),
+  className: "is-passive",
+  purchaseDescription: "BUY or the Items rack to keep it",
+  flightTarget: "rack",
+  dropTargets: ["buy", "rack"],
+});
+
 /** Shop stock is drawn with the same real cube appearances as cards and installed passives. */
 export function createShopView(
   host: HTMLElement,
