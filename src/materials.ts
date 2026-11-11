@@ -240,6 +240,17 @@ export const materialDefinitions = [
     // offered from round 1 at a low weight (a safe default, noted on #388).
     transmogrifier: { price: 2, weights: [[1, 0.5]] },
     appearance: {
+      // Bursts into small torn scraps that scatter, flutter and fade as the sheet vanishes (#447).
+      exit: {
+        steps: [
+          {
+            effects: [
+              { effect: "shred", config: { count: 28 } },
+              { effect: "fade", config: { seconds: 0.1 } },
+            ],
+          },
+        ],
+      },
       pattern: "cardSheet",
       assembly: "sixFaces",
       surface: "cardSheet",
@@ -507,6 +518,27 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // Cracks into five predefined translucent pieces that scatter and fade (#449). The pieces
+      // are the shared, authored-in-advance slab set, never a runtime fracture of the block.
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: {
+                  pieces: "slabs",
+                  colour: 0xcfe9f5,
+                  opacity: 0.55,
+                  speed: [0.6, 1.4],
+                  life: 1,
+                  fade: 0.5,
+                },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "frostedIce",
       assembly: "frostedBlock",
       surface: "frosted",
@@ -560,6 +592,26 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // Breaks into a few soft chunks rather than sharp fragments, which tumble and fade (#450).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: {
+                  pieces: "chunks",
+                  colour: 0xa3384a,
+                  speed: [0.5, 1.2],
+                  spin: 4,
+                  life: 0.9,
+                  fade: 0.35,
+                },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "marbledFlesh",
       assembly: "sixFaces",
       surface: "matte",
@@ -826,6 +878,34 @@ export const materialDefinitions = [
     scoringModifier: { additive: 1, multiplicative: 2, exponential: 1.2 },
     activation: { effect: { id: "pulse", colour: "#fff1cc" }, sfx: "material.activate.magic" },
     appearance: {
+      // The shell breaks apart and releases its stars outward before they fade (#458).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                target: "shell",
+                config: { pieces: "shards", colour: 0xe8eef2, opacity: 0.35, life: 0.9, fade: 0.4 },
+              },
+              {
+                effect: "burst",
+                target: "contents",
+                config: {
+                  count: 50,
+                  speed: [0.6, 1.6],
+                  lift: 0.3,
+                  gravity: 0.4,
+                  life: 1.2,
+                  size: 0.09,
+                  stars: true,
+                },
+              },
+              { effect: "fade", target: "contents", config: { seconds: 0.1 } },
+            ],
+          },
+        ],
+      },
       pattern: "cardSheet",
       assembly: "contained",
       surface: "clear",
@@ -1145,16 +1225,22 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     ],
     traits: {},
     appearance: {
-      // Experimental: the fan and vent assembly breaks into a few tumbling pieces (its own components) that fade as they go (#454).
+      // Experimental: the fan and vent assembly breaks into a few tumbling pieces (two fans and four vent slats) that fade as they go (#454).
       exit: {
         steps: [
           {
             effects: [
               {
                 effect: "fracture",
-                config: { pieces: "components", speed: [0.6, 1.4], spin: 6, life: 0.9 },
+                config: {
+                  pieces: "ventParts",
+                  colour: 0x8a959c,
+                  speed: [0.6, 1.4],
+                  spin: 6,
+                  life: 0.9,
+                  fade: 0.5,
+                },
               },
-              { effect: "fade", config: { seconds: 0.9 } },
             ],
           },
         ],

@@ -8,6 +8,21 @@ const exitOf = (id: string) => all.find((material) => material.id === id)!.appea
 
 const release = vi.fn();
 
+/** A container block: a shell mesh holding a contents mesh, each with its own material. */
+function container(): ExitVisual & { shellMesh: THREE.Mesh; contentsMesh: THREE.Mesh } {
+  const root = new THREE.Group();
+  const shellMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial(),
+  );
+  const contentsMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8, 0.8, 0.8),
+    new THREE.MeshStandardMaterial(),
+  );
+  root.add(shellMesh, contentsMesh);
+  new THREE.Group().add(root);
+  return { root, shell: [shellMesh], contents: [contentsMesh], release, shellMesh, contentsMesh };
+}
 function visual(): ExitVisual {
   const root = new THREE.Group();
   const body = new THREE.Mesh(
@@ -74,28 +89,102 @@ describe("material exits (#438)", () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
-  it("air: its own components tumble apart and fade as they go (#454)", () => {
+  it("paper bursts into torn scraps that flutter and fade as the sheet vanishes (#447)", () => {
     release.mockClear();
-    const root = new THREE.Group();
-    const housing = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial(),
-    );
-    const fan = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.3, 0.3, 0.05),
-      new THREE.MeshStandardMaterial(),
-    );
-    fan.position.x = 0.52;
-    root.add(housing, fan);
-    new THREE.Group().add(root);
-    const v: ExitVisual = { root, shell: [housing, fan], contents: [], release };
+    const v = visual();
+    const body = v.root.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "p" }, v, exitOf("paper"));
+    expect(v.root.children.slice(1)).toHaveLength(28);
+    for (let frame = 0; frame < 6; frame++) runner.update(1 / 60);
+    expect(body.material.opacity).toBeLessThan(0.5);
+    for (let frame = 0; frame < 240; frame++) runner.update(1 / 60);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("ice cracks into five translucent predefined pieces that scatter and fade (#449)", () => {
+    release.mockClear();
+    const v = visual();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "i" }, v, exitOf("ice"));
+    const pieces = v.root.children.slice(1) as THREE.Mesh<
+      THREE.BufferGeometry,
+      THREE.MeshStandardMaterial
+    >[];
+    expect(pieces).toHaveLength(5);
+    expect(pieces[0]!.material.transparent).toBe(true);
+    expect(pieces[0]!.material.opacity).toBeCloseTo(0.55);
+    // Shared, predefined geometry: another ice block's pieces reuse it.
+    const other = visual();
+    const second = createExitRunner(() => false);
+    second.start({ blockId: "i2" }, other, exitOf("ice"));
+    expect((other.root.children[1] as THREE.Mesh).geometry).toBe(pieces[0]!.geometry);
+    runner.update(0.75);
+    expect(pieces[0]!.material.opacity).toBeLessThan(0.55);
+    runner.update(0.3);
+    expect(runner.active).toBe(0);
+    second.dispose();
+  });
+
+  it("meat breaks into a few soft chunks that tumble and fade (#450)", () => {
+    release.mockClear();
+    const v = visual();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "m" }, v, exitOf("meat"));
+    const chunks = v.root.children.slice(1) as THREE.Mesh<
+      THREE.SphereGeometry,
+      THREE.MeshStandardMaterial
+    >[];
+    expect(chunks).toHaveLength(5);
+    // Soft, rounded lumps: spheres, not sharp shards.
+    expect(chunks.every(({ geometry }) => geometry.type === "SphereGeometry")).toBe(true);
+    runner.update(0.75);
+    expect(chunks[0]!.material.opacity).toBeLessThan(1);
+    runner.update(0.2);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("magic: the shell breaks apart and releases its stars outward, then they fade (#458)", () => {
+    release.mockClear();
+    const v = container();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "magic" }, v, exitOf("magic"));
+    expect(v.root.children.some((child) => child instanceof THREE.Points)).toBe(true);
+    for (let frame = 0; frame < 90; frame++) runner.update(1 / 60);
+    expect(runner.active).toBe(0);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("air: its fans and vent slats tumble apart and fade, from a single-mesh cube (#454)", () => {
+    release.mockClear();
+    // Like the real Air block: one body mesh, fans and vents only face artwork.
+    const v = visual();
+    const body = v.root.children[0] as THREE.Mesh;
     const runner = createExitRunner(() => false);
     runner.start({ blockId: "air" }, v, exitOf("airVent"));
-    const fanStart = fan.position.clone();
+    const parts = v.root.children.slice(1) as THREE.Mesh<
+      THREE.BufferGeometry,
+      THREE.MeshStandardMaterial
+    >[];
+    expect(parts.map(({ geometry }) => geometry.type).sort()).toEqual([
+      "BoxGeometry",
+      "BoxGeometry",
+      "BoxGeometry",
+      "BoxGeometry",
+      "CylinderGeometry",
+      "CylinderGeometry",
+    ]);
+    // The body itself stops drawing while its parts fly.
+    expect((body.material as THREE.Material).visible).toBe(false);
+    // Tumbling: every part has turned, whatever its random launch.
     runner.update(0.3);
-    expect(fan.position.distanceTo(fanStart)).toBeGreaterThan(0.05);
-    expect((fan.material as THREE.MeshStandardMaterial).opacity).toBeLessThan(1);
-    runner.update(0.7);
+    for (const part of parts)
+      expect(part.quaternion.angleTo(new THREE.Quaternion())).toBeGreaterThan(0.1);
+    runner.update(0.3);
+    expect(parts[0]!.material.opacity).toBeLessThan(1);
+    runner.update(0.4);
     expect(runner.active).toBe(0);
     expect(release).toHaveBeenCalledOnce();
   });
