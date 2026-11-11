@@ -71,8 +71,10 @@
     }
   },
   "block.dazzle_pop": {
-    "uses": 0,
-    "files": {}
+    "uses": 1,
+    "files": {
+      "visual/dazzle.ts": 1
+    }
   },
   "block.self_destruct": {
     "uses": 0,
