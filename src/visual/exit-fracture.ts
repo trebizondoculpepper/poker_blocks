@@ -231,15 +231,16 @@ exitEffects.register(
           bounds,
           colour: config?.colour ?? 0xcccccc,
         });
-    // Every original mesh that isn't itself a flying piece stops drawing while the pieces fly:
-    // each gets the shared invisible material in place of its own, which comes back on dispose.
+    // Every original that draws (a mesh, a written block's outline lines, points) and isn't
+    // itself a flying piece stops drawing while the pieces fly: each gets the shared invisible
+    // material in place of its own, which comes back on dispose.
     // Only that mesh's own drawing changes, never its children's (flying components, a flash's
     // overlay) and never a material another mesh shares (#512 review).
     const thrown = new Set<THREE.Object3D>(source.pieces);
     const hidden = reducedMotion
       ? []
       : originals
-          .filter((each) => (each as THREE.Mesh).isMesh && !thrown.has(each))
+          .filter((each) => (each as THREE.Mesh).material !== undefined && !thrown.has(each))
           .map((each) => ({ mesh: each as THREE.Mesh, material: (each as THREE.Mesh).material }));
     hidden.forEach(({ mesh }) => (mesh.material = unseen));
     // Motion is worked out in the block's own space, then turned into each piece's parent's

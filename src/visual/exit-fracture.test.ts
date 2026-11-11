@@ -284,3 +284,24 @@ describe("hiding only what should hide (#512 review)", () => {
     runner.dispose();
   });
 });
+
+describe("everything that draws hides (#512 review)", () => {
+  it("a written block's outline lines and point contents stop drawing while pieces fly", () => {
+    const root = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    const outlineMaterial = new THREE.LineBasicMaterial();
+    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(body.geometry), outlineMaterial);
+    const sparks = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial());
+    root.add(body, outline, sparks);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [body, outline], contents: [sparks], release: vi.fn() };
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [{ effects: [{ effect: "fracture", config: { pieces: "slabs" } }] }],
+    });
+    expect((outline.material as THREE.Material).visible).toBe(false);
+    expect((sparks.material as THREE.Material).visible).toBe(false);
+    runner.dispose();
+    expect(outline.material).toBe(outlineMaterial);
+  });
+});
