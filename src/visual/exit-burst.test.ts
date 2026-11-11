@@ -5,9 +5,10 @@ import { maxParticles } from "./exit-burst";
 
 function visual(): ExitVisual {
   const root = new THREE.Group();
-  root.add(new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial()));
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
+  root.add(body);
   new THREE.Group().add(root);
-  return { root, shell: [], contents: [], release: vi.fn() };
+  return { root, shell: [body], contents: [], release: vi.fn() };
 }
 const points = (v: ExitVisual) =>
   v.root.children.find((child): child is THREE.Points => child instanceof THREE.Points);
@@ -103,5 +104,16 @@ describe("particle burst exit effect (#444)", () => {
     });
     expect((points(v)!.material as THREE.PointsMaterial).size).toBeCloseTo(0.2);
     runner.dispose();
+  });
+
+  it("emits only from its configured target: a solid block's empty contents emit nothing", () => {
+    const v = visual();
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [{ effects: [{ effect: "burst", target: "contents" }] }],
+    });
+    expect(points(v)!.geometry.attributes.position!.count).toBe(0);
+    runner.update(0.016);
+    expect(runner.active).toBe(0);
   });
 });

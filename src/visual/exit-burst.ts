@@ -13,7 +13,7 @@
  * - Its randomness is cosmetic (`Math.random`), never the run's seeded stream. Presentation only.
  */
 import * as THREE from "three";
-import { exitEffects, localBlockSize } from "./exit-presentation";
+import { exitEffects, localBlockSize, localBounds } from "./exit-presentation";
 import { starTexture } from "./star-particles";
 import { keepWorldSize } from "./world-sized-points";
 
@@ -48,15 +48,26 @@ const defaults: Required<BurstConfig> = {
   stars: false,
 };
 
-exitEffects.register("burst", ({ visual, reducedMotion }, raw) => {
+exitEffects.register("burst", ({ visual, targets, reducedMotion }, raw) => {
   const config = { ...defaults, ...(raw as BurstConfig | undefined) };
   // Speeds and sizes are in block sizes: the block's size in its own (local) space, unchanged by
   // its world scale or rotation (#509 review); keepWorldSize applies the world scale itself.
   const scale = localBlockSize(visual);
-  const count = reducedMotion ? 0 : Math.max(0, Math.min(maxParticles, Math.round(config.count)));
+  // Particles come from the configured target only (the whole block, its shell or its contents):
+  // an empty target, such as a solid block's contents, emits nothing.
+  const from = localBounds(visual, targets);
+  const centre = from.isEmpty() ? new THREE.Vector3() : from.getCenter(new THREE.Vector3());
+  const count =
+    reducedMotion || from.isEmpty()
+      ? 0
+      : Math.max(0, Math.min(maxParticles, Math.round(config.count)));
   const positions = new Float32Array(count * 3);
   const velocities = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
+    // Each starts at the target's centre.
+    positions[i * 3] = centre.x;
+    positions[i * 3 + 1] = centre.y;
+    positions[i * 3 + 2] = centre.z;
     // A random direction on the unit sphere, scaled by a random speed in range.
     const z = Math.random() * 2 - 1;
     const angle = Math.random() * Math.PI * 2;
