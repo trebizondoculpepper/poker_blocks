@@ -1,9 +1,23 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createInteriorBoundary, type ContainedFrame } from "./contained";
 import { growingGrass, type GrowingGrassConfig } from "./growing-grass";
 
 const geometry = new THREE.BoxGeometry(1, 1, 1);
+
+// The grass's placement is cosmetic Math.random: a blade whose tries all land outside the walls
+// waits for the next birth, so a test could find none at a given moment (#515). Every test runs
+// on the same seeded sequence instead, so it sees the same layout every time.
+beforeEach(() => {
+  let seed = 0x2f6b22;
+  vi.spyOn(Math, "random").mockImplementation(() => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  });
+});
+afterEach(() => vi.restoreAllMocks());
 const config: GrowingGrassConfig = {
   count: 30,
   delay: 5,
