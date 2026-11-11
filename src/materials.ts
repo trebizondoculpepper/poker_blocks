@@ -1,7 +1,7 @@
 import type { ChopSettings } from "./visual/chopped-geometry";
 import type { Lettering } from "./visual/lettering";
 import { Registry } from "./core/registry";
-import type { ContainerConfig, ContentsConfig } from "./visual/contained";
+import type { ContainerConfig, ContentsConfig, ResidueConfig } from "./visual/contained";
 import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
@@ -95,6 +95,8 @@ export type MaterialDefinition = {
      */
     container?: ContainerConfig;
     contents?: ContentsConfig;
+    /** Optional residue on the wall, reading what the contents publish (#332). */
+    residue?: ResidueConfig;
     optics?: {
       tint: number;
       handIor: number;
@@ -425,31 +427,23 @@ export const materialDefinitions = [
         config: { opacity: 0.16, inset: 0.92, gloss: 1.6 },
       },
       contents: {
-        effect: "vesselFluid",
-        config: {
-          fill: 0xf2c84b,
-          surface: 0xfadf7e,
-          level: 0.45,
-          settleSeconds: 1.4,
-          traceSeconds: 4,
-          traceOpacity: 0.45,
-        },
+        effect: "levellingFluid",
+        config: { fill: 0xf2c84b, surface: 0xfadf7e, level: 0.45, settleSeconds: 1.4 },
       },
+      residue: { effect: "wallTrace", config: { fill: 0xf2c84b, seconds: 4, opacity: 0.45 } },
     },
   },
 ] as const satisfies readonly MaterialDefinition[];
 
 /** Custard's contents, shared by every experiment that shows them in another shell (#331). */
 const custardContents = {
-  effect: "vesselFluid",
-  config: {
-    fill: 0xf2c84b,
-    surface: 0xfadf7e,
-    level: 0.45,
-    settleSeconds: 1.4,
-    traceSeconds: 4,
-    traceOpacity: 0.45,
-  },
+  effect: "levellingFluid",
+  config: { fill: 0xf2c84b, surface: 0xfadf7e, level: 0.45, settleSeconds: 1.4 },
+};
+/** Custard's wall trace, shared the same way. */
+const custardResidue = {
+  effect: "wallTrace",
+  config: { fill: 0xf2c84b, seconds: 4, opacity: 0.45 },
 };
 
 /** The retired glass block's six pane tints (f99d307), in BoxGeometry face order. */
@@ -481,7 +475,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
       reliefScale: 0,
       endGrainFaces: noEnds,
       container: { shell: "stainedLantern", config: { inset: 0.88, tints: lanternTints } },
-      ...(contents ? { contents } : {}),
+      ...(contents ? { contents, residue: custardResidue } : {}),
     },
   });
   return [
@@ -505,6 +499,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
         endGrainFaces: noEnds,
         container: { shell: "framedGlass", config: { inset: 0.86, glass: 1.2 } },
         contents: custardContents,
+        residue: custardResidue,
       },
     },
   ];

@@ -85,19 +85,46 @@ export type ShellContext = {
 
 export type ShellHandler = (context: ShellContext, config: unknown) => ContainerShell;
 
-/** What contents add inside a boundary: their meshes (each releases its own resources). */
+/**
+ * A liquid's top, published by contents that have one (#332), in the boundary's block-local,
+ * unscaled space: a point p is inside the liquid where dot(p, normal) <= height. It is live:
+ * the contents update it each frame, before any consumer draws.
+ */
+export type LiquidSurface = {
+  readonly normal: THREE.Vector3;
+  readonly height: number;
+  wet(point: THREE.Vector3): boolean;
+};
+
+/** What contents publish for others to read (#329): only what they genuinely have. */
+export type Capabilities = { liquidSurface?: LiquidSurface };
+
+/** What contents add inside a boundary: their meshes and what they publish. */
 export type ContentsHandler = (
   boundary: InteriorBoundary,
   config: unknown,
-) => { meshes: THREE.Mesh[] };
+) => { meshes: THREE.Mesh[]; capabilities: Capabilities };
+
+/**
+ * Optional residue on the wall (#332, #334): it samples what the contents publish and keeps its
+ * own history; the contents never know it exists. It names the capability it needs, so a
+ * composition that cannot supply it fails when the material is built.
+ */
+export type ResidueHandler = {
+  requires: keyof Capabilities;
+  build(boundary: InteriorBoundary, capabilities: Capabilities, config: unknown): THREE.Mesh[];
+};
 
 export const containerShells = new Registry<ShellHandler>("container shell");
 export const containedContents = new Registry<ContentsHandler>("contained contents");
+export const containedResidues = new Registry<ResidueHandler>("contained residue");
 
 /** A material's container data: a registered shell and its configuration. */
 export type ContainerConfig = { shell: string; config: unknown };
 /** A material's contents data: a registered contents handler and its configuration. */
 export type ContentsConfig = { effect: string; config: unknown };
+/** A material's residue data: a registered residue handler and its configuration. */
+export type ResidueConfig = { effect: string; config: unknown };
 
 /**
  * Build a contained block: the shell, then its interior boundary, then the contents (if any)
@@ -107,16 +134,25 @@ export function composeContained(
   context: ShellContext & { size: number },
   container: ContainerConfig,
   contents: ContentsConfig | undefined,
+  residue?: ResidueConfig,
 ): { faces: readonly THREE.Material[]; extras: THREE.Mesh[] } {
   const shell = containerShells.get(container.shell)(context, container.config);
   const boundary = createInteriorBoundary(context.geometry, context.size, shell.inset);
   // No contents is an empty container: the same composition with nothing inside.
   const inside = [contents ?? []]
     .flat()
-    .flatMap(({ effect, config }) => containedContents.get(effect)(boundary, config).meshes);
+    .map(({ effect, config }) => containedContents.get(effect)(boundary, config));
+  const capabilities: Capabilities = Object.assign({}, ...inside.map((part) => part.capabilities));
+  // Residue reads what the contents publish; it never reaches into them.
+  const wall = [residue ?? []].flat().flatMap(({ effect, config }) => {
+    const handler = containedResidues.get(effect);
+    if (!capabilities[handler.requires])
+      throw new Error(`Residue "${effect}" needs contents that publish ${handler.requires}`);
+    return handler.build(boundary, capabilities, config);
+  });
   const faces = [shell.faces].flat();
   return {
     faces: Array.from({ length: 6 }, (_, face) => faces[face % faces.length]!),
-    extras: [...shell.meshes, ...inside],
+    extras: [...shell.meshes, ...inside.flatMap((part) => part.meshes), ...wall],
   };
 }

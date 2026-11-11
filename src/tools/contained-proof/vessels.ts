@@ -96,6 +96,7 @@ const custard: VesselBuilder = ({ environment }) => {
     },
     material.appearance.container,
     material.appearance.contents,
+    material.appearance.residue,
   );
   const object = new THREE.Group();
   const outer = new THREE.Mesh(blockGeometry, [...shell]);

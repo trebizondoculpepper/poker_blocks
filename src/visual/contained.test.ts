@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
 import { getMaterialDefinition, materialPools } from "../materials";
 import { composeContained, containedLayers } from "./contained";
-import { sharedSimulations } from "./shared-simulation";
 import "./filled-vessel";
 import "./glass-shells";
 
@@ -21,6 +20,7 @@ const build = (id: string) => {
     },
     appearance.container!,
     appearance.contents,
+    appearance.residue,
   );
 };
 
@@ -50,12 +50,77 @@ describe("contained components (#330)", () => {
     ]);
   });
 
-  it("the contents release their shared simulation when their materials are disposed", () => {
-    const before = sharedSimulations.size;
-    const { extras } = build("custard");
-    expect(sharedSimulations.size).toBe(before + 1);
-    extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
-    expect(sharedSimulations.size).toBe(before);
+  it("a fluid works with no residue, and residue attaches without changing the fluid (#332)", () => {
+    const { appearance } = materialPools
+      .get("registered")()
+      .find(({ id }) => id === "custard")!;
+    const context = {
+      geometry,
+      size: 1,
+      environment: null,
+      faceTexture: () => new THREE.Texture() as THREE.CanvasTexture,
+      ownSurface: (texture: THREE.CanvasTexture) =>
+        new THREE.MeshStandardMaterial({ map: texture }),
+    };
+    const bare = composeContained(context, appearance.container!, appearance.contents);
+    expect(bare.extras.map(({ renderOrder }) => renderOrder)).not.toContain(
+      containedLayers.residue,
+    );
+    const traced = composeContained(
+      context,
+      appearance.container!,
+      appearance.contents,
+      appearance.residue,
+    );
+    expect(traced.extras.map(({ renderOrder }) => renderOrder)).toContain(containedLayers.residue);
+    // Residue that needs a liquid surface cannot sit in an empty container.
+    expect(() =>
+      composeContained(context, appearance.container!, undefined, appearance.residue),
+    ).toThrow(/liquidSurface/);
+    [...bare.extras, ...traced.extras].forEach((mesh) =>
+      (mesh.material as THREE.Material).dispose(),
+    );
+  });
+
+  it("two vessels keep their own surfaces: each levels by its own motion (#332)", async () => {
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    const { appearance } = materialPools
+      .get("registered")()
+      .find(({ id }) => id === "custard")!;
+    const make = () =>
+      containedContents.get("levellingFluid")(
+        createInteriorBoundary(geometry, 1, 0.92),
+        appearance.contents!.config,
+      );
+    const a = make();
+    const b = make();
+    expect(a.capabilities.liquidSurface!.normal).not.toBe(b.capabilities.liquidSurface!.normal);
+    // Turn one vessel over and render a few frames: only its surface moves.
+    const turned = new THREE.Group();
+    turned.rotation.z = Math.PI / 2;
+    turned.add(a.meshes[0]!);
+    turned.updateMatrixWorld(true);
+    for (let frame = 0; frame < 3; frame++) {
+      a.meshes[0]!.onBeforeRender(
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+      );
+      b.meshes[0]!.onBeforeRender(
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+      );
+    }
+    expect(a.capabilities.liquidSurface!.normal.y).toBeLessThan(0.99);
+    expect(b.capabilities.liquidSurface!.normal.y).toBeCloseTo(1, 5);
+    expect(a.capabilities.liquidSurface!.wet(new THREE.Vector3(0, -0.4, 0))).toBeDefined();
   });
 
   it("ordinary atomic materials stay atomic", () => {

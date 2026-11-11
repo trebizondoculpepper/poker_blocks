@@ -872,7 +872,18 @@ Stateless shaders of the clock (the flame core, cloud) need no simulation and ar
 
 ### Extraction status (#330)
 
-The plastic container is extracted. `src/visual/contained.ts` holds the layer table (`containedLayers`), the interior boundary (`createInteriorBoundary`: `wall` and `volume` meshes at the shell's `inset`), the shell and contents registries, and `composeContained`, which builds shell → boundary → contents. The `contained` assembly in `block-appearance.ts` uses it. As planned for this slice, custard's fluid and wall trace stay together as one contents handler, `vesselFluid`. Separating fluid dynamics, look and residue is #332–#334. The per-frame context and capability publishing described above come with those missions. Today the fluid still drives itself from `onBeforeRender` and the shared simulation (#230).
+The plastic container is extracted. `src/visual/contained.ts` holds the layer table (`containedLayers`), the interior boundary (`createInteriorBoundary`: `wall` and `volume` meshes at the shell's `inset`), the shell and contents registries, and `composeContained`, which builds shell → boundary → contents. The `contained` assembly in `block-appearance.ts` uses it. Custard's fluid and trace were one contents handler (`vesselFluid`) in that slice. #332 has since split them into `levellingFluid` and the `wallTrace` residue. A separate look is #333, and richer residue is #334.
+
+### Levelling fluid and wall residue (#332)
+
+Custard's contents are now separate parts:
+
+- **`levellingFluid`** (contents) fills the boundary's volume, cut by a surface that eases toward world "up" as the block turns. Fill level, settle time and colours are configuration. It publishes `liquidSurface`: a live, block-local normal, a height and `wet(p)`.
+- **`wallTrace`** (residue, in the material's new `appearance.residue` slot) is an adapter for the old trace until #334. It keeps its own lagging plane, easing toward the published surface with `seconds`, and tints the wall between the two.
+
+The fluid never knows the trace exists. A fluid with no residue works, and adding or removing the residue changes no fluid code. A residue names the capability it needs (`requires: "liquidSurface"`), so composing it with contents that don't publish one (an empty container) fails when the material is built.
+
+**Simulation sharing (decision on #332):** each levelling fluid keeps its own surface, so independently moving vessels (hand cubes rocking, a dragged block, title rows) level by their own motion. Only immutable definitions are shared. This applies #329's per-cohort rule with every block as its own cohort. Nothing in the scene graph yet tells a group apart from individually moving cubes, and a settle step costs a few vector operations (#346). Grouping table blocks into one shared cohort can return if a measurement calls for it. The generic `sharedSimulations` registry (#230) stays available for effects that are genuinely shared.
 
 ### Glass shells (#331)
 
