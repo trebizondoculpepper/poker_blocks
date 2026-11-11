@@ -1,3 +1,4 @@
+import { commitReactions, type AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
 import { applyRackItem } from "./rack-item-effects";
 import type { BlockMaterial } from "./materials";
@@ -459,6 +460,9 @@ export class GameRun {
     return [{ type: "passive.installed", blockId: id }];
   }
 
+  /** The reactions the last play set off, in field order, for presentation (#366). */
+  lastReactions: readonly AppliedReaction[] = [];
+
   play(action: PlayAction): GameState | null {
     if (!this.inStage) return null;
     const next = this.activeDealer.play(this.currentState, action);
@@ -475,9 +479,15 @@ export class GameRun {
         ...next,
         round: { ...next.round, score: this.currentState.round.score + gained },
       };
+      // Reactions (#366): resolved once, after scoring, so they never score this play; they
+      // change the state later plays score.
+      // Committed through the shared command path; only real changes are reported.
+      this.lastReactions = commitReactions(this.commandTarget);
       // The current dealer scores in play(); this is a post-play event until
       // placement and scoring are separated by the gameplay coordinator.
       this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId });
+      for (const { blockId, from, to } of this.lastReactions)
+        this.passiveEvents.emit({ type: "reaction.applied", blockId, reaction: { from, to } });
       this.passiveEvents.drain();
       this.announceOutcome();
     }

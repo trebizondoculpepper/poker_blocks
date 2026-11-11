@@ -255,7 +255,7 @@ When the placed card lands, the scene presents each scoring line from lowest to 
 
 ### Material reactions (proposal, #363, epic #362)
 
-**Status: research proposal.** Nothing is built. #366 implements the contract; #367–#372 add individual reactions as data.
+**Status: the runner is built (#366)** in `src/reactions.ts`: the `reactions` list on a material definition, the `reactionMatchers` registry (`neighbour-material`), the `reactionResults` registry (`transform`, which uses `changeCardMaterial` and `setCardStateBonus`), and `resolveReactions`, which `GameRun.play` calls after scoring. Each fired reaction emits `reaction.applied` after `play.completed`, and `GameRun.lastReactions` lists them for presentation. No gameplay material has reactions yet: #367–#371 add them as data. `advance-cooking` is registered with the cooking state in #372. The first visible reaction (#367) also adds the play presentation that redraws the reacted blocks and plays a registered reaction sound.
 
 **What is agreed** (#362): only blocks that share a face interact; edge or corner contact does not. Reactions advance once per play, never in real time. Rank and suit never change; a transformation changes the card's material and/or its state bonus (see "State bonuses (proposal)"). Discards, camera motion and elapsed time are never plays.
 
