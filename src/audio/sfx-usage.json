@@ -266,9 +266,9 @@
     }
   },
   "passive.activate.scoring": {
-    "uses": 3,
+    "uses": 4,
     "files": {
-      "audio/sfx-registry.ts (placeholder)": 2,
+      "audio/sfx-registry.ts (placeholder)": 3,
       "passive-categories.ts": 1
     }
   },

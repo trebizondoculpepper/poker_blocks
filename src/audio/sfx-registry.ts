@@ -614,6 +614,7 @@ const entries = [
     name: "Activate magic",
     family: "material",
     description: "A Magic card's scoring modifier activates as its line is presented",
+    placeholder: "passive.activate.scoring",
   },
   {
     id: "passive.activate.economy",
