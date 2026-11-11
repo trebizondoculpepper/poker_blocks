@@ -153,3 +153,31 @@ describe("overlapping fades (#490 review)", () => {
     expect(shellMaterial.transparent).toBe(false);
   });
 });
+
+describe("fade edge cases (#490 review)", () => {
+  it("scales a cut-out threshold with the fade and restores it", () => {
+    const { v, shellMaterial } = visual();
+    shellMaterial.alphaTest = 0.5;
+    const runner = createExitRunner();
+    runner.start(snapshot, v, {
+      steps: [{ effects: [{ effect: "fade", target: "shell", config: { seconds: 1 } }] }],
+    });
+    runner.update(0.5);
+    expect(shellMaterial.alphaTest).toBeCloseTo(0.25);
+    expect(shellMaterial.opacity).toBeCloseTo(0.5);
+    runner.dispose();
+    expect(shellMaterial.alphaTest).toBe(0.5);
+  });
+
+  it("a shell-only fade leaves contents nested inside the shell alone", () => {
+    const { v, shell, contents, contentsMaterial } = visual();
+    shell.add(contents);
+    const runner = createExitRunner();
+    runner.start(snapshot, v, {
+      steps: [{ effects: [{ effect: "fade", target: "shell", config: { seconds: 1 } }] }],
+    });
+    runner.update(0.5);
+    expect(contentsMaterial.opacity).toBe(0.8);
+    runner.dispose();
+  });
+});

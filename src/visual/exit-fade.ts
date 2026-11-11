@@ -24,7 +24,7 @@ const defaultSeconds = 0.4;
  * when the last fade holding it is disposed.
  */
 type Shared = {
-  saved: { opacity: number; transparent: boolean; depthWrite: boolean };
+  saved: { opacity: number; transparent: boolean; depthWrite: boolean; alphaTest: number };
   shares: Map<object, number>;
 };
 const shared = new WeakMap<THREE.Material, Shared>();
@@ -37,6 +37,7 @@ function hold(material: THREE.Material, holder: object): void {
         opacity: material.opacity,
         transparent: material.transparent,
         depthWrite: material.depthWrite,
+        alphaTest: material.alphaTest,
       },
       shares: new Map(),
     };
@@ -50,9 +51,12 @@ function hold(material: THREE.Material, holder: object): void {
 
 /** The material's opacity: its original times each holder's remaining share. */
 function apply(material: THREE.Material, state: Shared): void {
-  let opacity = state.saved.opacity;
-  for (const share of state.shares.values()) opacity *= share;
-  material.opacity = opacity;
+  let share = 1;
+  for (const each of state.shares.values()) share *= each;
+  material.opacity = state.saved.opacity * share;
+  // A cut-out threshold scales with the fade, so cut-out faces fade smoothly to nothing instead
+  // of vanishing once opacity drops below it (#490 review).
+  material.alphaTest = state.saved.alphaTest * share;
 }
 
 function setShare(material: THREE.Material, holder: object, share: number): void {
@@ -70,22 +74,30 @@ function release(material: THREE.Material, holder: object): void {
   material.needsUpdate = true;
 }
 
-exitEffects.register("fade", ({ targets, reducedMotion, ownsObject }, raw) => {
+exitEffects.register("fade", ({ visual, targets, reducedMotion, ownsObject }, raw) => {
   const seconds = Math.max((raw as FadeConfig | undefined)?.seconds ?? defaultSeconds, 1e-3);
   const self = {};
   const faded = new Set<THREE.Material>();
-  for (const target of targets)
-    target.traverse((child) => {
-      // Only the departing block's own materials fade, never a sibling effect's overlay or
-      // particles (#490 review; ownership from #512).
-      if (!ownsObject(child)) return;
-      const material = (child as THREE.Mesh).material;
-      for (const each of [material ?? []].flat()) {
+  // The visual's parts this fade wasn't aimed at stay out even when nested inside a target (a
+  // shell-only fade never reaches contents parented under the shell, #490 review).
+  const aimed = new Set(targets);
+  // Aimed at the whole block (none of its listed parts named), everything is in.
+  const parts = [...visual.shell, ...visual.contents];
+  const choosesParts = parts.some((part) => aimed.has(part));
+  const outside = new Set(choosesParts ? parts.filter((part) => !aimed.has(part)) : []);
+  const visit = (object: THREE.Object3D) => {
+    if (outside.has(object)) return;
+    // Only the departing block's own materials fade, never a sibling effect's overlay or
+    // particles (#490 review; ownership from #512).
+    if (ownsObject(object))
+      for (const each of [(object as THREE.Mesh).material ?? []].flat()) {
         if (faded.has(each)) continue;
         faded.add(each);
         hold(each, self);
       }
-    });
+    object.children.forEach(visit);
+  };
+  targets.forEach(visit);
   let elapsed = 0;
   const show = (fraction: number) => {
     for (const material of faded) setShare(material, self, 1 - fraction);
