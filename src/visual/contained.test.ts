@@ -11,7 +11,13 @@ const build = (id: string) => {
     .get("registered")()
     .find((material) => material.id === id)!;
   return composeContained(
-    { geometry, size: 1, environment: null },
+    {
+      geometry,
+      size: 1,
+      environment: null,
+      faceTexture: () => new THREE.Texture() as THREE.CanvasTexture,
+      ownSurface: (texture) => new THREE.MeshStandardMaterial({ map: texture }),
+    },
     appearance.container!,
     appearance.contents,
   );
@@ -20,7 +26,8 @@ const build = (id: string) => {
 describe("contained components (#330)", () => {
   it("custard is a plastic shell holding its fluid and wall trace, in the agreed layers", () => {
     const { faces, extras } = build("custard");
-    expect(faces).toBeInstanceOf(THREE.MeshPhysicalMaterial);
+    expect(faces[0]).toBeInstanceOf(THREE.MeshPhysicalMaterial);
+    expect(new Set(faces).size).toBe(1);
     expect(extras.map(({ renderOrder }) => renderOrder)).toEqual([
       containedLayers.shellBack,
       containedLayers.gloss,
@@ -89,5 +96,30 @@ describe("the assembled contained block (#330 review)", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("glass container shells (#331)", () => {
+  it("holds the same custard contents in plastic, lantern and frame by configuration only", () => {
+    const contentsLayers = (id: string) =>
+      build(id)
+        .extras.map(({ renderOrder }) => renderOrder)
+        .filter(
+          (order) => order === containedLayers.contentsOpaque || order === containedLayers.residue,
+        );
+    for (const id of ["custard", "custardLantern", "custardFrame"])
+      expect(contentsLayers(id)).toEqual([containedLayers.contentsOpaque, containedLayers.residue]);
+    const config = (id: string) =>
+      materialPools
+        .get("registered")()
+        .find((material) => material.id === id)!.appearance.contents;
+    expect(config("custardLantern")).toEqual(config("custard"));
+    expect(config("custardFrame")).toEqual(config("custard"));
+  });
+
+  it("the empty lantern is the retired glass's six tinted panes with nothing inside", () => {
+    const { faces, extras } = build("emptyLantern");
+    expect(new Set(faces).size).toBe(6);
+    expect(extras).toEqual([]);
   });
 });

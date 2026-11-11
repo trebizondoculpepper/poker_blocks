@@ -423,6 +423,77 @@ export const materialDefinitions = [
   },
 ] as const satisfies readonly MaterialDefinition[];
 
+/** Custard's contents, shared by every experiment that shows them in another shell (#331). */
+const custardContents = {
+  effect: "vesselFluid",
+  config: {
+    fill: 0xf2c84b,
+    surface: 0xfadf7e,
+    level: 0.45,
+    settleSeconds: 1.4,
+    traceSeconds: 4,
+    traceOpacity: 0.45,
+  },
+};
+
+/** The retired glass block's six pane tints (f99d307), in BoxGeometry face order. */
+const lanternTints = [0xff9aa8, 0xffd27a, 0xf4fbff, 0x8fe3b0, 0x8fb4ff, 0xc9a6ff];
+
+/**
+ * Glass containers (#331): the stained lantern empty and holding custard, and custard in the
+ * fire's iron frame. The same contents in a different shell is configuration only.
+ */
+function glassContainerExperiments(): MaterialDefinition[] {
+  const lantern = (
+    id: string,
+    name: string,
+    contents?: MaterialDefinition["appearance"]["contents"],
+  ) => ({
+    id,
+    lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
+    name,
+    acoustics: { character: "ringing", hardness: 9, attach: "material.attach.prismatic" as const },
+    traits: { transparent: {} },
+    appearance: {
+      pattern: "leadedGlass",
+      assembly: "contained",
+      surface: "clear",
+      height: "none",
+      ink: lightInk,
+      edge: { color: 0x262b30, opacity: 0.8 },
+      geometry: { ...box, scale: 0.985 },
+      reliefScale: 0,
+      endGrainFaces: noEnds,
+      container: { shell: "stainedLantern", config: { inset: 0.88, tints: lanternTints } },
+      ...(contents ? { contents } : {}),
+    },
+  });
+  return [
+    lantern("emptyLantern", "Empty lantern"),
+    lantern("custardLantern", "Custard in a lantern", custardContents),
+    {
+      id: "custardFrame",
+      lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
+      name: "Custard in a frame",
+      acoustics: { character: "clanking", hardness: 8, attach: "material.attach.fire" as const },
+      traits: { transparent: {} },
+      appearance: {
+        pattern: "ironFrame",
+        assembly: "contained",
+        surface: "iron",
+        height: "frameRelief",
+        ink: { red: "#6e1a1a", black: "#24282c", onDark: false },
+        edge: { color: 0x2a2f34, opacity: 1 },
+        geometry: { ...box, scale: 0.985 },
+        reliefScale: 2.5,
+        endGrainFaces: noEnds,
+        container: { shell: "framedGlass", config: { inset: 0.86, glass: 1.2 } },
+        contents: custardContents,
+      },
+    },
+  ];
+}
+
 /**
  * Visual experiments (#227): materials that exist only to be looked at in a developer mode.
  * They are not in `materialDefinitions`, so no shop, reward or attract sequence ever deals
@@ -473,6 +544,7 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
       endGrainFaces: [0, 1],
     },
   },
+  ...glassContainerExperiments(),
 ];
 
 export type BlockMaterial = (typeof materialDefinitions)[number]["id"];

@@ -61,10 +61,10 @@ export function createInteriorBoundary(
   };
 }
 
-/** What a shell gives the block: its outer face material, extra meshes and its interior. */
+/** What a shell gives the block: its outer face materials, extra meshes and its interior. */
 export type ContainerShell = {
-  /** The material on the block's six outer faces. */
-  faces: THREE.Material;
+  /** The material on the block's six outer faces, or one per face (BoxGeometry order). */
+  faces: THREE.Material | readonly THREE.Material[];
   /** Its other meshes (an inner wall, a gloss layer), placed in their layers. */
   meshes: THREE.Mesh[];
   /** Scale from the outer surface to the inside of its wall: where its interior starts. */
@@ -74,6 +74,13 @@ export type ContainerShell = {
 export type ShellContext = {
   geometry: THREE.BufferGeometry;
   environment: THREE.Texture | null;
+  /**
+   * The material's own face artwork (its configured pattern, without the print), made once
+   * per block, for a shell drawn from it (a frame, leaded panes). The block disposes it.
+   */
+  faceTexture: () => THREE.CanvasTexture;
+  /** The material's own configured surface over a texture (an iron frame's metal). */
+  ownSurface: (texture: THREE.CanvasTexture) => THREE.Material;
 };
 
 export type ShellHandler = (context: ShellContext, config: unknown) => ContainerShell;
@@ -100,12 +107,16 @@ export function composeContained(
   context: ShellContext & { size: number },
   container: ContainerConfig,
   contents: ContentsConfig | undefined,
-): { faces: THREE.Material; extras: THREE.Mesh[] } {
+): { faces: readonly THREE.Material[]; extras: THREE.Mesh[] } {
   const shell = containerShells.get(container.shell)(context, container.config);
   const boundary = createInteriorBoundary(context.geometry, context.size, shell.inset);
   // No contents is an empty container: the same composition with nothing inside.
   const inside = [contents ?? []]
     .flat()
     .flatMap(({ effect, config }) => containedContents.get(effect)(boundary, config).meshes);
-  return { faces: shell.faces, extras: [...shell.meshes, ...inside] };
+  const faces = [shell.faces].flat();
+  return {
+    faces: Array.from({ length: 6 }, (_, face) => faces[face % faces.length]!),
+    extras: [...shell.meshes, ...inside],
+  };
 }

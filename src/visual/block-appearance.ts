@@ -6,8 +6,9 @@ import { additiveSheen } from "./additive-light";
 import { choppedGeometry, type ChopSettings } from "./chopped-geometry";
 import { createCrystalFire } from "./crystal-fire";
 import { composeContained, containedLayers } from "./contained";
-// Registers the plastic shell and the vessel fluid (#330).
+// Registers the plastic shell and the vessel fluid (#330), and the glass shells (#331).
 import "./filled-vessel";
+import "./glass-shells";
 import { createFireCore } from "./fire-core";
 
 export type BlockAppearance = {
@@ -175,6 +176,45 @@ function drawVentHousing(g: CanvasRenderingContext2D, fan: boolean): void {
     g.fillStyle = "#c3cbd0";
     g.fillRect(28, y + 6, SIZE - 56, 2);
   }
+}
+
+/**
+ * The retired glass block's pane (f99d307, restored for the `stainedLantern` shell, #331): clear
+ * glass with a few seed bubbles, in a dark lead-and-steel came with a bright inner bevel.
+ */
+function drawLeadedGlass(g: CanvasRenderingContext2D, random: () => number): void {
+  g.clearRect(0, 0, SIZE, SIZE);
+  gradient(g, [
+    [0, "#f4fbff38"],
+    [0.5, "#dff1f730"],
+    [1, "#f8fdff38"],
+  ]);
+  // Seeds: the small bubbles of hand-made glass.
+  for (let n = 0; n < 14; n++) {
+    g.strokeStyle = "#ffffff70";
+    g.lineWidth = 1;
+    g.beginPath();
+    g.ellipse(
+      30 + random() * 196,
+      30 + random() * 196,
+      1 + random() * 3,
+      1 + random() * 2,
+      random() * 3,
+      0,
+      Math.PI * 2,
+    );
+    g.stroke();
+  }
+  // The came: a dark metal frame with a bright bevel along its inner edge.
+  g.strokeStyle = "#262b30";
+  g.lineWidth = 30;
+  g.strokeRect(0, 0, SIZE, SIZE);
+  g.strokeStyle = "#8c969e";
+  g.lineWidth = 3;
+  g.strokeRect(16, 16, SIZE - 32, SIZE - 32);
+  g.strokeStyle = "#4a535b";
+  g.lineWidth = 2;
+  g.strokeRect(3, 3, SIZE - 6, SIZE - 6);
 }
 
 function drawSteel(g: CanvasRenderingContext2D, random: () => number, angle: number): void {
@@ -706,6 +746,7 @@ const patternRegistry = new Map<string, PatternHandler>([
   ["frostedIce", (g, random) => drawIce(g, random)],
   ["marbledFlesh", (g, random, _identity, endGrain) => drawMeat(g, random, endGrain)],
   ["ventHousing", (g, _random, _identity, endGrain) => drawVentHousing(g, endGrain)],
+  ["leadedGlass", (g, random) => drawLeadedGlass(g, random)],
 ]);
 
 function faceTexture(
@@ -1258,18 +1299,28 @@ function contained(context: AssemblyContext): BlockAppearance {
   const container = definition.appearance.container;
   if (!container) throw new Error("A contained block needs container data");
   const print = printSkin(art, definition.appearance, geometry);
+  // The material's own artwork, made only if its shell draws from it (a frame, leaded panes).
+  const own: THREE.CanvasTexture[] = [];
   const { faces, extras } = composeContained(
-    { geometry, size, environment: reflectionEnvironment },
+    {
+      geometry,
+      size,
+      environment: reflectionEnvironment,
+      faceTexture: () => {
+        own[0] ??= faceTexture(art, definition, false, 0, false);
+        return own[0];
+      },
+      ownSurface: (texture) =>
+        surface(texture, definition.appearance, heightFor(texture, art, definition.appearance)),
+    },
     container,
     definition.appearance.contents,
   );
   return {
-    ...appearanceBase(
-      context,
-      [print.texture],
-      Array.from({ length: 6 }, () => faces as THREE.MeshStandardMaterial),
-      [...extras, print.skin],
-    ),
+    ...appearanceBase(context, [print.texture, ...own], faces as THREE.MeshStandardMaterial[], [
+      ...extras,
+      print.skin,
+    ]),
     // The front skin draws after the contents and residue, before the gloss (#329 layers).
     faceLayer: containedLayers.shellFront,
   };

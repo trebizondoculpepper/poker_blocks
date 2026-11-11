@@ -857,6 +857,19 @@ Stateless shaders of the clock (the flame core, cloud) need no simulation and ar
 
 The plastic container is extracted. `src/visual/contained.ts` holds the layer table (`containedLayers`), the interior boundary (`createInteriorBoundary`: `wall` and `volume` meshes at the shell's `inset`), the shell and contents registries, and `composeContained`, which builds shell → boundary → contents. The `contained` assembly in `block-appearance.ts` uses it. As planned for this slice, custard's fluid and wall trace stay together as one contents handler, `vesselFluid`. Separating fluid dynamics, look and residue is #332–#334. The per-frame context and capability publishing described above come with those missions. Today the fluid still drives itself from `onBeforeRender` and the shared simulation (#230).
 
+### Glass shells (#331)
+
+Two existing glass designs are now container shells beside plastic (`src/visual/glass-shells.ts`). Any contents sit in any shell by configuration only, and no contents code knows which shell it is in:
+
+- **`framedGlass`:** the fire block's open iron frame, drawn from the material's own `ironFrame` artwork and `iron` surface, with the glossy additive glass sheen in its openings (#203) in the `gloss` layer. Its `inset` (0.86) starts the interior inside the thicker frame.
+- **`stainedLantern`:** the retired glass block (`f99d307`), restored only as a shell, never as a material in player pools. The pattern is the `leadedGlass` artwork (clear glass with seed bubbles in a lead-and-steel came), with each of the six panes tinted from its config (`tints`, the original pane colours).
+
+To build from a material's own artwork, a shell gets two hooks in `ShellContext`. `faceTexture()` gives the material's pattern without the print, made once and disposed with the block. `ownSurface(texture)` gives the material's configured surface. A shell may return one face material or six.
+
+Experiments (developer modes only): `emptyLantern`, `custardLantern` and `custardFrame`, the last two holding custard's exact contents configuration. See them at `?mode=dev9#materials/<id>`.
+
+**Limitations:** the lantern's panes are see-through by their texture's alpha, as the old glass was in the hand. The old glass's table refraction (`clearOnTable`) is not restored, so in the object browser the panes read darker and greyer than the old glass. The frame's panes are an additive sheen, so they never hide the contents. Neither shell refracts its contents.
+
 ### The rendering proof (#346): results and decision
 
 `?mode=dev15` is the proof room (`src/tools/contained-proof/`, development builds only). It draws a glass shell, refractive water cut by its own levelling surface, and a fading wall film, in the layer order above, with every vessel turning independently over a checked backdrop (so refraction shows), optionally overlapping. It also draws the custard baseline, built by the game's own `createFilledVessel`. **Measure** records 240 frames as a Markdown row. Film storages and vessels are registered by name (`coatingStorages`, `vesselBuilders`), so the room never asks which it holds.
