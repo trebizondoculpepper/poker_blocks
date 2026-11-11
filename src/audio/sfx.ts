@@ -1,62 +1,31 @@
-// Plays registered sound effects by id. A sound with no generated audio yet is silent,
-// so game code can call `playSfx` for every action before its audio exists.
-import { sfxFileNames, soundEffects, type SoundEffectId } from "./sfx-registry";
+// Plays registered sound effects by id (#518): each through the provider its registry entry
+// names, a pre-generated sample by default, or a live synthesised recipe. A sound with no audio
+// yet is silent, so game code can call `playSfx` for every action before its audio exists.
+import { soundEffects, type SoundEffectId } from "./sfx-registry";
+import { sfxProviders, type PlayOptions, type SfxSettings } from "./sfx-providers";
 
-const urlByFile = new Map(
-  Object.entries(
-    import.meta.glob<string>("../assets/sfx/*.mp3", {
-      eager: true,
-      query: "?url",
-      import: "default",
-    }),
-  ).map(([path, url]) => [path.slice(path.lastIndexOf("/") + 1), url]),
-);
+export type { PlayOptions } from "./sfx-providers";
 
-const ownTakes = new Map(
-  soundEffects.map((effect) => [
-    effect.id,
-    sfxFileNames(effect).flatMap((name) => urlByFile.get(name) ?? []),
-  ]),
-);
-// A sound with no audio yet plays its placeholder's takes, if it names one (#232).
-const takesById = new Map(
-  soundEffects.map((effect) => {
-    const own = ownTakes.get(effect.id) ?? [];
-    const stand = effect.placeholder ? (ownTakes.get(effect.placeholder) ?? []) : [];
-    return [effect.id, own.length > 0 ? own : stand];
-  }),
-);
-
-export type PlayOptions = {
-  /** Playback-rate multiplier; above 1 raises the pitch. */
-  rate?: number;
-  /** Random pitch spread, e.g. 0.06 for ±6%. Default 0.04. */
-  jitter?: number;
-  /** 0 to 1, multiplied by the master volume. */
-  volume?: number;
-};
-
-let masterVolume = 0.7;
-let muted = false;
+const effects = new Map(soundEffects.map((effect) => [effect.id, effect]));
+const settings: SfxSettings = { volume: 0.7, muted: false, random: Math.random };
 
 export function setSfxVolume(volume: number): void {
-  masterVolume = Math.min(1, Math.max(0, volume));
+  settings.volume = Math.min(1, Math.max(0, volume));
 }
 
 export function setSfxMuted(value: boolean): void {
-  muted = value;
+  settings.muted = value;
 }
 
-/** Plays one take of a sound. Does nothing if the sound has no audio yet or is muted. */
+/** For tests: replace the cosmetic random source (variation, take choice). */
+export function setSfxRandom(random: () => number): void {
+  settings.random = random;
+}
+
+/** Plays one take of a sound, by its provider. Does nothing when muted or it has no audio. */
 export function playSfx(id: SoundEffectId, options: PlayOptions = {}): void {
-  if (muted) return;
-  const takes = takesById.get(id);
-  if (!takes || takes.length === 0) return;
-  const audio = new Audio(takes[Math.floor(Math.random() * takes.length)]);
-  const jitter = options.jitter ?? 0.04;
-  audio.preservesPitch = false;
-  audio.playbackRate = (options.rate ?? 1) * (1 + (Math.random() * 2 - 1) * jitter);
-  audio.volume = masterVolume * (options.volume ?? 1);
-  // Browsers block audio until the first user gesture; a refused play is harmless.
-  audio.play().catch(() => {});
+  if (settings.muted) return;
+  const effect = effects.get(id);
+  if (!effect) return;
+  sfxProviders.get(effect.source?.provider ?? "sample")(effect, options, settings);
 }
