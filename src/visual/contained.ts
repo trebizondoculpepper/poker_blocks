@@ -119,13 +119,29 @@ export type ContainedFrame = {
   readonly first: boolean;
   /** The block's world rotation this frame. */
   readonly rotation: THREE.Quaternion;
+  /** The player's reduced-motion setting: drifting parts hold still or calm down (#349). */
+  readonly reducedMotion: boolean;
 };
+
+let reducedMotion: () => boolean = () => false;
+
+/** Where contained parts read the player's reduced-motion setting; the game wires it (main). */
+export function setContainedReducedMotion(provider: () => boolean): void {
+  reducedMotion = provider;
+}
+
+/** A contained part: a mesh, or points (a field of particles, #349). */
+export type ContainedPart = THREE.Mesh | THREE.Points;
 
 /** What contents add inside a boundary: their meshes, what they publish, their frame update. */
 export type ContentsHandler = (
   boundary: InteriorBoundary,
   config: unknown,
-) => { meshes: THREE.Mesh[]; capabilities: Capabilities; update?: (frame: ContainedFrame) => void };
+) => {
+  meshes: ContainedPart[];
+  capabilities: Capabilities;
+  update?: (frame: ContainedFrame) => void;
+};
 
 /**
  * Optional residue on the wall (#332, #334): it samples what the contents publish and keeps its
@@ -161,7 +177,7 @@ export function composeContained(
   container: ContainerConfig,
   contents: ContentsConfig | undefined,
   residue?: ResidueConfig,
-): { faces: readonly THREE.Material[]; extras: THREE.Mesh[] } {
+): { faces: readonly THREE.Material[]; extras: ContainedPart[] } {
   const shell = containerShells.get(container.shell)(context, container.config);
   const boundary = createInteriorBoundary(context.geometry, context.size, shell.inset);
   // No contents is an empty container: the same composition with nothing inside.
@@ -186,7 +202,7 @@ export function composeContained(
   const rotation = new THREE.Quaternion();
   let start: number | null = null;
   let last: number | null = null;
-  const tick = (mesh: THREE.Mesh) => {
+  const tick = (mesh: ContainedPart) => {
     const now = frameSeconds();
     if (now === last) return;
     start ??= now;
@@ -195,6 +211,7 @@ export function composeContained(
       delta: last === null ? 0 : Math.min(now - last, 0.1),
       first: last === null,
       rotation: mesh.getWorldQuaternion(rotation),
+      reducedMotion: reducedMotion(),
     };
     last = now;
     for (const update of updates) update(frame);

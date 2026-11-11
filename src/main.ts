@@ -1,3 +1,4 @@
+import { setContainedReducedMotion } from "./visual/contained";
 import type { WordCubeRoom } from "./tools/word-cube-room";
 import type { DialogRoom } from "./tools/dialog-room";
 import type { TuningControl } from "./attract-tuning-panel";
@@ -94,6 +95,8 @@ const actionLog = createActionLog();
 const beat = createBeatSignal(() => musicPlayer.position(performance.now()));
 // Things that move with the music join the dance floor (#256). Reduced motion stills them.
 const danceFloor = createDanceFloor(beat, () => run.reducedMotion);
+// Contained blocks' drifting parts (a cloud, a field of stars) follow the reduced-motion setting.
+setContainedReducedMotion(() => run.reducedMotion);
 const audio: AudioService = createAudioService({
   player: musicPlayer,
   music: createMusicController(

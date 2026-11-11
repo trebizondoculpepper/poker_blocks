@@ -12,6 +12,8 @@ import "./glass-shells";
 import "./fading-film";
 // Registers the contained cloud (#336).
 import "./cloud";
+// Registers the contained star field (#349).
+import "./contained-stars";
 // Registers the flame contents (#335).
 import "./fire-core";
 
@@ -32,7 +34,7 @@ export type BlockAppearance = {
    */
   faceLayer?: number;
   /** Extra meshes to add inside the block (the crystal's fire); dispose their materials. */
-  extras?: THREE.Mesh[];
+  extras?: (THREE.Mesh | THREE.Points)[];
 };
 
 const SIZE = 256;
@@ -1158,7 +1160,7 @@ function appearanceBase(
   context: AssemblyContext,
   textures: THREE.CanvasTexture[],
   materials: THREE.MeshStandardMaterial[],
-  extras?: THREE.Mesh[],
+  extras?: (THREE.Mesh | THREE.Points)[],
   boardMaterials?: THREE.MeshStandardMaterial[],
 ): BlockAppearance {
   return {

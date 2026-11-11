@@ -254,7 +254,7 @@ export type PassiveVisual = {
    * Meshes drawn inside the token (a material block's fire core or fluid, #391): consumers
    * attach them to the token mesh; `dispose` releases them.
    */
-  extras?: readonly THREE.Mesh[];
+  extras?: readonly (THREE.Mesh | THREE.Points)[];
   dispose(): void;
 };
 

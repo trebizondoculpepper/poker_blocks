@@ -114,6 +114,7 @@ containedContents.register("cloud", (boundary, raw) => {
   return {
     meshes: [mesh],
     capabilities: {},
-    update: ({ seconds }) => void (uniforms.time.value = seconds),
+    // Under reduced motion the cloud holds still where it is.
+    update: ({ delta, reducedMotion }) => void (uniforms.time.value += reducedMotion ? 0 : delta),
   };
 });
