@@ -458,6 +458,19 @@ export const materialDefinitions = [
     traits: {},
     shop: { basePrice: 3, weights: [[1, 0]] },
     appearance: {
+      // Fractures into pottery shards that scatter and fade (#455).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: { pieces: "shards", colour: 0xb4643c, life: 0.9, fade: 0.4 },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "crackedClay",
       assembly: "sixFaces",
       surface: "matte",
