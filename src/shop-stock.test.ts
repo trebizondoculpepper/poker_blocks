@@ -53,6 +53,7 @@ describe("shop preview", () => {
       maxOffers: 4,
       guaranteedPassives: 2,
       guaranteedCards: 2,
+      transmogrifierSlots: 0,
     });
     expect(state.shopStock?.map(({ kind }) => kind)).toEqual([
       "passive",
@@ -199,7 +200,7 @@ describe("saves from before #143", () => {
     const restored = fromSaveRecord(record, standardDeck, dealerRegistry);
     expect(restored).not.toBeNull();
     expect(restored?.state.deck.map(({ id }) => id)).toContain(lent);
-    expect(restored?.state.shopStock?.every(({ kind }) => kind === "passive")).toBe(true);
+    expect(restored?.state.shopStock?.some(({ kind }) => kind === "card")).toBe(false);
   });
 });
 

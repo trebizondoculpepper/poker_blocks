@@ -68,6 +68,11 @@ passiveFrequencies.register("exponentialScoring", [
   [7, common],
 ]);
 passiveFrequencies.register("even", [[1, 1]]);
+/**
+ * Never drawn into the ordinary passive offers: for items stocked only by their own dedicated
+ * shop slots (transmogrifiers, #388).
+ */
+passiveFrequencies.register("dedicated", [[1, absent]]);
 
 /** One of `items`, drawn by weight; null when nothing has a positive weight. */
 export function drawWeighted<T>(

@@ -1,3 +1,5 @@
+import { passiveFrequencies } from "./offer-weights";
+import type { BlockMaterial } from "./materials";
 import { Registry } from "./core/registry";
 import { categoryPalette, type PassiveCategoryTraits } from "./passive-categories";
 import type { EventRule, HandlerConfig } from "./event-rules";
@@ -17,6 +19,10 @@ export type PassiveBlock = {
     inspectable: InspectableTrait;
     /** What it cost in the shop, before modifiers; the resale policy reads it (#103). */
     priced?: { basePrice: number };
+    /** Uses left of its total, for an item that wears out (a transmogrifier, #388). */
+    limitedUse?: { uses: number; total: number };
+    /** The material a transmogrifier turns a card into (#388). */
+    transmogrifier?: { material: BlockMaterial };
   };
 };
 
@@ -425,7 +431,16 @@ export function randomPassiveDefinitions(
   const available = passiveDefinitions
     .names()
     .filter((name) => !excluded.includes(name) && !passiveDefinitions.get(name).retired)
-    .map((name) => passiveDefinitions.get(name));
+    .map((name) => passiveDefinitions.get(name))
+    // Only what the passive shop could ever offer: an item stocked by its own dedicated slots
+    // (a transmogrifier, #388) is made complete there, never granted as a bare passive.
+    .filter(({ shop }) =>
+      [shop ?? []]
+        .flat()
+        .every(({ frequency }) =>
+          passiveFrequencies.get(frequency).some(([, weight]) => weight > 0),
+        ),
+    );
   const picked: PassiveDefinition[] = [];
   while (picked.length < count && available.length) {
     picked.push(

@@ -1,16 +1,19 @@
 import type { CardBlock } from "./cards";
-import type { Registry } from "./core/registry";
+import { Registry } from "./core/registry";
 import type { Dealer } from "./dealer";
 import type { RunPhase, RunSnapshot } from "./game-run";
 import type { RandomCursor } from "./random";
 import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
+// Registers the transmogrifier definitions, so saved rack items resolve (#388).
+import "./transmogrifiers";
+import { rackTraitPersistence } from "./rack-trait-persistence";
 import { applyCardStates, type CardState } from "./card-material";
 import { stateBonuses } from "./state-bonuses";
 import { blockMaterials, type BlockMaterial } from "./materials";
 import { parseRunStats, type RunStats } from "./run-stats";
-import { createPassiveBlock, passiveDefinitions } from "./passives";
+import { createPassiveBlock, passiveDefinitions, type PassiveBlock } from "./passives";
 import {
   isOfferKind,
   offerKind,
@@ -56,7 +59,7 @@ export type SaveRecord = {
     deck: string[];
     discardPile: string[];
     /** Optional to keep previously saved runs readable. */
-    passiveRack?: { id: string; definitionId: string }[];
+    passiveRack?: SavedRackItem[];
     /** Each offer as its kind saves it (src/offer-kinds.ts). */
     shopStock?: SavedOffer[];
     /** Cards bought this run, saved in full (#143); absent in older saves. */
@@ -137,7 +140,7 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
       hand: ids(state.hand),
       deck: ids(state.deck),
       discardPile: ids(state.discardPile),
-      passiveRack: state.passiveRack.map(({ id, definitionId }) => ({ id, definitionId })),
+      passiveRack: state.passiveRack.map(saveRackItem),
       ...(state.shopStock
         ? {
             shopStock: state.shopStock.map((offer) => offerKind(offer).save(offer.block)),
@@ -193,14 +196,13 @@ export function fromSaveRecord(
     const passiveIds = new Set<string>();
     // A retired passive has no effect, so an older save that installed one drops it here
     // rather than carrying a dead slot for the rest of the run (doc/game.md).
-    const passiveRack = (state.passiveRack ?? []).flatMap(({ id, definitionId }) => {
+    const passiveRack = (state.passiveRack ?? []).flatMap((saved) => {
+      const { id, definitionId } = saved;
       if (typeof id !== "string" || passiveIds.has(id) || typeof definitionId !== "string") {
         throw new Error("bad passive");
       }
       passiveIds.add(id);
-      return passiveDefinitions.get(definitionId).retired
-        ? []
-        : [createPassiveBlock(definitionId, id)];
+      return passiveDefinitions.get(definitionId).retired ? [] : [restoreRackItem(saved)];
     });
     // Each offer is rebuilt by its own kind; an unknown kind makes the save invalid.
     const restoreOffer: OfferRestore = {
@@ -438,4 +440,34 @@ function restoreCardStates(saved: unknown): Record<string, CardState> | undefine
       ];
     }),
   );
+}
+
+/**
+ * A rack item as saved: its id and definition, plus the traits that registered how they
+ * persist (`rackTraitPersistence`): a transmogrifier's uses, price and material (#388).
+ */
+export type SavedRackItem = { id: string; definitionId: string; traits?: Record<string, unknown> };
+
+function saveRackItem(block: PassiveBlock): SavedRackItem {
+  const traits = Object.fromEntries(
+    Object.entries(block.traits).flatMap(([name, value]) =>
+      rackTraitPersistence.has(name) ? [[name, rackTraitPersistence.get(name).save(value)]] : [],
+    ),
+  );
+  return {
+    id: block.id,
+    definitionId: block.definitionId,
+    ...(Object.keys(traits).length ? { traits } : {}),
+  };
+}
+
+function restoreRackItem(saved: SavedRackItem): PassiveBlock {
+  const block = createPassiveBlock(saved.definitionId, saved.id);
+  const traits = Object.fromEntries(
+    Object.entries(saved.traits ?? {}).map(([name, value]) => [
+      name,
+      rackTraitPersistence.get(name).restore(value),
+    ]),
+  );
+  return { ...block, traits: { ...block.traits, ...traits } };
 }

@@ -64,6 +64,9 @@ export type OfferView<Block extends OfferBlock> = {
 
 const offerViews = new Registry<OfferView<OfferBlock>>("offer view");
 
+/** Whether an offer kind has a view, so a shop holding one can be drawn. */
+export const hasOfferView = (kind: string): boolean => offerViews.has(kind);
+
 /** Register how a kind of offer looks in the shop. */
 export function registerOfferView<Block extends OfferBlock>(
   name: string,
@@ -145,6 +148,18 @@ registerOfferView<PassiveBlock>("passive", {
   describe: (block) => block.traits.inspectable.inspect(),
   className: "is-passive",
   purchaseDescription: "BUY or the passive rack to install it",
+  flightTarget: "rack",
+  dropTargets: ["buy", "rack"],
+});
+
+// A transmogrifier (#388): an Items-rack item, shown as its passive token until its own look
+// (#391), bought like a passive.
+registerOfferView<PassiveBlock>("transmogrifier", {
+  cube: passiveCube,
+  name: (block) => passiveDefinitions.get(block.definitionId).name,
+  describe: (block) => block.traits.inspectable.inspect(),
+  className: "is-passive",
+  purchaseDescription: "BUY or the Items rack to keep it",
   flightTarget: "rack",
   dropTargets: ["buy", "rack"],
 });

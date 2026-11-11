@@ -268,7 +268,8 @@ describe("GameRun progression", () => {
       () => 0,
     );
     const balance = stocked.state.coins;
-    expect(stocked.state.shopStock).toHaveLength(5);
+    // Five ordinary offers plus the dedicated transmogrifier slot (#388).
+    expect(stocked.state.shopStock).toHaveLength(6);
     expect(stocked.leaveShop()).toBe(true);
     expect(stocked.state.coins).toBe(balance);
     expect(stocked.state.shopStock).toBeUndefined();

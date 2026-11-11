@@ -151,7 +151,13 @@ describe("game modes composed from traits", () => {
       onLoad: "title",
       save: { key: saveKey },
       passiveRack: { capacity: 5 },
-      shop: { minOffers: 5, maxOffers: 9, guaranteedPassives: 1, guaranteedCards: 1 },
+      shop: {
+        minOffers: 5,
+        maxOffers: 9,
+        guaranteedPassives: 1,
+        guaranteedCards: 1,
+        transmogrifierSlots: 1,
+      },
       music: { style: "ordinary" },
     });
     expect(gameModeFor(null).runSetup).toEqual([]);
