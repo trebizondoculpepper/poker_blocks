@@ -64,12 +64,13 @@ export const disabledAppearance = defineTrait({
       disabled.value = (payload as InteractionState).enabled ? 0 : 1;
     });
     // Each material is filtered once, however often the block is mounted: wrapping it twice
-    // would nest the filter and leave a stale hook behind on disposal.
-    const filtered = new Set<THREE.Material>();
+    // would nest the filter and leave a stale hook behind on disposal. The filter knows its own
+    // hooks, so a material already wearing one is skipped.
+    const ownHooks = new WeakSet<object>();
     const stopMount = block.on("presentation.mount", (payload) => {
       for (const material of (payload as PresentationMount).materials) {
-        if (filtered.has(material)) continue;
-        filtered.add(material);
+        // oxlint-disable-next-line typescript/unbound-method -- identity check only
+        if (ownHooks.has(material.onBeforeCompile)) continue;
         // oxlint-disable-next-line typescript/unbound-method -- explicitly called with material and restored on disposal
         const compile = material.onBeforeCompile;
         // oxlint-disable-next-line typescript/unbound-method -- explicitly called with material and restored on disposal
@@ -79,7 +80,7 @@ export const disabledAppearance = defineTrait({
         // scaled by their coverage. They are dithered on their unscaled brightness and scaled
         // back, so a faint glow stays faint instead of turning into full-strength white specks.
         const premultiplied = premultipliedOutput(material);
-        material.onBeforeCompile = (shader, renderer) => {
+        const hook: THREE.Material["onBeforeCompile"] = (shader, renderer) => {
           compile.call(material, shader, renderer);
           shader.uniforms.interactionDisabled = disabled;
           shader.uniforms.interactionDitherPixel = pixel;
@@ -107,6 +108,8 @@ export const disabledAppearance = defineTrait({
             }
           `;
         };
+        material.onBeforeCompile = hook;
+        ownHooks.add(hook);
         material.customProgramCacheKey = () =>
           key + (premultiplied ? "|interaction-dither-premultiplied" : "|interaction-dither");
         material.needsUpdate = true;
