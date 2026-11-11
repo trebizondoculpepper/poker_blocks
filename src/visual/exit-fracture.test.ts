@@ -56,13 +56,13 @@ describe("fracture (#442)", () => {
     const before = root.children.length;
     const runner = run(v, "fracture", { pieces: "slabs", life: 0.5 });
     expect(root.children.length).toBe(before + 5);
-    expect(faces.visible).toBe(false);
+    expect((faces.material as THREE.Material).visible).toBe(false);
     const piece = root.children.at(-1) as THREE.Mesh;
     const freed = vi.spyOn(piece.material as THREE.Material, "dispose");
     const shared = vi.spyOn(piece.geometry, "dispose");
     runner.update(0.6);
     expect(root.children.length).toBe(before);
-    expect(faces.visible).toBe(true);
+    expect((faces.material as THREE.Material).visible).toBe(true);
     expect(freed).toHaveBeenCalledTimes(1);
     expect(shared).not.toHaveBeenCalled();
   });
@@ -208,9 +208,79 @@ describe("fracture in awkward hierarchies (#512 review)", () => {
       steps: [{ effects: [{ effect: "fracture", target: "shell", config: { pieces: "slabs" } }] }],
     });
     expect(root.visible).toBe(true);
-    expect(material.visible).toBe(false);
+    // The body stops drawing through a stand-in material; its own is untouched and comes back.
+    expect(root.material).not.toBe(material);
+    expect((root.material as THREE.Material).visible).toBe(false);
+    expect(material.visible).toBe(true);
     expect(root.children.length).toBeGreaterThan(0);
     runner.dispose();
-    expect(material.visible).toBe(true);
+    expect(root.material).toBe(material);
+  });
+});
+
+describe("hiding only what should hide (#512 review)", () => {
+  it("a mesh root sharing its material with a flying component never hides that component", () => {
+    const shared = new THREE.MeshBasicMaterial();
+    const root = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), shared);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.1), shared);
+    root.add(blade);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [root], contents: [], release: vi.fn() };
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        { effects: [{ effect: "fracture", target: "shell", config: { pieces: "components" } }] },
+      ],
+    });
+    expect(blade.material).toBe(shared);
+    expect(shared.visible).toBe(true);
+    expect((root.material as THREE.Material).visible).toBe(false);
+    runner.dispose();
+    expect(root.material).toBe(shared);
+  });
+
+  it("a parallel flash's overlays stay visible on meshes a fracture hides", async () => {
+    await import("./flash-shudder");
+    const { v, faces } = visual();
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        {
+          effects: [
+            { effect: "flash", config: { seconds: 1 } },
+            { effect: "fracture", config: { pieces: "slabs" } },
+          ],
+        },
+      ],
+    });
+    const overlay = faces.children[0] as THREE.Mesh;
+    expect(overlay).toBeDefined();
+    expect(faces.visible).toBe(true);
+    expect(overlay.visible).toBe(true);
+    expect((overlay.material as THREE.Material).visible).toBe(true);
+    runner.dispose();
+  });
+
+  it("measures only the block's own geometry, not a sibling effect's", async () => {
+    await import("./exit-burst");
+    const { v, root } = visual();
+    const before = root.children.length;
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        {
+          effects: [
+            { effect: "burst", config: { count: 50 } },
+            { effect: "fracture", config: { pieces: "slabs" } },
+          ],
+        },
+      ],
+    });
+    const slab = root.children
+      .slice(before)
+      .find((child) => (child as THREE.Mesh).isMesh) as THREE.Mesh;
+    // The 2-unit body sets the slabs' size; the burst's particles don't widen it.
+    expect(slab.scale.x).toBeCloseTo(2);
+    runner.dispose();
   });
 });

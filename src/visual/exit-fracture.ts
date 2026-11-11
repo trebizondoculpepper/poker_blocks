@@ -147,46 +147,53 @@ registerPieceSet("shards", () =>
 /** The size of a departing block in its own space. */
 export type CrackConfig = { pattern?: string; seconds?: number; colour?: number };
 
-exitEffects.register("crack", ({ visual, targets, reducedMotion }, raw): ExitEffectInstance => {
-  const config = raw as CrackConfig | undefined;
-  const seconds = Math.max(config?.seconds ?? 0.3, 1e-3);
-  // Cracks run over the configured target only: an empty target, such as a solid block's
-  // contents, gets none (#512 review).
-  const bounds = targetBounds(visual, targets);
-  const size = bounds.isEmpty() ? new THREE.Vector3() : bounds.getSize(new THREE.Vector3());
-  const centre = bounds.isEmpty() ? new THREE.Vector3() : bounds.getCenter(new THREE.Vector3());
-  const points =
-    reducedMotion || bounds.isEmpty()
-      ? []
-      : crackPatterns
-          .get(config?.pattern ?? "radial")(Math.random)
-          .map((p) => p.clone().multiply(size).add(centre));
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  geometry.setDrawRange(0, 0);
-  const material = new THREE.LineBasicMaterial({ color: config?.colour ?? 0x1a1a1a });
-  const lines = new THREE.LineSegments(geometry, material);
-  visual.root.add(lines);
-  let elapsed = reducedMotion || !points.length ? seconds : 0;
-  const reveal = () =>
-    geometry.setDrawRange(0, Math.floor((points.length / 2) * (elapsed / seconds)) * 2);
-  return {
-    update(delta) {
-      if (elapsed >= seconds) return false;
-      elapsed = Math.min(elapsed + delta, seconds);
-      reveal();
-      return elapsed < seconds;
-    },
-    finish() {
-      elapsed = seconds;
-      reveal();
-    },
-    dispose() {
-      lines.removeFromParent();
-      geometry.dispose();
-      material.dispose();
-    },
-  };
-});
+exitEffects.register(
+  "crack",
+  ({ visual, targets, reducedMotion, ownsObject }, raw): ExitEffectInstance => {
+    const config = raw as CrackConfig | undefined;
+    const seconds = Math.max(config?.seconds ?? 0.3, 1e-3);
+    // Cracks run over the configured target only: an empty target, such as a solid block's
+    // contents, gets none (#512 review).
+    // Only the block's own geometry is measured, never a sibling effect's (#512 review).
+    const bounds = targetBounds(visual, targets, ownsObject);
+    const size = bounds.isEmpty() ? new THREE.Vector3() : bounds.getSize(new THREE.Vector3());
+    const centre = bounds.isEmpty() ? new THREE.Vector3() : bounds.getCenter(new THREE.Vector3());
+    const points =
+      reducedMotion || bounds.isEmpty()
+        ? []
+        : crackPatterns
+            .get(config?.pattern ?? "radial")(Math.random)
+            .map((p) => p.clone().multiply(size).add(centre));
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    geometry.setDrawRange(0, 0);
+    const material = new THREE.LineBasicMaterial({ color: config?.colour ?? 0x1a1a1a });
+    const lines = new THREE.LineSegments(geometry, material);
+    visual.root.add(lines);
+    let elapsed = reducedMotion || !points.length ? seconds : 0;
+    const reveal = () =>
+      geometry.setDrawRange(0, Math.floor((points.length / 2) * (elapsed / seconds)) * 2);
+    return {
+      update(delta) {
+        if (elapsed >= seconds) return false;
+        elapsed = Math.min(elapsed + delta, seconds);
+        reveal();
+        return elapsed < seconds;
+      },
+      finish() {
+        elapsed = seconds;
+        reveal();
+      },
+      dispose() {
+        lines.removeFromParent();
+        geometry.dispose();
+        material.dispose();
+      },
+    };
+  },
+);
+
+/** Stands in for a hidden mesh's material while its pieces fly: draws nothing, never disposed. */
+const unseen = new THREE.MeshBasicMaterial({ visible: false });
 
 export type FractureConfig = {
   pieces?: string;
@@ -205,7 +212,7 @@ exitEffects.register(
     const [slow, fast] = config?.speed ?? [0.8, 1.8];
     const spin = config?.spin ?? 8;
     // Measured in the block's own space, from the selected target (#512 review).
-    const bounds = targetBounds(visual, targets);
+    const bounds = targetBounds(visual, targets, ownsObject);
     const size = bounds.isEmpty() ? 0 : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
     const gravity = (config?.gravity ?? 4) * size;
     // The block's own meshes under the targets: broken up or hidden while the pieces fly.
@@ -224,26 +231,17 @@ exitEffects.register(
           bounds,
           colour: config?.colour ?? 0xcccccc,
         });
-    // A flying piece and every ancestor it hangs from stay visible (a group wrapping component
-    // meshes must not hide them, #512 review); the rest hides while they fly, and shows again on
-    // dispose.
-    const shown = new Set<THREE.Object3D>();
-    for (const piece of source.pieces)
-      for (let node: THREE.Object3D | null = piece; node; node = node.parent) shown.add(node);
+    // Every original mesh that isn't itself a flying piece stops drawing while the pieces fly:
+    // each gets the shared invisible material in place of its own, which comes back on dispose.
+    // Only that mesh's own drawing changes, never its children's (flying components, a flash's
+    // overlay) and never a material another mesh shares (#512 review).
+    const thrown = new Set<THREE.Object3D>(source.pieces);
     const hidden = reducedMotion
       ? []
-      : originals.filter((each) => each.visible && !shown.has(each));
-    hidden.forEach((each) => (each.visible = false));
-    // Something pieces hang from must stay visible, but if it draws (a root or wrapper that is
-    // itself a mesh) its own drawing hides, through its materials: the exit owns them (#512
-    // review). They show again on dispose.
-    const quietened = reducedMotion
-      ? []
       : originals
-          .filter((each) => shown.has(each) && !source.pieces.includes(each))
-          .flatMap((each) => [(each as THREE.Mesh).material ?? []].flat())
-          .filter((material) => material.visible);
-    quietened.forEach((material) => (material.visible = false));
+          .filter((each) => (each as THREE.Mesh).isMesh && !thrown.has(each))
+          .map((each) => ({ mesh: each as THREE.Mesh, material: (each as THREE.Mesh).material }));
+    hidden.forEach(({ mesh }) => (mesh.material = unseen));
     // Motion is worked out in the block's own space, then turned into each piece's parent's
     // space, so a piece inside a scaled or turned group still flies and falls true (#512 review).
     visual.root.updateWorldMatrix(true, true);
@@ -287,8 +285,7 @@ exitEffects.register(
       },
       dispose() {
         source.release();
-        hidden.forEach((each) => (each.visible = true));
-        quietened.forEach((material) => (material.visible = true));
+        hidden.forEach(({ mesh, material }) => (mesh.material = material));
       },
     };
   },
