@@ -139,7 +139,10 @@ describe("run setup steps", () => {
   it("materialSample starts the run on a structure holding a block of each material", () => {
     const run = freshRun("dev1");
     expect(run.state.field.length).toBeGreaterThan(0);
-    expect(run.state.field.length).toBeLessThan(run.state.deck.length);
+    // Every registered material is sampled (experiments included), and cards remain to play.
+    const sampled = new Set(run.state.field.map(({ block }) => block.traits.material?.kind));
+    expect(sampled.size).toBe(run.state.field.length);
+    expect(run.state.deck.length).toBeGreaterThan(0);
   });
 
   it("startingPassives fills the rack the run starts with, with distinct passives", () => {

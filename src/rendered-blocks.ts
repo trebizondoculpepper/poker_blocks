@@ -28,7 +28,7 @@ export type RenderedBlock = {
   /** Glass and crystal refract on the table, so they change material when they land. */
   boardMaterials: THREE.MeshStandardMaterial[];
   /** Meshes inside the block, such as the crystal's fire. */
-  extras: THREE.Mesh[];
+  extras: (THREE.Mesh | THREE.Points)[];
   edgeGeometry: THREE.EdgesGeometry;
   edgeMaterial: THREE.LineBasicMaterial;
   /** The edge colour and opacity its material gives it, restored when it's deselected. */

@@ -909,11 +909,23 @@ Experiments: `waterInPlastic` and `waterInLantern` (the same clear water config 
 
 `fadingFilm` (`src/visual/fading-film.ts`) replaces custard's two-plane trace with a **local history**, the representation chosen by the #346 proof. The wall is a six-face atlas, `resolution` texels per edge (32 for custard). The history is kept in 16-bit fixed point and written to the texture as bytes, 18 KB per vessel: 12 KB of history and 6 KB of texture, three times #346's 6 KB budget. That's the price of a fade that's correct at any frame rate. A one-byte history rounded away slow fades at 144–240 fps. The texel centres are shared per resolution. Each frame, through the block's one contained frame, every texel asks the published `liquidSurface.wet()` whether it is under the fluid. A wet texel goes back to full strength, so rewetting refreshes it. A dry one keeps `exp(-delta / seconds)` of its strength, so each exposed patch fades by its own age. The shader shows it only above the current surface, where the fluid doesn't hide the wall, and finds each fragment's face from its local position with no UVs. The fluid has no presence check for residue, and a fluid without residue works unchanged. Colour, opacity and fade time are the film's own configuration. Each vessel keeps its own history, and the texture is released with the film's material. Reduced motion needs nothing extra: the film only presents state, and it moves only when the vessel does.
 
+### Magic Lock: contained stars (#349)
+
+The proof that the contained-effect contract is reusable. **Magic Lock** (`magicLock` in plastic, `magicLockLantern` in the stained lantern, both experiments) is an existing shell holding the **`stars`** contents (`src/visual/contained-stars.ts`): the crystal title trail's four-pointed star and its lifecycle, extracted into `src/visual/star-particles.ts` and shared with `rainbowStars`, which is unchanged.
+
+- **Population:** a fixed pool (36 stars) with staggered ages, so it never pulses in step. A star reaching the end of its life is reborn at a random place inside. Memory is constant over any length of run.
+- **Motion:** each star drifts and fizzes in its own direction, with weak gravity toward world down, turned into the container's space every frame from the block's one contained frame. Walls deflect stars, damped, with a margin for the star's footprint, so none leaks through.
+- **Colour:** a configured ramp over life: brilliant white, cream, brown, black. Stars are drawn additively, so black adds no light and a dying star vanishes. The fade runs over a stretched span, so brown stays visible before the ramp takes it to black.
+- **Contract:** it publishes no capabilities, and no container, fluid, residue or material code names it. The same contents config works in two shells.
+- **Reduced motion:** the frame now carries `reducedMotion`, from a provider that main wires to the player's setting (`setContainedReducedMotion`). Under it the stars neither move, age nor twinkle. The cloud (#336) now holds still under it too.
+- **Measured:** 32 vessels of 36 stars update in 0.065 ms per frame on the CPU (Apple M3 Max, Node 26). Each vessel adds one additive points draw call, so a plastic Magic Lock is 5 draw calls, within #346's budget of 7. GPU time wasn't measured separately, and no phone was measured.
+- **Limitations:** the stars are point sprites, so their size is in world units and they don't rotate with the view. At the current size (0.3 of the interior) the four-pointed shape is small in the object browser; size, count, drift and gravity are configuration to tune. Randomness is cosmetic (`Math.random`, exempted in `src/random-guardrail.test.ts`), never the session stream.
+
 ### Contained cloud (#336)
 
 `cloud` contents (`src/visual/cloud.ts`): a light raymarch (14 steps of soft noise) through the interior volume, in the contents' transparent layer, fading towards the walls so it stays inside. Colour, density and drift speed are configuration. Its drift time comes from the block's one contained frame. It computes its view ray in the shader, so it has no clock or camera uniform of its own. It publishes nothing, so residue that needs a liquid surface can't pair with it. No existing container, fluid, residue or flame code changed to recognise it. Experiments: `cloudInPlastic` and `cloudInLantern`, with the same contents config in two containers.
 
-**Missing general hook:** the shared `ContainedFrame` doesn't yet carry the player's reduced-motion setting, so the cloud's gentle drift continues under reduced motion. Adding `reducedMotion` to the frame (and freezing drift on it) is a small, general follow-up, noted on #336.
+**Reduced motion:** the frame's `reducedMotion` (added in #349) freezes the cloud's drift.
 
 ### Flame as contents (#335)
 

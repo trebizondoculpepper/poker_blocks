@@ -250,7 +250,7 @@ type AttractCard = {
   /** The particle trails the card's material leaves (`appearance.trails`). */
   trails: readonly Trail[];
   /** Extra meshes on the card (a crystal's fire, a fire block's glass). */
-  extras: readonly THREE.Mesh[];
+  extras: readonly (THREE.Mesh | THREE.Points)[];
   /** Still fading in; drawn transparent until fully opaque. */
   fading: boolean;
   /** Fully faded in: give each material back its own transparency. */
@@ -472,7 +472,7 @@ export function createAttractScene(
    * and a near-mirror card reflecting nothing reads as dull grey whatever the lights do.
    */
   /** The same for a card's extra meshes: each material that reflects gets this environment. */
-  function reflectExtras(extras: readonly THREE.Mesh[]): void {
+  function reflectExtras(extras: readonly (THREE.Mesh | THREE.Points)[]): void {
     const reflective = extras
       .flatMap(({ material }) => [material].flat())
       .filter((material): material is THREE.MeshStandardMaterial => "envMap" in material);

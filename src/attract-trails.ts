@@ -9,6 +9,7 @@
 import * as THREE from "three";
 import { Registry } from "./core/registry";
 import type { AppearanceTrail } from "./materials";
+import { starBrightness, starTexture } from "./visual/star-particles";
 
 /** One card's trail: emits behind it as it moves, and is disposed with it. */
 export type Trail = {
@@ -20,45 +21,6 @@ export type Trail = {
 type TrailEffect = (config: AppearanceTrail, scene: THREE.Scene, random: () => number) => Trail;
 
 export const trailEffects = new Registry<TrailEffect>("trail effect");
-
-/** A soft four-pointed star, white on transparent, for additive sprites to colour. */
-function starTexture(): THREE.Texture {
-  const size = 64;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const g = canvas.getContext("2d")!;
-  const centre = size / 2;
-  // Four long, thin, bright rays, fading toward their tips: the star.
-  for (const angle of [0, Math.PI / 2]) {
-    g.save();
-    g.translate(centre, centre);
-    g.rotate(angle);
-    const ray = g.createLinearGradient(-centre, 0, centre, 0);
-    ray.addColorStop(0, "rgba(255,255,255,0)");
-    ray.addColorStop(0.5, "rgba(255,255,255,1)");
-    ray.addColorStop(1, "rgba(255,255,255,0)");
-    g.fillStyle = ray;
-    g.beginPath();
-    g.moveTo(-centre, 0);
-    g.quadraticCurveTo(0, -1.6, centre, 0);
-    g.quadraticCurveTo(0, 1.6, -centre, 0);
-    g.fill();
-    g.restore();
-  }
-  // A small, tight core where the rays cross: a glint, not a disc.
-  const core = g.createRadialGradient(centre, centre, 0, centre, centre, size * 0.14);
-  core.addColorStop(0, "rgba(255,255,255,1)");
-  core.addColorStop(1, "rgba(255,255,255,0)");
-  g.fillStyle = core;
-  g.beginPath();
-  g.arc(centre, centre, size * 0.14, 0, Math.PI * 2);
-  g.fill();
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-let sharedStar: THREE.Texture | null = null;
 
 /**
  * Rainbow stars: glints left behind in world space, each a spectral colour, drifting a little
@@ -76,10 +38,9 @@ trailEffects.register("rainbowStars", ({ rate, life, size, spread }, scene, rand
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
-  sharedStar ??= starTexture();
   const material = new THREE.PointsMaterial({
     size,
-    map: sharedStar,
+    map: starTexture(),
     vertexColors: true,
     transparent: true,
     blending: THREE.AdditiveBlending,
@@ -108,15 +69,13 @@ trailEffects.register("rainbowStars", ({ rate, life, size, spread }, scene, rand
       }
       particles.forEach((particle, index) => {
         particle.age += delta;
-        const left = Math.max(0, 1 - particle.age / life);
         positions[index * 3] += particle.drift.x * delta;
         positions[index * 3 + 1] += particle.drift.y * delta;
         positions[index * 3 + 2] += particle.drift.z * delta;
-        // A slow twinkle while it fades, and the hue slides a little as it goes.
-        const twinkle = 0.75 + 0.25 * Math.sin(particle.age * 18 + index);
+        // The hue slides a little as it goes; the shared star lifecycle (#349) gives the bright
+        // birth, twinkle and squared fade.
         colour.setHSL((particle.hue + particle.age * 0.15) % 1, 1, 0.6);
-        // Brighter than white where young: additive, so a fresh star blooms then fades.
-        colour.multiplyScalar(1.8 * left * left * twinkle * opacity);
+        colour.multiplyScalar(starBrightness(particle.age, life, index) * opacity);
         colours.set([colour.r, colour.g, colour.b], index * 3);
       });
       geometry.attributes.position!.needsUpdate = true;

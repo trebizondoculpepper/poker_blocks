@@ -103,8 +103,8 @@ describe("contained components (#330)", () => {
     const level = new THREE.Quaternion();
     for (let frame = 0; frame < 3; frame++) {
       const common = { seconds: frame * 0.5, delta: frame ? 0.5 : 0, first: frame === 0 };
-      a.update!({ ...common, rotation: frame ? turned : level });
-      b.update!({ ...common, rotation: level });
+      a.update!({ ...common, rotation: frame ? turned : level, reducedMotion: false });
+      b.update!({ ...common, rotation: level, reducedMotion: false });
     }
     expect(a.capabilities.liquidSurface!.normal.y).toBeLessThan(0.99);
     expect(b.capabilities.liquidSurface!.normal.y).toBeCloseTo(1, 5);
@@ -229,7 +229,7 @@ describe("one frame per contained block (#401 review)", () => {
       .get("wallTrace")
       .build(boundary, fluid.capabilities, appearance.residue!.config);
     const tilted = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 1);
-    const frame = { seconds: 0, delta: 0, first: true, rotation: tilted };
+    const frame = { seconds: 0, delta: 0, first: true, rotation: tilted, reducedMotion: false };
     fluid.update!(frame);
     trace.update!(frame);
     const uniforms = (trace.meshes[0]!.material as THREE.ShaderMaterial).uniforms;
@@ -369,8 +369,12 @@ describe("a contained cloud (#336)", () => {
     expect(cloud.capabilities).toEqual({});
     expect(cloud.meshes[0]!.renderOrder).toBe(containedLayers.contentsTransparent);
     const uniforms = (cloud.meshes[0]!.material as THREE.ShaderMaterial).uniforms;
-    cloud.update!({ seconds: 2.5, delta: 0.1, first: false, rotation: new THREE.Quaternion() });
-    expect(uniforms.time!.value).toBe(2.5);
+    const frame = { seconds: 2.5, delta: 0.1, first: false, rotation: new THREE.Quaternion() };
+    cloud.update!({ ...frame, reducedMotion: false });
+    expect(uniforms.time!.value).toBeCloseTo(0.1, 9);
+    // Under reduced motion it holds still.
+    cloud.update!({ ...frame, reducedMotion: true });
+    expect(uniforms.time!.value).toBeCloseTo(0.1, 9);
     cloud.meshes.forEach((mesh) => (mesh.material as THREE.Material).dispose());
   });
 });

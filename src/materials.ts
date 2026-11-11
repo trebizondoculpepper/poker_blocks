@@ -598,6 +598,22 @@ const softCloud = {
   config: { colour: 0xf4f7fb, density: 1.2, drift: 0.08 },
 };
 
+/**
+ * Magic Lock's stars (#349): a sparse, fizzing field of the crystal trail's stars, each aging
+ * brilliant white, cream, brown, then black (and gone). Weak gravity, gentle drift.
+ */
+const magicStars = {
+  effect: "stars",
+  config: {
+    count: 36,
+    life: 2.6,
+    size: 0.3,
+    drift: 0.12,
+    gravity: 0.05,
+    ramp: [0xffffff, 0xfff1cc, 0x8a5a2b, 0x000000],
+  },
+};
+
 /** A dark, oily fluid (#333): custard's look and mechanics with only its colours changed. */
 const darkFluid = {
   effect: "levellingFluid",
@@ -641,6 +657,7 @@ function plasticFluidExperiments(): MaterialDefinition[] {
     plastic("waterInPlastic", "Water in plastic", clearWater),
     plastic("darkFluid", "Dark fluid", darkFluid),
     plastic("cloudInPlastic", "Cloud in plastic", softCloud),
+    plastic("magicLock", "Magic Lock", magicStars),
   ];
 }
 
@@ -683,6 +700,8 @@ function glassContainerExperiments(): MaterialDefinition[] {
     lantern("waterInLantern", "Water in a lantern", clearWater),
     // A contained cloud (#336): the same contents in either container.
     lantern("cloudInLantern", "Cloud in a lantern", softCloud),
+    // Magic Lock (#349): the crystal trail's stars, aging white to black, in either container.
+    lantern("magicLockLantern", "Magic Lock (lantern)", magicStars),
     {
       id: "custardFrame",
       lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },

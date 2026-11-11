@@ -22,7 +22,7 @@ function vessel() {
         .value as THREE.DataTexture
     ).image.data as Uint8Array;
   const step = (rotation: THREE.Quaternion, seconds: number, delta: number, first = false) => {
-    const frame = { rotation, seconds, delta, first };
+    const frame = { rotation, seconds, delta, first, reducedMotion: false };
     fluid.update!(frame);
     film.update!(frame);
   };
@@ -99,10 +99,16 @@ describe("fading film is frame-rate independent (#412 review)", () => {
           (film.meshes[0]!.material as THREE.ShaderMaterial).uniforms.history!
             .value as THREE.DataTexture
         ).image.data as Uint8Array;
-      film.update!({ rotation: level, seconds: 0, delta: 0, first: true });
+      film.update!({ rotation: level, seconds: 0, delta: 0, first: true, reducedMotion: false });
       surface.height = -10; // drained: every texel exposed from now on
       for (let frame = 1; frame <= fps; frame++)
-        film.update!({ rotation: level, seconds: frame / fps, delta: 1 / fps, first: false });
+        film.update!({
+          rotation: level,
+          seconds: frame / fps,
+          delta: 1 / fps,
+          first: false,
+          reducedMotion: false,
+        });
       return data()[0]!;
     };
     // Configured 1 s fade: exp(-1) of full strength after a second (about 94 of 255).
