@@ -6,6 +6,7 @@
  * (`cardScoringRules`), in the agreed phases. Rank, suit and hand identity never change.
  */
 import { Registry } from "./core/registry";
+import { cardStateAppliers } from "./card-states";
 import type { CardBlock } from "./cards";
 import type { GameState } from "./game-state";
 import type { EventRule } from "./event-rules";
@@ -79,3 +80,9 @@ export function setCardStateBonus(state: GameState, cardId: string, id: string):
     },
   };
 }
+
+// A state bonus is restored after the material (#365).
+cardStateAppliers.register("stateBonus", {
+  order: 1,
+  apply: (card, value) => withStateBonus(card, value as string),
+});

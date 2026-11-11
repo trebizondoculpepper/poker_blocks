@@ -701,7 +701,14 @@ export function withMaterial(card: CardBlock, definition: MaterialDefinition): C
       ...card.traits,
       material: { kind: definition.id as BlockMaterial },
       ...definition.traits,
-      inspectable: inspectable(`${cardName(card.traits.identity)} · ${definition.name}`),
+      // A cookable material names its first doneness step too ("· Raw", #372).
+      inspectable: inspectable(
+        [
+          cardName(card.traits.identity),
+          definition.name,
+          ...[definition.cookable?.steps.at(0) ?? []].flat(),
+        ].join(" · "),
+      ),
     },
   };
 }

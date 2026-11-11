@@ -1,25 +1,37 @@
 /**
- * Applying a saved ledger of card states (#387, #365, #372) to freshly rebuilt cards: a changed
- * material, a state bonus and a doneness step, each by its own module.
+ * Applying a saved ledger of card states (#387, #365, #372) to freshly rebuilt cards, through a
+ * registry of appliers keyed by the state's field. Each module that persists card state
+ * registers its own applier with an order (a material before a state bonus before a doneness
+ * step, since the later ones read the card the earlier ones made); this function never names a
+ * mechanic, so a new persisted state needs no change here.
  */
+import { Registry } from "./core/registry";
 import type { CardBlock } from "./cards";
-import { rematerial, type CardState } from "./card-material";
-import { withStateBonus } from "./state-bonuses";
-import { withDoneness } from "./cooking";
+import type { CardState } from "./card-material";
 
-/** Apply a saved ledger of card states (material, state bonus) to freshly rebuilt cards. */
+export type CardStateApplier = {
+  /** Lower runs first. */
+  order: number;
+  apply(card: CardBlock, value: unknown): CardBlock;
+};
+
+export const cardStateAppliers = new Registry<CardStateApplier>("card state applier");
+
+/** Apply a saved ledger of card states to a freshly rebuilt card, in the appliers' order. */
 export function applyCardStates(
   card: CardBlock,
   states: Readonly<Record<string, CardState>> | undefined,
 ): CardBlock {
-  const state = states?.[card.id] ?? {};
-  const material = [state.material ?? []]
-    .flat()
-    .reduce((current, kind) => rematerial(current, kind), card);
-  const bonused = [state.stateBonus ?? []]
-    .flat()
-    .reduce((current, id) => withStateBonus(current, id), material);
-  return [state.doneness ?? []]
-    .flat()
-    .reduce((current, step) => withDoneness(current, step), bonused);
+  const state: Readonly<Record<string, unknown>> = states?.[card.id] ?? {};
+  return cardStateAppliers
+    .names()
+    .map((field) => ({ field, applier: cardStateAppliers.get(field) }))
+    .sort((a, b) => a.applier.order - b.applier.order)
+    .reduce<CardBlock>(
+      (current, { field, applier }) =>
+        [state[field] ?? []]
+          .flat()
+          .reduce<CardBlock>((each, value) => applier.apply(each, value), current),
+      card,
+    );
 }

@@ -11,6 +11,10 @@ import "./transmogrifiers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
 import { type CardState } from "./card-material";
 import { applyCardStates } from "./card-states";
+// Each registers how its saved card state is restored (#387, #365, #372).
+import "./card-material";
+import "./state-bonuses";
+import "./cooking";
 import { stateBonuses } from "./state-bonuses";
 import { blockMaterials, type BlockMaterial } from "./materials";
 import { parseRunStats, type RunStats } from "./run-stats";

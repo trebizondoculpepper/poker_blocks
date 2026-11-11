@@ -12,6 +12,7 @@ import { getMaterialDefinition, materialOf } from "./materials";
 import { reactionResults } from "./reactions";
 import { registerRuleCommand } from "./rule-commands";
 import { stageEndResets } from "./stage-end";
+import { cardStateAppliers } from "./card-states";
 import { inspectable } from "./traits/inspectable";
 import type { SoundEffectId } from "./audio/sfx-registry";
 
@@ -44,7 +45,14 @@ export function withoutDoneness(card: CardBlock): CardBlock {
     ...card,
     traits: {
       ...traits,
-      inspectable: inspectable(`${cardName(card.traits.identity)} · ${material.name}`),
+      // Back at the first step, which the inspector names too ("· Raw").
+      inspectable: inspectable(
+        [
+          cardName(card.traits.identity),
+          material.name,
+          ...[material.cookable?.steps.at(0) ?? []].flat(),
+        ].join(" · "),
+      ),
     },
   };
 }
@@ -118,3 +126,9 @@ const withoutDonenessIfCooked = (card: CardBlock): CardBlock =>
 
 // Doneness lasts one stage: registered so the run resets it without naming cooking (#372).
 stageEndResets.register("doneness", resetDoneness);
+
+// A doneness step is restored last, onto the card's material (#372).
+cardStateAppliers.register("doneness", {
+  order: 2,
+  apply: (card, value) => withDoneness(card, value as number),
+});

@@ -11,6 +11,7 @@
  */
 import type { CardBlock } from "./cards";
 import type { GameState } from "./game-state";
+import { cardStateAppliers } from "./card-states";
 import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
 
 /** What the run remembers about a card beyond its definition: its changed material. */
@@ -59,3 +60,9 @@ export function changeCardMaterial(
     cardStates: { ...state.cardStates, [cardId]: { ...state.cardStates?.[cardId], material } },
   };
 }
+
+// A changed material is restored first (#387).
+cardStateAppliers.register("material", {
+  order: 0,
+  apply: (card, value) => rematerial(card, value as BlockMaterial),
+});
