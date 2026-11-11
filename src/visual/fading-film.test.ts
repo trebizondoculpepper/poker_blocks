@@ -76,3 +76,35 @@ describe("fading film (#334)", () => {
     expect(disposed).toBe(true);
   });
 });
+
+describe("fading film is frame-rate independent (#412 review)", () => {
+  it("fades at the configured rate whether stepped at 10 fps or 240 fps", () => {
+    // The film alone, against a surface switched directly, so only its own fading is timed.
+    const fadeAfter = (fps: number) => {
+      const boundary = createInteriorBoundary(geometry, 1, 0.92);
+      const surface = {
+        normal: new THREE.Vector3(0, 1, 0),
+        height: 10,
+        wet: (point: THREE.Vector3) => point.y <= surface.height,
+      };
+      const film = containedResidues
+        .get("fadingFilm")
+        .build(boundary, { liquidSurface: surface }, filmConfig);
+      const data = () =>
+        (
+          (film.meshes[0]!.material as THREE.ShaderMaterial).uniforms.history!
+            .value as THREE.DataTexture
+        ).image.data as Uint8Array;
+      film.update!({ rotation: level, seconds: 0, delta: 0, first: true });
+      surface.height = -10; // drained: every texel exposed from now on
+      for (let frame = 1; frame <= fps; frame++)
+        film.update!({ rotation: level, seconds: frame / fps, delta: 1 / fps, first: false });
+      return data()[0]!;
+    };
+    // Configured 1 s fade: exp(-1) of full strength after a second (about 94 of 255).
+    expect(fadeAfter(10)).toBeGreaterThanOrEqual(92);
+    expect(fadeAfter(10)).toBeLessThanOrEqual(95);
+    expect(fadeAfter(240)).toBeGreaterThanOrEqual(92);
+    expect(fadeAfter(240)).toBeLessThanOrEqual(95);
+  });
+});

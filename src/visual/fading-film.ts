@@ -7,8 +7,8 @@
  * So recently exposed and older patches show different strengths and fade to nothing.
  *
  * The fluid never knows the film exists; the film keeps its own history per vessel. Above the
- * surface the film shows; below it the fluid hides the wall anyway. One byte per texel: 6 KB per
- * vessel at 32. The texel positions are shared by every film of a resolution.
+ * surface the film shows; below it the fluid hides the wall anyway. Two bytes of history and one
+ * texture byte per texel: 18 KB per vessel at 32. The texel positions are shared by every film of a resolution.
  */
 import * as THREE from "three";
 import { containedResidues, type ResidueHandler } from "./contained";
@@ -97,8 +97,11 @@ export const fadingFilm: ResidueHandler = {
     const surface = liquidSurface!;
     const n = config.resolution;
     const centres = texelCentres(n);
-    const strength = new Uint8Array(n * n * 6);
-    const texture = new THREE.DataTexture(strength, n, n * 6, THREE.RedFormat);
+    // The history in 16-bit fixed point, so a slow fade at a high frame rate never rounds to a
+    // whole step per frame; the texture gets it as bytes.
+    const strength = new Uint16Array(n * n * 6);
+    const shown = new Uint8Array(n * n * 6);
+    const texture = new THREE.DataTexture(shown, n, n * 6, THREE.RedFormat);
     texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearFilter;
     texture.needsUpdate = true;
@@ -132,7 +135,8 @@ export const fadingFilm: ResidueHandler = {
           point
             .set(centres[i * 3]!, centres[i * 3 + 1]!, centres[i * 3 + 2]!)
             .multiplyScalar(toBlock);
-          strength[i] = surface.wet(point) ? 255 : Math.floor(strength[i]! * keep);
+          strength[i] = surface.wet(point) ? 65535 : Math.round(strength[i]! * keep);
+          shown[i] = strength[i]! >> 8;
         }
         texture.needsUpdate = true;
       },
