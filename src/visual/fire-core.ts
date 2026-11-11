@@ -159,10 +159,20 @@ export function createFireCore(size: number): THREE.Mesh {
  * whatever container holds it, drawn after the frame (its own render order). It publishes nothing:
  * a flame has no liquid surface, so wall residue that needs one cannot be paired with it.
  */
-containedContents.register("flame", (boundary) => {
+/**
+ * The flame's configuration (#355): how large it is within the interior and how bright, as
+ * multiples of the original. Omitted, both are 1, the fire block's own flame.
+ */
+export type FlameConfig = { scale?: number; brightness?: number };
+
+containedContents.register("flame", (boundary, raw) => {
+  const { scale = 1, brightness = 1 } = (raw ?? {}) as FlameConfig;
   // It keeps the core's own order (drawn last, after the frame): it is an additive, non-depth-
   // writing material in the opaque queue, so the frame must be drawn first or its rear bars
   // would paint over the glow. The contained layer table orders the transparent queue only.
-  const core = createFireCore(boundary.halfSize * 2 * boundary.inset);
+  // A larger flame never grows past the interior: its box is the interior at most.
+  const core = createFireCore(boundary.halfSize * 2 * boundary.inset * Math.min(scale, 1 / 0.96));
+  const uniforms = (core.material as THREE.ShaderMaterial).uniforms;
+  uniforms.intensity!.value *= brightness;
   return { meshes: [core], capabilities: {} };
 });

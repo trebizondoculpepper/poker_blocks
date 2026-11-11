@@ -378,3 +378,23 @@ describe("a contained cloud (#336)", () => {
     cloud.meshes.forEach((mesh) => (mesh.material as THREE.Material).dispose());
   });
 });
+
+describe("flame configuration (#355)", () => {
+  it("defaults to the original flame, and scales size and brightness by configuration", async () => {
+    await import("./fire-core");
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    const boundary = createInteriorBoundary(new THREE.BoxGeometry(1, 1, 1), 1, 0.9);
+    const build = (config?: object) =>
+      containedContents.get("flame")(boundary, config).meshes[0] as THREE.Mesh;
+    const size = (mesh: THREE.Mesh) =>
+      new THREE.Box3().setFromObject(mesh).getSize(new THREE.Vector3()).y;
+    const intensity = (mesh: THREE.Mesh) =>
+      (mesh.material as THREE.ShaderMaterial).uniforms.intensity!.value as number;
+    const plain = build();
+    const strong = build({ scale: 1.04, brightness: 1.3 });
+    expect(intensity(plain)).toBe(3.2);
+    expect(intensity(strong)).toBeCloseTo(3.2 * 1.3, 6);
+    expect(size(strong)).toBeGreaterThan(size(plain));
+    expect(size(build({ scale: 5 }))).toBeLessThanOrEqual(boundary.halfSize * 2 + 1e-9);
+  });
+});
