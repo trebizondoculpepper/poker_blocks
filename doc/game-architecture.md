@@ -380,6 +380,19 @@ A block can be **triggered**, and responds with configured actions. `src/trigger
 - **Events:** each trigger that runs emits `block.triggered` (with its `trigger` context) before its responses' own follow-up events. Presentation listens; it never decides what a trigger does.
 - **Persistence:** a trigger resolves inside one model step, so nothing is pending across a save.
 
+### Block exits (#439)
+
+How a block leaving play is presented: the shared lifecycle the per-material blast responses (#438) and the exit effects (#440 fade, #441 flash and shudder, #442 crack and fracture, #443 shred and splinter, #444 particle bursts) build on. `src/visual/exit-presentation.ts`.
+
+- **Model first.** Whether a block leaves is decided by the model (destroyed, self-destructed, removed). Only afterwards does presentation play its exit. An exit never decides survival, damage or reward; a block that survives (steel under #437) gets a damage response, not an exit.
+- **Snapshot and handover.** The caller passes an `ExitSnapshot` (block id, cell, material), taken before removal, and the block's `ExitVisual`: its root, shell and contents, and the owner's `release`. From then on the visual belongs to the exit. It is not a gameplay entity and is never hit-tested, and its cell may be reused.
+- **Composition.** An `ExitSequence` is ordered steps. Each step runs its effects in parallel and ends when they all have. Effects are registered handlers (`exitEffects`), named and configured as data, so a material's exit will be a list on its definition (#438). No code names a material.
+- **Targets.** Each effect acts on a registered target (`exitTargets`): `whole`, `shell` or `contents`. A solid block's contents are empty; that is not a special case.
+- **Effect contract.** `update(delta)` returns false once finished; `finish()` jumps to the end state; `dispose()` frees what the effect made and is called exactly once. Effects that animate a target restore or own what they change.
+- **Bounds.** Each step has a time cap (`maxSeconds`, default 2), at which running effects are finished. Effects receive `reducedMotion` and should end at once or soon under it; the cap still applies. A scene's runner (`createExitRunner`) caps the work to the exits in progress.
+- **Cancellation and cleanup.** `cancel(blockId)` (its cell is needed, the stage clears) finishes and disposes that exit's effects at once. When any exit ends, by completion or cancellation, the visual is removed from its parent and released through the owner's `release`. Disposing the runner (scene exit) cancels every exit.
+- **Reuse.** The lifecycle knows nothing of explosions. Any removal (the Nothingifier, a future destroyer) can present an exit through it.
+
 ### Permanent material change (#387)
 
 `changeCardMaterial(state, cardId, material)` in `src/card-material.ts` (and `GameRun.changeCardMaterial`) gives one card a new material for the rest of the run. It finds the card wherever it is (hand, field, deck, discard pile, and the bought-card ledger) and replaces it with a copy carrying the new material, with the same id, rank and suit. `rematerial` first removes the traits the old material's definition brought (a transparent card turned to wood is no longer transparent), then applies the new definition. It returns null and changes nothing when the card isn't in the run or already has that material, so a transmogrifier can refuse such a drop without spending a use.
