@@ -143,3 +143,17 @@
   border-radius: 6px;
   box-sizing: border-box;
 }
+
+/* A rack item's charge dial (#391): a small clock face filled by uses left. */
+.rack-charges {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid #f4f0e8;
+  background: conic-gradient(#f4f0e8 var(--charge), transparent 0);
+  box-shadow: 0 0 2px #0008;
+  pointer-events: none;
+}
