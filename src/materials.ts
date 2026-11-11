@@ -186,6 +186,34 @@ const darkInk = { red: "#a32536", black: "#422716", onDark: true };
 /** Pale ink with a dark shadow, for prints on saturated wrapping foil. */
 const foilInk = { red: "#ffe3e6", black: "#fffaf0", onDark: true };
 const box = { shape: "box", segments: 0, radius: 0, scale: 1 };
+
+/**
+ * The shared container blast response (#438): the shell cracks, then falls to shards that
+ * scatter and fade while the contents fade away. Composed on each container material with
+ * its own shell colour; contents never inspect what shell they were in.
+ */
+const containerBreak = (shell: { colour: number; opacity: number }): ExitSequence => ({
+  steps: [
+    { effects: [{ effect: "crack", target: "shell", config: { seconds: 0.2, colour: 0x1a1a1a } }] },
+    {
+      effects: [
+        {
+          effect: "fracture",
+          target: "shell",
+          config: {
+            pieces: "shards",
+            colour: shell.colour,
+            opacity: shell.opacity,
+            speed: [0.6, 1.5],
+            life: 0.9,
+            fade: 0.4,
+          },
+        },
+        { effect: "fade", target: "contents", config: { seconds: 0.8 } },
+      ],
+    },
+  ],
+});
 const noEnds: readonly number[] = [];
 
 /**
@@ -608,6 +636,9 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // The shared container response (#452): its framed glass cracks and falls to pieces as
+      // the flame fades.
+      exit: containerBreak({ colour: 0x3a4046, opacity: 0.85 }),
       pattern: "ironFrame",
       assembly: "contained",
       surface: "iron",
