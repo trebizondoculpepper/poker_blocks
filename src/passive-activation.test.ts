@@ -105,3 +105,17 @@ describe("passive activation feedback (#81)", () => {
     ]);
   });
 });
+
+describe("committed sounds (#566 review)", () => {
+  it("plays each named sound once per discard, in first-named order", async () => {
+    const { committedSounds } = await import("./play-presenter");
+    expect(
+      committedSounds([
+        { type: "coins.gained", amount: 1, sound: "passive.coins" },
+        { type: "discard.completed" },
+        { type: "coins.gained", amount: 1, sound: "passive.coins" },
+        { type: "passive.installed", sound: "passive.granted" },
+      ]),
+    ).toEqual(["passive.coins", "passive.granted"]);
+  });
+});

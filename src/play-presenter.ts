@@ -9,6 +9,8 @@ import { cellKey } from "./traits/attachable";
  * While a play or its scoring is being presented the HUD hides the outcome and the table
  * takes no new gestures.
  */
+import type { SoundEffectId } from "./audio/sfx-registry";
+import type { GameEvent } from "./passives";
 import { landingSounds } from "./attachment-sound";
 import { getMaterialDefinition, materialOf } from "./materials";
 import * as THREE from "three";
@@ -348,7 +350,7 @@ export function createPlayPresenter(options: {
       hand.settle(sources);
       // Each committed outcome plays the sound its configuration named; nothing is inferred
       // from comparing state (#538).
-      for (const { sound } of session.lastDiscardEvents) if (sound) playSfx(sound);
+      for (const sound of committedSounds(session.lastDiscardEvents)) playSfx(sound);
       options.rackChanged();
       options.activated([
         ...new Set(session.lastDiscardActivations.map(({ sourceId }) => sourceId)),
@@ -429,4 +431,12 @@ export function queueScoreSteps<Line>(
   const settled =
     lines.length > 0 ? start + (lines.length - 1) * timing.lineStepMs + timing.settleMs : start;
   return { steps, outcomeAt: Math.max(outcomeAt ?? settled, settled) };
+}
+
+/**
+ * The sounds a set of committed events names, each once, in first-named order: two passives
+ * paying coins in one discard play the coin sound once, as before (#566 review).
+ */
+export function committedSounds(events: readonly GameEvent[]): SoundEffectId[] {
+  return [...new Set(events.flatMap(({ sound }) => (sound ? [sound] : [])))];
 }
