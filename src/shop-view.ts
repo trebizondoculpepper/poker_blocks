@@ -16,6 +16,7 @@ import type { PassiveBlock } from "./passives";
 import { createBlockAppearance } from "./visual/block-appearance";
 import { createMaterialise } from "./visual/materialise";
 import type { DragSource, Point } from "./drag-drop";
+import { returnToSource, stop as stopReturn, take } from "./return-to-source";
 import "./shop-view.css";
 
 type DisplayedOffer = {
@@ -260,6 +261,7 @@ export function createShopView(
     burn = null;
     burnPromise = null;
     for (const entry of displayed) {
+      stopReturn(entry.item);
       scene.remove(entry.cube);
       entry.dispose();
     }
@@ -523,7 +525,12 @@ export function createShopView(
       return displayed.find(({ item }) => contains(item, clientX, clientY)) ?? null;
     },
     begin(entry, press) {
-      dragging = { entry, press };
+      // Retaken while flying back (#482): carry on from where it is, not from its slot.
+      const here = take(entry.item, () => getComputedStyle(entry.item).translate);
+      dragging = {
+        entry,
+        press: { clientX: press.clientX - here.x, clientY: press.clientY - here.y },
+      };
       entry.item.classList.add("is-dragging");
     },
     move({ clientX, clientY }) {
@@ -535,9 +542,10 @@ export function createShopView(
       if (!dragging) return;
       const { entry } = dragging;
       dragging = null;
+      // Refused or let go off every target, the offer flies back to its slot (#482).
       const putBack = () => {
-        entry.item.style.translate = "";
         entry.item.classList.remove("is-dragging");
+        returnToSource(entry.item, { reducedMotion: reducedMotion(), className: "is-returning" });
       };
       if (canceled || burn) return putBack();
       const view = offerViews.get(entry.offer.kind);
@@ -549,7 +557,8 @@ export function createShopView(
       if (!onTarget || !buy(entry.offer.block.id, offerKind(entry.offer).destination))
         return putBack();
       animatePurchase(from, label, flightTargets[view.flightTarget]);
-      putBack();
+      entry.item.style.translate = "";
+      entry.item.classList.remove("is-dragging");
     },
   };
 
