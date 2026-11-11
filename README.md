@@ -1,5 +1,22 @@
 # Poker Blocks
 
+**Play it now:** <https://trebizondoculpepper.github.io/poker_blocks/>
+
+## How to play
+
+Poker Blocks is poker solitaire in three dimensions. You build a structure of card blocks, and every straight line of blocks scores as a poker hand.
+
+1. **Start.** Open the link above and choose **New game** (or **Continue** to resume your saved run).
+2. **Place the first block.** Six card blocks are dealt into your hand at the bottom. Drag one up onto the empty table: it becomes the centre block.
+3. **Build.** Drag a hand block onto any exposed face of a block already in play to attach it. Each placement uses one **play**. To place several at once, click or tap blocks to select them, then drag any one: they go down as a straight line from that face, in the order you selected them, for a single play.
+4. **Score.** After every play, every straight line along the three axes is scored as a poker hand (pairs, straights, flushes and so on), and the total is added to your score. Lines keep scoring on every later play, so build good lines early.
+5. **Discard.** Drag a block, or a selection, to the discard area to swap it for fresh cards. Each discard uses one of your limited discards.
+6. **Win the stage.** Reach the target score before your plays run out. The score, target, plays and discards are on the left; cards left in the deck are on the right. Winning earns coins to spend in the shop that follows; a round is three stages, the last a boss stage. Missing the target ends the run.
+
+**Controls.** Drag the table to turn the structure; scroll, or pinch, to zoom. Hover over a block (or press and hold on a touch screen) to read what it is. Escape or the ⚙ button opens the pause menu and settings. Your run saves automatically.
+
+The full rules are in [doc/game.md](doc/game.md).
+
 A browser puzzle game project. The page opens on a title screen with Continue (resume the automatically saved run; greyed out, with "There is no game in progress." on hover, when there is none), New game and Settings (volume, mute, sound effects and music on/off, motion, shadows). The title panel's footer shows the build version, with links to the source code and the bug-report form; the bug link is also on the pause menu. Escape, or the ⚙ button, opens the pause menu (Resume, Settings, Quit to title) on the title screen or during play; the music is muffled while it is open and thinned while Settings is open. The structure floats above a green baize table in a dim card room, casting shadows on the cloth. In a stage, the field starts empty and the first card you drag up becomes the centre block. Six card cubes are dealt into a hand at the bottom. Each cube shows its card's rank and suit on every face. Hover over any card to inspect it; click or tap a hand card to toggle selection. Placed blocks remain inspectable but cannot be selected. Drag a hand cube onto an exposed face of any cube in play to attach it, or into the pixel art discard area to discard it. Placement eases into the structure over one second; discards dissolve away with a Perlin noise effect. After one second, the dealer refills the empty hand slot with a card that materializes using the same effect. The left overlay shows score, target, moves, and discards; the right overlay shows cards left in the deck. The placed structure gently wobbles around its center of gravity, and you can drag it to rotate it horizontally and vertically. The camera eases back to fit the growing structure while the hand stays fixed. Reload to deal again. More game rules are still to be designed.
 
 On a touch screen, tap a block to select it, drag a hand block onto the structure or the Discard target, drag the structure with one finger to turn it, and press and hold any block to read its description.
