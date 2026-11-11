@@ -9,6 +9,7 @@ import type { CardBlock } from "./cards";
 import type { Line } from "./scoring";
 import type { PassiveFaceDesign, PassiveTokenAppearance } from "./passive-visual";
 import type { StageKind } from "./run-rules";
+import type { TriggerContext } from "./triggers";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
 
 export type PassiveBlock = {
@@ -56,6 +57,8 @@ export type GameEvent = {
   stageKind?: StageKind;
   /** On `reaction.applied` (#366): the block's material and state bonus before and after. */
   reaction?: { from: ReactionState; to: ReactionState; sound?: SoundEffectId };
+  /** On `block.triggered` (#433): what triggered it, and the chain it is part of. */
+  trigger?: TriggerContext;
   /** On `reward.finalized`: the coins paid, and the balance before and after. */
   reward?: { coins: number; balanceBefore: number; balance: number };
 };

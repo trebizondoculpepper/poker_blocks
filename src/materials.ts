@@ -10,7 +10,7 @@ import type {
 import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
-import type { EventRule } from "./event-rules";
+import type { EventRule, RuleCommand } from "./event-rules";
 import type { Reaction } from "./reactions";
 import { stateBonusRules } from "./state-bonuses";
 import { scoringModifierRules, type ScoringModifier } from "./scoring-modifier";
@@ -57,6 +57,12 @@ export type MaterialDefinition = {
    * matches taking effect once per play (src/reactions.ts).
    */
   reactions?: readonly Reaction[];
+  /**
+   * What a block of this material does when something triggers it (#433): registered rule
+   * commands, committed in order through the shared command path (src/triggers.ts). Kept on
+   * the definition, so a saved card restores it with its material.
+   */
+  triggerable?: { responses: readonly RuleCommand[] };
   /**
    * The material is a source of heat (#383): a neighbour that heat-sensitive reactions react to,
    * read by the `neighbour-heat` matcher. Flame has it; anything else may declare it.
