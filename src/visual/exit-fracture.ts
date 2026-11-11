@@ -79,17 +79,32 @@ export const pieceSources = new Registry<PieceSource>("piece source");
 pieceSources.register("components", ({ visual, originals }) => {
   // The root never flies (it carries everything); its own drawing hides instead.
   const pieces = originals.filter((each) => each !== visual.root && (each as THREE.Mesh).isMesh);
+  // Each flying piece is lifted into the block's own space, keeping where it is in the world, so
+  // a nested piece neither inherits its parent's flight nor falls twice (#512 review). Its parent,
+  // place among its siblings and local transform come back on release.
   const homes = pieces.map((piece) => ({
+    parent: piece.parent,
+    index: piece.parent?.children.indexOf(piece) ?? -1,
     position: piece.position.clone(),
     quaternion: piece.quaternion.clone(),
+    scale: piece.scale.clone(),
   }));
+  visual.root.updateWorldMatrix(true, true);
+  pieces.forEach((piece) => visual.root.attach(piece));
   return {
     pieces,
     // Back where they were, so the owner's release frees exactly what it made.
     release: () =>
-      pieces.forEach((piece, i) => {
-        piece.position.copy(homes[i]!.position);
-        piece.quaternion.copy(homes[i]!.quaternion);
+      [...pieces].reverse().forEach((piece) => {
+        const home = homes[pieces.indexOf(piece)]!;
+        piece.removeFromParent();
+        if (home.parent) {
+          home.parent.children.splice(home.index, 0, piece);
+          piece.parent = home.parent;
+        }
+        piece.position.copy(home.position);
+        piece.quaternion.copy(home.quaternion);
+        piece.scale.copy(home.scale);
       }),
   };
 });
@@ -195,6 +210,32 @@ exitEffects.register(
 /** Stands in for a hidden mesh's material while its pieces fly: draws nothing, never disposed. */
 const unseen = new THREE.MeshBasicMaterial({ visible: false });
 
+/**
+ * Which objects are currently stood in for, by how many fractures, and their real material: two
+ * fractures over the same block share one record, so the real material comes back exactly once,
+ * when the last of them lets go (#512 review).
+ */
+const suppressed = new WeakMap<
+  THREE.Object3D,
+  { material: THREE.Material | THREE.Material[]; holders: number }
+>();
+function suppress(object: THREE.Mesh): void {
+  const entry = suppressed.get(object);
+  if (entry) entry.holders += 1;
+  else {
+    suppressed.set(object, { material: object.material, holders: 1 });
+    object.material = unseen;
+  }
+}
+function unsuppress(object: THREE.Mesh): void {
+  const entry = suppressed.get(object);
+  if (!entry) return;
+  entry.holders -= 1;
+  if (entry.holders > 0) return;
+  object.material = entry.material;
+  suppressed.delete(object);
+}
+
 export type FractureConfig = {
   pieces?: string;
   speed?: [number, number];
@@ -242,7 +283,7 @@ exitEffects.register(
       : originals
           .filter((each) => (each as THREE.Mesh).material !== undefined && !thrown.has(each))
           .map((each) => ({ mesh: each as THREE.Mesh, material: (each as THREE.Mesh).material }));
-    hidden.forEach(({ mesh }) => (mesh.material = unseen));
+    hidden.forEach(({ mesh }) => suppress(mesh));
     // Motion is worked out in the block's own space, then turned into each piece's parent's
     // space, so a piece inside a scaled or turned group still flies and falls true (#512 review).
     visual.root.updateWorldMatrix(true, true);
@@ -286,7 +327,7 @@ exitEffects.register(
       },
       dispose() {
         source.release();
-        hidden.forEach(({ mesh, material }) => (mesh.material = material));
+        hidden.forEach(({ mesh }) => unsuppress(mesh));
       },
     };
   },

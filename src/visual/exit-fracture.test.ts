@@ -305,3 +305,62 @@ describe("everything that draws hides (#512 review)", () => {
     expect(outline.material).toBe(outlineMaterial);
   });
 });
+
+describe("overlapping fractures and nested pieces (#512 review)", () => {
+  it("two fractures over one block share its hiding: the real material comes back exactly once", () => {
+    const { v, faces } = visual();
+    const real = faces.material;
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        {
+          effects: [
+            { effect: "fracture", config: { pieces: "slabs" } },
+            { effect: "fracture", config: { pieces: "shards" } },
+          ],
+        },
+      ],
+    });
+    expect((faces.material as THREE.Material).visible).toBe(false);
+    runner.dispose();
+    expect(faces.material).toBe(real);
+  });
+
+  it("a nested flying mesh falls once, not with its parent's fall added, and goes home after", () => {
+    const root = new THREE.Group();
+    const outer = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+    const inner = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, 0.3, 0.3),
+      new THREE.MeshBasicMaterial(),
+    );
+    inner.position.set(0.2, 0, 0);
+    outer.add(inner);
+    root.add(outer);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [outer], contents: [], release: vi.fn() };
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        {
+          effects: [
+            {
+              effect: "fracture",
+              target: "shell",
+              config: { speed: [0, 0], spin: 0, gravity: 4, life: 2 },
+            },
+          ],
+        },
+      ],
+    });
+    const [outerStart, innerStart] = [outer, inner].map((m) =>
+      m.getWorldPosition(new THREE.Vector3()),
+    );
+    for (let frame = 0; frame < 30; frame++) runner.update(1 / 60);
+    const outerDrop = outerStart!.y - outer.getWorldPosition(new THREE.Vector3()).y;
+    const innerDrop = innerStart!.y - inner.getWorldPosition(new THREE.Vector3()).y;
+    expect(innerDrop).toBeCloseTo(outerDrop, 5);
+    runner.dispose();
+    expect(inner.parent).toBe(outer);
+    expect(inner.position.toArray()).toEqual([0.2, 0, 0]);
+  });
+});
