@@ -70,6 +70,12 @@ export type TableRules = {
   reorderPassive(from: number, to: number): boolean;
   /** Sell a passive; false when the rules refuse. */
   sellPassive(id: string): boolean;
+  /**
+   * Use a rack item on a card in the hand or on the table (#389), such as a transmogrifier;
+   * false when the rules refuse (the item has no effect on cards, or the card already has
+   * its material). A refusal spends nothing.
+   */
+  applyRackItem(itemId: string, cardId: string): boolean;
 };
 
 /** The passive rack view, as far as dragging a passive needs it. */
@@ -971,6 +977,18 @@ export function createTableInput(options: {
         trace("dropped on rack", `slot ${slot + 1}`);
         if (slot !== from && rules.reorderPassive(from, slot)) playSfx("hand.reorder");
         else playSfx("card.drag.return");
+        return;
+      }
+      // Dropped on a card in the hand or on the table: use it on that card (#389).
+      const card = canceled ? undefined : pickAny(clientX, clientY);
+      if (card) {
+        if (rules.applyRackItem(block.id, card.block.id)) {
+          trace("dropped on card", "a rack item used on a card");
+          playSfx("item.apply");
+        } else {
+          trace("refused", "using a rack item on a card");
+          playSfx("action.denied");
+        }
         return;
       }
       if (canceled || !overDiscardArea(clientX, clientY)) {
