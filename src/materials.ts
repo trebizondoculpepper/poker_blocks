@@ -627,6 +627,34 @@ const fastBubbles = {
   },
 };
 
+/**
+ * Earth (#358): brown soil that conforms very slowly to its new base, with no wall residue, and
+ * grass that grows on its settled top after about five seconds of stillness.
+ */
+const slowEarth = {
+  effect: "levellingFluid",
+  config: {
+    level: 0.5,
+    settleSeconds: 5,
+    look: { id: "opaqueFluid", config: { fill: 0x5b3a22, surface: 0x6e4a2c } },
+  },
+};
+const grass = {
+  effect: "growingGrass",
+  config: {
+    count: 90,
+    delay: 5,
+    interval: 0.12,
+    growSeconds: 0.8,
+    height: 0.14,
+    width: 0.025,
+    base: 0x2f6b22,
+    tip: 0x8fd16a,
+    turnDegrees: 30,
+    settledDegrees: 20,
+  },
+};
+
 /** A material with inclusions suspended in its contents (#353). */
 function withInclusions(
   material: MaterialDefinition,
@@ -698,6 +726,8 @@ function plasticFluidExperiments(): MaterialDefinition[] {
   });
   return [
     plastic("waterInPlastic", "Water in plastic", clearWater),
+    // Earth (#358): slow soil with grass, in plastic and in the lantern; no residue.
+    withInclusions(plastic("earthInPlastic", "Earth in plastic", slowEarth), [grass]),
     // Hot water (#353): the same water, with very slowly rising bubbles as an inclusion.
     withInclusions(plastic("hotWaterInPlastic", "Hot water in plastic", clearWater), [slowBubbles]),
     // Boiling water (#354): the same water, with fast bubbles.
@@ -749,6 +779,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
     lantern("waterInLantern", "Water in a lantern", clearWater),
     // A contained cloud (#336): the same contents in either container.
     lantern("cloudInLantern", "Cloud in a lantern", softCloud),
+    withInclusions(lantern("earthInLantern", "Earth in a lantern", slowEarth), [grass]),
     // Magic Lock (#349): the crystal trail's stars, aging white to black, in either container.
     lantern("magicLockLantern", "Magic Lock (lantern)", magicStars),
     {
