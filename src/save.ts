@@ -446,15 +446,26 @@ function restoreCardStates(saved: unknown): Record<string, CardState> | undefine
     throw new Error("bad card states");
   return Object.fromEntries(
     Object.entries(saved).map(([id, state]) => {
-      const { material, stateBonus, doneness } = (state ?? {}) as {
+      const { material, stateBonus, doneness, countdown } = (state ?? {}) as {
         material?: unknown;
         stateBonus?: unknown;
         doneness?: unknown;
+        countdown?: unknown;
       };
-      if (material === undefined && stateBonus === undefined && doneness === undefined)
+      if (
+        material === undefined &&
+        stateBonus === undefined &&
+        doneness === undefined &&
+        countdown === undefined
+      )
         throw new Error("bad card state");
       if (doneness !== undefined && (!Number.isSafeInteger(doneness) || (doneness as number) < 0))
         throw new Error("bad card state doneness");
+      if (
+        countdown !== undefined &&
+        (!Number.isSafeInteger(countdown) || (countdown as number) < 0)
+      )
+        throw new Error("bad card state countdown");
       if (material !== undefined && !blockMaterials.includes(material as BlockMaterial))
         throw new Error("bad card state material");
       if (
@@ -468,6 +479,7 @@ function restoreCardStates(saved: unknown): Record<string, CardState> | undefine
           ...(material === undefined ? {} : { material: material as BlockMaterial }),
           ...(stateBonus === undefined ? {} : { stateBonus: stateBonus as string }),
           ...(doneness === undefined ? {} : { doneness: doneness as number }),
+          ...(countdown === undefined ? {} : { countdown: countdown as number }),
         },
       ];
     }),

@@ -380,6 +380,17 @@ A block can be **triggered**, and responds with configured actions. `src/trigger
 - **Events:** each trigger that runs emits `block.triggered` (with its `trigger` context) before its responses' own follow-up events. Presentation listens; it never decides what a trigger does.
 - **Persistence:** a trigger resolves inside one model step, so nothing is pending across a save.
 
+### Trigger countdowns (#434)
+
+`src/trigger-countdown.ts`. A block that triggers itself after a number of committed plays, through the shared trigger contract above; it knows nothing about what the trigger does.
+
+- **Configuration** is data on the material definition: `triggerCountdown: { start, countPlacement }`. With `countPlacement`, the placing play counts, giving the agreed sequence: 3 in the hand, 2 once placed, 1 after the next play, then 0 and the trigger.
+- **Counting** happens only in `GameRun.play`, after reactions, through `commitCountdowns(target, placedIds)`, for blocks on the table. Previews, rendering and reloading never count. Reaching zero commits `trigger-block { cause: "countdown" }` through the shared command path, and the events it causes join the play's event queue.
+- **The count** is the card's `countdown` trait and its card-state ledger entry (`cardStates[id].countdown`), validated on load. `countdownOf(card)` exposes it for presentation: the start before placement, null for a block that doesn't count down.
+- **Zero fires once:** a count at 0 is never decremented or fired again.
+- **Material change** clears the count, trait and ledger (`materialScopedStates`), like doneness: a card made a counting material again starts from its start.
+- **Reset:** the count belongs to the block on the table. A registered stage-end reset returns it to its start when the table clears.
+
 ### Block exits (#439)
 
 How a block leaving play is presented: the shared lifecycle the per-material blast responses (#438) and the exit effects (#440 fade, #441 flash and shudder, #442 crack and fracture, #443 shred and splinter, #444 particle bursts) build on. `src/visual/exit-presentation.ts`.

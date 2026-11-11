@@ -63,6 +63,8 @@ export type MaterialDefinition = {
    * the definition, so a saved card restores it with its material.
    */
   triggerable?: { responses: readonly RuleCommand[] };
+  /** Triggers its block after `start` committed plays on the table (#434, src/trigger-countdown.ts). */
+  triggerCountdown?: { start: number; countPlacement: boolean };
   /**
    * The material is a source of heat (#383): a neighbour that heat-sensitive reactions react to,
    * read by the `neighbour-heat` matcher. Flame has it; anything else may declare it.

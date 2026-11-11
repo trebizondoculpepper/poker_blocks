@@ -40,7 +40,10 @@ export type GameState = {
    * it (src/card-material.ts). Absent when nothing changed.
    */
   cardStates?: Readonly<
-    Record<string, { material?: BlockMaterial; stateBonus?: string; doneness?: number }>
+    Record<
+      string,
+      { material?: BlockMaterial; stateBonus?: string; doneness?: number; countdown?: number }
+    >
   >;
   /** Run currency; unlike stage score, this carries across stages and the shop. */
   coins: number;
