@@ -164,5 +164,18 @@ describe("transmogrifiers are never granted as bare passives (#395 review)", () 
     for (const roll of [0, 0.25, 0.5, 0.75, 0.999])
       for (const definition of randomPassiveDefinitions(3, () => roll))
         expect(definition.id.startsWith("transmogrifier.")).toBe(false);
+describe("transmogrifier resale (#390)", () => {
+  it("pays half its price times the share of uses left, at least 1 coin", async () => {
+    const { resaleValue } = await import("./resale");
+    expect(resaleValue(createTransmogrifier("steel", "t", 8))).toBe(4);
+    expect(resaleValue(createTransmogrifier("steel", "t", 8, 1, 2))).toBe(2);
+    expect(resaleValue(createTransmogrifier("paper", "t", 2, 1, 2))).toBe(1);
+    expect(resaleValue(createTransmogrifier("prismatic", "t", 24, 1, 2))).toBe(6);
+  });
+
+  it("leaves ordinary passives at half their price", async () => {
+    const { defaultResale } = await import("./resale");
+    expect(defaultResale(7)).toBe(3);
+    expect(defaultResale(1)).toBe(1);
   });
 });
