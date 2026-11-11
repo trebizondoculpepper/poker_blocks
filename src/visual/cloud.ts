@@ -22,11 +22,17 @@ export type CloudConfig = {
 
 const vertexShader = /* glsl */ `
   varying vec3 vLocal;
-  varying vec3 vOrigin;
+  varying vec3 vRay;
   void main() {
     vLocal = position;
-    // The camera in the volume's own space, so the march needs no per-frame uniform.
-    vOrigin = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz;
+    // The view ray through this point, in the volume's own space: toward the camera's position
+    // for a perspective camera, along the camera's forward axis for an orthographic one (the
+    // hand), so the march follows the same path the pixel actually sees.
+    mat4 toLocal = inverse(modelMatrix);
+    vec3 origin = (toLocal * vec4(cameraPosition, 1.0)).xyz;
+    vec3 forward = -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
+    vec3 parallel = (toLocal * vec4(forward, 0.0)).xyz;
+    vRay = isOrthographic ? parallel : position - origin;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
@@ -38,7 +44,7 @@ const fragmentShader = /* glsl */ `
   uniform float density;
   uniform float drift;
   varying vec3 vLocal;
-  varying vec3 vOrigin;
+  varying vec3 vRay;
 
   float hash(vec3 p) {
     p = fract(p * 0.3183099 + 0.1);
@@ -63,7 +69,7 @@ const fragmentShader = /* glsl */ `
   }
   void main() {
     // March from where the ray enters the back face, toward the camera, through the box.
-    vec3 dir = normalize(vLocal - vOrigin);
+    vec3 dir = normalize(vRay);
     vec3 p = vLocal;
     // How far the ray runs through the box back toward the camera (slab method): up to the
     // full diagonal at oblique angles, so the 14 samples always span the whole visible volume.
