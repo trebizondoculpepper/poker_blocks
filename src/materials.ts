@@ -12,6 +12,7 @@ import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
 import type { EventRule, RuleCommand } from "./event-rules";
 import type { Reaction } from "./reactions";
+import { acquiredModifierRules } from "./modifier-registers";
 import { stateBonusRules } from "./state-bonuses";
 import { scoringModifierRules, type ScoringModifier } from "./scoring-modifier";
 import type { TokenEffectConfig } from "./passive-activation-effects";
@@ -1110,11 +1111,13 @@ export function scoringEligibilityOf(block: CardBlock): string {
 }
 
 export function cardScoringRules(block: CardBlock): EventRule[] {
-  // Its material's rules, then its state bonus's (#365): same phases, and the order within
-  // one card changes nothing (sums and products commute; successive powers multiply).
+  // Its material's rules, then its state bonus's (#365), then its acquired modifiers' (#431):
+  // same phases, and the order within one card changes nothing (sums and products commute;
+  // exponents add their increases above 1).
   return [
     ...scoringModifierRules(getMaterialDefinition(materialOf(block)).scoringModifier),
     ...stateBonusRules(block),
+    ...acquiredModifierRules(block),
   ];
 }
 

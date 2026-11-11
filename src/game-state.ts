@@ -1,3 +1,4 @@
+import type { ScoringModifier } from "./scoring-modifier";
 import type { BlockMaterial } from "./materials";
 import type { CardBlock } from "./cards";
 import type { Round } from "./round";
@@ -42,7 +43,13 @@ export type GameState = {
   cardStates?: Readonly<
     Record<
       string,
-      { material?: BlockMaterial; stateBonus?: string; doneness?: number; countdown?: number }
+      {
+        material?: BlockMaterial;
+        stateBonus?: string;
+        doneness?: number;
+        countdown?: number;
+        modifiers?: Readonly<Record<string, ScoringModifier>>;
+      }
     >
   >;
   /** Run currency; unlike stage score, this carries across stages and the shop. */

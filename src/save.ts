@@ -9,6 +9,7 @@ import { withoutSelectable } from "./traits/selectable";
 // Registers the transmogrifier definitions, so saved rack items resolve (#388).
 import "./transmogrifiers";
 import "./nothingifier";
+import { restoreModifierRegisters } from "./modifier-registers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
 import { asGenerated } from "./card-ownership";
 import { type CardState } from "./card-material";
@@ -446,17 +447,19 @@ function restoreCardStates(saved: unknown): Record<string, CardState> | undefine
     throw new Error("bad card states");
   return Object.fromEntries(
     Object.entries(saved).map(([id, state]) => {
-      const { material, stateBonus, doneness, countdown } = (state ?? {}) as {
+      const { material, stateBonus, doneness, countdown, modifiers } = (state ?? {}) as {
         material?: unknown;
         stateBonus?: unknown;
         doneness?: unknown;
         countdown?: unknown;
+        modifiers?: unknown;
       };
       if (
         material === undefined &&
         stateBonus === undefined &&
         doneness === undefined &&
-        countdown === undefined
+        countdown === undefined &&
+        modifiers === undefined
       )
         throw new Error("bad card state");
       if (doneness !== undefined && (!Number.isSafeInteger(doneness) || (doneness as number) < 0))
@@ -480,6 +483,7 @@ function restoreCardStates(saved: unknown): Record<string, CardState> | undefine
           ...(stateBonus === undefined ? {} : { stateBonus: stateBonus as string }),
           ...(doneness === undefined ? {} : { doneness: doneness as number }),
           ...(countdown === undefined ? {} : { countdown: countdown as number }),
+          ...(modifiers === undefined ? {} : { modifiers: restoreModifierRegisters(modifiers) }),
         },
       ];
     }),

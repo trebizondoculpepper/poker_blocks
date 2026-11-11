@@ -19,6 +19,12 @@ export type RuleFrame = {
   /** The game state, where the event has one; pure scoring evaluates without it. */
   state?: Readonly<GameState>;
   workingValue?: number;
+  /**
+   * The total exponent the power phase has applied to the working value so far (1 before
+   * any): exponents combine by adding their increases above 1 (#431), so ^1.1 and ^1.2 make
+   * ^1.3, not ^1.32.
+   */
+  exponent?: number;
   commands: readonly RuleCommand[];
   /** Set by `evaluate`: whether the rule's condition matched and its effects ran. */
   fired?: boolean;

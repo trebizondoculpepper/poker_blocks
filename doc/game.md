@@ -237,11 +237,13 @@ This section is the target design and supersedes the table above where they diff
 1. Each contributing card's base value gets its material's **additive** value (summed if several apply), then passive `score.beforeBlockValue` effects, in rack order.
 2. The line's working score is computed from block values and the ordinary hand multiplier.
 3. **Multiplicative** material factors multiply the working score (all factors multiplied together).
-4. **Exponential** effects apply next, one per contributing crystal, in sequence.
+4. **Exponential** effects apply next. Exponents combine by **adding their increases above 1** (#431): the line is raised once to E = 1 + Σ(e − 1), so ^1.1 and ^1.2 make ^1.3, not ^1.32. This holds for material, state-bonus, acquired and passive exponents alike.
 5. Passive `score.beforeLineFinalized` effects resolve in rack order, on the material-adjusted score. This is the owner's decision on #8: material effects come before passives.
 6. Clamp at zero.
 7. Passive `score.afterLineClamp` effects resolve in rack order. These are flat bonuses that can't rescue a negative line: a die adds its roll here (#97). Each die rolls once per scoring resolution, and the same roll is added to every scored line.
 8. Round to an integer once, after all effects.
+
+**Acquired modifiers (#431).** Besides its material's values, every card has three acquired modifier registers, each an add/multiply/exponent triple, neutral by default (add 0, multiply 1, exponent 1): **stage** (cleared when a stage ends), **round** (cleared when a round ends) and **run** (kept all run; bomb bonuses go here). Within and across registers additives sum, multipliers multiply and exponents add their increases above 1: a round +1 and a run +1 give +2; ×2 and ×3 give ×6; ^1.1 and ^1.2 give ^1.3. They score through the same phases as the card's material, as the card's own rules, and only while the card contributes. Save and Continue keep every register within its lifetime; a reload never resets one. State bonuses (melted, heated, boiled) are unchanged and separate. How acquired bonuses are shown on a block is #432.
 
 #### Worked examples
 

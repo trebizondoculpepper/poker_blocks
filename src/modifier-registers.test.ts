@@ -1,0 +1,122 @@
+import { describe, expect, it } from "vite-plus/test";
+import { standardDeck, type CardBlock } from "./cards";
+import { dealerRegistry } from "./dealer";
+import { GameRun } from "./game-run";
+import type { GameState, PlacedBlock } from "./game-state";
+import { getMaterialDefinition, withMaterial } from "./materials";
+import {
+  acquiredModifier,
+  addCardModifier,
+  clearModifierLifetime,
+  combineModifiers,
+} from "./modifier-registers";
+import { scoreFieldWithPassives } from "./passive-effects";
+import { resetRoundState } from "./round-end";
+import { demoRunRules } from "./run-rules";
+import { fromSaveRecord, toSaveRecord } from "./save";
+import { resetStageState } from "./stage-end";
+
+const card = (rank: string, suit: string): CardBlock =>
+  standardDeck.find(
+    (block) => block.traits.identity.rank === rank && block.traits.identity.suit.name === suit,
+  )!;
+const row = (...blocks: CardBlock[]): PlacedBlock[] =>
+  blocks.map((block, x) => ({ block, cell: { x, y: 0, z: 0 } }));
+const points = (field: PlacedBlock[]) => scoreFieldWithPassives(field, [])[0]!.points;
+const bare = (cards: CardBlock[]): GameState => ({
+  field: [],
+  hand: cards,
+  deck: [],
+  discardPile: [],
+  passiveRack: [],
+  coins: 0,
+  round: { score: 0, targetScore: 10, movesLeft: 5, discardsLeft: 3 },
+});
+
+describe("combining modifiers (#431)", () => {
+  it("sums additives, multiplies multipliers and adds exponents' increases above 1", () => {
+    expect(combineModifiers([{ additive: 1 }, { additive: 1 }])).toEqual({ additive: 2 });
+    expect(combineModifiers([{ multiplicative: 2 }, { multiplicative: 3 }])).toEqual({
+      multiplicative: 6,
+    });
+    expect(combineModifiers([{ exponential: 1.1 }, { exponential: 1.2 }]).exponential).toBeCloseTo(
+      1.3,
+    );
+    expect(combineModifiers([])).toEqual({});
+  });
+});
+
+describe("acquired modifier registers (#431)", () => {
+  const [a, b] = [card("7", "hearts"), card("7", "clubs")];
+
+  it("keeps stage, round and run registers apart, combined for scoring", () => {
+    let state = bare([a, b]);
+    state = addCardModifier(state, a.id, "round", { additive: 1 })!;
+    state = addCardModifier(state, a.id, "run", { additive: 1 })!;
+    state = addCardModifier(state, a.id, "stage", { multiplicative: 2 })!;
+    const held = state.hand[0]!;
+    expect(held.traits.modifiers).toEqual({
+      round: { additive: 1 },
+      run: { additive: 1 },
+      stage: { multiplicative: 2 },
+    });
+    expect(acquiredModifier(held)).toEqual({ additive: 2, multiplicative: 2 });
+    expect(state.cardStates?.[a.id]?.modifiers).toEqual(held.traits.modifiers);
+    // Its material's own values are untouched.
+    expect(getMaterialDefinition("paper").scoringModifier).toBeUndefined();
+  });
+
+  it("clears each register at its own boundary: stage at stage end, round at round end", () => {
+    let state = bare([a]);
+    for (const lifetime of ["stage", "round", "run"])
+      state = addCardModifier(state, a.id, lifetime, { additive: 1 })!;
+    const afterStage = resetStageState(state);
+    expect(Object.keys(afterStage.hand[0]!.traits.modifiers!)).toEqual(["round", "run"]);
+    const afterRound = resetRoundState(afterStage);
+    expect(afterRound.hand[0]!.traits.modifiers).toEqual({ run: { additive: 1 } });
+    expect(afterRound.cardStates?.[a.id]).toEqual({ modifiers: { run: { additive: 1 } } });
+    const none = clearModifierLifetime(afterRound, "run");
+    expect(none.hand[0]!.traits.modifiers).toBeUndefined();
+    expect(none.cardStates).toBeUndefined();
+  });
+
+  it("refuses an unknown lifetime or a card that isn't there", () => {
+    expect(() => addCardModifier(bare([a]), a.id, "forever", { additive: 1 })).toThrow();
+    expect(addCardModifier(bare([a]), "nobody", "run", { additive: 1 })).toBeNull();
+  });
+
+  it("scores acquired exponents additively: ^1.1 and ^1.2 make ^1.3, not ^1.32", () => {
+    const plain = points(row(a, b));
+    let state = bare([a, b]);
+    state = addCardModifier(state, a.id, "run", { exponential: 1.1 })!;
+    state = addCardModifier(state, b.id, "round", { exponential: 1.2 })!;
+    const [ra, rb] = state.hand as [CardBlock, CardBlock];
+    expect(points(row(ra, rb))).toBe(Math.round(plain ** 1.3));
+    expect(points(row(ra, rb))).not.toBe(Math.round(plain ** 1.32));
+  });
+
+  it("adds a material's own exponent the same way: Magic ^1.2 with an acquired ^1.1 is ^1.3", () => {
+    const magic = withMaterial(a, getMaterialDefinition("magic"));
+    const before = points(row(magic, b));
+    const boosted = addCardModifier(bare([magic, b]), magic.id, "run", { exponential: 1.1 })!;
+    const after = points(row(boosted.hand[0]!, b));
+    // Same working value before the power phase: the exponent moves from 1.2 to 1.3.
+    const base = before ** (1 / 1.2);
+    expect(after).toBeCloseTo(Math.round(base ** 1.3), -1);
+    expect(after).toBeGreaterThan(before);
+  });
+
+  it("keeps every register through save and Continue, and refuses a bad one", () => {
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    const held = game.state.hand[0]!;
+    let state = addCardModifier(game.state, held.id, "run", { multiplicative: 2 })!;
+    state = addCardModifier(state, held.id, "stage", { additive: 3 })!;
+    const record = JSON.parse(JSON.stringify(toSaveRecord({ ...game.snapshot(), state })));
+    const restored = fromSaveRecord(record, standardDeck, dealerRegistry)!;
+    const back = restored.state.hand.find(({ id }) => id === held.id)!;
+    expect(back.traits.modifiers).toEqual({ run: { multiplicative: 2 }, stage: { additive: 3 } });
+    const bad = structuredClone(record);
+    bad.state.cardStates[held.id].modifiers = { forever: { additive: 1 } };
+    expect(fromSaveRecord(bad, standardDeck, dealerRegistry)).toBeNull();
+  });
+});

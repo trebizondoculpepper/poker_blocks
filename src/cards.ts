@@ -1,3 +1,4 @@
+import type { ScoringModifier } from "./scoring-modifier";
 import type { DestructibleTrait } from "./traits/destructible";
 import type { TransparentTrait } from "./traits/transparent";
 import { faces, type AttachableTrait } from "./traits/attachable";
@@ -41,6 +42,11 @@ export type CardBlock = {
     owner?: { id: string };
     /** Plays left before it triggers itself (src/trigger-countdown.ts, #434). */
     countdown?: { left: number };
+    /**
+     * Scoring modifiers it has acquired, one register per lifetime (src/modifier-registers.ts,
+     * #431), kept apart from its material's own values.
+     */
+    modifiers?: Readonly<Record<string, ScoringModifier>>;
   };
 };
 
