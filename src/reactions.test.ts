@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { standardDeck, type CardBlock } from "./cards";
 import type { GameState, PlacedBlock } from "./game-state";
 import { materialOf, withMaterial, getMaterialDefinition, type BlockMaterial } from "./materials";
+import { withStateBonus } from "./state-bonuses";
 import { applyReactions, type Reaction } from "./reactions";
 import type { Cell } from "./traits/attachable";
 
@@ -108,8 +109,58 @@ describe("material reactions (#366)", () => {
     expect(run(first.state).applied).toEqual([]);
   });
 
-  it("no gameplay material reacts yet: reactions arrive with #367–#371", async () => {
-    const { materialDefinitions } = await import("./materials");
-    expect(materialDefinitions.filter((material) => "reactions" in material)).toEqual([]);
+  it("ice melts into water +1 beside flame or hot water, keeping rank and suit (#367)", async () => {
+    const ice = made(0, "ice");
+    const beside = (neighbour: CardBlock) =>
+      applyReactions(state(at(ice, 0), at(neighbour, 1))).state.field[0]!.block;
+    for (const melted of [
+      beside(made(1, "fire")),
+      beside(withStateBonus(made(1, "water"), "heated")),
+    ]) {
+      expect(materialOf(melted)).toBe("water");
+      expect(melted.traits.stateBonus).toEqual({ id: "melted" });
+      expect(melted.traits.identity).toEqual(ice.traits.identity);
+      expect(melted.id).toBe(ice.id);
+    }
+    // Plain (not hot) water, and a corner touch, leave ice alone.
+    expect(materialOf(beside(made(1, "water")))).toBe("ice");
+    expect(
+      materialOf(
+        applyReactions(state(at(ice, 0), at(made(1, "fire"), 1, 1))).state.field[0]!.block,
+      ),
+    ).toBe("ice");
+  });
+
+  it("flame heats water into hot water +1, replacing its old bonus; boiling water stays (#368)", () => {
+    const heat = (water: CardBlock) =>
+      applyReactions(state(at(water, 0), at(made(1, "fire"), 1))).state.field[0]!.block;
+    const melted = withStateBonus(made(0, "water"), "melted");
+    const hot = heat(melted);
+    expect(materialOf(hot)).toBe("water");
+    expect(hot.traits.stateBonus).toEqual({ id: "heated" });
+    expect(hot.traits.identity).toEqual(melted.traits.identity);
+    expect(heat(withStateBonus(made(0, "water"), "boiled")).traits.stateBonus).toEqual({
+      id: "boiled",
+    });
+    // The flame itself is unchanged.
+    const field = applyReactions(state(at(made(0, "water"), 0), at(made(1, "fire"), 1))).state
+      .field;
+    expect(materialOf(field[1]!.block)).toBe("fire");
+  });
+
+  it("air stokes flame into aggressive flame, the same card; air is unchanged (#370)", () => {
+    const fire = made(1, "fire");
+    const air = made(0, "airVent" as BlockMaterial);
+    const field = applyReactions(state(at(air, 0), at(fire, 1))).state.field;
+    const stoked = field[1]!.block;
+    expect(materialOf(stoked)).toBe("fire");
+    expect(stoked.traits.stateBonus).toEqual({ id: "aggressive" });
+    expect(stoked.id).toBe(fire.id);
+    expect(materialOf(field[0]!.block)).toBe("airVent");
+  });
+
+  it("water is never sold or unlocked: it only comes from reactions", async () => {
+    const { getMaterialDefinition } = await import("./materials");
+    expect(getMaterialDefinition("water").shop).toBeUndefined();
   });
 });

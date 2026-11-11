@@ -23,6 +23,8 @@ passiveVisualBuilders.register("materialBlock", (_appearance, size, raw) => {
     textures: block.textures,
     edges,
     faces: [],
+    // The material's own inside (the fire's flame, custard's fluid), drawn within the token.
+    extras: block.extras ?? [],
     dispose() {
       block.geometry.dispose();
       edges.dispose();

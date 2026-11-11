@@ -178,6 +178,7 @@ export function createPassiveRack(host: HTMLElement): {
           const appearance = passiveAppearance(block);
           const visual = createPassiveVisual(appearance, cubeSize);
           const mesh = new THREE.Mesh(visual.geometry, visual.materials);
+          mesh.add(...(visual.extras ?? []));
           const edges = new THREE.LineSegments(
             visual.edges,
             new THREE.LineBasicMaterial({ color: appearance.palette.edge }),

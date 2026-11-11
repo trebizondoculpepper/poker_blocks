@@ -569,6 +569,27 @@ const entries = [
     placeholder: "passive.activate.scoring",
   },
   {
+    id: "reaction.heat",
+    name: "Heat",
+    family: "material",
+    description: "Water beside flame heats into hot water as a play settles",
+    placeholder: "material.attach.fire",
+  },
+  {
+    id: "reaction.stoke",
+    name: "Stoke",
+    family: "material",
+    description: "Air beside flame stokes it into aggressive flame as a play settles",
+    placeholder: "material.attach.fire",
+  },
+  {
+    id: "reaction.melt",
+    name: "Melt",
+    family: "material",
+    description: "Ice beside flame or hot water melts into water as a play settles",
+    placeholder: "material.attach.ice",
+  },
+  {
     id: "material.activate.prismatic",
     name: "Activate prismatic",
     family: "material",

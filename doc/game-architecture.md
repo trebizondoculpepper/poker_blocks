@@ -255,6 +255,10 @@ When the placed card lands, the scene presents each scoring line from lowest to 
 
 ### Material reactions (proposal, #363, epic #362)
 
+**Heating (#368):** water lists one reaction: beside `fire`, `transform` to the `heated` bonus (sound `reaction.heat`). Its matcher config has `unlessState: ["boiled"]`, a generic `neighbour-material` option that refuses the match when the block already holds a listed bonus, so boiling water is never downgraded.
+
+**First reaction (#367):** ice's definition lists two reactions: beside `fire` (`neighbour-material`), and beside water with the `heated` bonus (the new `neighbour-state` matcher). Both `transform` it to water with the `melted` bonus and name the `reaction.melt` sound. The play presenter redraws reacted blocks already on the table straight after the play and plays each reaction's sound, while a reacted block still landing is drawn from the model when it lands (#389). Water is a gameplay material with no shop price, drawn as custard's vessel with a blue fluid until #333.
+
 **Status: the runner is built (#366)** in `src/reactions.ts`: the `reactions` list on a material definition, the `reactionMatchers` registry (`neighbour-material`), the `reactionResults` registry (`transform`, which uses `changeCardMaterial` and `setCardStateBonus`), and `resolveReactions`, which `GameRun.play` calls after scoring. Each fired reaction emits `reaction.applied` after `play.completed`, and `GameRun.lastReactions` lists them for presentation. No gameplay material has reactions yet: #367–#371 add them as data. `advance-cooking` is registered with the cooking state in #372. The first visible reaction (#367) also adds the play presentation that redraws the reacted blocks and plays a registered reaction sound.
 
 **What is agreed** (#362): only blocks that share a face interact; edge or corner contact does not. Reactions advance once per play, never in real time. Rank and suit never change; a transformation changes the card's material and/or its state bonus (see "State bonuses (proposal)"). Discards, camera motion and elapsed time are never plays.
@@ -365,7 +369,7 @@ Input follows "Input": the rack drag source decides where a carried item goes. A
 
 ### Transmogrifier look (#391)
 
-- **Token:** a passive token's appearance may name a registered **visual builder** (`passiveVisualBuilders` in `src/passive-visual.ts`). `createPassiveVisual` uses it, or the painted shape when none is named, so the rack, the shop and the object browser all follow. Transmogrifier definitions name `materialBlock` (`src/visual/material-token.ts`), which draws the material's own block appearance with blank face art: the material, with no rank or suit. Limitation: the token shows only the block's faces, not its extras, so a custard transmogrifier shows the plastic shell without its fluid. Pulsing (an audition idea in #384) is not built.
+- **Token:** a passive token's appearance may name a registered **visual builder** (`passiveVisualBuilders` in `src/passive-visual.ts`). `createPassiveVisual` uses it, or the painted shape when none is named, so the rack, the shop and the object browser all follow. Transmogrifier definitions name `materialBlock` (`src/visual/material-token.ts`), which draws the material's own block appearance with blank face art: the material, with no rank or suit. The token carries the block's extra meshes too (`PassiveVisual.extras`: the fire's flame, custard's fluid), which the rack, shop and browser attach, so every transmogrifier shows its whole material. Pulsing (an audition idea in #384) is not built.
 - **Charge dial:** a rack item shows **badges** registered per trait name (`rackBadges` in `src/passive-rack.ts`), redrawn on every render. `limitedUse` draws a clock-like conic dial of uses left: full when unused, a half-moon after one of two uses. It shows charges, not a cooldown.
 
 ## Session controller

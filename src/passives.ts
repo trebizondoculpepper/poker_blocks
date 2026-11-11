@@ -1,3 +1,4 @@
+import type { SoundEffectId } from "./audio/sfx-registry";
 import { passiveFrequencies } from "./offer-weights";
 import type { BlockMaterial } from "./materials";
 import { Registry } from "./core/registry";
@@ -51,7 +52,7 @@ export type GameEvent = {
   /** On `stage.won`: which stage of the round was won. */
   stageKind?: StageKind;
   /** On `reaction.applied` (#366): the block's material and state bonus before and after. */
-  reaction?: { from: ReactionState; to: ReactionState };
+  reaction?: { from: ReactionState; to: ReactionState; sound?: SoundEffectId };
   /** On `reward.finalized`: the coins paid, and the balance before and after. */
   reward?: { coins: number; balanceBefore: number; balance: number };
 };
