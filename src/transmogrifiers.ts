@@ -39,7 +39,10 @@ export function transmogrifierBalance(
   const own = material.transmogrifier;
   const price =
     own?.price ??
-    (material.shop ? Math.round(material.shop.basePrice * transmogrifierPriceFactor) : undefined);
+    (material.shop
+      ? // At least 1 coin: a free item would resell for a profit.
+        Math.max(1, Math.round(material.shop.basePrice * transmogrifierPriceFactor))
+      : undefined);
   const weights = own?.weights ?? material.shop?.weights;
   return price === undefined || weights === undefined ? null : { price, weights };
 }

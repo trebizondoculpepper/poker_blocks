@@ -108,9 +108,15 @@ export function validateShopBalanceDraft(draft: ShopBalanceDraft): DraftError[] 
 
   if (!keysMatch(draft.transmogrifier, ["uses", "priceFactor"]))
     add("transmogrifier", "Transmogrifier fields must match the configuration schema");
-  else
+  else {
     for (const message of validateTransmogrifierBalance(draft.transmogrifier))
       add("transmogrifier", message);
+    // Every derived price must be a whole number of at least 1 coin, or the item would be
+    // free to buy yet resell for at least 1.
+    for (const [id, material] of Object.entries(draft.materials ?? {}))
+      if (material && Math.round(material.basePrice * draft.transmogrifier.priceFactor) < 1)
+        add("transmogrifier.priceFactor", `Makes the ${id} transmogrifier free`);
+  }
 
   const rankKeys = Object.keys(gameTuning.cardRankSurcharge);
   if (!keysMatch(draft.cardRankSurcharge, rankKeys))

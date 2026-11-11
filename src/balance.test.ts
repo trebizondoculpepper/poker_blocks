@@ -145,3 +145,15 @@ describe("transmogrifier balance (#392)", () => {
     expect(validateShopBalanceDraft(draft).map(({ path }) => path)).toContain("transmogrifier");
   });
 });
+
+describe("transmogrifier prices are never free (#402 review)", () => {
+  it("refuses a price multiple that rounds a derived price to zero", async () => {
+    const { currentShopBalanceDraft, validateShopBalanceDraft } =
+      await import("./tools/shop-balance-draft");
+    const draft = currentShopBalanceDraft();
+    draft.transmogrifier.priceFactor = 0.1;
+    expect(validateShopBalanceDraft(draft).map(({ path }) => path)).toContain(
+      "transmogrifier.priceFactor",
+    );
+  });
+});
