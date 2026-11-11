@@ -108,3 +108,46 @@ describe("flash and shudder as exit effects (#441)", () => {
     expect(root.position.toArray()).toEqual([0, 0, 0]);
   });
 });
+
+describe("overlapping flashes and shudders (#511 review)", () => {
+  it("a second flash never overlays the first's overlay, and each keeps its own until it ends", () => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(), lit());
+    const first = createFlash([mesh], { seconds: 1 });
+    const second = createFlash([mesh], { seconds: 1 });
+    expect(mesh.children).toHaveLength(2);
+    const [mine, theirs] = mesh.children as THREE.Mesh[];
+    expect(mine!.children).toEqual([]);
+    expect(theirs!.children).toEqual([]);
+    first.dispose();
+    expect(mesh.children).toHaveLength(1);
+    second.dispose();
+    expect(mesh.children).toEqual([]);
+  });
+
+  it("overlapping shudders compose about one home, which is restored when the last ends", () => {
+    const target = new THREE.Group();
+    target.position.set(1, 0, 0);
+    const first = createShudder(target, { seconds: 0.4 });
+    first.update(0.05);
+    const second = createShudder(target, { seconds: 1 });
+    first.update(1);
+    second.update(0.05);
+    expect(target.position.toArray()).not.toEqual([1, 0, 0]);
+    while (second.update(0.05));
+    expect(target.position.toArray()).toEqual([1, 0, 0]);
+    // Cancelled part-way, in either order, it still comes home.
+    const a = createShudder(target, { seconds: 1 });
+    const b = createShudder(target, { seconds: 1 });
+    a.update(0.1);
+    b.update(0.1);
+    a.dispose();
+    b.dispose();
+    expect(target.position.toArray()).toEqual([1, 0, 0]);
+  });
+
+  it("are loaded wherever exits are run from the effects module", async () => {
+    const { exitEffects } = await import("./exit-effects");
+    for (const name of ["flash", "shudder", "shred", "splinter"])
+      expect(exitEffects.has(name)).toBe(true);
+  });
+});
