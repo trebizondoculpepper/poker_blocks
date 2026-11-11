@@ -1,13 +1,16 @@
 /**
- * A stage for word cubes in the developer rooms (dev13, dev14): a canvas drawn with the title
- * screen's look (src/visual/attract-look.ts), a camera that fits whatever is shown, and pointer
- * input turned into each cube's own `input.*` events, so the cubes' traits do the rest. Rooms
- * decide what to show and where; the stage knows nothing of menus or dialogs.
+ * A stage for word cubes (#528): a canvas drawn with the title screen's look
+ * (src/visual/attract-look.ts), a camera that fits whatever is shown, and pointer input turned
+ * into each cube's own `input.*` events, so the cubes' traits do the rest. Its callers (the
+ * production block menus, src/block-menu/block-menus.ts, and the developer rooms) decide what to
+ * show and where; the stage knows nothing of menus or dialogs.
+ *
+ * Over the game it is transparent and leaves the game's reflections alone; a developer room gives
+ * it a `background` and lets it `reflect` its own studio (`StageOptions`).
  */
 import * as THREE from "three";
 import { createPointerRouter } from "./pointer-router";
 import type { MenuBlockItem } from "../game-modes";
-import { setReflectionEnvironment } from "../visual/block-appearance";
 import {
   addAttractLighting,
   attractFieldOfView,
@@ -33,13 +36,23 @@ export type CubeStage = {
   dispose(): void;
 };
 
-export function createCubeStage(host: HTMLElement): CubeStage {
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+export type StageOptions = {
+  /** A solid background colour; omitted, the stage is transparent over whatever is behind. */
+  background?: number;
+  /**
+   * Hand the stage's studio environment to the block appearance (a developer room, where no game
+   * draws). Omitted, the game's own reflections stay as they are.
+   */
+  reflect?: (environment: THREE.Texture) => void;
+};
+
+export function createCubeStage(host: HTMLElement, look: StageOptions = {}): CubeStage {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   configureAttractRenderer(renderer);
   host.append(renderer.domElement);
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x05070b);
+  scene.background = look.background === undefined ? null : new THREE.Color(look.background);
   addAttractLighting(scene);
   const environment = sparkleEnvironment(renderer, 0);
   const camera = new THREE.PerspectiveCamera(attractFieldOfView, 1, 0.1, 100);
@@ -57,6 +70,8 @@ export function createCubeStage(host: HTMLElement): CubeStage {
     cubes.forEach((cube) => cube.dispose());
     cubes = [];
     router.forget();
+    // Blank the canvas too, so a hidden menu leaves no last frame behind (#532 review).
+    renderer.clear();
   }
 
   /** Back the camera off until every position fits, with a cube's margin around them. */
@@ -122,8 +137,8 @@ export function createCubeStage(host: HTMLElement): CubeStage {
     async show(items, positions, options = () => ({})) {
       clear();
       const mine = generation;
-      // Blocks made here reflect the stage's own studio; the game draws none in these rooms.
-      setReflectionEnvironment(environment);
+      // Only a developer room hands over its studio; over the game, its reflections stay.
+      look.reflect?.(environment);
       const made = await Promise.all(
         items.map(async (item, index) => {
           const cube = await createWordCube(item.label, {
@@ -136,6 +151,7 @@ export function createCubeStage(host: HTMLElement): CubeStage {
             ...options(item, index),
           });
           cube.object.position.copy(positions[index]!);
+          useStageReflections(cube.object, environment);
           return { ...cube, index };
         }),
       );
@@ -167,6 +183,9 @@ export function createCubeStage(host: HTMLElement): CubeStage {
       clear();
       environment.dispose();
       renderer.dispose();
+      // The canvas is the stage's own: it leaves with it, so a host can make a new stage in its
+      // place without stacking canvases (#532 review).
+      canvas.remove();
     },
   };
 }
@@ -176,4 +195,20 @@ function isWithin(child: THREE.Object3D, ancestor: THREE.Object3D): boolean {
   for (let node: THREE.Object3D | null = child; node; node = node.parent)
     if (node === ancestor) return true;
   return false;
+}
+
+/**
+ * Point every reflective material in a cube at this stage's own environment (#532 review). The
+ * stage draws with its own WebGL renderer, so the game's global reflection map (made on the game's
+ * renderer) can't be sampled here; the game's global setting itself is left alone.
+ */
+export function useStageReflections(object: THREE.Object3D, environment: THREE.Texture): void {
+  object.traverse((child) => {
+    for (const material of [(child as THREE.Mesh).material ?? []].flat()) {
+      const reflective = material as THREE.MeshStandardMaterial;
+      if (!reflective.envMap) continue;
+      reflective.envMap = environment;
+      reflective.needsUpdate = true;
+    }
+  });
 }

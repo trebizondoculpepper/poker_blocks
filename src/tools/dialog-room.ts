@@ -10,11 +10,10 @@
  * quite the same way twice. Activating a cube shows its action; nothing runs.
  * Developer-only: production never imports it (src/main.ts).
  */
-import * as THREE from "three";
+import { setReflectionEnvironment } from "../visual/block-appearance";
 import type { DanceFloor } from "../dance/dance-floor";
 import { gameModeFor, modeLink, type DevDialogRoomConfig, type DialogConfig } from "../game-modes";
-import { springAnchor } from "../traits/spring-anchor";
-import { createCubeStage, type StageCube } from "./cube-stage";
+import { createBlockMenus, type ShownMenu } from "../block-menu/block-menus";
 import { playSfx } from "../audio/sfx";
 import "./dialog-room.css";
 
@@ -26,21 +25,8 @@ export type DialogRoom = {
   dispose(): void;
 };
 
-/** The distance between neighbouring buttons' fixed points. */
-const spacing = 1.7;
-
-/** Each button's fixed point: a single centred row. */
-export function rowPositions(count: number): THREE.Vector3[] {
-  return Array.from(
-    { length: count },
-    (_, index) => new THREE.Vector3((index - (count - 1) / 2) * spacing, 0, 0),
-  );
-}
-
-/** Whether a dancer's phase has wrapped round since last frame: its cycle just began. */
-export function cycleBegan(previous: number, phase: number): boolean {
-  return phase < previous;
-}
+// The row layout and beat helpers live with the production block menus (#528).
+export { cycleBegan, rowPositions } from "../block-menu/block-menus";
 
 export function createDialogRoom(host: HTMLElement, floor: Pick<DanceFloor, "join">): DialogRoom {
   const root = document.createElement("section");
@@ -65,64 +51,36 @@ export function createDialogRoom(host: HTMLElement, floor: Pick<DanceFloor, "joi
   host.append(root);
   const part = <T extends HTMLElement>(name: string) =>
     root.querySelector<T>(`[data-part="${name}"]`)!;
-  const stage = createCubeStage(part("stage"));
+  // The production block menus (#528), made when the room opens with its spring and beat.
+  let menus: ReturnType<typeof createBlockMenus> | null = null;
+  let menu: ShownMenu | null = null;
 
   const dialogs: DialogConfig[] = [];
   let config: DevDialogRoomConfig | null = null;
   let current = 0;
   let held = false;
   let timer = 0;
-  let leaveFloor: (() => void)[] = [];
-  // The cubes on show and whether each is available now, so availability can be toggled live
-  // to audition the disabled look's transitions (#461).
-  let shown: { block: StageCube["block"]; enabled: boolean }[] = [];
+  // Whether each shown choice is available now, so availability can be toggled live to
+  // audition the disabled look's transitions (#461).
+  let shown: { action: string; enabled: boolean }[] = [];
 
   function present(): void {
-    leaveFloor.forEach((leave) => leave());
-    leaveFloor = [];
-    if (!config || dialogs.length === 0) {
+    menu?.hide();
+    menu = null;
+    if (!config || !menus || dialogs.length === 0) {
       part("title").textContent = "No dialogs composed";
       part("count").textContent = "";
-      stage.clear();
       return;
     }
     current = ((current % dialogs.length) + dialogs.length) % dialogs.length;
     const dialog = dialogs[current]!;
     part("title").textContent = dialog.title;
     part("count").textContent = `${current + 1} / ${dialogs.length}`;
-    const { spring, beat } = config;
-    shown = [];
-    void stage.show(dialog.items, rowPositions(dialog.items.length)).then((cubes) => {
-      cubes.forEach((cube) => mount(cube, spring, beat));
-      shown = cubes.map(({ block, index }) => ({
-        block,
-        enabled: dialog.items[index]?.enabled ?? true,
-      }));
+    menu = menus.show(dialog, {
+      onAction: (action) => (part("action").textContent = action),
+      onInspect: (text) => (part("inspect").textContent = text),
     });
-  }
-
-  /** Put a cube on its spring, and kick it on its beat, a little after its left neighbour. */
-  function mount(
-    { block, object, index }: StageCube,
-    spring: DevDialogRoomConfig["spring"],
-    beat: DevDialogRoomConfig["beat"],
-  ): void {
-    block.add(springAnchor, { ...spring, reducedMotion: stage.reducedMotion });
-    block.emit("anchor.mount", { object });
-    block.on("menu.action", (action) => (part("action").textContent = String(action)));
-    block.on("inspection", (text) => (part("inspect").textContent = String(text)));
-    let previous = 1;
-    leaveFloor.push(
-      floor.join({
-        cycle: beat.cycle,
-        offset: -index * beat.stagger,
-        dance: ({ phase, energy }) => {
-          if (cycleBegan(previous, phase) && energy > 0)
-            block.emit("spring.kick", { y: beat.kick * energy });
-          previous = phase;
-        },
-      }),
-    );
+    shown = dialog.items.map(({ action, enabled }) => ({ action, enabled: enabled ?? true }));
   }
 
   function step(by: number): void {
@@ -139,9 +97,9 @@ export function createDialogRoom(host: HTMLElement, floor: Pick<DanceFloor, "joi
   part("next").addEventListener("click", () => step(1));
   part("toggle").addEventListener("click", () => {
     playSfx("ui.click");
-    for (const cube of shown) {
-      cube.enabled = !cube.enabled;
-      cube.block.emit("input.enabled", cube.enabled);
+    for (const choice of shown) {
+      choice.enabled = !choice.enabled;
+      menu?.setAvailability(choice.action, { enabled: choice.enabled });
     }
   });
   part("hold").addEventListener("click", () => {
@@ -168,23 +126,29 @@ export function createDialogRoom(host: HTMLElement, floor: Pick<DanceFloor, "joi
       ).href;
       root.hidden = false;
       current = 0;
+      menus?.dispose();
+      menus = createBlockMenus(part("stage"), {
+        background: 0x05070b,
+        reflect: setReflectionEnvironment,
+        spring: next.spring,
+        beat: next.beat,
+        floor,
+      });
       present();
-      stage.start();
       restartTimer();
     },
     hide() {
       config = null;
       root.hidden = true;
       window.clearInterval(timer);
-      leaveFloor.forEach((leave) => leave());
-      leaveFloor = [];
-      stage.stop();
-      stage.clear();
+      menu?.hide();
+      menu = null;
+      menus?.dispose();
+      menus = null;
     },
     dispose() {
       window.clearInterval(timer);
-      leaveFloor.forEach((leave) => leave());
-      stage.dispose();
+      menus?.dispose();
       root.remove();
     },
   };
