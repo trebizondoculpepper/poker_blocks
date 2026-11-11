@@ -38,7 +38,10 @@ export type Coating = {
   mesh: THREE.Mesh;
   /** Age every sample by `delta` seconds and refresh the ones the surface now covers. */
   update(surface: LiquidSurface, delta: number): void;
-  /** Bytes of history this vessel keeps (CPU copy; the GPU holds the same again). */
+  /**
+   * Bytes of history this vessel keeps on the CPU (the GPU holds its texture or attribute
+   * again). Shared, immutable sample positions are not counted here: see `texelCentres`.
+   */
   readonly bytes: number;
   /** How many samples are tested each frame. */
   readonly samples: number;
@@ -160,28 +163,8 @@ function faceTextureCoating(scale: number, config: CoatingConfig): Coating {
   texture.magFilter = THREE.LinearFilter;
   texture.minFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
-  // The local position at the centre of every texel, worked out once.
-  const centres = new Float32Array(n * n * 6 * 3);
-  const axes: [number, number, number, number][] = [
-    // [axis, sign, u axis, v axis], in the shader's face order.
-    [0, 1, 2, 1],
-    [0, -1, 2, 1],
-    [1, 1, 0, 2],
-    [1, -1, 0, 2],
-    [2, 1, 0, 1],
-    [2, -1, 0, 1],
-  ];
-  axes.forEach(([axis, sign, u, v], face) => {
-    for (let row = 0; row < n; row++)
-      for (let column = 0; column < n; column++) {
-        const at = ((face * n + row) * n + column) * 3;
-        const point = [0, 0, 0];
-        point[axis] = 0.5 * sign;
-        point[u] = ((column + 0.5) / n - 0.5) * 1;
-        point[v] = ((row + 0.5) / n - 0.5) * 1;
-        centres.set(point, at);
-      }
-  });
+  // Texel centres are immutable for a resolution: shared by every vessel (#329 tier 1).
+  const centres = texelCentres(n);
   const strength = new Float32Array(n * n * 6);
   const geometry = new THREE.BoxGeometry(1, 1, 1);
   const uniforms = { ...filmUniforms(config), history: { value: texture } };
@@ -208,6 +191,36 @@ function faceTextureCoating(scale: number, config: CoatingConfig): Coating {
       mesh.material.dispose();
     },
   };
+}
+
+const centresByResolution = new Map<number, Float32Array>();
+
+/** The local position at the centre of every texel of a `n`-per-edge atlas, made once per `n`. */
+export function texelCentres(n: number): Float32Array {
+  const cached = centresByResolution.get(n);
+  if (cached) return cached;
+  const centres = new Float32Array(n * n * 6 * 3);
+  const axes: [number, number, number, number][] = [
+    // [axis, sign, u axis, v axis], in the shader's face order.
+    [0, 1, 2, 1],
+    [0, -1, 2, 1],
+    [1, 1, 0, 2],
+    [1, -1, 0, 2],
+    [2, 1, 0, 1],
+    [2, -1, 0, 1],
+  ];
+  axes.forEach(([axis, sign, u, v], face) => {
+    for (let row = 0; row < n; row++)
+      for (let column = 0; column < n; column++) {
+        const point = [0, 0, 0];
+        point[axis] = 0.5 * sign;
+        point[u] = (column + 0.5) / n - 0.5;
+        point[v] = (row + 0.5) / n - 0.5;
+        centres.set(point, ((face * n + row) * n + column) * 3);
+      }
+  });
+  centresByResolution.set(n, centres);
+  return centres;
 }
 
 function filmUniforms(config: CoatingConfig) {
