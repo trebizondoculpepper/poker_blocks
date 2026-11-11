@@ -156,8 +156,6 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
             handlers.onInspect?.(String(text));
           }),
         );
-        // A choice activated while its cube was being built activates now its action is heard.
-        if (pending.delete(index)) choiceActions.activate(block);
         // A choice focused while its cube was still being built is described now (#532 review).
         if (buttons[index] && buttons[index] === document.activeElement) choiceActions.focus(block);
         const beat = options.beat;
@@ -175,6 +173,13 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
             }),
           );
         }
+      }
+      // Only once every cube is set up, choices activated while they were being built play now.
+      // An action may close or replace this menu: stop as soon as it is no longer the one shown,
+      // so a closed menu never sets anything up or replays anything more (#532 review).
+      for (const { block, index } of made) {
+        if (mine !== token) return;
+        if (pending.delete(index)) choiceActions.activate(block);
       }
     });
     stage.start();
