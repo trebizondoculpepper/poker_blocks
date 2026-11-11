@@ -14,6 +14,7 @@ import "./fading-film";
 import "./cloud";
 // Registers the contained star field (#349).
 import "./contained-stars";
+import { giftBox } from "./gift-box";
 // Registers the rising-bubbles inclusion (#353).
 import "./rising-bubbles";
 // Registers the growing-grass inclusion (#358).
@@ -1141,14 +1142,14 @@ function brushAngles(art: FaceArt): number[] {
  * direction (anisotropyRotation matches the face's scratches), so each face catches the
  * light differently as the block turns.
  */
-type AssemblyContext = {
+export type AssemblyContext = {
   art: FaceArt;
   definition: MaterialDefinition;
   geometry: THREE.BufferGeometry;
   size: number;
 };
 
-type AssemblyHandler = (context: AssemblyContext) => BlockAppearance;
+export type AssemblyHandler = (context: AssemblyContext) => BlockAppearance;
 type HeightHandler = (
   texture: THREE.CanvasTexture,
   art: FaceArt,
@@ -1330,6 +1331,8 @@ const assemblyRegistry = new Map<string, AssemblyHandler>([
   ["refractiveCrystal", refractiveCrystal],
   ["frostedBlock", frostedBlock],
   ["contained", contained],
+  // A wrapped gift box (#496).
+  ["giftBox", giftBox],
 ]);
 
 /** A chopped shape's cuts and dents when its material gives none. */
