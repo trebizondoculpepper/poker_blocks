@@ -137,3 +137,23 @@ function mulberry(seed: number): () => number {
     return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+describe("transmogrifier shop presentation (#388 review)", () => {
+  it("has a registered shop view, so a shop holding one can be drawn", async () => {
+    const { hasOfferView } = await import("./shop-view");
+    expect(hasOfferView("transmogrifier")).toBe(true);
+  });
+
+  it("refuses stock whose guarantees and dedicated slots overflow nine offers", async () => {
+    const { validateShopStock } = await import("./shop-stock-config");
+    expect(
+      validateShopStock({
+        minOffers: 9,
+        maxOffers: 9,
+        guaranteedCards: 9,
+        guaranteedPassives: 0,
+        transmogrifierSlots: 1,
+      }).map(({ field }) => field),
+    ).toContain("transmogrifierSlots");
+  });
+});

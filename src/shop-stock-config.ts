@@ -28,5 +28,17 @@ export function validateShopStock(stock: ShopTrait): ShopStockError[] {
     (stock.guaranteedPassives ?? 1) + (stock.guaranteedCards ?? 1) > stock.minOffers
   )
     add("guaranteedPassives", "Guaranteed offers cannot exceed the minimum stock count");
+  // The shop lays out at most nine offers: the guarantees and the dedicated transmogrifier
+  // slots must fit together (#388).
+  if (
+    whole(stock.guaranteedPassives ?? 1, 0) &&
+    whole(stock.guaranteedCards ?? 1, 0) &&
+    whole(stock.transmogrifierSlots ?? 1, 0) &&
+    (stock.guaranteedPassives ?? 1) +
+      (stock.guaranteedCards ?? 1) +
+      (stock.transmogrifierSlots ?? 1) >
+      9
+  )
+    add("transmogrifierSlots", "Guaranteed offers and transmogrifier slots must fit in nine");
   return errors;
 }
