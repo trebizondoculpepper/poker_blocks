@@ -1,0 +1,89 @@
+import * as THREE from "three";
+import { describe, expect, it, vi } from "vite-plus/test";
+import { createExitRunner, type ExitVisual } from "./exit-presentation";
+import { pieceSources } from "./exit-fracture";
+
+function visual() {
+  const root = new THREE.Group();
+  const faces = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
+  const fan = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.1), new THREE.MeshBasicMaterial());
+  fan.position.set(0, 0, 0.9);
+  root.add(faces, fan);
+  new THREE.Group().add(root);
+  const v: ExitVisual = { root, shell: [faces, fan], contents: [], release: vi.fn() };
+  return { v, root, faces, fan };
+}
+const run = (v: ExitVisual, effect: string, config: object, reduced = false) => {
+  const runner = createExitRunner(() => reduced);
+  runner.start({ blockId: "b" }, v, {
+    steps: [{ effects: [{ effect, target: "shell", config }] }],
+  });
+  return runner;
+};
+
+describe("crack (#442)", () => {
+  it("grows crack lines over the block without touching it, then removes and frees them", () => {
+    const { v, root, faces } = visual();
+    const runner = run(v, "crack", { seconds: 1 });
+    const lines = root.children.find(
+      (child): child is THREE.LineSegments => child instanceof THREE.LineSegments,
+    )!;
+    expect(lines.geometry.drawRange.count).toBe(0);
+    runner.update(0.5);
+    const half = lines.geometry.drawRange.count;
+    expect(half).toBeGreaterThan(0);
+    const freed = vi.spyOn(lines.geometry, "dispose");
+    runner.update(0.6);
+    expect(faces.visible).toBe(true);
+    expect(lines.parent).toBeNull();
+    expect(freed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("fracture (#442)", () => {
+  it("throws the block's own components apart, then puts them back for the release", () => {
+    const { v, fan } = visual();
+    const runner = run(v, "fracture", { pieces: "components", life: 0.5 });
+    runner.update(0.2);
+    expect(fan.position.distanceTo(new THREE.Vector3(0, 0, 0.9))).toBeGreaterThan(0);
+    runner.update(0.5);
+    expect(fan.position.toArray()).toEqual([0, 0, 0.9]);
+    expect(fan.quaternion.toArray()).toEqual([0, 0, 0, 1]);
+  });
+
+  it("breaks into a registered piece set, hides the block meanwhile, and cleans up after", () => {
+    const { v, root, faces } = visual();
+    const before = root.children.length;
+    const runner = run(v, "fracture", { pieces: "slabs", life: 0.5 });
+    expect(root.children.length).toBe(before + 5);
+    expect(faces.visible).toBe(false);
+    const piece = root.children.at(-1) as THREE.Mesh;
+    const freed = vi.spyOn(piece.material as THREE.Material, "dispose");
+    const shared = vi.spyOn(piece.geometry, "dispose");
+    runner.update(0.6);
+    expect(root.children.length).toBe(before);
+    expect(faces.visible).toBe(true);
+    expect(freed).toHaveBeenCalledTimes(1);
+    expect(shared).not.toHaveBeenCalled();
+  });
+
+  it("shares a set's geometry between fractures", () => {
+    const a = visual();
+    const b = visual();
+    run(a.v, "fracture", { pieces: "shards" });
+    run(b.v, "fracture", { pieces: "shards" });
+    const geometry = (root: THREE.Object3D) => (root.children.at(-1) as THREE.Mesh).geometry;
+    expect(geometry(a.root)).toBe(geometry(b.root));
+  });
+
+  it("does nothing under reduced motion, and refuses an unknown piece source", () => {
+    const { v, root, faces } = visual();
+    const before = root.children.length;
+    const runner = run(v, "fracture", { pieces: "slabs" }, true);
+    expect(root.children.length).toBe(before);
+    expect(faces.visible).toBe(true);
+    runner.update(0.016);
+    expect(runner.active).toBe(0);
+    expect(() => pieceSources.get("no-such-set")).toThrow();
+  });
+});
