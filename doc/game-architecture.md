@@ -923,6 +923,16 @@ A contained block may list **inclusions**: things suspended in its contents, reg
 
 **Steam was left out** of boiling water (#354, which made it optional). A surface-sourced vapour would be one more additive transparent layer above the liquid, on top of refractive water, which is already the most expensive contents in #346's budget. Its headspace is also small at the water's 0.55 level. The fast bubbles alone make the distinction the ticket requires. Steam could later be its own inclusion reading `liquidSurface`, with no change to the bubbles.
 
+### Gelato: settling scoops (#382)
+
+**Gelato** (`gelato`, an experiment) is the plastic vessel frosted (more opaque, low gloss, so it refracts little) holding **`settlingScoops`** (`src/visual/settling-scoops.ts`): one solid sphere per configured colour (chocolate, vanilla, strawberry).
+
+- **Motion:** each frame a tiny rigid-body step pulls the spheres toward world down, turned into the vessel's space from the shared frame. It damps them, clamps them at the walls with a margin of their radius, and separates overlapping pairs so they rest against one another. The spheres start slightly staggered so they can slide past each other.
+- **What it isn't:** there's no fluid, no surface capability and no residue.
+- **Reduced motion:** the spheres are brought to rest each frame instead of rolling.
+- **Cost:** three draw calls and a constant handful of vector operations per block. The spheres share one geometry, which is released with their materials.
+- **Tuning:** at opacity 0.42 the frosting is still fairly clear, which can be raised. The scoop radius (0.16 of the interior) lets three sit side by side.
+
 ### Earth and growing grass (#358)
 
 **Earth** (`earthInPlastic`, `earthInLantern`, experiments) is #332's levelling fluid, configured slow (`settleSeconds: 5`) and brown with the `opaqueFluid` look. It has no residue: the slot is simply omitted. #332's settling model gives the requested visual as it is, so it gains no earth code.

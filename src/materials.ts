@@ -704,6 +704,33 @@ const grass = {
   },
 };
 
+/** Gelato's three scoops (#382): chocolate, vanilla and strawberry, settling to the low side. */
+const neapolitan = {
+  effect: "settlingScoops",
+  config: {
+    colours: [0x4a2b1a, 0xf3df8f, 0xf2a0b4],
+    radius: 0.16,
+    gravity: 3,
+    damping: 0.05,
+    roughness: 0.85,
+  },
+};
+
+/** The same plastic vessel, frosted: more opaque and less glossy, so it refracts little (#382). */
+function frosted(material: MaterialDefinition): MaterialDefinition {
+  const container = material.appearance.container!;
+  return {
+    ...material,
+    appearance: {
+      ...material.appearance,
+      container: {
+        ...container,
+        config: { ...(container.config as object), opacity: 0.42, gloss: 0.4 },
+      },
+    },
+  };
+}
+
 /** A material with inclusions suspended in its contents (#353). */
 function withInclusions(
   material: MaterialDefinition,
@@ -759,6 +786,8 @@ function plasticFluidExperiments(): MaterialDefinition[] {
   });
   return [
     plastic("waterInPlastic", "Water in plastic", clearWater),
+    // Gelato (#382): three Neapolitan scoops settling in a frosted cube (plastic, mostly opaque).
+    frosted(plastic("gelato", "Gelato", neapolitan)),
     // Earth (#358): slow soil with grass, in plastic and in the lantern; no residue.
     withInclusions(plastic("earthInPlastic", "Earth in plastic", slowEarth), [grass]),
     // Hot water (#353): the same water, with very slowly rising bubbles as an inclusion.
