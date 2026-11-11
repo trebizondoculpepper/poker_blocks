@@ -66,4 +66,15 @@ describe("generated field blocks (#424)", () => {
     // And after Continue, clearing still keeps it out of the deck.
     expect(clearField(restored.state).deck.map(({ id }) => id)).not.toContain("generated.cloud.1");
   });
+
+  it("takes a cleared card's saved state with it, so the next save still loads (#427 review)", async () => {
+    const { setCardStateBonus } = await import("./state-bonuses");
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    const bonused = setCardStateBonus(withCloud(), "generated.cloud.1", "heated")!;
+    expect(bonused.cardStates?.["generated.cloud.1"]).toBeDefined();
+    const cleared = clearField(bonused);
+    expect(cleared.cardStates?.["generated.cloud.1"]).toBeUndefined();
+    const record = JSON.parse(JSON.stringify(toSaveRecord({ ...game.snapshot(), state: cleared })));
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)).not.toBeNull();
+  });
 });

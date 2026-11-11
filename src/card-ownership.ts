@@ -23,7 +23,14 @@ cardOwners.register("deck", {
 cardOwners.register("field", {
   atTableClear: (state, card) => {
     const generatedCards = (state.generatedCards ?? []).filter(({ id }) => id !== card.id);
-    return { ...state, generatedCards: generatedCards.length ? generatedCards : undefined };
+    // Its saved state (a material change or bonus) goes with it, or a save would name a card
+    // that no longer exists and be refused (#427 review).
+    const { [card.id]: _gone, ...cardStates } = state.cardStates ?? {};
+    return {
+      ...state,
+      generatedCards: generatedCards.length ? generatedCards : undefined,
+      cardStates: Object.keys(cardStates).length ? cardStates : undefined,
+    };
   },
 });
 
