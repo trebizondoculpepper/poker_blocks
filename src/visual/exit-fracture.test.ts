@@ -124,4 +124,27 @@ describe("targets and grouped components (#512 review)", () => {
     expect(blade.visible).toBe(true);
     runner.dispose();
   });
+
+  it("sizes and places a piece set from its target, in the block's own space (#512 review)", () => {
+    const { v, root } = visual();
+    root.parent!.rotation.y = Math.PI / 4;
+    root.parent!.updateMatrixWorld(true);
+    const before = root.children.length;
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [{ effects: [{ effect: "fracture", target: "shell", config: { pieces: "slabs" } }] }],
+    });
+    const piece = root.children[before] as THREE.Mesh;
+    // The shell is the 2-unit body (and the fan inside it): unchanged by the turn.
+    expect(piece.scale.x).toBeCloseTo(2);
+    runner.dispose();
+    const empty = createExitRunner();
+    empty.start({ blockId: "c" }, v, {
+      steps: [
+        { effects: [{ effect: "fracture", target: "contents", config: { pieces: "slabs" } }] },
+      ],
+    });
+    expect(root.children.length).toBe(before);
+    empty.dispose();
+  });
 });

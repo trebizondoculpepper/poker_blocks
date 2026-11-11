@@ -69,7 +69,8 @@ crackPatterns.register("radial", (random) => {
 export type PieceSource = (context: {
   visual: ExitVisual;
   originals: readonly THREE.Object3D[];
-  size: number;
+  /** The selected target's bounds in the block's own space: where and how big pieces are. */
+  bounds: THREE.Box3;
   colour: number;
 }) => { pieces: THREE.Object3D[]; release(): void };
 export const pieceSources = new Registry<PieceSource>("piece source");
@@ -101,12 +102,17 @@ export function registerPieceSet(
   recipe: () => readonly THREE.BufferGeometry[],
 ): void {
   let shared: readonly THREE.BufferGeometry[] | null = null;
-  pieceSources.register(name, ({ visual, size, colour }) => {
+  pieceSources.register(name, ({ visual, bounds, colour }) => {
+    // Sized and placed to the selected target; an empty target gets no pieces (#512 review).
+    if (bounds.isEmpty()) return { pieces: [], release: () => {} };
     shared ??= recipe();
+    const size = bounds.getSize(new THREE.Vector3());
+    const centre = bounds.getCenter(new THREE.Vector3());
     const material = new THREE.MeshStandardMaterial({ color: colour });
     const pieces = shared.map((geometry) => {
       const piece = new THREE.Mesh(geometry, material);
-      piece.scale.setScalar(size);
+      piece.scale.copy(size);
+      piece.position.copy(centre);
       visual.root.add(piece);
       return piece;
     });
@@ -138,12 +144,6 @@ registerPieceSet("shards", () =>
 );
 
 /** The size of a departing block in its own space. */
-function localSize(visual: ExitVisual): number {
-  const bounds = new THREE.Box3().setFromObject(visual.root);
-  const world = bounds.isEmpty() ? 1 : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
-  return world / Math.max(visual.root.getWorldScale(new THREE.Vector3()).x, 1e-6);
-}
-
 export type CrackConfig = { pattern?: string; seconds?: number; colour?: number };
 
 exitEffects.register("crack", ({ visual, targets, reducedMotion }, raw): ExitEffectInstance => {
@@ -201,7 +201,9 @@ exitEffects.register("fracture", ({ visual, targets, reducedMotion }, raw): Exit
   const life = Math.max(config?.life ?? 0.8, 1e-3);
   const [slow, fast] = config?.speed ?? [0.8, 1.8];
   const spin = config?.spin ?? 8;
-  const size = localSize(visual);
+  // Measured in the block's own space, from the selected target (#512 review).
+  const bounds = targetBounds(visual, targets);
+  const size = bounds.isEmpty() ? 0 : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
   const gravity = (config?.gravity ?? 4) * size;
   // The block's own meshes under the targets: broken up or hidden while the pieces fly.
   const originals: THREE.Object3D[] = [];
@@ -214,7 +216,7 @@ exitEffects.register("fracture", ({ visual, targets, reducedMotion }, raw): Exit
     : pieceSources.get(config?.pieces ?? "components")({
         visual,
         originals,
-        size,
+        bounds,
         colour: config?.colour ?? 0xcccccc,
       });
   // A flying piece and every ancestor it hangs from stay visible (a group wrapping component
