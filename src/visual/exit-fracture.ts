@@ -165,6 +165,18 @@ registerPieceSet("chunks", () =>
   ),
 );
 
+/**
+ * Air's breakup (#454): two fan discs and four thin vent slats. Air draws its fans and vents as
+ * face artwork on one mesh, so its components would only throw the whole cube.
+ */
+registerPieceSet("ventParts", () => [
+  new THREE.CylinderGeometry(0.3, 0.3, 0.04, 16).rotateZ(Math.PI / 2).translate(0.45, 0, 0),
+  new THREE.CylinderGeometry(0.3, 0.3, 0.04, 16).rotateZ(Math.PI / 2).translate(-0.45, 0, 0),
+  ...[-0.3, -0.1, 0.1, 0.3].map((y) =>
+    new THREE.BoxGeometry(0.04, 0.06, 0.8).translate(0, y, 0.45),
+  ),
+]);
+
 /** Five horizontal slabs: the stand-in for authored ice pieces. */
 registerPieceSet("slabs", () =>
   Array.from({ length: 5 }, (_, i) =>
@@ -372,3 +384,25 @@ exitEffects.register(
     };
   },
 );
+
+/**
+ * Hide (#451): the target stops drawing at once, through the same shared invisible stand-in
+ * fracture uses, and draws again on dispose. It works whatever a mesh's shader (a crystal's
+ * fire ignores opacity, so a fade can't hide it); only the departing block's own objects.
+ */
+exitEffects.register("hide", ({ targets, ownsObject }): ExitEffectInstance => {
+  const hidden: THREE.Mesh[] = [];
+  for (const target of targets)
+    target.traverse((child) => {
+      if (ownsObject(child) && (child as THREE.Mesh).material !== undefined)
+        hidden.push(child as THREE.Mesh);
+    });
+  hidden.forEach(suppress);
+  return {
+    update: () => false,
+    finish() {},
+    dispose() {
+      hidden.forEach(unsuppress);
+    },
+  };
+});

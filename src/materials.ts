@@ -350,6 +350,32 @@ export const materialDefinitions = [
       sfx: "material.activate.prismatic",
     },
     appearance: {
+      // Appears to crack, then with a flash instantly bursts into a cloud of stars that
+      // dissipate (#451): the shared crack, flash and star burst. The block is hidden at once
+      // (not faded: its shader-driven fire ignores opacity).
+      exit: {
+        steps: [
+          { effects: [{ effect: "crack", config: { seconds: 0.25, colour: 0xf4f0ff } }] },
+          {
+            effects: [
+              { effect: "flash", config: { colour: 0xffffff, intensity: 1.2, seconds: 0.18 } },
+              {
+                effect: "burst",
+                config: {
+                  count: 70,
+                  speed: [0.8, 2.2],
+                  lift: 0.4,
+                  gravity: 0.6,
+                  life: 1.1,
+                  size: 0.1,
+                  stars: true,
+                },
+              },
+              { effect: "hide" },
+            ],
+          },
+        ],
+      },
       pattern: "rainbowCrystal",
       assembly: "refractiveCrystal",
       surface: "clear",
@@ -518,6 +544,27 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // Cracks into five predefined translucent pieces that scatter and fade (#449). The pieces
+      // are the shared, authored-in-advance slab set, never a runtime fracture of the block.
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: {
+                  pieces: "slabs",
+                  colour: 0xcfe9f5,
+                  opacity: 0.55,
+                  speed: [0.6, 1.4],
+                  life: 1,
+                  fade: 0.5,
+                },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "frostedIce",
       assembly: "frostedBlock",
       surface: "frosted",
@@ -571,6 +618,26 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // Breaks into a few soft chunks rather than sharp fragments, which tumble and fade (#450).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: {
+                  pieces: "chunks",
+                  colour: 0xa3384a,
+                  speed: [0.5, 1.2],
+                  spin: 4,
+                  life: 0.9,
+                  fade: 0.35,
+                },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "marbledFlesh",
       assembly: "sixFaces",
       surface: "matte",
@@ -837,6 +904,34 @@ export const materialDefinitions = [
     scoringModifier: { additive: 1, multiplicative: 2, exponential: 1.2 },
     activation: { effect: { id: "pulse", colour: "#fff1cc" }, sfx: "material.activate.magic" },
     appearance: {
+      // The shell breaks apart and releases its stars outward before they fade (#458).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                target: "shell",
+                config: { pieces: "shards", colour: 0xe8eef2, opacity: 0.35, life: 0.9, fade: 0.4 },
+              },
+              {
+                effect: "burst",
+                target: "contents",
+                config: {
+                  count: 50,
+                  speed: [0.6, 1.6],
+                  lift: 0.3,
+                  gravity: 0.4,
+                  life: 1.2,
+                  size: 0.09,
+                  stars: true,
+                },
+              },
+              { effect: "fade", target: "contents", config: { seconds: 0.1 } },
+            ],
+          },
+        ],
+      },
       pattern: "cardSheet",
       assembly: "contained",
       surface: "clear",
@@ -1156,6 +1251,26 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     ],
     traits: {},
     appearance: {
+      // Experimental: the fan and vent assembly breaks into a few tumbling pieces (two fans and four vent slats) that fade as they go (#454).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: {
+                  pieces: "ventParts",
+                  colour: 0x8a959c,
+                  speed: [0.6, 1.4],
+                  spin: 6,
+                  life: 0.9,
+                  fade: 0.5,
+                },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "ventHousing",
       assembly: "sixFaces",
       surface: "matte",
