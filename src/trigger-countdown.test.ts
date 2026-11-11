@@ -123,4 +123,17 @@ describe("trigger countdowns (#434)", () => {
     expect(countdownOf(reset.field[0]!.block)).toBe(3);
     expect(reset.cardStates).toBeUndefined();
   });
+
+  it("starts again from its start after a material change, never resuming or staying spent", () => {
+    const run = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    const bomb = run.state.hand[0]!;
+    run.changeCardMaterial(bomb.id, "wood");
+    run.play({ cardId: bomb.id });
+    const placed = () => run.state.field.find(({ block }) => block.id === bomb.id)!.block;
+    expect(countdownOf(placed())).toBe(2);
+    run.changeCardMaterial(bomb.id, "paper");
+    run.changeCardMaterial(bomb.id, "wood");
+    expect(countdownOf(placed())).toBe(3);
+    expect(run.state.cardStates?.[bomb.id]?.countdown).toBeUndefined();
+  });
 });

@@ -13,11 +13,14 @@
  * - **The count** is the card's `countdown` trait and its card-state ledger entry, so a save keeps
  *   it; `countdownOf` exposes it for presentation. A card never placed shows its start.
  * - **Zero** fires exactly once: the count stays at 0 and is never decremented or fired again.
+ * - **Material change** clears the count (trait and ledger), like doneness: a card made a
+ *   counting material again starts from its start.
  * - **Reset:** the count belongs to the block on the table; when the table clears at a stage's
  *   end it goes back to its start (a registered stage-end reset).
  */
 import type { CardBlock } from "./cards";
 import { cardStateAppliers } from "./card-states";
+import { materialScopedStates } from "./card-material";
 import type { GameState } from "./game-state";
 import { getMaterialDefinition, materialOf } from "./materials";
 import type { GameEvent } from "./passives";
@@ -104,3 +107,7 @@ cardStateAppliers.register("countdown", {
   order: 4,
   apply: (card, value) => withCount(card, value as number),
 });
+
+// The count belongs to the material that counts: a material change clears it, so a card turned
+// back into a counting material starts again from its start (#487 review).
+materialScopedStates.register("countdown", true);

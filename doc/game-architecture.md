@@ -388,6 +388,7 @@ A block can be **triggered**, and responds with configured actions. `src/trigger
 - **Counting** happens only in `GameRun.play`, after reactions, through `commitCountdowns(target, placedIds)`, for blocks on the table. Previews, rendering and reloading never count. Reaching zero commits `trigger-block { cause: "countdown" }` through the shared command path, and the events it causes join the play's event queue.
 - **The count** is the card's `countdown` trait and its card-state ledger entry (`cardStates[id].countdown`), validated on load. `countdownOf(card)` exposes it for presentation: the start before placement, null for a block that doesn't count down.
 - **Zero fires once:** a count at 0 is never decremented or fired again.
+- **Material change** clears the count, trait and ledger (`materialScopedStates`), like doneness: a card made a counting material again starts from its start.
 - **Reset:** the count belongs to the block on the table. A registered stage-end reset returns it to its start when the table clears.
 
 ### Block exits (#439)
