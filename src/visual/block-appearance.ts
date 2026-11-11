@@ -16,6 +16,8 @@ import "./cloud";
 import "./contained-stars";
 // Registers the rising-bubbles inclusion (#353).
 import "./rising-bubbles";
+// Registers the growing-grass inclusion (#358).
+import "./growing-grass";
 // Registers the flame contents (#335).
 import "./fire-core";
 

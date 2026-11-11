@@ -923,6 +923,19 @@ A contained block may list **inclusions**: things suspended in its contents, reg
 
 **Steam was left out** of boiling water (#354, which made it optional). A surface-sourced vapour would be one more additive transparent layer above the liquid, on top of refractive water, which is already the most expensive contents in #346's budget. Its headspace is also small at the water's 0.55 level. The fast bubbles alone make the distinction the ticket requires. Steam could later be its own inclusion reading `liquidSurface`, with no change to the bubbles.
 
+### Earth and growing grass (#358)
+
+**Earth** (`earthInPlastic`, `earthInLantern`, experiments) is #332's levelling fluid, configured slow (`settleSeconds: 5`) and brown with the `opaqueFluid` look. It has no residue: the slot is simply omitted. #332's settling model gives the requested visual as it is, so it gains no earth code.
+
+**`growingGrass`** (`src/visual/growing-grass.ts`) is an inclusion reading `liquidSurface` and the shared frame's rotation:
+
+- **Turning:** the block's world rotation moving more than `turnDegrees` (2°) from where the grass started clears every blade at once and resets the stillness timer. Camera motion doesn't change the block's rotation, and jitter stays under the tolerance.
+- **Surface readiness:** stillness is timed from the end of the last turn. No blade is born until the published surface normal is within `settledDegrees` (4°) of world up seen from the block, so grass never grows on an obsolete top. The first blade therefore appears at whichever comes later: `delay` (5 s) of stillness, or the earth settling. After a quarter turn at `settleSeconds: 5`, settling to 4° takes about 16 s.
+- **Growth:** one blade at a time, about `interval` (0.12 s) apart with jitter, at random places on the top inside the walls. Each tip draws up from its base over `growSeconds` (0.8 s), and earlier blades stay. The pool is bounded (90 blades).
+- **Rendering:** one opaque mesh of triangles, in the contents' opaque layer.
+- **Reduced motion:** blades appear at full height instead of growing.
+- **Previewing:** the object browser's turntable keeps turning the block, so grass correctly never grows there. To see it, hold a block still in the game.
+
 ### Magic Lock: contained stars (#349)
 
 The proof that the contained-effect contract is reusable. **Magic Lock** (`magicLock` in plastic, `magicLockLantern` in the stained lantern, both experiments) is an existing shell holding the **`stars`** contents (`src/visual/contained-stars.ts`): the crystal title trail's four-pointed star and its lifecycle, extracted into `src/visual/star-particles.ts` and shared with `rainbowStars`, which is unchanged.
