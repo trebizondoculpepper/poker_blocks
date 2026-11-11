@@ -53,7 +53,7 @@ export function createWordCubeRoom(host: HTMLElement): WordCubeRoom {
     <div class="word-cube-room-stage" data-part="stage"></div>
     <footer class="word-cube-room-readout">
       <p>Action: <output data-part="action">none yet</output></p>
-      <p>Inspect: <output data-part="inspect">hover or tap a block</output></p>
+      <p>Inspect: <output data-part="inspect">hover or long-press a block</output></p>
     </footer>`;
   host.append(root);
   const part = <T extends HTMLElement>(name: string) =>

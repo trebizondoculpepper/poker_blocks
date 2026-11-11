@@ -5,6 +5,7 @@
  * decide what to show and where; the stage knows nothing of menus or dialogs.
  */
 import * as THREE from "three";
+import { createPointerRouter } from "./pointer-router";
 import type { MenuBlockItem } from "../game-modes";
 import { setReflectionEnvironment } from "../visual/block-appearance";
 import {
@@ -46,7 +47,6 @@ export function createCubeStage(host: HTMLElement): CubeStage {
 
   let cubes: StageCube[] = [];
   let shown: readonly THREE.Vector3[] = [];
-  let hovered: StageCube | null = null;
   let generation = 0;
   let frame = 0;
   let last = performance.now();
@@ -56,7 +56,7 @@ export function createCubeStage(host: HTMLElement): CubeStage {
     generation++;
     cubes.forEach((cube) => cube.dispose());
     cubes = [];
-    hovered = null;
+    router.forget();
   }
 
   /** Back the camera off until every position fits, with a cube's margin around them. */
@@ -89,25 +89,11 @@ export function createCubeStage(host: HTMLElement): CubeStage {
     );
     return cubes.find(({ object }) => hit && isWithin(hit.object, object)) ?? null;
   }
-  function hover(next: StageCube | null): void {
-    if (next === hovered) return;
-    hovered?.block.emit("input.leave");
-    hovered = next;
-    hovered?.block.emit("input.enter");
-  }
-  canvas.addEventListener("pointermove", (event) => hover(cubeAt(event)));
-  canvas.addEventListener("pointerdown", (event) => {
-    hover(cubeAt(event));
-    hovered?.block.emit("input.press");
-  });
-  canvas.addEventListener("pointerup", (event) => {
-    hover(cubeAt(event));
-    cubes.forEach(({ block }) => block.emit("input.release"));
-  });
-  canvas.addEventListener("pointerleave", () => {
-    cubes.forEach(({ block }) => block.emit("input.cancel"));
-    hovered = null;
-  });
+  const router = createPointerRouter(() => cubes);
+  canvas.addEventListener("pointermove", (event) => router.move(cubeAt(event), event.pointerType));
+  canvas.addEventListener("pointerdown", (event) => router.down(cubeAt(event), event.pointerType));
+  canvas.addEventListener("pointerup", (event) => router.up(cubeAt(event), event.pointerType));
+  canvas.addEventListener("pointerleave", () => router.leave());
 
   function resize(): void {
     const width = Math.max(1, host.clientWidth);
@@ -145,6 +131,7 @@ export function createCubeStage(host: HTMLElement): CubeStage {
             action: item.action,
             enabled: item.enabled,
             description: item.description,
+            disabledReason: item.disabledReason,
             feedback: { reducedMotion },
             ...options(item, index),
           });

@@ -9,6 +9,7 @@ import {
 } from "./traits/interaction-feedback";
 import { additiveLight } from "./visual/additive-light";
 import { inspectableTrait } from "./traits/inspectable";
+import { longPressInspect } from "./traits/long-press-inspect";
 import { playSfx } from "./audio/sfx";
 vi.mock("./audio/sfx", () => ({ playSfx: vi.fn() }));
 
@@ -57,7 +58,8 @@ describe("wordCube menu traits", () => {
     block.emit("input.enter");
     block.emit("input.press");
     block.emit("input.release");
-    expect(inspect).toHaveBeenCalledTimes(2);
+    // Hovering inspects; the press itself doesn't (on touch it is the activating tap, #462).
+    expect(inspect).toHaveBeenCalledTimes(1);
     expect(inspect).toHaveBeenLastCalledWith("There is no game in progress");
     expect(action).not.toHaveBeenCalled();
     expect(playSfx).toHaveBeenCalledWith("action.denied");
@@ -190,5 +192,109 @@ describe("disabled appearance, production checks (#461)", () => {
     block.dispose();
     // oxlint-disable-next-line typescript/unbound-method -- comparing hook identity only
     expect(material.onBeforeCompile).toBe(original);
+  });
+});
+
+describe("menu block inspection (#462)", () => {
+  function inspected(description = "Carry on with your saved game.", disabledReason = "") {
+    const block = new Block("menu");
+    block.add(menuAction, { action: "continue", enabled: true });
+    block.add(inspectableTrait, { description, disabledReason });
+    block.add(longPressInspect, { holdSeconds: 0.5 });
+    const texts: string[] = [];
+    const actions: unknown[] = [];
+    block.on("inspection", (text) => texts.push(String(text)));
+    block.on("menu.action", (action) => actions.push(action));
+    return { block, texts, actions };
+  }
+
+  it("describes what choosing it does on hover and keyboard focus", () => {
+    const { block, texts } = inspected();
+    block.emit("input.enter");
+    block.emit("input.focus");
+    expect(texts).toEqual(["Carry on with your saved game.", "Carry on with your saved game."]);
+    block.dispose();
+  });
+
+  it("explains why it is unavailable, live, and re-describes while inspected", () => {
+    const { block, texts } = inspected();
+    block.emit("input.enter");
+    block.emit("input.enabled", { enabled: false, reason: "There is no saved game to continue." });
+    expect(texts.at(-1)).toBe(
+      "Carry on with your saved game. Unavailable: There is no saved game to continue.",
+    );
+    block.emit("input.enabled", true);
+    expect(texts.at(-1)).toBe("Carry on with your saved game.");
+    // Not being inspected: a change says nothing.
+    block.emit("input.leave");
+    const count = texts.length;
+    block.emit("input.enabled", false);
+    expect(texts).toHaveLength(count);
+    block.dispose();
+  });
+
+  it("falls back to its configured reason when the scene sends none", () => {
+    const { block, texts } = inspected("Carry on.", "No save.");
+    block.emit("input.enabled", false);
+    block.emit("inspect.request");
+    expect(texts.at(-1)).toBe("Carry on. Unavailable: No save.");
+    block.dispose();
+  });
+
+  it("a tap activates once and doesn't inspect", () => {
+    vi.mocked(playSfx).mockClear();
+    const { block, texts, actions } = inspected();
+    block.emit("input.press");
+    block.update(0.1);
+    block.emit("input.release");
+    expect(actions).toEqual(["continue"]);
+    expect(texts).toEqual([]);
+    expect(vi.mocked(playSfx).mock.calls.filter(([id]) => id === "ui.click")).toHaveLength(1);
+    block.dispose();
+  });
+
+  it("a long-press inspects and suppresses activation on release, with no click", () => {
+    vi.mocked(playSfx).mockClear();
+    const { block, texts, actions } = inspected();
+    block.emit("input.press");
+    block.update(0.3);
+    block.update(0.3);
+    block.emit("input.release");
+    expect(texts).toEqual(["Carry on with your saved game."]);
+    expect(actions).toEqual([]);
+    expect(vi.mocked(playSfx)).not.toHaveBeenCalledWith("ui.click");
+    block.dispose();
+  });
+
+  it("a disabled block is still inspectable by long-press, and never activates", () => {
+    const { block, texts, actions } = inspected("Carry on.", "No save.");
+    block.emit("input.enabled", false);
+    block.emit("input.press");
+    block.update(0.6);
+    block.emit("input.release");
+    expect(texts).toEqual(["Carry on. Unavailable: No save."]);
+    expect(actions).toEqual([]);
+    block.dispose();
+  });
+
+  it("moving off the block or cancelling stops the hold", () => {
+    const { block, texts } = inspected();
+    block.emit("input.press");
+    block.update(0.3);
+    block.emit("input.leave");
+    block.update(0.5);
+    block.emit("input.press");
+    block.emit("input.cancel");
+    block.update(0.9);
+    expect(texts).toEqual([]);
+    block.dispose();
+  });
+
+  it("stops listening when disposed", () => {
+    const { block, texts } = inspected();
+    block.dispose();
+    block.emit("input.enter");
+    block.update(1);
+    expect(texts).toEqual([]);
   });
 });
