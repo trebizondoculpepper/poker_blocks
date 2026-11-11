@@ -70,3 +70,12 @@ describe("cooking (#372)", () => {
     );
   });
 });
+
+describe("doneness resets through the stage-end registry (#408 review)", () => {
+  it("is registered, and the run's reset clears it", async () => {
+    const { stageEndResets, resetStageState } = await import("./stage-end");
+    expect(stageEndResets.has("doneness")).toBe(true);
+    const cooked = applyReactions(table(at(made(0, "meat"), 0), at(made(1, "fire"), 1))).state;
+    expect(meatOf(resetStageState(cooked)).traits.doneness).toBeUndefined();
+  });
+});

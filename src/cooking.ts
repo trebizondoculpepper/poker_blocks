@@ -11,6 +11,7 @@ import type { GameState } from "./game-state";
 import { getMaterialDefinition, materialOf } from "./materials";
 import { reactionResults } from "./reactions";
 import { registerRuleCommand } from "./rule-commands";
+import { stageEndResets } from "./stage-end";
 import { inspectable } from "./traits/inspectable";
 import type { SoundEffectId } from "./audio/sfx-registry";
 
@@ -114,3 +115,6 @@ export function resetDoneness(state: GameState): GameState {
 
 const withoutDonenessIfCooked = (card: CardBlock): CardBlock =>
   [card.traits.doneness ?? []].flat().reduce((current) => withoutDoneness(current), card);
+
+// Doneness lasts one stage: registered so the run resets it without naming cooking (#372).
+stageEndResets.register("doneness", resetDoneness);
