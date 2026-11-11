@@ -1,3 +1,4 @@
+import { createTransmogrifier } from "./transmogrifiers";
 /**
  * Offer kinds (#67): what each kind of shop offer means, registered once. A shop offer is plain
  * data, `{ kind, block }`. Pricing, buying, leaving the shop and saving ask the offer's kind
@@ -131,5 +132,33 @@ registerOfferKind<PassiveBlock>("passive", {
   restore: (saved, restore) => {
     if (typeof saved.definitionId !== "string") throw new Error("bad passive offer");
     return createPassiveBlock(saved.definitionId, restore.takePassiveId(saved.id));
+  },
+});
+
+// A transmogrifier (#388): an Items-rack item that wears out. It costs the price it was offered
+// at, is bought into a free rack slot like a passive, and saves its material and price so a
+// saved shop rebuilds it exactly.
+registerOfferKind<PassiveBlock>("transmogrifier", {
+  destination: "passive-rack",
+  price: (block) => block.traits.priced?.basePrice ?? Number.NaN,
+  receive: (state, block, { rackCapacity }) =>
+    state.passiveRack.length >= rackCapacity || state.passiveRack.some(({ id }) => id === block.id)
+      ? null
+      : { ...state, passiveRack: [...state.passiveRack, block] },
+  unbought: (state) => state,
+  save: (block) => ({
+    kind: "transmogrifier",
+    id: block.id,
+    material: block.traits.transmogrifier?.material,
+    price: block.traits.priced?.basePrice,
+  }),
+  restore: (saved, restore) => {
+    const price = Number(saved.price);
+    if (!Number.isSafeInteger(price) || price < 0) throw new Error("bad transmogrifier offer");
+    return createTransmogrifier(
+      text(saved.material) as BlockMaterial,
+      restore.takePassiveId(saved.id),
+      price,
+    );
   },
 });
