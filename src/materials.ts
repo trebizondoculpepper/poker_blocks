@@ -350,6 +350,32 @@ export const materialDefinitions = [
       sfx: "material.activate.prismatic",
     },
     appearance: {
+      // Appears to crack, then with a flash instantly bursts into a cloud of stars that
+      // dissipate (#451): the shared crack, flash and star burst. The block is hidden at once
+      // (not faded: its shader-driven fire ignores opacity).
+      exit: {
+        steps: [
+          { effects: [{ effect: "crack", config: { seconds: 0.25, colour: 0xf4f0ff } }] },
+          {
+            effects: [
+              { effect: "flash", config: { colour: 0xffffff, intensity: 1.2, seconds: 0.18 } },
+              {
+                effect: "burst",
+                config: {
+                  count: 70,
+                  speed: [0.8, 2.2],
+                  lift: 0.4,
+                  gravity: 0.6,
+                  life: 1.1,
+                  size: 0.1,
+                  stars: true,
+                },
+              },
+              { effect: "hide" },
+            ],
+          },
+        ],
+      },
       pattern: "rainbowCrystal",
       assembly: "refractiveCrystal",
       surface: "clear",

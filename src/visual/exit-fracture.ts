@@ -384,3 +384,25 @@ exitEffects.register(
     };
   },
 );
+
+/**
+ * Hide (#451): the target stops drawing at once, through the same shared invisible stand-in
+ * fracture uses, and draws again on dispose. It works whatever a mesh's shader (a crystal's
+ * fire ignores opacity, so a fade can't hide it); only the departing block's own objects.
+ */
+exitEffects.register("hide", ({ targets, ownsObject }): ExitEffectInstance => {
+  const hidden: THREE.Mesh[] = [];
+  for (const target of targets)
+    target.traverse((child) => {
+      if (ownsObject(child) && (child as THREE.Mesh).material !== undefined)
+        hidden.push(child as THREE.Mesh);
+    });
+  hidden.forEach(suppress);
+  return {
+    update: () => false,
+    finish() {},
+    dispose() {
+      hidden.forEach(unsuppress);
+    },
+  };
+});
