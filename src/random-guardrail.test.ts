@@ -37,6 +37,7 @@ const allowed: Readonly<Record<string, string>> = {
   "src/audio/music-plan.ts": "which track plays: presentation",
   "src/audio/music-controller.ts": "shuffling the music queue: presentation",
   "src/audio/sfx.ts": "a sound's variation: presentation",
+  "src/audio/celebration.ts": "a celebration's whistle pitches and offsets (#494): presentation",
   "src/tools/listening-room/main.ts": "a developer tool outside the game",
   "src/attract-scene.ts":
     "the title's cosmetic attract sequence: must not touch the session stream",

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createExitRunner, type ExitVisual } from "./exit-presentation";
-import { maxFragments, shredDefaults, splinterDefaults } from "./exit-fragments";
+import { confettiDefaults, maxFragments, shredDefaults, splinterDefaults } from "./exit-fragments";
 
 function visual(): ExitVisual {
   const root = new THREE.Group();
@@ -91,5 +91,29 @@ describe("shred and splinter (#443)", () => {
     });
     expect(fragments(shell)).toHaveLength(shredDefaults.count);
     other.dispose();
+  });
+
+  it("confetti (#494): small paper squares split across its colours, bounded, then gone", () => {
+    const v = visual();
+    const runner = start(v, "confetti", { count: 10, colours: [0xff0000, 0x00ff00, 0x0000ff] });
+    const pieces = fragments(v);
+    expect(pieces).toHaveLength(10);
+    const colours = pieces.map((mesh) =>
+      (mesh.material as THREE.MeshStandardMaterial).color.getHex(),
+    );
+    expect(colours.filter((c) => c === 0xff0000)).toHaveLength(4);
+    expect(colours.filter((c) => c === 0x00ff00)).toHaveLength(3);
+    expect(colours.filter((c) => c === 0x0000ff)).toHaveLength(3);
+    for (let frame = 0; frame < 200; frame++) runner.update(1 / 60);
+    expect(fragments(v)).toHaveLength(0);
+    const many = visual();
+    start(many, "confetti", { count: 9999 }).dispose();
+    const bounded = start(many, "confetti", { count: 9999 });
+    expect(fragments(many)).toHaveLength(maxFragments);
+    bounded.dispose();
+    expect(confettiDefaults.colours.length).toBeGreaterThan(1);
+    const still = visual();
+    start(still, "confetti", {}, true);
+    expect(fragments(still)).toHaveLength(0);
   });
 });

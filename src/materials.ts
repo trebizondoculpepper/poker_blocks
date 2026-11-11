@@ -44,6 +44,11 @@ export type MaterialDefinition = {
   /** Default text font for letter and word cubes; does not affect card faces. */
   lettering?: Lettering;
   /**
+   * How big a celebration this material gets (#494), such as a Present revealing a card of it:
+   * how many party whistles join the pop (src/audio/celebration.ts). Omitted: one.
+   */
+  celebration?: { whistles: number };
+  /**
    * How a card of this material shows its rank and suit: a registered card face
    * (src/visual/face-art.ts). Omitted: `rankAndSuit`. Letter and word blocks don't use it.
    */
@@ -332,6 +337,8 @@ export const materialDefinitions = [
   },
   {
     id: "prismatic",
+    // Crystal celebrates with three whistles (#494, owner decision on #497).
+    celebration: { whistles: 3 },
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
     name: "Prismatic Crystal",
     acoustics: { character: "ringing", hardness: 10, attach: "material.attach.prismatic" },
@@ -843,6 +850,8 @@ export const materialDefinitions = [
     // stars, aging white to black, in a plastic vessel. Its scoring package is +1, ×2 and ^1.2,
     // applied by the shared scorer in its documented order. Price: assumed 16 (see #375).
     id: "magic",
+    // Magic celebrates with three whistles (#494, owner decision on #497).
+    celebration: { whistles: 3 },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Magic",
     acoustics: { character: "ringing", hardness: 10.5, attach: "material.attach.prismatic" },

@@ -173,8 +173,9 @@
     }
   },
   "shop.stock.land": {
-    "uses": 1,
+    "uses": 2,
     "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
       "shop-view.ts": 1
     }
   },
@@ -182,6 +183,18 @@
     "uses": 1,
     "files": {
       "run-controller.ts": 1
+    }
+  },
+  "celebration.pop": {
+    "uses": 1,
+    "files": {
+      "audio/celebration.ts": 1
+    }
+  },
+  "celebration.whistle": {
+    "uses": 1,
+    "files": {
+      "audio/celebration.ts": 1
     }
   },
   "shop.buy.denied": {
@@ -215,10 +228,10 @@
     }
   },
   "ui.click": {
-    "uses": 35,
+    "uses": 36,
     "files": {
       "attract-tuning-panel.ts": 1,
-      "audio/sfx-registry.ts (placeholder)": 2,
+      "audio/sfx-registry.ts (placeholder)": 3,
       "game-modes.ts": 2,
       "menus.ts": 7,
       "run-controller.ts": 1,

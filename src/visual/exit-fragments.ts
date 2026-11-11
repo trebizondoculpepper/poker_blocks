@@ -38,6 +38,8 @@ fragmentShapes.register(
 );
 /** A wood splinter: a long thin sliver. */
 fragmentShapes.register("splinter", () => new THREE.BoxGeometry(0.03, 0.03, 0.28));
+/** A confetti square (#494): a small flat paper square. */
+fragmentShapes.register("confetti", () => new THREE.PlaneGeometry(0.06, 0.06));
 
 export type FragmentConfig = {
   shape: string;
@@ -196,3 +198,49 @@ exitEffects.register("splinter", ({ visual, targets, reducedMotion }, raw) =>
     reducedMotion,
   ),
 );
+
+export type ConfettiConfig = Omit<FragmentConfig, "shape" | "colour"> & {
+  /** The confetti's colours; the count is split evenly across them. */
+  colours: readonly number[];
+};
+
+/** Light, fluttering paper squares in party colours (#494). */
+export const confettiDefaults: ConfettiConfig = {
+  count: 48,
+  speed: [1, 2.2],
+  lift: 1.6,
+  gravity: 2.5,
+  drag: 2.2,
+  tumble: 12,
+  life: 1.6,
+  colours: [0xe8413c, 0xf2c84b, 0x3fa7e0, 0x4cc46a, 0xd965c8],
+};
+
+/**
+ * Confetti (#494): small paper squares in several colours, one fragment burst per colour on the
+ * shared emitter, together bounded by `maxFragments`.
+ */
+exitEffects.register("confetti", ({ visual, targets, reducedMotion }, raw) => {
+  const config = { ...confettiDefaults, ...(raw as Partial<ConfettiConfig>) };
+  const colours = config.colours.length ? config.colours : confettiDefaults.colours;
+  const total = Math.max(0, Math.min(maxFragments, Math.round(config.count)));
+  const bursts = colours.map((colour, index) =>
+    emitFragments(
+      visual,
+      targets,
+      {
+        ...config,
+        shape: "confetti",
+        colour,
+        // The total split evenly, the remainder going to the first colours.
+        count: Math.floor(total / colours.length) + (index < total % colours.length ? 1 : 0),
+      },
+      reducedMotion,
+    ),
+  );
+  return {
+    update: (delta) => bursts.map((burst) => burst.update(delta)).some(Boolean),
+    finish: () => bursts.forEach((burst) => burst.finish()),
+    dispose: () => bursts.forEach((burst) => burst.dispose()),
+  };
+});

@@ -362,6 +362,23 @@ const entries = [
     prompt: "Cheerful short cash register ding with a coin clink, a purchase made",
   },
   {
+    id: "celebration.pop",
+    name: "Celebration pop",
+    family: "celebration",
+    description: "The pop that opens a celebration (#494), such as a Present unwrapping",
+    placeholder: "shop.stock.land",
+    prompt: "A single cheerful party-popper pop, bright paper burst with a soft thump, short",
+  },
+  {
+    id: "celebration.whistle",
+    name: "Party whistle",
+    family: "celebration",
+    description:
+      "One party whistle in a celebration (#494); one to three play together at slightly different pitches",
+    placeholder: "ui.click",
+    prompt: "A short party blowout whistle, a playful rising toot, one breath, slightly reedy",
+  },
+  {
     id: "shop.buy.denied",
     name: "Can't afford",
     family: "shop",
