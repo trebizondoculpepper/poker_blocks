@@ -268,23 +268,25 @@ When the placed card lands, the scene presents each scoring line from lowest to 
 reactions?: readonly {
   /** What must share a face with this block, as a registered matcher and its config. */
   when: { id: string; config: unknown };      // e.g. { id: "neighbour-material", config: { material: "flame" } }
-  /** What this block becomes. Either part may be left out. */
-  become: { material?: BlockMaterial; stateBonus?: string };
+  /** What happens to this block: registered results, each with its configuration. */
+  results: readonly { id: string; config: unknown }[];
+  // e.g. [{ id: "transform", config: { material: "water", stateBonus: "melted" } }]
+  //      [{ id: "advance-cooking", config: { steps: 1 } }]
 }[];
 ```
 
 - **Matchers** are a registry keyed by handler name (`neighbour-material`, later `neighbour-state`). A matcher gets the block and its face neighbours from a snapshot and answers yes or no. Adding a reaction kind means registering a matcher, not adding a branch.
 - **Neighbours** are the six face offsets already defined in `src/traits/attachable.ts` (`faceNormal`), looked up in a cell map of the field. Edge and corner cells are never consulted.
-- **The result** is a list of commands (`transform-block { blockId, material?, stateBonus? }`, `advance-cooking { blockId }`), committed through the existing `commitCommands` path, as discard rules are. A reaction never edits state directly.
+- **Results** are a registry keyed by handler name, like matchers. `transform` turns its config into a `transform-block { blockId, material?, stateBonus? }` command. `advance-cooking` turns its config into an `advance-cooking { blockId, steps }` command, so meat asks to cook through data on its own definition (`when` a heat source, `results: [{ id: "advance-cooking", config: { steps: 1 } }]`) with no branch on meat. A new kind of outcome is a new registered result handler. Commands are committed through the existing `commitCommands` path, as discard rules are. A reaction never edits state directly.
 
 **Reactions never score (owner, 2026-11-11).** A reaction does not add to the score of the play that caused it, or of any play. The play is scored on the field as placed, and its reactions are resolved and committed afterwards. What a reaction changes is the state of the game (a material, a state bonus), and that raises what later plays can score. A later modifier may subscribe to `reaction.applied` and award points for the reaction itself, but that would be an ordinary rule on that event, not part of the reaction.
 
 **One step per play, with no cascades.** The resolver works on a **snapshot** of the field taken once, after placement:
 
 1. Every block on the field is checked against its own material's reactions, with its neighbours read **from the snapshot**. Every block is checked, not only the one just placed, so meat keeps cooking on each later play while it stays beside heat.
-2. Each block takes **at most one** transformation per play: the **first** of its material's reactions whose matcher accepts, in the order listed on the definition. That listed order is the conflict rule, and it is deterministic. A block next to both flame and aggressive flame takes whichever reaction its material lists first.
+2. Each block takes **at most one** reaction per play (all of that reaction's results): the **first** of its material's reactions whose matcher accepts, in the order listed on the definition. That listed order is the conflict rule, and it is deterministic. A block next to both flame and aggressive flame takes whichever reaction its material lists first.
 3. All transformations are committed together, after resolution. Because everything read the snapshot, a block changed this play cannot trigger its neighbours until the **next** play. Air makes flame aggressive on one play, and that aggressive flame boils water on a later play, never both at once. That is what "one step per play" means here, and it also rules out repeated rewards from one play.
-4. Blocks are visited in a fixed order (field order, which is placement order), so the commands, events and presentation are reproducible. The result never depends on that order, because of the snapshot.
+4. Blocks are visited in a fixed order (field order, which is placement order), so the commands, events and presentation are reproducible. Which reactions are selected does not depend on that order, because of the snapshot. Anything that subscribes to the resulting `reaction.applied` events (a passive with limited uses, say) sees them in that field order, and its own outcome may depend on it.
 
 **Events and presentation.** Each committed transformation emits a `reaction.applied { blockId, from, to }` event after `play.completed`. The play presenter uses it to restyle the block and to play the reaction's registered sound, which is configured on the reaction and has a placeholder until its audio exists. Presentation never decides whether a reaction happened (model first).
 
@@ -294,7 +296,7 @@ reactions?: readonly {
 
 **Out of scope here:** creating new blocks (cloud from air and boiling water, #374) is identity creation, not a transformation, and gets its own contract. So do container visuals (#328): a reaction changes the model, and the material's appearance follows.
 
-**Guardrails for #366:** a test that edge or corner contact never reacts; that a block changes at most once per play; that a two-step chain (air → aggressive flame → boiling water) takes two plays; that discards, refills and stage advance never react; that candidate-hand scoring is unchanged by pending reactions; that the result is the same whatever order the blocks are visited in; that a transformation survives save and Continue; and the guardrail scan, so that no generic code names a material.
+**Guardrails for #366:** a test that edge or corner contact never reacts; that a block changes at most once per play; that a two-step chain (air → aggressive flame → boiling water) takes two plays; that discards, refills and stage advance never react; that candidate-hand scoring is unchanged by pending reactions; that the same reactions are selected whatever order the blocks are visited in (events are still dispatched in field order); that a transformation survives save and Continue; and the guardrail scan, so that no generic code names a material.
 
 ## Session controller
 
