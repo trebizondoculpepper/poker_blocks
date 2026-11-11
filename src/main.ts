@@ -317,6 +317,7 @@ const shopView = createShopView(
   () => cameraView.finishShopEntrance(),
   () => run.deckBlocks().length,
   () => run.reducedMotion,
+  (id, destination) => run.game.purchaseVerdict(id, destination),
 );
 shopView.render([], false);
 const presenter: PlayPresenter = createPlayPresenter({

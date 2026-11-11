@@ -80,19 +80,21 @@ export const fluidLooks = new Registry<FluidLook>("fluid look");
 /** Custard's look (#227): flat-shaded colour and a lighter, flat top seen through the cut. */
 fluidLooks.register("opaqueFluid", (surface, raw) => {
   const { fill, surface: top } = raw as { fill: number; surface: number };
-  return {
-    material: new THREE.ShaderMaterial({
-      uniforms: {
-        ...surface,
-        fill: { value: new THREE.Color(fill) },
-        surfaceColour: { value: new THREE.Color(top) },
-      },
-      vertexShader: fluidVertex,
-      fragmentShader: fluidFragment,
-      side: THREE.DoubleSide,
-    }),
-    layer: "contentsOpaque",
-  };
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      ...surface,
+      fill: { value: new THREE.Color(fill) },
+      surfaceColour: { value: new THREE.Color(top) },
+      // Read from the material's own opacity at render (set below), never a copy.
+      opacity: { value: 1 },
+    },
+    vertexShader: fluidVertex,
+    fragmentShader: fluidFragment,
+    side: THREE.DoubleSide,
+  });
+  // The fluid follows its material's opacity, as any material does, so a fade fades it (#456).
+  Object.defineProperty(material.uniforms.opacity!, "value", { get: () => material.opacity });
+  return { material, layer: "contentsOpaque" };
 });
 
 /**
@@ -166,18 +168,20 @@ const fluidFragment = /* glsl */ `
   uniform float height;
   uniform vec3 fill;
   uniform vec3 surfaceColour;
+  // The material's own opacity, so a shared fade (an exit, #456) fades the fluid too.
+  uniform float opacity;
   varying vec3 vLocal;
   varying vec3 vNormal;
   void main() {
     if (dot(vLocal, surfaceNormal) > height) discard;
     if (!gl_FrontFacing) {
       // Seen through the cut: the fluid's flat top.
-      gl_FragColor = vec4(surfaceColour, 1.0);
+      gl_FragColor = vec4(surfaceColour, opacity);
       return;
     }
     // A soft, creamy shade: wrapped diffuse from a fixed key light in view space.
     float light = 0.55 + 0.45 * max(dot(normalize(vNormal), normalize(vec3(0.3, 0.8, 0.5))), 0.0);
-    gl_FragColor = vec4(fill * light, 1.0);
+    gl_FragColor = vec4(fill * light, opacity);
   }
 `;
 

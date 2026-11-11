@@ -41,6 +41,8 @@ const fragmentShader = /* glsl */ `
   uniform float time;
   uniform float halfSize;
   uniform vec3 colour;
+  // The material's own opacity, so a shared fade (an exit, #459) fades the cloud too.
+  uniform float opacity;
   uniform float density;
   uniform float drift;
   varying vec3 vLocal;
@@ -89,7 +91,7 @@ const fragmentShader = /* glsl */ `
       if (alpha > 0.95) break;
     }
     if (alpha < 0.01) discard;
-    gl_FragColor = vec4(colour, alpha);
+    gl_FragColor = vec4(colour, alpha * opacity);
   }
 `;
 
@@ -101,6 +103,8 @@ containedContents.register("cloud", (boundary, raw) => {
     colour: { value: new THREE.Color(config.colour) },
     density: { value: config.density },
     drift: { value: config.drift },
+    // Read from the material's own opacity at render (set below), never a copy.
+    opacity: { value: 1 },
   };
   const material = new THREE.ShaderMaterial({
     uniforms,
@@ -110,6 +114,8 @@ containedContents.register("cloud", (boundary, raw) => {
     transparent: true,
     depthWrite: false,
   });
+  // The cloud follows its material's opacity, as any material does, so a fade fades it (#459).
+  Object.defineProperty(uniforms.opacity, "value", { get: () => material.opacity });
   const mesh = boundary.volume(material, "contentsTransparent");
   return {
     meshes: [mesh],
