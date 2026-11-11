@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { containedContents, createInteriorBoundary, type ContainedFrame } from "./contained";
 import { rampColour } from "./contained-stars";
 import { materialPools } from "../materials";
@@ -27,6 +27,8 @@ function field(overrides: Partial<Record<string, unknown>> = {}) {
   return { stars, step, positions: () => attribute("position"), colours: () => attribute("color") };
 }
 
+afterEach(() => vi.restoreAllMocks());
+
 describe("Magic Lock's contained stars (#349)", () => {
   it("ages through white, cream, brown to black, in order", () => {
     const ramp = [0xffffff, 0xfff1cc, 0x8a5a2b, 0x000000].map((hex) => new THREE.Color(hex));
@@ -49,6 +51,11 @@ describe("Magic Lock's contained stars (#349)", () => {
   });
 
   it("drifts toward world down as the vessel turns, without piling up", () => {
+    // Births and drift are cosmetic Math.random; seed it so the check is deterministic.
+    let seed = 7;
+    vi.spyOn(Math, "random").mockImplementation(
+      () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646,
+    );
     const { step, positions } = field({ drift: 0, gravity: 0.5 });
     const upsideDown = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI);
     const meanY = () => {

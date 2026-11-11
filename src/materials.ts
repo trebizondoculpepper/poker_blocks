@@ -796,6 +796,8 @@ export const materialDefinitions = [
     scoringModifier: { additive: 2, multiplicative: 1.2 },
     activation: { effect: { id: "pulse", colour: "#f2c84b" }, sfx: "material.activate.custard" },
     appearance: {
+      // The shared container response (#453): its plastic tub cracks and falls to pieces as the custard fades.
+      exit: containerBreak({ colour: 0xe8eef2, opacity: 0.35 }),
       pattern: "cardSheet",
       assembly: "contained",
       surface: "clear",
@@ -844,6 +846,8 @@ export const materialDefinitions = [
     ],
     roundEndMaterial: "custard",
     appearance: {
+      // The shared container response (#457): its frosted shell breaks apart as the three coloured scoops fade.
+      exit: containerBreak({ colour: 0xf2f4f6, opacity: 0.5 }),
       pattern: "cardSheet",
       assembly: "contained",
       surface: "clear",
