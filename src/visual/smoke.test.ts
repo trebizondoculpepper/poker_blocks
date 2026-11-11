@@ -43,8 +43,8 @@ describe("smoke block effect (#464)", () => {
     const centre = block.getWorldPosition(new THREE.Vector3());
     smoke!.update(0.1, block, false);
     const [first] = live(smoke!.object as THREE.Points);
-    // Born at the centre, then risen for the rest of that frame (0.1 s at 1 block a second).
-    expect(first!.y).toBeCloseTo(centre.y + 0.1, 3);
+    // Born when the first puff fell due (0.1 s at 10 a second): at the centre, not yet risen.
+    expect(first!.y).toBeCloseTo(centre.y, 3);
     smoke!.update(0.5, block, false);
     const risen = live(smoke!.object as THREE.Points);
     expect(Math.max(...risen.map(({ y }) => y))).toBeGreaterThan(centre.y + 0.3);
@@ -69,6 +69,19 @@ describe("smoke block effect (#464)", () => {
     expect(xs.some((x) => Math.abs(x) < 1)).toBe(true);
     expect(xs.some((x) => x > 9)).toBe(true);
     expect(before.length).toBeGreaterThan(0);
+    smoke!.dispose();
+  });
+
+  it("puffs born within one frame get their own ages, and none is aged before it is born", () => {
+    const [smoke] = createBlockEffects([{ ...config, frequency: 40, lifetime: 0.08 }], {
+      random,
+      size: 1,
+    });
+    const block = new THREE.Object3D();
+    smoke!.update(0.1, block, false);
+    const heights = live(smoke!.object as THREE.Points).map(({ y }) => y);
+    expect(heights).toHaveLength(4);
+    expect(new Set(heights.map((y) => y.toFixed(4))).size).toBe(4);
     smoke!.dispose();
   });
 
