@@ -5,10 +5,10 @@ import { cardFaceArt } from "./visual/face-art";
  * and field views both build their cubes here, and the selection highlight covers all of
  * them.
  */
+import { cardLook } from "./card-look";
 import * as THREE from "three";
 import type { CardBlock } from "./cards";
 import { blockHighlighted } from "./block-trait-behaviours";
-import { getMaterialDefinition, materialOf } from "./materials";
 import { randomRock, type Rock, type RockState } from "./motion";
 import type { Selection } from "./traits/selectable";
 import type { Cell } from "./traits/attachable";
@@ -83,7 +83,7 @@ export function createBlockViews(parents: {
     create(block, size, location) {
       const appearance = createBlockAppearance(
         cardFaceArt(block.traits.identity),
-        getMaterialDefinition(materialOf(block)),
+        cardLook(block),
         size,
       );
       const { geometry, textures, edgeColor, edgeOpacity } = appearance;

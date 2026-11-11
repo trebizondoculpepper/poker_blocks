@@ -15,6 +15,7 @@ import { stageEndResets } from "./stage-end";
 import { cardStateAppliers } from "./card-states";
 import { materialScopedStates } from "./card-material";
 import { inspectable } from "./traits/inspectable";
+import { cardLookAdjusters } from "./card-look";
 import type { SoundEffectId } from "./audio/sfx-registry";
 
 /** The card's doneness step names, from its material, or none if it doesn't cook. */
@@ -136,3 +137,9 @@ cardStateAppliers.register("doneness", {
 
 // Doneness belongs to the meat: a material change clears it (#372, #408 review).
 materialScopedStates.register("doneness", true);
+
+// A doneness step shows its configured face tint (#376); a step without one keeps the look.
+cardLookAdjusters.register("doneness", (definition, value) => {
+  const tint = definition.cookable?.looks?.[(value as { step: number }).step];
+  return tint ? { ...definition, appearance: { ...definition.appearance, tint } } : definition;
+});
