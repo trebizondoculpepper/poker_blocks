@@ -39,7 +39,7 @@ describe("transmogrifier items (#388)", () => {
       const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, random);
       const stock = shopPreviewState(game.state, 99, random, defaultShop, 5).shopStock ?? [];
       const transmogrifiers = stock.filter(({ kind }) => kind === "transmogrifier");
-      expect(transmogrifiers).toHaveLength(defaultShop.transmogrifierSlots ?? 1);
+      expect(transmogrifiers).toHaveLength(defaultShop.itemSlots ?? 1);
       expect(
         stock
           .filter(({ kind }) => kind === "passive")
@@ -152,9 +152,9 @@ describe("transmogrifier shop presentation (#388 review)", () => {
         maxOffers: 9,
         guaranteedCards: 9,
         guaranteedPassives: 0,
-        transmogrifierSlots: 1,
+        itemSlots: 1,
       }).map(({ field }) => field),
-    ).toContain("transmogrifierSlots");
+    ).toContain("itemSlots");
   });
 });
 

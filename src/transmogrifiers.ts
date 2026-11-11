@@ -12,7 +12,7 @@
  * - **The item:** a passive block of a generated definition (`transmogrifier.<material>`), with
  *   no event rules and no passive shop balance, so the ordinary passive draw never offers it.
  *   It carries `limitedUse` (uses left of total) and `priced` (what it cost: the resale basis).
- * - **The shop:** `transmogrifierSlots` dedicated offers (default 1), on top of the ordinary
+ * - **The shop:** `itemSlots` dedicated offers (default 1), on top of the ordinary
  *   stock, each drawn by weight from the transmogrifiers unlocked this round.
  */
 import { materialDefinitions, type BlockMaterial, type MaterialDefinition } from "./materials";
@@ -21,6 +21,7 @@ import { weightAt, type WeightCurve } from "./offer-weights";
 import { gameTuning } from "./balance";
 import { blockMaterials } from "./materials";
 import { rackTraitPersistence } from "./rack-trait-persistence";
+import { itemOfferPools } from "./item-offers";
 // Registers the material-block token visual (#391).
 import "./visual/material-token";
 
@@ -122,3 +123,15 @@ rackTraitPersistence.register("transmogrifier", {
     return { material: material as BlockMaterial };
   },
 });
+
+// A shop's item slots draw transmogrifiers unlocked this round by their material's weight
+// (#388), alongside other registered items (#156).
+itemOfferPools.register("transmogrifiers", (round, nextOfferId) =>
+  transmogrifierWeights(round).map(({ material, price, weight }) => ({
+    weight,
+    offer: () => ({
+      kind: "transmogrifier",
+      block: createTransmogrifier(material, nextOfferId("shop.transmogrifier"), price),
+    }),
+  })),
+);

@@ -156,7 +156,7 @@ describe("game modes composed from traits", () => {
         maxOffers: 9,
         guaranteedPassives: 1,
         guaranteedCards: 1,
-        transmogrifierSlots: 1,
+        itemSlots: 1,
       },
       music: { style: "ordinary" },
     });

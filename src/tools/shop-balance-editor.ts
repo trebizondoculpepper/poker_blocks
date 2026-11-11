@@ -265,7 +265,7 @@ export function createShopBalanceEditor(host: HTMLElement): ShopBalanceEditor {
           "maxOffers",
           "guaranteedPassives",
           "guaranteedCards",
-          "transmogrifierSlots",
+          "itemSlots",
         ] as const)
           fields.append(
             field(key, `stock.${key}`, draft.stock[key], (value) => {

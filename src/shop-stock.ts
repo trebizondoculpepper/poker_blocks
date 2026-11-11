@@ -7,7 +7,9 @@ import { drawWeighted, passiveFrequencies, weightAt } from "./offer-weights";
 import { passiveUnlockRound } from "./offer-eligibility";
 import type { ShopOffer } from "./offer-kinds";
 import { validateShopStock } from "./shop-stock-config";
-import { createTransmogrifier, transmogrifierWeights } from "./transmogrifiers";
+import { itemOfferPools } from "./item-offers";
+// Registers the transmogrifiers' item offers (#388).
+import "./transmogrifiers";
 
 export type { ShopOffer } from "./offer-kinds";
 
@@ -74,8 +76,8 @@ export function shopPreviewState(
     }),
   );
 
-  // Dedicated transmogrifier offers (#388) come on top; the shop holds at most nine.
-  const slots = stock.transmogrifierSlots ?? 1;
+  // Dedicated item offers (transmogrifiers #388, the Nothingifier #156) come on top; the shop holds at most nine.
+  const slots = stock.itemSlots ?? 1;
   const count = Math.min(
     stock.minOffers + Math.floor(random() * (stock.maxOffers - stock.minOffers + 1)),
     9 - slots,
@@ -92,26 +94,19 @@ export function shopPreviewState(
   for (let index = 0; index < (stock.guaranteedCards ?? 1); index++) draw(cards);
   while (chosen.length < count && [...passives, ...cards].some(({ weight }) => weight > 0))
     draw([...passives, ...cards]);
-  // Each slot draws a transmogrifier unlocked this round, by its material's weight, at most
-  // one per material a shop.
-  const transmogrifiers: Candidate[] = transmogrifierWeights(round).map(
-    ({ material, price, weight }) => ({
-      weight,
-      once: true,
-      shelf: 2,
-      offer: () => ({
-        kind: "transmogrifier",
-        block: createTransmogrifier(material, nextOfferId("shop.transmogrifier"), price),
-      }),
-    }),
-  );
+  // Each item slot (#388, #156) draws from every registered item pool's candidates this
+  // round, by weight, each candidate at most once a shop.
+  const items: Candidate[] = itemOfferPools
+    .names()
+    .flatMap((name) => itemOfferPools.get(name)(round, nextOfferId))
+    .map(({ weight, offer }) => ({ weight, once: true, shelf: 2, offer }));
   for (let slot = 0; slot < slots; slot++) {
-    const candidate = drawWeighted(transmogrifiers, ({ weight }) => weight, random);
+    const candidate = drawWeighted(items, ({ weight }) => weight, random);
     if (!candidate) break;
     chosen.push(candidate);
     candidate.weight = 0;
   }
-  // Laid out passives first, then cards, then transmogrifiers.
+  // Laid out passives first, then cards, then items.
   const offers = chosen.toSorted((a, b) => a.shelf - b.shelf).map(({ offer }) => offer());
   return {
     ...state,

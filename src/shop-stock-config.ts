@@ -10,10 +10,9 @@ export function validateShopStock(stock: ShopTrait): ShopStockError[] {
     typeof value === "number" && Number.isSafeInteger(value) && value >= minimum;
   for (const field of ["minOffers", "maxOffers"] as const)
     if (!whole(stock[field], 1)) add(field, "Use a positive whole offer count");
-  if (stock.transmogrifierSlots !== undefined && !whole(stock.transmogrifierSlots, 0))
-    add("transmogrifierSlots", "Use a nonnegative whole slot count");
-  else if ((stock.transmogrifierSlots ?? 1) > 2)
-    add("transmogrifierSlots", "Use at most two transmogrifier slots");
+  if (stock.itemSlots !== undefined && !whole(stock.itemSlots, 0))
+    add("itemSlots", "Use a nonnegative whole slot count");
+  else if ((stock.itemSlots ?? 1) > 2) add("itemSlots", "Use at most two item slots");
   for (const field of ["guaranteedPassives", "guaranteedCards"] as const)
     if (stock[field] !== undefined && !whole(stock[field], 0))
       add(field, "Use a nonnegative whole guaranteed count");
@@ -33,12 +32,9 @@ export function validateShopStock(stock: ShopTrait): ShopStockError[] {
   if (
     whole(stock.guaranteedPassives ?? 1, 0) &&
     whole(stock.guaranteedCards ?? 1, 0) &&
-    whole(stock.transmogrifierSlots ?? 1, 0) &&
-    (stock.guaranteedPassives ?? 1) +
-      (stock.guaranteedCards ?? 1) +
-      (stock.transmogrifierSlots ?? 1) >
-      9
+    whole(stock.itemSlots ?? 1, 0) &&
+    (stock.guaranteedPassives ?? 1) + (stock.guaranteedCards ?? 1) + (stock.itemSlots ?? 1) > 9
   )
-    add("transmogrifierSlots", "Guaranteed offers and transmogrifier slots must fit in nine");
+    add("itemSlots", "Guaranteed offers and item slots must fit in nine");
   return errors;
 }

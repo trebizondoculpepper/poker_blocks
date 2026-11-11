@@ -53,7 +53,7 @@ describe("shop preview", () => {
       maxOffers: 4,
       guaranteedPassives: 2,
       guaranteedCards: 2,
-      transmogrifierSlots: 0,
+      itemSlots: 0,
     });
     expect(state.shopStock?.map(({ kind }) => kind)).toEqual([
       "passive",
