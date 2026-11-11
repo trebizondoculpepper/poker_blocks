@@ -145,4 +145,18 @@ describe("growing grass (#358)", () => {
     expect(blades.length).toBeGreaterThan(1);
     expect(blades[0]!.base.distanceTo(blades[1]!.base)).toBeGreaterThan(1e-6);
   });
+
+  it("keeps blades rooted on the top while it is still settling (#419 review)", () => {
+    const v = vessel();
+    // Settled enough to grow, but still 15° from level, then easing the rest of the way.
+    v.normal.set(Math.sin(0.26), Math.cos(0.26), 0);
+    v.run(7);
+    expect(v.blades().length).toBeGreaterThan(0);
+    v.normal.set(0, 1, 0);
+    v.run(1 / 30);
+    for (const { base, tip } of v.blades()) {
+      expect(Math.abs(base.y)).toBeLessThan(1e-5);
+      expect(tip.y).toBeGreaterThan(0);
+    }
+  });
 });

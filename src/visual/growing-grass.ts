@@ -121,12 +121,12 @@ export const growingGrass: InclusionHandler = {
           .addScaledVector(v, (random() * 2 - 1) * boundary.halfSize * 1.5);
         if (Math.max(Math.abs(point.x), Math.abs(point.y), Math.abs(point.z)) > reach) continue;
         point.toArray(bases, i * 3);
-        // Each blade leans a little its own way, and has its own height.
+        // Each blade leans a little its own way (kept as a sideways offset, applied to the live
+        // normal when drawn), and has its own height.
         point
-          .copy(n)
+          .set(0, 0, 0)
           .addScaledVector(u, (random() - 0.5) * 0.5)
-          .addScaledVector(v, (random() - 0.5) * 0.5)
-          .normalize();
+          .addScaledVector(v, (random() - 0.5) * 0.5);
         point.toArray(leans, i * 3);
         point
           .copy(u)
@@ -139,17 +139,39 @@ export const growingGrass: InclusionHandler = {
       }
       return false;
     };
+    const root = new THREE.Vector3();
+    const side = new THREE.Vector3();
+    const rise = new THREE.Vector3();
+    const flat = (array: Float32Array, i: number, out: THREE.Vector3, n: THREE.Vector3) =>
+      out.fromArray(array, i * 3).addScaledVector(n, -out.dot(n));
+    /**
+     * Draw a blade rooted on the live surface: while the soil is still settling its base slides
+     * onto the current top, and it leans from the current normal, so no blade floats or sinks
+     * (#419 review).
+     */
     const draw = (i: number, grown: number) => {
+      const n = surface.normal;
+      const level = surface.height / scale;
+      root.fromArray(bases, i * 3);
+      root.addScaledVector(n, level - root.dot(n));
+      flat(across, i, side, n)
+        .normalize()
+        .multiplyScalar((config.width * width) / 2);
+      flat(leans, i, rise, n)
+        .add(n)
+        .normalize()
+        .multiplyScalar(tall[i]! * grown);
       const o = i * 9;
-      const half = (config.width * width) / 2;
-      for (let axis = 0; axis < 3; axis++) {
-        const b = bases[i * 3 + axis]!;
-        const a = across[i * 3 + axis]! * half;
-        positions[o + axis] = b - a;
-        positions[o + 3 + axis] = b + a;
-        // The tip rises from the base: a blade draws itself up rather than popping in.
-        positions[o + 6 + axis] = b + leans[i * 3 + axis]! * tall[i]! * grown;
-      }
+      root.clone().sub(side).toArray(positions, o);
+      root
+        .clone()
+        .add(side)
+        .toArray(positions, o + 3);
+      // The tip rises from the base: a blade draws itself up rather than popping in.
+      root
+        .clone()
+        .add(rise)
+        .toArray(positions, o + 6);
     };
 
     return {
