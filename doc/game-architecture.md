@@ -1142,7 +1142,6 @@ Each proof vessel is 6 draw calls (back glass, water top, film, water, front gla
 
 The same boundary contract serves all of them; no content, look or residue knows which shell holds it.
 
-
 ## Tweening library direction (#556)
 
 The [tweening research decision](tweening-library-research.md) recommends Tween.js 25.0.0 for finite numeric interpolation behind a narrow service. This is a target integration, not an installed dependency. Controller/effect traits own policy and channels; the service knows no game identities. The shared presentation clock drives explicit updates; the visual-event scheduler owns starts, cancellation and completion scopes. Keep physical spring and ambient simulation behavior separate. Implementers and reviewers must check lifecycle cleanup, transform ownership, reduced motion and model-first input against that decision before migration.

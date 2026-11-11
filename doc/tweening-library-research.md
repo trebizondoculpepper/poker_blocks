@@ -10,11 +10,11 @@ The proposed service supplies interpolation, not gameplay policy or a second eve
 
 ## Alternatives examined
 
-| Candidate | Published version checked | Fit and trade-off |
-| --- | --- | --- |
-| Tween.js | 25.0.0 | Recommended: small scope, manual clock, numeric objects, typed ESM, MIT. Requires application ownership and cleanup. |
-| GSAP | 3.15.1 | Rich timelines and overwrite controls; useful for elaborate authored sequences, more capability than the present numeric interpolation need. Has its own ticker to integrate and a custom Standard No Charge license rather than MIT. |
-| Anime.js | 4.5.0 | Typed modular animation engine, MIT; manual engine operation is available. Its DOM/animation facilities and engine are broader than required here. |
+| Candidate | Published version checked | Fit and trade-off                                                                                                                                                                                                                     |
+| --------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tween.js  | 25.0.0                    | Recommended: small scope, manual clock, numeric objects, typed ESM, MIT. Requires application ownership and cleanup.                                                                                                                  |
+| GSAP      | 3.15.1                    | Rich timelines and overwrite controls; useful for elaborate authored sequences, more capability than the present numeric interpolation need. Has its own ticker to integrate and a custom Standard No Charge license rather than MIT. |
+| Anime.js  | 4.5.0                     | Typed modular animation engine, MIT; manual engine operation is available. Its DOM/animation facilities and engine are broader than required here.                                                                                    |
 
 Registry package unpacked sizes were 223,658 bytes, 6,274,260 bytes and 2,126,307 bytes respectively. These include packaging and ancillary files: **they are not download or production bundle sizes**. Measure a representative Vite build before adopting; no browser/GPU performance ranking was established. No paid GSAP subscription is assumed in this comparison.
 
