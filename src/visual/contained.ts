@@ -99,11 +99,27 @@ export type LiquidSurface = {
 /** What contents publish for others to read (#329): only what they genuinely have. */
 export type Capabilities = { liquidSurface?: LiquidSurface };
 
-/** What contents add inside a boundary: their meshes and what they publish. */
+/**
+ * One frame of a contained block (#329 "Lifecycle and ownership"), built once per block per
+ * frame by `composeContained` and handed to its parts in order: contents, then residue. No part
+ * reads the clock or the block's rotation itself.
+ */
+export type ContainedFrame = {
+  /** Seconds since the block's first frame (frame time, the same for every part). */
+  readonly seconds: number;
+  /** Seconds since its previous frame, capped; 0 on the first frame. */
+  readonly delta: number;
+  /** True on the block's first frame: parts start from their resting state. */
+  readonly first: boolean;
+  /** The block's world rotation this frame. */
+  readonly rotation: THREE.Quaternion;
+};
+
+/** What contents add inside a boundary: their meshes, what they publish, their frame update. */
 export type ContentsHandler = (
   boundary: InteriorBoundary,
   config: unknown,
-) => { meshes: THREE.Mesh[]; capabilities: Capabilities };
+) => { meshes: THREE.Mesh[]; capabilities: Capabilities; update?: (frame: ContainedFrame) => void };
 
 /**
  * Optional residue on the wall (#332, #334): it samples what the contents publish and keeps its
@@ -112,7 +128,11 @@ export type ContentsHandler = (
  */
 export type ResidueHandler = {
   requires: keyof Capabilities;
-  build(boundary: InteriorBoundary, capabilities: Capabilities, config: unknown): THREE.Mesh[];
+  build(
+    boundary: InteriorBoundary,
+    capabilities: Capabilities,
+    config: unknown,
+  ): { meshes: THREE.Mesh[]; update?: (frame: ContainedFrame) => void };
 };
 
 export const containerShells = new Registry<ShellHandler>("container shell");
@@ -144,15 +164,47 @@ export function composeContained(
     .map(({ effect, config }) => containedContents.get(effect)(boundary, config));
   const capabilities: Capabilities = Object.assign({}, ...inside.map((part) => part.capabilities));
   // Residue reads what the contents publish; it never reaches into them.
-  const wall = [residue ?? []].flat().flatMap(({ effect, config }) => {
+  const wall = [residue ?? []].flat().map(({ effect, config }) => {
     const handler = containedResidues.get(effect);
     if (!capabilities[handler.requires])
       throw new Error(`Residue "${effect}" needs contents that publish ${handler.requires}`);
     return handler.build(boundary, capabilities, config);
   });
+  const parts = [...inside, ...wall];
+  const meshes = parts.flatMap((part) => part.meshes);
+  // One frame callback for the whole block, on its first contained mesh: contents update
+  // before residue, from one clock and one rotation.
+  const updates = parts.flatMap((part) => [part.update ?? []].flat());
+  const [driver] = [...shell.meshes, ...meshes];
+  [driver ?? []].flat().forEach((mesh) => {
+    const rotation = new THREE.Quaternion();
+    let start: number | null = null;
+    let last: number | null = null;
+    const previous = mesh.onBeforeRender.bind(mesh);
+    mesh.onBeforeRender = (...args) => {
+      previous(...args);
+      const now = frameSeconds();
+      start ??= now;
+      const frame: ContainedFrame = {
+        seconds: now - start,
+        delta: last === null ? 0 : Math.min(now - last, 0.1),
+        first: last === null,
+        rotation: mesh.getWorldQuaternion(rotation),
+      };
+      if (now === last) return;
+      last = now;
+      for (const update of updates) update(frame);
+    };
+  });
   const faces = [shell.faces].flat();
   return {
     faces: Array.from({ length: 6 }, (_, face) => faces[face % faces.length]!),
-    extras: [...shell.meshes, ...inside.flatMap((part) => part.meshes), ...wall],
+    extras: [...shell.meshes, ...meshes],
   };
+}
+
+/** The current frame's time, in seconds: the same for every block drawn in one frame. */
+function frameSeconds(): number {
+  const time = typeof document === "undefined" ? null : document.timeline?.currentTime;
+  return (typeof time === "number" ? time : performance.now()) / 1000;
 }

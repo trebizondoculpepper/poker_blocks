@@ -192,13 +192,10 @@ export const levellingFluid: ContentsHandler = (boundary, raw) => {
   );
   const settle = createSettler({ settleSeconds: config.settleSeconds, traceSeconds: 1 });
   const unused = new THREE.Vector3();
-  const rotation = new THREE.Quaternion();
-  fluid.onBeforeRender = () => {
-    fluid.getWorldQuaternion(rotation);
-    settle(rotation, frameSeconds(), normal, unused);
-  };
   return {
     meshes: [fluid],
+    // Driven by the block's one frame (src/visual/contained.ts), never its own clock.
+    update: ({ rotation, seconds }) => settle(rotation, seconds, normal, unused),
     capabilities: {
       liquidSurface: { normal, height, wet: (point) => point.dot(normal) <= height },
     },
@@ -234,14 +231,15 @@ export const wallTrace: ResidueHandler = {
       }),
       "residue",
     );
-    let last: number | null = null;
-    trace.onBeforeRender = () => {
-      const now = frameSeconds();
-      const delta = last === null ? 0 : Math.min(now - last, 0.1);
-      last = now;
-      lagging.lerp(surface.normal, 1 - Math.exp(-delta / config.seconds)).normalize();
+    return {
+      meshes: [trace],
+      // After the contents in the block's one frame: on the first frame the trace starts at the
+      // published surface (no false wet band on a vessel first seen tilted), then lags it.
+      update: ({ first, delta }) => {
+        if (first) lagging.copy(surface.normal);
+        else lagging.lerp(surface.normal, 1 - Math.exp(-delta / config.seconds)).normalize();
+      },
     };
-    return [trace];
   },
 };
 
@@ -329,10 +327,4 @@ export function createVesselSimulation(config: {
       trace.copy(traceWorld).applyQuaternion(inverse);
     },
   };
-}
-
-/** The current frame's time, in seconds: the same for every block drawn in one frame. */
-function frameSeconds(): number {
-  const time = typeof document === "undefined" ? null : document.timeline?.currentTime;
-  return (typeof time === "number" ? time : performance.now()) / 1000;
 }

@@ -95,28 +95,13 @@ describe("contained components (#330)", () => {
     const a = make();
     const b = make();
     expect(a.capabilities.liquidSurface!.normal).not.toBe(b.capabilities.liquidSurface!.normal);
-    // Turn one vessel over and render a few frames: only its surface moves.
-    const turned = new THREE.Group();
-    turned.rotation.z = Math.PI / 2;
-    turned.add(a.meshes[0]!);
-    turned.updateMatrixWorld(true);
+    // Turn one vessel over and step a few frames: only its surface moves.
+    const turned = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+    const level = new THREE.Quaternion();
     for (let frame = 0; frame < 3; frame++) {
-      a.meshes[0]!.onBeforeRender(
-        {} as never,
-        {} as never,
-        {} as never,
-        {} as never,
-        {} as never,
-        {} as never,
-      );
-      b.meshes[0]!.onBeforeRender(
-        {} as never,
-        {} as never,
-        {} as never,
-        {} as never,
-        {} as never,
-        {} as never,
-      );
+      const common = { seconds: frame * 0.5, delta: frame ? 0.5 : 0, first: frame === 0 };
+      a.update!({ ...common, rotation: frame ? turned : level });
+      b.update!({ ...common, rotation: level });
     }
     expect(a.capabilities.liquidSurface!.normal.y).toBeLessThan(0.99);
     expect(b.capabilities.liquidSurface!.normal.y).toBeCloseTo(1, 5);
@@ -224,5 +209,26 @@ describe("a shell's generated textures are the block's to dispose (#399 review)"
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("one frame per contained block (#401 review)", () => {
+  it("starts the wall trace at the published surface, so a tilted vessel shows no false band", async () => {
+    const { containedContents, containedResidues, createInteriorBoundary } =
+      await import("./contained");
+    const { appearance } = materialPools
+      .get("registered")()
+      .find(({ id }) => id === "custard")!;
+    const boundary = createInteriorBoundary(geometry, 1, 0.92);
+    const fluid = containedContents.get("levellingFluid")(boundary, appearance.contents!.config);
+    const trace = containedResidues
+      .get("wallTrace")
+      .build(boundary, fluid.capabilities, appearance.residue!.config);
+    const tilted = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 1);
+    const frame = { seconds: 0, delta: 0, first: true, rotation: tilted };
+    fluid.update!(frame);
+    trace.update!(frame);
+    const uniforms = (trace.meshes[0]!.material as THREE.ShaderMaterial).uniforms;
+    expect(uniforms.traceNormal!.value.angleTo(uniforms.surfaceNormal!.value)).toBeCloseTo(0, 6);
   });
 });
