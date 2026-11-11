@@ -3,45 +3,74 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { additiveLight } from "./additive-light";
 
 export type LaserOutlineConfig = {
+  /** Noise patches across the outlined object's size: higher is busier. */
   frequency: number;
-  drift: readonly [number, number, number];
+  /** Steady scroll along the noise, in texture widths per second. */
+  scroll: number;
+  /** How fast the pattern changes: scroll across the noise's rows, texture widths per second. */
   evolution: number;
+  /** A sinusoidal sway on top of the scroll: its size (texture widths) and rate (radians/s). */
+  sway: { amount: number; rate: number };
   /** Radii as a fraction of the outlined object's size. */
   coreRadius: number;
   glowRadius: number;
 };
 export const defaultLaserOutline: LaserOutlineConfig = {
-  frequency: 2.4,
-  drift: [0.12, -0.07, 0.09],
-  evolution: 0.22,
+  frequency: 0.9,
+  scroll: 0.05,
+  evolution: 0.12,
+  sway: { amount: 0.08, rate: 0.9 },
   coreRadius: 0.004,
   glowRadius: 0.025,
 };
 
-// Four-dimensional gradient noise with quintic interpolation. The fourth coordinate evolves
-// independently of spatial drift, so the field changes shape rather than merely translating.
-export const laserNoise = `
-vec4 gradient4(vec4 cell) {
-  vec4 h = vec4(dot(cell, vec4(127.1,311.7,74.7,269.5)),
-                dot(cell, vec4(269.5,183.3,246.1,113.5)),
-                dot(cell, vec4(113.5,271.9,124.6,199.3)),
-                dot(cell, vec4(419.2,371.9,128.5,213.7)));
-  vec4 g = fract(sin(h) * 43758.5453) * 2.0 - 1.0;
-  return g * inversesqrt(max(dot(g,g), .001));
+/** Texels along each side of the shared noise texture. */
+const noiseSize = 64;
+let sharedNoise: THREE.DataTexture | null = null;
+
+/**
+ * One small tileable 2D value-noise texture (two octaves), made once and shared by every laser
+ * outline: the haze the beam shows. Each edge samples a line through it; scrolling the texture
+ * moves and changes the haze, so the shader does one texture read per pixel.
+ */
+export function laserNoiseTexture(): THREE.DataTexture {
+  if (sharedNoise) return sharedNoise;
+  let seed = 0x9e3779b9;
+  const random = () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const octave = (cells: number) => {
+    const lattice = Array.from({ length: cells * cells }, random);
+    const at = (x: number, y: number) => lattice[(y % cells) * cells + (x % cells)]!;
+    const smooth = (t: number) => t * t * (3 - 2 * t);
+    return (x: number, y: number) => {
+      const fx = (x / noiseSize) * cells,
+        fy = (y / noiseSize) * cells;
+      const x0 = Math.floor(fx),
+        y0 = Math.floor(fy);
+      const tx = smooth(fx - x0),
+        ty = smooth(fy - y0);
+      const top = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * tx;
+      const bottom = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * tx;
+      return top + (bottom - top) * ty;
+    };
+  };
+  const coarse = octave(8),
+    fine = octave(16);
+  const data = new Uint8Array(noiseSize * noiseSize);
+  for (let y = 0; y < noiseSize; y++)
+    for (let x = 0; x < noiseSize; x++)
+      data[y * noiseSize + x] = Math.round((0.65 * coarse(x, y) + 0.35 * fine(x, y)) * 255);
+  const texture = new THREE.DataTexture(data, noiseSize, noiseSize, THREE.RedFormat);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = texture.minFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  sharedNoise = texture;
+  return texture;
 }
-float gradientNoise4(vec4 point) {
-  vec4 cell = floor(point), local = fract(point);
-  vec4 fade = local * local * local * (local * (local * 6.0 - 15.0) + 10.0);
-  float result = 0.0;
-  for (int index = 0; index < 16; index++) {
-    float n = float(index);
-    vec4 corner = vec4(mod(n,2.0), mod(floor(n/2.0),2.0), mod(floor(n/4.0),2.0), floor(n/8.0));
-    vec4 weight = mix(1.0-fade, fade, corner);
-    result += dot(gradient4(cell+corner), local-corner) * weight.x*weight.y*weight.z*weight.w;
-  }
-  return result;
-}
-`;
 
 /** One shared shader/geometry pair per outline; no simulation per edge or per clone. */
 export function createLaserOutline(
@@ -58,8 +87,9 @@ export function createLaserOutline(
     tint: { value: new THREE.Color(colour) },
     opacity: { value: 1 },
     frequency: { value: config.frequency / size },
-    drift: { value: new THREE.Vector3(...config.drift) },
-    evolution: { value: config.evolution },
+    noise: { value: laserNoiseTexture() },
+    // Where the edges read the noise this frame: scroll and evolution, plus the sway.
+    offset: { value: new THREE.Vector2() },
   };
   const object = new THREE.Group();
   const up = new THREE.Vector3(0, 1, 0);
@@ -96,13 +126,15 @@ export function createLaserOutline(
         void main() { vec4 view = modelViewMatrix * vec4(position,1.0);
           edgePosition = position; surfaceNormal = normalMatrix * normal; viewDirection = -view.xyz;
           gl_Position = projectionMatrix * view; }`,
-      fragmentShader: `uniform float time,frequency,evolution,opacity,strength; uniform vec3 drift,tint;
+      // Each edge is a line through the noise: two fixed directions turn its position into
+      // texture coordinates, so every edge reads its own line and the corners stay continuous.
+      fragmentShader: `uniform float frequency,opacity,strength; uniform vec2 offset;
+        uniform vec3 tint; uniform sampler2D noise;
         varying vec3 edgePosition; varying vec3 surfaceNormal; varying vec3 viewDirection;
-        ${laserNoise}
         void main() {
-          vec4 point = vec4(edgePosition*frequency + drift*time, time*evolution);
-          float smoke = .65*gradientNoise4(point) + .35*gradientNoise4(point*2.03 + vec4(13.7));
-          float density = smoothstep(.25,.72, .5 + smoke*1.25);
+          vec2 uv = vec2(dot(edgePosition, vec3(.71,.53,.37)), dot(edgePosition, vec3(-.29,.61,.83)));
+          float haze = texture2D(noise, uv*frequency + offset).r;
+          float density = smoothstep(.3,.72, haze);
           float radial = pow(max(0.0,dot(normalize(surfaceNormal),normalize(viewDirection))),1.7);
           float light = (.05 + density*1.5) * radial * strength * opacity;
           gl_FragColor = vec4(mix(tint,vec3(1.0),density*.4)*light,clamp(light,0.0,1.0));
@@ -126,7 +158,14 @@ export function createLaserOutline(
     object,
     material: core,
     update(seconds: number, reducedMotion = false) {
-      if (!reducedMotion) uniforms.time.value = seconds;
+      if (!reducedMotion) {
+        uniforms.time.value = seconds;
+        const sway = config.sway.amount;
+        uniforms.offset.value.set(
+          config.scroll * seconds + sway * Math.sin(config.sway.rate * seconds),
+          config.evolution * seconds + sway * Math.cos(config.sway.rate * 0.73 * seconds),
+        );
+      }
       uniforms.opacity.value = core.opacity;
     },
     dispose() {
