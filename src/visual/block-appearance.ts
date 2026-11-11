@@ -10,6 +10,8 @@ import "./filled-vessel";
 import "./glass-shells";
 // Registers the fading wall film residue (#334).
 import "./fading-film";
+// Registers the contained cloud (#336).
+import "./cloud";
 // Registers the flame contents (#335).
 import "./fire-core";
 
