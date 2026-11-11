@@ -4,6 +4,7 @@ import { getMaterialDefinition, materialPools } from "../materials";
 import { composeContained, containedLayers } from "./contained";
 import { sharedSimulations } from "./shared-simulation";
 import "./filled-vessel";
+import "./glass-shells";
 
 const geometry = new THREE.BoxGeometry(1, 1, 1);
 const build = (id: string) => {
