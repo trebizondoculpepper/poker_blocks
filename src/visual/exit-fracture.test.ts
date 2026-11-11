@@ -164,3 +164,53 @@ describe("fracture beside other effects (#512 review)", () => {
     runner.dispose();
   });
 });
+
+describe("fracture in awkward hierarchies (#512 review)", () => {
+  it("flies true inside a scaled, turned group: motion is turned into each piece's parent's space", () => {
+    const root = new THREE.Group();
+    const wrapper = new THREE.Group();
+    wrapper.scale.setScalar(2);
+    wrapper.rotation.z = Math.PI / 2;
+    const piece = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.5, 0.5),
+      new THREE.MeshBasicMaterial(),
+    );
+    wrapper.add(piece);
+    root.add(wrapper);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [wrapper], contents: [], release: vi.fn() };
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [
+        {
+          effects: [
+            { effect: "fracture", target: "shell", config: { speed: [0, 0], gravity: 4, life: 2 } },
+          ],
+        },
+      ],
+    });
+    const before = piece.getWorldPosition(new THREE.Vector3());
+    for (let frame = 0; frame < 30; frame++) runner.update(1 / 60);
+    const after = piece.getWorldPosition(new THREE.Vector3());
+    // With no launch speed it only falls: straight down in the world, whatever the wrapper does.
+    expect(after.y).toBeLessThan(before.y);
+    expect(after.x).toBeCloseTo(before.x, 5);
+    runner.dispose();
+  });
+
+  it("handles a root that is itself a mesh: pieces show and the intact body hides", () => {
+    const material = new THREE.MeshBasicMaterial();
+    const root = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+    new THREE.Group().add(root);
+    const v: ExitVisual = { root, shell: [root], contents: [], release: vi.fn() };
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [{ effects: [{ effect: "fracture", target: "shell", config: { pieces: "slabs" } }] }],
+    });
+    expect(root.visible).toBe(true);
+    expect(material.visible).toBe(false);
+    expect(root.children.length).toBeGreaterThan(0);
+    runner.dispose();
+    expect(material.visible).toBe(true);
+  });
+});

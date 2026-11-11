@@ -76,8 +76,9 @@ export type PieceSource = (context: {
 export const pieceSources = new Registry<PieceSource>("piece source");
 
 /** The block's own component meshes fly apart (a shell breaking up, a fan's parts). */
-pieceSources.register("components", ({ originals }) => {
-  const pieces = originals.filter((each) => (each as THREE.Mesh).isMesh);
+pieceSources.register("components", ({ visual, originals }) => {
+  // The root never flies (it carries everything); its own drawing hides instead.
+  const pieces = originals.filter((each) => each !== visual.root && (each as THREE.Mesh).isMesh);
   const homes = pieces.map((piece) => ({
     position: piece.position.clone(),
     quaternion: piece.quaternion.clone(),
@@ -212,7 +213,8 @@ exitEffects.register(
     for (const target of targets)
       target.traverse((child) => {
         // Only the block's own objects: never a sibling effect's particles or overlays.
-        if (child !== visual.root && ownsObject(child)) originals.push(child);
+        // The root counts too: a root that is itself a mesh is part of the block (#512 review).
+        if (ownsObject(child)) originals.push(child);
       });
     const source = reducedMotion
       ? { pieces: [], release: () => {} }
@@ -232,16 +234,39 @@ exitEffects.register(
       ? []
       : originals.filter((each) => each.visible && !shown.has(each));
     hidden.forEach((each) => (each.visible = false));
-    const motion = source.pieces.map(() => ({
-      velocity: new THREE.Vector3(Math.random() - 0.5, Math.random(), Math.random() - 0.5)
-        .normalize()
-        .multiplyScalar((slow + Math.random() * (fast - slow)) * size),
-      axis: new THREE.Vector3(
-        Math.random() - 0.5,
-        Math.random() - 0.5,
-        Math.random() - 0.5,
-      ).normalize(),
-    }));
+    // Something pieces hang from must stay visible, but if it draws (a root or wrapper that is
+    // itself a mesh) its own drawing hides, through its materials: the exit owns them (#512
+    // review). They show again on dispose.
+    const quietened = reducedMotion
+      ? []
+      : originals
+          .filter((each) => shown.has(each) && !source.pieces.includes(each))
+          .flatMap((each) => [(each as THREE.Mesh).material ?? []].flat())
+          .filter((material) => material.visible);
+    quietened.forEach((material) => (material.visible = false));
+    // Motion is worked out in the block's own space, then turned into each piece's parent's
+    // space, so a piece inside a scaled or turned group still flies and falls true (#512 review).
+    visual.root.updateWorldMatrix(true, true);
+    const fromRoot = new THREE.Matrix4().copy(visual.root.matrixWorld).invert();
+    const motion = source.pieces.map((piece) => {
+      const toParent = new THREE.Matrix3().setFromMatrix4(
+        new THREE.Matrix4()
+          .multiplyMatrices(fromRoot, piece.parent?.matrixWorld ?? visual.root.matrixWorld)
+          .invert(),
+      );
+      return {
+        velocity: new THREE.Vector3(Math.random() - 0.5, Math.random(), Math.random() - 0.5)
+          .normalize()
+          .multiplyScalar((slow + Math.random() * (fast - slow)) * size)
+          .applyMatrix3(toParent),
+        fall: new THREE.Vector3(0, -gravity, 0).applyMatrix3(toParent),
+        axis: new THREE.Vector3(
+          Math.random() - 0.5,
+          Math.random() - 0.5,
+          Math.random() - 0.5,
+        ).normalize(),
+      };
+    });
     let elapsed = reducedMotion ? life : 0;
     const turn = new THREE.Quaternion();
     return {
@@ -250,8 +275,8 @@ exitEffects.register(
         const step = Math.min(delta, life - elapsed);
         elapsed += step;
         source.pieces.forEach((piece, i) => {
-          const { velocity, axis } = motion[i]!;
-          velocity.y -= gravity * step;
+          const { velocity, fall, axis } = motion[i]!;
+          velocity.addScaledVector(fall, step);
           piece.position.addScaledVector(velocity, step);
           piece.quaternion.premultiply(turn.setFromAxisAngle(axis, spin * step));
         });
@@ -263,6 +288,7 @@ exitEffects.register(
       dispose() {
         source.release();
         hidden.forEach((each) => (each.visible = true));
+        quietened.forEach((material) => (material.visible = true));
       },
     };
   },
