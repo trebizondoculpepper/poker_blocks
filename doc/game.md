@@ -167,7 +167,7 @@ These prototypes have no material-specific rules yet. **Jelly** is excluded unti
 
 ### Basic scoring materials (planned)
 
-The shop's material pool expands by **round number**, through configured unlocks and stock weights rather than branches for named materials. Paper is never sold: every run starts with it. Each round has one most common material (three in round 4): wood in round 1, steel in 2, terracotta in 3, ice, meat and fire in 4, custard in 5, gold in 6 and prismatic crystal in 7, with earlier materials still offered less often (see "Unlocks and stock weights" below). Unlocking makes a material possible in stock, not guaranteed.
+The shop's material pool expands by **round number**, through configured unlocks and stock weights rather than branches for named materials. Paper is never sold: every run starts with it. Each round's newly unlocked materials are the most common: wood in round 1, steel in 2, terracotta and custard in 3, ice, meat and fire in 4 (still leading in 5, when nothing new unlocks), gold in 6 and prismatic crystal in 7, with earlier materials still offered less often (see "Unlocks and stock weights" below). Unlocking makes a material possible in stock, not guaranteed.
 
 | Material          | Earliest shop round | Effect when its block contributes to a scored hand                                                                                                                                                                                         |
 | ----------------- | ------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -175,6 +175,7 @@ The shop's material pool expands by **round number**, through configured unlocks
 | Wood              |                   1 | Add a small configured amount to that block's base value; **+1** is the first tuning value.                                                                                                                                                |
 | Gold              |                   6 | Add **+1** to that contributing block's base value; separately, each Gold card left in hand grants **2 coins after every stage**.                                                                                                          |
 | Steel             |                   2 | Multiply the line's working score by a configured factor; the factor is still to be tuned. Conductive and resilient are possible later traits, not part of this initial effect.                                                            |
+| Custard           |                   3 | Add **+2** to that block's base value, then multiply the line's working score by **1.2** (#381). Both go through the shared scoring rules; rank and suit are unchanged.                                                                    |
 | Prismatic crystal |                   7 | After ordinary scoring changes, raise the line's working score to a configured power; **1.1** is the first tuning value. Each contributing prismatic applies its power in sequence, and the result is rounded only after all such effects. |
 
 Only blocks that **contribute to the selected scoring hand** activate these material scoring effects. A block present in a longer line but excluded from its best scoring hand has no scoring effect, unless a separate modifier explicitly extends eligibility. Gold's held-card coin reward is separate and does not require the card to score. Material behavior belongs in configured traits; the line scorer supplies contributor IDs and the effect runner applies each eligible operation at its defined scoring phase. Steel strength and prismatic balance are first tuning values. **Implemented in [#141](https://github.com/trebizondoculpepper/poker_blocks/issues/141)** for wood, steel and prismatic crystal (see "Agreed model" below). Meat, fire and ice bring no scoring modifier until their design tickets decide one (#104–#106); Gold's modifier is specified below but not yet implemented. [Material design issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8) tracks the rest.
@@ -187,7 +188,7 @@ This section is the target design and supersedes the table above where they diff
 
 #### Agreed model
 
-- Every card has **exactly one** material at a time (`traits.material.kind`; paper when absent). Changing a card's material is a distant-future idea.
+- Every card has **exactly one** material at a time (`traits.material.kind`; paper when absent). A card's material can change during a run (a transmogrifier, #384; later, material reactions, #362). The change is permanent for the rest of the run, keeps the card's identity, rank and suit, and is saved for Continue (#387).
 - First-version material behaviour is **scoring only**, and only when the card **contributes to the scored hand** of its line.
 - A material's effect is a **`scoringModifier` trait** configured in the balance config, with three inputs and their neutral values: `additive` (0), `multiplicative` (1), `exponential` (1).
 - Materials contribute **event rules** exactly as passives do ([#63](https://github.com/trebizondoculpepper/poker_blocks/issues/63)). `scoringModifier` (on the material's own definition in `src/materials.ts`, expanded by `src/scoring-modifier.ts`) brings one rule per non-neutral value: additive on `score.beforeBlockValue`, multiplicative on `score.lineMultiply`, and exponential on `score.linePower`. The line phases run in that order, before the rack's `score.beforeLineFinalized`. In each phase, the contributing cards' own rules run first, then the passives'. The scorer never names a material.
@@ -199,6 +200,7 @@ This section is the target design and supersedes the table above where they diff
 | Wood              |       +1 |              1 |           1 |             1 |
 | Gold              |       +1 |              1 |           1 |             6 |
 | Steel             |        0 |           1.25 |           1 |             2 |
+| Custard           |       +2 |            1.2 |           1 |             3 |
 | Prismatic crystal |        0 |              1 |         1.1 |             7 |
 
 #### Order of operations (Agreed)
@@ -221,6 +223,7 @@ Values use the current hand table (a pair's base values summed, ×2 hand multipl
 - **Two steels:** both 7s steel. 28 × 1.25 × 1.25 = 43.75 → **44**.
 - **Crystal:** a crystal 7 and a paper 7. 28^1.1 = 39.07 → **39**.
 - **Non-contributor:** a steel 3 in a line whose best hand is a pair of 7s has no effect.
+- **Custard in a pair:** a custard 7 and a paper 7. (7+2+7) ×2 = 32; ×1.2 = 38.4 → **38** (#381).
 - **Gold scoring:** a Gold 7 and a paper 7 score (7+1+7) ×2 = **30**; a Gold card excluded from the selected hand adds no score.
 
 #### Gold's end-of-stage hand reward (#107, #218; built)
@@ -371,7 +374,7 @@ A passive whose effect names a material is never eligible before that material u
 
 #### Unlocks and stock weights
 
-Material unlocks by round: 1 wood; 2 steel; 3 terracotta; 4 ice, meat and fire; 5 custard; 6 gold; 7 prismatic crystal. Paper is never offered. Each material is the most common offer in its unlock round, then rarer but still offered.
+Material unlocks by round: 1 wood; 2 steel; 3 terracotta and custard (#381); 4 ice, meat and fire; 6 gold; 7 prismatic crystal. Paper is never offered. Each material is the most common offer in its unlock round, then rarer but still offered.
 
 Every offer type in the balance config has a **minimum unlock round**, a **default weight** and optional **weight keyframes** by round. A type is eligible from its unlock round. Its weight is interpolated linearly between keyframes and holds the last keyframe's value afterwards. Drawing normalizes the eligible weights; weights are relative, not probabilities.
 

@@ -197,7 +197,7 @@
     }
   },
   "ui.click": {
-    "uses": 29,
+    "uses": 33,
     "files": {
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 1,
@@ -206,6 +206,7 @@
       "run-controller.ts": 1,
       "settings-panel.ts": 7,
       "tools/block-designer.ts": 3,
+      "tools/contained-proof/room.ts": 4,
       "tools/shop-balance-editor.ts": 6,
       "traits/menu-action.ts": 1
     }
@@ -259,8 +260,9 @@
     }
   },
   "passive.activate.scoring": {
-    "uses": 1,
+    "uses": 2,
     "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
       "passive-categories.ts": 1
     }
   },
@@ -307,9 +309,9 @@
     }
   },
   "material.attach.steel": {
-    "uses": 1,
+    "uses": 2,
     "files": {
-      "materials.ts": 1
+      "materials.ts": 2
     }
   },
   "material.attach.fire": {
@@ -349,6 +351,12 @@
     }
   },
   "material.activate.steel": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.activate.custard": {
     "uses": 1,
     "files": {
       "materials.ts": 1

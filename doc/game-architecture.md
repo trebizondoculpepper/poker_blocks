@@ -127,11 +127,11 @@ A discarded hand cube dissolves with the same shader over one second before its 
 
 Material appearance is defined on each material definition in `src/materials.ts`: printed ink, face pattern, relief, surface, geometry, edges, optical settings and the transparent trait attachment. `src/visual/block-appearance.ts` is a generic builder that dispatches named pattern, surface, relief, geometry and assembly handlers from that configuration. The same definition is used by blocks in hand, in the field and in the shop. A new material may combine existing handlers without changing the builder; a genuinely new visual technique gets one new registered handler. Material gameplay effects remain separate and are tracked in #8 and #63.
 
-**Filled vessels and visual experiments (#227).** The `filledVessel` assembly (`src/visual/filled-vessel.ts`) draws a hollow, clear vessel part-filled with a viscous fluid, configured entirely by a material's `appearance.vessel` data. That data sets the fill and surface colours, the level, a settle time constant, a trace time constant and opacity, the shell's opacity and the wall thickness. No code names the material. Custard is the first such material: it began as a visual experiment and is now a gameplay material, sold in the shop from round 5 (#342).
+**Filled vessels and visual experiments (#227).** The `filledVessel` assembly (`src/visual/filled-vessel.ts`) draws a hollow, clear vessel part-filled with a viscous fluid, configured entirely by a material's `appearance.vessel` data. That data sets the fill and surface colours, the level, a settle time constant, a trace time constant and opacity, the shell's opacity and the wall thickness. No code names the material. Custard is the first such material: it began as a visual experiment and is now a gameplay material, sold in the shop from round 3, scoring +2 and ×1.2 (#342, #381).
 
 - **How it works:** it is a lightweight approximation, not a fluid simulation. A copy of the block's shape is cut by a flat surface: fragments above it are discarded, and back faces seen through the cut are shaded flat, so the cut reads as the fluid's top. Each frame, the surface's normal eases toward "up" in the block's own space (the world's up, turned back by the block's rotation), using an exponential with the settle time constant. The fluid therefore levels slowly, without splashing or overshooting.
 - **Wall trace:** a second normal follows the surface more slowly. Inner wall that lies below that old surface but above the current one is tinted faintly. As the old surface catches up, the band shrinks to nothing, so the trace fades. Exact volume is not preserved as the block tilts.
-- **Where it can appear:** experimental materials live in `experimentalMaterials`, not `materialDefinitions`. No shop, reward, material sample or attract sequence ever deals them, and they carry no scoring, prices or rewards. A developer mode deals one only by asking: `materialDeck` with the `registered` pool (dev0 deals every registered material, so a new experiment appears there automatically), or the `uniformMaterialDeck` run setup step. The list is empty at the moment: custard, the first, graduated to `materialDefinitions` when the shop began to sell it (#342), so it is dealt like any gameplay material; `dev6` (sandbox play, every card custard) still shows it alone. `src/visual/filled-vessel.test.ts` checks that no file in `src/visual` names an experimental material, and that experiments stay out of gameplay.
+- **Where it can appear:** experimental materials live in `experimentalMaterials`, not `materialDefinitions`. No shop, reward, material sample or attract sequence ever deals them, and they carry no scoring, prices or rewards. A developer mode deals one only by asking: `materialDeck` with the `registered` pool (dev0 deals every registered material, so a new experiment appears there automatically), or the `uniformMaterialDeck` run setup step. **Air** (`airVent`, #357) is the current experiment: a pale powder-coated housing drawn by the `ventHousing` face pattern. It has a PC fan on its two variant faces (`endGrainFaces: [0, 1]`, so the fans face each other across the block) and louvred slats on the other four, on the ordinary `sixFaces` assembly. The fans are static for now: a turning fan would need a per-frame visual behaviour, which is left for later rather than drawn into the face texture. It has no airflow, scoring, price or reward, and borrows steel's attach sound. See it in `?mode=dev9#materials/airVent` or dealt in dev0. Custard, the first experiment, graduated to `materialDefinitions` when the shop began to sell it (#342), so it is dealt like any gameplay material; `dev6` (sandbox play, every card custard) still shows it alone. `src/visual/filled-vessel.test.ts` checks that no file in `src/visual` names an experimental material, and that experiments stay out of gameplay.
 - **Shared simulations (#230):** blocks of one effect type show one simulation result. `src/visual/shared-simulation.ts` is a generic registry: `sharedSimulations.acquire(config, create)` returns the simulation for a configuration object (a material's appearance data), creating it on first use. It is released when the block's material is disposed, and dropped when no block uses it. A simulation advances at most once per frame, keyed on the frame's timestamp (`document.timeline.currentTime`), however many blocks render it. The vessel simulation keeps the fluid's surface and trace as world-space normals. It is driven by the rotation of the first block drawn each frame; blocks on the table all share the structure's rotation. Each block turns that result into its own space, so placement and orientation stay per block while the simulation runs once. `src/visual/shared-simulation.test.ts` checks one simulation and one step per frame for many blocks, separate configurations kept apart, identical results at one orientation, and the same world surface at another. It also guards that the per-block vessel factory gets its simulation from the registry. The flame core needs nothing more: it is a stateless shader of the shared clock, so every flame already looks identical. A future flame particle system should acquire its simulation the same way. **Amended by #329:** simulations are shared per configuration _and_ motion cohort, and residue history is per block; see "Simulation sharing: amending #230" under Contained components.
 - **Performance:** each vessel adds three meshes (inner wall, fluid and trace) and two transparent layers (shell and trace), and the fluid is double-sided. That is more overdraw than an opaque block, and transparent sorting can occasionally flicker where vessels overlap. The shaders are cheap: one dot product and a discard, with no textures or extra render passes. A table full of vessels on a low-end phone is the case to watch. If it struggles, the first savings are to drop the trace mesh and use the outer shell alone.
 
@@ -297,6 +297,59 @@ reactions?: readonly {
 **Out of scope here:** creating new blocks (cloud from air and boiling water, #374) is identity creation, not a transformation, and gets its own contract. So do container visuals (#328): a reaction changes the model, and the material's appearance follows.
 
 **Guardrails for #366:** a test that edge or corner contact never reacts; that a block changes at most once per play; that a two-step chain (air → aggressive flame → boiling water) takes two plays; that discards, refills and stage advance never react; that candidate-hand scoring is unchanged by pending reactions; that the same reactions are selected whatever order the blocks are visited in (events are still dispatched in field order); that a transformation survives save and Continue; and the guardrail scan, so that no generic code names a material.
+
+### State bonuses (proposal, #364, epic #362)
+
+**Status: research proposal.** Nothing is built. #365 implements it once the owner questions on #364 are answered.
+
+A **state bonus** is a scoring bonus a card gains from a reaction (ice melted into water: +1; water heated: +1; water boiled: ×2). It never changes the card's rank, suit or poker-hand identity. A new state **replaces** the old one rather than adding to it. Bonuses on different cards in a scored line still combine, as material modifiers do.
+
+**Representation.** A card has at most one state bonus, in one trait slot:
+
+```ts
+// On CardBlock.traits
+stateBonus?: { id: string };   // a registered state bonus, e.g. "melted", "heated", "boiled"
+```
+
+The numbers live once, in a registry of state-bonus definitions (`src/state-bonuses.ts`), not on the card. They are validated like a material's numbers:
+
+```ts
+type StateBonusDefinition = {
+  name: string; // shown by the inspector: "Boiled (×2)"
+  modifier: ScoringModifier; // the existing type: additive / multiplicative / exponential
+  activation: MaterialActivationCue; // pulse accent and registered sound when it fires
+};
+```
+
+Reusing `ScoringModifier` means a state bonus can be additive, multiplicative or exponential with no new arithmetic. Replacing is a plain overwrite of the trait (`{ ...card, traits: { ...card.traits, stateBonus: { id } } }`), so the old bonus can never stack with the new one. Removing the trait returns the card to no bonus.
+
+**Exactly where it applies in scoring.** `cardScoringRules(block)` in `src/materials.ts` is the single place a card's own rules are collected. It becomes the material's rules followed by the state bonus's rules (`scoringModifierRules(definition.modifier)`). They enter the scorer as the same card's rules, so they run in the phases and order already agreed in `doc/game.md` ("Order of operations"):
+
+1. additive on `score.beforeBlockValue` (step 1, with the material's additive, before passives);
+2. multiplicative on `score.lineMultiply` (step 3);
+3. exponential on `score.linePower` (step 4);
+
+and then passives (step 5), the clamp (step 6), after-clamp bonuses (step 7) and rounding (step 8), all unchanged.
+
+Within one card, the material rule runs before the state rule. That invents no order: sums and products commute, and successive powers multiply exponents ((x^a)^b = x^(ab)), so the result is the same either way. `scoreFieldWithPassives` needs no change. It already asks `rulesForCard` and reports activations with the card as source.
+
+**Contributing cards only (default):** like material modifiers, a state bonus applies only while its card contributes to the line's scored hand, because it travels through the same card rules. Question 1 on #364 asks the owner to confirm this.
+
+**Presentation:** an activation from a card is presented with that card's material cue today. A state bonus needs its own cue (the "Boiled" pulse and sound), so a `RuleActivation` gains an optional `cue` naming which of the card's rule groups fired: its material, or its state bonus. The presenter looks the cue up in that group's definition, and nothing branches on which group it is. The new sound gets a registered id with a placeholder (`score.state-bonus`).
+
+**Persistence.**
+
+- **Within a run:** a reaction replaces the card object in `state.field` with a new object of the same id (model first). At stage end the field's blocks return to the deck as those same objects (`dealer.ts`, `game-run.ts`), so the bonus follows the card through hand, deck, discard and later stages with no extra work.
+- **Save and Continue:** the save stores card ids and rebuilds each card from the starting deck and `boughtCards`, so a state bonus would be lost. #387 has since built the per-card ledger for changed materials (`GameState.cardStates`, saved as the optional `state.cardStates`; see "Permanent material change" below). #365 extends each entry with an optional `stateBonus` id, validated against the state-bonus registry on restore. An unknown id rejects the record, and older saves stay readable.
+- **Across runs:** none. A new run deals fresh cards (`dealer.ts`), so no bonus carries over.
+
+**Guardrails for #365:** a test that a state bonus leaves rank, suit and hand evaluation unchanged; that a second state replaces the first; that a non-contributing card's bonus does nothing; that the bonus survives the field → deck return, and survives save → Continue; that an unknown saved bonus is rejected; and that no generic code names a state bonus (guardrail scan, as for materials).
+
+### Permanent material change (#387)
+
+`changeCardMaterial(state, cardId, material)` in `src/card-material.ts` (and `GameRun.changeCardMaterial`) gives one card a new material for the rest of the run. It finds the card wherever it is (hand, field, deck, discard pile, and the bought-card ledger) and replaces it with a copy carrying the new material, with the same id, rank and suit. `rematerial` first removes the traits the old material's definition brought (a transparent card turned to wood is no longer transparent), then applies the new definition. It returns null and changes nothing when the card isn't in the run or already has that material, so a transmogrifier can refuse such a drop without spending a use.
+
+The run keeps a ledger, `GameState.cardStates` (`{ [cardId]: { material } }`), because a save stores card ids and rebuilds cards from the starting deck and `boughtCards`. The save writes it as the optional `state.cardStates`, and restore applies it to the rebuilt cards. A saved entry naming an unknown material or card rejects the record. Older saves without it stay readable, and `saveVersion` stays 1. The changed card is the same object the dealer moves from field to deck at stage end, so the change also carries through later stages. Material reactions (#366) and state bonuses (#365) are meant to extend this same record.
 
 ## Session controller
 
@@ -800,18 +853,53 @@ Stateless shaders of the clock (the flame core, cloud) need no simulation and ar
 
 **Cost and evidence.** A simulation step is a few vector operations: well under 0.01 ms. With cohorts there are at most (configurations × cohorts) steps per frame: one for the table, plus one per free contained block (a hand of 8 and a shop of 4 would add 12 tiny steps). The real cost is per-block residue history and transparent overdraw, which #346 measures.
 
-### The bounded comparison for #346
+### The rendering proof (#346): results and decision
 
-#346 builds one contained block (a glass shell, refractive water, a fading film) in a dev room, and measures before any extraction:
+`?mode=dev15` is the proof room (`src/tools/contained-proof/`, development builds only). It draws a glass shell, refractive water cut by its own levelling surface, and a fading wall film, in the layer order above, with every vessel turning independently over a checked backdrop (so refraction shows), optionally overlapping. It also draws the custard baseline, built by the game's own `createFilledVessel`. **Measure** records 240 frames as a Markdown row. Film storages and vessels are registered by name (`coatingStorages`, `vesselBuilders`), so the room never asks which it holds.
 
-- **Residue representations**, each fading over `seconds`:
-  1. **Lagging plane** (today): no memory, one previous surface.
-  2. **Plane ring buffer**: the last N surfaces (N = 4 and 8) as uniforms, fading by age. Fixed, small cost; remembers a few sloshes.
-  3. **Wetness texture**: a low-resolution wetness map over the wall (6 faces × 32² texels), written on the GPU each frame from the surface and decayed by `seconds`. Remembers any history; costs a render target per block.
-- **Layering:** the glass + water + film stack, at several angles and over a busy background, checked for sorting errors and flicker.
-- **Representative load:** 24 contained blocks on the table plus 8 in hand, on a desktop browser and a mid-range phone.
+**What was compared.** The issue asked for wall-coating storage per vertex against a per-face texture, using local wetting queries:
 
-**Targets** (to confirm or revise in #346): 60 fps on desktop and at least 50 fps on the phone at that load; at most 7 draw calls per contained block; residue memory at most 32 KB per block (a 6 × 32² single-channel float16 map is 12 KB); simulation steps at most 0.05 ms per frame in total. #346 records the measured numbers here and picks the residue representation for #334.
+- **Per vertex:** one strength per vertex of a box subdivided `resolution` times per edge, drawn just inside the wall. Detail depends on the mesh, so the coating needs its own dense mesh: the rounded block shell has too few vertices across a face to carry a wet line.
+- **Per-face texture:** one strength per texel of a six-face atlas (`resolution`² per face). The shader finds the face and texel from the fragment's local position, so it needs no UVs and its detail is independent of the wall mesh.
+
+Both keep each vessel's own history. A sample under the surface goes back to full strength (rewetting refreshes it); a dry one fades by `exp(-delta / seconds)`, so different places hold different ages.
+
+**Measured** on 2026-11-10: headless Chrome 150, ANGLE Metal on an Apple M3 Max, 960×758 at 1×, frame-rate limit off (so frame time is the work, not vsync), overlap on, every vessel tumbling:
+
+| Vessel               | Storage      | Resolution | Count | Mean ms | p95 ms | Update ms | Update + render ms | Draw calls | Triangles | Film KB/vessel |
+| -------------------- | ------------ | ---------- | ----- | ------- | ------ | --------- | ------------------ | ---------- | --------- | -------------- |
+| custard (baseline)   | —            | —          | 8     | 2.02    | 3.30   | —         | 1.78               | 49         | 46,658    | 0              |
+| custard (baseline)   | —            | —          | 32    | 2.02    | 3.30   | —         | 1.72               | 193        | 186,626   | 0              |
+| glass + water + film | face texture | 32         | 8     | 2.21    | 3.70   | 0.16      | 1.90               | 50         | 38,980    | 30.0           |
+| glass + water + film | vertex       | 32         | 8     | 2.06    | 3.60   | 0.28      | 1.77               | 50         | 137,188   | 25.5           |
+| glass + water + film | face texture | 16         | 32    | 2.35    | 4.40   | 0.21      | 2.01               | 194        | 155,908   | 7.5            |
+| glass + water + film | vertex       | 16         | 32    | 2.27    | 3.90   | 0.34      | 1.95               | 194        | 253,828   | 6.8            |
+| glass + water + film | face texture | 32         | 32    | 2.04    | 4.10   | 0.60      | 1.69               | 194        | 155,908   | 30.0           |
+| glass + water + film | vertex       | 32         | 32    | 1.96    | 2.40   | 1.18      | 1.70               | 194        | 548,740   | 25.5           |
+| glass + water + film | face texture | 64         | 32    | 2.77    | 3.10   | 1.98      | 2.53               | 194        | 155,908   | 120.0          |
+| glass + water + film | vertex       | 64         | 32    | 4.88    | 5.30   | 4.16      | 4.67               | 194        | 1,728,388 | 99.0           |
+
+"Update ms" times the room's explicit per-vessel update (the proof's settler and film). The custard baseline has none: it steps its simulation inside `renderer.render` (`onBeforeRender`), so only "Update + render ms" compares the two like for like. Changing a control during a measurement cancels it, so each row is one configuration.
+
+Each proof vessel is 6 draw calls (back glass, water top, film, water, front glass, print), the same as custard (outer shell, inner wall, fluid, trace, gloss, print). Each scene adds a call or two of its own (the backdrop), so the table's totals are 6 per vessel plus 1 for custard and plus 2 for the proof. On this machine the GPU is never the limit: frame time stays near 2 ms up to 32 vessels except at resolution 64. The real cost is the **CPU film update**, which grows with samples × vessels, and the vertex storage's **triangles**, which grow with the square of its resolution on every face.
+
+**Decision: per-face texture storage at 32 texels per face edge** for #334.
+
+- It is independent of the shell mesh, as the acceptance requires, and costs no extra triangles (the film is a plain box).
+- It updates twice as fast as vertex storage at the same density (0.60 ms against 1.18 ms for 32 vessels), and going from resolution 32 to 64 at 32 vessels, vertex storage raises the mean frame time from 1.96 to 4.88 ms (about 2.5 times) and the update time from 1.18 to 4.16 ms.
+- Memory: "Film KB/vessel" counts each vessel's own history only. At 32 that is 30 KB, of which 24 KB is a CPU float copy kept for clarity; production keeps one byte per texel (6 KB per vessel) or moves the decay to the GPU. The texel positions the update tests against are immutable for a resolution, so they are made once and shared by every vessel (72 KB at 32, once in total, not per vessel). Vertex storage's positions live in its own subdivided geometry, which every vessel here builds afresh (about 150 KB at 32); production would share one geometry per resolution.
+
+**Visual checks** (in the room, at 1, 2 and 8 vessels): the water is cut cleanly by its surface and refracts the backdrop; the print stays legible on every face, front and back; overlapping, independently turning vessels sort without flicker in the layer order above. Approximations judged acceptable: the water's top is not a cap mesh. As in custard, the clipped volume's back faces are drawn in one flat, semi-transparent colour, so looking down through the cut you see the far walls and bottom in that colour and they read as a flat top. A true cap along the plane is left to #333 if this proves unconvincing for clear water; the film is a box just inside the wall, so on a rounded corner it sits a little inside the glass.
+
+**Limitations to carry forward:**
+
+- **Transmission ignores render order:** three.js draws three queues in turn: opaque, then **transmissive** (any `MeshPhysicalMaterial` with `transmission` > 0), then transparent. `renderOrder` only sorts within a queue. So refractive water is drawn before every transparent layer in the table above, whatever order it is given, and its depth write hides the back glass and film behind it. The proof shows this is acceptable, because transmission only refracts opaque things anyway: through the water you see the refracted backdrop, not the back wall. But the layer table holds only for the transparent queue. **Rule for #333:** a transmissive content is its own queue, drawn before all contained transparent layers. Layers behind it are hidden where it covers them, and only layers in front of it (the film above the surface, the front glass, gloss and print) keep the table's order. An opaque or transparent fluid (custard) still uses the table as given.
+
+- **Nested transmission:** three.js transmission samples only opaque objects (`transmissionRenderTarget`), so refractive water shows the backdrop through it but not other glass or water. That matches the agreed look closely enough for a single vessel, but stacked water blocks do not refract each other. Accept it for #333; revisit only if the owner wants it.
+- **One machine:** these numbers come from one fast desktop GPU. No phone was measured. The budget below is set from the CPU cost, which scales predictably; #333 or #334 should measure on a phone before raising it.
+- **Not measured in the game's own passes:** the room has its own renderer. The hand and table passes add their own layers (print 20, meltwater 15); #330 checks the layer table there when it extracts the plastic shell.
+
+**Budget for later missions:** per contained block, at most 7 draw calls and 6 KB of film history; film update at most 1 ms per frame across all contained blocks (≈32 blocks at 32²); simulation steps at most 0.05 ms per frame in total; no per-block render target.
 
 ### Data flow by example
 

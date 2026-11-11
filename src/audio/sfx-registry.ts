@@ -554,6 +554,13 @@ const entries = [
     description: "A steel card's scoring modifier activates as its line is presented",
   },
   {
+    id: "material.activate.custard",
+    name: "Activate custard",
+    family: "material",
+    description: "A custard card's scoring modifier activates as its line is presented",
+    placeholder: "passive.activate.scoring",
+  },
+  {
     id: "material.activate.prismatic",
     name: "Activate prismatic",
     family: "material",
