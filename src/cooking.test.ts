@@ -80,6 +80,37 @@ describe("doneness resets through the stage-end registry (#408 review)", () => {
   });
 });
 
+describe("steak payout and Le Chef (#373)", () => {
+  it("pays a coin per Bloody, Rare or Medium Rare steak on the table", async () => {
+    const { materialFieldRewardEntries } = await import("./stage-rewards");
+    const field = [0, 1, 3, 4, 5].map((step, index) =>
+      at(withDoneness(made(index, "meat"), step), index),
+    );
+    // Raw (0), Well Done (4) and Overcooked (5) don't qualify: Bloody (1) and Medium Rare (3) do.
+    expect(materialFieldRewardEntries(table(...field))).toEqual([
+      { source: "material.meat.field", label: "Steak (2)", coins: 2 },
+    ]);
+  });
+
+  it("with Le Chef, each qualifying steak pays 3 instead of 1", async () => {
+    const { materialFieldRewardEntries } = await import("./stage-rewards");
+    const { createPassiveBlock } = await import("./passives");
+    const state = {
+      ...table(at(withDoneness(made(0, "meat"), 2), 0)),
+      passiveRack: [createPassiveBlock("le-chef", "passive.1")],
+    };
+    expect(materialFieldRewardEntries(state)).toEqual([
+      { source: "material.meat.field", label: "Steak (1)", coins: 3 },
+    ]);
+  });
+
+  it("pays nothing for meat in the hand", async () => {
+    const { materialFieldRewardEntries } = await import("./stage-rewards");
+    const state = { ...table(), hand: [withDoneness(made(0, "meat"), 2)] };
+    expect(materialFieldRewardEntries(state)).toEqual([]);
+  });
+});
+
 describe("the inspector names Raw too (#408 review)", () => {
   it("shows Raw on fresh meat and after the stage reset", () => {
     expect(made(0, "meat").traits.inspectable?.inspect()).toMatch(/· Meat · Raw$/);
