@@ -29,7 +29,9 @@ export type GameState = {
    * Cards whose material changed this run (#387), by id: saved so Continue rebuilds them with
    * it (src/card-material.ts). Absent when nothing changed.
    */
-  cardStates?: Readonly<Record<string, { material?: BlockMaterial; stateBonus?: string }>>;
+  cardStates?: Readonly<
+    Record<string, { material?: BlockMaterial; stateBonus?: string; doneness?: number }>
+  >;
   /** Run currency; unlike stage score, this carries across stages and the shop. */
   coins: number;
   round: Readonly<Round>;
