@@ -99,6 +99,12 @@ export type PassiveDefinition = {
    * round it can be stocked. Absent only on a retired passive.
    */
   shop?: PassiveShopBalance;
+  /**
+   * Settlement reward modifiers it brings while installed (#373): registered handlers by name
+   * (`rewardModifiers` in src/stage-rewards.ts), each with its configuration. Le Chef brings
+   * `field-rate`, raising a material's field reward rate.
+   */
+  rewardModifiers?: readonly { id: string; config: unknown }[];
   /** Excluded from new draws; kept so a save that names it still resolves. */
   retired?: boolean;
 };
@@ -218,6 +224,19 @@ const definitions: PassiveDefinition[] = [
     eventRules: [
       coinsPerBlock("stage.won", { id: "material-is", config: { material: "gold" } }, 1),
     ],
+  },
+  {
+    // Le Chef (#104, #373): steak on the table at settlement pays 3 coins each instead of 1.
+    id: "le-chef",
+    shop: { basePrice: 5, unlockRound: 3, frequency: "even" },
+    categoryTrait: { economyCategory: {} },
+    name: "Le Chef",
+    symbol: "♨",
+    description:
+      "After each stage, each Bloody, Rare or Medium Rare steak on the table pays 3 coins instead of 1.",
+    traitId: "passive.event-rules",
+    eventRules: [],
+    rewardModifiers: [{ id: "field-rate", config: { material: "meat", coinsPerCard: 3 } }],
   },
   {
     id: "carnivore",

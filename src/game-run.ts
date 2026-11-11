@@ -17,6 +17,7 @@ import { moveItem } from "./zones";
 import {
   ledgerTotal,
   materialHandRewardEntries,
+  materialFieldRewardEntries,
   stageRewardLedger,
   type StageReward,
 } from "./stage-rewards";
@@ -287,7 +288,10 @@ export class GameRun {
             this.config.stageReward,
             this.currentPhase as StageKind,
           )
-        : materialHandRewardEntries(this.currentState);
+        : [
+            ...materialHandRewardEntries(this.currentState),
+            ...materialFieldRewardEntries(this.currentState),
+          ];
     if (outcome === "lost" && entries.length === 0) return null;
     const balanceBefore = this.currentState.coins;
     const balance = balanceBefore + ledgerTotal(entries);

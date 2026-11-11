@@ -56,6 +56,11 @@ export type MaterialDefinition = {
    * material's own weight curve) does not apply or there is no shop price (#388).
    */
   transmogrifier?: { price?: number; weights?: WeightCurve };
+  /**
+   * Coins per card of this material left on the field at settlement, on both a win and a loss,
+   * counting only cards at one of the listed doneness steps (steak, #373).
+   */
+  fieldReward?: { coinsPerCard: number; doneness: readonly string[]; label: string };
   /** Coins per card still held at settlement, on both a win and a loss. */
   handReward?: { coinsPerCard: number };
   /** Presentation when one of this material's scoring rules fires. */
@@ -362,6 +367,8 @@ export const materialDefinitions = [
     acoustics: { character: "squishy", hardness: 1, attach: "material.attach.meat" },
     // Cooks one step per play beside flame or boiling water, stopping at Overcooked; back to
     // Raw each stage (#372).
+    // A coin per steak left on the table at settlement: Bloody, Rare or Medium Rare (#373).
+    fieldReward: { coinsPerCard: 1, doneness: ["Bloody", "Rare", "Medium Rare"], label: "Steak" },
     cookable: { steps: ["Raw", "Bloody", "Rare", "Medium Rare", "Well Done", "Overcooked"] },
     reactions: [
       {
