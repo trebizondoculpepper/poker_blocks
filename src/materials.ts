@@ -613,6 +613,20 @@ const slowBubbles = {
   },
 };
 
+/** Fast bubbles (#354): boiling water's, the same handler as hot water's, busier and quicker. */
+const fastBubbles = {
+  effect: "risingBubbles",
+  config: {
+    count: 48,
+    rise: 0.6,
+    wobble: 0.05,
+    size: 0.09,
+    rest: 0.25,
+    colour: 0xeaf6ff,
+    opacity: 0.8,
+  },
+};
+
 /** A material with inclusions suspended in its contents (#353). */
 function withInclusions(
   material: MaterialDefinition,
@@ -686,6 +700,10 @@ function plasticFluidExperiments(): MaterialDefinition[] {
     plastic("waterInPlastic", "Water in plastic", clearWater),
     // Hot water (#353): the same water, with very slowly rising bubbles as an inclusion.
     withInclusions(plastic("hotWaterInPlastic", "Hot water in plastic", clearWater), [slowBubbles]),
+    // Boiling water (#354): the same water, with fast bubbles.
+    withInclusions(plastic("boilingWaterInPlastic", "Boiling water in plastic", clearWater), [
+      fastBubbles,
+    ]),
     plastic("darkFluid", "Dark fluid", darkFluid),
     plastic("cloudInPlastic", "Cloud in plastic", softCloud),
     plastic("magicLock", "Magic Lock", magicStars),
