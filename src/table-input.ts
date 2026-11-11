@@ -70,6 +70,12 @@ export type TableRules = {
   reorderPassive(from: number, to: number): boolean;
   /** Sell a passive; false when the rules refuse. */
   sellPassive(id: string): boolean;
+  /**
+   * Use a rack item on a card in the hand or on the table (#389), such as a transmogrifier;
+   * false when the rules refuse (the item has no effect on cards, or the card already has
+   * its material). A refusal spends nothing.
+   */
+  applyRackItem(itemId: string, cardId: string): boolean;
 };
 
 /** The passive rack view, as far as dragging a passive needs it. */
@@ -412,6 +418,17 @@ export function createTableInput(options: {
 
   const pickAny = (clientX: number, clientY: number) =>
     pickBlock(clientX, clientY, reachableHand()) ?? pickBlock(clientX, clientY, field.blocks());
+
+  /**
+   * The card under a point for a rack item: a hand card, or a table card, including one still
+   * landing (its stand-in), so input is never held back by an animation (#272).
+   */
+  function cardUnder(clientX: number, clientY: number): CardBlock | undefined {
+    const held = pickBlock(clientX, clientY, reachableHand());
+    if (held) return held.block;
+    pointRay(clientX, clientY);
+    return field.faceAt(raycaster)?.target.block;
+  }
 
   function overDiscardArea(clientX: number, clientY: number): boolean {
     const bounds = discardArea.getBoundingClientRect();
@@ -971,6 +988,20 @@ export function createTableInput(options: {
         trace("dropped on rack", `slot ${slot + 1}`);
         if (slot !== from && rules.reorderPassive(from, slot)) playSfx("hand.reorder");
         else playSfx("card.drag.return");
+        return;
+      }
+      // Dropped on a card in the hand or on the table (one still landing too): use it on that
+      // card (#389). The SELL bin, drawn over the table, takes precedence over cards behind it.
+      const card =
+        canceled || overDiscardArea(clientX, clientY) ? undefined : cardUnder(clientX, clientY);
+      if (card) {
+        if (rules.applyRackItem(block.id, card.id)) {
+          trace("dropped on card", "a rack item used on a card");
+          playSfx("item.apply");
+        } else {
+          trace("refused", "using a rack item on a card");
+          playSfx("action.denied");
+        }
         return;
       }
       if (canceled || !overDiscardArea(clientX, clientY)) {

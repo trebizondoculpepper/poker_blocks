@@ -1,5 +1,6 @@
 import { commitReactions, type AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
+import { applyRackItem } from "./rack-item-effects";
 import type { BlockMaterial } from "./materials";
 import { changeCardMaterial } from "./card-material";
 import type { CardBlock } from "./cards";
@@ -510,6 +511,16 @@ export class GameRun {
    */
   setCardStateBonus(cardId: string, bonusId: string): GameState | null {
     const next = setCardStateBonus(this.currentState, cardId, bonusId);
+    if (next) this.currentState = next;
+    return next;
+  }
+
+  /**
+   * Use a rack item on a card (#389): a transmogrifier changes its material. One use is spent;
+   * an item with none left leaves the rack. Null, changing nothing, when it is refused.
+   */
+  applyRackItem(itemId: string, cardId: string): GameState | null {
+    const next = applyRackItem(this.currentState, itemId, cardId);
     if (next) this.currentState = next;
     return next;
   }

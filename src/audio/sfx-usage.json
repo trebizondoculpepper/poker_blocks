@@ -70,12 +70,12 @@
     }
   },
   "action.denied": {
-    "uses": 9,
+    "uses": 10,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
       "menus.ts": 2,
       "run-controller.ts": 2,
-      "table-input.ts": 3,
+      "table-input.ts": 4,
       "traits/menu-action.ts": 1
     }
   },
@@ -259,10 +259,16 @@
       "play-presenter.ts": 1
     }
   },
-  "passive.activate.scoring": {
-    "uses": 2,
+  "item.apply": {
+    "uses": 1,
     "files": {
-      "audio/sfx-registry.ts (placeholder)": 1,
+      "table-input.ts": 1
+    }
+  },
+  "passive.activate.scoring": {
+    "uses": 3,
+    "files": {
+      "audio/sfx-registry.ts (placeholder)": 2,
       "passive-categories.ts": 1
     }
   },

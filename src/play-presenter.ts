@@ -1,3 +1,4 @@
+import { cellKey } from "./traits/attachable";
 /**
  * Play presenter service: shows a play or discard the rules have already accepted. Played
  * blocks fly from the hand to their cells one after another (a transparent block dissolves
@@ -206,6 +207,18 @@ export function createPlayPresenter(options: {
       } else {
         // Same look in hand and on the table: the flying block simply stays.
         field.adopt(flight.source, flight.cell);
+      }
+    }
+    // A block changed while it flew (a transmogrifier dropped on it mid-flight, #389) lands as
+    // the model has it now: model first, presentation catches up.
+    for (const flight of action.flights) {
+      const shown = field
+        .blocks()
+        .find(({ cell }) => cell && cellKey(cell) === cellKey(flight.cell));
+      const now = game().state.field.find(({ cell }) => cellKey(cell) === cellKey(flight.cell));
+      if (shown && now && now.block !== shown.block) {
+        field.remove(shown.block.id);
+        field.add(now.block, now.cell);
       }
     }
     options.moved();
