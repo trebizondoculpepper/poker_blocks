@@ -383,12 +383,16 @@ export const materialDefinitions = [
     traits: { transparent: {} },
     shop: {
       basePrice: 3,
+      // Unlocks in round 3 (#381), alongside terracotta.
       weights: [
-        [5, 4],
-        [6, 1.5],
-        [7, 1],
+        [3, 4],
+        [4, 1.5],
+        [5, 1],
       ],
     },
+    // +2 to its base value, then ×1.2 on its line, when it contributes (#381).
+    scoringModifier: { additive: 2, multiplicative: 1.2 },
+    activation: { effect: { id: "pulse", colour: "#f2c84b" }, sfx: "material.activate.custard" },
     appearance: {
       pattern: "cardSheet",
       assembly: "contained",
@@ -424,7 +428,7 @@ export const materialDefinitions = [
  * They are not in `materialDefinitions`, so no shop, reward or attract sequence ever deals
  * them. A developer mode deals one only by asking: the `uniformMaterialDeck` run setup step, or
  * `materialDeck` with the `registered` pool (dev0, dev1). None at the moment: custard, the
- * first, became a gameplay material when the shop began to sell it. The empty vessel (#330) is custard's container with no contents.
+ * first, became a gameplay material when the shop began to sell it. The empty vessel (#330) is custard's container with no contents, and Air (#357) is a vented housing.
  */
 export const experimentalMaterials: readonly MaterialDefinition[] = [
   {
@@ -446,6 +450,27 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
       reliefScale: 0,
       endGrainFaces: noEnds,
       container: { shell: "plasticShell", config: { opacity: 0.16, inset: 0.92, gloss: 1.6 } },
+    },
+  },
+  {
+    // Air (#357): a visual experiment only. A fan on two opposite faces (its variant faces,
+    // +x and −x), louvred vents on the other four. No airflow, scoring, price or reward.
+    id: "airVent",
+    lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
+    name: "Air",
+    // A powder-coated housing: it sounds like steel until it has a sound of its own.
+    acoustics: { character: "clanking", hardness: 7, attach: "material.attach.steel" },
+    traits: {},
+    appearance: {
+      pattern: "ventHousing",
+      assembly: "sixFaces",
+      surface: "matte",
+      height: "none",
+      ink: { red: "#a3202f", black: "#1f2c38", onDark: false },
+      edge: { color: 0x6f7a82, opacity: 1 },
+      geometry: { shape: "rounded", segments: 2, radius: 0.06, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: [0, 1],
     },
   },
 ];

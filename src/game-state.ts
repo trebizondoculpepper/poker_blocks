@@ -1,3 +1,4 @@
+import type { BlockMaterial } from "./materials";
 import type { CardBlock } from "./cards";
 import type { Round } from "./round";
 import type { PassiveBlock } from "./passives";
@@ -24,6 +25,11 @@ export type GameState = {
    * starting deck.
    */
   boughtCards?: readonly CardBlock[];
+  /**
+   * Cards whose material changed this run (#387), by id: saved so Continue rebuilds them with
+   * it (src/card-material.ts). Absent when nothing changed.
+   */
+  cardStates?: Readonly<Record<string, { material: BlockMaterial }>>;
   /** Run currency; unlike stage score, this carries across stages and the shop. */
   coins: number;
   round: Readonly<Round>;
