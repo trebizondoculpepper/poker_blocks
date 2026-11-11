@@ -9,6 +9,7 @@
  */
 import * as THREE from "three";
 import { additiveLight } from "./additive-light";
+import { containedContents, containedLayers } from "./contained";
 
 const vertexShader = /* glsl */ `
   varying vec3 vLocal;
@@ -152,3 +153,14 @@ export function createFireCore(size: number): THREE.Mesh {
   };
   return core;
 }
+
+/**
+ * The flame as contained contents (#335): the same raymarched core, sized to the interior of
+ * whatever container holds it, drawn in the contents' transparent layer. It publishes nothing:
+ * a flame has no liquid surface, so wall residue that needs one cannot be paired with it.
+ */
+containedContents.register("flame", (boundary) => {
+  const core = createFireCore(boundary.halfSize * 2 * boundary.inset);
+  core.renderOrder = containedLayers.contentsTransparent;
+  return { meshes: [core], capabilities: {} };
+});

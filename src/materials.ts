@@ -380,7 +380,7 @@ export const materialDefinitions = [
     },
     appearance: {
       pattern: "ironFrame",
-      assembly: "flameFrame",
+      assembly: "contained",
       surface: "iron",
       height: "frameRelief",
       ink: { red: "#6e1a1a", black: "#24282c", onDark: false },
@@ -388,6 +388,9 @@ export const materialDefinitions = [
       geometry: { ...box, scale: 0.985 },
       reliefScale: 2.5,
       endGrainFaces: noEnds,
+      // The iron frame and glass panes, holding a flame (#335).
+      container: { shell: "framedGlass", config: { inset: 0.97, glass: 1.2 } },
+      contents: { effect: "flame", config: {} },
     },
   },
   {
@@ -487,6 +490,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
   return [
     lantern("emptyLantern", "Empty lantern"),
     lantern("custardLantern", "Custard in a lantern", custardContents),
+    lantern("flameLantern", "Flame in a lantern", { effect: "flame", config: {} }),
     {
       id: "custardFrame",
       lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
