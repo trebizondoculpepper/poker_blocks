@@ -610,6 +610,12 @@ const entries = [
     description: "A prismatic crystal card's scoring modifier activates as its line is presented",
   },
   {
+    id: "material.activate.magic",
+    name: "Activate magic",
+    family: "material",
+    description: "A Magic card's scoring modifier activates as its line is presented",
+  },
+  {
     id: "passive.activate.economy",
     name: "Activate economy",
     family: "passive",

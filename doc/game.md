@@ -155,6 +155,7 @@ The playable `?mode=dev0` experiment (formerly `?room=dev`) assigns a random vis
 - **Wood:** branded rank and suit, with red suits inked red.
 - **Steel:** brushed steel plates, riveted at the corners; each face is brushed in its own direction and its anisotropic reflections catch the light differently as the block turns.
 - **Prismatic crystal:** a solid, chamfered square-cut crystal; strongly refractive with dispersion and an iridescent sheen.
+- **Magic:** a clear plastic vessel holding a fizzing field of the crystal trail's stars, each aging brilliant white, cream, brown, then black (#349).
 - **Fire:** an open iron frame with a raymarched, volumetric flame burning just below the centre; the rank and suit are iron lettering in the frame.
 - **Gold:** warm reflective foil and engraved edges.
 - **Terracotta:** rough fired clay with impressed markings.
@@ -167,7 +168,7 @@ These prototypes have no material-specific rules yet. **Jelly** is excluded unti
 
 ### Basic scoring materials (planned)
 
-The shop's material pool expands by **round number**, through configured unlocks and stock weights rather than branches for named materials. Paper is never sold: every run starts with it. Each round's newly unlocked materials are the most common: wood in round 1, steel in 2, terracotta and custard in 3, ice, meat and fire in 4 (still leading in 5, when nothing new unlocks), gold in 6 and prismatic crystal in 7, with earlier materials still offered less often (see "Unlocks and stock weights" below). Unlocking makes a material possible in stock, not guaranteed.
+The shop's material pool expands by **round number**, through configured unlocks and stock weights rather than branches for named materials. Paper is never sold: every run starts with it. Each round's newly unlocked materials are the most common: wood in round 1, steel in 2, terracotta and custard in 3, ice, meat and fire in 4 (still leading in 5, when nothing new unlocks), gold in 6, prismatic crystal in 7 and Magic in 8, with earlier materials still offered less often (see "Unlocks and stock weights" below). Unlocking makes a material possible in stock, not guaranteed.
 
 | Material          | Earliest shop round | Effect when its block contributes to a scored hand                                                                                                                                                                                         |
 | ----------------- | ------------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -177,6 +178,7 @@ The shop's material pool expands by **round number**, through configured unlocks
 | Steel             |                   2 | Multiply the line's working score by a configured factor; the factor is still to be tuned. Conductive and resilient are possible later traits, not part of this initial effect.                                                            |
 | Custard           |                   3 | Add **+2** to that block's base value, then multiply the line's working score by **1.2** (#381). Both go through the shared scoring rules; rank and suit are unchanged.                                                                    |
 | Prismatic crystal |                   7 | After ordinary scoring changes, raise the line's working score to a configured power; **1.1** is the first tuning value. Each contributing prismatic applies its power in sequence, and the result is rounded only after all such effects. |
+| Magic             |                   8 | Add **+1** to that block's base value, multiply the line's working score by **2**, then raise it to the power **1.2** (#375). All three go through the shared scoring rules, in their agreed phase order.                                  |
 
 Only blocks that **contribute to the selected scoring hand** activate these material scoring effects. A block present in a longer line but excluded from its best scoring hand has no scoring effect, unless a separate modifier explicitly extends eligibility. Gold's held-card coin reward is separate and does not require the card to score. Material behavior belongs in configured traits; the line scorer supplies contributor IDs and the effect runner applies each eligible operation at its defined scoring phase. Steel strength and prismatic balance are first tuning values. **Implemented in [#141](https://github.com/trebizondoculpepper/poker_blocks/issues/141)** for wood, steel and prismatic crystal (see "Agreed model" below). Meat, fire and ice bring no scoring modifier until their design tickets decide one (#104–#106); Gold's modifier is specified below but not yet implemented. [Material design issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8) tracks the rest.
 
@@ -214,6 +216,7 @@ This section is the target design and supersedes the table above where they diff
 | Steel             |        0 |           1.25 |           1 |             2 |
 | Custard           |       +2 |            1.2 |           1 |             3 |
 | Prismatic crystal |        0 |              1 |         1.1 |             7 |
+| Magic             |       +1 |              2 |         1.2 |             8 |
 
 #### Order of operations (Agreed)
 
