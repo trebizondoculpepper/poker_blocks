@@ -21,6 +21,13 @@ exitEffects.register("fade", ({ targets, reducedMotion }, raw) => {
   const faded: { material: THREE.Material; from: number }[] = [];
   const copy = (material: THREE.Material) => {
     const own = material.clone();
+    // clone() drops shader hooks and copies uniforms: keep the original's hook and program key
+    // (a refractive fluid clips itself there) and share its live uniforms, so the copy draws
+    // exactly as the original did, only fading (#490 review).
+    own.onBeforeCompile = material.onBeforeCompile.bind(material);
+    own.customProgramCacheKey = material.customProgramCacheKey.bind(material);
+    if (material instanceof THREE.ShaderMaterial)
+      (own as THREE.ShaderMaterial).uniforms = material.uniforms;
     own.transparent = true;
     own.depthWrite = false;
     faded.push({ material: own, from: material.opacity });

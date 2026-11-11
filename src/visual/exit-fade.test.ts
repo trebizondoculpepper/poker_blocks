@@ -75,4 +75,24 @@ describe("fade exit effect (#440)", () => {
     expect(cancelled.shell.material).toBe(cancelled.shellMaterial);
     expect(cancelled.released).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps the original's shader hook, program key and live uniforms on its copy (#490 review)", () => {
+    const { v, shell, shellMaterial } = visual();
+    const hook = vi.fn();
+    shellMaterial.onBeforeCompile = hook;
+    shellMaterial.customProgramCacheKey = () => "clipped-fluid";
+    const shaded = new THREE.ShaderMaterial({ uniforms: { time: { value: 1 } } });
+    const extra = new THREE.Mesh(new THREE.BoxGeometry(), shaded);
+    v.root.add(extra);
+    const runner = createExitRunner();
+    runner.start(snapshot, v, {
+      steps: [{ effects: [{ effect: "fade", config: { seconds: 1 } }] }],
+    });
+    const copy = shell.material as THREE.Material;
+    copy.onBeforeCompile({} as never, {} as never);
+    expect(hook).toHaveBeenCalledTimes(1);
+    expect(copy.customProgramCacheKey()).toBe("clipped-fluid");
+    expect((extra.material as THREE.ShaderMaterial).uniforms).toBe(shaded.uniforms);
+    runner.dispose();
+  });
 });
