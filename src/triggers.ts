@@ -79,8 +79,24 @@ export function commitTrigger(
   return [{ type: "block.triggered", blockId, trigger }, ...commitCommands(responses, target)];
 }
 
-registerRuleCommand<TriggerConfig>("trigger-block", (config, target) =>
-  commitTrigger(config, target),
+/**
+ * A `trigger-block` command's own trigger, carrying the chain on: a response's config holds its
+ * parent's `trigger`, whose path the new trigger extends (an explicit `path` wins), so
+ * configured responses that trigger blocks, their own included, can never loop.
+ */
+export function inheritedTrigger(
+  config: TriggerConfig & { trigger?: Pick<TriggerContext, "path"> },
+): TriggerConfig {
+  return {
+    blockId: config.blockId,
+    cause: config.cause,
+    path: config.path ?? config.trigger?.path ?? [],
+  };
+}
+
+registerRuleCommand<TriggerConfig & { trigger?: TriggerContext }>(
+  "trigger-block",
+  (config, target) => commitTrigger(inheritedTrigger(config), target),
 );
 
 /** For tests and tools: trigger one block in a bare state. */

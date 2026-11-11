@@ -4,7 +4,8 @@ import type { RuleCommand } from "./event-rules";
 import type { GameState } from "./game-state";
 import { getMaterialDefinition, withMaterial } from "./materials";
 import { registerRuleCommand } from "./rule-commands";
-import { commitTrigger, triggerBlock, type TriggerContext } from "./triggers";
+import { commitTrigger, inheritedTrigger, triggerBlock, type TriggerContext } from "./triggers";
+import { ruleCommands } from "./rule-commands";
 import type { Cell } from "./traits/attachable";
 
 // Test-only responses: record what each saw, remove the source, or trigger another block.
@@ -129,5 +130,30 @@ describe("triggerable blocks (#433)", () => {
       state: before,
       events: [],
     });
+  });
+
+  it("carries the chain through the registered command, so a self-trigger can't loop (#475 review)", () => {
+    const source = { block: a, cell: at(0) };
+    const parent: TriggerContext = { cause: "test", source, path: [a.id] };
+    expect(inheritedTrigger({ blockId: a.id, cause: "again", trigger: parent })).toEqual({
+      blockId: a.id,
+      cause: "again",
+      path: [a.id],
+    });
+    // A response on A that triggers A again, through the registered command: A is in its own
+    // chain, so the nested trigger does nothing and returns.
+    let current = state();
+    const target = {
+      get state() {
+        return current;
+      },
+      update: (next: GameState) => void (current = next),
+      grantUnownedPassive: () => [],
+    };
+    const events = ruleCommands.get("trigger-block")(
+      { blockId: a.id, cause: "again", trigger: parent },
+      target,
+    );
+    expect(events).toEqual([]);
   });
 });
