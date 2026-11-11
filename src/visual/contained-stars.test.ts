@@ -93,4 +93,13 @@ describe("Magic Lock's contained stars (#349)", () => {
     console.info(`[magic lock] 32 vessels, 36 stars each: ${perFrame.toFixed(3)} ms per frame`);
     expect(perFrame).toBeLessThan(5);
   });
+
+  it("releases its own geometry when its material is disposed (#415 review)", () => {
+    const { stars } = field();
+    const points = stars.meshes[0] as THREE.Points;
+    let released = false;
+    points.geometry.addEventListener("dispose", () => (released = true));
+    (points.material as THREE.Material).dispose();
+    expect(released).toBe(true);
+  });
 });

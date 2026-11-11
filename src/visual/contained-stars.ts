@@ -84,6 +84,9 @@ containedContents.register("stars", (boundary, raw) => {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
+  // The field owns its geometry (the block's cleanup disposes extras' materials): release it with
+  // the material, as the fading film releases its texture.
+  material.addEventListener("dispose", () => geometry.dispose());
   const points = new THREE.Points(geometry, material);
   points.scale.setScalar(boundary.volumeScale);
   points.renderOrder = containedLayers.contentsTransparent;
