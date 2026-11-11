@@ -48,6 +48,16 @@ describe("the transparent trait", () => {
         .filter(({ traits }) => "transparent" in traits)
         .map(({ id }) => id)
         .sort(),
-    ).toEqual(["cloud", "custard", "earth", "fire", "gelato", "ice", "magic", "prismatic", "water"]);
+    ).toEqual([
+      "cloud",
+      "custard",
+      "earth",
+      "fire",
+      "gelato",
+      "ice",
+      "magic",
+      "prismatic",
+      "water",
+    ]);
   });
 });

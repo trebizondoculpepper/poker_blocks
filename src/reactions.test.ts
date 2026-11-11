@@ -189,3 +189,31 @@ describe("earth bakes into terracotta (#371)", () => {
     ]);
   });
 });
+
+describe("earth beside flame in play (#371 review)", () => {
+  it("bakes into terracotta across a face, keeping the card; flame is unchanged", () => {
+    const earth = made(0, "earth");
+    const fire = made(1, "fire");
+    const field = applyReactions(state(at(earth, 0), at(fire, 1))).state.field;
+    const baked = field[0]!.block;
+    expect(materialOf(baked)).toBe("terracotta");
+    expect(baked.id).toBe(earth.id);
+    expect(baked.traits.identity).toEqual(earth.traits.identity);
+    expect(materialOf(field[1]!.block)).toBe("fire");
+  });
+
+  it("never bakes across an edge or a corner, nor beside anything but flame", () => {
+    const earth = made(0, "earth");
+    const after = (neighbour: PlacedBlock) =>
+      materialOf(applyReactions(state(at(earth, 0), neighbour)).state.field[0]!.block);
+    expect(after(at(made(1, "fire"), 1, 1))).toBe("earth");
+    expect(after(at(made(1, "fire"), 1, 1, 1))).toBe("earth");
+    expect(after(at(made(1, "wood"), 1))).toBe("earth");
+  });
+
+  it("terracotta, once baked, stays terracotta beside flame", () => {
+    const baked = made(0, "terracotta");
+    const field = applyReactions(state(at(baked, 0), at(made(1, "fire"), 1))).state.field;
+    expect(materialOf(field[0]!.block)).toBe("terracotta");
+  });
+});
