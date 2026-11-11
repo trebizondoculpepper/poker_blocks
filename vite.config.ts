@@ -13,6 +13,10 @@ export default defineConfig({
   base: "./",
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
   fmt: {},
+  // The pre-commit hook (.vite-hooks/pre-commit) formats and lints only the staged files.
+  staged: {
+    "*.{ts,tsx,js,mjs,json,md,css,html}": "vp check --fix",
+  },
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
