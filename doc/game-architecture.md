@@ -295,10 +295,16 @@ Within one card, the material rule runs before the state rule. That invents no o
 **Persistence.**
 
 - **Within a run:** a reaction replaces the card object in `state.field` with a new object of the same id (model first). At stage end the field's blocks return to the deck as those same objects (`dealer.ts`, `game-run.ts`), so the bonus follows the card through hand, deck, discard and later stages with no extra work.
-- **Save and Continue:** the save stores card ids and rebuilds each card from the starting deck and `boughtCards`, so a state bonus would be lost. The save gains an optional `cardStates?: Record<cardId, { stateBonus?: string }>`, written for cards with a bonus and applied after the cards are rebuilt. An unknown bonus id rejects the record, as a malformed card does. It is optional, so older saves stay readable, and `saveVersion` stays 1. The same record later carries a reaction's material change (#363, #366), so both are restored together.
+- **Save and Continue:** the save stores card ids and rebuilds each card from the starting deck and `boughtCards`, so a state bonus would be lost. #387 has since built the per-card ledger for changed materials (`GameState.cardStates`, saved as the optional `state.cardStates`; see "Permanent material change" below). #365 extends each entry with an optional `stateBonus` id, validated against the state-bonus registry on restore. An unknown id rejects the record, and older saves stay readable.
 - **Across runs:** none. A new run deals fresh cards (`dealer.ts`), so no bonus carries over.
 
 **Guardrails for #365:** a test that a state bonus leaves rank, suit and hand evaluation unchanged; that a second state replaces the first; that a non-contributing card's bonus does nothing; that the bonus survives the field → deck return, and survives save → Continue; that an unknown saved bonus is rejected; and that no generic code names a state bonus (guardrail scan, as for materials).
+
+### Permanent material change (#387)
+
+`changeCardMaterial(state, cardId, material)` in `src/card-material.ts` (and `GameRun.changeCardMaterial`) gives one card a new material for the rest of the run. It finds the card wherever it is (hand, field, deck, discard pile, and the bought-card ledger) and replaces it with a copy carrying the new material, with the same id, rank and suit. `rematerial` first removes the traits the old material's definition brought (a transparent card turned to wood is no longer transparent), then applies the new definition. It returns null and changes nothing when the card isn't in the run or already has that material, so a transmogrifier can refuse such a drop without spending a use.
+
+The run keeps a ledger, `GameState.cardStates` (`{ [cardId]: { material } }`), because a save stores card ids and rebuilds cards from the starting deck and `boughtCards`. The save writes it as the optional `state.cardStates`, and restore applies it to the rebuilt cards. A saved entry naming an unknown material or card rejects the record. Older saves without it stay readable, and `saveVersion` stays 1. The changed card is the same object the dealer moves from field to deck at stage end, so the change also carries through later stages. Material reactions (#366) and state bonuses (#365) are meant to extend this same record.
 
 ## Session controller
 
