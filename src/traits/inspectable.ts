@@ -42,6 +42,9 @@ export const inspectableTrait = defineTrait({
       block.on("inspect.request", describe),
       block.on("input.leave", () => void (inspecting = false)),
       block.on("input.blur", () => void (inspecting = false)),
+      // A cancelled gesture (the pointer left the stage) ends inspection too. A long-press
+      // cancels its press before it asks for inspection, so that still describes.
+      block.on("input.cancel", () => void (inspecting = false)),
       block.on("input.enabled", (payload) => {
         const now = availability(payload);
         enabled = now.enabled;
