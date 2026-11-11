@@ -6,6 +6,7 @@ import { cardName, standardDeck, type CardBlock } from "./cards";
 import { inspectable } from "./traits/inspectable";
 import type { WeightCurve } from "./offer-weights";
 import type { EventRule } from "./event-rules";
+import type { Reaction } from "./reactions";
 import { stateBonusRules } from "./state-bonuses";
 import { scoringModifierRules, type ScoringModifier } from "./scoring-modifier";
 import type { TokenEffectConfig } from "./passive-activation-effects";
@@ -42,6 +43,12 @@ export type MaterialDefinition = {
    * scoring is designed: meat, fire and ice wait on #104–#106.
    */
   scoringModifier?: ScoringModifier;
+  /**
+   * What happens to a block of this material when a face neighbour sets it off (#366): each
+   * reaction names a registered matcher (`when`) and registered results, the first that
+   * matches taking effect once per play (src/reactions.ts).
+   */
+  reactions?: readonly Reaction[];
   /**
    * Its transmogrifier's balance, where the default (twice the shop base price, drawn by the
    * material's own weight curve) does not apply or there is no shop price (#388).
