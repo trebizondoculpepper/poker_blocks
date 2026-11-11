@@ -74,14 +74,17 @@ const fragmentShader = /* glsl */ `
     // How far the ray runs through the box back toward the camera (slab method): up to the
     // full diagonal at oblique angles, so the 14 samples always span the whole visible volume.
     vec3 toward = -dir;
-    vec3 safe = sign(toward) * max(abs(toward), vec3(1e-5));
+    // A component exactly zero is a ray parallel to that slab: give it a tiny positive size so
+    // the division is finite and that axis never limits the span (its exit is far away).
+    vec3 safe = mix(vec3(1e-5), toward, step(1e-5, abs(toward)));
     vec3 exits = (sign(safe) * halfSize - p) / safe;
+    exits = mix(vec3(1e6), exits, step(1e-5, abs(toward)));
     float span = max(min(min(exits.x, exits.y), exits.z), 0.0);
-    float step = span / 14.0;
+    float stride = span / 14.0;
     float alpha = 0.0;
     for (int i = 0; i < 14; i++) {
-      p -= dir * step;
-      float d = cloud(p) * step / halfSize;
+      p -= dir * stride;
+      float d = cloud(p) * stride / halfSize;
       alpha += (1.0 - alpha) * clamp(d, 0.0, 1.0);
       if (alpha > 0.95) break;
     }
