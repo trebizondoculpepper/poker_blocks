@@ -5,6 +5,8 @@ import { clearField } from "./card-ownership";
 import "./pair-spawn";
 // Registers cooking's stage-end reset (#372).
 import "./cooking";
+// Registers the `trigger-block` rule command (#433).
+import "./triggers";
 import { commitReactions, type AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
 import { applyRackItem } from "./rack-item-effects";
