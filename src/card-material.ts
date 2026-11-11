@@ -1,3 +1,4 @@
+import type { ScoringModifier } from "./scoring-modifier";
 /**
  * Permanent per-card material change (#387, split from #384): the model command a
  * transmogrifier (and later a material reaction, #366) uses to give one card a new material
@@ -29,6 +30,8 @@ export type CardState = {
   doneness?: number;
   /** Plays left before its countdown triggers it (#434). */
   countdown?: number;
+  /** Acquired scoring modifiers by lifetime register (#431). */
+  modifiers?: Readonly<Record<string, ScoringModifier>>;
 };
 
 /**

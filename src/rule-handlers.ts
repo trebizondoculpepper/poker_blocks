@@ -112,7 +112,21 @@ ruleHandlers.registerEffect<{ factor: number }, unknown>(
 /** Raises the working score to `power` (a prismatic crystal's exponential modifier). */
 ruleHandlers.registerEffect<{ power: number }, unknown>(
   "power-line-score",
-  ({ power }, _selected, frame) => working(frame, (value) => value ** power),
+  // Exponents add their increases above 1 (#431): the phase's starting value is raised to the
+  // new total, so it ends at base^(1 + sum(e - 1)) in any order, even through a total of 0.
+  ({ power }, _selected, frame) => {
+    const exponent = (frame.exponent ?? 1) + power - 1;
+    const base = frame.powerBase ?? frame.workingValue ?? 0;
+    // A power that has no finite result (a zero line under a negative total exponent) scores
+    // nothing, so a score is always a finite number (#476 review).
+    const raised = base ** exponent;
+    return {
+      ...frame,
+      workingValue: Number.isFinite(raised) ? raised : 0,
+      exponent,
+      powerBase: base,
+    };
+  },
 );
 /** Adds `amount` once, or once per crossing cell with `perIntersection`. */
 ruleHandlers.registerEffect<

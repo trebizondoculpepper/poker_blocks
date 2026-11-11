@@ -78,9 +78,18 @@ function evaluateRules(
 ): { value: number; activations: RuleActivation[] } {
   const activations: RuleActivation[] = [];
   let value = start;
+  // The phase's total exponent so far: each power rule moves it (#431).
+  let exponent = 1;
   for (const { source, rule } of rules) {
-    const frame = ruleHandlers.evaluate(rule, { event, workingValue: value, commands: [] });
+    const frame = ruleHandlers.evaluate(rule, {
+      event,
+      workingValue: value,
+      exponent,
+      powerBase: start,
+      commands: [],
+    });
     value = frame.workingValue ?? value;
+    exponent = frame.exponent ?? exponent;
     if (frame.fired)
       activations.push({
         sourceId: source.id,

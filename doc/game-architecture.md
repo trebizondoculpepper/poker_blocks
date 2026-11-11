@@ -353,7 +353,7 @@ Reusing `ScoringModifier` means a state bonus can be additive, multiplicative or
 
 and then passives (step 5), the clamp (step 6), after-clamp bonuses (step 7) and rounding (step 8), all unchanged.
 
-Within one card, the material rule runs before the state rule. That invents no order: sums and products commute, and successive powers multiply exponents ((x^a)^b = x^(ab)), so the result is the same either way. `scoreFieldWithPassives` needs no change. It already asks `rulesForCard` and reports activations with the card as source.
+Within one card, the material rule runs before the state rule. That invents no order: sums and products commute, and exponents add their increases above 1 (#431: the power phase carries its total exponent in `RuleFrame.exponent` and its starting value in `RuleFrame.powerBase`, and each `power-line-score` raises that base to the new total, so the order never matters, even when the total passes through 0), so the result is the same either way. `scoreFieldWithPassives` needs no change. It already asks `rulesForCard` and reports activations with the card as source.
 
 **Contributing cards only (default):** like material modifiers, a state bonus applies only while its card contributes to the line's scored hand, because it travels through the same card rules. Question 1 on #364 asks the owner to confirm this.
 
@@ -411,6 +411,10 @@ How a block leaving play is presented: the shared lifecycle the per-material bla
 - **Bounds.** Each step has a time cap (`maxSeconds`, default 2), at which running effects are finished. Effects receive `reducedMotion` and should end at once or soon under it; the cap still applies. A scene's runner (`createExitRunner`) caps the work to the exits in progress.
 - **Cancellation and cleanup.** `cancel(blockId)` (its cell is needed, the stage clears) finishes and disposes that exit's effects at once. When any exit ends, by completion or cancellation, the visual is removed from its parent and released through the owner's `release`. Disposing the runner (scene exit) cancels every exit.
 - **Reuse.** The lifecycle knows nothing of explosions. Any removal (the Nothingifier, a future destroyer) can present an exit through it.
+
+### Acquired modifier registers (#431)
+
+`src/modifier-registers.ts`. A card's acquired modifiers live in its `modifiers` trait, one `ScoringModifier` per lifetime register, apart from its material's values. Lifetimes are registered (`modifierLifetimes`): `stage` and `round` each register their clearing with `stageEndResets` and `roundEndResets`, `run` registers none, so neither the run nor the scorer names a lifetime. `addCardModifier(state, cardId, lifetime, modifier)` combines into a register on the card wherever it is, and records it in the card-state ledger (`cardStates[id].modifiers`). Saves validate each entry (a registered lifetime, valid numbers) and the `modifiers` card-state applier restores it. `cardScoringRules` adds the combined acquired modifier's rules after the material's and state bonus's, so the scorer needs no change. They are the card's own rules, so they share its scoring eligibility (`scoringEligibilities`): a cloud's acquired bonus applies in any scored line it is in, as its material's does (scored-subset eligibility is preserved, #431). The power phase composes exponents additively (see "State bonuses"). Nothing in the normal game writes a register yet; bombs (#24, #436) will.
 
 ### Permanent material change (#387)
 
