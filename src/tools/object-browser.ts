@@ -1,4 +1,5 @@
-import { cardFaceArt } from "../visual/face-art";
+import { cardFaceArt, type CardFaceOptions } from "../visual/face-art";
+import { rankFaceDefinitions } from "../visual/rank-faces";
 /**
  * The developer object browser (dev9): every object the game defines, by category, one page
  * each, with a turning preview drawn by the game's own renderer and a table of its properties.
@@ -13,7 +14,13 @@ import { soundEffects } from "../audio/sfx-registry";
 import usage from "../audio/sfx-usage.json";
 import { standardDeck } from "../cards";
 import { gameModeFor, modeLink } from "../game-modes";
-import { experimentalMaterials, materialDefinitions, type MaterialDefinition } from "../materials";
+import {
+  experimentalMaterials,
+  getMaterialDefinition,
+  materialDefinitions,
+  type BlockMaterial,
+  type MaterialDefinition,
+} from "../materials";
 import { passiveAppearance, createPassiveBlock, passiveDefinitions } from "../passives";
 import { createPassiveVisual } from "../passive-visual";
 import { createBlockAppearance, setReflectionEnvironment } from "../visual/block-appearance";
@@ -37,15 +44,27 @@ type Category = { id: string; label: string; objects: () => BrowsedObject[] };
 /** A card to dress in each material: the same card for every page, so only the material differs. */
 const sampleCard = standardDeck[0]!;
 
-function materialPage(definition: MaterialDefinition, note?: string): BrowsedObject {
+function materialPage(
+  definition: MaterialDefinition,
+  note?: string,
+  page: {
+    card?: typeof sampleCard;
+    options?: CardFaceOptions;
+    id?: string;
+    name?: string;
+    properties?: unknown;
+  } = {},
+): BrowsedObject {
+  const { card = sampleCard, options = {}, id = definition.id, name = definition.name } = page;
   return {
-    id: definition.id,
-    name: definition.name,
+    id,
+    name,
     note,
-    properties: definition,
+    // The caller says what the page shows: the material's definition unless told otherwise.
+    properties: page.properties ?? definition,
     preview(size) {
       const appearance = createBlockAppearance(
-        cardFaceArt(sampleCard.traits.identity),
+        cardFaceArt(card.traits.identity, options),
         definition,
         size,
       );
@@ -71,7 +90,38 @@ function materialPage(definition: MaterialDefinition, note?: string): BrowsedObj
 }
 
 /** The categories, each listed from its registry. */
+/**
+ * Rank glyph styles (#489): every rank that carries a style, in it and plain, on a few
+ * representative materials, so the combining marks can be judged in the real canvas fonts.
+ */
+function rankStylePages(): BrowsedObject[] {
+  const auditioned = ["paper", "wood", "steel", "ice", "gold"].map((id) =>
+    getMaterialDefinition(id as BlockMaterial),
+  );
+  return rankFaceDefinitions.flatMap(({ rank, styles }) =>
+    Object.keys(styles ?? {}).flatMap((style) => {
+      const card = standardDeck.find(({ traits }) => traits.identity.rank === rank)!;
+      return auditioned.flatMap((definition) =>
+        [undefined, style].map((rankStyle) =>
+          materialPage(
+            definition,
+            rankStyle ? `Rank style: ${rankStyle}` : "Plain glyph, for comparison",
+            {
+              card,
+              options: { rankStyle },
+              id: `${rank}-${definition.id}-${rankStyle ?? "plain"}`,
+              name: `${rank} ${rankStyle ?? "plain"} · ${definition.name}`,
+              properties: { rank, rankStyle: rankStyle ?? null, material: definition.id },
+            },
+          ),
+        ),
+      );
+    }),
+  );
+}
+
 const categories: readonly Category[] = [
+  { id: "rank-glyphs", label: "Rank glyphs", objects: rankStylePages },
   {
     id: "materials",
     label: "Materials",

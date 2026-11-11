@@ -153,7 +153,10 @@ export const materialReactions = (block: CardBlock): readonly Reaction[] =>
   getMaterialDefinition(materialOf(block)).reactions ?? [];
 
 /** The blocks sharing a face with this one, from a cell map of the field. */
-function faceNeighbours(placed: PlacedBlock, byCell: ReadonlyMap<string, CardBlock>): CardBlock[] {
+export function faceNeighbours(
+  placed: PlacedBlock,
+  byCell: ReadonlyMap<string, CardBlock>,
+): CardBlock[] {
   return faces.flatMap((face) => {
     const offset = faceNormal(face);
     const neighbour = byCell.get(
