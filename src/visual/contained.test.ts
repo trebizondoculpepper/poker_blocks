@@ -5,6 +5,7 @@ import { composeContained, containedLayers } from "./contained";
 import { sharedSimulations } from "./shared-simulation";
 import "./filled-vessel";
 import "./glass-shells";
+import "./fire-core";
 
 const geometry = new THREE.BoxGeometry(1, 1, 1);
 const build = (id: string) => {
@@ -159,5 +160,28 @@ describe("a shell's generated textures are the block's to dispose (#399 review)"
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("the flame as contents (#335)", () => {
+  it("burns in the iron frame (fire) and in the lantern by configuration only", () => {
+    for (const id of ["fire", "flameLantern"]) {
+      const { extras } = build(id);
+      // Drawn after the front shell (5) and gloss (6): the glow is never painted over.
+      expect(Math.max(...extras.map(({ renderOrder }) => renderOrder))).toBeGreaterThan(
+        containedLayers.gloss,
+      );
+      extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+    }
+  });
+
+  it("no container code names it (comments aside)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const code = (file: string) =>
+      readFileSync(new URL(file, import.meta.url), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "");
+    for (const file of ["./contained.ts", "./glass-shells.ts", "./filled-vessel.ts"])
+      expect(code(file)).not.toMatch(/flame|fire/i);
   });
 });
