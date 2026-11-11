@@ -104,7 +104,10 @@ function recordingHost() {
         hide: () => void calls.push("balance:hide"),
       },
       devBlockDesigner: { show: () => {}, hide: () => {} },
-      devContainedProof: { show: () => {}, hide: () => {} },
+      devContainedProof: {
+        show: (backTo) => void calls.push(`proof:show:${backTo}`),
+        hide: () => void calls.push("proof:hide"),
+      },
       devWordCubeRoom: {
         show: ({ items }) => void calls.push(`cubes:show:${items.length}`),
         hide: () => void calls.push("cubes:hide"),
@@ -312,6 +315,17 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toContain("browser:show:game");
     scenes.switchTo("table");
     expect(calls).toContain("browser:hide");
+  });
+
+  it("mounts the contained-components proof only while its developer scene is active (dev15)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("proof", { devContainedProof: { backTo: "game" } }));
+    scenes.register(scene("table", {}));
+    scenes.switchTo("proof");
+    expect(calls).toContain("proof:show:game");
+    scenes.switchTo("table");
+    expect(calls).toContain("proof:hide");
   });
 
   it("lists the deck read-only and goes back from its Back button (#175)", () => {
