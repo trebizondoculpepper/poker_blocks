@@ -123,4 +123,14 @@ describe("mixed sample and synthesised sound effects (#518)", () => {
     expect(vary(100, 0.1, () => 1)).toBeCloseTo(110);
     expect(vary(100, 0.1, () => 0)).toBeCloseTo(90);
   });
+
+  it("resumes a fresh, suspended context on the very first synthesised sound (#525 review)", () => {
+    const cold = fakeContext();
+    (cold.context as unknown as { state: string }).state = "suspended";
+    setAudioContextFactory(() => cold.context);
+    resetSynthForTests();
+    sfxProviders.get("synth")(pop, {}, settings);
+    const { resume } = cold.context as unknown as { resume: ReturnType<typeof vi.fn> };
+    expect(resume).toHaveBeenCalledTimes(1);
+  });
 });

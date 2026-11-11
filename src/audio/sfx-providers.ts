@@ -92,8 +92,10 @@ function sfxBus(): { context: AudioContext; gain: GainNode } {
 sfxProviders.register("synth", (effect, options, { volume, random }) => {
   if (live.size >= maxSynthVoices) return;
   const { recipe, config } = effect.source!.config as { recipe: string; config?: unknown };
-  resumeSharedAudio();
+  // Make the context (and bus) first, then ask it to run: the first sound of a session may find
+  // a fresh, suspended context (#525 review).
   const { context, gain } = sfxBus();
+  resumeSharedAudio();
   gain.gain.value = volume;
   const voice = synthRecipes.get(recipe)(
     {
