@@ -29,6 +29,7 @@ import { faceNeighbours } from "./reactions";
 import { commitCommands, registerRuleCommand } from "./rule-commands";
 import { cellKey } from "./traits/attachable";
 import { blockResists } from "./block-trait-behaviours";
+import { addCombinedModifier, combineModifiers } from "./modifier-registers";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { TriggerContext } from "./triggers";
 
@@ -120,3 +121,36 @@ registerRuleCommand<{
       ];
     }),
 );
+
+/**
+ * `transfer-bonuses { select, lifetime, from? }` (#436): the triggered block passes its acquired
+ * bonuses on. Only acquired registers move, never its material's own values. They're read from
+ * the trigger's snapshot, so a block that has already removed itself still passes on what it had.
+ * The registers named in `from` (default: all of them) are combined with the shared rules (sums,
+ * products, exponent increases summed above 1) and added once to each selected recipient's
+ * `lifetime` register (e.g. `run`, promoting stage and round bonuses), recorded for saves. Who
+ * receives is the configured selector: this chooses no reward policy. Emits `bonus.transferred`
+ * per recipient that received something.
+ */
+registerRuleCommand<{
+  trigger: TriggerContext;
+  select: HandlerConfig;
+  lifetime: string;
+  from?: readonly string[];
+}>("transfer-bonuses", ({ trigger, select, lifetime, from }, target) => {
+  const held = trigger.source.block.traits.modifiers ?? {};
+  const passed = combineModifiers(
+    Object.entries(held).flatMap(([register, modifier]) =>
+      !from || from.includes(register) ? [modifier] : [],
+    ),
+  );
+  if (!Object.keys(passed).length) return [];
+  return triggerTargetSelectors
+    .get(select.id)(trigger, target.state, select.config)
+    .flatMap((recipient): GameEvent[] => {
+      const next = addCombinedModifier(target.state, recipient.id, lifetime, passed);
+      if (!next) return [];
+      target.update(next);
+      return [{ type: "bonus.transferred", blockId: recipient.id, trigger }];
+    });
+});
