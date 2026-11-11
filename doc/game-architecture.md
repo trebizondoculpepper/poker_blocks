@@ -253,6 +253,49 @@ After each successful play the base dealer adds the points of every line on the 
 
 When the placed card lands, the scene presents each scoring line from lowest to highest: the reusable `tintRow` effect flashes its blocks gold, the `score.magnitude.*` sound for its points plays (`src/score-presentation.ts`), and its points are added to the displayed score. The stage result and its sound follow the last line.
 
+### Material reactions (proposal, #363, epic #362)
+
+**Status: research proposal.** Nothing is built. #366 implements the contract; #367–#372 add individual reactions as data.
+
+**What is agreed** (#362): only blocks that share a face interact; edge or corner contact does not. Reactions advance once per play, never in real time. Rank and suit never change; a transformation changes the card's material and/or its state bonus (see "State bonuses (proposal)"). Discards, camera motion and elapsed time are never plays.
+
+**The authoritative event.** A reaction happens only in `GameRun.play`, after the dealer has committed the placement (`activeDealer.play` returned the next state). That is the one moment a play is real. Nothing else runs reactions: not placement previews, not hit tests, not the speculative scoring of candidate hands (`scoreFieldWithPassives` stays pure and never sees them), not presentation frames, and not `discard`, `refillHand` or stage advance.
+
+**The contract.** A reaction is data on the reacting material's definition, in the same shape as event rules, so generic code never names a material:
+
+```ts
+// On a MaterialDefinition
+reactions?: readonly {
+  /** What must share a face with this block, as a registered matcher and its config. */
+  when: { id: string; config: unknown };      // e.g. { id: "neighbour-material", config: { material: "flame" } }
+  /** What this block becomes. Either part may be left out. */
+  become: { material?: BlockMaterial; stateBonus?: string };
+}[];
+```
+
+- **Matchers** are a registry keyed by handler name (`neighbour-material`, later `neighbour-state`). A matcher gets the block and its face neighbours from a snapshot and answers yes or no. Adding a reaction kind means registering a matcher, not adding a branch.
+- **Neighbours** are the six face offsets already defined in `src/traits/attachable.ts` (`faceNormal`), looked up in a cell map of the field. Edge and corner cells are never consulted.
+- **The result** is a list of commands (`transform-block { blockId, material?, stateBonus? }`, `advance-cooking { blockId }`), committed through the existing `commitCommands` path, as discard rules are. A reaction never edits state directly.
+
+**Before or after this play's score (default: after; question 1 on #363).** By default the play is scored first, on the field as placed, and its reactions are resolved and committed afterwards. They change what later plays score, not the play that caused them. That keeps the scored total equal to what the player was shown as they placed the block, and keeps scoring a pure function of the placed field. The alternative is to resolve reactions first and score the transformed field, so placing ice beside flame scores as water at once. That only moves the resolver to before `scoreFieldWithPassives` in `GameRun.play`, so either choice is cheap to change.
+
+**One step per play, with no cascades.** The resolver works on a **snapshot** of the field taken once, after placement:
+
+1. Every block on the field is checked against its own material's reactions, with its neighbours read **from the snapshot**. Every block is checked, not only the one just placed, so meat keeps cooking on each later play while it stays beside heat.
+2. Each block takes **at most one** transformation per play: the **first** of its material's reactions whose matcher accepts, in the order listed on the definition. That listed order is the conflict rule, and it is deterministic. A block next to both flame and aggressive flame takes whichever reaction its material lists first.
+3. All transformations are committed together, after resolution. Because everything read the snapshot, a block changed this play cannot trigger its neighbours until the **next** play. Air makes flame aggressive on one play, and that aggressive flame boils water on a later play, never both at once. That is what "one step per play" means here, and it also rules out repeated rewards from one play.
+4. Blocks are visited in a fixed order (field order, which is placement order), so the commands, events and presentation are reproducible. The result never depends on that order, because of the snapshot.
+
+**Events and presentation.** Each committed transformation emits a `reaction.applied { blockId, from, to }` event after `play.completed`. The play presenter uses it to restyle the block and to play the reaction's registered sound, which is configured on the reaction and has a placeholder until its audio exists. Presentation never decides whether a reaction happened (model first).
+
+**Persistence.** A transformed card is a new object with the same id, so it follows the card through deck and stages, as in "State bonuses (proposal)". The save's optional `cardStates` record from that section carries `material` as well as `stateBonus`, and a cooking step for meat, so both are restored on Continue.
+
+**Rule change to record when #366 lands:** `doc/game.md` currently says every card has exactly one material and that "changing a card's material is a distant-future idea". Reactions make material changes real. Each card still has exactly one material at a time, but a reaction may replace it. #366 updates that rule in the same PR.
+
+**Out of scope here:** creating new blocks (cloud from air and boiling water, #374) is identity creation, not a transformation, and gets its own contract. So do container visuals (#328): a reaction changes the model, and the material's appearance follows.
+
+**Guardrails for #366:** a test that edge or corner contact never reacts; that a block changes at most once per play; that a two-step chain (air → aggressive flame → boiling water) takes two plays; that discards, refills and stage advance never react; that candidate-hand scoring is unchanged by pending reactions; that the result is the same whatever order the blocks are visited in; that a transformation survives save and Continue; and the guardrail scan, so that no generic code names a material.
+
 ## Session controller
 
 `GameRun` (`src/game-run.ts`) controls one run: stage 1 → shop → stage 2 → shop → boss stage → shop → next round. It holds the round number, the phase (a stage, `shop` or `over`), the stage that opened the current shop, the active dealer and the current `GameState`. `advance()` opens a shop after any won stage and sets the phase to `over` on a loss. `leaveShop()` starts the next stage, or stage 1 of the next round after a boss. The shop can be skipped without spending coins. `snapshot()` preserves the completed stage so Continue leaves a restored shop for the right destination; older boss-only shop saves still lead to the next round.
