@@ -1,4 +1,5 @@
 import { resetStageState } from "./stage-end";
+import { resetRoundState } from "./round-end";
 // Registers cooking's stage-end reset (#372).
 import "./cooking";
 import { commitReactions, type AppliedReaction } from "./reactions";
@@ -651,10 +652,11 @@ export class GameRun {
       ),
       shopStock: undefined,
     };
-    // Leaving the round's last shop ends the round, under the run's discard pile policy.
+    // Leaving the round's last shop ends the round, under the run's discard pile policy; then
+    // round-scoped card state resets through its registered handlers (#383).
     if (!next)
-      this.currentState = discardPileAtRoundEnd[this.config.discardPileAfterShop](
-        this.currentState,
+      this.currentState = resetRoundState(
+        discardPileAtRoundEnd[this.config.discardPileAfterShop](this.currentState),
       );
     this.lifecycle("shop.left");
     if (!next) this.currentRound++;

@@ -13,6 +13,7 @@ import type { CardBlock } from "./cards";
 import type { GameState } from "./game-state";
 import { cardStateAppliers } from "./card-states";
 import { Registry } from "./core/registry";
+import { roundEndResets } from "./round-end";
 
 /**
  * Card states that belong to a card's material (#372, doneness), by trait name: a material
@@ -84,3 +85,22 @@ cardStateAppliers.register("material", {
   order: 0,
   apply: (card, value) => rematerial(card, value as BlockMaterial),
 });
+
+// Cards of a material with a `roundEndMaterial` become it when the round ends: gelato back to
+// custard (#383). Read uniformly from each card's own material definition.
+roundEndResets.register("roundEndMaterial", (state) =>
+  [
+    ...state.hand,
+    ...state.field.map(({ block }) => block),
+    ...state.deck,
+    ...state.discardPile,
+  ].reduce((current, card) => {
+    const target = getMaterialDefinition(materialOf(card)).roundEndMaterial;
+    return [target ?? []]
+      .flat()
+      .reduce(
+        (next, kind) => changeCardMaterial(next, card.id, kind as BlockMaterial) ?? next,
+        current,
+      );
+  }, state),
+);

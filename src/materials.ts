@@ -54,6 +54,13 @@ export type MaterialDefinition = {
    * matches taking effect once per play (src/reactions.ts).
    */
   reactions?: readonly Reaction[];
+  /**
+   * The material is a source of heat (#383): a neighbour that heat-sensitive reactions react to,
+   * read by the `neighbour-heat` matcher. Flame has it; anything else may declare it.
+   */
+  heat?: Record<string, never>;
+  /** The material its cards become when a round ends, e.g. gelato back to custard (#383). */
+  roundEndMaterial?: string;
   /** Doneness steps, first (raw) to last, for a material that cooks (#372). */
   cookable?: { steps: readonly string[] };
   /**
@@ -438,6 +445,8 @@ export const materialDefinitions = [
     name: "Fire",
     acoustics: { character: "rattling", hardness: 9, attach: "material.attach.fire" },
     // Air beside it stokes it into aggressive flame, the same card (#370).
+    // Flame is a source of heat (#383): it thaws gelato and keeps custard from freezing.
+    heat: {},
     reactions: [
       {
         when: {
@@ -479,6 +488,16 @@ export const materialDefinitions = [
     name: "Custard",
     // Plastic, between wood and ice (#232).
     acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
+    // Ice freezes it into gelato (#383), unless a source of heat is beside it too.
+    reactions: [
+      {
+        when: {
+          id: "neighbour-material",
+          config: { material: "ice", unlessNeighbour: [{ id: "neighbour-heat", config: {} }] },
+        },
+        results: [{ id: "transform", config: { material: "gelato", sound: "reaction.freeze" } }],
+      },
+    ],
     traits: { transparent: {} },
     shop: {
       basePrice: 3,
@@ -519,6 +538,48 @@ export const materialDefinitions = [
       residue: {
         effect: "fadingFilm",
         config: { fill: 0xf2c84b, opacity: 0.45, seconds: 4, resolution: 32 },
+      },
+    },
+  },
+  {
+    // Gelato (#383): only ever made by a reaction (ice beside custard), never sold. +4 and ×1.5
+    // in place of custard's +2 and ×1.2. Heat beside it thaws it back to custard, and every
+    // gelato card reverts to custard when the round ends. Its look is #382's settling scoops.
+    id: "gelato",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
+    name: "Gelato",
+    acoustics: { character: "muffled", hardness: 4.5, attach: "material.attach.custard" },
+    traits: { transparent: {} },
+    scoringModifier: { additive: 4, multiplicative: 1.5 },
+    activation: { effect: { id: "pulse", colour: "#f2a0b4" }, sfx: "material.activate.gelato" },
+    reactions: [
+      {
+        when: { id: "neighbour-heat", config: {} },
+        results: [{ id: "transform", config: { material: "custard", sound: "reaction.thaw" } }],
+      },
+    ],
+    roundEndMaterial: "custard",
+    appearance: {
+      pattern: "cardSheet",
+      assembly: "contained",
+      surface: "clear",
+      height: "none",
+      ink: lightInk,
+      edge: { color: 0xe8eef2, opacity: 0.3 },
+      geometry: { shape: "rounded", segments: 1, radius: 0.08, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: noEnds,
+      // Frosted plastic: more opaque and less glossy than custard's, so it refracts little.
+      container: { shell: "plasticShell", config: { opacity: 0.42, inset: 0.92, gloss: 0.4 } },
+      contents: {
+        effect: "settlingScoops",
+        config: {
+          colours: [0x4a2b1a, 0xf3df8f, 0xf2a0b4],
+          radius: 0.16,
+          gravity: 3,
+          damping: 0.05,
+          roughness: 0.85,
+        },
       },
     },
   },
@@ -704,33 +765,6 @@ const grass = {
   },
 };
 
-/** Gelato's three scoops (#382): chocolate, vanilla and strawberry, settling to the low side. */
-const neapolitan = {
-  effect: "settlingScoops",
-  config: {
-    colours: [0x4a2b1a, 0xf3df8f, 0xf2a0b4],
-    radius: 0.16,
-    gravity: 3,
-    damping: 0.05,
-    roughness: 0.85,
-  },
-};
-
-/** The same plastic vessel, frosted: more opaque and less glossy, so it refracts little (#382). */
-function frosted(material: MaterialDefinition): MaterialDefinition {
-  const container = material.appearance.container!;
-  return {
-    ...material,
-    appearance: {
-      ...material.appearance,
-      container: {
-        ...container,
-        config: { ...(container.config as object), opacity: 0.42, gloss: 0.4 },
-      },
-    },
-  };
-}
-
 /** A material with inclusions suspended in its contents (#353). */
 function withInclusions(
   material: MaterialDefinition,
@@ -786,8 +820,6 @@ function plasticFluidExperiments(): MaterialDefinition[] {
   });
   return [
     plastic("waterInPlastic", "Water in plastic", clearWater),
-    // Gelato (#382): three Neapolitan scoops settling in a frosted cube (plastic, mostly opaque).
-    frosted(plastic("gelato", "Gelato", neapolitan)),
     // Earth (#358): slow soil with grass, in plastic and in the lantern; no residue.
     withInclusions(plastic("earthInPlastic", "Earth in plastic", slowEarth), [grass]),
     // Hot water (#353): the same water, with very slowly rising bubbles as an inclusion.
