@@ -1251,6 +1251,26 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     ],
     traits: {},
     appearance: {
+      // Experimental: the fan and vent assembly breaks into a few tumbling pieces (two fans and four vent slats) that fade as they go (#454).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: {
+                  pieces: "ventParts",
+                  colour: 0x8a959c,
+                  speed: [0.6, 1.4],
+                  spin: 6,
+                  life: 0.9,
+                  fade: 0.5,
+                },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "ventHousing",
       assembly: "sixFaces",
       surface: "matte",
