@@ -89,6 +89,8 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
     const mine = ++token;
     const stops: (() => void)[] = [];
     const buttons: HTMLButtonElement[] = [];
+    /** Choices activated before their cube was ready. */
+    const pending = new Set<number>();
     let cubes: StageCube[] = [];
     list.replaceChildren();
     list.setAttribute("aria-label", dialog.title);
@@ -107,7 +109,12 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
       const cube = () => cubes[index]?.block;
       button.addEventListener("focus", () => choiceActions.focus(cube()));
       button.addEventListener("blur", () => choiceActions.blur(cube()));
-      button.addEventListener("click", () => choiceActions.activate(cube()));
+      button.addEventListener("click", () => {
+        // Activated while its cube is still loading (fonts loading cold): kept and played once
+        // the cube is ready, so a keyboard or screen-reader choice is never dropped (#532 review).
+        if (cube()) choiceActions.activate(cube());
+        else pending.add(index);
+      });
       button.addEventListener("keydown", (event) => {
         const next = focusAfter(event.key, index, dialog.items.length);
         if (next !== null) {
@@ -149,6 +156,8 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
             handlers.onInspect?.(String(text));
           }),
         );
+        // A choice activated while its cube was being built activates now its action is heard.
+        if (pending.delete(index)) choiceActions.activate(block);
         // A choice focused while its cube was still being built is described now (#532 review).
         if (buttons[index] && buttons[index] === document.activeElement) choiceActions.focus(block);
         const beat = options.beat;
