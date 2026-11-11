@@ -433,7 +433,11 @@ export const materialDefinitions = [
         effect: "levellingFluid",
         config: { fill: 0xf2c84b, surface: 0xfadf7e, level: 0.45, settleSeconds: 1.4 },
       },
-      residue: { effect: "wallTrace", config: { fill: 0xf2c84b, seconds: 4, opacity: 0.45 } },
+      // A fading film with local history (#334): wet walls refresh it, exposed patches fade.
+      residue: {
+        effect: "fadingFilm",
+        config: { fill: 0xf2c84b, opacity: 0.45, seconds: 4, resolution: 32 },
+      },
     },
   },
 ] as const satisfies readonly MaterialDefinition[];
@@ -445,8 +449,8 @@ const custardContents = {
 };
 /** Custard's wall trace, shared the same way. */
 const custardResidue = {
-  effect: "wallTrace",
-  config: { fill: 0xf2c84b, seconds: 4, opacity: 0.45 },
+  effect: "fadingFilm",
+  config: { fill: 0xf2c84b, opacity: 0.45, seconds: 4, resolution: 32 },
 };
 
 /** The retired glass block's six pane tints (f99d307), in BoxGeometry face order. */

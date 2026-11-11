@@ -8,6 +8,8 @@ import { composeContained, containedLayers } from "./contained";
 // Registers the plastic shell and the vessel fluid (#330), and the glass shells (#331).
 import "./filled-vessel";
 import "./glass-shells";
+// Registers the fading wall film residue (#334).
+import "./fading-film";
 // Registers the flame contents (#335).
 import "./fire-core";
 
