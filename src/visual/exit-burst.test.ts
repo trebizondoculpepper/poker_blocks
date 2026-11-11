@@ -79,4 +79,17 @@ describe("particle burst exit effect (#444)", () => {
     runner.update(0.016);
     expect(runner.active).toBe(0);
   });
+
+  it("sizes particles in the block's own space, so a scaled block isn't scaled twice (#509 review)", () => {
+    const v = visual();
+    v.root.parent!.scale.setScalar(3);
+    v.root.parent!.updateMatrixWorld(true);
+    const runner = createExitRunner();
+    runner.start({ blockId: "b" }, v, {
+      steps: [{ effects: [{ effect: "burst", config: { size: 0.1 } }] }],
+    });
+    // A 2-unit block: 0.1 of it is 0.2 in its own space; the world scale of 3 is applied once, later.
+    expect((points(v)!.material as THREE.PointsMaterial).size).toBeCloseTo(0.2);
+    runner.dispose();
+  });
 });

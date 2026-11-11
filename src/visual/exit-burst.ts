@@ -55,6 +55,8 @@ exitEffects.register("burst", ({ visual, reducedMotion }, raw) => {
   const blockSize = bounds.isEmpty()
     ? 1
     : Math.max(...bounds.getSize(new THREE.Vector3()).toArray());
+  // The block's size in its own (local) space: velocities, gravity and particle size all live
+  // there, and keepWorldSize applies the world scale itself (#509 review).
   const scale = blockSize / Math.max(visual.root.getWorldScale(new THREE.Vector3()).x, 1e-6);
   const count = reducedMotion ? 0 : Math.max(0, Math.min(maxParticles, Math.round(config.count)));
   const positions = new Float32Array(count * 3);
@@ -73,7 +75,7 @@ exitEffects.register("burst", ({ visual, reducedMotion }, raw) => {
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const material = new THREE.PointsMaterial({
     color: config.colour,
-    size: config.size * blockSize,
+    size: config.size * scale,
     sizeAttenuation: true,
     transparent: true,
     depthWrite: false,
@@ -81,7 +83,7 @@ exitEffects.register("burst", ({ visual, reducedMotion }, raw) => {
   const points = new THREE.Points(geometry, material);
   points.frustumCulled = false;
   // The star artwork is shared and needs a canvas: attached when first drawn, never disposed here.
-  keepWorldSize(points, material, config.size * blockSize, () => {
+  keepWorldSize(points, material, config.size * scale, () => {
     if (!config.stars || material.map) return;
     material.map = starTexture();
     material.needsUpdate = true;
