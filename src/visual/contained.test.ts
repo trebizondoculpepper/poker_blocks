@@ -337,3 +337,17 @@ describe("fluid looks (#333)", () => {
     expect(contents("waterInLantern")).toEqual(contents("waterInPlastic"));
   });
 });
+
+describe("every registered material's fluid names a look (#413 review)", () => {
+  it("builds every material's contents without error", async () => {
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    for (const material of materialPools.get("registered")())
+      for (const { effect, config } of [material.appearance.contents ?? []].flat()) {
+        const built = containedContents.get(effect)(
+          createInteriorBoundary(geometry, 1, 0.9),
+          config,
+        );
+        built.meshes.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+      }
+  });
+});

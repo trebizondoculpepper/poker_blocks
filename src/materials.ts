@@ -503,7 +503,22 @@ export const materialDefinitions = [
       container: { shell: "plasticShell", config: { opacity: 0.16, inset: 0.92, gloss: 1.6 } },
       contents: {
         effect: "levellingFluid",
-        config: { fill: 0x5fa8d8, surface: 0x9fd2f0, level: 0.55, settleSeconds: 0.5 },
+        // Clear, refracting water (#333's look), with the same level and settling as before.
+        config: {
+          level: 0.55,
+          settleSeconds: 0.5,
+          look: {
+            id: "refractiveFluid",
+            config: {
+              tint: 0xe8f6ff,
+              ior: 1.33,
+              thickness: 0.6,
+              roughness: 0.04,
+              attenuation: 0x7fc8ee,
+              attenuationDistance: 1.6,
+            },
+          },
+        },
       },
       residue: { effect: "wallTrace", config: { fill: 0x5fa8d8, seconds: 1.5, opacity: 0.3 } },
     },
