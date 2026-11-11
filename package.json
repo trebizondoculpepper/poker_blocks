@@ -8,11 +8,14 @@
     "build": "vp build",
     "preview": "vp preview",
     "check": "vp check",
+    "lint": "vp lint",
+    "fmt": "vp fmt",
     "test": "vp test run --passWithNoTests",
     "sfx": "node --env-file-if-exists=.env scripts/generate-sfx.ts",
     "sfx:usage": "node scripts/sfx-usage.ts",
     "release": "node scripts/release.ts",
-    "version-guard": "node scripts/version-guard.ts"
+    "version-guard": "node scripts/version-guard.ts",
+    "prepare": "vp config --hooks --no-agent"
   },
   "dependencies": {
     "@dnd-kit/abstract": "0.5.3",

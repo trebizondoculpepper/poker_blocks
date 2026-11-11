@@ -6,6 +6,10 @@ Instructions for coding agents working in this repository. Project documents liv
 
 Two documents hold the project's decisions. [doc/game-architecture.md](doc/game-architecture.md) says **how** we implement things; [doc/game.md](doc/game.md) says **what** the game is (its rules). Before changing code, read the sections that apply. If your change conflicts with either, either make the code match or change the document in the same PR and say so; never diverge silently. Code review (CodeRabbit, advisory) checks every PR against both.
 
+## Checks before committing
+
+`npm run lint` lints the project (`npm run check` adds formatting and type checks, as CI runs them). `npm install` installs a pre-commit hook (`.vite-hooks/pre-commit`) that formats and lints the staged files with `vp staged` and stops the commit if a problem can't be fixed automatically. Don't skip it with `--no-verify`.
+
 ## No special cases (read this first)
 
 **The hard rule: no special cases, and no if/else chains, in generic code.** Generic code (the event queue, the scorer, the run controller, services, registries and their runners) never asks what something is. It dispatches to the handler registered for it. The point of the game is that unexpected behaviour emerges from composing traits, and every special case makes that harder.
