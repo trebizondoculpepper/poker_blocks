@@ -86,4 +86,28 @@ describe("material exits (#438)", () => {
     expect(runner.active).toBe(0);
     expect(release).toHaveBeenCalledOnce();
   });
+
+  it("ice cracks into five translucent predefined pieces that scatter and fade (#449)", () => {
+    release.mockClear();
+    const v = visual();
+    const runner = createExitRunner(() => false);
+    runner.start({ blockId: "i" }, v, exitOf("ice"));
+    const pieces = v.root.children.slice(1) as THREE.Mesh<
+      THREE.BufferGeometry,
+      THREE.MeshStandardMaterial
+    >[];
+    expect(pieces).toHaveLength(5);
+    expect(pieces[0]!.material.transparent).toBe(true);
+    expect(pieces[0]!.material.opacity).toBeCloseTo(0.55);
+    // Shared, predefined geometry: another ice block's pieces reuse it.
+    const other = visual();
+    const second = createExitRunner(() => false);
+    second.start({ blockId: "i2" }, other, exitOf("ice"));
+    expect((other.root.children[1] as THREE.Mesh).geometry).toBe(pieces[0]!.geometry);
+    runner.update(0.75);
+    expect(pieces[0]!.material.opacity).toBeLessThan(0.55);
+    runner.update(0.3);
+    expect(runner.active).toBe(0);
+    second.dispose();
+  });
 });

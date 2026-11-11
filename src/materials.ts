@@ -518,6 +518,27 @@ export const materialDefinitions = [
       ],
     },
     appearance: {
+      // Cracks into five predefined translucent pieces that scatter and fade (#449). The pieces
+      // are the shared, authored-in-advance slab set, never a runtime fracture of the block.
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                config: {
+                  pieces: "slabs",
+                  colour: 0xcfe9f5,
+                  opacity: 0.55,
+                  speed: [0.6, 1.4],
+                  life: 1,
+                  fade: 0.5,
+                },
+              },
+            ],
+          },
+        ],
+      },
       pattern: "frostedIce",
       assembly: "frostedBlock",
       surface: "frosted",
