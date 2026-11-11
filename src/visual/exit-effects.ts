@@ -3,6 +3,7 @@
  * runner from here, so each effect a material's exit sequence names is registered before it runs.
  * A new effect module adds its import here.
  */
+import "./exit-burst";
 import "./exit-fragments";
 import "./flash-shudder";
 

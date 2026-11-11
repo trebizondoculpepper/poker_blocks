@@ -147,7 +147,7 @@ describe("overlapping flashes and shudders (#511 review)", () => {
 
   it("are loaded wherever exits are run from the effects module", async () => {
     const { exitEffects } = await import("./exit-effects");
-    for (const name of ["flash", "shudder", "shred", "splinter"])
+    for (const name of ["flash", "shudder", "shred", "splinter", "burst"])
       expect(exitEffects.has(name)).toBe(true);
   });
 });
