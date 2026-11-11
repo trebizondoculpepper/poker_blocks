@@ -1,3 +1,4 @@
+import { Registry } from "./core/registry";
 import * as THREE from "three";
 import { tweenValue } from "./easing";
 import "./passive-rack.css";
@@ -24,6 +25,32 @@ type RenderedPassive = {
   /** When its activation effect started, while one is playing. */
   activatedAt: number | null;
 };
+
+/**
+ * Badges a rack item shows, keyed by trait name (#391): each trait that registers one draws it
+ * from its own value. The rack never asks what kind of item it holds.
+ */
+export const rackBadges = new Registry<(value: unknown) => HTMLElement>("rack badge");
+
+function rackBadgesFor(block: PassiveBlock): HTMLElement[] {
+  return Object.entries(block.traits).flatMap(([trait, value]) =>
+    rackBadges.has(trait) ? [rackBadges.get(trait)(value)] : [],
+  );
+}
+
+/**
+ * A clock-like dial of uses left (#384): full when unused, a half-moon after one of two uses.
+ * It shows charges, not a cooldown.
+ */
+rackBadges.register("limitedUse", (value) => {
+  const { uses, total } = value as { uses: number; total: number };
+  const dial = document.createElement("span");
+  dial.className = "rack-badge rack-charges";
+  dial.style.setProperty("--charge", `${(uses / total) * 360}deg`);
+  dial.setAttribute("aria-label", `${uses} of ${total} uses left`);
+  dial.title = `${uses} of ${total} uses left`;
+  return dial;
+});
 
 /** One frame of a token's activation effect, from its category's config; then back to rest. */
 function activationFrame(entry: RenderedPassive, time: number, reducedMotion: boolean): void {
@@ -181,6 +208,13 @@ export function createPassiveRack(host: HTMLElement): {
           rendered.set(block.id, entry);
           mesh.scale.setScalar(0.001);
         }
+        // Badges from the item's traits (a transmogrifier's charge dial, #391), redrawn each
+        // render so they follow the item's state.
+        entry.item.querySelectorAll(".rack-badge").forEach((badge) => badge.remove());
+        entry.item.append(...rackBadgesFor(block));
+        entry.item.setAttribute("aria-label", block.traits.inspectable.inspect());
+        entry.item.dataset.passiveId = block.id;
+        entry.block = block;
         entry.targetX = slotX(index);
         if (entry.mesh.scale.x === 0.001) entry.mesh.position.x = entry.targetX + 0.65;
         slots.append(entry.item);
