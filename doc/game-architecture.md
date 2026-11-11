@@ -277,7 +277,7 @@ reactions?: readonly {
 - **Neighbours** are the six face offsets already defined in `src/traits/attachable.ts` (`faceNormal`), looked up in a cell map of the field. Edge and corner cells are never consulted.
 - **The result** is a list of commands (`transform-block { blockId, material?, stateBonus? }`, `advance-cooking { blockId }`), committed through the existing `commitCommands` path, as discard rules are. A reaction never edits state directly.
 
-**Before or after this play's score (default: after; question 1 on #363).** By default the play is scored first, on the field as placed, and its reactions are resolved and committed afterwards. They change what later plays score, not the play that caused them. That keeps the scored total equal to what the player was shown as they placed the block, and keeps scoring a pure function of the placed field. The alternative is to resolve reactions first and score the transformed field, so placing ice beside flame scores as water at once. That only moves the resolver to before `scoreFieldWithPassives` in `GameRun.play`, so either choice is cheap to change.
+**Reactions never score (owner, 2026-11-11).** A reaction does not add to the score of the play that caused it, or of any play. The play is scored on the field as placed, and its reactions are resolved and committed afterwards. What a reaction changes is the state of the game (a material, a state bonus), and that raises what later plays can score. A later modifier may subscribe to `reaction.applied` and award points for the reaction itself, but that would be an ordinary rule on that event, not part of the reaction.
 
 **One step per play, with no cascades.** The resolver works on a **snapshot** of the field taken once, after placement:
 
