@@ -1,5 +1,5 @@
 import type { CardBlock } from "./cards";
-import type { Registry } from "./core/registry";
+import { Registry } from "./core/registry";
 import type { Dealer } from "./dealer";
 import type { RunPhase, RunSnapshot } from "./game-run";
 import type { RandomCursor } from "./random";
@@ -8,6 +8,7 @@ import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
 // Registers the transmogrifier definitions, so saved rack items resolve (#388).
 import "./transmogrifiers";
+import { rackTraitPersistence } from "./rack-trait-persistence";
 import { applyCardStates, type CardState } from "./card-material";
 import { blockMaterials, type BlockMaterial } from "./materials";
 import { parseRunStats, type RunStats } from "./run-stats";
@@ -425,48 +426,31 @@ function restoreCardStates(saved: unknown): Record<string, CardState> | undefine
 }
 
 /**
- * A rack item as saved: its id and definition, plus, for an item that wears out (a
- * transmogrifier, #388), its uses left, its total, what it cost and its material.
+ * A rack item as saved: its id and definition, plus the traits that registered how they
+ * persist (`rackTraitPersistence`): a transmogrifier's uses, price and material (#388).
  */
-export type SavedRackItem = {
-  id: string;
-  definitionId: string;
-  uses?: number;
-  total?: number;
-  price?: number;
-  material?: string;
-};
+export type SavedRackItem = { id: string; definitionId: string; traits?: Record<string, unknown> };
 
 function saveRackItem(block: PassiveBlock): SavedRackItem {
-  const { limitedUse, priced, transmogrifier } = block.traits;
+  const traits = Object.fromEntries(
+    Object.entries(block.traits).flatMap(([name, value]) =>
+      rackTraitPersistence.has(name) ? [[name, rackTraitPersistence.get(name).save(value)]] : [],
+    ),
+  );
   return {
     id: block.id,
     definitionId: block.definitionId,
-    ...(limitedUse ? { uses: limitedUse.uses, total: limitedUse.total } : {}),
-    ...(limitedUse && priced ? { price: priced.basePrice } : {}),
-    ...(transmogrifier ? { material: transmogrifier.material } : {}),
+    ...(Object.keys(traits).length ? { traits } : {}),
   };
 }
 
 function restoreRackItem(saved: SavedRackItem): PassiveBlock {
   const block = createPassiveBlock(saved.definitionId, saved.id);
-  const { uses, total, price, material } = saved;
-  if (uses === undefined && total === undefined && material === undefined) return block;
-  const whole = (value: unknown): value is number =>
-    typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-  if (!whole(uses) || !whole(total) || uses < 1 || uses > total || !whole(price))
-    throw new Error("bad rack item uses");
-  if (material !== undefined && !blockMaterials.includes(material as BlockMaterial))
-    throw new Error("bad rack item material");
-  return {
-    ...block,
-    traits: {
-      ...block.traits,
-      limitedUse: { uses, total },
-      priced: { basePrice: price },
-      ...(material === undefined
-        ? {}
-        : { transmogrifier: { material: material as BlockMaterial } }),
-    },
-  };
+  const traits = Object.fromEntries(
+    Object.entries(saved.traits ?? {}).map(([name, value]) => [
+      name,
+      rackTraitPersistence.get(name).restore(value),
+    ]),
+  );
+  return { ...block, traits: { ...block.traits, ...traits } };
 }

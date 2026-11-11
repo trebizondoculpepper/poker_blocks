@@ -18,6 +18,8 @@
 import { materialDefinitions, type BlockMaterial, type MaterialDefinition } from "./materials";
 import { createPassiveBlock, passiveDefinitions, type PassiveBlock } from "./passives";
 import { weightAt, type WeightCurve } from "./offer-weights";
+import { blockMaterials } from "./materials";
+import { rackTraitPersistence } from "./rack-trait-persistence";
 
 /** Uses a new transmogrifier has (#384). */
 export const defaultTransmogrifierUses = 2;
@@ -100,3 +102,14 @@ export function transmogrifierWeights(
     weight: weightAt(weights, round),
   }));
 }
+
+// A transmogrifier's material is saved with it in the rack (#388).
+rackTraitPersistence.register("transmogrifier", {
+  save: (value) => ({ ...(value as object) }),
+  restore: (saved) => {
+    const material = (saved as { material?: unknown })?.material;
+    if (!blockMaterials.includes(material as BlockMaterial))
+      throw new Error("bad transmogrifier material");
+    return { material: material as BlockMaterial };
+  },
+});
