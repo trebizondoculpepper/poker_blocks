@@ -89,6 +89,8 @@ export type PassiveDefinition = {
   shape?: string;
   /** Artwork per face in logical order: face `i` sits opposite face `count - 1 - i`. */
   faces?: readonly PassiveFaceDesign[];
+  /** A registered visual builder for a token not drawn as a painted shape (#391). */
+  visual?: { builder: string; config: unknown };
   /** Its event rules: named, configured handlers from `src/rule-handlers.ts` (#139, #170). */
   eventRules: readonly EventRule[];
   /**
@@ -349,6 +351,7 @@ export function passiveAppearance(block: PassiveBlock): PassiveTokenAppearance {
       palette: passivePalette(definition()),
       shape: definition().shape,
       faces: definition().faces,
+      visual: definition().visual,
     }
   );
 }
@@ -367,6 +370,7 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
         palette: passivePalette(definition),
         shape: definition.shape,
         faces: definition.faces,
+        visual: definition.visual,
       },
       passive: {
         traitId: definition.traitId,
