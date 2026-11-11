@@ -15,8 +15,10 @@
  *   (propagation, #435) does so depth-first, in place, through the same command.
  * - **Cancellation:** a target no longer in the hand or on the table (removed earlier in the
  *   same chain, or by anything else) does nothing.
- * - **Repeats:** a block already in the chain's `path` is not triggered again, so a chain can
- *   never loop; a later, separate trigger starts a new chain and may trigger it again.
+ * - **Repeats:** a chain records every block it has triggered, across all its branches
+ *   (`visited`), and never triggers one twice, so it can neither loop nor reach a block by two
+ *   routes; a later, separate trigger starts a new chain and may trigger it again. `path` keeps
+ *   each block's ancestry for responses to read.
  * - **Not triggerable:** a block with no responses ignores a trigger and emits nothing.
  * - **Events:** each trigger that runs emits `block.triggered` (with its `trigger` context)
  *   before its responses' own follow-up events.
@@ -38,11 +40,22 @@ export type TriggerContext = {
   cause: string;
   /** The block, captured before its responses ran. */
   source: TriggerSource;
-  /** The chain so far, this block last: blocks in it are never triggered again by it. */
+  /** This block's ancestry in the chain: who triggered whom to reach it, this block last. */
   path: readonly string[];
+  /**
+   * Every block the whole chain has triggered so far, across all its branches: none of them is
+   * triggered again by this chain (#488 review). Transient: it lives only while the chain runs.
+   */
+  visited: Set<string>;
 };
 
-export type TriggerConfig = { blockId: string; cause: string; path?: readonly string[] };
+export type TriggerConfig = {
+  blockId: string;
+  cause: string;
+  path?: readonly string[];
+  /** The chain's shared record of triggered blocks; a new chain starts its own. */
+  visited?: Set<string>;
+};
 
 /** A block's responses, from its material: none when it doesn't respond to triggers. */
 export const materialTriggerResponses = (block: CardBlock): readonly RuleCommand[] =>
@@ -61,17 +74,18 @@ function locate(state: GameState, blockId: string): TriggerSource | null {
  * read by `responsesFor` (materials by default; tests and tools may supply their own).
  */
 export function commitTrigger(
-  { blockId, cause, path = [] }: TriggerConfig,
+  { blockId, cause, path = [], visited = new Set(path) }: TriggerConfig,
   target: CommandTarget,
   responsesFor: (block: CardBlock) => readonly RuleCommand[] = materialTriggerResponses,
 ): GameEvent[] {
-  if (path.includes(blockId)) return [];
+  if (visited.has(blockId)) return [];
   const source = locate(target.state, blockId);
   if (!source) return [];
   const configured = responsesFor(source.block);
   // A block that doesn't respond to triggers isn't triggered: nothing happens, nothing is said.
   if (!configured.length) return [];
-  const trigger: TriggerContext = { cause, source, path: [...path, blockId] };
+  visited.add(blockId);
+  const trigger: TriggerContext = { cause, source, path: [...path, blockId], visited };
   const responses = configured.map(({ id, config }) => ({
     id,
     config: { ...(config as object), trigger },
@@ -85,12 +99,15 @@ export function commitTrigger(
  * configured responses that trigger blocks, their own included, can never loop.
  */
 export function inheritedTrigger(
-  config: TriggerConfig & { trigger?: Pick<TriggerContext, "path"> },
+  config: TriggerConfig & { trigger?: Pick<TriggerContext, "path" | "visited"> },
 ): TriggerConfig {
+  const path = config.path ?? config.trigger?.path ?? [];
   return {
     blockId: config.blockId,
     cause: config.cause,
-    path: config.path ?? config.trigger?.path ?? [],
+    path,
+    // The chain's shared record, so sibling branches never trigger a block twice.
+    visited: config.visited ?? config.trigger?.visited ?? new Set(path),
   };
 }
 

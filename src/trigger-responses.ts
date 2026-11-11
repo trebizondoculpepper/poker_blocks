@@ -12,8 +12,8 @@
  *   the same `trigger-block` command. Who is a registered selector: `face-neighbours`, the blocks
  *   sharing a face with the source. Selection reads the source's cell from the trigger's snapshot,
  *   so it works after the source has removed itself. Targets go in a fixed order (field order);
- *   each carries the chain on, so a block is never triggered twice in one chain and chains can't
- *   loop.
+ *   each carries the chain's shared record on, so a block is never triggered twice in one chain,
+ *   by any route, and chains can't loop.
  *
  * Order within one block's responses is the listed order, so `trigger-targets` before
  * `self-destruct` lets neighbours respond while the source is still on the table, and after it
@@ -86,7 +86,7 @@ registerRuleCommand<{ trigger: TriggerContext; select: HandlerConfig; cause: str
         .get(select.id)(trigger, target.state, select.config)
         .map((block) => ({
           id: "trigger-block",
-          config: { blockId: block.id, cause, path: trigger.path },
+          config: { blockId: block.id, cause, path: trigger.path, visited: trigger.visited },
         })),
       target,
     ),

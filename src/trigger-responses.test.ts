@@ -114,4 +114,23 @@ describe("self-destruct and target triggers (#435)", () => {
     expect(after).toEqual(before);
     expect(events.map(({ type }) => type)).toEqual(["block.triggered"]);
   });
+
+  it("never reaches a block twice by two routes: a square of four runs each once (#488 review)", () => {
+    lend([
+      { id: "add-coins", config: { amount: 1 } },
+      {
+        id: "trigger-targets",
+        config: { select: { id: "face-neighbours", config: {} }, cause: "chain" },
+      },
+    ]);
+    const [a, b, c, d] = [woodCard(0), woodCard(1), woodCard(2), woodCard(3)];
+    const square = state([a, at(0, 0)], [b, at(1, 0)], [c, at(0, 1)], [d, at(1, 1)]);
+    const { state: after, events } = triggerBlock(square, { blockId: a.id, cause: "test" });
+    expect(after.coins).toBe(4);
+    const triggered = events
+      .filter(({ type }) => type === "block.triggered")
+      .map(({ blockId }) => blockId);
+    expect(new Set(triggered).size).toBe(4);
+    expect(triggered).toHaveLength(4);
+  });
 });
