@@ -29,7 +29,7 @@ describe("block menu keyboard and screen-reader path (#528)", () => {
   it("focusing a choice describes it; activating it is a complete press on its cube", () => {
     const { block, texts, actions } = cube();
     choiceActions.focus(block);
-    expect(texts).toEqual(["Go somewhere."]);
+    expect(texts.at(-1)).toBe("Go somewhere.");
     choiceActions.activate(block);
     expect(actions).toEqual(["go"]);
   });
@@ -38,7 +38,7 @@ describe("block menu keyboard and screen-reader path (#528)", () => {
     const { block, texts, actions } = cube(false);
     choiceActions.focus(block);
     choiceActions.activate(block);
-    expect(texts).toHaveLength(1);
+    expect(texts.at(-1)).toBe("Go somewhere.");
     expect(actions).toEqual([]);
   });
 
@@ -46,5 +46,15 @@ describe("block menu keyboard and screen-reader path (#528)", () => {
     expect(() => choiceActions.activate(undefined)).not.toThrow();
     expect(isBackKey("Escape")).toBe(true);
     expect(isBackKey("Backspace")).toBe(false);
+  });
+
+  it("shows keyboard focus on the cube itself: focus lifts it like hover, blur drops it (#532 review)", () => {
+    const { block } = cube();
+    const states: { hovered: boolean }[] = [];
+    block.on("interaction.state", (state) => states.push(state as { hovered: boolean }));
+    choiceActions.focus(block);
+    expect(states.at(-1)?.hovered).toBe(true);
+    choiceActions.blur(block);
+    expect(states.at(-1)?.hovered).toBe(false);
   });
 });

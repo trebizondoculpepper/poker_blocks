@@ -21,8 +21,18 @@ export function focusAfter(key: string, index: number, count: number): number | 
 
 /** What the buttons' events do to a cube (it may not be built yet). */
 export const choiceActions = {
-  focus: (cube: Block | undefined) => cube?.emit("input.focus"),
-  blur: (cube: Block | undefined) => cube?.emit("input.blur"),
+  /**
+   * Focus describes the cube and gives it the hover lift, so a keyboard user can see which choice
+   * Enter or Space will activate: the hidden button's own outline can't show (#532 review).
+   */
+  focus(cube: Block | undefined) {
+    cube?.emit("input.focus");
+    cube?.emit("input.enter");
+  },
+  blur(cube: Block | undefined) {
+    cube?.emit("input.blur");
+    cube?.emit("input.leave");
+  },
   /** Activating the button is a complete press on its cube. */
   activate(cube: Block | undefined) {
     cube?.emit("input.press");
