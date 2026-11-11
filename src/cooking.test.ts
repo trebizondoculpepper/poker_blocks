@@ -89,3 +89,17 @@ describe("the inspector names Raw too (#408 review)", () => {
     expect(made(0, "wood").traits.inspectable?.inspect()).toMatch(/· Wood$/);
   });
 });
+
+describe("a material change clears doneness (#408 review)", () => {
+  it("transmogrified cooked meat forgets its step, on the card and in the ledger", async () => {
+    const { changeCardMaterial } = await import("./card-material");
+    const cooked = applyReactions(table(at(made(0, "meat"), 0), at(made(1, "fire"), 1))).state;
+    const id = meatOf(cooked).id;
+    const wood = changeCardMaterial(cooked, id, "wood")!;
+    expect(meatOf(wood).traits.doneness).toBeUndefined();
+    expect(wood.cardStates?.[id]).toEqual({ material: "wood" });
+    const back = changeCardMaterial(wood, id, "meat")!;
+    expect(meatOf(back).traits.inspectable?.inspect()).toMatch(/· Meat · Raw$/);
+    expect(meatOf(back).traits.doneness).toBeUndefined();
+  });
+});

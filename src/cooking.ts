@@ -13,6 +13,7 @@ import { reactionResults } from "./reactions";
 import { registerRuleCommand } from "./rule-commands";
 import { stageEndResets } from "./stage-end";
 import { cardStateAppliers } from "./card-states";
+import { materialScopedStates } from "./card-material";
 import { inspectable } from "./traits/inspectable";
 import type { SoundEffectId } from "./audio/sfx-registry";
 
@@ -132,3 +133,6 @@ cardStateAppliers.register("doneness", {
   order: 2,
   apply: (card, value) => withDoneness(card, value as number),
 });
+
+// Doneness belongs to the meat: a material change clears it (#372, #408 review).
+materialScopedStates.register("doneness", true);
