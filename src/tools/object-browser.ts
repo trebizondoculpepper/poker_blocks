@@ -47,20 +47,21 @@ const sampleCard = standardDeck[0]!;
 function materialPage(
   definition: MaterialDefinition,
   note?: string,
-  card = sampleCard,
-  options: CardFaceOptions = {},
-  id = definition.id,
-  name = definition.name,
+  page: {
+    card?: typeof sampleCard;
+    options?: CardFaceOptions;
+    id?: string;
+    name?: string;
+    properties?: unknown;
+  } = {},
 ): BrowsedObject {
+  const { card = sampleCard, options = {}, id = definition.id, name = definition.name } = page;
   return {
     id,
     name,
     note,
-    // A plain material page shows its definition; a rank style page, what it is showing.
-    properties:
-      card === sampleCard
-        ? definition
-        : { ...options, rank: card.traits.identity.rank, material: definition.id },
+    // The caller says what the page shows: the material's definition unless told otherwise.
+    properties: page.properties ?? definition,
     preview(size) {
       const appearance = createBlockAppearance(
         cardFaceArt(card.traits.identity, options),
@@ -105,10 +106,13 @@ function rankStylePages(): BrowsedObject[] {
           materialPage(
             definition,
             rankStyle ? `Rank style: ${rankStyle}` : "Plain glyph, for comparison",
-            card,
-            { rankStyle },
-            `${rank}-${definition.id}-${rankStyle ?? "plain"}`,
-            `${rank} ${rankStyle ?? "plain"} · ${definition.name}`,
+            {
+              card,
+              options: { rankStyle },
+              id: `${rank}-${definition.id}-${rankStyle ?? "plain"}`,
+              name: `${rank} ${rankStyle ?? "plain"} · ${definition.name}`,
+              properties: { rank, rankStyle: rankStyle ?? null, material: definition.id },
+            },
           ),
         ),
       );
