@@ -77,4 +77,21 @@ describe("generated field blocks (#424)", () => {
     const record = JSON.parse(JSON.stringify(toSaveRecord({ ...game.snapshot(), state: cleared })));
     expect(fromSaveRecord(record, standardDeck, dealerRegistry)).not.toBeNull();
   });
+
+  it("is honoured by the run's own stage transition (#427 review)", () => {
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    const state = withCloud();
+    const own = state.field[0]!.block.id;
+    const run = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, {
+      ...game.snapshot(),
+      phase: "shop",
+      state,
+    });
+    expect(run.leaveShop()).toBe(true);
+    const ids = [...run.state.deck, ...run.state.hand].map(({ id }) => id);
+    expect(ids).toContain(own);
+    expect(ids).not.toContain("generated.cloud.1");
+    expect(run.state.field.map(({ block }) => block.id)).not.toContain("generated.cloud.1");
+    expect(run.state.generatedCards).toBeUndefined();
+  });
 });
