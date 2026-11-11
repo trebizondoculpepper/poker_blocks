@@ -266,9 +266,9 @@
     }
   },
   "passive.activate.scoring": {
-    "uses": 3,
+    "uses": 4,
     "files": {
-      "audio/sfx-registry.ts (placeholder)": 2,
+      "audio/sfx-registry.ts (placeholder)": 3,
       "passive-categories.ts": 1
     }
   },
@@ -330,9 +330,9 @@
     }
   },
   "material.attach.prismatic": {
-    "uses": 2,
+    "uses": 3,
     "files": {
-      "materials.ts": 2
+      "materials.ts": 3
     }
   },
   "passive.pickup": {
@@ -402,6 +402,12 @@
     }
   },
   "material.activate.prismatic": {
+    "uses": 1,
+    "files": {
+      "materials.ts": 1
+    }
+  },
+  "material.activate.magic": {
     "uses": 1,
     "files": {
       "materials.ts": 1

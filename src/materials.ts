@@ -137,6 +137,22 @@ const darkInk = { red: "#a32536", black: "#422716", onDark: true };
 const box = { shape: "box", segments: 0, radius: 0, scale: 1 };
 const noEnds: readonly number[] = [];
 
+/**
+ * Magic Lock's stars (#349): a sparse, fizzing field of the crystal trail's stars, each aging
+ * brilliant white, cream, brown, then black (and gone). Weak gravity, gentle drift.
+ */
+const magicStars = {
+  effect: "stars",
+  config: {
+    count: 36,
+    life: 2.6,
+    size: 0.3,
+    drift: 0.12,
+    gravity: 0.05,
+    ramp: [0xffffff, 0xfff1cc, 0x8a5a2b, 0x000000],
+  },
+};
+
 export const materialDefinitions = [
   {
     id: "paper",
@@ -562,6 +578,39 @@ export const materialDefinitions = [
       residue: { effect: "wallTrace", config: { fill: 0x5fa8d8, seconds: 1.5, opacity: 0.3 } },
     },
   },
+  {
+    // Magic (#375): the round-8 material. Its look is Magic Lock's (#349): the crystal trail's
+    // stars, aging white to black, in a plastic vessel. Its scoring package is +1, ×2 and ^1.2,
+    // applied by the shared scorer in its documented order. Price: assumed 16 (see #375).
+    id: "magic",
+    lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
+    name: "Magic",
+    acoustics: { character: "ringing", hardness: 10.5, attach: "material.attach.prismatic" },
+    traits: { transparent: {} },
+    shop: {
+      basePrice: 16,
+      weights: [
+        [8, 4],
+        [9, 1.5],
+        [10, 1],
+      ],
+    },
+    scoringModifier: { additive: 1, multiplicative: 2, exponential: 1.2 },
+    activation: { effect: { id: "pulse", colour: "#fff1cc" }, sfx: "material.activate.magic" },
+    appearance: {
+      pattern: "cardSheet",
+      assembly: "contained",
+      surface: "clear",
+      height: "none",
+      ink: lightInk,
+      edge: { color: 0xe8eef2, opacity: 0.3 },
+      geometry: { shape: "rounded", segments: 1, radius: 0.08, scale: 1 },
+      reliefScale: 0,
+      endGrainFaces: noEnds,
+      container: { shell: "plasticShell", config: { opacity: 0.16, inset: 0.92, gloss: 1.6 } },
+      contents: magicStars,
+    },
+  },
 ] as const satisfies readonly MaterialDefinition[];
 
 /** Custard's contents, shared by every experiment that shows them in another shell (#331). */
@@ -667,22 +716,6 @@ function withInclusions(
 const softCloud = {
   effect: "cloud",
   config: { colour: 0xf4f7fb, density: 1.2, drift: 0.08 },
-};
-
-/**
- * Magic Lock's stars (#349): a sparse, fizzing field of the crystal trail's stars, each aging
- * brilliant white, cream, brown, then black (and gone). Weak gravity, gentle drift.
- */
-const magicStars = {
-  effect: "stars",
-  config: {
-    count: 36,
-    life: 2.6,
-    size: 0.3,
-    drift: 0.12,
-    gravity: 0.05,
-    ramp: [0xffffff, 0xfff1cc, 0x8a5a2b, 0x000000],
-  },
 };
 
 /** A dark, oily fluid (#333): custard's look and mechanics with only its colours changed. */
