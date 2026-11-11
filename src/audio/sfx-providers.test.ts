@@ -12,7 +12,7 @@ import { envelope, noiseBurst, synthRecipes, tone, vary } from "./synth";
 
 /** A minimal stand-in for Web Audio: enough nodes to build and end voices. */
 function fakeContext() {
-  const sources: { ended: () => void; stopped: boolean }[] = [];
+  const sources: { ended: () => void; stopped: boolean; stopAt?: number }[] = [];
   const param = () => ({
     value: 0,
     setValueAtTime: vi.fn(),
@@ -28,10 +28,17 @@ function fakeContext() {
       frequency: param(),
       type: "",
       start: vi.fn(),
-      stop: vi.fn(() => (entry.stopped = true)),
+      // Like the browser: a scheduled stop ends the source (and fires "ended") at that time.
+      stop: vi.fn((at?: number) => {
+        entry.stopped = true;
+        entry.stopAt = at;
+      }),
       addEventListener: (_: string, listener: () => void) => listeners.push(listener),
     };
-    const entry = { ended: () => listeners.forEach((each) => each()), stopped: false };
+    const entry: { ended: () => void; stopped: boolean; stopAt?: number } = {
+      ended: () => listeners.forEach((each) => each()),
+      stopped: false,
+    };
     sources.push(entry);
     return made;
   };
@@ -105,10 +112,24 @@ describe("mixed sample and synthesised sound effects (#518)", () => {
     expect(liveSynthVoices()).toBe(0);
   });
 
-  it("caps how many voices sound at once, dropping new ones rather than cutting others off", () => {
+  it("caps how many voices sound at once, dropping new ones rather than starting more", () => {
     for (let i = 0; i < maxSynthVoices + 5; i++) sfxProviders.get("synth")(pop, {}, settings);
     expect(liveSynthVoices()).toBe(maxSynthVoices);
-    expect(fake.sources.every(({ stopped }) => !stopped)).toBe(true);
+    expect(fake.sources).toHaveLength(maxSynthVoices * 2);
+  });
+
+  it("stops every source at the voice's declared end, so even a tone finishes (#525 review)", () => {
+    sfxProviders.get("synth")(pop, {}, settings);
+    // The recipe declares its end 0.1 s after the start (currentTime 1).
+    expect(fake.sources.map(({ stopAt }) => stopAt)).toEqual([1.1, 1.1]);
+    // When those scheduled stops arrive, the voice is released; plenty more can follow.
+    fake.sources.forEach((source) => source.ended());
+    expect(liveSynthVoices()).toBe(0);
+    for (let i = 0; i < 20; i++) {
+      sfxProviders.get("synth")(pop, {}, settings);
+      fake.sources.slice(-2).forEach((source) => source.ended());
+    }
+    expect(liveSynthVoices()).toBe(0);
   });
 
   it("stops every voice on request (scene exit)", () => {

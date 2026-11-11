@@ -109,13 +109,17 @@ sfxProviders.register("synth", (effect, options, { volume, random }) => {
     config,
   );
   live.add(voice);
-  // A voice is released when its last source ends, so finished voices never pile up.
+  // A voice is released when its last source ends, so finished voices never pile up. Every
+  // source is stopped at the voice's declared end: an oscillator under a decayed envelope would
+  // otherwise run forever and its voice would never be released (#525 review).
   let left = voice.sources.length;
-  for (const source of voice.sources)
+  for (const source of voice.sources) {
     source.addEventListener("ended", () => {
       left -= 1;
       if (left <= 0) live.delete(voice);
     });
+    source.stop(voice.endsAt);
+  }
   if (!voice.sources.length) live.delete(voice);
 });
 
