@@ -826,6 +826,34 @@ export const materialDefinitions = [
     scoringModifier: { additive: 1, multiplicative: 2, exponential: 1.2 },
     activation: { effect: { id: "pulse", colour: "#fff1cc" }, sfx: "material.activate.magic" },
     appearance: {
+      // The shell breaks apart and releases its stars outward before they fade (#458).
+      exit: {
+        steps: [
+          {
+            effects: [
+              {
+                effect: "fracture",
+                target: "shell",
+                config: { pieces: "shards", colour: 0xe8eef2, opacity: 0.35, life: 0.9, fade: 0.4 },
+              },
+              {
+                effect: "burst",
+                target: "contents",
+                config: {
+                  count: 50,
+                  speed: [0.6, 1.6],
+                  lift: 0.3,
+                  gravity: 0.4,
+                  life: 1.2,
+                  size: 0.09,
+                  stars: true,
+                },
+              },
+              { effect: "fade", target: "contents", config: { seconds: 0.1 } },
+            ],
+          },
+        ],
+      },
       pattern: "cardSheet",
       assembly: "contained",
       surface: "clear",
