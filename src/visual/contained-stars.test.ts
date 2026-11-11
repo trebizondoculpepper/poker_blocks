@@ -102,4 +102,37 @@ describe("Magic Lock's contained stars (#349)", () => {
     (points.material as THREE.Material).dispose();
     expect(released).toBe(true);
   });
+
+  it("sizes stars to the same world width under orthographic and perspective cameras (#415 review)", () => {
+    const { stars } = field();
+    const points = stars.meshes[0] as THREE.Points;
+    const material = points.material as THREE.PointsMaterial;
+    material.map = new THREE.Texture(); // skip the canvas-drawn texture in a headless test
+    const renderer = {
+      getDrawingBufferSize: (target: THREE.Vector2) => target.set(800, 600),
+    } as unknown as THREE.WebGLRenderer;
+    const ortho = new THREE.OrthographicCamera(-2, 2, 1.5, -1.5);
+    points.onBeforeRender(
+      renderer,
+      new THREE.Scene(),
+      ortho,
+      points.geometry,
+      material,
+      null as never,
+    );
+    // World width: 0.3 of the interior, times the field's own scale (the volume, 0.92 × 0.97);
+    // at 600 px over 3 world units, that many world units times 200 px.
+    const world = 0.3 * 0.92 * 0.97;
+    expect(material.size).toBeCloseTo(world * (2 / 3) * 300, 6);
+    const perspective = new THREE.PerspectiveCamera(50, 4 / 3, 0.1, 100);
+    points.onBeforeRender(
+      renderer,
+      new THREE.Scene(),
+      perspective,
+      points.geometry,
+      material,
+      null as never,
+    );
+    expect(material.size).toBeCloseTo(world, 6);
+  });
 });

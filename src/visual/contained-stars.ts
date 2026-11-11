@@ -92,10 +92,23 @@ containedContents.register("stars", (boundary, raw) => {
   points.renderOrder = containedLayers.contentsTransparent;
   points.frustumCulled = false;
   // Attached when first drawn (the shared texture needs a canvas; building it doesn't).
-  points.onBeforeRender = () => {
-    if (material.map) return;
-    material.map = starTexture();
-    material.needsUpdate = true;
+  const worldScale = new THREE.Vector3();
+  const buffer = new THREE.Vector2();
+  points.onBeforeRender = (renderer, _scene, camera) => {
+    if (!material.map) {
+      material.map = starTexture();
+      material.needsUpdate = true;
+    }
+    // A star is a fixed fraction of the interior wide, under any camera. Three.js attenuates
+    // point size by depth only for a perspective projection; under an orthographic one (the
+    // hand) `size` is in pixels, so convert the world size with the projection's vertical
+    // scale. The projection matrix itself says which it is (its w row is 0 0 -1 0 in
+    // perspective, 0 0 0 1 orthographic).
+    const world = config.size * width * points.getWorldScale(worldScale).y;
+    const projection = camera.projectionMatrix.elements;
+    const perspective = projection[11] !== 0;
+    renderer.getDrawingBufferSize(buffer);
+    material.size = perspective ? world : (world * projection[5]! * buffer.y) / 2;
   };
   const down = new THREE.Vector3();
   const inverse = new THREE.Quaternion();
