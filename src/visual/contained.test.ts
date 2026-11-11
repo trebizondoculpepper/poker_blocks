@@ -5,6 +5,7 @@ import { composeContained, containedLayers } from "./contained";
 import "./filled-vessel";
 import "./glass-shells";
 import "./fire-core";
+import "./fading-film";
 
 const geometry = new THREE.BoxGeometry(1, 1, 1);
 const build = (id: string) => {
