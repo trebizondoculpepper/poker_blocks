@@ -12,6 +12,7 @@
  * rivets), so a block looks the same every time it's drawn.
  */
 import type { IdentityTrait } from "../cards";
+import { rankGlyph } from "./rank-faces";
 
 /** The ink tones artwork can ask for; each material's appearance gives each one a colour. */
 export type InkTone = "red" | "black";
@@ -26,8 +27,17 @@ export type FaceArt = {
   paint(g: CanvasRenderingContext2D, pen: FacePen): void;
 };
 
+export type CardFaceOptions = {
+  /**
+   * A rank glyph style (#489): each rank prints its own glyph for it where it has one
+   * (`underlined` marks 6 and 9), its plain glyph otherwise. Omitted: the plain glyphs.
+   */
+  rankStyle?: string;
+};
+
 /** A card's rank above its suit, centred, in its suit's tone. */
-export function cardFaceArt(identity: IdentityTrait): FaceArt {
+export function cardFaceArt(identity: IdentityTrait, options: CardFaceOptions = {}): FaceArt {
+  const rank = rankGlyph(identity.rank, options.rankStyle);
   const tone: InkTone = identity.suit.tone;
   return {
     seed: `${identity.rank}-${identity.suit.name}`,
@@ -36,7 +46,7 @@ export function cardFaceArt(identity: IdentityTrait): FaceArt {
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.font = "bold 80px system-ui, sans-serif";
-      g.fillText(identity.rank, 128, 100);
+      g.fillText(rank, 128, 100);
       g.font = "94px Georgia, serif";
       g.fillText(identity.suit.symbol, 128, 180);
     },
