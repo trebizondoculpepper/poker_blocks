@@ -86,7 +86,7 @@ export type RunServices = {
   readonly frame: Pick<HudFrame, "layout" | "setLayout">;
 };
 
-export type RunController = {
+export type GameRunController = {
   readonly game: GameRun;
   /** The mode being played. */
   readonly mode: GameMode;
@@ -166,14 +166,14 @@ const stageWonDelayMs = 900;
 /** When a lost stage's outcome has been announced, the game over screen follows. */
 const gameOverDelayMs = 1400;
 
-export function createRunController<Context>(options: {
+export function createGameRunController<Context>(options: {
   host: HTMLElement;
   storage: SaveStorage | null;
   /** The page's URL parameters (`?mode=`, `&restart=true`). */
   params: URLSearchParams;
   scenes: SceneManager<SceneTraits, Context>;
   services: RunServices;
-}): RunController {
+}): GameRunController {
   const { host, storage, scenes, services } = options;
   /**
    * Game modes are composed from mode traits; see src/game-modes.ts. dev0 is the normal

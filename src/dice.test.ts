@@ -118,7 +118,7 @@ describe("dice passives (#97)", () => {
   it("guardrail: dice come from configuration, never from named branches in the run or scorer", () => {
     for (const file of [
       "game-run.ts",
-      "run-controller.ts",
+      "game-run-controller.ts",
       "passive-effects.ts",
       "rule-handlers.ts",
       "event-rules.ts",

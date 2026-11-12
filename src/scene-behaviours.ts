@@ -26,7 +26,7 @@ import type { AudioService } from "./audio-service";
 import type { CameraViewService } from "./camera-view";
 import type { Overlays } from "./overlays";
 import type { HudPanel, HudPanelConfigs, HudPanels } from "./hud-panels";
-import type { RunController } from "./run-controller";
+import type { GameRunController } from "./game-run-controller";
 import type { ShopView } from "./shop-view";
 import type { TableInput } from "./table-input";
 import type { TableRenderer } from "./table-renderer";
@@ -112,7 +112,7 @@ export type SceneHost = {
     };
     /** The run, for the game state a scene trait presents and the actions it dispatches. */
     run: Pick<
-      RunController,
+      GameRunController,
       | "rackCapacity"
       | "shopStock"
       | "deckBlocks"

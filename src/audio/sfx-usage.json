@@ -66,8 +66,8 @@
     "uses": 3,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
-      "game-run.ts": 1,
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1,
+      "game-run.ts": 1
     }
   },
   "block.dazzle_pop": {
@@ -84,9 +84,9 @@
     "uses": 10,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 2,
+      "game-run-controller.ts": 1,
       "menus.ts": 1,
       "purchase-refusals.ts": 1,
-      "run-controller.ts": 1,
       "table-input.ts": 4,
       "traits/menu-action.ts": 1
     }
@@ -144,13 +144,13 @@
   "round.cleared": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "round.failed": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "round.start": {
@@ -182,7 +182,7 @@
   "shop.buy": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "celebration.pop": {
@@ -212,13 +212,13 @@
   "shop.stock.burn": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "run.lost": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "attract.card.bonk": {
@@ -233,8 +233,8 @@
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 3,
       "game-modes.ts": 2,
+      "game-run-controller.ts": 1,
       "menus.ts": 5,
-      "run-controller.ts": 1,
       "settings-panel.ts": 7,
       "tools/block-designer.ts": 3,
       "tools/contained-proof/room.ts": 4,
@@ -388,7 +388,7 @@
   "shop.leave": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "material.activate.wood": {
