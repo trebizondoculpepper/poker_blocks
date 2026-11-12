@@ -5,6 +5,22 @@
  */
 import * as THREE from "three";
 
+/**
+ * The board's overhead lamp: warm, above and slightly in front, casting soft shadows. The card
+ * room places it over the table each frame (`boardLampOffset` from the table's centre).
+ */
+export function boardLamp(): THREE.DirectionalLight {
+  const lamp = new THREE.DirectionalLight(0xfff1d6, 1.6);
+  lamp.castShadow = true;
+  lamp.shadow.bias = -0.0005;
+  lamp.shadow.normalBias = 0.02;
+  lamp.shadow.radius = 4;
+  return lamp;
+}
+
+/** Where the lamp sits relative to the table's centre. */
+export const boardLampOffset = new THREE.Vector3(-2, 14, 5);
+
 /** The board: a warm sky and floor, and a white fill from above left. */
 export function boardLights(): THREE.Light[] {
   const fill = new THREE.DirectionalLight(0xffffff, 1.3);

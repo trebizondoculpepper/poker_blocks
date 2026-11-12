@@ -23,6 +23,7 @@ import {
 } from "./cases";
 import { costMeasures, profilerExport, sortedByCost, type ProfilerEnvironmentInfo } from "./export";
 import { createGpuTimer } from "./gpu-timer";
+import { createHostTracker } from "./host-tracker";
 import { createProfilerRunner, type CaseResult, type RunOptions } from "./runner";
 import "./room.css";
 
@@ -129,6 +130,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
   let activePreview: ProfiledObject | null = null;
   /** How to undo each preview's host, once, when that preview ends. */
   const previewHosts = new Map<ProfiledObject, () => void>();
+  /** Every preview host not yet undone, including previews whose factory is still building. */
+  const previewHostTracker = createHostTracker();
   let lastExport: string | null = null;
   let results: CaseResult[] = [];
 
@@ -210,7 +213,11 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     playSfx("ui.click");
     const mine = ++previewToken;
     // The case's own host, as a run would draw it (#712), undone when the preview ends.
-    const undoHost = runner.prepareHost(profilingCases.get(id).host ?? defaultProfilingHost);
+    // Undone exactly once: by this preview ending, or by a run starting while its factory is
+    // still building, whichever comes first (#720 review).
+    const undoHost = previewHostTracker.track(
+      runner.prepareHost(profilingCases.get(id).host ?? defaultProfilingHost),
+    );
     let one: ProfiledObject;
     try {
       one = await profilingCases.get(id).create({ seed: 1, phase });
@@ -271,6 +278,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     previewToken++;
     // A preview still animating leaves the stage now, so it never shares a measured frame.
     if (activePreview) endPreview(activePreview);
+    // So do the hosts of previews still being built: the run's own host lights it alone.
+    previewHostTracker.releaseAll();
     applySize();
     // The settings a run uses are fixed and recorded as it starts: later changes to the controls
     // affect the next run, never this run's metadata (#640 review).

@@ -2,6 +2,7 @@
 // structure, lit by an overhead lamp that casts soft shadows. Presentation only; all
 // textures are drawn procedurally here, so there are no external art assets.
 import * as THREE from "three";
+import { boardLamp, boardLampOffset } from "./lighting";
 
 export type ShadowQuality = "high" | "low" | "off";
 
@@ -44,13 +45,9 @@ export function createCardRoom(
 
   // The lamp sits above and slightly in front, so shadows fall back and down onto the
   // baize while the faces turned toward the camera stay well lit.
-  const lamp = new THREE.DirectionalLight(0xfff1d6, 1.6);
-  lamp.castShadow = true;
-  lamp.shadow.bias = -0.0005;
-  lamp.shadow.normalBias = 0.02;
-  lamp.shadow.radius = 4;
+  const lamp = boardLamp();
   scene.add(lamp, lamp.target);
-  const lampOffset = new THREE.Vector3(-2, 14, 5);
+  const lampOffset = boardLampOffset;
 
   let tableY: number | null = null;
   let tableRadius: number | null = null;
