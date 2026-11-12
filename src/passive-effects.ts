@@ -77,6 +77,24 @@ function subscribedRules(
  */
 let countOperation: ((registration: string) => void) | null = null;
 
+/**
+ * Run `body` with every rule it evaluates counted by `operate` (the resolving action's budget,
+ * #661 review): committed scoring and a committed discard's listeners use it; trial scoring and
+ * the reward ledger's preview don't.
+ */
+export function withOperationCounter<T>(
+  operate: ((registration: string) => void) | undefined,
+  body: () => T,
+): T {
+  const previous = countOperation;
+  countOperation = operate ?? null;
+  try {
+    return body();
+  } finally {
+    countOperation = previous;
+  }
+}
+
 function evaluateRules(
   rules: readonly { source: RuleSource; rule: EventRule }[],
   event: GameEvent,
@@ -122,13 +140,7 @@ export function scoreFieldWithPassives(
   /** Count each rule against the resolving action's budget: committed scoring only. */
   operate?: (registration: string) => void,
 ): PassiveScoredLine[] {
-  const previous = countOperation;
-  countOperation = operate ?? null;
-  try {
-    return scoreLines(field, rack, rulesForCard, random);
-  } finally {
-    countOperation = previous;
-  }
+  return withOperationCounter(operate, () => scoreLines(field, rack, rulesForCard, random));
 }
 
 function scoreLines(

@@ -182,14 +182,14 @@ describe("the action budget reaches commands and outcomes (#661 review)", () => 
   };
 
   it("counts each command, so a listener's commands can exhaust the operation budget", () => {
-    // The scrapper's listener is one operation and its add-coins command a second.
-    const { game, hand } = limitedRun({ events: 128, operations: 1 });
+    // The scrapper's listener, its rule and its add-coins command are one operation each.
+    const { game, hand } = limitedRun({ events: 128, operations: 2 });
     const before = game.state;
     expect(game.discard(hand.map(({ id }) => id))).toBeNull();
     expect(game.state).toBe(before);
     expect((game.actionFailure as ResolutionBudgetExceeded).registration).toBe("command add-coins");
     // With room for both, the same discard commits.
-    const roomy = limitedRun({ events: 128, operations: 2 });
+    const roomy = limitedRun({ events: 128, operations: 3 });
     expect(roomy.game.discard(roomy.hand.map(({ id }) => id))).not.toBeNull();
   });
 
@@ -317,5 +317,39 @@ describe("the ledger's rule is the same before and after Continue (#661 review)"
       expect(which.has("mine")).toBe(true);
       expect(which.has("theirs")).toBe(false);
     }
+  });
+});
+
+describe("discard rules count against the budget (#661 review)", () => {
+  it("charges every rule a listener evaluates, even ones whose conditions fail", () => {
+    const rules = Array.from({ length: 5 }, () => ({
+      on: "discard.completed",
+      select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+      where: { id: "count-at-least", config: { minimum: 99 } },
+      effects: [{ id: "add-coins", config: { amount: 1 } }],
+    }));
+    const listener: PassiveBlock = {
+      ...createPassiveBlock("scrapper", "many.1"),
+      traits: {
+        ...createPassiveBlock("scrapper", "many.1").traits,
+        passive: { traitId: "passive.event-rules", eventRules: rules },
+      },
+    };
+    const config = {
+      ...sandboxRunRules(demoRunRules),
+      resolutionLimits: { events: 128, operations: 3 },
+    };
+    const opening = new GameRun(dealerRegistry, config, standardDeck, () => 0);
+    opening.installPassive(listener);
+    const game = GameRun.fromSnapshot(
+      dealerRegistry,
+      config,
+      standardDeck,
+      opening.snapshot(),
+      () => 0,
+    );
+    // One listener operation plus five rule evaluations: more than three.
+    expect(game.discard([game.state.hand[0]!.id])).toBeNull();
+    expect(game.actionFailure).toBeInstanceOf(ResolutionBudgetExceeded);
   });
 });

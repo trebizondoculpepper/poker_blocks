@@ -43,6 +43,7 @@ import {
 } from "./passives";
 import {
   passiveActivations,
+  withOperationCounter,
   scoreFieldWithPassives,
   type PassiveScoredLine,
   type RuleActivation,
@@ -747,7 +748,11 @@ export class GameRun {
       this.discardEvents = this.passiveEvents.drain(
         128,
         (block, event) => {
-          const fired = passiveActivations(block, event);
+          // Every rule the listener evaluates counts against the discard's budget (#661 review).
+          const fired = withOperationCounter(
+            (registration) => context.operate(registration, "discard", []),
+            () => passiveActivations(block, event),
+          );
           this.discardActivations.push(...fired);
           return commitCommands(
             fired.flatMap(({ commands }) => commands),
