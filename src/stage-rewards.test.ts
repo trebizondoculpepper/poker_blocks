@@ -6,7 +6,13 @@ import { makeDevDeck, materialOf } from "./materials";
 import { createPassiveBlock } from "./passives";
 import { fromSaveRecord, toSaveRecord } from "./save";
 import { demoRunRules } from "./run-rules";
-import { ledgerTotal, stageCompleteBonus, stageRewardLedger } from "./stage-rewards";
+import {
+  coinEntry,
+  ledgerTotal,
+  rewardEffects,
+  stageCompleteBonus,
+  stageRewardLedger,
+} from "./stage-rewards";
 
 const newRun = (cards = standardDeck) => new GameRun(dealerRegistry, demoRunRules, cards, () => 0);
 
@@ -17,9 +23,9 @@ describe("stage rewards", () => {
     game.forceOutcome("won");
     const first = game.claimStageRewards()!;
     expect(first.entries).toEqual([
-      { source: "stage.complete", label: "Stage complete bonus", coins: stageCompleteBonus },
+      coinEntry("stage.complete", "Stage complete bonus", stageCompleteBonus),
       // Won with all six plays to spare: a coin each.
-      { source: "stage.unusedPlays", label: "Unused plays (6)", coins: 6 },
+      coinEntry("stage.unusedPlays", "Unused plays (6)", 6),
     ]);
     expect(first.balanceBefore).toBe(0);
     expect(first.balance).toBe(10);
@@ -44,10 +50,10 @@ describe("stage rewards", () => {
     const other = deck.find((block) => materialOf(block) === "wood")!;
     const entries = stageRewardLedger({ ...game.state, hand: [...golds, other] });
     expect(entries).toEqual([
-      { source: "stage.complete", label: "Stage complete bonus", coins: 4 },
-      { source: "stage.unusedPlays", label: "Unused plays (6)", coins: 6 },
-      { source: "material.gold", label: "Gold held in hand", coins: 4 },
-      { source: "passive.gold-standard", label: "Gold Standard", coins: 2 },
+      coinEntry("stage.complete", "Stage complete bonus", 4),
+      coinEntry("stage.unusedPlays", "Unused plays (6)", 6),
+      coinEntry("material.gold", "Gold held in hand", 4),
+      coinEntry("passive.gold-standard", "Gold Standard", 2),
     ]);
     expect(ledgerTotal(entries)).toBe(16);
     // No gold in hand: the passive pays nothing and gets no row.
@@ -102,12 +108,12 @@ describe("stage rewards", () => {
       expect(reward.entries).toEqual(
         outcome === "won"
           ? [
-              { source: "stage.complete", label: "Stage complete bonus", coins: 4 },
-              { source: "stage.unusedPlays", label: "Unused plays (6)", coins: 6 },
-              { source: "material.gold", label: "Gold held in hand", coins: 2 },
-              { source: "passive.gold-standard", label: "Gold Standard", coins: 1 },
+              coinEntry("stage.complete", "Stage complete bonus", 4),
+              coinEntry("stage.unusedPlays", "Unused plays (6)", 6),
+              coinEntry("material.gold", "Gold held in hand", 2),
+              coinEntry("passive.gold-standard", "Gold Standard", 1),
             ]
-          : [{ source: "material.gold", label: "Gold held in hand", coins: 2 }],
+          : [coinEntry("material.gold", "Gold held in hand", 2)],
       );
       expect(reward.balance).toBe(outcome === "won" ? 13 : 2);
       expect(game.claimStageRewards()).toEqual(reward);
@@ -139,8 +145,94 @@ describe("stage rewards", () => {
     });
     game.forceOutcome("won");
     expect(game.claimStageRewards()!.entries).toEqual([
-      { source: "stage.complete", label: "Stage complete bonus", coins: 4 },
-      { source: "stage.unusedPlays", label: "Unused plays (6)", coins: 6 },
+      coinEntry("stage.complete", "Stage complete bonus", 4),
+      coinEntry("stage.unusedPlays", "Unused plays (6)", 6),
     ]);
+  });
+});
+
+describe("typed reward entries (#729)", () => {
+  // A non-cash effect, registered for the test: it adds nothing to the coin total.
+  if (!rewardEffects.has("test.trophy"))
+    rewardEffects.register("test.trophy", {
+      coins: () => 0,
+      validate: (config) => {
+        if (typeof (config as { name?: unknown })?.name !== "string") throw new Error("bad trophy");
+        return config;
+      },
+    });
+  const trophy = {
+    source: "test.trophy",
+    label: "Trophy",
+    effects: [{ id: "test.trophy", config: { name: "cup" } }],
+    presentation: "coins",
+  };
+
+  it("totals only coin effects: a non-cash row adds nothing and is no zero-coin row", () => {
+    const entries = [coinEntry("stage.complete", "Stage complete bonus", 4), trophy];
+    expect(ledgerTotal(entries)).toBe(4);
+    expect(trophy.effects.some(({ id }) => id === "coins")).toBe(false);
+  });
+
+  it("formats and cues a row through its registered presentation", async () => {
+    const { rewardPresentations } = await import("./reward-presentation");
+    const row = coinEntry("stage.complete", "Stage complete bonus", 1);
+    expect(rewardPresentations.get(row.presentation).value(row)).toBe("+1 coin");
+    expect(rewardPresentations.get(row.presentation).cue).toBe("reward.coin");
+  });
+
+  /** A paid run's save record, with its ledger rows replaced. */
+  const savedWith = (entries: unknown[], balanceDelta: number) => {
+    const game = newRun();
+    game.forceOutcome("won");
+    game.claimStageRewards();
+    const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
+    record.rewarded.reward.entries = entries;
+    record.rewarded.reward.balance = record.rewarded.reward.balanceBefore + balanceDelta;
+    return record;
+  };
+
+  it("reads an older coin-only ledger as the same coin rows, never paying again", () => {
+    const record = savedWith(
+      [
+        { source: "stage.complete", label: "Stage complete bonus", coins: 4 },
+        { source: "stage.unusedPlays", label: "Unused plays (6)", coins: 6 },
+      ],
+      10,
+    );
+    const snapshot = fromSaveRecord(record, standardDeck, dealerRegistry)!;
+    expect(snapshot.rewarded!.reward.entries).toEqual([
+      coinEntry("stage.complete", "Stage complete bonus", 4),
+      coinEntry("stage.unusedPlays", "Unused plays (6)", 6),
+    ]);
+    const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, snapshot);
+    const coins = resumed.state.coins;
+    resumed.claimStageRewards();
+    expect(resumed.state.coins).toBe(coins);
+  });
+
+  it("keeps a typed mixed receipt through save and reload", () => {
+    const record = savedWith([coinEntry("stage.complete", "Stage complete bonus", 4), trophy], 4);
+    const snapshot = fromSaveRecord(record, standardDeck, dealerRegistry)!;
+    expect(snapshot.rewarded!.reward.entries).toEqual([
+      coinEntry("stage.complete", "Stage complete bonus", 4),
+      trophy,
+    ]);
+  });
+
+  it("refuses malformed receipts: the save is rejected, never read as a payout", () => {
+    const read = (entries: unknown[], delta = 0) =>
+      fromSaveRecord(savedWith(entries, delta), standardDeck, dealerRegistry);
+    // Control: a well-formed receipt is read.
+    expect(read([coinEntry("a", "A", 3)], 3)).not.toBeNull();
+    expect(read([{ ...trophy, effects: [{ id: "nope", config: {} }] }])).toBeNull();
+    expect(read([{ ...trophy, effects: [{ id: "test.trophy", config: {} }] }])).toBeNull();
+    expect(
+      read([{ ...coinEntry("a", "A", 1), effects: [{ id: "coins", config: { amount: -1 } }] }]),
+    ).toBeNull();
+    expect(read([{ ...trophy, presentation: "" }])).toBeNull();
+    expect(read([{ source: "a", label: "A", coins: 1.5 }], 1.5)).toBeNull();
+    // A balance that disagrees with the coin effects.
+    expect(read([coinEntry("a", "A", 3)], 2)).toBeNull();
   });
 });

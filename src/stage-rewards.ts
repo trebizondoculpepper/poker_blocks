@@ -12,8 +12,63 @@ import { passiveDefinitions } from "./passives";
 import type { StageKind } from "./run-rules";
 import { getMaterialDefinition, materialOf, materialDefinitions } from "./materials";
 
-/** One line of the ledger: where the coins come from, what to call it, how many. */
-export type RewardEntry = { source: string; label: string; coins: number };
+/**
+ * What one ledger row does, as a registered effect and its configuration (#729; doc/presents.md,
+ * "Mixed reward ledger and sound"). Coins are the first effect; an object grant is another (#730).
+ */
+export type RewardEffect = { id: string; config: unknown };
+
+/**
+ * One line of the ledger: where it comes from, what to call it, its typed effects, and the
+ * registered presentation that formats it and plays its cue. A non-cash row is never a
+ * zero-coin row: it has no coin effect at all.
+ */
+export type RewardEntry = {
+  source: string;
+  label: string;
+  effects: readonly RewardEffect[];
+  presentation: string;
+};
+
+/**
+ * A registered reward effect: how many coins it adds to the financial total (zero for a
+ * non-cash effect), and how a saved configuration is validated (throwing when it is malformed,
+ * so a bad receipt can never authorise a second payout).
+ */
+export type RewardEffectHandler = {
+  coins(config: unknown): number;
+  validate(config: unknown): unknown;
+};
+
+export const rewardEffects = new Registry<RewardEffectHandler>("reward effect");
+
+rewardEffects.register("coins", {
+  coins: (config) => (config as { amount: number }).amount,
+  validate(config) {
+    const amount = (config as { amount?: unknown } | null)?.amount;
+    if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount < 0)
+      throw new Error("bad coin reward");
+    return { amount };
+  },
+});
+
+/** A coin row: the usual ledger line, presented as coins. */
+export function coinEntry(source: string, label: string, coins: number): RewardEntry {
+  return {
+    source,
+    label,
+    effects: [{ id: "coins", config: { amount: coins } }],
+    presentation: "coins",
+  };
+}
+
+/** The coins one row adds to the balance: the sum its effects declare. */
+export function entryCoins(entry: RewardEntry): number {
+  return entry.effects.reduce(
+    (total, { id, config }) => total + rewardEffects.get(id).coins(config),
+    0,
+  );
+}
 
 /** What a stage win pays out: the rows, and the balance before and after. */
 export type StageReward = { entries: RewardEntry[]; balanceBefore: number; balance: number };
@@ -37,7 +92,7 @@ export function stageRewardLedger(
   context?: StageContext,
 ): RewardEntry[] {
   const entries: RewardEntry[] = [
-    { source: "stage.complete", label: "Stage complete bonus", coins: bonus },
+    coinEntry("stage.complete", "Stage complete bonus", bonus),
     ...unusedPlayEntries(state),
     ...materialHandRewardEntries(state),
     ...materialFieldRewardEntries(state),
@@ -48,7 +103,7 @@ export function stageRewardLedger(
     const name = passiveDefinitions.has(passive.definitionId)
       ? passiveDefinitions.get(passive.definitionId).name
       : passive.definitionId;
-    entries.push({ source: `passive.${passive.definitionId}`, label: name, coins });
+    entries.push(coinEntry(`passive.${passive.definitionId}`, name, coins));
   }
   return entries;
 }
@@ -57,13 +112,7 @@ export function stageRewardLedger(
 export function unusedPlayEntries(state: GameState): RewardEntry[] {
   const unused = Math.max(0, state.round.movesLeft);
   return unused > 0
-    ? [
-        {
-          source: "stage.unusedPlays",
-          label: `Unused plays (${unused})`,
-          coins: unused * coinsPerUnusedPlay,
-        },
-      ]
+    ? [coinEntry("stage.unusedPlays", `Unused plays (${unused})`, unused * coinsPerUnusedPlay)]
     : [];
 }
 
@@ -72,9 +121,7 @@ export function materialHandRewardEntries(state: GameState): RewardEntry[] {
   return materialDefinitions.flatMap(({ id, name }) => {
     const rate = getMaterialDefinition(id).handReward?.coinsPerCard ?? 0;
     const count = state.hand.filter((card) => materialOf(card) === id).length;
-    return rate && count
-      ? [{ source: `material.${id}`, label: `${name} held in hand`, coins: count * rate }]
-      : [];
+    return rate && count ? [coinEntry(`material.${id}`, `${name} held in hand`, count * rate)] : [];
   });
 }
 
@@ -122,13 +169,7 @@ export function materialFieldRewardEntries(state: GameState): RewardEntry[] {
         reward.coinsPerCard,
       );
     return count && rate
-      ? [
-          {
-            source: `material.${id}.field`,
-            label: `${reward.label} (${count})`,
-            coins: count * rate,
-          },
-        ]
+      ? [coinEntry(`material.${id}.field`, `${reward.label} (${count})`, count * rate)]
       : [];
   });
 }
@@ -162,5 +203,6 @@ function stageWonCoins(
 }
 
 export function ledgerTotal(entries: readonly RewardEntry[]): number {
-  return entries.reduce((total, { coins }) => total + coins, 0);
+  // Only what effects declare as coins: a non-cash row adds nothing and is still a row.
+  return entries.reduce((total, entry) => total + entryCoins(entry), 0);
 }

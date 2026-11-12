@@ -286,7 +286,7 @@
   "reward.coin": {
     "uses": 2,
     "files": {
-      "menus.ts": 1,
+      "reward-presentation.ts": 1,
       "table-input.ts": 1
     }
   },

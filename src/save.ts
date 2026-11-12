@@ -1,3 +1,4 @@
+import { coinEntry, ledgerTotal, rewardEffects, type RewardEntry } from "./stage-rewards";
 import type { CardBlock } from "./cards";
 import { Registry } from "./core/registry";
 import type { Dealer } from "./dealer";
@@ -337,6 +338,37 @@ function parseSeed(value: unknown): { seed: number } | Record<string, never> {
     : {};
 }
 
+/**
+ * One saved ledger row (#729): the typed form (effects, each validated by its registered handler,
+ * and a presentation name, resolved by the screen that shows it), or an older coin-only row ({ source, label, coins }), read as
+ * the same coin row it always was, never reissued. Anything else is refused.
+ */
+function parseRewardEntry(value: unknown): RewardEntry {
+  const row = value as Partial<RewardEntry> & { coins?: unknown };
+  if (
+    !row ||
+    typeof row.source !== "string" ||
+    !row.source ||
+    typeof row.label !== "string" ||
+    !row.label
+  )
+    throw new Error("bad reward entry");
+  if (row.effects === undefined) {
+    const coins = row.coins;
+    if (typeof coins !== "number" || !Number.isSafeInteger(coins) || coins < 0)
+      throw new Error("bad reward entry");
+    return coinEntry(row.source, row.label, coins);
+  }
+  if (!Array.isArray(row.effects) || typeof row.presentation !== "string" || !row.presentation)
+    throw new Error("bad reward entry");
+  const effects = row.effects.map((effect: unknown) => {
+    const { id, config } = (effect ?? {}) as { id?: unknown; config?: unknown };
+    if (typeof id !== "string" || !rewardEffects.has(id)) throw new Error("bad reward effect");
+    return { id, config: rewardEffects.get(id).validate(config) };
+  });
+  return { source: row.source, label: row.label, effects, presentation: row.presentation };
+}
+
 /** A saved paid-stage marker; malformed data must never permit a second payout. */
 function parseRewarded(
   value: unknown,
@@ -350,22 +382,11 @@ function parseRewarded(
     !Array.isArray(saved.reward?.entries)
   )
     throw new Error("bad paid-stage marker");
-  const entries = saved.reward.entries.map(({ source, label, coins }) => {
-    if (
-      typeof source !== "string" ||
-      !source ||
-      typeof label !== "string" ||
-      !label ||
-      !Number.isSafeInteger(coins) ||
-      coins < 0
-    )
-      throw new Error("bad reward entry");
-    return { source, label, coins };
-  });
+  const entries = (saved.reward.entries as unknown[]).map(parseRewardEntry);
   const balanceBefore = nonnegativeInteger(saved.reward.balanceBefore);
   const balance = nonnegativeInteger(saved.reward.balance);
-  if (balance !== balanceBefore + entries.reduce((total, entry) => total + entry.coins, 0))
-    throw new Error("bad reward balance");
+  // Only coin effects count toward the balance; a non-cash row validates on its own (#729).
+  if (balance !== balanceBefore + ledgerTotal(entries)) throw new Error("bad reward balance");
   return {
     rewarded: {
       stage: saved.stage,
