@@ -677,4 +677,43 @@ describe("the visual-event scheduler (#546)", () => {
     scheduler.update(100, true);
     expect(log).toEqual([]);
   });
+
+  it("does not time out an effect another effect cancelled in the same pass (#785 review)", () => {
+    const { scheduler, handlers, fallbacks } = harness();
+    let fallbackRuns = 0;
+    fallbacks.register("count", () => void fallbackRuns++);
+    let victim: ReturnType<typeof scheduler.schedule> | null = null;
+    handlers.register("killer", (_payload, context) => ({
+      update: () => {
+        if (victim?.accepted) context.cancel(victim.handle);
+        return "running";
+      },
+      cancel: () => {},
+      dispose: () => {},
+    }));
+    const first = scheduler.createScope(null, { maxEffectMs: 1000 });
+    scheduler.schedule(first, { handler: "killer", dueUnits: 0 });
+    const second = scheduler.createScope(null, { maxEffectMs: 10, fallback: "count" });
+    victim = scheduler.schedule(second, {
+      handler: "effect",
+      payload: { label: "v", ms: 5000 },
+      dueUnits: 0,
+    });
+    scheduler.seal(second);
+    scheduler.update(0, true);
+    scheduler.update(100, true);
+    expect(fallbackRuns).toBe(0);
+  });
+
+  it("settles a scope an observer creates during generation disposal (#785 review)", () => {
+    const { scheduler } = harness();
+    const root = scheduler.createScope(null);
+    const seen: ScopeStatus[] = [];
+    scheduler.observe(root, () => {
+      const born = scheduler.createScope(null);
+      scheduler.observe(born, (status) => seen.push(status));
+    });
+    scheduler.disposeGeneration();
+    expect(seen).toEqual([{ state: "cancelled" }]);
+  });
 });

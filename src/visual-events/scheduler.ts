@@ -199,6 +199,7 @@ export function createVisualScheduler(
   let nowMs = 0;
   let lastRealMs: number | null = null;
   let updating = false;
+  let disposing = false;
 
   /** Rebuild the heap from what is still pending: TinyQueue has no delete (O(n), bounded). */
   const rebuild = () => {
@@ -462,7 +463,7 @@ export function createVisualScheduler(
       // A parent this generation doesn't know (a disposed run's scene, say) yields a cancelled
       // scope, never a fresh root that could mount old feedback in the new run (#785 review).
       const parentScope = parent ? (scopes.get(parent) ?? null) : null;
-      const staleParent = parent !== null && parentScope === null;
+      const staleParent = disposing || (parent !== null && parentScope === null);
       if (config.fallback && !fallbacks.has(config.fallback))
         throw new Error(`Unknown visual fallback "${config.fallback}"`);
       // Overrides keep the bounds: positive whole counts, finite positive durations (#785 review).
@@ -563,7 +564,13 @@ export function createVisualScheduler(
     },
     /** Cancel everything this generation owns; anything later from it does nothing. */
     disposeGeneration(): void {
-      for (const scope of Array.from(scopes.values())) if (!scope.parent) cancelScope(scope);
+      // Scopes created while disposing (by an observer) are born cancelled (#785 review).
+      disposing = true;
+      try {
+        for (const scope of Array.from(scopes.values())) if (!scope.parent) cancelScope(scope);
+      } finally {
+        disposing = false;
+      }
       scopes.clear();
       entries.clear();
       active.clear();
@@ -602,6 +609,8 @@ export function createVisualScheduler(
       try {
         // Running effects first: finished ones settle, ones past their time fail their scope.
         for (const entry of Array.from(active)) {
+          // An earlier effect may have cancelled this one during the pass (#785 review).
+          if (entry.state !== "active") continue;
           const limit = entry.scope.config.maxEffectMs ?? limits.maxEffectMs;
           if (nowMs - entry.dueAtMs > limit) {
             fail(entry.scope, `effect "${entry.handler}" exceeded ${limit} ms`);
