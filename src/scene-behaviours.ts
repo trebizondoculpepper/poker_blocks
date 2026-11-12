@@ -82,6 +82,10 @@ export type SceneHost = {
     devObjectBrowser: Pick<ShopBalanceEditor, "show" | "hide">;
     devBlockDesigner: Pick<ShopBalanceEditor, "show" | "hide">;
     devContainedProof: Pick<ShopBalanceEditor, "show" | "hide">;
+    devCrystalComparison: {
+      show(config: SceneTraits["devCrystalComparison"]): void;
+      hide(): void;
+    };
     devWordCubeRoom: {
       show(config: SceneTraits["devWordCubeRoom"]): void;
       hide(): void;
@@ -462,6 +466,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("devShopBalanceEditor", {
     enter: ({ services }, { backTo }) => services.devShopBalanceEditor.show(backTo),
     exit: ({ services }) => services.devShopBalanceEditor.hide(),
+  });
+  behaviours.register("devCrystalComparison", {
+    enter: ({ services }, config) => services.devCrystalComparison.show(config),
+    exit: ({ services }) => services.devCrystalComparison.hide(),
   });
   behaviours.register("devContainedProof", {
     enter: ({ services }, { backTo }) => services.devContainedProof.show(backTo),

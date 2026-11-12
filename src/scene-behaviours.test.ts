@@ -108,6 +108,10 @@ function recordingHost() {
         show: (backTo) => void calls.push(`proof:show:${backTo}`),
         hide: () => void calls.push("proof:hide"),
       },
+      devCrystalComparison: {
+        show: ({ backends }) => void calls.push(`crystal:show:${backends.join(",")}`),
+        hide: () => void calls.push("crystal:hide"),
+      },
       devWordCubeRoom: {
         show: ({ items }) => void calls.push(`cubes:show:${items.length}`),
         hide: () => void calls.push("cubes:hide"),
