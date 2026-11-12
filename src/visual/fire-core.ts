@@ -31,6 +31,13 @@ const fragmentShader = /* glsl */ `
   // How far below the centre the flame's base sits, along world down, as a fraction of the
   // interior half-extent (#745).
   uniform float baseOffset;
+  // The flame's palette, cool to hot, and how tall its envelope is (#743).
+  uniform vec3 ember;
+  uniform vec3 mid;
+  uniform vec3 core;
+  uniform float heightScale;
+  // How much of the dim, smoky low-heat edge is kept (1 = all of it, #743).
+  uniform float haze;
   varying vec3 vLocal;
 
   float hash(vec3 p) {
@@ -71,7 +78,7 @@ const fragmentShader = /* glsl */ `
     vec3 front = cross(side, up);
     q = vec3(dot(q, side), dot(q, up), dot(q, front));
     float base = -baseOffset; // below the centre, on world down
-    float height = q.y - base;
+    float height = (q.y - base) / heightScale;
     if (height < -0.08) return vec2(0.0);
     // Sway, more towards the tip.
     q.x += 0.07 * sin(time * 2.7 + q.y * 3.0) * height;
@@ -82,14 +89,12 @@ const fragmentShader = /* glsl */ `
     float density = smoothstep(radius, radius * 0.25, distance);
     density *= smoothstep(-0.08, 0.06, height) * (1.0 - smoothstep(0.7, 1.35, height));
     float heat = density * (1.0 - height * 0.55) * (0.75 + 0.5 * turbulence);
+    density *= mix(haze, 1.0, smoothstep(0.0, 0.45, heat));
     return vec2(density, heat);
   }
 
   vec3 fireColour(float heat) {
-    vec3 ember = vec3(0.55, 0.04, 0.0);
-    vec3 orange = vec3(1.0, 0.42, 0.04);
-    vec3 yellow = vec3(1.0, 0.86, 0.45);
-    return heat < 0.5 ? mix(ember, orange, heat * 2.0) : mix(orange, yellow, (heat - 0.5) * 2.0);
+    return heat < 0.5 ? mix(ember, mid, heat * 2.0) : mix(mid, core, (heat - 0.5) * 2.0);
   }
 
   void main() {
@@ -121,6 +126,17 @@ const fragmentShader = /* glsl */ `
 /** The flame base's default depth below the centre (doc/presentation-contracts.md, #745). */
 export const flameBaseOffset = 0.6;
 
+/**
+ * The regular flame's palette, cool edge to hot core (#743): deep red into orange, with an amber
+ * rather than white core, so a hotter configuration reads clearly hotter beside it.
+ */
+type Rgb = [number, number, number];
+export const flamePalette: { ember: Rgb; mid: Rgb; core: Rgb } = {
+  ember: [0.5, 0.03, 0.0],
+  mid: [0.95, 0.3, 0.02],
+  core: [1.0, 0.62, 0.18],
+};
+
 /** The fire inside one fire block; add it as a child of the block's mesh. */
 export function createFireCore(size: number): THREE.Mesh {
   const halfSize = (size / 2) * 0.96;
@@ -134,6 +150,11 @@ export function createFireCore(size: number): THREE.Mesh {
       intensity: { value: 3.2 },
       upLocal: { value: new THREE.Vector3(0, 1, 0) },
       baseOffset: { value: flameBaseOffset },
+      ember: { value: new THREE.Color(...flamePalette.ember) },
+      mid: { value: new THREE.Color(...flamePalette.mid) },
+      core: { value: new THREE.Color(...flamePalette.core) },
+      heightScale: { value: 1 },
+      haze: { value: 1 },
       // Read from the material's own opacity at render (set below), never a copy.
       opacity: { value: 1 },
     },
@@ -153,11 +174,13 @@ export function createFireCore(size: number): THREE.Mesh {
     material,
   );
   core.renderOrder = 10;
+  // How fast the flame moves, as a multiple of the regular flame's (#743).
+  material.userData.speed = 1;
   // Each frame: advance the flames and give the shader the camera in the block's own space.
   const start = performance.now();
   const turned = new THREE.Quaternion();
   core.onBeforeRender = (_renderer, _scene, camera) => {
-    material.uniforms.time.value = (performance.now() - start) / 1000;
+    material.uniforms.time.value = ((performance.now() - start) / 1000) * material.userData.speed;
     core.updateMatrixWorld();
     material.uniforms.cameraLocal.value.setFromMatrixPosition(camera.matrixWorld);
     core.worldToLocal(material.uniforms.cameraLocal.value);
@@ -176,10 +199,30 @@ export function createFireCore(size: number): THREE.Mesh {
  * The flame's configuration (#355): how large it is within the interior and how bright, as
  * multiples of the original. Omitted, both are 1, the fire block's own flame.
  */
-export type FlameConfig = { scale?: number; brightness?: number; baseOffset?: number };
+export type FlameConfig = {
+  scale?: number;
+  brightness?: number;
+  baseOffset?: number;
+  /** The flame's colours, cool to hot; omitted, the regular flame's (#743). */
+  palette?: Partial<typeof flamePalette>;
+  /** The density envelope's height, as a multiple of the regular flame's (#743). */
+  height?: number;
+  /** How fast it flickers and rises, as a multiple of the regular flame's (#743). */
+  speed?: number;
+  /** How much of the dim, smoky outer edge is kept, 0 to 1; omitted, all of it (#743). */
+  haze?: number;
+};
 
 containedContents.register("flame", (boundary, raw) => {
-  const { scale = 1, brightness = 1, baseOffset = flameBaseOffset } = (raw ?? {}) as FlameConfig;
+  const {
+    scale = 1,
+    brightness = 1,
+    baseOffset = flameBaseOffset,
+    palette = {},
+    height = 1,
+    speed = 1,
+    haze = 1,
+  } = (raw ?? {}) as FlameConfig;
   // It keeps the core's own order (drawn last, after the frame): it is an additive, non-depth-
   // writing material in the opaque queue, so the frame must be drawn first or its rear bars
   // would paint over the glow. The contained layer table orders the transparent queue only.
@@ -188,5 +231,11 @@ containedContents.register("flame", (boundary, raw) => {
   const uniforms = (core.material as THREE.ShaderMaterial).uniforms;
   uniforms.intensity!.value *= brightness;
   uniforms.baseOffset!.value = baseOffset;
+  (core.material as THREE.ShaderMaterial).userData.speed = speed;
+  uniforms.haze!.value = Math.min(Math.max(haze, 0), 1);
+  // Headroom: the envelope never reaches past the top of the interior (1 above the centre).
+  uniforms.heightScale!.value = Math.min(height, (1 + baseOffset) / 1.35);
+  for (const [key, rgb] of Object.entries(palette))
+    (uniforms[key]!.value as THREE.Color).setRGB(...rgb);
   return { meshes: [core], capabilities: {} };
 });
