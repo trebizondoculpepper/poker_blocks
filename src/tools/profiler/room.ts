@@ -201,6 +201,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       one.dispose();
       return;
     }
+    // A preview still running is replaced: taken off and freed first, never orphaned (#653 review).
+    if (activePreview) endPreview(activePreview);
     runner.scene.add(one.object);
     activePreview = one;
     runner.camera.position.set(0, 0, 5);
