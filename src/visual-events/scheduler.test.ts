@@ -530,4 +530,49 @@ describe("the visual-event scheduler (#546)", () => {
     expect(disposed).toBe(1);
     expect(log).toContain("ok@67");
   });
+
+  it("cancels an effect once even when its cancel re-enters cancellation (#785 review)", () => {
+    const { scheduler, handlers } = harness();
+    let cancels = 0;
+    handlers.register("reenter", (_payload, context) => ({
+      update: () => "running",
+      cancel: () => {
+        cancels++;
+        context.cancel(context.scope);
+      },
+      dispose: () => {},
+    }));
+    const scope = scheduler.createScope(null);
+    const admitted = scheduler.schedule(scope, { handler: "reenter", dueUnits: 0 });
+    scheduler.update(0, true);
+    if (admitted.accepted) scheduler.cancel(admitted.handle);
+    expect(cancels).toBe(1);
+    expect(scheduler.counts.active).toBe(0);
+  });
+
+  it("still settles the parent when a child's observer throws (#785 review)", async () => {
+    const { scheduler } = harness();
+    const parent = scheduler.createScope(null);
+    const child = scheduler.createScope(parent);
+    scheduler.seal(parent);
+    scheduler.observe(child, () => {
+      throw new Error("observer");
+    });
+    const errors: unknown[] = [];
+    const original = globalThis.queueMicrotask;
+    globalThis.queueMicrotask = (task) => {
+      try {
+        task();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+    try {
+      scheduler.seal(child);
+    } finally {
+      globalThis.queueMicrotask = original;
+    }
+    expect(scheduler.status(parent).state).toBe("finished");
+    expect(errors).toHaveLength(1);
+  });
 });

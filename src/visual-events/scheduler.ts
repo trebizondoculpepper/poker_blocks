@@ -133,6 +133,7 @@ type Entry = {
   depth: number;
   state: "pending" | "active" | "settled";
   effect: EffectHandle | null;
+  cancelling: boolean;
 };
 
 /**
@@ -207,8 +208,18 @@ export function createVisualScheduler(
 
   const notify = (scope: Scope) => {
     const status = statusOf(scope);
-    for (const listener of Array.from(scope.listeners)) listener(status);
+    const listeners = Array.from(scope.listeners);
     scope.listeners.clear();
+    // A throwing observer can't stop the bookkeeping: its error is reported after the settlement
+    // has finished propagating to the ancestors (#785 review).
+    for (const listener of listeners)
+      try {
+        listener(status);
+      } catch (error) {
+        queueMicrotask(() => {
+          throw error;
+        });
+      }
   };
   const statusOf = (scope: Scope): ScopeStatus =>
     scope.diagnostic
@@ -263,9 +274,16 @@ export function createVisualScheduler(
     settleIfDone(entry.scope);
   };
 
+  /** An effect's cancel callback runs once, even if it re-enters cancellation (#785 review). */
+  const cancelEffect = (entry: Entry) => {
+    if (entry.cancelling) return;
+    entry.cancelling = true;
+    entry.effect?.cancel();
+  };
+
   const cancelEntry = (entry: Entry) => {
-    if (entry.state === "settled") return;
-    if (entry.state === "active") entry.effect?.cancel();
+    if (entry.state === "settled" || entry.cancelling) return;
+    if (entry.state === "active") cancelEffect(entry);
     finishEntry(entry);
   };
 
@@ -276,7 +294,7 @@ export function createVisualScheduler(
     for (const child of Array.from(scope.children)) cancelScope(child);
     const hadPending = [...scope.events].some(({ state }) => state === "pending");
     for (const entry of Array.from(scope.events)) {
-      if (entry.state === "active") entry.effect?.cancel();
+      if (entry.state === "active") cancelEffect(entry);
       if (entry.state !== "settled") {
         const wasActive = entry.state === "active";
         entry.state = "settled";
@@ -335,6 +353,7 @@ export function createVisualScheduler(
       depth,
       state: "pending",
       effect: null,
+      cancelling: false,
     };
     entries.set(handle, entry);
     scope.events.add(entry);
