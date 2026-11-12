@@ -183,10 +183,10 @@ These are complete: `card.select`, `card.deselect`, `card.pickup`, `card.drag.sn
 
 | Id                                                              | Played from                            | Note                                                               |
 | --------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------ |
-| `shop.buy`                                                      | run-controller                         | Every purchase is silent. The table above still says planned.      |
+| `shop.buy`                                                      | game-run-controller                    | Every purchase is silent. The table above still says planned.      |
 | `shop.stock.toss`, `shop.stock.land`                            | shop-view                              | The shop's entrance animation is silent                            |
-| `shop.stock.burn`                                               | run-controller                         | Unbought stock burning on leaving is silent                        |
-| `block.destroyed`                                               | game-run, run-controller               | Destruction is silent; the table above lists it as `block.destroy` |
+| `shop.stock.burn`                                               | game-run-controller                    | Unbought stock burning on leaving is silent                        |
+| `block.destroyed`                                               | game-run, game-run-controller          | Destruction is silent; the table above lists it as `block.destroy` |
 | `passive.coins`, `passive.granted`                              | play-presenter                         |                                                                    |
 | `passive.activate.scoring`, `.economy`, `.effect`, `.retrigger` | passive-categories (category defaults) | Every passive activation is silent                                 |
 | `material.activate.wood`, `.gold`, `.steel`, `.prismatic`       | materials (activation data)            | Tracked by #212                                                    |

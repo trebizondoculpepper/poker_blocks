@@ -4,11 +4,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 describe("scene architecture guardrails", () => {
   it("switches modes without navigating or reloading the document", () => {
-    for (const file of ["./main.ts", "./run-controller.ts", "./console-host.ts"]) {
+    for (const file of ["./main.ts", "./game-run-controller.ts", "./console-host.ts"]) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
       expect(source).not.toMatch(/window\.location\.(assign|reload)\s*\(/);
     }
-    const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
+    const run = readFileSync(new URL("./game-run-controller.ts", import.meta.url), "utf8");
     expect(run).toContain("window.history.replaceState");
     // The page's mode comes from ?mode= with the ?room= alias (tested in game-modes.test.ts).
     expect(run).toContain("gameModeFromParams(options.params)");
@@ -132,7 +132,7 @@ describe("scene architecture guardrails", () => {
 
   it("keeps mode-level panel and placement flags from returning (#53)", () => {
     const modes = readFileSync(new URL("./game-modes.ts", import.meta.url), "utf8");
-    const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
+    const run = readFileSync(new URL("./game-run-controller.ts", import.meta.url), "utf8");
 
     // Which panels show, and where blocks may be played, is the scene's business now: a scene
     // composes `roundPanel`, `deckPanel`, `coinsPanel`, `shopExit`, `fieldPlacement` or
@@ -146,7 +146,7 @@ describe("scene architecture guardrails", () => {
 
   it("keeps run setup off the mode traits, and out of the Continue path (#34)", () => {
     const modes = readFileSync(new URL("./game-modes.ts", import.meta.url), "utf8");
-    const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
+    const run = readFileSync(new URL("./game-run-controller.ts", import.meta.url), "utf8");
 
     // Run setup is ordered data on the mode: steps, not flags a controller branches on.
     expect(modes).toContain("runSetup:");
@@ -183,7 +183,7 @@ describe("scene architecture guardrails", () => {
   });
 
   it("dispatches a page load through configuration, not a scene or mode check", () => {
-    const run = readFileSync(new URL("./run-controller.ts", import.meta.url), "utf8");
+    const run = readFileSync(new URL("./game-run-controller.ts", import.meta.url), "utf8");
     // `onLoad` is one configured value looked up in a handler table. Reading startScene by
     // value would be a scene-identity branch, and a presence check on a marker trait would be
     // a trait read as a flag; the guardrail sees neither when they sit on the mode.

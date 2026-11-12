@@ -695,7 +695,7 @@ export type ModeTraits = {
   /**
    * What a fresh page load does: show the `title` screen, deal a `newRun`, or `resume` the
    * mode's saved run when it has one. Configuration, not a flag: `onLoadHandlers` in
-   * src/run-controller.ts dispatches it through a table, so no code asks which mode it is.
+   * src/game-run-controller.ts dispatches it through a table, so no code asks which mode it is.
    */
   onLoad: OnLoad;
   /** The music this mode plays, through the behaviour in src/mode-music.ts. */
