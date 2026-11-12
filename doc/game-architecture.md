@@ -1580,3 +1580,7 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 ## Agreed presentation follow-ups (#761)
 
 [Agreed presentation contracts](presentation-contracts.md) is the target for material transition facts and independent dissolve/audio responses (#479/#539), resolved activation operands (#483), laser target-guide controller (#500), experimental smoke/dust composition (#466), manual preview rotation (#746), reviewed water/flame/grass corrections, lightweight imported assets (#747/#748/#753/#759), crystal promotion (#749), profiler animation fidelity (#752), and configured music operations (#758). It records ownership, configuration, lifecycle, composition, source evidence and initial defaults. These are documentation-first targets, not claims that runtime migration has shipped.
+
+## Ordered card ownership target (#550)
+
+[Ordered cards and authoritative ownership](ordered-card-ownership.md) specifies index-zero pop, seeded shuffle, atomic zone transfers, run-level inventory, discardable composition, stage/round collection order and compatible save boundaries. It supersedes random-index drawing as the target; legacy reconstruction receipts are not live cards. Runtime migration remains #551/#574/#472 and the linked lifecycle work.
