@@ -5,7 +5,7 @@
  * registered appearances with no case.
  */
 import type { CoverageReport } from "./cases";
-import type { CaseResult, RunOptions, RunResult } from "./runner";
+import type { CaseResult, RunOptions, RunResult, SampleSet } from "./runner";
 
 export type ProfilerEnvironmentInfo = {
   userAgent: string;
@@ -18,8 +18,11 @@ export type ProfilerEnvironmentInfo = {
 };
 
 export const profilerMethod = {
-  version: 1,
-  sets: ["baseline (empty scene)", "one object", "collection on a fixed square grid"],
+  version: 2,
+  sets: [
+    "baseline (empty scene, once per case in its host)",
+    "each requested count on a fixed square grid, framed for that count (a fixed-viewport collection test)",
+  ],
   warmup: "frames rendered before each set to compile shaders; creation timed separately",
   gpu: "EXT_disjoint_timer_query_webgl2, polled asynchronously; disjoint or invalid results dropped",
   relative: "set median minus baseline median: an estimate, not an additive per-object cost",
@@ -65,12 +68,38 @@ export function profilerExport(
   };
 }
 
-/** The measured costs results can be sorted by: the collection's median of each. */
+/** A result's largest measured count, which rankings compare (the 50-instance collection). */
+export function largestSet(result: CaseResult): SampleSet | null {
+  return (
+    result.counts.reduce<CaseResult["counts"][number] | null>(
+      (best, entry) => (best && best.count >= entry.count ? best : entry),
+      null,
+    )?.set ?? null
+  );
+}
+
+/** The measured costs results can be sorted by: the largest count's median of each. */
 export const costMeasures = {
-  gpu: (result: CaseResult) => result.collection.gpu?.median ?? -1,
-  cpu: (result: CaseResult) => result.collection.cpu.median,
-  frame: (result: CaseResult) => result.collection.frame.median,
+  gpu: (result: CaseResult) => largestSet(result)?.gpu?.median ?? -1,
+  cpu: (result: CaseResult) => largestSet(result)?.cpu.median ?? -1,
+  frame: (result: CaseResult) => largestSet(result)?.frame.median ?? -1,
 };
+
+/**
+ * Read an exported file (#721): version 2 is today's matrix; version 1 (fixed one/collection
+ * slots) is recognised as an old result and never read as a count-50 sample; anything else is
+ * refused, clearly.
+ */
+export function readProfilerExport(
+  text: string,
+): { kind: "current"; record: ProfilerExport } | { kind: "legacy"; version: 1 } {
+  const parsed = JSON.parse(text) as { method?: { version?: unknown } };
+  const version = parsed.method?.version;
+  if (version === profilerMethod.version)
+    return { kind: "current", record: parsed as ProfilerExport };
+  if (version === 1) return { kind: "legacy", version: 1 };
+  throw new Error(`Unsupported profiler export version: ${String(version)}`);
+}
 
 /** Results by a chosen measured cost, highest first; missing GPU time sorts last, never CPU. */
 export function sortedByCost(
