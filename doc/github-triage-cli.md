@@ -4,16 +4,16 @@ GitHub Triage is developed in the standalone [github_triage repository](https://
 
 ## Git dependency installation and launch (#724)
 
-The owner selected an npm URL dependency while the standalone tool is unreleased. Add `github-triage` to `devDependencies` using a public Git HTTPS URL pinned to a tested full commit SHA, and commit `package-lock.json`. The consumer script launches the installed source entry:
+The owner selected an npm URL dependency while the standalone tool is unreleased. Add `github-triage` to `devDependencies` using a public Git HTTPS URL tracking its `main` branch, and commit `package-lock.json`. The consumer script launches the installed source entry:
 
 ```json
 "triage": "node node_modules/github-triage/src/cli.js"
 ```
 
-The initial tested Git dependency is:
+The Git dependency follows `main`:
 
 ```text
-git+https://git@github.com/trebizondoculpepper/github_triage.git#35bc59385b542235178dc8a202be5a531b886b73
+git+https://git@github.com/trebizondoculpepper/github_triage.git#main
 ```
 
 The literal `git` username is public and contains no credential; it preserves HTTPS in npm's resolved lockfile instead of npm normalizing this GitHub URL to SSH. No registry publication, local sibling checkout, global install or SSH key is required. Use normal `npm install` / `npm ci` with development dependencies. The dependency may run its upstream `prepare` lifecycle as permitted by the npm version's lifecycle policy; it is not imported into the game or built at runtime.
@@ -31,7 +31,16 @@ npm forwards arguments and preserves the game checkout as the working directory,
 
 ## Updates, evidence and limits
 
-Dependency upgrades change the pinned SHA and npm lockfile in a reviewed PR, with help and real full-ticket JSON smoke checks. A floating branch would let reinstalls silently change tooling behavior; a pin makes updates explicit. Git fetching is a temporary distribution choice before release, not authorization to publish a package.
+The owner selected branch tracking with **explicit updates**, rather than fetching on every execution. `package.json` follows `main`; `package-lock.json` records the last resolved commit so `npm ci` remains reproducible. Merely running the CLI or `npm ci` does not fetch a newer upstream commit.
+
+Refresh to the latest `main` commit with:
+
+```sh
+npm update github-triage
+npm run triage -- --help
+```
+
+Commit the updated lockfile through the normal PR/check process and smoke-test full-ticket JSON when updating. No pre-run updater is installed; offline cache behavior remains under the standalone CLI's control. Git fetching is a temporary distribution choice before release, not authorization to publish a package.
 
 Source audit at `35bc593`: standalone `package.json` declares `src/cli.js` as its CLI entry and a `prepare` hook using Vite+; `src/github.js` uses `gh repo view` with the inherited working directory. Disposable normal npm installs verified Git URL installation and explicit installed-source execution. An explicit HTTPS URL with the public `git` username preserved HTTPS in the generated lockfile, while the same URL without it was normalized to `git+ssh` by npm 11.19.0. The implementation PR must also validate clean `npm ci` and the project's normal checks.
 
