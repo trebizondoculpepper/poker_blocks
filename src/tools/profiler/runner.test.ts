@@ -103,7 +103,8 @@ describe("the profiler runner (#618)", () => {
   it("reports a leak when a case does not free what it made", async () => {
     const { env, memory } = fakeEnvironment();
     const run = await createProfilerRunner(env).run([["leaky", testCase(memory, true)]], options);
-    expect(run.results[0]!.leaked.geometries).toBe(5);
+    // One object built and disposed in the repeated cycle, and not freed.
+    expect(run.results[0]!.leaked.geometries).toBe(1);
   });
 
   it("labels GPU timing unavailable rather than using frame time", async () => {
@@ -374,5 +375,25 @@ describe("hidden-tab detection between checks (#625 review)", () => {
     // The baseline set (frames 4 to 13) was retaken, so the pause never reaches its timings.
     expect(run.invalidated).toEqual([]);
     expect(run.results[0]!.baseline.frame.p95).toBeLessThan(100);
+  });
+});
+
+describe("leaks are judged across a repeated cycle", () => {
+  it("does not call a resource made once and shared a leak", async () => {
+    const { env, memory } = fakeEnvironment();
+    let shared = false;
+    const sharing: ProfilingCase = {
+      ...testCase(memory),
+      create(context) {
+        // A cache filled on first use and kept, as a shared texture is.
+        if (!shared) {
+          shared = true;
+          memory.geometries++;
+        }
+        return testCase(memory).create(context);
+      },
+    };
+    const run = await createProfilerRunner(env).run([["shared", sharing]], options);
+    expect(run.results[0]!.leaked.geometries).toBe(0);
   });
 });

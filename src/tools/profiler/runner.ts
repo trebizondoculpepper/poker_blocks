@@ -266,7 +266,6 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     // in every set (#625 review).
     frameFor(count);
     await warm([], options, check);
-    const before = counts();
     const baseline = await measured(`${label}/baseline`, [], options, check, invalidated);
 
     const buildStart = env.now();
@@ -290,6 +289,14 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       );
       remove(objects);
       objects = [];
+      frame([], 0);
+      // Leaks across a repeated cycle: by now anything a case creates once and shares (a cached
+      // texture, a compiled program) already exists, so one more build, render and dispose of a
+      // single object should leave the counts where they were.
+      const before = counts();
+      const again = await build(profile, 1, options, phase);
+      frame(again, 0);
+      remove(again);
       frame([], 0);
       const after = counts();
       const less = (a: number | undefined, b: number | undefined) =>
