@@ -15,7 +15,7 @@ import { setReflectionEnvironment } from "../../visual/block-appearance";
 import { playSfx } from "../../audio/sfx";
 import { gameModeFor, modeLink } from "../../game-modes";
 import "./all-cases";
-import { profilingCases, uncoveredCases, type ProfiledObject } from "./cases";
+import { catalogCoverage, describeCoverage, profilingCases, type ProfiledObject } from "./cases";
 import { costMeasures, profilerExport, sortedByCost, type ProfilerEnvironmentInfo } from "./export";
 import { createGpuTimer } from "./gpu-timer";
 import { createProfilerRunner, type CaseResult, type RunOptions } from "./runner";
@@ -30,7 +30,13 @@ export function runSettings(countText: string, framesText: string) {
   return { count: whole(countText, 25, 1, 200), frames: whole(framesText, 120, 10, 2000) };
 }
 
-export type ProfilerRoom = { show(backTo: string): void; hide(): void; dispose(): void };
+/** The room's composed configuration: where Back goes, and the catalogs it must cover (#710). */
+export type ProfilerRoomConfig = { backTo: string; catalogs: readonly string[] };
+export type ProfilerRoom = {
+  show(config: ProfilerRoomConfig): void;
+  hide(): void;
+  dispose(): void;
+};
 
 /** Frames a preview advances before it is shown. */
 const previewFrames = 30;
@@ -39,6 +45,8 @@ const previewFrames = 30;
 const qualities = { low: 1, standard: 1.5, high: 2 };
 
 export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
+  // The catalogs the composing trait expects, captured on entry; none until then.
+  let expectedCatalogs: string[] = [];
   const root = document.createElement("section");
   root.className = "profiler-room";
   root.hidden = true;
@@ -148,10 +156,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     }
     if (!profilingCases.names().length)
       part("status").textContent = "No profiling cases are registered yet.";
-    const uncovered = uncoveredCases();
-    part("coverage").textContent = uncovered.length
-      ? `Uncovered: ${uncovered.map(({ family, missing }) => `${family}: ${missing.join(", ")}`).join("; ")}`
-      : "Every registered appearance has a case.";
+    part("coverage").textContent = describeCoverage(catalogCoverage(expectedCatalogs));
   }
 
   function showResults(): void {
@@ -268,7 +273,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       const outcome = await runner.run(chosen, options);
       results = outcome.results;
       lastExport = JSON.stringify(
-        profilerExport(outcome, options, settings, uncoveredCases()),
+        profilerExport(outcome, options, settings, catalogCoverage(expectedCatalogs)),
         null,
         2,
       );
@@ -304,7 +309,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
   });
 
   return {
-    show(backTo) {
+    show({ backTo, catalogs }) {
+      expectedCatalogs = [...catalogs];
       part<HTMLAnchorElement>("back").href = modeLink(
         gameModeFor(backTo),
         window.location.href,

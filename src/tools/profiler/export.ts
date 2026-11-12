@@ -4,6 +4,7 @@
  * method and whether GPU timing was available, raw and baseline-relative results, and the
  * registered appearances with no case.
  */
+import type { CoverageReport } from "./cases";
 import type { CaseResult, RunOptions, RunResult } from "./runner";
 
 export type ProfilerEnvironmentInfo = {
@@ -33,7 +34,10 @@ export type ProfilerExport = {
   gpuTiming: RunResult["gpuTiming"];
   cancelled: boolean;
   invalidated: string[];
+  /** Expected cases with no case, by catalog (kept for readers of earlier exports). */
   uncovered: { family: string; missing: string[] }[];
+  /** Coverage against the composed expected catalogs (#710): providers, unsupported, totals. */
+  coverage: CoverageReport;
   results: CaseResult[];
 };
 
@@ -41,7 +45,7 @@ export function profilerExport(
   run: RunResult,
   options: RunOptions,
   environment: ProfilerEnvironmentInfo,
-  uncovered: ProfilerExport["uncovered"],
+  coverage: CoverageReport,
   now = new Date(),
 ): ProfilerExport {
   const { signal: _signal, ...settings } = options;
@@ -53,7 +57,10 @@ export function profilerExport(
     gpuTiming: run.gpuTiming,
     cancelled: run.cancelled,
     invalidated: run.invalidated,
-    uncovered,
+    uncovered: coverage.catalogs
+      .filter(({ uncovered }) => uncovered.length)
+      .map(({ catalog, uncovered }) => ({ family: catalog, missing: uncovered })),
+    coverage,
     results: run.results,
   };
 }

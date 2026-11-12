@@ -99,7 +99,14 @@ export type SceneTraits = {
   /** Developer tool: the contained-components rendering proof (dev15, #346). */
   devContainedProof: { backTo: string };
   /** Developer tool: the visual performance profiler (dev16, #527). */
-  devProfiler: { backTo: string };
+  devProfiler: {
+    backTo: string;
+    /**
+     * The catalogs a complete run must cover (#710): each names its provider, a registered
+     * profiling coverage family. A missing provider is reported, never treated as covered.
+     */
+    catalogs: readonly string[];
+  };
   /** Developer tool: switch a fixed crystal collection between optics backends (dev17, #524). */
   devCrystalComparison: DevCrystalComparisonConfig;
   /**
@@ -1093,7 +1100,15 @@ const gameModes: GameMode[] = [
           // exported as JSON.
           id: "dev16",
           scenes: composeScenes("dev16", [
-            { scenes: ["profiler"], traits: { devProfiler: { backTo: "game" } } },
+            {
+              scenes: ["profiler"],
+              traits: {
+                devProfiler: {
+                  backTo: "game",
+                  catalogs: ["material", "rack item", "letter block", "menu cube", "exit effect"],
+                },
+              },
+            },
           ]),
           startScene: "profiler",
           flow: standardGameFlow,

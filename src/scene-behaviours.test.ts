@@ -112,7 +112,7 @@ function recordingHost() {
         hide: () => void calls.push("proof:hide"),
       },
       devProfiler: {
-        show: (backTo) => void calls.push(`profiler:show:${backTo}`),
+        show: ({ backTo }) => void calls.push(`profiler:show:${backTo}`),
         hide: () => void calls.push("profiler:hide"),
       },
       devCrystalComparison: {
