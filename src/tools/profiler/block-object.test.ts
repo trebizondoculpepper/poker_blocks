@@ -10,6 +10,13 @@ const extraMaps: { own: THREE.Texture; shared: THREE.Texture } = {
 };
 
 vi.mock("../../visual/block-appearance", () => ({
+  // The real rule, not a stub: this test is about which textures survive disposal.
+  disposeMaterialTextures: (materials: Iterable<THREE.Material>) => {
+    for (const material of materials) {
+      const map = (material as THREE.MeshStandardMaterial).map;
+      if (map && !map.userData.shared) map.dispose();
+    }
+  },
   createBlockAppearance: () => ({
     extras: [
       new THREE.Mesh(undefined, new THREE.MeshBasicMaterial({ map: extraMaps.own })),

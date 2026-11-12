@@ -18,7 +18,7 @@ import * as THREE from "three";
 import { standardDeck, type IdentityTrait } from "./cards";
 import { blockMaterials, getMaterialDefinition, type BlockMaterial } from "./materials";
 import { createAttractTuningPanel, type TuningControl } from "./attract-tuning-panel";
-import { createBlockAppearance } from "./visual/block-appearance";
+import { createBlockAppearance, disposeMaterialTextures } from "./visual/block-appearance";
 import {
   addAttractLighting,
   attractFieldOfView,
@@ -435,7 +435,12 @@ export function createAttractScene(
         for (const material of new Set([...appearance.materials, ...materials])) material.dispose();
         for (const extra of appearance.extras ?? [])
           for (const used of new Array<THREE.Material>().concat(extra.material)) used.dispose();
-        for (const texture of appearance.textures) texture.dispose();
+        for (const texture of appearance.textures) if (!texture.userData.shared) texture.dispose();
+        disposeMaterialTextures(
+          (appearance.extras ?? []).flatMap((extra) =>
+            ([] as THREE.Material[]).concat(extra.material),
+          ),
+        );
       },
     };
   }

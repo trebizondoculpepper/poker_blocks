@@ -12,7 +12,7 @@ import { blockHighlighted } from "./block-trait-behaviours";
 import { randomRock, type Rock, type RockState } from "./motion";
 import type { Selection } from "./traits/selectable";
 import type { Cell } from "./traits/attachable";
-import { createBlockAppearance } from "./visual/block-appearance";
+import { createBlockAppearance, disposeMaterialTextures } from "./visual/block-appearance";
 
 /** The outline colour of a selected block (#305): the game's accent cyan. */
 const selectionOutline = 0x65f4dd;
@@ -68,12 +68,13 @@ export function createBlockViews(parents: {
     new Set([...rendered.handMaterials, ...rendered.boardMaterials]).forEach((material) =>
       material.dispose(),
     );
+    // Extras may own per-face texture copies (the ice's meltwater): free those, but not a map
+    // shared with every other block (#662).
+    disposeMaterialTextures(
+      rendered.extras.flatMap((extra) => ([] as THREE.Material[]).concat(extra.material)),
+    );
     for (const extra of rendered.extras)
-      for (const material of ([] as THREE.Material[]).concat(extra.material)) {
-        // Extras may own per-face texture copies (the ice's meltwater): free those too.
-        (material as THREE.MeshStandardMaterial).map?.dispose();
-        material.dispose();
-      }
+      for (const material of ([] as THREE.Material[]).concat(extra.material)) material.dispose();
     rendered.edgeGeometry.dispose();
     rendered.edgeMaterial.dispose();
   }

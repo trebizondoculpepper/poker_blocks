@@ -807,6 +807,22 @@ function faceTexture(
 /** Reflections for crystal, steel, gold and iron; set once by the game (see setReflectionEnvironment). */
 let reflectionEnvironment: THREE.Texture | null = null;
 
+/**
+ * Free the textures a block's materials own, leaving the ones they share (#662).
+ *
+ * A block's extra effects (contained stars, smoke puffs, laser outlines) use textures that are
+ * built once and handed to every block: freeing one from a single block's disposal forces a
+ * re-upload for every other user. Those are marked `userData.shared` where they are built, so
+ * disposal frees a map only when it is not shared. This is the one place that rule lives; block
+ * disposal should call it rather than repeating the test.
+ */
+export function disposeMaterialTextures(materials: Iterable<THREE.Material>): void {
+  for (const material of materials) {
+    const map = (material as THREE.MeshStandardMaterial).map;
+    if (map && !map.userData.shared) map.dispose();
+  }
+}
+
 /** Give the shiny materials something to reflect (a PMREM environment map). */
 /** The shared reflection environment, for assemblies built in other modules (#536 review). */
 export const getReflectionEnvironment = (): THREE.Texture | null => reflectionEnvironment;
