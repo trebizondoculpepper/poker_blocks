@@ -466,3 +466,49 @@ describe("play card IDs are immutable in events (#682 review)", () => {
     expect(completed.subjectIds).toEqual([id]);
   });
 });
+
+describe("lifecycle hook rules resolve their own values (#682 review)", () => {
+  it("grants a rolled amount from a play.afterScore rule, and line scoring doesn't roll it", async () => {
+    const { createPassiveBlock } = await import("../passives");
+    const { scoreFieldWithPassives } = await import("../passive-effects");
+    const base = createPassiveBlock("scrapper", "roll.1");
+    const listener = {
+      ...base,
+      traits: {
+        ...base.traits,
+        passive: {
+          traitId: "passive.event-rules",
+          eventRules: [
+            {
+              on: "play.afterScore",
+              select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+              where: { id: "always", config: {} },
+              effects: [{ id: "add-coins", config: { amount: { valueSource: "roll", sides: 6 } } }],
+            },
+          ],
+        },
+      },
+    } as unknown as typeof base;
+    const rules = sandboxRunRules(demoRunRules);
+    const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    opening.installPassive(listener);
+    const game = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      opening.snapshot(),
+      () => 0,
+    );
+    const coins = game.state.coins;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(typeof game.state.coins).toBe("number");
+    expect(game.state.coins - coins).toBeGreaterThanOrEqual(1);
+    expect(game.state.coins - coins).toBeLessThanOrEqual(6);
+    const never = () => {
+      throw new Error("drew a random value");
+    };
+    expect(() =>
+      scoreFieldWithPassives(game.state.field, [listener], undefined, never),
+    ).not.toThrow();
+  });
+});

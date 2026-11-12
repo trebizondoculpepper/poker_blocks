@@ -848,7 +848,7 @@ export class GameRun {
     activations: RuleActivation[] = [],
   ): GameEvent[] {
     // Every rule it evaluates is charged by the action's counter (see transact).
-    const fired = passiveActivations(block, event);
+    const fired = passiveActivations(block, event, this.random);
     activations.push(...fired);
     return commitCommands(
       fired.flatMap(({ commands }) => commands),
