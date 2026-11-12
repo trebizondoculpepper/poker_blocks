@@ -209,8 +209,9 @@ export class GameRun {
     actionId: string | undefined,
     body: (action: ActionContext) => T | null,
   ): T | null {
+    // A generated ID is fresh by construction; only a caller's own can be a duplicate.
     const id = actionId ?? this.actions.next(kind);
-    if (this.actions.has(id)) return null;
+    if (actionId !== undefined && this.actions.has(id)) return null;
     // The run's own fields as they are now (its state is immutable; arrays are replaced, not
     // mutated), restored wholesale if the action fails.
     const saved = Object.fromEntries(Object.entries(this));

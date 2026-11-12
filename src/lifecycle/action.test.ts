@@ -305,3 +305,17 @@ describe("automatic IDs compare in full (#661 review)", () => {
     expect(ledger.has("auto:1")).toBe(true);
   });
 });
+
+describe("the ledger's rule is the same before and after Continue (#661 review)", () => {
+  it("treats an issued automatic ID as spent either way, and a caller's own only once resolved", () => {
+    const ledger = new ActionLedger();
+    const unresolved = ledger.next("play");
+    ledger.remember("mine");
+    const restored = ActionLedger.restore(ledger.state);
+    for (const which of [ledger, restored]) {
+      expect(which.has(unresolved)).toBe(true);
+      expect(which.has("mine")).toBe(true);
+      expect(which.has("theirs")).toBe(false);
+    }
+  });
+});

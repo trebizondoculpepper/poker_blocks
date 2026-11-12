@@ -192,22 +192,20 @@ export class ActionLedger {
     return id;
   }
 
-  /** Whether this action ID has already resolved. */
+  /**
+   * Whether this action ID is spent. A caller's own ID is spent once its action resolved. An
+   * automatic ID is spent once issued, whether or not its action succeeded: nobody resubmits
+   * one, and this way the rule is the same before and after Continue (#661 review).
+   */
   has(actionId: string): boolean {
     if (this.explicit.has(actionId)) return true;
     const serial = autoSerial(actionId);
-    // Every automatic ID up to the counter has been issued; one resolves or is never reused.
-    return serial !== null && serial <= this.counter && this.issued.has(serial);
+    return serial !== null && serial <= this.counter;
   }
 
-  /** Serial numbers issued and resolved, so a failed automatic action's ID isn't burned. */
-  private readonly issued = new Set<number>();
-
-  /** Remember a resolved action ID. */
+  /** Remember a resolved action ID (an automatic one is already spent by being issued). */
   remember(actionId: string): void {
-    const serial = autoSerial(actionId);
-    if (serial !== null && serial <= this.counter) this.issued.add(serial);
-    else this.explicit.add(actionId);
+    if (autoSerial(actionId) === null) this.explicit.add(actionId);
   }
 
   /** What a save keeps. */
@@ -215,12 +213,11 @@ export class ActionLedger {
     return { counter: this.counter, explicit: [...this.explicit] };
   }
 
-  /** A ledger as it was saved: every automatic ID up to its counter counts as resolved. */
+  /** A ledger as it was saved: the same spent IDs as before. */
   static restore(saved: ActionLedgerState | undefined): ActionLedger {
     const ledger = new ActionLedger();
     if (!saved) return ledger;
     ledger.counter = saved.counter;
-    for (let serial = 1; serial <= saved.counter; serial++) ledger.issued.add(serial);
     for (const id of saved.explicit) ledger.explicit.add(id);
     return ledger;
   }
