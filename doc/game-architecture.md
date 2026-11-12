@@ -1365,6 +1365,8 @@ _Source audit (three.js 0.187.0, the version in `package-lock.json`):_
 
 These are what the code does. How much they cost on a given device is what the comparison room and the profiler measure.
 
+**Visual verdict and next experiment.** The owner rejected the previous approximation’s procedural sub-facets, including after its transparent-pane fix (#643). Preserve it as a comparison reference, not an accepted replacement. [Crystal v3](crystal-v3.md) (#644, #645) is the agreed next experiment: clean original faces, rear/front shared smooth spectral environment mapping, bounded incidence-driven lookup offsets and Fresnel composition. Its first version blends layers without capturing or distorting a rendered rear image. The linked design records evidence, alternatives, ownership, tuning and audition limits. Production stays on Current.
+
 **The approximation (#523).** A second registered assembly, `approximateCrystal`, builds a crystal-compatible block with no physical transmission, no scene refraction and no crystal fire. It has two layers.
 
 - **Outer:** a tinted, see-through standard material. Its map is the block's own face artwork, so the rank, suit and letters are unchanged. A clearcoat, the shared static reflection environment (`getReflectionEnvironment()`) and the material's own thin-film iridescence add facet highlights and colour.
