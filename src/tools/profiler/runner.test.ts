@@ -397,3 +397,30 @@ describe("leaks are judged across a repeated cycle", () => {
     expect(run.results[0]!.leaked.geometries).toBe(0);
   });
 });
+
+describe("cancelling while a collection is built (#625 review)", () => {
+  it("stops creating objects and frees the ones already made", async () => {
+    const { env, memory } = fakeEnvironment();
+    const controller = new AbortController();
+    let created = 0;
+    const base = testCase(memory);
+    const slow: ProfilingCase = {
+      ...base,
+      defaultCount: 5,
+      async create(context) {
+        created++;
+        // The collection's first creation: cancel while it is pending.
+        if (created === 2) controller.abort();
+        return base.create(context);
+      },
+    };
+    const run = await createProfilerRunner(env).run([["slow", slow]], {
+      ...options,
+      signal: controller.signal,
+    });
+    expect(run.cancelled).toBe(true);
+    // One for the single-object set, one for the collection when the cancel came: no more.
+    expect(created).toBe(2);
+    expect(memory.geometries).toBe(0);
+  });
+});

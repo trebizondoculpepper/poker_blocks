@@ -222,14 +222,23 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     count: number,
     options: RunOptions,
     phase: string | undefined,
+    check: () => void = () => {},
   ): Promise<ProfiledObject[]> {
     const positions = gridPositions(count);
     const made: ProfiledObject[] = [];
-    for (let index = 0; index < count; index++) {
-      const one = await profile.create({ seed: options.seed + index, phase });
-      one.object.position.copy(positions[index]!);
-      scene.add(one.object);
-      made.push(one);
+    try {
+      for (let index = 0; index < count; index++) {
+        // A cancel stops the build between creations, not after the whole collection (#625).
+        check();
+        const one = await profile.create({ seed: options.seed + index, phase });
+        one.object.position.copy(positions[index]!);
+        scene.add(one.object);
+        made.push(one);
+      }
+      check();
+    } catch (error) {
+      remove(made);
+      throw error;
     }
     return made;
   }
@@ -269,7 +278,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     const baseline = await measured(`${label}/baseline`, [], options, check, invalidated);
 
     const buildStart = env.now();
-    let objects = await build(profile, 1, options, phase);
+    let objects = await build(profile, 1, options, phase, check);
     const buildTime = env.now() - buildStart;
     const firstStart = env.now();
     frame(objects, 0);
@@ -278,7 +287,9 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       await warm(objects, options, check);
       const one = await measured(`${label}/one`, objects, options, check, invalidated);
       remove(objects);
-      objects = await build(profile, count, options, phase);
+      // Freed: a cancel during the next build must not free them again.
+      objects = [];
+      objects = await build(profile, count, options, phase, check);
       await warm(objects, options, check);
       const collection = await measured(
         `${label}/collection`,
@@ -294,7 +305,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       // texture, a compiled program) already exists, so one more build, render and dispose of a
       // single object should leave the counts where they were.
       const before = counts();
-      const again = await build(profile, 1, options, phase);
+      const again = await build(profile, 1, options, phase, check);
       frame(again, 0);
       remove(again);
       frame([], 0);
