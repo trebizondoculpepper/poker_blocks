@@ -1,3 +1,9 @@
+import {
+  attachPlayfield,
+  playSteps,
+  type PlayPhases,
+  type PlayStepContext,
+} from "./lifecycle/play-phases";
 import { resetStageState } from "./stage-end";
 import { resetRoundState } from "./round-end";
 import { clearField, removeCardForRun } from "./card-ownership";
@@ -9,8 +15,7 @@ import "./cooking";
 import "./triggers";
 // Registers the self-destruct and trigger-targets responses (#435).
 import "./trigger-responses";
-import { commitReactions, type AppliedReaction } from "./reactions";
-import { commitCountdowns } from "./trigger-countdown";
+import type { AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
 import { applyRackItem } from "./rack-item-effects";
 import type { BlockMaterial } from "./materials";
@@ -141,6 +146,8 @@ export class GameRun {
   ) {
     this.dealers = dealers;
     this.config = config;
+    // The playfield's controllers attach their steps as the run is composed, never mid-play.
+    this.playPhases = attachPlayfield(config.playfield);
     this.random = random;
     const setup = config.stage(1, "stage-1");
     this.activeDealer = dealers.get(setup.dealer);
@@ -678,6 +685,8 @@ export class GameRun {
 
   /** The reactions the last play set off, in field order, for presentation (#366). */
   lastReactions: readonly AppliedReaction[] = [];
+  /** The steps the composed playfield controllers attached, for the run's lifetime. */
+  private readonly playPhases: PlayPhases;
 
   /**
    * Play from the hand, resolved as one transaction (#657): invalid plays consume nothing; an
@@ -689,49 +698,54 @@ export class GameRun {
     return this.transact("play", actionId, (context) => this.resolvePlay(action, context));
   }
 
+  /**
+   * A play, with its material steps run where the playfield's composed controllers attached them
+   * (#658; doc/game-events.md, "Resolution order for a play"): before score (countdown
+   * deductions record pending triggers), then scoring, then after score (reactions, then the
+   * pending detonations). Without a composition, no material steps run.
+   */
   private resolvePlay(action: PlayAction, context: ActionContext): GameState | null {
     const next = this.activeDealer.play(this.currentState, action);
-    if (next) {
-      this.scoredLines = scoreFieldWithPassives(
-        next.field,
-        next.passiveRack,
-        undefined,
-        this.random,
-      );
-      const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
-      this.runStats = recordPlay(this.runStats, gained, action.cardIds?.length || 1);
-      this.currentState = {
-        ...next,
-        round: { ...next.round, score: this.currentState.round.score + gained },
-      };
-      // Reactions (#366): resolved once, after scoring, so they never score this play; they
-      // change the state later plays score.
-      // Committed through the shared command path; only real changes are reported.
-      this.lastReactions = commitReactions(this.commandTarget);
-      // Countdowns (#434): only a committed play counts; a block reaching zero is triggered.
-      const counted = commitCountdowns(
-        this.commandTarget,
-        new Set([action.cardId, ...(action.cardIds ?? [])]),
-      );
-      // The current dealer scores in play(); this is a post-play event until
-      // placement and scoring are separated by the gameplay coordinator.
-      // Every card placed, in placement order, so the fact describes the whole group (#661 review).
-      this.passiveEvents.emit({
-        type: "play.completed",
-        blockId: action.cardId,
-        cardIds: action.cardIds?.length ? [...action.cardIds] : [action.cardId],
-      });
-      for (const { blockId, from, to } of this.lastReactions)
-        this.passiveEvents.emit({ type: "reaction.applied", blockId, reaction: { from, to } });
-      for (const event of counted) this.passiveEvents.emit(event);
-      this.recordDelivered(
-        context,
-        "play",
-        this.passiveEvents.drain(undefined, undefined, this.budgetFor(context, "play")),
-      );
-      this.announceOutcome();
-    }
-    return next ? this.currentState : null;
+    if (!next) return null;
+    const placed = action.cardIds?.length ? [...action.cardIds] : [action.cardId];
+    const steps: PlayStepContext = {
+      target: this.commandTarget,
+      placed: new Set(placed),
+      pending: [],
+      reactions: [],
+    };
+    // The dealer's result already holds a provisional score; until scoring applies the committed
+    // one, pre-score steps see the score as it was.
+    const scoreBefore = this.currentState.round.score;
+    this.currentState = { ...next, round: { ...next.round, score: scoreBefore } };
+    const caused: GameEvent[] = [];
+    for (const name of this.playPhases.beforeScore) caused.push(...playSteps.get(name)(steps));
+
+    this.scoredLines = scoreFieldWithPassives(
+      this.currentState.field,
+      this.currentState.passiveRack,
+      undefined,
+      this.random,
+    );
+    const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
+    this.runStats = recordPlay(this.runStats, gained, placed.length);
+    this.currentState = {
+      ...this.currentState,
+      round: { ...this.currentState.round, score: scoreBefore + gained },
+    };
+
+    for (const name of this.playPhases.afterScore) caused.push(...playSteps.get(name)(steps));
+    this.lastReactions = steps.reactions;
+    // Every card placed, in placement order, so the fact describes the whole group (#661 review).
+    this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId, cardIds: placed });
+    for (const event of caused) this.passiveEvents.emit(event);
+    this.recordDelivered(
+      context,
+      "play",
+      this.passiveEvents.drain(undefined, undefined, this.budgetFor(context, "play")),
+    );
+    this.announceOutcome();
+    return this.currentState;
   }
 
   /**
