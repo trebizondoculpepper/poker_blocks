@@ -507,7 +507,8 @@ export class GameRun {
     if (!this.inStage || roundOutcome(this.currentState) === "playing") return null;
     const stage = this.stageKey;
     if (this.rewarded?.stage === stage) return this.rewarded.reward;
-    return this.transact("reward", undefined, () => {
+    this.settlementFailed = false;
+    const settled = this.transact("reward", undefined, () => {
       const balanceBefore = this.currentState.coins;
       const finalized = entries.map((entry) => ({
         ...entry,
@@ -534,7 +535,12 @@ export class GameRun {
       });
       return this.rewarded.reward;
     });
+    this.settlementFailed = settled === null;
+    return settled;
   }
+
+  /** The last settlement rolled back (it threw, or ran out of budget); nothing was paid. */
+  private settlementFailed = false;
 
   useDealer(name: string): void {
     this.activeDealer = this.dealers.get(name);
@@ -1053,6 +1059,10 @@ export class GameRun {
     if (outcome === "playing") return false;
     this.announceOutcome();
     this.claimStageRewards();
+    // A settlement that rolled back pays nothing: stay on the decided stage, so it can be
+    // settled again, rather than progressing past it and losing the payout (#740 review). A
+    // loss with nothing to pay settles nothing, and still proceeds.
+    if (this.settlementFailed) return false;
     if (outcome === "lost") {
       this.currentPhase = "over";
       return true;

@@ -358,3 +358,23 @@ describe("settlement review fixes (#740 review)", () => {
     expect(types.indexOf("passive.installed")).toBeLessThan(types.indexOf("reward.finalized"));
   });
 });
+
+describe("a failed settlement holds the run on the stage (#740 review)", () => {
+  it("does not advance past a stage whose settlement rolled back", () => {
+    // An operation budget too small for settlement: it rolls back.
+    const tight = { ...demoRunRules, resolutionLimits: { events: 128, operations: 0 } };
+    const game = new GameRun(dealerRegistry, tight, standardDeck, () => 0);
+    game.forceOutcome("won");
+    const coins = game.state.coins;
+    expect(game.advance()).toBe(false);
+    expect(game.state.coins).toBe(coins);
+    // Still on the decided stage, unpaid: a later settlement can pay it.
+    expect(game.stageRewardsPending).toBe(true);
+  });
+
+  it("still advances a lost stage that has nothing to pay", () => {
+    const game = newRun();
+    game.forceOutcome("lost");
+    expect(game.advance()).toBe(true);
+  });
+});
