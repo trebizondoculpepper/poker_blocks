@@ -14,6 +14,8 @@ const result = (id: string, gpu: number | null, cpu: number): CaseResult => ({
   id,
   family: "test",
   label: id,
+  unit: { kind: "group", size: 4 },
+  sampling: "steady",
   creation: { build: 1, firstFrame: 2 },
   baseline: set(gpu === null ? null : 0.1, 0.1),
   one: set(gpu, cpu),
@@ -77,6 +79,7 @@ describe("profiler export (#619)", () => {
     expect(round.results[0].collection.gpu).toBeNull();
     expect(round.uncovered).toEqual([{ family: "material", missing: ["material:steel"] }]);
     expect(round.coverage.complete).toBe(false);
+    expect(round.results[0].unit).toEqual({ kind: "group", size: 4 });
     expect(round.coverage.catalogs[1]).toMatchObject({ catalog: "rack item", installed: false });
     expect(round.method.version).toBe(1);
     expect(round.exportedAt).toBe("2026-11-12T00:00:00.000Z");
