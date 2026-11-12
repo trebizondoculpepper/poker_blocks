@@ -13,6 +13,7 @@
  * do nothing. Nothing here names a material.
  */
 import { Registry } from "./core/registry";
+import { countOperation } from "./lifecycle/operations";
 import type { CardBlock } from "./cards";
 import type { RuleCommand } from "./event-rules";
 import type { GameState, PlacedBlock } from "./game-state";
@@ -181,12 +182,15 @@ export function resolveReactions(
   const byCell = new Map(state.field.map(({ block, cell }) => [cellKey(cell), block]));
   return state.field.flatMap((placed) => {
     const neighbours = faceNeighbours(placed, byCell);
-    const reaction = reactionsFor(placed.block).find(({ when }) =>
-      reactionMatchers.get(when.id)(placed.block, neighbours, when.config),
-    );
-    return (reaction?.results ?? []).flatMap((result) =>
-      reactionResults.get(result.id)(placed.block, result.config, neighbours),
-    );
+    // Each matcher and result is charged to the resolving action, matched or not (#661 review).
+    const reaction = reactionsFor(placed.block).find(({ when }) => {
+      countOperation(`reaction matcher ${when.id}`);
+      return reactionMatchers.get(when.id)(placed.block, neighbours, when.config);
+    });
+    return (reaction?.results ?? []).flatMap((result) => {
+      countOperation(`reaction result ${result.id}`);
+      return reactionResults.get(result.id)(placed.block, result.config, neighbours);
+    });
   });
 }
 

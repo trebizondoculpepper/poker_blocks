@@ -1,4 +1,5 @@
 import type { PlacedBlock } from "./game-state";
+import { countOperation, withOperationCounter } from "./lifecycle/operations";
 import type { EventRule, RuleCommand } from "./event-rules";
 import type { GameEvent, PassiveBlock } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
@@ -71,29 +72,7 @@ function subscribedRules(
  * Run the subscribed rules over a working value, left to right, each seeing the value the
  * previous one left. Pure: it returns the result and the rules that fired, applying nothing.
  */
-/**
- * Counts each scoring rule against the committed action's budget while one is scoring (#661
- * review); null during trial scoring, which must stay free of gameplay effects.
- */
-let countOperation: ((registration: string) => void) | null = null;
-
-/**
- * Run `body` with every rule it evaluates counted by `operate` (the resolving action's budget,
- * #661 review): committed scoring and a committed discard's listeners use it; trial scoring and
- * the reward ledger's preview don't.
- */
-export function withOperationCounter<T>(
-  operate: ((registration: string) => void) | undefined,
-  body: () => T,
-): T {
-  const previous = countOperation;
-  countOperation = operate ?? null;
-  try {
-    return body();
-  } finally {
-    countOperation = previous;
-  }
-}
+export { withOperationCounter } from "./lifecycle/operations";
 
 function evaluateRules(
   rules: readonly { source: RuleSource; rule: EventRule }[],
@@ -105,7 +84,7 @@ function evaluateRules(
   // The phase's total exponent so far: each power rule moves it (#431).
   let exponent = 1;
   for (const { source, rule } of rules) {
-    countOperation?.(`rule ${rule.on} from ${source.id}`);
+    countOperation(`rule ${rule.on} from ${source.id}`);
     const frame = ruleHandlers.evaluate(rule, {
       event,
       workingValue: value,
@@ -140,7 +119,10 @@ export function scoreFieldWithPassives(
   /** Count each rule against the resolving action's budget: committed scoring only. */
   operate?: (registration: string) => void,
 ): PassiveScoredLine[] {
-  return withOperationCounter(operate, () => scoreLines(field, rack, rulesForCard, random));
+  // Given a counter, install it; otherwise leave whatever the resolving action installed.
+  return operate
+    ? withOperationCounter(operate, () => scoreLines(field, rack, rulesForCard, random))
+    : scoreLines(field, rack, rulesForCard, random);
 }
 
 function scoreLines(

@@ -246,17 +246,18 @@ describe("scoring rules and the duplicate ledger (#661 review)", () => {
   };
 
   it("counts committed scoring rules against the play's operation budget", () => {
-    // A pair of sevens as one line, so a line scores and the rack's scoring rule is evaluated.
-    const withRule = scoringRun([createPassiveBlock("double-line", "p.1")], 0);
-    const before = withRule.game.state;
-    const pair = withRule.hand.slice(0, 2).map(({ id }) => id);
-    expect(withRule.game.play({ cardId: pair[0]!, cardIds: pair })).toBeNull();
-    expect(withRule.game.state).toBe(before);
+    const pairPlay = (rack: readonly PassiveBlock[], operations: number) => {
+      const { game, hand } = scoringRun(rack, operations);
+      const pair = hand.slice(0, 2).map(({ id }) => id);
+      return { game, played: game.play({ cardId: pair[0]!, cardIds: pair }) };
+    };
+    // The smallest budget the plain pair play needs (its reaction checks and the like).
+    let needed = 0;
+    while (pairPlay([], needed).played === null) needed++;
+    // With a scoring rule in the rack, that budget is no longer enough: its rules count too.
+    const withRule = pairPlay([createPassiveBlock("double-line", "p.1")], needed);
+    expect(withRule.played).toBeNull();
     expect(withRule.game.actionFailure).toBeInstanceOf(ResolutionBudgetExceeded);
-    // The same play with no scoring rule needs no operations, so it commits.
-    const plain = scoringRun([], 0);
-    const plainPair = plain.hand.slice(0, 2).map(({ id }) => id);
-    expect(plain.game.play({ cardId: plainPair[0]!, cardIds: plainPair })).not.toBeNull();
   });
 
   it("remembers every resolved action ID for the run", () => {
@@ -351,5 +352,25 @@ describe("discard rules count against the budget (#661 review)", () => {
     // One listener operation plus five rule evaluations: more than three.
     expect(game.discard([game.state.hand[0]!.id])).toBeNull();
     expect(game.actionFailure).toBeInstanceOf(ResolutionBudgetExceeded);
+  });
+});
+
+describe("reaction checks count against the budget (#661 review)", () => {
+  it("charges a reaction matcher even when it matches nothing", async () => {
+    const { reactionMatchers } = await import("../reactions");
+    const { resolveReactions } = await import("../reactions");
+    const { withOperationCounter } = await import("./operations");
+    const charged: string[] = [];
+    if (!reactionMatchers.has("test.never")) reactionMatchers.register("test.never", () => false);
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
+    game.play({ cardId: game.state.hand[0]!.id });
+    withOperationCounter(
+      (registration) => void charged.push(registration),
+      () =>
+        resolveReactions(game.state, () => [
+          { when: { id: "test.never", config: {} }, results: [] },
+        ]),
+    );
+    expect(charged).toEqual(["reaction matcher test.never"]);
   });
 });

@@ -224,7 +224,11 @@ export class GameRun {
     );
     try {
       this.activeAction = { context: action, phase: kind };
-      const result = body(action);
+      // Everything evaluated inside the action is charged to its budget (#661 review).
+      const result = withOperationCounter(
+        (registration) => action.operate(registration, kind, []),
+        () => body(action),
+      );
       this.activeAction = null;
       if (result === null) return null;
       this.actions.remember(id);
@@ -657,8 +661,6 @@ export class GameRun {
         next.passiveRack,
         undefined,
         this.random,
-        // Committed scoring counts against the play's budget (#661 review).
-        (registration) => context.operate(registration, "play", []),
       );
       const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
       this.runStats = recordPlay(this.runStats, gained, action.cardIds?.length || 1);
@@ -748,11 +750,8 @@ export class GameRun {
       this.discardEvents = this.passiveEvents.drain(
         128,
         (block, event) => {
-          // Every rule the listener evaluates counts against the discard's budget (#661 review).
-          const fired = withOperationCounter(
-            (registration) => context.operate(registration, "discard", []),
-            () => passiveActivations(block, event),
-          );
+          // Every rule it evaluates is charged by the action's counter (see transact).
+          const fired = passiveActivations(block, event);
           this.discardActivations.push(...fired);
           return commitCommands(
             fired.flatMap(({ commands }) => commands),
