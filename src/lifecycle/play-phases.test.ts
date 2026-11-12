@@ -90,3 +90,35 @@ describe("a play resolves in the documented phases (#658)", () => {
     ).toEqual(['unknown play step "nope"', 'play step "reactions" listed twice']);
   });
 });
+
+describe("play phase review fixes (#682 review)", () => {
+  it("refuses to compose a run with an invalid phase configuration", () => {
+    const rules = {
+      ...sandboxRunRules(demoRunRules),
+      playPhases: { beforeScore: ["countdown-deductions", "countdown-deductions"], afterScore: [] },
+    };
+    expect(() => new GameRun(dealerRegistry, rules, standardDeck, () => 0)).toThrow(/listed twice/);
+  });
+
+  it("shows placement and pre-score steps the score from before the play", async () => {
+    const { playSteps } = await import("./play-phases");
+    const seen: number[] = [];
+    if (!playSteps.has("test.score-probe"))
+      playSteps.register("test.score-probe", (context) => {
+        seen.push(context.target.state.round.score);
+        return [];
+      });
+    const rules = {
+      ...sandboxRunRules(demoRunRules),
+      playPhases: { beforeScore: ["test.score-probe"], afterScore: [] },
+    };
+    const { game, hand } = runWith(rules);
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    // The second play makes a line, so the dealer's provisional score would differ.
+    const before = game.state.round.score;
+    seen.length = 0;
+    expect(game.play({ cardId: hand[1]!.id, targetId: hand[0]!.id, face: "east" })).not.toBeNull();
+    expect(game.state.round.score).toBeGreaterThan(before);
+    expect(seen).toEqual([before]);
+  });
+});

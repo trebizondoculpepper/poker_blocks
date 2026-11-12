@@ -1,6 +1,11 @@
 import { resetStageState } from "./stage-end";
 import { resetRoundState } from "./round-end";
-import { defaultPlayPhases, playSteps, type PlayStepContext } from "./lifecycle/play-phases";
+import {
+  defaultPlayPhases,
+  playSteps,
+  validatePlayPhases,
+  type PlayStepContext,
+} from "./lifecycle/play-phases";
 import { clearField } from "./card-ownership";
 // Registers the spawn-beyond-pair reaction result (#425).
 import "./pair-spawn";
@@ -141,6 +146,9 @@ export class GameRun {
   ) {
     this.dealers = dealers;
     this.config = config;
+    // A play's configured steps are checked as the run is composed, never mid-play (#682 review).
+    const problems = validatePlayPhases(config.playPhases ?? defaultPlayPhases);
+    if (problems.length) throw new Error(`Invalid play phases: ${problems.join("; ")}`);
     this.random = random;
     const setup = config.stage(1, "stage-1");
     this.activeDealer = dealers.get(setup.dealer);
@@ -696,7 +704,9 @@ export class GameRun {
     };
     // The score before this play: the dealer's next state is not the base the play's points add to.
     const scoreBefore = this.currentState.round.score;
-    this.currentState = next;
+    // The dealer's result already holds a provisional score; until the scoring phase applies the
+    // committed one, placement and pre-score steps see the score as it was (#682 review).
+    this.currentState = { ...next, round: { ...next.round, score: scoreBefore } };
 
     // 1. Placement: the batch once, then each block in placement order.
     const batchId = `${context.actionId}:play`;
