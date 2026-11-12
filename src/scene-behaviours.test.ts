@@ -108,6 +108,10 @@ function recordingHost() {
         show: (backTo) => void calls.push(`proof:show:${backTo}`),
         hide: () => void calls.push("proof:hide"),
       },
+      devProfiler: {
+        show: (backTo) => void calls.push(`profiler:show:${backTo}`),
+        hide: () => void calls.push("profiler:hide"),
+      },
       devWordCubeRoom: {
         show: ({ items }) => void calls.push(`cubes:show:${items.length}`),
         hide: () => void calls.push("cubes:hide"),

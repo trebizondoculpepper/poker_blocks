@@ -144,6 +144,7 @@ type TraitContext = {
     devObjectBrowser: ShopBalanceEditor;
     devBlockDesigner: ShopBalanceEditor;
     devContainedProof: ShopBalanceEditor;
+    devProfiler: ShopBalanceEditor;
     devWordCubeRoom: WordCubeRoom;
     dialogs: SceneHost["services"]["dialogs"];
     devDialogRoom: DialogRoom;
@@ -163,6 +164,9 @@ const devBlockDesigner: ShopBalanceEditor = import.meta.env.DEV
   : { show() {}, hide() {}, dispose() {} };
 const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/contained-proof/room")).createContainedProofRoom(host)
+  : { show() {}, hide() {}, dispose() {} };
+const devProfiler: ShopBalanceEditor = import.meta.env.DEV
+  ? (await import("./tools/profiler/room")).createProfilerRoom(host)
   : { show() {}, hide() {}, dispose() {} };
 const devWordCubeRoom: WordCubeRoom = import.meta.env.DEV
   ? (await import("./tools/word-cube-room")).createWordCubeRoom(host)
@@ -252,6 +256,7 @@ const traitContext: TraitContext = {
     devObjectBrowser,
     devBlockDesigner,
     devContainedProof,
+    devProfiler,
     devWordCubeRoom,
     // Every dialog a scene composes goes to the game's presenter and, in development, to the
     // dialog room (dev14), which shows only while its own scene does.
@@ -458,6 +463,7 @@ if (import.meta.hot) {
     devObjectBrowser.dispose();
     devBlockDesigner.dispose();
     devContainedProof.dispose();
+    devProfiler.dispose();
     devWordCubeRoom.dispose();
     devDialogRoom.dispose();
     dialogPresenter.dispose();

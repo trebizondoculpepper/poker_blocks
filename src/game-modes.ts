@@ -95,6 +95,8 @@ export type SceneTraits = {
   devBlockDesigner: { backTo: string };
   /** Developer tool: the contained-components rendering proof (dev15, #346). */
   devContainedProof: { backTo: string };
+  /** Developer tool: the visual performance profiler (dev16, #527). */
+  devProfiler: { backTo: string };
   /**
    * Developer tool: the menu block audition room (dev13, #303). Each item becomes a word cube
    * made by the real creator; activating one shows its action rather than running it.
@@ -480,6 +482,7 @@ export const sceneDefinitions = [
         { name: "object-browser", traits: {} },
         { name: "block-designer", traits: {} },
         { name: "contained-proof", traits: {} },
+        { name: "profiler", traits: {} },
         { name: "menu-blocks", traits: {} },
         { name: "dialogs", traits: {} },
         {
@@ -1064,6 +1067,24 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev15-run" },
             console: { name: "dev15" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // What each visual costs to draw (#527): registered profiling cases, measured and
+          // exported as JSON.
+          id: "dev16",
+          scenes: composeScenes("dev16", [
+            { scenes: ["profiler"], traits: { devProfiler: { backTo: "game" } } },
+          ]),
+          startScene: "profiler",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev16-run" },
+            console: { name: "dev16" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,

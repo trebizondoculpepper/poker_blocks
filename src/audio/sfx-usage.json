@@ -228,7 +228,7 @@
     }
   },
   "ui.click": {
-    "uses": 34,
+    "uses": 38,
     "files": {
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 3,
@@ -239,6 +239,7 @@
       "tools/block-designer.ts": 3,
       "tools/contained-proof/room.ts": 4,
       "tools/dialog-room.ts": 1,
+      "tools/profiler/room.ts": 4,
       "tools/shop-balance-editor.ts": 6,
       "traits/menu-action.ts": 1
     }
@@ -251,11 +252,12 @@
     }
   },
   "ui.back": {
-    "uses": 7,
+    "uses": 8,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
       "game-modes.ts": 4,
       "scene-behaviours.ts": 1,
+      "tools/profiler/room.ts": 1,
       "tools/shop-balance-editor.ts": 1
     }
   },
