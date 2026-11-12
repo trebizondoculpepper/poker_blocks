@@ -393,6 +393,22 @@ describe("flame configuration (#355)", () => {
     expect(offset({ baseOffset: 0.5 })).toBe(0.5);
   });
 
+  it("takes its palette, height and speed from configuration (#743)", async () => {
+    await import("./fire-core");
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    const boundary = createInteriorBoundary(new THREE.BoxGeometry(1, 1, 1), 1, 0.9);
+    const material = (config: unknown) =>
+      (containedContents.get("flame")(boundary, config).meshes[0] as THREE.Mesh)
+        .material as THREE.ShaderMaterial;
+    const hot = material({ palette: { core: [1, 0.97, 0.9] }, height: 1.15, speed: 1.6 });
+    expect((hot.uniforms.core!.value as THREE.Color).toArray()).toEqual([1, 0.97, 0.9]);
+    expect(hot.uniforms.heightScale!.value).toBeCloseTo(1.15);
+    expect(hot.userData.speed).toBe(1.6);
+    expect(material({ haze: 0.4 }).uniforms.haze!.value).toBe(0.4);
+    // Never taller than the interior allows.
+    expect(material({ height: 5 }).uniforms.heightScale!.value).toBeCloseTo(1.6 / 1.35);
+  });
+
   it("defaults to the original flame, and scales size and brightness by configuration", async () => {
     await import("./fire-core");
     const { containedContents, createInteriorBoundary } = await import("./contained");

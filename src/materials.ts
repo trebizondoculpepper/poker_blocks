@@ -1196,7 +1196,18 @@ function glassContainerExperiments(): MaterialDefinition[] {
         reliefScale: 2.5,
         endGrainFaces: noEnds,
         container: { shell: "framedGlass", config: { inset: 0.97, glass: 1.2 } },
-        contents: { effect: "flame", config: { scale: 1.04, brightness: 1.3 } },
+        // White hot beside the regular flame (#743): brighter, taller, faster, less smoky, a pale yellow-white core.
+        contents: {
+          effect: "flame",
+          config: {
+            scale: 1.04,
+            brightness: 1.5,
+            height: 1.15,
+            speed: 1.6,
+            haze: 0.4,
+            palette: { ember: [0.85, 0.2, 0.02], mid: [1.0, 0.78, 0.35], core: [1.0, 0.97, 0.9] },
+          },
+        },
       },
     },
     {
