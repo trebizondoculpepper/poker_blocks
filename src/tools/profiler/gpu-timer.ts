@@ -78,6 +78,11 @@ export function createGpuTimer(gl: WebGL2RenderingContext | null): GpuTimer {
       return rejected;
     },
     dispose() {
+      if (open) {
+        gl.endQuery(ext.TIME_ELAPSED_EXT);
+        gl.deleteQuery(open);
+        open = null;
+      }
       waiting.splice(0).forEach(({ query }) => gl.deleteQuery(query));
     },
   };

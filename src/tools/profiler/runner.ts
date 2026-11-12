@@ -137,8 +137,12 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     const start = env.now();
     for (const each of objects) each.update?.(dt);
     env.timer.begin();
-    env.renderer.render(scene, camera);
-    env.timer.end();
+    try {
+      env.renderer.render(scene, camera);
+    } finally {
+      // A render that throws still closes its query (#625 review).
+      env.timer.end();
+    }
     return env.now() - start;
   }
 

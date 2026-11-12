@@ -449,3 +449,43 @@ describe("a case that fails on its first frame (#625 review)", () => {
     expect(memory.geometries).toBe(0);
   });
 });
+
+describe("GPU queries stay balanced when rendering fails (#625 review)", () => {
+  it("ends the query a throwing render began", async () => {
+    const { env, memory } = fakeEnvironment();
+    let open = 0;
+    env.timer = { ...unavailableTimer(), begin: () => void open++, end: () => void open-- };
+    let renders = 0;
+    const render = env.renderer.render.bind(env.renderer);
+    env.renderer.render = (scene, camera) => {
+      // The first frame with an object in it fails.
+      if (scene.children.some((child) => child.userData.profiled) && ++renders === 1)
+        throw new Error("render failed");
+      render(scene, camera);
+    };
+    await expect(
+      createProfilerRunner(env).run([["cube", testCase(memory)]], options),
+    ).rejects.toThrow("render failed");
+    expect(open).toBe(0);
+  });
+
+  it("closes a query still open when the timer is disposed", () => {
+    const ext = { TIME_ELAPSED_EXT: 1, GPU_DISJOINT_EXT: 2 };
+    const calls: string[] = [];
+    const gl = {
+      QUERY_RESULT_AVAILABLE: 3,
+      QUERY_RESULT: 4,
+      getExtension: () => ext,
+      createQuery: () => ({}),
+      beginQuery: () => void calls.push("begin"),
+      endQuery: () => void calls.push("end"),
+      deleteQuery: () => void calls.push("delete"),
+      getParameter: () => false,
+      getQueryParameter: () => false,
+    } as unknown as WebGL2RenderingContext;
+    const timer = createGpuTimer(gl);
+    timer.begin();
+    timer.dispose();
+    expect(calls).toEqual(["begin", "end", "delete"]);
+  });
+});
