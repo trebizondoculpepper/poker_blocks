@@ -82,8 +82,12 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     now: () => performance.now(),
     nextFrame: () => new Promise((resolve) => requestAnimationFrame(() => resolve())),
     hidden: () => document.hidden,
+    visibilityChanges: () => visibilityChanges,
   });
 
+  let visibilityChanges = 0;
+  const countVisibility = () => visibilityChanges++;
+  document.addEventListener("visibilitychange", countVisibility);
   let controller: AbortController | null = null;
   let lastExport: string | null = null;
   let results: CaseResult[] = [];
@@ -248,6 +252,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     },
     dispose() {
       controller?.abort();
+      document.removeEventListener("visibilitychange", countVisibility);
       timer.dispose();
       renderer.dispose();
       root.remove();
