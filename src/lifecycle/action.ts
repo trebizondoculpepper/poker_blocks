@@ -159,16 +159,14 @@ function structuredCloneable<T>(value: T, seen = new WeakMap<object, unknown>())
   return copy as T;
 }
 
-/** Rejects an action ID that already resolved, so a duplicate submission does nothing. */
+/**
+ * Rejects an action ID that already resolved, so a duplicate submission does nothing. It keeps
+ * every ID for the run's lifetime (#661 review): forgetting one would let a replayed submission
+ * through and reuse its event IDs. One short string per action is a small cost.
+ */
 export class ActionLedger {
   private readonly seen = new Set<string>();
-  private readonly order: string[] = [];
   private counter = 0;
-  private readonly capacity: number;
-
-  constructor(capacity = 256) {
-    this.capacity = capacity;
-  }
 
   /**
    * A fresh action ID for an action submitted without one: in its own namespace, and never one
@@ -188,9 +186,6 @@ export class ActionLedger {
 
   /** Remember a resolved action ID (bounded: the oldest are forgotten). */
   remember(actionId: string): void {
-    if (this.seen.has(actionId)) return;
     this.seen.add(actionId);
-    this.order.push(actionId);
-    if (this.order.length > this.capacity) this.seen.delete(this.order.shift()!);
   }
 }

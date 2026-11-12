@@ -5,7 +5,7 @@ import { GameRun } from "../game-run";
 import { createPassiveBlock, passiveTraits, type PassiveBlock } from "../passives";
 import { Randomizer } from "../random";
 import { demoRunRules, sandboxRunRules } from "../run-rules";
-import { ActionContext, ResolutionBudgetExceeded, deepFreeze } from "./action";
+import { ActionContext, ActionLedger, ResolutionBudgetExceeded, deepFreeze } from "./action";
 
 describe("captured facts (#657)", () => {
   it("are deeply immutable copies: the live data can change, the fact cannot", () => {
@@ -221,5 +221,48 @@ describe("follow-up facts name their cause (#661 review)", () => {
     const coins = game.actionFacts.find(({ type }) => type === "coins.gained")!;
     expect(completed.parentId).toBeNull();
     expect(coins.parentId).toBe(completed.eventId);
+  });
+});
+
+describe("scoring rules and the duplicate ledger (#661 review)", () => {
+  const scoringRun = (rack: readonly PassiveBlock[], operations: number) => {
+    const config = {
+      ...sandboxRunRules(demoRunRules),
+      resolutionLimits: { events: 128, operations },
+    };
+    const opening = new GameRun(dealerRegistry, config, standardDeck, () => 0);
+    for (const block of rack) opening.installPassive(block);
+    const hand = [card("7", "hearts"), card("7", "spades"), card("2", "clubs")];
+    return {
+      game: GameRun.fromSnapshot(
+        dealerRegistry,
+        config,
+        standardDeck,
+        { ...opening.snapshot(), state: { ...opening.state, hand } },
+        () => 0,
+      ),
+      hand,
+    };
+  };
+
+  it("counts committed scoring rules against the play's operation budget", () => {
+    // A pair of sevens as one line, so a line scores and the rack's scoring rule is evaluated.
+    const withRule = scoringRun([createPassiveBlock("double-line", "p.1")], 0);
+    const before = withRule.game.state;
+    const pair = withRule.hand.slice(0, 2).map(({ id }) => id);
+    expect(withRule.game.play({ cardId: pair[0]!, cardIds: pair })).toBeNull();
+    expect(withRule.game.state).toBe(before);
+    expect(withRule.game.actionFailure).toBeInstanceOf(ResolutionBudgetExceeded);
+    // The same play with no scoring rule needs no operations, so it commits.
+    const plain = scoringRun([], 0);
+    const plainPair = plain.hand.slice(0, 2).map(({ id }) => id);
+    expect(plain.game.play({ cardId: plainPair[0]!, cardIds: plainPair })).not.toBeNull();
+  });
+
+  it("remembers every resolved action ID for the run", () => {
+    const ledger = new ActionLedger();
+    ledger.remember("first");
+    for (let i = 0; i < 300; i++) ledger.remember(ledger.next("play"));
+    expect(ledger.has("first")).toBe(true);
   });
 });

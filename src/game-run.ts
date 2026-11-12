@@ -650,6 +650,8 @@ export class GameRun {
         next.passiveRack,
         undefined,
         this.random,
+        // Committed scoring counts against the play's budget (#661 review).
+        (registration) => context.operate(registration, "play", []),
       );
       const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
       this.runStats = recordPlay(this.runStats, gained, action.cardIds?.length || 1);

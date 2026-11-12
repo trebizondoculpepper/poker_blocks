@@ -71,6 +71,12 @@ function subscribedRules(
  * Run the subscribed rules over a working value, left to right, each seeing the value the
  * previous one left. Pure: it returns the result and the rules that fired, applying nothing.
  */
+/**
+ * Counts each scoring rule against the committed action's budget while one is scoring (#661
+ * review); null during trial scoring, which must stay free of gameplay effects.
+ */
+let countOperation: ((registration: string) => void) | null = null;
+
 function evaluateRules(
   rules: readonly { source: RuleSource; rule: EventRule }[],
   event: GameEvent,
@@ -81,6 +87,7 @@ function evaluateRules(
   // The phase's total exponent so far: each power rule moves it (#431).
   let exponent = 1;
   for (const { source, rule } of rules) {
+    countOperation?.(`rule ${rule.on} from ${source.id}`);
     const frame = ruleHandlers.evaluate(rule, {
       event,
       workingValue: value,
@@ -112,6 +119,23 @@ export function scoreFieldWithPassives(
   rack: readonly PassiveBlock[],
   rulesForCard: (block: CardBlock) => EventRule[] = cardScoringRules,
   random: () => number = noRandomSource,
+  /** Count each rule against the resolving action's budget: committed scoring only. */
+  operate?: (registration: string) => void,
+): PassiveScoredLine[] {
+  const previous = countOperation;
+  countOperation = operate ?? null;
+  try {
+    return scoreLines(field, rack, rulesForCard, random);
+  } finally {
+    countOperation = previous;
+  }
+}
+
+function scoreLines(
+  field: readonly PlacedBlock[],
+  rack: readonly PassiveBlock[],
+  rulesForCard: (block: CardBlock) => EventRule[],
+  random: () => number,
 ): PassiveScoredLine[] {
   const lines = findScoringLines(field);
   // One resolution: each passive's value sources (a die's roll) resolve once, here, before any
