@@ -135,15 +135,21 @@ function scoreLines(
   // candidate hand is evaluated, and the same values apply to every line (#97).
   // Only line-scoring rules resolve here; every other hook resolves its own values, once, when
   // it runs (#682 review).
-  const passives = rack.map((passive) => {
-    const source = passiveSource(passive);
-    return {
-      ...source,
-      rules: source.rules
-        .filter((rule) => lineScoringPhases.has(rule.on))
-        .map((rule) => ruleHandlers.resolveValues(rule, random)),
-    };
-  });
+  // One resolution: a passive rule's value sources (a die's roll) resolve the first time line
+  // scoring evaluates it, once for the whole play, and the same values apply to every line
+  // (#97). A rule line scoring never evaluates is never resolved here, so a rule on any other hook
+  // rolls once, when that hook is delivered (#695 review).
+  const passives = rack.map(passiveSource);
+  const passiveRules = new Set(passives.flatMap(({ rules }) => rules));
+  const resolved = new Map<EventRule, EventRule>();
+  const resolve = (rule: EventRule): EventRule => {
+    if (!passiveRules.has(rule)) return rule;
+    const known = resolved.get(rule) ?? ruleHandlers.resolveValues(rule, random);
+    resolved.set(rule, known);
+    return known;
+  };
+  const lineRules = (sources: readonly RuleSource[], on: string) =>
+    subscribedRules(sources, on).map((entry) => ({ ...entry, rule: resolve(entry.rule) }));
   return lines.map((line) => {
     const intersections = crossingCells(line, lines);
     // Evaluate: a block's value is the same in every candidate, so each is worked out once.
@@ -151,7 +157,7 @@ function scoreLines(
       line.blocks.map((block) => [
         block.id,
         evaluateRules(
-          subscribedRules([cardSource(block, rulesForCard), ...passives], "score.beforeBlockValue"),
+          lineRules([cardSource(block, rulesForCard), ...passives], "score.beforeBlockValue"),
           { type: "score.beforeBlockValue", score: { line, intersections, block } },
           scorableValue(block),
         ),
@@ -196,7 +202,7 @@ function scoreLines(
     const phases = linePhases.reduce(
       (previous, phase) => {
         const next = evaluateRules(
-          subscribedRules(sources, phase),
+          lineRules(sources, phase),
           { type: phase, score: { line, intersections } },
           previous.value,
         );
@@ -207,7 +213,7 @@ function scoreLines(
     // The line is clamped at zero, then the after-clamp phase adds its flat bonuses.
     const clamped = Math.max(0, phases.value);
     const after = evaluateRules(
-      subscribedRules(sources, afterClampPhase),
+      lineRules(sources, afterClampPhase),
       { type: afterClampPhase, score: { line, intersections } },
       clamped,
     );
@@ -227,13 +233,6 @@ function scoreLines(
     };
   });
 }
-
-/** The phases line scoring evaluates itself: only their rules resolve values during it. */
-const lineScoringPhases: ReadonlySet<string> = new Set([
-  "score.beforeBlockValue",
-  ...linePhases,
-  afterClampPhase,
-]);
 
 /** For callers without the run's random source: fine until a rule tries to draw from it. */
 function noRandomSource(): number {

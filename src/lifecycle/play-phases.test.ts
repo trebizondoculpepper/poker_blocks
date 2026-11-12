@@ -316,3 +316,12 @@ describe("per-block payloads are frozen too (#695 review)", () => {
     expect((placed.payload as { blocks: unknown[] }).blocks).toHaveLength(1);
   });
 });
+
+describe("a play's facts name what was placed (#695 review)", () => {
+  it("refuses a group whose primary card is not its first, changing nothing", () => {
+    const { game, hand } = runWith();
+    const before = game.state;
+    expect(game.play({ cardId: hand[0]!.id, cardIds: [hand[1]!.id] })).toBeNull();
+    expect(game.state).toEqual(before);
+  });
+});

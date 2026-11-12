@@ -707,6 +707,9 @@ export class GameRun {
    * drained before the next begins. Nothing waits for presentation.
    */
   private resolvePlay(action: PlayAction, context: ActionContext): GameState | null {
+    // A group names its primary card first; one that doesn't is refused, so every fact names
+    // what was actually placed (#695 review).
+    if (action.cardIds?.length && action.cardIds[0] !== action.cardId) return null;
     const next = this.activeDealer.play(this.currentState, action);
     if (!next) return null;
     // Captured: listeners receive these IDs, and must not change the play (#682 review).
