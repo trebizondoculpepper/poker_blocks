@@ -474,3 +474,20 @@ describe("every registry charges the action as it hands out a handler (#661 revi
     expect(charged).toHaveLength(2);
   });
 });
+
+describe("block-trait callbacks count too (#661 review)", () => {
+  it("charges a resistance check made inside an action", async () => {
+    const { blockResists } = await import("../block-trait-behaviours");
+    const { withOperationCounter } = await import("./operations");
+    const steel = standardDeck.map((card) => ({
+      ...card,
+      traits: { ...card.traits, resistant: { causes: ["explosion"] } },
+    }))[0]!;
+    const charged: string[] = [];
+    withOperationCounter(
+      (registration) => void charged.push(registration),
+      () => blockResists(steel, "explosion"),
+    );
+    expect(charged).toContain("block trait resistant");
+  });
+});
