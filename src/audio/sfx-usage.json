@@ -81,10 +81,10 @@
     "files": {}
   },
   "action.denied": {
-    "uses": 11,
+    "uses": 10,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 2,
-      "menus.ts": 2,
+      "menus.ts": 1,
       "purchase-refusals.ts": 1,
       "run-controller.ts": 1,
       "table-input.ts": 4,
@@ -228,12 +228,12 @@
     }
   },
   "ui.click": {
-    "uses": 36,
+    "uses": 34,
     "files": {
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 3,
       "game-modes.ts": 2,
-      "menus.ts": 7,
+      "menus.ts": 5,
       "run-controller.ts": 1,
       "settings-panel.ts": 7,
       "tools/block-designer.ts": 3,
@@ -254,8 +254,7 @@
     "uses": 7,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
-      "game-modes.ts": 3,
-      "menus.ts": 1,
+      "game-modes.ts": 4,
       "scene-behaviours.ts": 1,
       "tools/shop-balance-editor.ts": 1
     }

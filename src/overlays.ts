@@ -30,8 +30,12 @@ export type Overlays = {
   readonly screen: Screen;
   /** Whether a menu screen covers the game. */
   readonly isOpen: boolean;
-  /** Show the title screen with these items (its scene trait decided which apply). */
-  showTitle(items: readonly MenuChoice[]): void;
+  /** Show the title screen; its choices are a block menu (#529). */
+  showTitle(): void;
+  /** Where the title's block-menu choices are drawn. */
+  choicesHost(): HTMLElement;
+  /** A block-menu choice: a title command, or a navigation action. */
+  choose(action: string): void;
   /** The title scene was exited. */
   hideTitle(): void;
   /** The panel's footer: the build version and links out, shown by a `panelFooter` trait. */
@@ -137,7 +141,9 @@ export function createOverlays(
     get isOpen() {
       return menus.isOpen || (options.panels ?? []).some((panel) => panel.isOpen);
     },
-    showTitle: (items) => menus.showTitle(items),
+    showTitle: () => menus.showTitle(),
+    choicesHost: () => menus.choicesHost(),
+    choose: (action) => menus.choose(action),
     hideTitle: () => menus.hideTitle(),
     panelHeadingHost: () => menus.panelHeadingHost(),
     showPanelFooter: (links, version) => menus.showPanelFooter(links, version),

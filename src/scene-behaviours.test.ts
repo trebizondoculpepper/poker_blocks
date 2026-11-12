@@ -113,8 +113,11 @@ function recordingHost() {
         hide: () => void calls.push("cubes:hide"),
       },
       dialogs: {
-        add: ({ title }) => {
+        add: ({ title, items }, handlers) => {
           calls.push(`dialog:add:${title}`);
+          calls.push(
+            `choices:${items.map((item) => (handlers.availability(item) ? item.action : `${item.action}(disabled)`)).join(",")}`,
+          );
           return () => void calls.push(`dialog:remove:${title}`);
         },
       },
@@ -175,10 +178,8 @@ function recordingHost() {
           calls.push(`stageWon:${reward.balance}:${next.id}${args.length > 2 ? ":seed" : ""}`);
         },
         hideStageWon: () => void calls.push("stageWon:hide"),
-        showTitle: (items) =>
-          void calls.push(
-            `title:${items.map((item) => ((item as { disabled?: boolean }).disabled ? `${item.id}(disabled)` : item.id)).join(",")}`,
-          ),
+        showTitle: () => void calls.push("title:show"),
+        choose: (action) => void calls.push(`choose:${action}`),
         hideTitle: () => void calls.push("title:hide"),
         showPanelFooter: (links, version) =>
           void calls.push(`footer:${version}:${links.map(({ label }) => label).join(",")}`),
@@ -621,15 +622,15 @@ describe("the title screen's scene trait (#88)", () => {
     return { ...recorded, scenes };
   }
 
-  it("shows the items its scene declares, greying out Continue with no save (#10, #148)", () => {
+  it("shows its dialog's choices, greying out Continue with no save (#10, #148, #529)", () => {
     // Continue needs a save to be chosen, but stays on the title, disabled, without one.
     const without = stack(false);
     without.scenes.switchTo(title.id);
-    expect(without.calls).toContain("title:continue(disabled),new,openSettings");
+    expect(without.calls).toContain("choices:continue(disabled),new,openSettings");
 
     const withSave = stack(true);
     withSave.scenes.switchTo(title.id);
-    expect(withSave.calls).toContain("title:continue,new,openSettings");
+    expect(withSave.calls).toContain("choices:continue,new,openSettings");
   });
 
   it("hides the panel when its scene is left", () => {
@@ -638,6 +639,7 @@ describe("the title screen's scene trait (#88)", () => {
     calls.length = 0;
     scenes.switchTo(stage.id);
     expect(calls).toContain("title:hide");
+    expect(calls).toContain("dialog:remove:Poker Blocks");
   });
 
   it("re-shows the items when it comes back in front, so Continue reflects the latest save", () => {
@@ -647,7 +649,7 @@ describe("the title screen's scene trait (#88)", () => {
     calls.length = 0;
     scenes.pop();
     // Coming back in front re-reads the conditions, so Continue is enabled once a save exists.
-    expect(calls).toContain("title:continue(disabled),new,openSettings");
+    expect(calls).toContain("choices:continue(disabled),new,openSettings");
   });
 });
 

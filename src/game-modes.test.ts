@@ -9,6 +9,7 @@ import {
   sceneDefinitions,
   sceneNames,
   type SceneName,
+  gameDialogs,
 } from "./game-modes";
 import { saveKey } from "./save";
 import { createModeMusicBehaviours } from "./mode-music";
@@ -261,18 +262,8 @@ describe("game modes composed from traits", () => {
           tilt: 0,
         },
       },
-      titleScreen: {
-        items: [
-          {
-            id: "continue",
-            label: "Continue",
-            enabledWhen: "hasSave",
-            disabledHint: "There is no game in progress.",
-          },
-          { id: "new", label: "New game" },
-          { id: "openSettings", label: "Settings" },
-        ],
-      },
+      titleScreen: {},
+      titleMenuDialog: gameDialogs.titleMenu,
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
     });
     // The game over scene owns its screen and music cue, with no HUD panels or field input (#90).

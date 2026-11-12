@@ -33,14 +33,15 @@ import { createHandView, type HandView } from "./hand-view";
 import { createHudPanels, type HudPanels } from "./hud-panels";
 import { createDeckView, type DeckView } from "./deck-view";
 import { createOverlays, type Overlays } from "./overlays";
+import { createDialogPresenter } from "./block-menu/block-menus";
 import { createPassiveRack } from "./passive-rack";
 import { createPlayPresenter, type PlayPresenter } from "./play-presenter";
 import { createBlockViews, type BlockViews } from "./rendered-blocks";
-import { gameModeRegistry } from "./game-modes";
+import { blockMenuMotion, gameModeRegistry } from "./game-modes";
 import { createRunController, type RunController } from "./run-controller";
 import { browserStorage } from "./save";
 import { SceneManager } from "./scenes";
-import { sceneBehaviours } from "./scene-behaviours";
+import { sceneBehaviours, type SceneHost } from "./scene-behaviours";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView, type ShopView } from "./shop-view";
 import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
@@ -144,7 +145,7 @@ type TraitContext = {
     devBlockDesigner: ShopBalanceEditor;
     devContainedProof: ShopBalanceEditor;
     devWordCubeRoom: WordCubeRoom;
-    dialogs: Pick<DialogRoom, "add">;
+    dialogs: SceneHost["services"]["dialogs"];
     devDialogRoom: DialogRoom;
     version: string;
     sound: (id: SoundEffectId) => void;
@@ -166,7 +167,12 @@ const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
 const devWordCubeRoom: WordCubeRoom = import.meta.env.DEV
   ? (await import("./tools/word-cube-room")).createWordCubeRoom(host)
   : { show() {}, hide() {}, dispose() {} };
-// Until the real menus show dialogs as blocks, only the dialog room (dev14) does.
+// The game's dialogs as block menus, drawn in the title panel (#529); overlays are built later,
+// so the host is looked up when the first dialog shows.
+const dialogPresenter = createDialogPresenter(() => overlays.choicesHost(), {
+  ...blockMenuMotion,
+  floor: danceFloor,
+});
 const devDialogRoom: DialogRoom = import.meta.env.DEV
   ? (await import("./tools/dialog-room")).createDialogRoom(host, danceFloor)
   : { add: () => () => {}, show() {}, hide() {}, dispose() {} };
@@ -247,7 +253,14 @@ const traitContext: TraitContext = {
     devBlockDesigner,
     devContainedProof,
     devWordCubeRoom,
-    dialogs: devDialogRoom,
+    // Every dialog a scene composes goes to the game's presenter and, in development, to the
+    // dialog room (dev14), which shows only while its own scene does.
+    dialogs: {
+      add(dialog, handlers) {
+        const removes = [dialogPresenter.add(dialog, handlers), devDialogRoom.add(dialog)];
+        return () => removes.forEach((remove) => remove());
+      },
+    },
     devDialogRoom,
     sound: (id) => playSfx(id),
     version: appVersion,
@@ -447,6 +460,7 @@ if (import.meta.hot) {
     devContainedProof.dispose();
     devWordCubeRoom.dispose();
     devDialogRoom.dispose();
+    dialogPresenter.dispose();
     view.dispose();
   });
 }

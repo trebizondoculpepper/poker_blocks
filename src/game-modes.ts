@@ -155,7 +155,7 @@ export type SceneTraits = {
    * The title screen is shown while this scene is in front: its panel, and its items whose
    * conditions hold (Continue needs a save). Choosing an item dispatches its action.
    */
-  titleScreen: { items: readonly MenuItem[] };
+  titleScreen: Record<never, never>;
   /**
    * The stage-won pop-up is shown while this scene is in front: the won stage's reward rows
    * counting in, then a button for `next`, which dispatches its id as a named action (#91).
@@ -265,10 +265,25 @@ export type MenuBlockItem = {
   description?: string;
   /** Why it is unavailable, shown with the description while it is disabled (#462). */
   disabledReason?: string;
+  /** Available only while this registered condition holds, checked as the menu shows (#529). */
+  enabledWhen?: MenuCondition;
 };
 
 /** A dialog: its heading and its buttons, shown side by side. */
-export type DialogConfig = { title: string; items: readonly MenuBlockItem[] };
+export type DialogConfig = {
+  title: string;
+  items: readonly MenuBlockItem[];
+  /** A line shown above the choices (a warning), read out as it appears. */
+  message?: string;
+  /** The choice keyboard focus starts on; otherwise the first available one. */
+  focus?: string;
+};
+
+/** How the game's block menus move: their springs and beat kick (#529), shared with dev14. */
+export const blockMenuMotion = {
+  spring: { stiffness: 70, damping: 5, restJitter: 0.04, tiltJitter: 2 },
+  beat: { cycle: "beat", kick: 0.7, stagger: 0.08 },
+} satisfies Pick<DevDialogRoomConfig, "spring" | "beat">;
 
 export type DevDialogRoomConfig = {
   backTo: string;
@@ -288,7 +303,7 @@ export const gameDialogs = {
       {
         label: "Continue",
         action: "continue",
-        enabled: false,
+        enabledWhen: "hasSave",
         description: "Carry on with your saved game.",
         disabledReason: "There is no saved game to continue.",
       },
@@ -302,6 +317,10 @@ export const gameDialogs = {
   },
   newGame: {
     title: "Start a new game? The game in progress will be lost.",
+    message: "Start a new game? The game in progress will be lost.",
+    // Focus starts on the non-destructive choice, so a held or repeated Enter cannot overwrite
+    // the save (#10).
+    focus: "cancelNewGame",
     items: [
       {
         label: "Start",
@@ -396,18 +415,9 @@ export const sceneDefinitions = [
   {
     name: "title",
     traits: {
-      titleScreen: {
-        items: [
-          {
-            id: "continue",
-            label: "Continue",
-            enabledWhen: "hasSave",
-            disabledHint: "There is no game in progress.",
-          },
-          { id: "new", label: "New game" },
-          { id: "openSettings", label: "Settings" },
-        ],
-      },
+      titleScreen: {},
+      // After `titleScreen`, so the panel the choices sit in is already showing (#529).
+      titleMenuDialog: gameDialogs.titleMenu,
       blockTitle: titleBlocks,
       // After `titleScreen`, so the panel is already showing when the footer is added to it.
       panelFooter: { links: projectLinks },
@@ -416,6 +426,16 @@ export const sceneDefinitions = [
       enterSound: { sfx: "ui.title.enter" },
       exitSound: { sfx: "ui.title.exit" },
       ...escapeOpensPause,
+    },
+  },
+  {
+    // The new-game confirmation over the title (#529): its own scene, opened only when starting
+    // again would replace a saved run.
+    name: "confirm-new-game",
+    traits: {
+      newGameDialog: gameDialogs.newGame,
+      // Escape cancels; as the top scene's key action it never reaches the title underneath.
+      keyAction: { key: "Escape", action: "cancelNewGame", sfx: "ui.back" },
     },
   },
   {
@@ -665,13 +685,22 @@ export type GameMode = {
 };
 
 /** The menu actions that only move between scenes; the flow data says how. */
-export type NavigationAction = "openPause" | "openSettings" | "openDeck" | "back" | "resume";
+export type NavigationAction =
+  | "openPause"
+  | "openSettings"
+  | "openDeck"
+  | "openNewGameConfirm"
+  | "cancelNewGame"
+  | "back"
+  | "resume";
 
 /** Shared default navigation: menus push over what is in front and pop back to it. */
 export const standardNavigation: GameFlow<NavigationAction, SceneName> = {
   openPause: { operation: "push", scene: "pause" },
   openSettings: { operation: "push", scene: "settings" },
   openDeck: { operation: "push", scene: "deck" },
+  openNewGameConfirm: { operation: "push", scene: "confirm-new-game" },
+  cancelNewGame: { operation: "pop" },
   back: { operation: "pop" },
   resume: { operation: "pop" },
 };
@@ -999,8 +1028,7 @@ const gameModes: GameMode[] = [
                 devDialogRoom: {
                   backTo: "game",
                   seconds: 6,
-                  spring: { stiffness: 70, damping: 5, restJitter: 0.04, tiltJitter: 2 },
-                  beat: { cycle: "beat", kick: 0.7, stagger: 0.08 },
+                  ...blockMenuMotion,
                 },
                 titleMenuDialog: gameDialogs.titleMenu,
                 newGameDialog: gameDialogs.newGame,
