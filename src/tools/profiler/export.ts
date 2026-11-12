@@ -36,6 +36,10 @@ export type ProfilerExport = {
   options: Omit<RunOptions, "signal">;
   gpuTiming: RunResult["gpuTiming"];
   cancelled: boolean;
+  /** Cases that failed or timed out, why the run stopped early, and what never ran (#722). */
+  failures: RunResult["failures"];
+  aborted: RunResult["aborted"];
+  notRun: string[];
   invalidated: string[];
   /** Expected cases with no case, by catalog (kept for readers of earlier exports). */
   uncovered: { family: string; missing: string[] }[];
@@ -59,6 +63,9 @@ export function profilerExport(
     options: settings,
     gpuTiming: run.gpuTiming,
     cancelled: run.cancelled,
+    failures: run.failures,
+    aborted: run.aborted,
+    notRun: run.notRun,
     invalidated: run.invalidated,
     uncovered: coverage.catalogs
       .filter(({ uncovered }) => uncovered.length)

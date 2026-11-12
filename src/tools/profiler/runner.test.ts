@@ -482,7 +482,9 @@ describe("a case that fails on its first frame (#625 review)", () => {
       },
     };
     const runner = createProfilerRunner(env);
-    await expect(runner.run([["broken", failing]], options)).rejects.toThrow("broken case");
+    // Recorded as a failure, not thrown: later cases still run (#722).
+    const run = await runner.run([["broken", failing]], options);
+    expect(run.failures).toEqual([{ id: "broken", kind: "error", reason: "broken case" }]);
     expect(runner.scene.children.some((child) => child.userData.profiled)).toBe(false);
     expect(memory.geometries).toBe(0);
   });
@@ -501,9 +503,9 @@ describe("GPU queries stay balanced when rendering fails (#625 review)", () => {
         throw new Error("render failed");
       render(scene, camera);
     };
-    await expect(
-      createProfilerRunner(env).run([["cube", testCase(memory)]], options),
-    ).rejects.toThrow("render failed");
+    // Recorded as the case's failure, not thrown (#722); the query is still closed.
+    const run = await createProfilerRunner(env).run([["cube", testCase(memory)]], options);
+    expect(run.failures).toEqual([{ id: "cube", kind: "error", reason: "render failed" }]);
     expect(open).toBe(0);
   });
 
@@ -682,5 +684,193 @@ describe("creation timings per count (#723 review)", () => {
     expect(builds).toEqual([2, 10]);
     for (const { creation } of run.results[0]!.counts)
       expect(creation.firstFrame).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("failure isolation, timeouts and context loss (#722)", () => {
+  const quick = { ...options, counts: [1] };
+
+  it("records a throwing factory and goes on with the next case", async () => {
+    const { env, memory } = fakeEnvironment();
+    const runner = createProfilerRunner(env);
+    const broken: ProfilingCase = {
+      ...testCase(memory),
+      create: () => {
+        throw new Error("shader failed to compile");
+      },
+    };
+    const run = await runner.run(
+      [
+        ["broken", broken],
+        ["good", testCase(memory)],
+      ],
+      quick,
+    );
+    expect(run.failures).toEqual([
+      { id: "broken", kind: "error", reason: "shader failed to compile" },
+    ]);
+    expect(run.results.map(({ id }) => id)).toEqual(["good"]);
+    expect(run.cancelled).toBe(false);
+    expect(run.aborted).toBeNull();
+    expect(runner.scene.children.some((child) => child.userData.profiled)).toBe(false);
+  });
+
+  it("times out a case that never finishes building, disposes what it makes late, and goes on", async () => {
+    const { env, memory } = fakeEnvironment();
+    const runner = createProfilerRunner(env);
+    let finishLate: (() => void) | null = null;
+    let lateDisposed = false;
+    const base = testCase(memory);
+    const stuck: ProfilingCase = {
+      ...base,
+      create: (context) =>
+        new Promise((resolve) => {
+          finishLate = () =>
+            void Promise.resolve(base.create(context)).then((one) =>
+              resolve({
+                ...one,
+                dispose: () => {
+                  lateDisposed = true;
+                  one.dispose();
+                },
+              }),
+            );
+        }),
+    };
+    const run = await runner.run(
+      [
+        ["stuck", stuck],
+        ["good", testCase(memory)],
+      ],
+      { ...quick, timeoutMs: 30 },
+    );
+    expect(run.failures).toEqual([{ id: "stuck", kind: "timeout", reason: "exceeded 30 ms" }]);
+    expect(run.results.map(({ id }) => id)).toEqual(["good"]);
+    // The factory finally settles after its case gave up: what it made is freed, not leaked.
+    finishLate!();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(lateDisposed).toBe(true);
+  });
+
+  it("stops on a lost WebGL context, saying so and listing what never ran", async () => {
+    const { env, memory } = fakeEnvironment();
+    let lost = false;
+    env.contextLost = () => lost;
+    const losing: ProfilingCase = {
+      ...testCase(memory),
+      create: (context) => {
+        lost = true;
+        return testCase(memory).create(context);
+      },
+    };
+    const run = await createProfilerRunner(env).run(
+      [
+        ["first", losing],
+        ["second", testCase(memory)],
+        ["third", testCase(memory)],
+      ],
+      quick,
+    );
+    expect(run.aborted).toBe("context-lost");
+    // Lost while the first case ran: its measurements are not accepted (#726 review).
+    expect(run.results).toEqual([]);
+    expect(run.failures).toEqual([
+      {
+        id: "first",
+        kind: "context-lost",
+        reason: "the WebGL context was lost while this case ran",
+      },
+    ]);
+    expect(run.notRun).toEqual(["second", "third"]);
+  });
+
+  it("stops a case still building the moment the context is lost, not at its timeout", async () => {
+    const { env, memory } = fakeEnvironment();
+    let lose: (() => void) | null = null;
+    env.onContextLost = (listener) => {
+      lose = listener;
+      return () => {
+        lose = null;
+      };
+    };
+    const pending: ProfilingCase = {
+      ...testCase(memory),
+      create: () => {
+        // The context goes while this factory is still building, and it never settles.
+        queueMicrotask(() => lose?.());
+        return new Promise(() => {});
+      },
+    };
+    const started = Date.now();
+    const run = await createProfilerRunner(env).run(
+      [
+        ["pending", pending],
+        ["after", testCase(memory)],
+      ],
+      { ...quick, timeoutMs: 60_000 },
+    );
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(run.aborted).toBe("context-lost");
+    expect(run.failures.map(({ id, kind }) => [id, kind])).toEqual([["pending", "context-lost"]]);
+    expect(run.notRun).toEqual(["after"]);
+  });
+
+  it("keeps the completed results and lists the rest when cancelled", async () => {
+    const { env, memory } = fakeEnvironment();
+    const controller = new AbortController();
+    const cancelling: ProfilingCase = {
+      ...testCase(memory),
+      create: (context) => {
+        controller.abort();
+        return testCase(memory).create(context);
+      },
+    };
+    const run = await createProfilerRunner(env).run(
+      [
+        ["done", testCase(memory)],
+        ["cancelling", cancelling],
+        ["after", testCase(memory)],
+      ],
+      { ...quick, signal: controller.signal },
+    );
+    expect(run.cancelled).toBe(true);
+    expect(run.results.map(({ id }) => id)).toEqual(["done"]);
+    expect(run.notRun).toEqual(["cancelling", "after"]);
+    expect(run.failures).toEqual([]);
+  });
+});
+
+describe("the leak probe cleans up after itself (#726 review)", () => {
+  it("removes the probe object when rendering it throws, so the next case measures clean", async () => {
+    const { env, memory } = fakeEnvironment();
+    const runner = createProfilerRunner(env);
+    let builds = 0;
+    const base = testCase(memory);
+    // Two builds for counts [1]: the measured set, then the leak probe, whose render throws.
+    const probeFails: ProfilingCase = {
+      ...base,
+      create: (context) => {
+        builds++;
+        const one = base.create(context) as Awaited<ReturnType<typeof base.create>>;
+        if (builds === 2) one.object.userData.explodes = true;
+        return one;
+      },
+    };
+    const render = env.renderer.render.bind(env.renderer);
+    env.renderer.render = (scene, camera) => {
+      if (scene.children.some((child) => child.userData.explodes)) throw new Error("probe failed");
+      render(scene, camera);
+    };
+    const run = await runner.run(
+      [
+        ["probe", probeFails],
+        ["next", testCase(memory)],
+      ],
+      { ...options, counts: [1] },
+    );
+    expect(run.failures.map(({ id }) => id)).toEqual(["probe"]);
+    expect(runner.scene.children.some((child) => child.userData.profiled)).toBe(false);
+    // The next case's baseline drew nothing left over.
+    expect(run.results[0]!.baseline.counts.calls).toBe(0);
   });
 });
