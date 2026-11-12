@@ -1,6 +1,6 @@
-# Dev 17: calm and bubbling refractive water, and copyable presets (#673)
+# Transparent materials bench: water prototypes and copyable presets (#673)
 
-**Agreed gallery experiments, not production migration.** Add **Calm water (prototype)** and **Bubbling water (prototype)** to the existing Dev 17 refractive-materials gallery. The owner prefers the current Internal appearance as a promising direction for chromatic crystal and likes fake Refraction for water; that is not approval to replace production water/container or crystal definitions. Keep all existing comparisons available.
+**Agreed gallery experiments, not production migration.** Add **Calm water (prototype)** and **Bubbling water (prototype)** to the **Transparent materials bench** (`?mode=dev17`). The owner prefers the current Internal appearance as a promising direction for chromatic crystal and likes fake Refraction for water; that is not approval to replace production water/container or crystal definitions. Keep all existing comparisons available.
 
 ## Evidence and starting point
 
