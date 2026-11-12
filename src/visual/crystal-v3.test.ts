@@ -45,6 +45,15 @@ describe("Crystal v3's spectral environment (#645)", () => {
   });
 });
 
+describe("Crystal v3's environment at the poles (#647 review)", () => {
+  it("has no colour around the top and bottom rows, where all longitudes meet", () => {
+    for (const y of [0, height - 1]) {
+      const first = pixel(0, y);
+      for (let x = 1; x < width; x++) expect(distance(pixel(x, y), first)).toBeLessThan(0.01);
+    }
+  });
+});
+
 describe("Crystal v3's layers (#645)", () => {
   it("draws the rear first, from back faces, and shares the environment and tuning", () => {
     const rear = createCrystalV3Rear(new THREE.BoxGeometry(1, 1, 1));

@@ -81,7 +81,10 @@ export function spectralEnvironment(
       // Hue turns six times around the horizon and drifts with height, so the small change in
       // lookup across one face, and any turn of the block, sweeps through the spectrum (#645).
       const hue = ((x / width) * 6 + (y / height) * 1.5) % 1;
-      colour.setHSL(hue, 0.9, 0.55);
+      // Saturation fades to nothing at the poles, where every longitude meets one direction,
+      // so the sphere has no pinwheel there (#647 review).
+      const polar = Math.cos(latitude);
+      colour.setHSL(hue, 0.9 * polar * polar, 0.55);
       const at = (y * width + x) * 4;
       data[at] = Math.min(1.5, colour.r * shade + band);
       data[at + 1] = Math.min(1.5, colour.g * shade + band);
