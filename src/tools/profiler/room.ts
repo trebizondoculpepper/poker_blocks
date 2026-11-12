@@ -39,6 +39,7 @@ import {
 } from "./autorun";
 import { createGpuTimer } from "./gpu-timer";
 import { createHostTracker } from "./host-tracker";
+import { profilerReport, type ProfilerReport } from "./report";
 import {
   createProfilerRunner,
   standardCounts,
@@ -148,6 +149,7 @@ export function createProfilerRoom(
     </aside>
     <div class="profiler-room-main">
       <div class="profiler-room-stage" data-part="stage"></div>
+      <section class="profiler-room-report" data-part="report" aria-live="polite"></section>
       <table class="profiler-room-results">
         <thead><tr><th>Case</th><th>Family</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Frame ms (p95), largest</th><th>Calls, largest</th><th>Triangles, largest</th><th>Create ms</th><th>Leak</th></tr></thead>
         <tbody data-part="results"></tbody>
@@ -415,6 +417,7 @@ export function createProfilerRoom(
       results = outcome.results;
       lastExport = JSON.stringify(record, null, 2);
       part("status").textContent = describeOutcome(outcome);
+      showReport(profilerReport(record));
       part<HTMLButtonElement>("export").disabled = false;
       showResults();
       return record;
@@ -426,6 +429,34 @@ export function createProfilerRoom(
       part<HTMLButtonElement>("run-all").disabled = false;
       part<HTMLButtonElement>("cancel").disabled = true;
     }
+  }
+
+  /** The end-of-run report (#733): banner, rankings at the largest count, and unit summaries. */
+  function showReport(report: ProfilerReport): void {
+    const line = (tag: string, text: string) => {
+      const element = document.createElement(tag);
+      element.textContent = text;
+      return element;
+    };
+    const sections: HTMLElement[] = [
+      line("p", `${report.banner.summary} · ${report.banner.coverage}`),
+      ...report.banner.notes.map((note) => line("p", note)),
+    ];
+    for (const ranking of report.rankings) {
+      sections.push(
+        line("h3", `${ranking.title}${ranking.count ? `, ${ranking.count} instances` : ""}`),
+      );
+      const list = document.createElement("ol");
+      list.append(...ranking.entries.map(({ text }) => line("li", text)));
+      sections.push(list);
+    }
+    sections.push(
+      line(
+        "p",
+        report.byUnit.map(({ kind, rows }) => `${rows.length} ${kind} case(s)`).join(" · "),
+      ),
+    );
+    part("report").replaceChildren(...sections);
   }
 
   /** The status line for a finished, cancelled or stopped run. */
