@@ -248,6 +248,8 @@ export function createVisualScheduler(
     const wasActive = entry.state === "active";
     entry.state = "settled";
     entries.delete(entry.handle);
+    // Released from its scope too, so a long-lived scope holds only live work (#785 review).
+    entry.scope.events.delete(entry);
     entry.payload = null;
     if (wasActive) {
       active.delete(entry);
@@ -433,7 +435,10 @@ export function createVisualScheduler(
         config,
         sealed: false,
         state:
-          staleParent || (parentScope && parentScope.state !== "pending") ? "cancelled" : "pending",
+          staleParent ||
+          (parentScope && (parentScope.state !== "pending" || parentScope.cancelling))
+            ? "cancelled"
+            : "pending",
         pending: 0,
         active: 0,
         failure: null,
@@ -551,7 +556,19 @@ export function createVisualScheduler(
             cancelEntry(entry);
             continue;
           }
-          if (entry.effect && entry.effect.update(nowMs) === "finished") finishEntry(entry);
+          // A throwing effect fails its own scope and is released; the pass goes on (#785 review).
+          let finished = false;
+          try {
+            finished = entry.effect !== null && entry.effect.update(nowMs) === "finished";
+          } catch (error) {
+            fail(
+              entry.scope,
+              `effect "${entry.handler}" failed: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            cancelEntry(entry);
+            continue;
+          }
+          if (finished) finishEntry(entry);
         }
         // Then due starts, in order, within the budget and the active cap.
         let started = 0;

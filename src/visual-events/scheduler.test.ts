@@ -482,4 +482,52 @@ describe("the visual-event scheduler (#546)", () => {
     ])
       expect(() => scheduler.createScope(null, config)).toThrow();
   });
+
+  it("refuses a child scope created while its parent is cancelling (#785 review)", () => {
+    const { scheduler } = harness();
+    const parent = scheduler.createScope(null);
+    const child = scheduler.createScope(parent);
+    let late: ReturnType<typeof scheduler.createScope> | null = null;
+    scheduler.observe(child, () => {
+      late = scheduler.createScope(parent);
+    });
+    scheduler.cancel(parent);
+    expect(scheduler.status(late!).state).toBe("cancelled");
+  });
+
+  it("releases settled entries from a long-lived scope (#785 review)", () => {
+    const { scheduler } = harness();
+    const scope = scheduler.createScope(null);
+    for (let i = 0; i < 100; i++) {
+      scheduler.schedule(scope, { handler: "mark", payload: { label: "x" }, dueUnits: 0 });
+      scheduler.update(i, true);
+    }
+    expect(scheduler.counts.entries).toBe(0);
+    let rescanned = 0;
+    scheduler.observe(scope, () => rescanned++);
+    scheduler.cancel(scope);
+    expect(rescanned).toBe(1);
+  });
+
+  it("isolates a throwing effect update: its scope fails, others keep running (#785 review)", () => {
+    const { scheduler, handlers, log } = harness();
+    let disposed = 0;
+    handlers.register("bad", () => ({
+      update: () => {
+        throw new Error("bad frame");
+      },
+      cancel: () => {},
+      dispose: () => void disposed++,
+    }));
+    const broken = scheduler.createScope(null);
+    scheduler.schedule(broken, { handler: "bad", dueUnits: 0 });
+    scheduler.seal(broken);
+    const other = scheduler.createScope(null);
+    scheduler.schedule(other, { handler: "mark", payload: { label: "ok" }, dueUnits: 1 });
+    scheduler.update(0, true);
+    scheduler.update(100, true);
+    expect(scheduler.status(broken).state).toBe("failed");
+    expect(disposed).toBe(1);
+    expect(log).toContain("ok@67");
+  });
 });
