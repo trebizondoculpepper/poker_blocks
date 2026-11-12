@@ -258,6 +258,14 @@ export type PassiveVisual = {
   dispose(): void;
 };
 
+/**
+ * Attach a token's extras to its mesh, one at a time: spreading an empty list into `add()` makes
+ * three.js log an error for every token without extras (#630).
+ */
+export function addExtras(mesh: THREE.Object3D, extras: PassiveVisual["extras"]): void {
+  for (const extra of extras ?? []) mesh.add(extra);
+}
+
 /** Builds a token's visual some other way than the painted shape (#391), by name. */
 export type PassiveVisualBuilder = (
   appearance: PassiveTokenAppearance,
