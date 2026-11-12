@@ -31,7 +31,7 @@ import {
   type StageReward,
 } from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
-import { stageKinds, type RunRules, type StageKind } from "./run-rules";
+import { stageKinds, stageOrdinal, type RunRules, type StageKind } from "./run-rules";
 import {
   createPassiveBlock,
   PassiveEventQueue,
@@ -240,7 +240,17 @@ export class GameRun {
    */
   get stageContext(): StageContext | null {
     const kind = this.inStage ? (this.currentPhase as StageKind) : this.shopAfter;
-    return kind ? { round: this.currentRound, kind, dealer: this.activeDealer.name } : null;
+    if (!kind) return null;
+    // A stage's ordinal is its position in the configured stage order: the legacy kind handle is
+    // mapped here, at the boundary, and nothing downstream compares it (#660).
+    const ordinal = stageOrdinal(kind);
+    return {
+      round: this.currentRound,
+      ordinal,
+      instance: `${this.currentRound}.${ordinal}`,
+      kind,
+      dealer: this.activeDealer.name,
+    };
   }
 
   private get stageKey(): string {
