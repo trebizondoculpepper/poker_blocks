@@ -392,6 +392,9 @@ export function createProfilerRoom(
     outer?.addEventListener("abort", () => mine.abort(), { once: true });
     if (outer?.aborted) mine.abort();
     const options: RunOptions = { ...settings, signal: mine.signal };
+    // Every run, manual or automatic, holds the application's rendering when it can, and the
+    // record says which it was (#735 review).
+    const resumeRendering = capabilities.pauseRendering?.();
     part<HTMLButtonElement>("run").disabled = true;
     part<HTMLButtonElement>("run-all").disabled = true;
     part<HTMLButtonElement>("cancel").disabled = false;
@@ -401,7 +404,14 @@ export function createProfilerRoom(
       `Running ${chosen.length} case(s)… GPU timing ${timer.available ? "available" : "unavailable"}.`;
     try {
       const outcome = await runner.run(chosen, options);
-      const record = profilerExport(outcome, options, environmentInfo, catalogCoverage(catalogs));
+      const record = profilerExport(
+        outcome,
+        options,
+        environmentInfo,
+        catalogCoverage(catalogs),
+        undefined,
+        resumeRendering ? "paused" : "shared",
+      );
       results = outcome.results;
       lastExport = JSON.stringify(record, null, 2);
       part("status").textContent = describeOutcome(outcome);
@@ -409,6 +419,7 @@ export function createProfilerRoom(
       showResults();
       return record;
     } finally {
+      resumeRendering?.();
       if (controller === mine) controller = null;
       setSettingsEnabled(true);
       part<HTMLButtonElement>("run").disabled = false;
@@ -505,7 +516,8 @@ export function createProfilerRoom(
                   previewToken++;
                   if (activePreview) endPreview(activePreview);
                   previewHostTracker.releaseAll();
-                  return capabilities.pauseRendering!();
+                  // The run itself holds the application's rendering (see execute).
+                  return () => {};
                 },
               }
             : {}),
