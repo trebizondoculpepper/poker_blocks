@@ -2,6 +2,12 @@
 
 The user and several coding agents work on this project at once. This page describes how work moves from a ticket to `main`. The architecture rules are in [AGENTS.md](../AGENTS.md); this page covers process only.
 
+## Design, research and implementation roles
+
+The design agent works with the user on initial decisions and updates the canonical design/architecture documents when preparing tickets. Research is shared: either agent may investigate relevant code, libraries or behavior and report evidence. Initial design-document responsibility does not reserve all research to the design agent.
+
+Implementation agents normally implement the agreed merged contract. They surface concrete missing/contradictory patterns or consequential design questions through tickets/PRs for the design agent, instead of redesigning independently. Existing accurate documentation can be followed directly, and a conforming fix does not need a new design round. Explicit user assignments can change the division of work. Keep design-document PRs separate from runtime implementation, with the documentation merged first.
+
 ## Tickets
 
 - **Every piece of work has a GitHub issue.** Write new work up as an issue before starting it.

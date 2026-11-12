@@ -89,6 +89,11 @@ reviews:
              Identify the concrete unsupported claim or undocumented architectural change.
              Existing evidence suffices; do not require a new research mission or external
              search for ordinary reuse of an accurate documented pattern.
+             Initial design-document updates belong to the design role; research is shared.
+             Flag an implementation that silently substitutes a new design for the agreed
+             contract. Concrete implementation discoveries go back through the documented
+             design process, unless the user explicitly assigns or approves otherwise.
+             Do not infer a violation from an agent identity or from an agent doing research.
           7. A save-format change lacks a version bump and an explicit migration.
           9. Services and controller traits ("Services and controller traits" in
              doc/game-architecture.md): a service learns a scene, mode, material or item
