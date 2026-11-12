@@ -1362,6 +1362,8 @@ The runner's tests use a fake timer and renderer, so they check the logic (rejec
 
 ## Approximate crystal optics and the comparison room (#523, #524)
 
+**Water gallery and preset export (#673).** [Refractive water prototypes](refractive-water-prototypes.md) defines the next two Dev 17 experiments: calm cyclic lookup distortion and the same with composable rising bubbles, using the existing fake-refraction baseline. It also defines complete Copy settings JSON via registered backend schemas, independent of slider labels and scoped tuning. Existing production water/crystal choices remain unchanged; capture, volume, reduced-motion and reproducibility boundaries are explicit in that design.
+
 **Today's crystal, audited.** Prismatic crystal's table look (`refractiveCrystal` in `src/visual/block-appearance.ts`) is a `MeshPhysicalMaterial` with `transmission: 1`, dispersion, thickness and attenuation. Any transmissive material makes three.js render the opaque scene a **second time** into a transmission target every frame, and dispersion samples it three times per pixel. On top of that sits the crystal fire (`src/visual/crystal-fire.ts`): a back-face copy of the block whose shader does three refractions into a made-up studio, plus a glint. The print skin is a third layer. These are the costs to compare; no speed-up is claimed until the profiler (#527) or the comparison room measures one.
 
 _Source audit (three.js 0.187.0, the version in `package-lock.json`):_
