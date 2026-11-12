@@ -12,6 +12,19 @@
 import * as THREE from "three";
 import type { ProfiledObject, ProfilingCase } from "./cases";
 import type { GpuTimer } from "./gpu-timer";
+import { useCosmeticRandom } from "../../visual/block-effects";
+
+/** A small seeded stream (mulberry32): the same numbers for the same seed, run after run. */
+export function seededStream(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 export type RendererCounts = {
   calls: number;
@@ -377,8 +390,15 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       signal = options.signal;
       try {
         for (const [id, profile] of cases)
-          for (const phase of profile.phases ?? [undefined])
-            results.push(await runCase(id, profile, phase, options, check, invalidated));
+          for (const phase of profile.phases ?? [undefined]) {
+            // Cosmetic randomness (stars, bubbles, grass) repeats exactly for a seed (#653 review).
+            const restore = useCosmeticRandom(seededStream(options.seed));
+            try {
+              results.push(await runCase(id, profile, phase, options, check, invalidated));
+            } finally {
+              restore();
+            }
+          }
       } catch (error) {
         if (!(error instanceof Cancelled)) throw error;
         return { results, cancelled: true, gpuTiming: timing(), invalidated };

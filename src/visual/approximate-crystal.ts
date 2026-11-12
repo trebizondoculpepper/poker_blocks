@@ -106,6 +106,7 @@ export function facetTexture(): THREE.DataTexture {
   facets = new THREE.DataTexture(facetPattern(), facetSize, facetSize);
   facets.wrapS = facets.wrapT = THREE.RepeatWrapping;
   facets.needsUpdate = true;
+  facets.userData.shared = true;
   return facets;
 }
 

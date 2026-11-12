@@ -63,7 +63,10 @@ export type SceneTraits = {
    * The board's own gestures while this scene shows (#275): dragging the structure turns it, a
    * pinch zooms and a two-finger twist turns it, the wheel zooms.
    */
-  boardGestures: Record<never, never>;
+  boardGestures: {
+    /** The sound a drag that turns the structure plays as it begins (#641). */
+    turnSound: SoundEffectId;
+  };
   /** The ghost cube that invites a stage's first play, and how it looks and responds. */
   firstPlayPrompt: FirstPlayPromptConfig;
   /**
@@ -236,8 +239,8 @@ const playSceneTraits: Partial<SceneTraits> = {
   },
   // Hand blocks can be picked up and dragged to play, discard or reorder them.
   dragSource: { sources: [{ source: "hand" }] },
-  // The board can be turned and zoomed.
-  boardGestures: {},
+  // The board can be turned and zoomed; turning it by drag has its own sound (#641).
+  boardGestures: { turnSound: "view.rotate" },
   firstPlayPrompt: {
     colour: 0x65f4dd,
     // A steady glow: the laser edges and the dance give it life, so it never flashes.
@@ -1113,7 +1116,7 @@ const gameModes: GameMode[] = [
                 devCrystalComparison: {
                   backTo: "game",
                   material: "prismatic",
-                  backends: ["current", "approximation", "crystalV3"],
+                  backends: ["current", "approximation", "crystalV3", "refraction", "internal"],
                   count: 9,
                   seed: 524,
                 },

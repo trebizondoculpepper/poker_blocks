@@ -23,6 +23,7 @@
  * Cosmetic randomness only: never the session's seeded stream.
  */
 import * as THREE from "three";
+import { cosmeticRandom } from "./block-effects";
 import { containedInclusions, containedLayers, type InclusionHandler } from "./contained";
 
 export type GrowingGrassConfig = {
@@ -81,7 +82,7 @@ export const growingGrass: InclusionHandler = {
     mesh.renderOrder = containedLayers.contentsOpaque;
     mesh.frustumCulled = false;
 
-    const random = Math.random;
+    const random = cosmeticRandom;
     const anchor = new THREE.Quaternion();
     const inverse = new THREE.Quaternion();
     const up = new THREE.Vector3();

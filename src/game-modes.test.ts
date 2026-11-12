@@ -332,7 +332,7 @@ describe("game modes composed from traits", () => {
         ],
       },
       dragSource: { sources: [{ source: "hand" }] },
-      boardGestures: {},
+      boardGestures: { turnSound: "view.rotate" },
       firstPlayPrompt: expect.objectContaining({ colour: 0x65f4dd }),
       handView: {},
       selectable: { sources: [{ source: "hand" }, { source: "field" }] },

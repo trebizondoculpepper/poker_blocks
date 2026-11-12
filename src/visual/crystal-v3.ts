@@ -59,31 +59,50 @@ const environmentWidth = 256;
 const environmentHeight = 128;
 
 /**
- * The smooth spectral environment, as linear RGB in an equirectangular layout: hue turns slowly
- * with longitude at restrained saturation, with broad pale bands of light at a few latitudes.
- * Smooth everywhere, with no cells, and continuous across the longitude seam.
+ * The shapes the spectral map can take: each gives a hue (0..1, wrapping) for a point on the
+ * sphere, from its longitude share u (0..1, wrapping) and latitude share v (0 at the bottom, 1 at
+ * the top). Longitude terms use whole numbers of turns, so the map is continuous at the wrap.
+ */
+export const spectralPatterns: Record<string, (u: number, v: number, frequency: number) => number> =
+  {
+    /** Hue turns around the horizon and drifts with height (the v3 default). */
+    bands: (u, v, frequency) => u * Math.round(frequency) + v * 1.5,
+    /** Rainbow rings stacked from bottom to top. */
+    "horizontal stripes": (_u, v, frequency) => v * frequency,
+    /** Rainbow wedges round the horizon, like segments of an orange. */
+    "vertical stripes": (u, _v, frequency) => u * Math.round(frequency),
+    /** Stripes that wind up the sphere: two arms around the horizon, turned by height. */
+    spiral: (u, v, frequency) => u * 2 + v * frequency,
+  };
+
+/** The current shape of the shared spectral map (a developer control changes it live). */
+export const spectralShape = { pattern: "bands", frequency: 6 };
+
+/**
+ * The smooth spectral environment, as linear RGB in an equirectangular layout, shaped by a
+ * registered pattern at restrained saturation, with soft pale bands of light. Smooth everywhere,
+ * continuous across the longitude seam, and colourless at the poles where every longitude meets.
  */
 export function spectralEnvironment(
   width = environmentWidth,
   height = environmentHeight,
+  shape = spectralShape,
 ): Float32Array {
   const data = new Float32Array(width * height * 4);
   const colour = new THREE.Color();
+  const hueAt = spectralPatterns[shape.pattern] ?? spectralPatterns.bands!;
   for (let y = 0; y < height; y++) {
-    const latitude = (y / (height - 1)) * Math.PI - Math.PI / 2;
-    // Broad pale bands: soft studio lights above and a dimmer floor below.
+    const v = y / (height - 1);
+    const latitude = v * Math.PI - Math.PI / 2;
     // Soft pale bands, kept low so they light the spectrum rather than wash it out.
     const band =
       0.3 * Math.exp(-(((latitude - 0.7) / 0.18) ** 2)) +
       0.12 * Math.exp(-(((latitude + 0.25) / 0.25) ** 2));
-    const shade = 0.55 + 0.45 * (latitude / Math.PI + 0.5);
+    const shade = 0.55 + 0.45 * v;
+    // Saturation fades to nothing at the poles (#647 review).
+    const polar = Math.cos(latitude);
     for (let x = 0; x < width; x++) {
-      // Hue turns six times around the horizon and drifts with height, so the small change in
-      // lookup across one face, and any turn of the block, sweeps through the spectrum (#645).
-      const hue = ((x / width) * 6 + (y / height) * 1.5) % 1;
-      // Saturation fades to nothing at the poles, where every longitude meets one direction,
-      // so the sphere has no pinwheel there (#647 review).
-      const polar = Math.cos(latitude);
+      const hue = ((hueAt(x / width, v, shape.frequency) % 1) + 1) % 1;
       colour.setHSL(hue, 0.9 * polar * polar, 0.55);
       const at = (y * width + x) * 4;
       data[at] = Math.min(1.5, colour.r * shade + band);
@@ -93,6 +112,14 @@ export function spectralEnvironment(
     }
   }
   return data;
+}
+
+/** Reshape the shared spectral map in place: every look that reads it changes at once. */
+export function setSpectralShape(next: Partial<typeof spectralShape>): void {
+  Object.assign(spectralShape, next);
+  if (!environment) return;
+  (environment.image.data as Float32Array).set(spectralEnvironment());
+  environment.needsUpdate = true;
 }
 
 let environment: THREE.DataTexture | null = null;
@@ -113,6 +140,7 @@ export function crystalV3Environment(): THREE.DataTexture {
   environment.wrapT = THREE.ClampToEdgeWrapping;
   environment.magFilter = environment.minFilter = THREE.LinearFilter;
   environment.needsUpdate = true;
+  environment.userData.shared = true;
   return environment;
 }
 

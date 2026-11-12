@@ -266,8 +266,13 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // While a scene shows, the board's gestures are bound (#275).
   const gesturesBound = new WeakMap<object, () => void>();
   behaviours.register("boardGestures", {
+    // The controller: the input service reports a turn starting; this trait's configuration says
+    // which sound it plays (#641).
     enter({ services }, config) {
-      gesturesBound.set(config, services.input.enableBoardGestures());
+      gesturesBound.set(
+        config,
+        services.input.enableBoardGestures({ turnStarted: () => services.sound(config.turnSound) }),
+      );
     },
     exit(_context, config) {
       gesturesBound.get(config)?.();

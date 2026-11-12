@@ -9,6 +9,8 @@ import type { HudPanel } from "./hud-panels";
 import type { ShopOffer } from "./shop-stock";
 
 /** A host that records what the traits did, with no DOM or renderer behind it. */
+let turnStarted: (() => void) | undefined;
+
 function recordingHost() {
   const calls: string[] = [];
   const shown = new Set<HudPanel>();
@@ -86,7 +88,8 @@ function recordingHost() {
           calls.push(`select:${source}:on`);
           return () => void calls.push(`select:${source}:off`);
         },
-        enableBoardGestures: () => {
+        enableBoardGestures: (handlers) => {
+          turnStarted = () => handlers?.turnStarted?.();
           calls.push("board:on");
           return () => void calls.push("board:off");
         },
@@ -276,7 +279,7 @@ describe("scene traits own their behaviour", () => {
   it("binds the board gestures while its scene shows, through menus, and unbinds them (#275)", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
-    scenes.register(scene("stage", { boardGestures: {} }));
+    scenes.register(scene("stage", { boardGestures: { turnSound: "view.rotate" } }));
     scenes.register(scene("menu", { pausesBelow: { input: true, update: true } }));
     scenes.register(scene("title", {}));
     const board = () => calls.filter((call) => call.startsWith("board:"));
@@ -286,6 +289,16 @@ describe("scene traits own their behaviour", () => {
     expect(board()).toEqual(["board:on"]);
     scenes.switchTo("title");
     expect(board()).toEqual(["board:on", "board:off"]);
+  });
+
+  it("plays its configured turn sound when the board reports a turn starting (#641)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("stage", { boardGestures: { turnSound: "view.rotate" } }));
+    scenes.switchTo("stage");
+    calls.length = 0;
+    turnStarted?.();
+    expect(calls).toEqual(["sound:view.rotate"]);
   });
 
   it("composes Sell in the shop without exposing the Discard bin", () => {

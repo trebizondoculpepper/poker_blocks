@@ -511,3 +511,29 @@ describe("a cancel while frames are suspended (#625 review)", () => {
     expect(memory.geometries).toBe(0);
   });
 });
+
+describe("cosmetic randomness is fixed by the run seed (#653 review)", () => {
+  it("gives a case the same random workload on every run, and restores the source after", async () => {
+    const { cosmeticRandom } = await import("../../visual/block-effects");
+    const drawn = async () => {
+      const { env, memory } = fakeEnvironment();
+      const values: number[] = [];
+      const base = testCase(memory);
+      const animated: ProfilingCase = {
+        ...base,
+        create(context) {
+          const made = base.create(context) as { object: THREE.Object3D; dispose(): void };
+          values.push(cosmeticRandom());
+          return { ...made, update: () => void values.push(cosmeticRandom()) };
+        },
+      };
+      await createProfilerRunner(env).run([["animated", animated]], options);
+      return values;
+    };
+    const first = await drawn();
+    expect(first.length).toBeGreaterThan(10);
+    expect(await drawn()).toEqual(first);
+    // Outside a run, cosmetic randomness is ordinary again.
+    expect(cosmeticRandom()).not.toBe(first[0]);
+  });
+});

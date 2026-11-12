@@ -11,10 +11,11 @@
  *   immutable geometry and never a runtime fracture of the mesh; or `components`, the departing
  *   visual's own meshes (a shell breaking up, a fan's parts flying off). What doesn't fly hides.
  *
- * Randomness is cosmetic (`Math.random`). Under reduced motion both end at once and show nothing.
+ * Randomness is cosmetic (`cosmeticRandom`). Under reduced motion both end at once and show nothing.
  * Everything an effect makes is freed on dispose; shared piece geometry is never disposed.
  */
 import * as THREE from "three";
+import { cosmeticRandom } from "./block-effects";
 import { Registry } from "../core/registry";
 import { exitEffects, type ExitEffectInstance, type ExitVisual } from "./exit-presentation";
 import { targetBounds } from "./exit-fragments";
@@ -212,7 +213,7 @@ exitEffects.register(
       reducedMotion || bounds.isEmpty()
         ? []
         : crackPatterns
-            .get(config?.pattern ?? "radial")(Math.random)
+            .get(config?.pattern ?? "radial")(cosmeticRandom)
             .map((p) => p.clone().multiply(size).add(centre));
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     geometry.setDrawRange(0, 0);
@@ -345,15 +346,19 @@ exitEffects.register(
           .invert(),
       );
       return {
-        velocity: new THREE.Vector3(Math.random() - 0.5, Math.random(), Math.random() - 0.5)
+        velocity: new THREE.Vector3(
+          cosmeticRandom() - 0.5,
+          cosmeticRandom(),
+          cosmeticRandom() - 0.5,
+        )
           .normalize()
-          .multiplyScalar((slow + Math.random() * (fast - slow)) * size)
+          .multiplyScalar((slow + cosmeticRandom() * (fast - slow)) * size)
           .applyMatrix3(toParent),
         fall: down.clone().applyMatrix3(toParent),
         axis: new THREE.Vector3(
-          Math.random() - 0.5,
-          Math.random() - 0.5,
-          Math.random() - 0.5,
+          cosmeticRandom() - 0.5,
+          cosmeticRandom() - 0.5,
+          cosmeticRandom() - 0.5,
         ).normalize(),
       };
     });

@@ -11,7 +11,7 @@ import type { CardBlock } from "./cards";
 import { EventRuleRegistry, type RuleFrame } from "./event-rules";
 import type { BlockMaterial } from "./materials";
 import { materialOf } from "./materials";
-import type { ScoreEventContext } from "./passives";
+import type { ScoreEventContext, StageContext } from "./passives";
 import type { StageKind } from "./run-rules";
 import type { HandlerConfig } from "./event-rules";
 
@@ -41,6 +41,11 @@ ruleHandlers.registerSelector<{ where: HandlerConfig }, readonly CardBlock[]>(
   "event-blocks",
   ({ where }, frame) =>
     (frame.event.blocks ?? []).filter((block) => ruleHandlers.holds(where, block, frame)),
+);
+/** On a stage or shop lifecycle event: its stage, with round and ordinal (#660). */
+ruleHandlers.registerSelector<Record<never, never>, StageContext | undefined>(
+  "event-stage",
+  (_config, frame) => frame.event.stage,
 );
 /** On `stage.won`: the stage of the round that was won. */
 ruleHandlers.registerSelector<Record<never, never>, StageKind | undefined>(
@@ -84,6 +89,18 @@ ruleHandlers.registerCondition<{ minimum: number }, readonly unknown[]>(
 ruleHandlers.registerCondition<{ stages: readonly StageKind[] }, StageKind | undefined>(
   "stage-in",
   ({ stages }, stage) => !!stage && stages.includes(stage),
+);
+/**
+ * Which stage of the round it is, by ordinal (1, 2 or 3), and optionally in which rounds (#660):
+ * `{ ordinals: [2] }` matches stage two in every round, never one or three.
+ */
+ruleHandlers.registerCondition<
+  { ordinals: readonly number[]; rounds?: readonly number[] },
+  StageContext | undefined
+>(
+  "stage-ordinal-in",
+  ({ ordinals, rounds }, stage) =>
+    !!stage && ordinals.includes(stage.ordinal) && (!rounds || rounds.includes(stage.round)),
 );
 
 // ----- Value sources: amounts an effect's configuration may take instead of a number (#97) -----

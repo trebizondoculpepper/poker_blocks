@@ -228,7 +228,7 @@
     }
   },
   "ui.click": {
-    "uses": 40,
+    "uses": 41,
     "files": {
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 3,
@@ -238,7 +238,7 @@
       "settings-panel.ts": 7,
       "tools/block-designer.ts": 3,
       "tools/contained-proof/room.ts": 4,
-      "tools/crystal-comparison/room.ts": 2,
+      "tools/crystal-comparison/room.ts": 3,
       "tools/dialog-room.ts": 1,
       "tools/profiler/room.ts": 4,
       "tools/shop-balance-editor.ts": 6,
@@ -277,8 +277,9 @@
     }
   },
   "view.rotate": {
-    "uses": 1,
+    "uses": 2,
     "files": {
+      "game-modes.ts": 1,
       "tools/crystal-comparison/room.ts": 1
     }
   },
