@@ -53,6 +53,7 @@ import {
   ActionContext,
   ActionLedger,
   defaultResolutionLimits,
+  type ActionLedgerState,
   type EventEnvelope,
 } from "./lifecycle/action";
 
@@ -92,6 +93,8 @@ export type RunSnapshot = {
    * same sequence rather than replaying it (#134).
    */
   random?: RandomCursor;
+  /** Which actions have resolved, so Continue still rejects a duplicate (#661 review). */
+  actions?: ActionLedgerState;
 };
 
 /**
@@ -121,7 +124,7 @@ export class GameRun {
   /** Rewinds the session's random stream when an action rolls back (#657); none in tests. */
   private randomCheckpoints: RandomCheckpoints | null = null;
   /** Resolved action IDs, so a duplicate submission is rejected (#657). */
-  private readonly actions = new ActionLedger();
+  private actions = new ActionLedger();
   /** Bumped by every committed action: the version a captured fact describes. */
   private version = 0;
   private lastFacts: readonly EventEnvelope[] = [];
@@ -170,6 +173,7 @@ export class GameRun {
     session.rewarded = snapshot.rewarded ?? null;
     session.runSeed = snapshot.seed;
     session.randomCursor = snapshot.random;
+    session.actions = ActionLedger.restore(snapshot.actions);
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
     // A stage saved after it was decided already announced its outcome.
     session.decidedStage =
@@ -397,6 +401,7 @@ export class GameRun {
       ...(this.rewarded ? { rewarded: this.rewarded } : {}),
       ...(this.runSeed === undefined ? {} : { seed: this.runSeed }),
       ...(this.randomCursor === undefined ? {} : { random: this.randomCursor }),
+      actions: this.actions.state,
     };
   }
 

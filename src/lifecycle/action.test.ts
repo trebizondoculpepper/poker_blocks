@@ -266,3 +266,32 @@ describe("scoring rules and the duplicate ledger (#661 review)", () => {
     expect(ledger.has("first")).toBe(true);
   });
 });
+
+describe("action identity survives save and Continue (#661 review)", () => {
+  it("still rejects a used ID, and never reissues an automatic one", async () => {
+    const { fromSaveRecord, toSaveRecord } = await import("../save");
+    // An ordinary run (its cards all accounted for, as the save validator requires).
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
+    const hand = game.state.hand;
+    expect(game.discard([hand[0]!.id], "mine")).not.toBeNull();
+    expect(game.discard([hand[1]!.id])).not.toBeNull();
+    const usedAuto = game.actionFacts[0]!.actionId;
+    // Through the real save pipeline, as Continue does.
+    const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
+    const snapshot = fromSaveRecord(record, standardDeck, dealerRegistry)!;
+    const restored = GameRun.fromSnapshot(
+      dealerRegistry,
+      sandboxRunRules(demoRunRules),
+      standardDeck,
+      snapshot,
+      () => 0,
+    );
+    const card = restored.state.hand[0]!;
+    // The explicit ID is still spent, even though the request would otherwise be valid.
+    expect(restored.discard([card.id], "mine")).toBeNull();
+    // A fresh automatic action gets an ID never used before the save.
+    expect(restored.discard([card.id])).not.toBeNull();
+    expect(restored.actionFacts[0]!.actionId).not.toBe(usedAuto);
+    expect(restored.actionFacts[0]!.actionId).not.toBe("mine");
+  });
+});

@@ -159,33 +159,67 @@ function structuredCloneable<T>(value: T, seen = new WeakMap<object, unknown>())
   return copy as T;
 }
 
+/** What a ledger saves (#661 review): small, whatever the run's length. */
+export type ActionLedgerState = { counter: number; explicit: readonly string[] };
+
+const autoPrefix = "auto:";
+/** The serial number of an automatic ID (`auto:<kind>-<n>`), or null for a caller's own ID. */
+function autoSerial(actionId: string): number | null {
+  if (!actionId.startsWith(autoPrefix)) return null;
+  const match = /-(\d+)$/.exec(actionId);
+  return match ? Number(match[1]) : null;
+}
+
 /**
- * Rejects an action ID that already resolved, so a duplicate submission does nothing. It keeps
- * every ID for the run's lifetime (#661 review): forgetting one would let a replayed submission
- * through and reuse its event IDs. One short string per action is a small cost.
+ * Rejects an action ID that already resolved, so a duplicate submission does nothing, for the
+ * whole run, across save and Continue (#661 review). Automatic IDs are serial, so the counter
+ * alone says which were used; a caller's own IDs are kept individually.
  */
 export class ActionLedger {
-  private readonly seen = new Set<string>();
+  private readonly explicit = new Set<string>();
   private counter = 0;
 
   /**
-   * A fresh action ID for an action submitted without one: in its own namespace, and never one
-   * already resolved, so it can't collide with a caller's explicit ID (#661 review).
+   * A fresh action ID for an action submitted without one: in its own namespace, never one
+   * already resolved, so it can't collide with a caller's explicit ID.
    */
   next(kind: string): string {
     let id: string;
-    do id = `auto:${kind}-${++this.counter}`;
-    while (this.seen.has(id));
+    do id = `${autoPrefix}${kind}-${++this.counter}`;
+    while (this.explicit.has(id));
     return id;
   }
 
   /** Whether this action ID has already resolved. */
   has(actionId: string): boolean {
-    return this.seen.has(actionId);
+    if (this.explicit.has(actionId)) return true;
+    const serial = autoSerial(actionId);
+    // Every automatic ID up to the counter has been issued; one resolves or is never reused.
+    return serial !== null && serial <= this.counter && this.issued.has(serial);
   }
 
-  /** Remember a resolved action ID (bounded: the oldest are forgotten). */
+  /** Serial numbers issued and resolved, so a failed automatic action's ID isn't burned. */
+  private readonly issued = new Set<number>();
+
+  /** Remember a resolved action ID. */
   remember(actionId: string): void {
-    this.seen.add(actionId);
+    const serial = autoSerial(actionId);
+    if (serial !== null && serial <= this.counter) this.issued.add(serial);
+    else this.explicit.add(actionId);
+  }
+
+  /** What a save keeps. */
+  get state(): ActionLedgerState {
+    return { counter: this.counter, explicit: [...this.explicit] };
+  }
+
+  /** A ledger as it was saved: every automatic ID up to its counter counts as resolved. */
+  static restore(saved: ActionLedgerState | undefined): ActionLedger {
+    const ledger = new ActionLedger();
+    if (!saved) return ledger;
+    ledger.counter = saved.counter;
+    for (let serial = 1; serial <= saved.counter; serial++) ledger.issued.add(serial);
+    for (const id of saved.explicit) ledger.explicit.add(id);
+    return ledger;
   }
 }
