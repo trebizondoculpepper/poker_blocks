@@ -1584,3 +1584,7 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 ## Ordered card ownership target (#550)
 
 [Ordered cards and authoritative ownership](ordered-card-ownership.md) specifies index-zero pop, seeded shuffle, atomic zone transfers, run-level inventory, discardable composition, stage/round collection order and compatible save boundaries. It supersedes random-index drawing as the target; legacy reconstruction receipts are not live cards. Runtime migration remains #551/#574/#472 and the linked lifecycle work.
+
+## Concrete visual scheduling interface (#545)
+
+[Visual-event scheduler interface](visual-event-interface.md) finalizes the shared API, clock boundary, admission/active/depth/lifetime limits, overload summary path, cancellation and migration acceptance after #541. Its capacity probe is reproducible evidence for bounds, not a production performance benchmark. The earlier hidden-tab pause, scheduled-time late starts and committed-play narration order are adopted as reversible engineering defaults under the owner's instruction; no further owner decision blocks this implementation.
