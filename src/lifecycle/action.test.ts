@@ -207,7 +207,7 @@ describe("the action budget reaches commands and outcomes (#661 review)", () => 
     expect(first.game.discard([first.hand[1]!.id])).not.toBeNull();
     // Even a caller using the automatic namespace is skipped, not collided with.
     const second = limitedRun({ events: 128, operations: 4096 });
-    expect(second.game.discard([second.hand[0]!.id], "auto:discard-1")).not.toBeNull();
+    expect(second.game.discard([second.hand[0]!.id], "auto:1")).not.toBeNull();
     expect(second.game.discard([second.hand[1]!.id])).not.toBeNull();
   });
 });
@@ -293,5 +293,15 @@ describe("action identity survives save and Continue (#661 review)", () => {
     expect(restored.discard([card.id])).not.toBeNull();
     expect(restored.actionFacts[0]!.actionId).not.toBe(usedAuto);
     expect(restored.actionFacts[0]!.actionId).not.toBe("mine");
+  });
+});
+
+describe("automatic IDs compare in full (#661 review)", () => {
+  it("does not alias a caller's ID with an automatic one of the same number", () => {
+    const ledger = new ActionLedger();
+    ledger.remember(ledger.next("discard"));
+    // Shaped like the old automatic form, but never resolved: not a duplicate.
+    expect(ledger.has("auto:play-1")).toBe(false);
+    expect(ledger.has("auto:1")).toBe(true);
   });
 });

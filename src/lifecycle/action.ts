@@ -163,10 +163,12 @@ function structuredCloneable<T>(value: T, seen = new WeakMap<object, unknown>())
 export type ActionLedgerState = { counter: number; explicit: readonly string[] };
 
 const autoPrefix = "auto:";
-/** The serial number of an automatic ID (`auto:<kind>-<n>`), or null for a caller's own ID. */
+/**
+ * The serial number of an automatic ID, which is exactly `auto:<n>` (the serial is its whole
+ * identity, #661 review), or null for any other ID, compared in full as a caller's own.
+ */
 function autoSerial(actionId: string): number | null {
-  if (!actionId.startsWith(autoPrefix)) return null;
-  const match = /-(\d+)$/.exec(actionId);
+  const match = /^auto:(\d+)$/.exec(actionId);
   return match ? Number(match[1]) : null;
 }
 
@@ -183,9 +185,9 @@ export class ActionLedger {
    * A fresh action ID for an action submitted without one: in its own namespace, never one
    * already resolved, so it can't collide with a caller's explicit ID.
    */
-  next(kind: string): string {
+  next(_kind: string): string {
     let id: string;
-    do id = `${autoPrefix}${kind}-${++this.counter}`;
+    do id = `${autoPrefix}${++this.counter}`;
     while (this.explicit.has(id));
     return id;
   }
