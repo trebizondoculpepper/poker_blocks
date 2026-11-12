@@ -53,7 +53,8 @@ describe("GameRun.destroyBlock", () => {
     const { score, movesLeft, discardsLeft } = game.state.round;
     expect(game.destroyBlock(placed.block.id, "manual")).toEqual(placed);
     expect(game.state.field).toEqual([]);
-    expect(game.state.discardPile).toContain(placed.block);
+    // Destroyed for good (#659): not in the discard pile, so it can never come back.
+    expect(game.state.discardPile).not.toContain(placed.block);
     expect(game.state.round).toMatchObject({ score, movesLeft, discardsLeft });
   });
 
