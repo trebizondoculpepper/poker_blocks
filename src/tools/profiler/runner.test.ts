@@ -62,7 +62,8 @@ function testCase(memory: { geometries: number }, leak = false): ProfilingCase {
   };
 }
 
-const options: RunOptions = { frames: 10, warmupFrames: 3, seed: 1 };
+// One object and a small collection: the same sets as the standard sweep, at test speed.
+const options: RunOptions = { frames: 10, warmupFrames: 3, seed: 1, counts: [1, 4] };
 
 describe("profiler statistics (#618)", () => {
   it("gives the median and nearest-rank 95th percentile", () => {
@@ -83,19 +84,19 @@ describe("profiler statistics (#618)", () => {
 });
 
 describe("the profiler runner (#618)", () => {
-  it("samples a baseline, one object and the collection, and finds no leak", async () => {
+  it("samples a baseline and each requested count, and finds no leak", async () => {
     const { env, memory } = fakeEnvironment();
     const runner = createProfilerRunner(env);
     const run = await runner.run([["cube", testCase(memory)]], options);
     const [result] = run.results;
     expect(run.cancelled).toBe(false);
     expect(result!.baseline.objects).toBe(0);
-    expect(result!.one.objects).toBe(1);
-    expect(result!.collection.objects).toBe(4);
-    expect(result!.one.cpu.samples).toBe(10);
+    expect(result!.counts[0]!.set.objects).toBe(1);
+    expect(result!.counts[1]!.set.objects).toBe(4);
+    expect(result!.counts[0]!.set.cpu.samples).toBe(10);
     // Rendering costs 1 ms per object in the fake, so the collection's CPU time is higher.
-    expect(result!.collection.cpu.median).toBeGreaterThan(result!.one.cpu.median);
-    expect(result!.relative.oneCpu).toBe(1);
+    expect(result!.counts[1]!.set.cpu.median).toBeGreaterThan(result!.counts[0]!.set.cpu.median);
+    expect(result!.counts[0]!.relative.cpu).toBe(1);
     expect(result!.leaked.geometries).toBe(0);
     expect(runner.scene.children.some((child) => child.userData.profiled)).toBe(false);
   });
@@ -111,8 +112,8 @@ describe("the profiler runner (#618)", () => {
     const { env, memory } = fakeEnvironment();
     const run = await createProfilerRunner(env).run([["cube", testCase(memory)]], options);
     expect(run.gpuTiming).toBe("unavailable");
-    expect(run.results[0]!.one.gpu).toBeNull();
-    expect(run.results[0]!.relative.oneGpu).toBeNull();
+    expect(run.results[0]!.counts[0]!.set.gpu).toBeNull();
+    expect(run.results[0]!.counts[0]!.relative.gpu).toBeNull();
   });
 
   it("uses GPU results when available and drops disjoint ones", async () => {
@@ -140,7 +141,7 @@ describe("the profiler runner (#618)", () => {
     };
     const { env, memory } = fakeEnvironment(timer);
     const run = await createProfilerRunner(env).run([["cube", testCase(memory)]], options);
-    const one = run.results[0]!.one;
+    const one = run.results[0]!.counts[0]!.set;
     expect(run.gpuTiming).toBe("available");
     expect(one.gpu?.median).toBe(2);
     expect(one.gpuRejected).toBeGreaterThan(0);
@@ -277,8 +278,8 @@ describe("GPU results stay with their own set (#625 review)", () => {
     const [result] = run.results;
     // Each set holds exactly its own frames: no warm-up values, nothing from the set before.
     expect(result!.baseline.gpu).toEqual({ median: 0.5, p95: 0.5, samples: 10 });
-    expect(result!.one.gpu).toEqual({ median: 1.5, p95: 1.5, samples: 10 });
-    expect(result!.collection.gpu).toEqual({ median: 4.5, p95: 4.5, samples: 10 });
+    expect(result!.counts[0]!.set.gpu).toEqual({ median: 1.5, p95: 1.5, samples: 10 });
+    expect(result!.counts[1]!.set.gpu).toEqual({ median: 4.5, p95: 4.5, samples: 10 });
   });
 });
 
@@ -339,16 +340,19 @@ describe("the GPU timer (#625 review)", () => {
 });
 
 describe("the runner's fairness and cancellation (#625 review)", () => {
-  it("sees every set of a case from the same camera position", async () => {
+  it("frames each count for itself, from one fixed viewport, and records the framing (#721)", async () => {
+    // doc/automatic-profiling.md: each count gets its fixed-grid framing; per-object screen area
+    // shrinks as the count grows, so the framing is recorded with every count.
     const { env, memory } = fakeEnvironment();
-    const seen = new Set<string>();
-    const render = env.renderer.render.bind(env.renderer);
-    env.renderer.render = (scene, camera) => {
-      seen.add(camera.position.toArray().join(","));
-      render(scene, camera);
-    };
-    await createProfilerRunner(env).run([["cube", testCase(memory)]], options);
-    expect(seen.size).toBe(1);
+    const run = await createProfilerRunner(env).run([["cube", testCase(memory)]], {
+      ...options,
+      counts: [1, 4, 9],
+    });
+    const framings = run.results[0]!.counts.map(({ framing }) => framing);
+    expect(framings.map(({ gridSide }) => gridSide)).toEqual([1, 2, 3]);
+    const distances = framings.map(({ cameraDistance }) => cameraDistance);
+    expect(distances).toEqual([...distances].sort((a, b) => a - b));
+    expect(new Set(distances).size).toBe(3);
   });
 
   it("honours a cancel that arrives while the last set's GPU queries drain", async () => {
@@ -625,5 +629,32 @@ describe("representative hosts (#712)", () => {
     expect(run.results[0]!.host).toBe("board");
     expect(lightsWhileBuilding).toBeGreaterThan(0);
     expect(runner.scene.children.filter((child) => (child as THREE.Light).isLight)).toEqual([]);
+  });
+});
+
+describe("the count matrix (#721)", () => {
+  it("measures the standard [1, 10, 50] when no counts are given, each keyed by its count", async () => {
+    const { env, memory } = fakeEnvironment();
+    const { counts: _counts, ...standard } = options;
+    const run = await createProfilerRunner(env).run([["cube", testCase(memory)]], standard);
+    const [result] = run.results;
+    expect(result!.counts.map(({ count, set }) => [count, set.objects])).toEqual([
+      [1, 1],
+      [10, 10],
+      [50, 50],
+    ]);
+    // GPU timing unavailable stays null for every count, never zero.
+    expect(
+      result!.counts.every(({ set, relative }) => set.gpu === null && relative.gpu === null),
+    ).toBe(true);
+  });
+
+  it("measures exactly the counts asked for, in order", async () => {
+    const { env, memory } = fakeEnvironment();
+    const run = await createProfilerRunner(env).run([["cube", testCase(memory)]], {
+      ...options,
+      counts: [2, 3, 7],
+    });
+    expect(run.results[0]!.counts.map(({ count }) => count)).toEqual([2, 3, 7]);
   });
 });

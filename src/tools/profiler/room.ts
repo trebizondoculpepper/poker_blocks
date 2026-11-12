@@ -21,19 +21,41 @@ import {
   profilingCases,
   type ProfiledObject,
 } from "./cases";
-import { costMeasures, profilerExport, sortedByCost, type ProfilerEnvironmentInfo } from "./export";
+import {
+  costMeasures,
+  largestSet,
+  profilerExport,
+  sortedByCost,
+  type ProfilerEnvironmentInfo,
+} from "./export";
 import { createGpuTimer } from "./gpu-timer";
 import { createHostTracker } from "./host-tracker";
-import { createProfilerRunner, type CaseResult, type RunOptions } from "./runner";
+import { createProfilerRunner, standardCounts, type CaseResult, type RunOptions } from "./runner";
 import "./room.css";
 
-/** Bounded positive whole numbers from the count and frames inputs; defaults when unreadable. */
-export function runSettings(countText: string, framesText: string) {
+/**
+ * The counts and frames inputs as run settings (#721): counts are a list of positive whole numbers
+ * (at most 200 each), deduplicated and ascending, the standard [1, 10, 50] when none are readable;
+ * frames are bounded too.
+ */
+export function runSettings(countsText: string, framesText: string) {
   const whole = (text: string, fallback: number, min: number, max: number) => {
     const number = Math.round(Number(text));
     return Number.isFinite(number) && number >= min ? Math.min(max, number) : fallback;
   };
-  return { count: whole(countText, 25, 1, 200), frames: whole(framesText, 120, 10, 2000) };
+  const counts = [
+    ...new Set(
+      countsText
+        .split(/[\s,]+/)
+        .filter(Boolean)
+        .map((text) => whole(text, 0, 1, 200))
+        .filter((count) => count > 0),
+    ),
+  ].sort((a, b) => a - b);
+  return {
+    counts: counts.length ? counts : [...standardCounts],
+    frames: whole(framesText, 120, 10, 2000),
+  };
 }
 
 /** The room's composed configuration: where Back goes, and the catalogs it must cover (#710). */
@@ -63,7 +85,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     </header>
     <aside class="profiler-room-controls">
       <fieldset data-part="cases"><legend>Cases</legend></fieldset>
-      <label>Collection <input data-part="count" type="number" min="1" max="200" value="25" /></label>
+      <label>Counts <input data-part="counts" type="text" value="1, 10, 50" /></label>
       <label>Frames per set <input data-part="frames" type="number" min="10" max="2000" value="120" /></label>
       <label>Resolution <select data-part="resolution">
         <option value="640x360">640 × 360</option>
@@ -91,7 +113,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     <div class="profiler-room-main">
       <div class="profiler-room-stage" data-part="stage"></div>
       <table class="profiler-room-results">
-        <thead><tr><th>Case</th><th>Family</th><th>Objects</th><th>GPU ms</th><th>CPU ms</th><th>Frame ms (p95)</th><th>Calls</th><th>Triangles</th><th>Create ms</th><th>Leak</th></tr></thead>
+        <thead><tr><th>Case</th><th>Family</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Frame ms (p95), largest</th><th>Calls, largest</th><th>Triangles, largest</th><th>Create ms</th><th>Leak</th></tr></thead>
         <tbody data-part="results"></tbody>
       </table>
     </div>`;
@@ -188,12 +210,13 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
         row.append(
           cell(result.phase ? `${result.label} (${result.phase})` : result.label),
           cell(result.family),
-          cell(String(result.collection.objects)),
-          cell(ms(result.collection.gpu?.median)),
-          cell(ms(result.collection.cpu.median)),
-          cell(`${ms(result.collection.frame.median)} (${ms(result.collection.frame.p95)})`),
-          cell(String(result.collection.counts.calls)),
-          cell(String(result.collection.counts.triangles)),
+          // One value per count, in the order run: "1 / 10 / 50".
+          cell(result.counts.map(({ count }) => count).join(" / ")),
+          cell(result.counts.map(({ set }) => ms(set.gpu?.median)).join(" / ")),
+          cell(result.counts.map(({ set }) => ms(set.cpu.median)).join(" / ")),
+          cell(`${ms(largestSet(result)?.frame.median)} (${ms(largestSet(result)?.frame.p95)})`),
+          cell(String(largestSet(result)?.counts.calls ?? "n/a")),
+          cell(String(largestSet(result)?.counts.triangles ?? "n/a")),
           cell(ms(result.creation.build + result.creation.firstFrame)),
           cell(
             result.leaked.geometries || result.leaked.textures
@@ -284,12 +307,12 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     // The settings a run uses are fixed and recorded as it starts: later changes to the controls
     // affect the next run, never this run's metadata (#640 review).
     const settings = environment();
-    const { count, frames } = runSettings(value("count"), value("frames"));
-    part<HTMLInputElement>("count").value = String(count);
+    const { counts, frames } = runSettings(value("counts"), value("frames"));
+    part<HTMLInputElement>("counts").value = counts.join(", ");
     part<HTMLInputElement>("frames").value = String(frames);
     controller = new AbortController();
     const options: RunOptions = {
-      count,
+      counts,
       frames,
       warmupFrames: 30,
       seed: 527,

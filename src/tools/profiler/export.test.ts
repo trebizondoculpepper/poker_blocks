@@ -19,9 +19,12 @@ const result = (id: string, gpu: number | null, cpu: number): CaseResult => ({
   host: "board",
   creation: { build: 1, firstFrame: 2 },
   baseline: set(gpu === null ? null : 0.1, 0.1),
-  one: set(gpu, cpu),
-  collection: set(gpu, cpu),
-  relative: { oneGpu: gpu, oneCpu: cpu, collectionGpu: gpu },
+  counts: [1, 10, 50].map((count) => ({
+    count,
+    framing: { gridSide: Math.ceil(Math.sqrt(count)), cameraDistance: 5, fov: 40 },
+    set: set(gpu === null ? null : gpu * count, cpu * count),
+    relative: { gpu, cpu },
+  })),
   leaked: { geometries: 0, textures: 0 },
 });
 
@@ -41,7 +44,13 @@ describe("profiler export (#619)", () => {
     };
     const exported = profilerExport(
       run,
-      { frames: 120, warmupFrames: 30, seed: 527, count: 25, signal: new AbortController().signal },
+      {
+        frames: 120,
+        warmupFrames: 30,
+        seed: 527,
+        counts: [1, 10, 50],
+        signal: new AbortController().signal,
+      },
       {
         userAgent: "test",
         gpu: null,
@@ -75,14 +84,45 @@ describe("profiler export (#619)", () => {
       new Date("2026-11-12T00:00:00Z"),
     );
     const round = JSON.parse(JSON.stringify(exported));
-    expect(round.options).toEqual({ frames: 120, warmupFrames: 30, seed: 527, count: 25 });
+    expect(round.options).toEqual({
+      frames: 120,
+      warmupFrames: 30,
+      seed: 527,
+      counts: [1, 10, 50],
+    });
     expect(round.gpuTiming).toBe("unavailable");
-    expect(round.results[0].collection.gpu).toBeNull();
+    expect(round.results[0].counts.map(({ set }: { set: { gpu: unknown } }) => set.gpu)).toEqual([
+      null,
+      null,
+      null,
+    ]);
     expect(round.uncovered).toEqual([{ family: "material", missing: ["material:steel"] }]);
     expect(round.coverage.complete).toBe(false);
     expect(round.results[0].unit).toEqual({ kind: "group", size: 4 });
     expect(round.coverage.catalogs[1]).toMatchObject({ catalog: "rack item", installed: false });
-    expect(round.method.version).toBe(1);
+    expect(round.method.version).toBe(2);
     expect(round.exportedAt).toBe("2026-11-12T00:00:00.000Z");
+  });
+});
+
+describe("export schema versions (#721)", () => {
+  it("reads version 2, recognises version 1 as old results, and refuses anything else", async () => {
+    const { readProfilerExport } = await import("./export");
+    const current = JSON.stringify({ method: { version: 2 }, results: [] });
+    expect(readProfilerExport(current).kind).toBe("current");
+    const old = JSON.stringify({ method: { version: 1 }, results: [{ collection: {} }] });
+    expect(readProfilerExport(old)).toEqual({ kind: "legacy", version: 1 });
+    expect(() => readProfilerExport(JSON.stringify({ method: { version: 9 } }))).toThrow(
+      /version: 9/,
+    );
+  });
+
+  it("ranks by the largest count, missing GPU time last", async () => {
+    const { sortedByCost } = await import("./export");
+    const ranked = sortedByCost(
+      [result("small", 1, 1), result("none", null, 9), result("big", 3, 1)],
+      "gpu",
+    );
+    expect(ranked.map(({ id }) => id)).toEqual(["big", "small", "none"]);
   });
 });

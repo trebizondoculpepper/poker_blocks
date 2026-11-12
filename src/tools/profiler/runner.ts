@@ -81,8 +81,8 @@ export type ProfilerEnvironment = {
 };
 
 export type RunOptions = {
-  /** Objects in the collection; a case's own default when omitted. */
-  count?: number;
+  /** The collection sizes measured, in order; the standard [1, 10, 50] when omitted. */
+  counts?: readonly number[];
   /** Frames sampled per set. */
   frames: number;
   /** Frames rendered before sampling, to compile shaders and settle. */
@@ -105,6 +105,24 @@ export type SampleSet = {
   gpuRejected: number;
 };
 
+/** One count's measurement and its baseline-relative estimate (not an additive per-object cost). */
+/**
+ * How a count was framed: its square grid and the camera's distance and field of view. A fixed
+ * viewport fits each count, so per-object screen area shrinks as the count grows; compare a
+ * series as a fixed-viewport collection test, not as constant per-object cost.
+ */
+export type Framing = { gridSide: number; cameraDistance: number; fov: number };
+
+export type CountResult = {
+  count: number;
+  framing: Framing;
+  set: SampleSet;
+  relative: { gpu: number | null; cpu: number };
+};
+
+/** The standard sweep's counts (doc/automatic-profiling.md, "Sweep and representative host"). */
+export const standardCounts: readonly number[] = [1, 10, 50];
+
 export type CaseResult = {
   id: string;
   family: string;
@@ -119,10 +137,8 @@ export type CaseResult = {
   /** Milliseconds to build one object and to render its first (compiling) frame. */
   creation: { build: number; firstFrame: number };
   baseline: SampleSet;
-  one: SampleSet;
-  collection: SampleSet;
-  /** Baseline-relative estimates (not additive per-object costs). */
-  relative: { oneGpu: number | null; oneCpu: number; collectionGpu: number | null };
+  /** One record per requested count, in the order run (#721): never fixed one/collection slots. */
+  counts: CountResult[];
   /** Resources left after disposal compared with before the case: positive means a leak. */
   leaked: { geometries: number; textures: number };
 };
@@ -180,7 +196,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     });
   }
 
-  const counts = (): RendererCounts => ({
+  const rendererCounts = (): RendererCounts => ({
     calls: env.renderer.info.render.calls,
     triangles: env.renderer.info.render.triangles,
     geometries: env.renderer.info.memory.geometries,
@@ -202,10 +218,12 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
   }
 
   /** Fit the camera so the collection's grid fills a fixed share of the view. */
-  function frameFor(count: number): void {
+  function frameFor(count: number): Framing {
     const side = Math.ceil(Math.sqrt(Math.max(1, count)));
-    camera.position.set(0, 0, 3 + side * 2.2);
+    const distance = 3 + side * 2.2;
+    camera.position.set(0, 0, distance);
     camera.lookAt(0, 0, 0);
+    return { gridSide: side, cameraDistance: distance, fov: camera.fov };
   }
 
   async function sample(
@@ -223,7 +241,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     let spoiled = env.hidden();
     const changesBefore = env.visibilityChanges();
     let last = env.now();
-    let setCounts = counts();
+    let setCounts = rendererCounts();
     for (let i = 0; i < options.frames; i++) {
       check();
       await waitFrame();
@@ -231,7 +249,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       frames.push(now - last);
       last = now;
       cpu.push(frame(objects, frames.at(-1)! / 1000));
-      if (i === 0) setCounts = counts();
+      if (i === 0) setCounts = rendererCounts();
       gpu.push(...env.timer.poll());
       if (env.hidden() || env.visibilityChanges() !== changesBefore) spoiled = true;
     }
@@ -328,13 +346,13 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     invalidated: string[],
   ): Promise<CaseResult> {
     const label = phase ? `${id}:${phase}` : id;
-    const count = options.count ?? profile.defaultCount ?? 25;
+    const counts = options.counts ?? standardCounts;
     // The case's host sets the scene up before anything is built, and is undone after (#712).
     const host = profile.host ?? defaultProfilingHost;
     const undoHost = prepareHost(host);
     try {
       return {
-        ...(await measureCase(id, profile, phase, options, check, invalidated, label, count)),
+        ...(await measureCase(id, profile, phase, options, check, invalidated, label, counts)),
         host,
       };
     } finally {
@@ -355,52 +373,59 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     check: () => void,
     invalidated: string[],
     label: string,
-    count: number,
+    counts: readonly number[],
   ): Promise<Omit<CaseResult, "host">> {
-    // One framing for every set of the case, chosen for its collection: baseline, one object and
-    // collection are all seen from the same place, so each object covers the same screen area
-    // in every set (#625 review).
-    frameFor(count);
+    // Each count has its own fixed-grid framing (doc/automatic-profiling.md, "Sweep and
+    // representative host"): a fixed-viewport collection test, so per-object screen area shrinks
+    // as the count grows. The empty baseline is taken once per case, in this case's host.
+    frameFor(1);
     await warm([], options, check);
     const baseline = await measured(`${label}/baseline`, [], options, check, invalidated);
 
-    const buildStart = env.now();
-    let objects = await build(profile, 1, options, phase, check);
-    const buildTime = env.now() - buildStart;
+    const less = (a: number | undefined, b: number | undefined) =>
+      a === undefined || b === undefined ? null : a - b;
+    const measuredCounts: CountResult[] = [];
+    let creation: CaseResult["creation"] | null = null;
+    let objects: ProfiledObject[] = [];
     try {
-      // The compiling first frame is inside the cleanup, so a case that throws here is still
-      // removed and freed (#625 review).
-      const firstStart = env.now();
-      frame(objects, 0);
-      const firstFrame = env.now() - firstStart;
-      await warm(objects, options, check);
-      const one = await measured(`${label}/one`, objects, options, check, invalidated);
-      remove(objects);
-      // Freed: a cancel during the next build must not free them again.
-      objects = [];
-      objects = await build(profile, count, options, phase, check);
-      await warm(objects, options, check);
-      const collection = await measured(
-        `${label}/collection`,
-        objects,
-        options,
-        check,
-        invalidated,
-      );
-      remove(objects);
-      objects = [];
+      for (const count of counts) {
+        const framing = frameFor(count);
+        const buildStart = env.now();
+        objects = await build(profile, count, options, phase, check);
+        const buildTime = env.now() - buildStart;
+        // The compiling first frame is inside the cleanup, so a case that throws here is still
+        // removed and freed (#625 review).
+        const firstStart = env.now();
+        frame(objects, 0);
+        const firstFrame = env.now() - firstStart;
+        // Creation is reported for one object: the first count's build, divided out.
+        creation ??= { build: buildTime / count, firstFrame };
+        await warm(objects, options, check);
+        const set = await measured(`${label}/${count}`, objects, options, check, invalidated);
+        remove(objects);
+        // Freed: a cancel during the next build must not free them again.
+        objects = [];
+        measuredCounts.push({
+          count,
+          framing,
+          set,
+          // Baseline-relative estimates: not additive per-object costs.
+          relative: {
+            gpu: less(set.gpu?.median, baseline.gpu?.median),
+            cpu: set.cpu.median - baseline.cpu.median,
+          },
+        });
+      }
       frame([], 0);
       // Leaks across a repeated cycle: by now anything a case creates once and shares (a cached
       // texture, a compiled program) already exists, so one more build, render and dispose of a
       // single object should leave the counts where they were.
-      const before = counts();
+      const before = rendererCounts();
       const again = await build(profile, 1, options, phase, check);
       frame(again, 0);
       remove(again);
       frame([], 0);
-      const after = counts();
-      const less = (a: number | undefined, b: number | undefined) =>
-        a === undefined || b === undefined ? null : a - b;
+      const after = rendererCounts();
       return {
         id,
         family: profile.family,
@@ -409,15 +434,9 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
         unit: profile.unit ?? oneBlock,
         ...(profile.variant ? { variant: profile.variant } : {}),
         sampling: "steady" as ProfilingPhase["sampling"],
-        creation: { build: buildTime, firstFrame },
+        creation: creation ?? { build: 0, firstFrame: 0 },
         baseline,
-        one,
-        collection,
-        relative: {
-          oneGpu: less(one.gpu?.median, baseline.gpu?.median),
-          oneCpu: one.cpu.median - baseline.cpu.median,
-          collectionGpu: less(collection.gpu?.median, baseline.gpu?.median),
-        },
+        counts: measuredCounts,
         leaked: {
           geometries: after.geometries - before.geometries,
           textures: after.textures - before.textures,
