@@ -350,7 +350,12 @@ describe("score facts (#658, part 4)", () => {
     expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
     expect(game.play({ cardId: hand[1]!.id, targetId: hand[0]!.id, face: "east" })).not.toBeNull();
     const score = game.actionFacts.filter(({ phase }) => phase === "score").map(({ type }) => type);
-    expect(score).toEqual(["score.lineFinalized", "score.allLinesFinalized", "score.totalApplied"]);
+    expect(score).toEqual([
+      "score.lineFinalized",
+      "score.allLinesFinalized",
+      "score.beforeTotalApplied",
+      "score.totalApplied",
+    ]);
     const total = game.lastScoredLines.reduce((sum, { points }) => sum + points, 0);
     const applied = game.actionFacts.find(({ type }) => type === "score.totalApplied")!;
     expect((applied.payload as { amount: number }).amount).toBe(total);
@@ -424,5 +429,107 @@ describe("a finalized line's card IDs are frozen (#696 review)", () => {
     expect(refused).toBe(true);
     const line = game.actionFacts.find(({ type }) => type === "score.lineFinalized")!;
     expect(line.subjectIds).not.toContain("intruder");
+  });
+});
+
+/** A passive whose rules adjust the play's working aggregate. */
+const aggregate = (effects: unknown[]) => ({
+  traitId: "passive.event-rules",
+  eventRules: [
+    {
+      on: "score.beforeTotalApplied",
+      select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+      where: { id: "always", config: {} },
+      effects,
+    },
+  ],
+});
+
+describe("the working aggregate (#658, part 5)", () => {
+  it("lets a score.beforeTotalApplied rule change the play's total, applied once", async () => {
+    const game = await withListener(aggregate([{ id: "add-line-score", config: { amount: 10 } }]));
+    const before = game.state.round.score;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    const lines = game.lastScoredLines.reduce((sum, { points }) => sum + points, 0);
+    expect(game.state.round.score).toBe(before + lines + 10);
+    const applied = game.actionFacts.filter(({ type }) => type === "score.totalApplied");
+    expect(applied).toHaveLength(1);
+    expect((applied[0]!.payload as { amount: number }).amount).toBe(lines + 10);
+  });
+
+  it("commits the commands an aggregate rule returns", async () => {
+    const game = await withListener(aggregate([{ id: "add-coins", config: { amount: 5 } }]));
+    const coins = game.state.coins;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(game.state.coins).toBe(coins + 5);
+  });
+
+  it("never rolls an aggregate rule's dice during line scoring", async () => {
+    const { scoreFieldWithPassives } = await import("../passive-effects");
+    const never = () => {
+      throw new Error("drew a random value");
+    };
+    const roll = { id: "add-line-score", config: { amount: { valueSource: "roll", sides: 6 } } };
+    const game = await withListener(aggregate([roll]));
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(() =>
+      scoreFieldWithPassives(game.state.field, game.state.passiveRack, undefined, never),
+    ).not.toThrow();
+  });
+});
+
+describe("the aggregate is delivered like any phase (#697 review)", () => {
+  it("reaches a subscribed trait's respond, and records its follow-up with its cause", async () => {
+    const { passiveTraits } = await import("../passives");
+    if (!passiveTraits.has("test.aggregate-echo"))
+      passiveTraits.register("test.aggregate-echo", {
+        id: "test.aggregate-echo",
+        listensTo: ["score.beforeTotalApplied"],
+        respond: () => [{ type: "test.aggregate-heard" }],
+      });
+    const game = await withListener({ traitId: "test.aggregate-echo" });
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    const phase = game.actionFacts.find(({ type }) => type === "score.beforeTotalApplied")!;
+    const heard = game.actionFacts.find(({ type }) => type === "test.aggregate-heard")!;
+    expect(heard.parentId).toBe(phase.eventId);
+    expect(Object.keys(phase.payload as object)).not.toContain("working");
+  });
+
+  it("commits each listener's commands before the next listener runs", async () => {
+    const { passiveTraits, createPassiveBlock } = await import("../passives");
+    const seen: number[] = [];
+    const probe = { read: () => 0 };
+    if (!passiveTraits.has("test.aggregate-coin-probe"))
+      passiveTraits.register("test.aggregate-coin-probe", {
+        id: "test.aggregate-coin-probe",
+        listensTo: ["score.beforeTotalApplied"],
+        respond: () => {
+          seen.push(probe.read());
+          return [];
+        },
+      });
+    const rules = sandboxRunRules(demoRunRules);
+    const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    const first = createPassiveBlock("scrapper", "agg.first");
+    opening.installPassive({
+      ...first,
+      traits: { ...first.traits, passive: aggregate([{ id: "add-coins", config: { amount: 5 } }]) },
+    } as unknown as typeof first);
+    const second = createPassiveBlock("scrapper", "agg.second");
+    opening.installPassive({
+      ...second,
+      traits: { ...second.traits, passive: { traitId: "test.aggregate-coin-probe" } },
+    });
+    const game = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      opening.snapshot(),
+      () => 0,
+    );
+    probe.read = () => game.state.coins;
+    const coins = game.state.coins;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(seen).toEqual([coins + 5]);
   });
 });

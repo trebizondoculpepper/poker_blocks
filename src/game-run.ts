@@ -48,7 +48,8 @@ import {
 } from "./passives";
 import {
   crossingCells,
-  passiveActivations,
+  beforeTotalPhase,
+  resolvePassiveRules,
   withOperationCounter,
   scoreFieldWithPassives,
   type PassiveScoredLine,
@@ -282,7 +283,10 @@ export class GameRun {
     // (#661 review); a fact from an earlier drain of this action is found the same way.
     for (const event of delivered) {
       const cause = this.passiveEvents.parentOf(event);
-      const envelope = action.record(event.type, event, {
+      // A working-value capability belongs to the mutable phase, never to the recorded fact.
+      const fact: GameEvent = { ...event };
+      delete fact.working;
+      const envelope = action.record(event.type, fact, {
         phase,
         parent: cause ? this.recordedFacts.get(cause) : null,
         batchId,
@@ -688,6 +692,8 @@ export class GameRun {
 
   /** The reactions the last play set off, in field order, for presentation (#366). */
   lastReactions: readonly AppliedReaction[] = [];
+  /** The aggregate rules that changed the last play's total, for presentation. */
+  lastTotalActivations: readonly RuleActivation[] = [];
   /** The steps the composed playfield controllers attached, for the run's lifetime. */
   private readonly playPhases: PlayPhases;
 
@@ -780,12 +786,31 @@ export class GameRun {
       });
     this.passiveEvents.emit({ type: "score.allLinesFinalized", amount: gained });
     this.drainPhase(context, "score", batchId);
-    this.runStats = recordPlay(this.runStats, gained, placed.length);
+    // The working aggregate: score.beforeTotalApplied may change the play's delta, never a
+    // finalized line. It is delivered like any phase, to its subscribers in order: each
+    // listener's rules read and write the working total and commit their commands before the
+    // next listener runs (#697 review). The result is rounded once, never below zero.
+    let working = gained;
+    const aggregate: RuleActivation[] = [];
+    this.passiveEvents.emit({
+      type: beforeTotalPhase,
+      amount: gained,
+      working: Object.freeze({
+        read: () => working,
+        write: (value: number) => {
+          working = value;
+        },
+      }),
+    });
+    this.drainPhase(context, "score", batchId, aggregate);
+    this.lastTotalActivations = aggregate;
+    const total = { value: Math.max(0, Math.round(working)) };
+    this.runStats = recordPlay(this.runStats, total.value, placed.length);
     this.currentState = {
       ...this.currentState,
-      round: { ...this.currentState.round, score: scoreBefore + gained },
+      round: { ...this.currentState.round, score: scoreBefore + total.value },
     };
-    this.passiveEvents.emit({ type: "score.totalApplied", amount: gained });
+    this.passiveEvents.emit({ type: "score.totalApplied", amount: total.value });
     this.drainPhase(context, "score", batchId);
 
     // 4. After score: its configured steps (reactions, then pending detonations).
@@ -817,13 +842,18 @@ export class GameRun {
   }
 
   /** Deliver and record what is queued, as this phase's facts, against the action's budget. */
-  private drainPhase(context: ActionContext, phase: string, batchId: string): void {
+  private drainPhase(
+    context: ActionContext,
+    phase: string,
+    batchId: string,
+    activations: RuleActivation[] = [],
+  ): void {
     this.recordDelivered(
       context,
       phase,
       this.passiveEvents.drain(
         undefined,
-        (block, event) => this.commitRules(block, event),
+        (block, event) => this.commitRules(block, event, activations),
         this.budgetFor(context, phase),
       ),
       batchId,
@@ -840,7 +870,14 @@ export class GameRun {
     activations: RuleActivation[] = [],
   ): GameEvent[] {
     // Every rule it evaluates is charged by the action's counter (see transact).
-    const fired = passiveActivations(block, event, this.random);
+    // A mutable phase's working value, if the event carries one, is read and written back.
+    const { value, activations: fired } = resolvePassiveRules(
+      block,
+      event,
+      this.random,
+      event.working?.read() ?? 0,
+    );
+    event.working?.write(value);
     activations.push(...fired);
     return commitCommands(
       fired.flatMap(({ commands }) => commands),

@@ -239,6 +239,9 @@ function scoreLines(
   });
 }
 
+/** The aggregate phase: may change a play's total delta, never a finalized line (#682 review). */
+export const beforeTotalPhase = "score.beforeTotalApplied";
+
 /** For callers without the run's random source: fine until a rule tries to draw from it. */
 function noRandomSource(): number {
   throw new Error("This rule draws a random value: pass the run's random source");
@@ -268,10 +271,22 @@ export function passiveActivations(
   event: Readonly<GameEvent>,
   random: () => number = noRandomSource,
 ): RuleActivation[] {
-  // A hook's rules resolve their value sources (a roll) once, as it is delivered (#682 review).
+  return resolvePassiveRules(passive, event, random, 0).activations;
+}
+
+/**
+ * One listener's rules for an event, over a working value: its value sources (a roll) resolve
+ * once, as it is delivered (#682 review), and it returns what the rules leave and what fired.
+ */
+export function resolvePassiveRules(
+  passive: PassiveBlock,
+  event: Readonly<GameEvent>,
+  random: () => number,
+  start: number,
+): { value: number; activations: RuleActivation[] } {
   const resolved = subscribedRules([passiveSource(passive)], event.type).map((entry) => ({
     ...entry,
     rule: ruleHandlers.resolveValues(entry.rule, random),
   }));
-  return evaluateRules(resolved, event, 0).activations;
+  return evaluateRules(resolved, event, start);
 }
