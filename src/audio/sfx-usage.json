@@ -228,7 +228,7 @@
     }
   },
   "ui.click": {
-    "uses": 34,
+    "uses": 36,
     "files": {
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 3,
@@ -238,14 +238,16 @@
       "settings-panel.ts": 7,
       "tools/block-designer.ts": 3,
       "tools/contained-proof/room.ts": 4,
+      "tools/crystal-comparison/room.ts": 2,
       "tools/dialog-room.ts": 1,
       "tools/shop-balance-editor.ts": 6,
       "traits/menu-action.ts": 1
     }
   },
   "ui.hover": {
-    "uses": 3,
+    "uses": 4,
     "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
       "menus.ts": 2,
       "traits/menu-action.ts": 1
     }
@@ -266,9 +268,16 @@
     }
   },
   "view.zoom": {
-    "uses": 2,
+    "uses": 3,
     "files": {
-      "audio-service.ts": 2
+      "audio-service.ts": 2,
+      "tools/crystal-comparison/room.ts": 1
+    }
+  },
+  "view.rotate": {
+    "uses": 1,
+    "files": {
+      "tools/crystal-comparison/room.ts": 1
     }
   },
   "reward.coin": {
