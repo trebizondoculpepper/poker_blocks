@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { approximateOuter, createFacetShell, fillPane } from "./approximate-crystal";
 import { createCrystalV3Front, createCrystalV3Rear } from "./crystal-v3";
-import { createRefractionFront, createRefractionRear } from "./crystal-refraction";
+import {
+  createRefractionFront,
+  createRefractionRear,
+  refractionPresets,
+} from "./crystal-refraction";
 import { createInternalFront, createInternalRear } from "./crystal-internal";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { FaceArt } from "./face-art";
@@ -1334,19 +1338,23 @@ function crystalV3(context: AssemblyContext): BlockAppearance {
   );
 }
 
-/** Faked background refraction (prototype, src/visual/crystal-refraction.ts). */
+/**
+ * Faked background refraction (prototype, src/visual/crystal-refraction.ts), configured by the
+ * registered refraction preset its `appearance.refraction` names (#674).
+ */
 function crystalRefraction(context: AssemblyContext): BlockAppearance {
   const { art, definition, geometry } = context;
+  const preset = refractionPresets.get(definition.appearance.refraction ?? "crystal");
   const texture = faceTexture(art, definition, false, 0, false);
   const height = heightFor(texture, art, definition.appearance);
   const print = printSkin(art, definition.appearance, geometry);
   const inHand = surface(texture, definition.appearance, height);
-  const front = createRefractionFront() as unknown as THREE.MeshStandardMaterial;
+  const front = createRefractionFront(preset) as unknown as THREE.MeshStandardMaterial;
   return appearanceBase(
     context,
     [texture, ...[height].filter((value) => value !== undefined), print.texture],
     Array.from({ length: 6 }, () => inHand),
-    [createRefractionRear(geometry), print.skin],
+    [createRefractionRear(geometry, preset), print.skin],
     Array.from({ length: 6 }, () => front),
   );
 }

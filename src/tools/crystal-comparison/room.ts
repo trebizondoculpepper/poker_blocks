@@ -76,7 +76,13 @@ export function distribution(values: readonly number[]) {
 const warmupFrames = 60;
 const sampleFrames = 120;
 
-export function createCrystalComparisonRoom(host: HTMLElement): CrystalComparisonRoom {
+/** What the game lends the room: the player's reduced-motion setting, read each frame. */
+export type CrystalComparisonOptions = { reducedMotion: () => boolean };
+
+export function createCrystalComparisonRoom(
+  host: HTMLElement,
+  options: CrystalComparisonOptions,
+): CrystalComparisonRoom {
   const root = document.createElement("section");
   root.className = "crystal-comparison";
   root.hidden = true;
@@ -289,8 +295,17 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     camera.lookAt(0, 0, 0);
     renderer.info.reset();
     const start = performance.now();
-    // Any passes the chosen look needs first (a background capture), as its backend declares.
-    opticsBackends.get(backend).frame?.({ renderer, scene, camera, hide: group });
+    // Any passes the chosen look needs first (a background capture), as its backend declares,
+    // with the presentation time since the last frame for a look that animates (#674).
+    const delta = last === null ? 0 : (time - last) / 1000;
+    opticsBackends.get(backend).frame?.({
+      renderer,
+      scene,
+      camera,
+      hide: group,
+      delta,
+      reducedMotion: options.reducedMotion(),
+    });
     renderer.render(scene, camera);
     const submitted = performance.now() - start;
     if (last !== null) {

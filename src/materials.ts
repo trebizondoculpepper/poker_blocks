@@ -166,6 +166,11 @@ export type MaterialDefinition = {
     residue?: ResidueConfig;
     /** Optional inclusions suspended in the contents, e.g. rising bubbles (#353). */
     inclusions?: readonly InclusionConfig[];
+    /**
+     * For the `crystalRefraction` assembly (#674): the registered refraction preset whose
+     * settings and ripple it draws with (src/visual/crystal-refraction.ts); `crystal` if unset.
+     */
+    refraction?: string;
     optics?: {
       tint: number;
       handIor: number;
