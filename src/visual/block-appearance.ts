@@ -544,14 +544,19 @@ const faceAxes: [THREE.Vector3, THREE.Vector3][] = [
 function meltwaterSkin(
   art: FaceArt,
   geometry: THREE.BufferGeometry,
-): { skin: THREE.Mesh; texture: THREE.CanvasTexture } {
+): { skin: THREE.Mesh; textures: THREE.CanvasTexture[] } {
   const texture = meltwater(art);
+  // Every texture the skin makes: the original and each face's clone. The block's owner frees
+  // them all; a clone left out of this list would never be disposed (#769).
+  const textures: THREE.CanvasTexture[] = [texture];
   // Seconds for a drop to slide the height of an upright face, varied a little per block.
   const secondsPerFace = 14 + randomFor(art, "ice", false)() * 10;
   const turned = new THREE.Quaternion();
   const down = new THREE.Vector3();
   const materials = faceAxes.map(([u, v]) => {
-    const faceTexture = texture.clone();
+    // A clone of a canvas texture is a canvas texture; three types `clone()` as the base class.
+    const faceTexture = texture.clone() as THREE.CanvasTexture;
+    textures.push(faceTexture);
     faceTexture.wrapS = faceTexture.wrapT = THREE.RepeatWrapping;
     faceTexture.center.set(0.5, 0.5);
     faceTexture.needsUpdate = true;
@@ -592,7 +597,7 @@ function meltwaterSkin(
   });
   const skin = new THREE.Mesh(geometry, materials);
   skin.renderOrder = 15;
-  return { skin, texture };
+  return { skin, textures };
 }
 
 /**
@@ -1386,7 +1391,7 @@ function frostedBlock(context: AssemblyContext): BlockAppearance {
   const onTable = cloudyIce(texture, height, size, definition.appearance.reliefScale);
   return appearanceBase(
     context,
-    [texture, ...[height].filter((value) => value !== undefined), print.texture, melt.texture],
+    [texture, ...[height].filter((value) => value !== undefined), print.texture, ...melt.textures],
     Array.from({ length: 6 }, () => inHand),
     [melt.skin, print.skin],
     Array.from({ length: 6 }, () => onTable),
