@@ -1261,3 +1261,67 @@ Two separate review checks apply. First, any implementation that introduces or c
 Support can be existing research, a local source audit identifying files/symbols and the inspected revision, a reproducible experiment with its conditions/results, or authoritative external documentation for a library's actual published version. Choose evidence appropriate to the claim: a package README does not establish this game's performance, and a successful isolated API probe does not demonstrate complete production integration. Explain how the evidence leads to the decision, relevant alternatives and trade-offs, and what has not been verified. Mark proposals and assumptions explicitly.
 
 Research is conditional, not a mandatory separate mission or external search. Existing sufficient evidence may be cited; straightforward reuse of an accurate documented pattern needs no new research report. Reviewers flag the specific changed architecture missing documentation, or the specific claim/recommendation lacking support, and request the missing link, evidence or correction. They do not block unrelated work with speculative investigations. Implementation PRs cite the prior merged architecture decision; documentation PRs cite their evidence and rationale.
+
+## Visual performance profiler (#527)
+
+A developer room, `?mode=dev16`, measures what each visual object costs to draw, so expensive looks (such as the current crystal optics) can be found and compared. It complements the crystal comparison room (#524) and changes nothing in production: it never lowers quality or swaps renderers by itself.
+
+**Registered cases.** A `profilingCases` registry (in `src/tools/profiler/`) holds one case per appearance to measure. A case is data plus a factory: its id and family (material, rack item, letter or menu block, effect), a typical configuration, a fixed seed and transform, a default collection size, optional named phases for transient effects (idle, active, pulse, exit), and `create(host)` returning the object built by the **production** factory, with an `update(dt)` and a `dispose()`. The runner only enumerates the registry and calls the handlers; it never asks what a case is. Each family that can be profiled also registers a coverage source, which lists its registered appearances; any appearance with no case is reported as **uncovered**, never skipped silently. Shared geometry and materials stay shared, as they are in the game, and disposal frees only what the case made. Cases never trigger gameplay or draw from the run's random sequence.
+
+**Method.** Every run fixes the viewport size, device pixel ratio, quality setting, camera, lighting and cosmetic seed, and records them. For each case the runner:
+
+1. Builds the object and renders it until the shaders have compiled. Creation and compilation time are reported separately and are not part of the steady-state figures.
+2. Samples a fixed number of frames for an empty host (the baseline), for one object, and for a collection of N objects laid out on a fixed grid.
+
+Each sample records:
+
+- **GPU time**, from `EXT_disjoint_timer_query_webgl2`. Queries are read asynchronously, a disjoint or invalid result is dropped, and where the extension is missing GPU time is reported as unavailable. Frame time is never presented as GPU time.
+- **CPU update and submission time.**
+- **Frame time**, as the median, the 95th percentile and the sample count.
+- **Renderer counts:** draw calls, triangles, and live geometries, textures and programs.
+
+Results are given raw and relative to the baseline. The relative figure is an estimate: shared passes, transparency, overdraw and transmission make collection cost nonlinear, so it is not a per-object cost to add up. A sample set taken while the tab was hidden is discarded and repeated. Runs are bounded and can be cancelled, one case runs at a time, and the room's own UI is not redrawn during sampling. After a repeated run the renderer's resource counts are compared, so leaks show up.
+
+**Room and export.** The room is a developer mode declared in `src/game-modes.ts` and composed from a trait under `src/tools/`. It lets you:
+
+- run all cases or a selection, and cancel a run;
+- choose the collection size, resolution and quality;
+- sort the results by measured cost, so outliers are visible (there is no fixed "expensive" threshold);
+- preview the selected object as it really looks.
+
+**Export** saves JSON that holds:
+
+- each case's identity and configuration;
+- the environment: user agent, the WebGL renderer string where the browser exposes it, size and pixel ratio;
+- the method and whether GPU timing was available;
+- the raw and baseline-relative results, and the uncovered appearances.
+
+**Evidence, trade-offs and limits.**
+
+_Sources:_
+
+- [Khronos `EXT_disjoint_timer_query_webgl2`](https://registry.khronos.org/webgl/extensions/EXT_disjoint_timer_query_webgl2/) defines `TIME_ELAPSED_EXT` queries, their asynchronous results (`QUERY_RESULT_AVAILABLE`) and the `GPU_DISJOINT_EXT` flag, which marks results in flight as invalid.
+- [MDN's page on the extension](https://developer.mozilla.org/en-US/docs/Web/API/EXT_disjoint_timer_query_webgl2) notes that browsers may coarsen or withhold it, so it must be optional.
+- three.js's [`WebGLRenderer.info`](https://threejs.org/docs/#api/en/renderers/WebGLRenderer.info) supplies the draw-call, triangle, geometry, texture and program counts.
+
+_Why this method:_ polling a query for its result every frame avoids the stall that a synchronous read would add to the very timing being measured. CPU time and frame time come from `performance.now()`, which the browser may also coarsen.
+
+_Measurement boundaries:_
+
+- An empty-scene baseline captures fixed costs: clearing, lights, and the renderer's own passes.
+- A one-object set and an N-object set bracket how cost grows with count.
+- Neither isolates transmission or transparency passes that three.js adds only once some material needs them. The first such object therefore carries that whole pass, which is why relative figures are labelled as estimates.
+
+_What remains unverified until #618 runs in browsers:_
+
+- how often timer queries are available and disjoint on the owner's devices (Safari has historically not exposed the extension, and the room then reports GPU time as unavailable);
+- how stable the medians are across repeated runs;
+- whether the default frame and warm-up counts are long enough.
+
+The runner's tests use a fake timer and renderer, so they check the logic (rejection, retakes, cancellation, leak detection) but not real GPU numbers.
+
+**Delivery.** The work is split into child tickets:
+
+1. #618: the registry and runner, tested with test-only cases and a fake timer.
+2. #619: the room and the export.
+3. Cases for materials (#620), rack items (#621), and letter, menu and effect visuals (#622).
