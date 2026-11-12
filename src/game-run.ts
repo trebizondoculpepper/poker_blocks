@@ -228,7 +228,8 @@ export class GameRun {
       this.activeAction = { context: action, phase: kind };
       // Everything evaluated inside the action is charged to its budget (#661 review).
       const result = withOperationCounter(
-        (registration) => action.operate(registration, kind, []),
+        // The event chain being delivered now, if any, names the cause in a diagnostic.
+        (registration) => action.operate(registration, kind, this.passiveEvents.ancestry),
         () => body(action),
       );
       this.activeAction = null;

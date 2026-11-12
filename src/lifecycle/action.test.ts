@@ -518,3 +518,32 @@ describe("every action fact carries the stage it happened in (#661 review)", () 
     expect(facts[0]!.context).toMatchObject({ stage: { ordinal: 1 } });
   });
 });
+
+describe("budget failures name the events that led to them (#661 review)", () => {
+  it("reports discard.completed as the cause when its listener's command runs out", () => {
+    const config = {
+      ...sandboxRunRules(demoRunRules),
+      resolutionLimits: { events: 128, operations: 0 },
+    };
+    const opening = new GameRun(dealerRegistry, config, standardDeck, () => 0);
+    opening.installPassive(createPassiveBlock("scrapper", "s.1"));
+    // Room for everything before the listener runs, found by measuring.
+    let operations = 0;
+    let failure: ResolutionBudgetExceeded | null = null;
+    while (operations < 50) {
+      const limited = { ...config, resolutionLimits: { events: 128, operations } };
+      const game = GameRun.fromSnapshot(
+        dealerRegistry,
+        limited,
+        standardDeck,
+        opening.snapshot(),
+        () => 0,
+      );
+      if (game.discard([game.state.hand[0]!.id]) !== null) break;
+      failure = game.actionFailure as ResolutionBudgetExceeded;
+      operations++;
+    }
+    // The last failure happened inside the listener: its ancestry names the discard.
+    expect(failure?.ancestry).toContain("discard.completed");
+  });
+});

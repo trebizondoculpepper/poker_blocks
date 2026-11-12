@@ -440,6 +440,21 @@ export class PassiveEventQueue {
   /** Which delivered event each queued response answered, kept as it is queued (#661 review). */
   private readonly parents = new WeakMap<GameEvent, GameEvent>();
 
+  /** The causal chain of the event whose listeners are running now, oldest first (#661 review). */
+  private delivering: readonly string[] = [];
+
+  /** The event types from the first cause to the event now being delivered; empty between. */
+  get ancestry(): readonly string[] {
+    return this.delivering;
+  }
+
+  private chainOf(event: GameEvent): string[] {
+    const chain: string[] = [];
+    for (let at: GameEvent | undefined = event; at; at = this.parents.get(at))
+      chain.unshift(at.type);
+    return chain;
+  }
+
   /** The event `event` was a response to, if it was one. */
   parentOf(event: GameEvent): GameEvent | undefined {
     return this.parents.get(event);
@@ -510,10 +525,16 @@ export class PassiveEventQueue {
           this.pending.length = 0;
           throw error;
         }
-        const responses = [
-          ...(trait.respond?.(block, Object.freeze({ ...event })) ?? []),
-          ...(onResponse?.(block, Object.freeze({ ...event })) ?? []),
-        ];
+        this.delivering = this.chainOf(event);
+        let responses: GameEvent[];
+        try {
+          responses = [
+            ...(trait.respond?.(block, Object.freeze({ ...event })) ?? []),
+            ...(onResponse?.(block, Object.freeze({ ...event })) ?? []),
+          ];
+        } finally {
+          this.delivering = [];
+        }
         for (const response of responses) this.parents.set(response, event);
         this.pending.push(...responses);
       }
