@@ -189,6 +189,14 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     one.dispose();
   }
 
+  /** The controls that change what a run measures or how results show, off while one runs. */
+  function setSettingsEnabled(enabled: boolean): void {
+    for (const control of root.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+      ".profiler-room-controls input, .profiler-room-controls select",
+    ))
+      control.disabled = !enabled;
+  }
+
   async function run(): Promise<void> {
     playSfx("ui.click");
     const chosen = [...part("cases").querySelectorAll<HTMLInputElement>("input:checked")].map(
@@ -211,6 +219,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     };
     part<HTMLButtonElement>("run").disabled = true;
     part<HTMLButtonElement>("cancel").disabled = false;
+    // Nothing in the room redraws while a run samples (#640 review).
+    setSettingsEnabled(false);
     part("status").textContent =
       `Running ${chosen.length} case(s)… GPU timing ${timer.available ? "available" : "unavailable"}.`;
     try {
@@ -227,6 +237,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       showResults();
     } finally {
       controller = null;
+      setSettingsEnabled(true);
       part<HTMLButtonElement>("run").disabled = false;
       part<HTMLButtonElement>("cancel").disabled = true;
     }
@@ -239,7 +250,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
   });
   part("sort").addEventListener("change", () => {
     playSfx("ui.click");
-    showResults();
+    if (!controller) showResults();
   });
   part("export").addEventListener("click", () => {
     if (!lastExport) return;
