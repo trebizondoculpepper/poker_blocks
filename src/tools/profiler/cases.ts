@@ -38,6 +38,8 @@ export type ProfilingCase = {
   family: string;
   /** What the case shows, for the results table. */
   label: string;
+  /** The registered host it is drawn in (#712); the board when omitted. */
+  host?: string;
   /** What one instance is; one block when omitted. */
   unit?: ProfilingUnit;
   /** The representative configuration chosen, for the results table (a word, a card). */
@@ -163,3 +165,22 @@ export function describeCoverage(report: CoverageReport): string {
     ...problems,
   ].join("; ");
 }
+
+/** What a host is given to prepare: the run's scene, and reflections its own renderer made. */
+export type ProfilingHostSetup = { scene: THREE.Scene; reflections: THREE.Texture | null };
+
+/**
+ * A representative host (#712; doc/automatic-profiling.md, "Sweep and representative host"): it
+ * sets up the scene as a production path draws its objects (lights, reflection environment) and
+ * returns how to undo that. A case names its host; the runner dispatches to it and never asks
+ * what the case is.
+ */
+export type ProfilingHost = {
+  label: string;
+  prepare(setup: ProfilingHostSetup): () => void;
+};
+
+export const profilingHosts = new Registry<ProfilingHost>("profiling host");
+
+/** The host a case gets when it names none: blocks as they are lit on the board. */
+export const defaultProfilingHost = "board";

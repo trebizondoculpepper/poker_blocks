@@ -12,6 +12,7 @@
  */
 import { createSceneLayer } from "./scene-layer";
 import * as THREE from "three";
+import { boardLights, handLights } from "./visual/lighting";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { setReflectionEnvironment } from "./visual/block-appearance";
 import { createCardRoom, type ShadowQuality } from "./visual/card-room";
@@ -86,14 +87,8 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
 
   // The hand keeps its neutral studio light; the board sits in the warmer card room,
   // whose overhead lamp (see createCardRoom) adds the shadows.
-  handScene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
-  const handSun = new THREE.DirectionalLight(0xffffff, 2.4);
-  handSun.position.set(-3, 6, 7);
-  handScene.add(handSun);
-  scene.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3226, 2));
-  const boardFill = new THREE.DirectionalLight(0xffffff, 1.3);
-  boardFill.position.set(-3, 6, 7);
-  scene.add(boardFill);
+  handScene.add(...handLights());
+  scene.add(...boardLights());
   const cardRoom = createCardRoom(scene, [renderer, front], backgroundLayer);
   // Something for crystal and metals to reflect: a soft studio room, prefiltered once, on the
   // front canvas, where the blocks are drawn.

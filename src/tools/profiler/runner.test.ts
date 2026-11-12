@@ -571,3 +571,59 @@ describe("cosmetic randomness is fixed by the run seed (#653 review)", () => {
     expect(cosmeticRandom()).not.toBe(first[0]);
   });
 });
+
+describe("representative hosts (#712)", () => {
+  it("prepares the case's own registered host before building, undoes it after, and records it", async () => {
+    const { profilingHosts } = await import("./cases");
+    const { env, memory } = fakeEnvironment();
+    const reflections = new THREE.Texture();
+    env.reflections = () => reflections;
+    const calls: string[] = [];
+    let given: THREE.Texture | null = null;
+    if (!profilingHosts.has("test.studio"))
+      profilingHosts.register("test.studio", {
+        label: "Test studio",
+        prepare: ({ reflections: owned }) => {
+          given = owned;
+          calls.push("prepare");
+          return () => calls.push("undo");
+        },
+      });
+    const base = testCase(memory);
+    const studio: ProfilingCase = {
+      ...base,
+      host: "test.studio",
+      create: (context) => {
+        calls.push("create");
+        return base.create(context);
+      },
+    };
+    const run = await createProfilerRunner(env).run([["studio", studio]], options);
+    expect(run.results[0]!.host).toBe("test.studio");
+    expect(calls[0]).toBe("prepare");
+    expect(calls.at(-1)).toBe("undo");
+    expect(calls.filter((call) => call === "prepare")).toHaveLength(1);
+    // The reflections are the ones the runner's own environment made.
+    expect(given).toBe(reflections);
+  });
+
+  it("lights a case without a host as the board is lit, and takes the lights off after", async () => {
+    const { env, memory } = fakeEnvironment();
+    const runner = createProfilerRunner(env);
+    let lightsWhileBuilding = 0;
+    const base = testCase(memory);
+    const board: ProfilingCase = {
+      ...base,
+      create: (context) => {
+        lightsWhileBuilding = runner.scene.children.filter(
+          (child) => (child as THREE.Light).isLight,
+        ).length;
+        return base.create(context);
+      },
+    };
+    const run = await runner.run([["board", board]], options);
+    expect(run.results[0]!.host).toBe("board");
+    expect(lightsWhileBuilding).toBeGreaterThan(0);
+    expect(runner.scene.children.filter((child) => (child as THREE.Light).isLight)).toEqual([]);
+  });
+});
