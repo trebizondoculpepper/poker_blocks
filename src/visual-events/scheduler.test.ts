@@ -631,4 +631,50 @@ describe("the visual-event scheduler (#546)", () => {
     expect(errors).toHaveLength(1);
     expect(scheduler.counts).toMatchObject({ active: 0, entries: 0 });
   });
+
+  it("settles a parent cancelled from inside its child's cancellation only after the child (#785 review)", () => {
+    const { scheduler, handlers } = harness();
+    let parent: ReturnType<typeof scheduler.createScope>;
+    let disposed = 0;
+    let seenAtParent: { active: number; disposed: number } | null = null;
+    handlers.register("cascade", (_payload, context) => ({
+      update: () => "running",
+      cancel: () => context.cancel(parent),
+      dispose: () => void disposed++,
+    }));
+    parent = scheduler.createScope(null);
+    const child = scheduler.createScope(parent);
+    scheduler.schedule(child, { handler: "cascade", dueUnits: 0 });
+    scheduler.update(0, true);
+    scheduler.observe(parent, () => {
+      seenAtParent = { active: scheduler.counts.active, disposed };
+    });
+    scheduler.cancel(child);
+    expect(seenAtParent).toEqual({ active: 0, disposed: 1 });
+    expect(scheduler.status(parent).state).toBe("cancelled");
+    expect(scheduler.status(child).state).toBe("cancelled");
+  });
+
+  it("closes the lease when a handler cancels its own event before returning (#785 review)", () => {
+    const { scheduler, handlers, log } = harness();
+    let kept: Parameters<VisualHandler>[1] | null = null;
+    handlers.register("selfEvent", (_payload, context) => {
+      kept = context;
+      return { update: () => "running", cancel: () => {}, dispose: () => {} };
+    });
+    const scope = scheduler.createScope(null);
+    const admitted = scheduler.schedule(scope, { handler: "selfEvent", dueUnits: 0 });
+    handlers.register("selfEvent2", (_payload, context) => {
+      kept = context;
+      if (admitted2.accepted) context.cancel(admitted2.handle);
+      return { update: () => "running", cancel: () => {}, dispose: () => {} };
+    });
+    const admitted2 = scheduler.schedule(scope, { handler: "selfEvent2", dueUnits: 0 });
+    scheduler.update(0, true);
+    expect(admitted.accepted).toBe(true);
+    const late = kept!.schedule({ handler: "mark", payload: { label: "late" }, dueUnits: 0 });
+    expect(late.accepted).toBe(false);
+    scheduler.update(100, true);
+    expect(log).toEqual([]);
+  });
 });

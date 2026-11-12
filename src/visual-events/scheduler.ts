@@ -120,6 +120,8 @@ type Scope = {
   fallbackRan: boolean;
   /** Being cancelled: its children's settling must not report it finished (#785 review). */
   cancelling: boolean;
+  /** Its own events are released (cancellation's first half). */
+  cleaned: boolean;
   listeners: Set<(status: ScopeStatus) => void>;
 };
 
@@ -324,10 +326,24 @@ export function createVisualScheduler(
     scope.pending = 0;
     scope.active = 0;
     scope.events.clear();
+    scope.cleaned = true;
+    if (hadPending) rebuild();
+    completeCancel(scope);
+  };
+
+  /**
+   * A cancelling scope reports cancelled only once its own work is released and every child has
+   * settled. A child still mid-cancellation (its effect cancelled the parent from inside) defers
+   * the parent until that child finishes, so ancestors never settle first (#785 review).
+   */
+  const completeCancel = (scope: Scope) => {
+    if (scope.state !== "pending" || !scope.cleaned) return;
+    for (const child of scope.children) if (child.state === "pending") return;
     scope.state = "cancelled";
     notify(scope);
-    if (hadPending) rebuild();
-    if (scope.parent) settleIfDone(scope.parent);
+    if (!scope.parent) return;
+    if (scope.parent.cancelling) completeCancel(scope.parent);
+    else settleIfDone(scope.parent);
   };
 
   const admit = (
@@ -418,6 +434,7 @@ export function createVisualScheduler(
     // never mounted, so it is cancelled and released at once, exactly once (#785 review).
     // Re-read: the handler may have settled this entry (TypeScript can't see that side effect).
     if ((entry.state as Entry["state"]) === "settled") {
+      lease.open = false;
       guarded(() => result.cancel());
       guarded(() => result.dispose());
       return;
@@ -478,6 +495,7 @@ export function createVisualScheduler(
         failure: null,
         fallbackRan: false,
         cancelling: false,
+        cleaned: false,
         listeners: new Set(),
       };
       scopes.set(handle, scope);
