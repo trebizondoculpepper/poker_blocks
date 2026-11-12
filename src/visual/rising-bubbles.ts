@@ -37,7 +37,7 @@ export type RisingBubblesConfig = {
 let disc: THREE.DataTexture | null = null;
 
 /** A soft ring with a bright rim: a bubble seen through water. Built without a canvas. */
-function bubbleTexture(): THREE.DataTexture {
+export function bubbleTexture(): THREE.DataTexture {
   if (disc) return disc;
   const n = 32;
   const data = new Uint8Array(n * n * 4);
@@ -51,6 +51,8 @@ function bubbleTexture(): THREE.DataTexture {
   disc.magFilter = THREE.LinearFilter;
   disc.minFilter = THREE.LinearFilter;
   disc.needsUpdate = true;
+  // Shared by every bubble: never freed with one block's resources (#653 review).
+  disc.userData.shared = true;
   return disc;
 }
 

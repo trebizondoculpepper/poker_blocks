@@ -64,3 +64,13 @@ describe("freeing a profiled block (#653 review)", () => {
     expect(shared).toBe(0);
   });
 });
+
+describe("every module-level shared texture is marked (#653 review)", () => {
+  it("marks the bubble, facet and crystal environment textures (canvas-free ones testable here)", async () => {
+    const { bubbleTexture } = await import("../../visual/rising-bubbles");
+    const { facetTexture } = await import("../../visual/approximate-crystal");
+    const { crystalV3Environment } = await import("../../visual/crystal-v3");
+    for (const texture of [bubbleTexture(), facetTexture(), crystalV3Environment()])
+      expect(texture.userData.shared).toBe(true);
+  });
+});
