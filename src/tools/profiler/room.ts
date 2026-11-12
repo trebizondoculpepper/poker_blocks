@@ -151,7 +151,7 @@ export function createProfilerRoom(
       <div class="profiler-room-stage" data-part="stage"></div>
       <section class="profiler-room-report" data-part="report" aria-live="polite"></section>
       <table class="profiler-room-results">
-        <thead><tr><th>Case</th><th>Family</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Frame ms (p95), largest</th><th>Calls, largest</th><th>Triangles, largest</th><th>Create ms</th><th>Leak</th></tr></thead>
+        <thead><tr><th>Case</th><th>Family</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Frame ms (p95), largest</th><th>Calls</th><th>Triangles</th><th>Create ms</th><th>Leak</th></tr></thead>
         <tbody data-part="results"></tbody>
       </table>
     </div>`;
@@ -266,8 +266,9 @@ export function createProfilerRoom(
           cell(result.counts.map(({ set }) => ms(set.gpu?.median)).join(" / ")),
           cell(result.counts.map(({ set }) => ms(set.cpu.median)).join(" / ")),
           cell(`${ms(largestSet(result)?.frame.median)} (${ms(largestSet(result)?.frame.p95)})`),
-          cell(String(largestSet(result)?.counts.calls ?? "n/a")),
-          cell(String(largestSet(result)?.counts.triangles ?? "n/a")),
+          // Geometry at every count, so batching and growth show without the export (#741 review).
+          cell(result.counts.map(({ set }) => String(set.counts.calls)).join(" / ")),
+          cell(result.counts.map(({ set }) => String(set.counts.triangles)).join(" / ")),
           // Creation per count, raw for the whole set (build plus compiling first frame).
           cell(
             result.counts

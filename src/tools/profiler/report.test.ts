@@ -202,3 +202,27 @@ describe("invalidated sets and growth (#741 review)", () => {
     expect(row!.growthText).toBe("a: GPU ×50.0, CPU ×50.0 (1 → 50)");
   });
 });
+
+describe("hosts and geometry (#741 review)", () => {
+  it("names each ranked entry's host when cases were drawn in different hosts", () => {
+    const hand = { ...result("held", 0.2, 0.1), host: "hand" };
+    const report = profilerReport(record([result("board", 0.1, 0.1), hand]));
+    expect(
+      report.rankings[0]!.entries.map(
+        ({ text }) => text.endsWith("]") && text.slice(text.lastIndexOf("[")),
+      ),
+    ).toEqual(["[host: hand]", "[host: board]"]);
+    expect(report.banner.notes.join(" ")).toMatch(/2 different hosts \(board, hand\)/);
+  });
+
+  it("leaves entries unlabelled when every case shares one host", () => {
+    const report = profilerReport(record([result("a", 0.1, 0.1), result("b", 0.2, 0.1)]));
+    expect(report.rankings[0]!.entries.every(({ text }) => !text.includes("[host:"))).toBe(true);
+  });
+
+  it("keeps draw calls and triangles for every count on each row", () => {
+    const [row] = profilerReport(record([result("a", 0.1, 0.1)])).rows;
+    expect(row!.calls).toEqual([1, 10, 50]);
+    expect(row!.triangles).toEqual([12, 120, 600]);
+  });
+});

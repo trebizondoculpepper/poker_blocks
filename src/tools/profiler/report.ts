@@ -175,6 +175,8 @@ function ranked(
 
 export function profilerReport(record: ProfilerExport, topN = 10): ProfilerReport {
   const invalidated = new Set(record.invalidated);
+  const hosts = [...new Set(record.results.map(({ host }) => host))];
+  const mixedHosts = hosts.length > 1;
   const pairs = record.results.map((result) => ({ result, row: rowOf(result, invalidated) }));
   const rows = pairs.map(({ row }) => row);
   const top = Math.max(
@@ -257,6 +259,11 @@ export function profilerReport(record: ProfilerExport, topN = 10): ProfilerRepor
             `${phase ? `${id}:${phase}` : id} failed (${kind}): ${reason}`,
         ),
         ...(isolated ? [] : ["Not isolated: other rendering may have shared the frames"]),
+        ...(mixedHosts
+          ? [
+              `Cases were drawn in ${hosts.length} different hosts (${hosts.join(", ")}): rankings name each entry's host`,
+            ]
+          : []),
         ...(record.invalidated.length
           ? [
               `${record.invalidated.length} set(s) invalidated (tab hidden through every retry), left out of the rankings: ${record.invalidated.join(", ")}`,
@@ -265,8 +272,20 @@ export function profilerReport(record: ProfilerExport, topN = 10): ProfilerRepor
       ],
     },
     rows,
-    // With no valid GPU timing, the labelled CPU ranking comes first.
-    rankings: gpuValid ? [gpu, cpu, calls] : [cpu, calls],
+    // With no valid GPU timing, the labelled CPU ranking comes first. When the cases were drawn
+    // in different hosts, every entry names its host, so a lighting difference never passes as
+    // a difference in object cost (#741 review).
+    rankings: (gpuValid ? [gpu, cpu, calls] : [cpu, calls]).map((ranking) =>
+      mixedHosts
+        ? {
+            ...ranking,
+            entries: ranking.entries.map((entry) => ({
+              ...entry,
+              text: `${entry.text} [host: ${entry.row.host}]`,
+            })),
+          }
+        : ranking,
+    ),
     byUnit: kinds.map((kind) => ({ kind, rows: rows.filter((row) => row.unit.kind === kind) })),
   };
 }
