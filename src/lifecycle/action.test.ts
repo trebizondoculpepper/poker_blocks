@@ -211,3 +211,15 @@ describe("the action budget reaches commands and outcomes (#661 review)", () => 
     expect(second.game.discard([second.hand[1]!.id])).not.toBeNull();
   });
 });
+
+describe("follow-up facts name their cause (#661 review)", () => {
+  it("records a command's result with the fact that caused it as its parent", () => {
+    const randomizer = new Randomizer(3);
+    const { game, hand } = runWith([createPassiveBlock("scrapper", "s.1")], randomizer);
+    expect(game.discard(hand.map(({ id }) => id))).not.toBeNull();
+    const completed = game.actionFacts.find(({ type }) => type === "discard.completed")!;
+    const coins = game.actionFacts.find(({ type }) => type === "coins.gained")!;
+    expect(completed.parentId).toBeNull();
+    expect(coins.parentId).toBe(completed.eventId);
+  });
+});

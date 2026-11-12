@@ -250,12 +250,21 @@ export class GameRun {
 
   /** Record the events an action delivered as its facts, in delivery order. */
   private recordDelivered(action: ActionContext, phase: string, delivered: readonly GameEvent[]) {
-    for (const event of delivered)
-      action.record(event.type, event, {
+    // Each fact names the fact it answered, from the parent the queue kept as it queued it
+    // (#661 review); a fact from an earlier drain of this action is found the same way.
+    for (const event of delivered) {
+      const cause = this.passiveEvents.parentOf(event);
+      const envelope = action.record(event.type, event, {
         phase,
+        parent: cause ? this.recordedFacts.get(cause) : null,
         subjectIds: [event.blockId ?? [], ...(event.cardIds ?? [])].flat(),
       });
+      this.recordedFacts.set(event, envelope);
+    }
   }
+
+  /** The envelope recorded for each delivered event, so a follow-up can name its parent. */
+  private recordedFacts = new WeakMap<GameEvent, EventEnvelope>();
 
   get dealer(): Dealer {
     return this.activeDealer;

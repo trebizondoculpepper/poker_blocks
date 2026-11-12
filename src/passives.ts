@@ -426,6 +426,13 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
 export class PassiveEventQueue {
   private readonly listeners = new Map<string, PassiveBlock[]>();
   private readonly pending: GameEvent[] = [];
+  /** Which delivered event each queued response answered, kept as it is queued (#661 review). */
+  private readonly parents = new WeakMap<GameEvent, GameEvent>();
+
+  /** The event `event` was a response to, if it was one. */
+  parentOf(event: GameEvent): GameEvent | undefined {
+    return this.parents.get(event);
+  }
 
   syncRack(rack: readonly PassiveBlock[]): void {
     this.listeners.clear();
@@ -492,8 +499,12 @@ export class PassiveEventQueue {
           this.pending.length = 0;
           throw error;
         }
-        this.pending.push(...(trait.respond?.(block, Object.freeze({ ...event })) ?? []));
-        this.pending.push(...(onResponse?.(block, Object.freeze({ ...event })) ?? []));
+        const responses = [
+          ...(trait.respond?.(block, Object.freeze({ ...event })) ?? []),
+          ...(onResponse?.(block, Object.freeze({ ...event })) ?? []),
+        ];
+        for (const response of responses) this.parents.set(response, event);
+        this.pending.push(...responses);
       }
     }
     return delivered;
