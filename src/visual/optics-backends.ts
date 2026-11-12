@@ -199,6 +199,20 @@ opticsBackends.register("refraction", {
   controls: [...mapControls, ...refractionControls("crystal")],
 });
 
+/**
+ * Calm water (prototype, #675): the refraction backend's assembly and passes with the calm-water
+ * preset's own settings, ripple and sky. It reads no spectral map, so offers no map controls.
+ */
+opticsBackends.register("calmWater", {
+  label: "Calm water (prototype)",
+  assembly: "crystalRefraction",
+  unsupported:
+    "Prototype: the Refraction look, gentler, with a slow ripple in what is seen through it. Blocks do not refract each other, overlapping blocks take the nearest rear facet's bend, and the hand has nothing captured behind it.",
+  appearance: { refraction: "calmWater" },
+  frame: refractionFrameFor("calmWater"),
+  controls: refractionControls("calmWater"),
+});
+
 opticsBackends.register("internal", {
   label: "Internal (prototype)",
   assembly: "crystalInternal",

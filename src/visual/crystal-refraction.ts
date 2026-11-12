@@ -162,6 +162,73 @@ export function refractionFrame(context: {
   renderer.setRenderTarget(previous);
 }
 
+/**
+ * Calm water (prototype, #675; doc/refractive-water-prototypes.md): the same fake refraction,
+ * gentler. A lower bend and magnification, almost no colour split, a slight cool tint and a
+ * restrained, colourless reflection of a soft sky, with a slow lookup ripple. No bubbles: it
+ * composes none.
+ */
+export const calmWaterSettings: RefractionSettings = {
+  rearStrength: 0.06,
+  frontStrength: 0.02,
+  magnify: 0.12,
+  dispersion: 0.02,
+  fresnelBase: 0.02,
+  fresnelPower: 5,
+  spectral: 0,
+  reflection: 0.35,
+  clarity: 0.9,
+};
+
+refractionPresets.register(
+  "calmWater",
+  createRefractionPreset({
+    settings: calmWaterSettings,
+    ripple: { amplitude: 0.006, period: 10, scale: 1.6 },
+    environment: calmSkyEnvironment,
+  }),
+);
+
+let calmSky: THREE.DataTexture | null = null;
+
+/**
+ * A soft, colourless sky for water to reflect: bright overhead, pale at the horizon, dark below,
+ * with one broad light. Its own map, so water never reflects the crystals' spectral map or follows
+ * its pattern controls. Shared and immutable, like the spectral map.
+ */
+export function calmSkyEnvironment(): THREE.DataTexture {
+  if (calmSky) return calmSky;
+  const width = 64;
+  const height = 32;
+  const data = new Float32Array(width * height * 4);
+  const mix = (a: number, b: number, t: number) => a + (b - a) * Math.min(1, Math.max(0, t));
+  for (let row = 0; row < height; row++)
+    for (let column = 0; column < width; column++) {
+      // Rows run bottom (straight down) to top (straight up), as the lookup's latitude does.
+      const up = (row + 0.5) / height;
+      const below = [0.05, 0.08, 0.1];
+      const horizon = [0.55, 0.62, 0.68];
+      const above = [0.78, 0.86, 0.94];
+      const light = Math.exp(-(((column / width - 0.3) * 6) ** 2 + ((up - 0.78) * 8) ** 2));
+      const index = (row * width + column) * 4;
+      for (let channel = 0; channel < 3; channel++)
+        data[index + channel] =
+          (up < 0.5
+            ? mix(below[channel]!, horizon[channel]!, (up - 0.35) / 0.15)
+            : mix(horizon[channel]!, above[channel]!, (up - 0.5) / 0.3)) +
+          light * 0.8;
+      data[index + 3] = 1;
+    }
+  calmSky = new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.FloatType);
+  calmSky.colorSpace = THREE.LinearSRGBColorSpace;
+  calmSky.wrapS = THREE.RepeatWrapping;
+  calmSky.wrapT = THREE.ClampToEdgeWrapping;
+  calmSky.magFilter = calmSky.minFilter = THREE.LinearFilter;
+  calmSky.needsUpdate = true;
+  calmSky.userData.shared = true;
+  return calmSky;
+}
+
 /** A backend's frame hook for one preset: its ripple's clock, then the shared passes. */
 export function refractionFrameFor(preset: string) {
   return (context: Parameters<typeof refractionFrame>[0] & FrameTime): void => {
