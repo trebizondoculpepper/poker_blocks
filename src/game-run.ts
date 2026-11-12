@@ -33,6 +33,8 @@ import {
   materialHandRewardEntries,
   materialFieldRewardEntries,
   stageRewardLedger,
+  rewardEffects,
+  type RewardEntry,
   type StageReward,
 } from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
@@ -489,15 +491,61 @@ export class GameRun {
             ...materialFieldRewardEntries(this.currentState),
           ];
     if (outcome === "lost" && entries.length === 0) return null;
-    const balanceBefore = this.currentState.coins;
-    const balance = balanceBefore + ledgerTotal(entries);
-    this.currentState = { ...this.currentState, coins: balance };
-    this.rewarded = { stage, reward: { entries, balanceBefore, balance } };
-    this.lifecycle("reward.finalized", {
-      reward: { coins: balance - balanceBefore, balanceBefore, balance },
-    });
-    return this.rewarded.reward;
+    return this.settleStageRewards(entries);
   }
+
+  /**
+   * Settle a ledger once (#730; doc/presents.md, "Mixed reward ledger and sound"). Every
+   * entry's effects commit their commands through the shared command path, the coins are paid,
+   * and the paid-stage marker records the finalized receipt (with any granted object IDs), all
+   * in one transaction: a failure leaves state, events and the random stream as they were, and
+   * nothing is paid. Settling a paid stage again returns its receipt and changes nothing.
+   */
+  settleStageRewards(entries: readonly RewardEntry[]): StageReward | null {
+    // Only a decided stage settles: never mid-play (it would spend the stage's marker) or in the
+    // shop (whose key isn't a stage), whoever calls (#740 review).
+    if (!this.inStage || roundOutcome(this.currentState) === "playing") return null;
+    const stage = this.stageKey;
+    if (this.rewarded?.stage === stage) return this.rewarded.reward;
+    this.settlementFailed = false;
+    const settled = this.transact("reward", undefined, (context) => {
+      const finalized = entries.map((entry) => ({
+        ...entry,
+        effects: entry.effects.map((effect) => {
+          const handler = rewardEffects.get(effect.id);
+          const events = commitCommands(
+            handler.commands?.(effect.config) ?? [],
+            this.commandTarget,
+          );
+          // The grant's own facts (passive.installed, ...) are delivered and recorded like any
+          // command's, inside this settlement (#740 review).
+          for (const event of events) this.passiveEvents.emit(event);
+          // Delivered through the rule-committing path, so a passive's rules on these facts
+          // commit their commands too, inside this settlement (#740 review).
+          this.drainPhase(context, "reward", `${context.actionId}:reward`);
+          return handler.receipt
+            ? { ...effect, config: handler.receipt(effect.config, events) }
+            : effect;
+        }),
+      }));
+      // The wallet as the grants (and anything they set off) left it: the receipt's balances
+      // then match the wallet, and still differ by exactly the ledger's coin effects (#740 review).
+      const balanceBefore = this.currentState.coins;
+      const paid = ledgerTotal(finalized);
+      const balance = balanceBefore + paid;
+      this.currentState = { ...this.currentState, coins: balance };
+      this.rewarded = { stage, reward: { entries: finalized, balanceBefore, balance } };
+      this.lifecycle("reward.finalized", {
+        reward: { coins: paid, balanceBefore, balance },
+      });
+      return this.rewarded.reward;
+    });
+    this.settlementFailed = settled === null;
+    return settled;
+  }
+
+  /** The last settlement rolled back (it threw, or ran out of budget); nothing was paid. */
+  private settlementFailed = false;
 
   useDealer(name: string): void {
     this.activeDealer = this.dealers.get(name);
@@ -1016,6 +1064,10 @@ export class GameRun {
     if (outcome === "playing") return false;
     this.announceOutcome();
     this.claimStageRewards();
+    // A settlement that rolled back pays nothing: stay on the decided stage, so it can be
+    // settled again, rather than progressing past it and losing the payout (#740 review). A
+    // loss with nothing to pay settles nothing, and still proceeds.
+    if (this.settlementFailed) return false;
     if (outcome === "lost") {
       this.currentPhase = "over";
       return true;

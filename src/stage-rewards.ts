@@ -6,8 +6,9 @@ import { Registry } from "./core/registry";
 import { donenessSteps } from "./cooking";
 import type { GameState } from "./game-state";
 import { passiveActivations } from "./passive-effects";
-import { commitCommands } from "./rule-commands";
-import type { PassiveBlock, StageContext } from "./passives";
+import type { RuleCommand } from "./event-rules";
+import { commitCommands, ruleCommands } from "./rule-commands";
+import type { GameEvent, PassiveBlock, StageContext } from "./passives";
 import { passiveDefinitions } from "./passives";
 import type { StageKind } from "./run-rules";
 import { getMaterialDefinition, materialOf, materialDefinitions } from "./materials";
@@ -38,6 +39,13 @@ export type RewardEntry = {
 export type RewardEffectHandler = {
   coins(config: unknown): number;
   validate(config: unknown): unknown;
+  /**
+   * The commands this effect commits when the stage is settled (#730), through the shared
+   * command path and inside the settlement's transaction. None for a coin effect.
+   */
+  commands?(config: unknown): readonly RuleCommand[];
+  /** The finalized configuration the receipt keeps, given the events its commands caused. */
+  receipt?(config: unknown, events: readonly GameEvent[]): unknown;
 };
 
 export const rewardEffects = new Registry<RewardEffectHandler>("reward effect");
@@ -49,6 +57,40 @@ rewardEffects.register("coins", {
     if (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount < 0)
       throw new Error("bad coin reward");
     return { amount };
+  },
+});
+
+/**
+ * An object grant (#730; doc/presents.md, "Mixed reward ledger and sound"): it commits the
+ * registered command its configuration names, and its receipt records the IDs of the objects that
+ * command reported. It adds no coins. The receipt is the proof of the grant: settling again,
+ * Continue or reopening the ledger never runs the command again, wherever the object has moved.
+ */
+type GrantConfig = { command: RuleCommand; granted?: readonly string[] };
+const isText = (value: unknown): value is string => typeof value === "string";
+rewardEffects.register("grant", {
+  coins: () => 0,
+  commands: (config) => [(config as GrantConfig).command],
+  receipt: (config, events) => {
+    const granted = events.flatMap(({ blockId }) => (blockId ? [blockId] : []));
+    // A grant that produced nothing (a full rack, say) is a failure, never a paid receipt: the
+    // settlement rolls back and the stage stays eligible to settle again (#740 review).
+    if (!granted.length) throw new Error("the grant produced no object");
+    return { ...(config as GrantConfig), granted };
+  },
+  validate(config) {
+    const { command, granted } = (config ?? {}) as Partial<GrantConfig>;
+    if (!command || !isText(command.id) || !ruleCommands.has(command.id))
+      throw new Error("bad grant reward");
+    // Saved effects are receipts: a grant's must record what it granted (#740 review). The IDs
+    // stay valid wherever those objects have since moved.
+    if (
+      !Array.isArray(granted) ||
+      !granted.length ||
+      granted.some((id) => typeof id !== "string" || !id)
+    )
+      throw new Error("bad grant receipt");
+    return { command: { id: command.id, config: command.config }, granted: [...granted] };
   },
 });
 
