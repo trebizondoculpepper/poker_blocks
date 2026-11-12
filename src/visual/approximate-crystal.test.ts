@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
 import { getMaterialDefinition } from "../materials";
-import { createFacetShell, facetPattern, facetTexture } from "./approximate-crystal";
+import { createFacetShell, facetPattern, facetTexture, fillPane } from "./approximate-crystal";
 import { opticsBackends, withOpticsBackend } from "./optics-backends";
 
 describe("approximate crystal (#523)", () => {
@@ -48,5 +48,34 @@ describe("optics backends (#523)", () => {
 
   it("states what the approximation cannot show", () => {
     expect(opticsBackends.get("approximation").unsupported).toMatch(/Contained blocks/);
+  });
+});
+
+describe("the approximation shows filled, coloured facets, not a wireframe (#524)", () => {
+  it("fills the face's see-through pane and leaves the art as it was", () => {
+    // One clear pane pixel, one opaque art pixel.
+    const pixels = new Uint8ClampedArray([0, 0, 0, 0, 160, 30, 50, 255]);
+    fillPane(pixels, new THREE.Color(0xffffff));
+    // The pane is now a pale, mostly opaque fill instead of nothing.
+    expect(pixels[3]).toBeGreaterThanOrEqual(150);
+    expect(Math.min(pixels[0]!, pixels[1]!, pixels[2]!)).toBeGreaterThan(200);
+    expect(Array.from(pixels.slice(4))).toEqual([160, 30, 50, 255]);
+  });
+
+  it("fills each facet with colour; seams are not what dominates", () => {
+    const size = 64;
+    const data = facetPattern(size, 12, 7);
+    let bright = 0;
+    let saturated = 0;
+    for (let at = 0; at < data.length; at += 4) {
+      const [r, g, b] = [data[at]!, data[at + 1]!, data[at + 2]!];
+      if (Math.max(r, g, b) > 60) bright++;
+      if (Math.max(r, g, b) - Math.min(r, g, b) > 40) saturated++;
+    }
+    const pixels = size * size;
+    // Almost every pixel is a lit facet (not a dark interior behind a bright outline)...
+    expect(bright / pixels).toBeGreaterThan(0.9);
+    // ...and most carry visible colour.
+    expect(saturated / pixels).toBeGreaterThan(0.5);
   });
 });
