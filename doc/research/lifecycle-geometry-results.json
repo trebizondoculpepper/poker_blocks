@@ -1,0 +1,47 @@
+{
+  "cube": {
+    "count": 8,
+    "dims": [2, 2, 2],
+    "volume": 8,
+    "density": 1,
+    "exposed": 24,
+    "sealedEmpty": 0,
+    "neighborTests": 48
+  },
+  "line": {
+    "count": 8,
+    "dims": [8, 1, 1],
+    "volume": 8,
+    "density": 1,
+    "exposed": 34,
+    "sealedEmpty": 0,
+    "neighborTests": 48
+  },
+  "ring": {
+    "count": 8,
+    "dims": [3, 3, 1],
+    "volume": 9,
+    "density": 0.8888888888888888,
+    "exposed": 32,
+    "sealedEmpty": 0,
+    "neighborTests": 48
+  },
+  "shell": {
+    "count": 26,
+    "dims": [3, 3, 3],
+    "volume": 27,
+    "density": 0.9629629629629629,
+    "exposed": 60,
+    "sealedEmpty": 1,
+    "neighborTests": 156
+  },
+  "tunnel": {
+    "count": 24,
+    "dims": [3, 3, 3],
+    "volume": 27,
+    "density": 0.8888888888888888,
+    "exposed": 64,
+    "sealedEmpty": 0,
+    "neighborTests": 144
+  }
+}

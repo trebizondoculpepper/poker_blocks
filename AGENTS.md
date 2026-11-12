@@ -75,6 +75,12 @@ The primary review question is whether this PR moves the code toward the **targe
 
 - Check that scoring, purchases, rewards, and other gameplay outcomes come from game state and rules, while animations, tinting, audio, and camera movement only present those outcomes. Flag a presentation effect that decides or mutates gameplay results. Pure visual changes do not need a game-rules document update.
 
+## Design and implementation ownership
+
+The design agent owns initial design decisions with the user and the initial updates to `doc/game.md` and `doc/game-architecture.md`, including while creating implementation tickets. Research is a joint responsibility: either design or implementation agents may investigate a concrete uncertainty and contribute evidence. Initial design-document ownership is not exclusive research ownership.
+
+The implementing agent normally builds against the agreed, already merged design rather than independently changing it. When implementation exposes a missing pattern, contradiction or costly unresolved decision, report the concrete finding on the ticket/PR for the design agent; do not silently invent a replacement architecture or bundle a new design with runtime changes. This does not require a new research mission for straightforward reuse or forbid evidence-backed implementation fixes that already match the docs. The user may explicitly assign a different role or authorize a design change. Documentation still merges in its own PR before the corresponding implementation begins.
+
 ## Working with other agents
 
 The full process (claiming tickets, open questions, labels, merging) is in [doc/process.md](doc/process.md). Where this section and that page differ, the page wins.
