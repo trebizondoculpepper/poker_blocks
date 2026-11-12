@@ -16,7 +16,7 @@
     "release": "node scripts/release.ts",
     "version-guard": "node scripts/version-guard.ts",
     "prepare": "vp config --hooks --no-agent",
-    "triage": "node scripts/triage/cli.js"
+    "triage": "node ../github_triage/src/cli.js"
   },
   "dependencies": {
     "@dnd-kit/abstract": "0.5.3",
