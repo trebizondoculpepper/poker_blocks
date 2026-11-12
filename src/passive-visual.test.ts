@@ -1,7 +1,8 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { passiveDefinitions } from "./passives";
 import {
+  addExtras,
   createPassiveVisual,
   defaultPassiveShape,
   passiveShapes,
@@ -123,5 +124,19 @@ describe("passive token visuals (#125)", () => {
       const { shape } = passiveDefinitions.get(id);
       expect(passiveShapes.has(shape ?? defaultPassiveShape), id).toBe(true);
     }
+  });
+});
+
+describe("adding a token's extras (#630)", () => {
+  it("logs no three.js error when a token has none", () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const mesh = new THREE.Mesh();
+    addExtras(mesh, undefined);
+    addExtras(mesh, []);
+    expect(errors).not.toHaveBeenCalled();
+    const extra = new THREE.Mesh();
+    addExtras(mesh, [extra]);
+    expect(mesh.children).toEqual([extra]);
+    errors.mockRestore();
   });
 });

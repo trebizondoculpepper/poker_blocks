@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { tweenValue } from "./easing";
 import "./passive-rack.css";
 import { passiveAppearance, type PassiveBlock } from "./passives";
-import { createPassiveVisual, type PassiveVisual } from "./passive-visual";
+import { addExtras, createPassiveVisual, type PassiveVisual } from "./passive-visual";
 import { categoryDefaults } from "./passive-categories";
 import {
   createActivationPulse,
@@ -178,7 +178,7 @@ export function createPassiveRack(host: HTMLElement): {
           const appearance = passiveAppearance(block);
           const visual = createPassiveVisual(appearance, cubeSize);
           const mesh = new THREE.Mesh(visual.geometry, visual.materials);
-          mesh.add(...(visual.extras ?? []));
+          addExtras(mesh, visual.extras);
           const edges = new THREE.LineSegments(
             visual.edges,
             new THREE.LineBasicMaterial({ color: appearance.palette.edge }),
