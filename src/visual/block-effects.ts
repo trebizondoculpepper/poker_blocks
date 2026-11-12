@@ -37,7 +37,8 @@ export type BlockEffectHandler = (
 export const blockEffects = new Registry<BlockEffectHandler>("block effect");
 
 /** Where cosmetic randomness comes from: `Math.random` unless a tool asks for a fixed stream. */
-let cosmeticSource: () => number = Math.random;
+// Looked up at each call, not captured: a test that stubs Math.random still reaches it.
+let cosmeticSource: () => number = () => Math.random();
 
 /** Cosmetic randomness for effects: presentation, never the session's stream. */
 export const cosmeticRandom = (): number => cosmeticSource();
