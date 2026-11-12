@@ -17,7 +17,7 @@ The first implementation is one coherent read-only collector/action briefing, no
 ## Inputs and commands
 
 - `npm run triage` refreshes open issues and PRs and prints a compact text briefing, highest-priority suggested actions first. Repository defaults to `gh repo view` for the checkout; `--repo owner/name` overrides it.
-- `--json` emits schema-versioned JSON without progress/debug noise on stdout.
+- `--json` emits schema-versioned JSON without progress/debug noise on stdout. Use `npm run --silent triage -- --json` to suppress npm’s own command banner.
 - `--issue N` additionally fetches that issue even when closed and includes unabridged body/comments plus related open PR evidence; it never automatically claims it.
 - `--since <ISO timestamp>` includes changed issues and PRs (including closed/merged) since that time. Without it, the briefing describes current state, not an invented “since yesterday”.
 - `--checkpoint <path>` compares with the last successful checkpoint time and advances it only after a complete successful live report is produced. A missing checkpoint establishes a baseline explicitly; it is not a claim to have observed all history. Supplied `--since` is explicit and takes precedence.
@@ -52,3 +52,15 @@ The registry may emit heuristic findings only with an explicit uncertainty label
 ## Verification and rollout
 
 First merge this document and the canonical architecture/process pointers, then implement in a separate PR. Tests must cover primary and nested pagination/completeness, declared versus incidental dependencies, cross-repository references, closed-unplanned versus merged status, missing/failed/pending head checks, unresolved threads, competing owners/readiness contradictions, question candidates with later replies, deterministic ordering, cache repo/schema mismatch/offline age, checkpoint failure safety and unknown/error reporting. Use injected gh query/clock/filesystem boundaries; tests must not need a GitHub credential. Run a real read-only report against this repository and inspect its suggested actions and full-ticket mode before delivery. No gameplay changes or generation keys are involved.
+
+## Running the implementation
+
+```sh
+npm run triage
+npm run --silent triage -- --json
+npm run --silent triage -- --issue 677 --json
+npm run triage -- --checkpoint /tmp/poker-triage-checkpoint.json --cache /tmp/poker-triage-cache.json
+npm run triage -- --offline --cache /tmp/poker-triage-cache.json
+```
+
+Requires Node 22.18+ (native erasable TypeScript) and authenticated `gh`. The cache contains repository issue/comment data; keep it outside git. Offline mode always uses its recorded timestamp, does not poll GitHub or advance a checkpoint, and cannot be combined with `--since`. Primary issues/PRs and comment history are paginated fully; unusually large nested PR/label connections are explicitly incomplete with exit 2 rather than silently certified for merge. Review thread previews retain total/omitted comment metadata. No background daemon is installed: invoke the command whenever the agent needs a new briefing, or use an external caller to poll it.
