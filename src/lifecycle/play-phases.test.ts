@@ -399,3 +399,30 @@ describe("score facts (#658, part 4)", () => {
     expect(seen).toEqual([before]);
   });
 });
+
+describe("a finalized line's card IDs are frozen (#696 review)", () => {
+  it("refuses a listener's change to score.lineFinalized's card IDs", async () => {
+    const { passiveTraits } = await import("../passives");
+    let refused = false;
+    if (!passiveTraits.has("test.line-meddler"))
+      passiveTraits.register("test.line-meddler", {
+        id: "test.line-meddler",
+        listensTo: ["score.lineFinalized"],
+        respond: (_block, event) => {
+          try {
+            (event.cardIds as string[]).push("intruder");
+          } catch {
+            refused = true;
+          }
+          return [];
+        },
+      });
+    const game = await withListener({ traitId: "test.line-meddler" });
+    const [first, second] = game.state.hand;
+    expect(game.play({ cardId: first!.id })).not.toBeNull();
+    expect(game.play({ cardId: second!.id, targetId: first!.id, face: "east" })).not.toBeNull();
+    expect(refused).toBe(true);
+    const line = game.actionFacts.find(({ type }) => type === "score.lineFinalized")!;
+    expect(line.subjectIds).not.toContain("intruder");
+  });
+});

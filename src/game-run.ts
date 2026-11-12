@@ -775,7 +775,7 @@ export class GameRun {
       this.passiveEvents.emit({
         type: "score.lineFinalized",
         amount: scored.points,
-        cardIds: [...scored.blockIds],
+        cardIds: captured([...scored.blockIds]),
         score: captured({ line: scored.line, intersections: crossingCells(scored.line, lines) }),
       });
     this.passiveEvents.emit({ type: "score.allLinesFinalized", amount: gained });
