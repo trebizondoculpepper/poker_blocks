@@ -1296,6 +1296,30 @@ Results are given raw and relative to the baseline. The relative figure is an es
 - the method and whether GPU timing was available;
 - the raw and baseline-relative results, and the uncovered appearances.
 
+**Evidence, trade-offs and limits.**
+
+_Sources:_
+
+- [Khronos `EXT_disjoint_timer_query_webgl2`](https://registry.khronos.org/webgl/extensions/EXT_disjoint_timer_query_webgl2/) defines `TIME_ELAPSED_EXT` queries, their asynchronous results (`QUERY_RESULT_AVAILABLE`) and the `GPU_DISJOINT_EXT` flag, which marks results in flight as invalid.
+- [MDN's page on the extension](https://developer.mozilla.org/en-US/docs/Web/API/EXT_disjoint_timer_query_webgl2) notes that browsers may coarsen or withhold it, so it must be optional.
+- three.js's [`WebGLRenderer.info`](https://threejs.org/docs/#api/en/renderers/WebGLRenderer.info) supplies the draw-call, triangle, geometry, texture and program counts.
+
+_Why this method:_ polling a query for its result every frame avoids the stall that a synchronous read would add to the very timing being measured. CPU time and frame time come from `performance.now()`, which the browser may also coarsen.
+
+_Measurement boundaries:_
+
+- An empty-scene baseline captures fixed costs: clearing, lights, and the renderer's own passes.
+- A one-object set and an N-object set bracket how cost grows with count.
+- Neither isolates transmission or transparency passes that three.js adds only once some material needs them. The first such object therefore carries that whole pass, which is why relative figures are labelled as estimates.
+
+_What remains unverified until #618 runs in browsers:_
+
+- how often timer queries are available and disjoint on the owner's devices (Safari has historically not exposed the extension, and the room then reports GPU time as unavailable);
+- how stable the medians are across repeated runs;
+- whether the default frame and warm-up counts are long enough.
+
+The runner's tests use a fake timer and renderer, so they check the logic (rejection, retakes, cancellation, leak detection) but not real GPU numbers.
+
 **Delivery.** The work is split into child tickets:
 
 1. #618: the registry and runner, tested with test-only cases and a fake timer.
