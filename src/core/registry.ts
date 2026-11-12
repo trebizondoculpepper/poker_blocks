@@ -1,3 +1,5 @@
+import { countOperation } from "../lifecycle/operations";
+
 /** A named collection of definitions (traits, effects, ...). Names are unique. */
 export class Registry<T> {
   private readonly items = new Map<string, T>();
@@ -12,9 +14,16 @@ export class Registry<T> {
     this.items.set(name, item);
   }
 
+  /**
+   * The registered item. Inside a committed action each lookup is charged to its operation budget
+   * (#661 review): registered handlers are what an action's work is made of, so every registry
+   * (triggers, removals, reactions and any added later) shares the one action-wide limit.
+   * Outside an action nothing is charged.
+   */
   get(name: string): T {
     const item = this.items.get(name);
     if (item === undefined) throw new Error(`Unknown ${this.what} "${name}"`);
+    countOperation(`${this.what} ${name}`);
     return item;
   }
 

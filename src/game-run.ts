@@ -617,8 +617,6 @@ export class GameRun {
     },
     update: (state: GameState) => void (run.currentState = state),
     grantUnownedPassive: () => run.grantUnownedPassive(),
-    operate: (registration: string) =>
-      run.activeAction?.context.operate(registration, run.activeAction.phase, []),
   }))(this);
 
   /** A passive instance id no installed passive has: `passive.<n>`, from the rack size up. */

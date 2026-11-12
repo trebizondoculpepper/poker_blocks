@@ -194,7 +194,9 @@ describe("the action budget reaches commands and outcomes (#661 review)", () => 
     const before = game.state;
     expect(game.discard(hand.map(({ id }) => id))).toBeNull();
     expect(game.state).toBe(before);
-    expect((game.actionFailure as ResolutionBudgetExceeded).registration).toBe("command add-coins");
+    expect((game.actionFailure as ResolutionBudgetExceeded).registration).toBe(
+      "rule command add-coins",
+    );
   });
 
   it("delivers a play's stage outcome inside the action, recording it as a fact", () => {
@@ -447,5 +449,28 @@ describe("nested reaction matchers count too (#661 review)", () => {
       "reaction matcher neighbour-material",
       "reaction matcher test.nested-never",
     ]);
+  });
+});
+
+describe("every registry charges the action as it hands out a handler (#661 review)", () => {
+  it("charges trigger selectors, removal modes and any other registered handler", async () => {
+    const { Registry } = await import("../core/registry");
+    const { triggerTargetSelectors } = await import("../trigger-responses");
+    const { withOperationCounter } = await import("./operations");
+    const anyRegistry = new Registry<() => void>("test handler");
+    anyRegistry.register("one", () => {});
+    const charged: string[] = [];
+    withOperationCounter(
+      (registration) => void charged.push(registration),
+      () => {
+        anyRegistry.get("one");
+        triggerTargetSelectors.get(triggerTargetSelectors.names()[0]!);
+      },
+    );
+    expect(charged[0]).toBe("test handler one");
+    expect(charged).toHaveLength(2);
+    // Outside an action nothing is charged.
+    anyRegistry.get("one");
+    expect(charged).toHaveLength(2);
   });
 });

@@ -13,7 +13,6 @@
  * do nothing. Nothing here names a material.
  */
 import { Registry } from "./core/registry";
-import { countOperation } from "./lifecycle/operations";
 import type { CardBlock } from "./cards";
 import type { RuleCommand } from "./event-rules";
 import type { GameState, PlacedBlock } from "./game-state";
@@ -58,11 +57,9 @@ export const reactionResults = new Registry<ReactionResult>("reaction result");
  * much as the outer ones. Nothing counts outside an action.
  */
 function matcher(id: string): ReactionMatcher {
-  countOperation(`reaction matcher ${id}`);
   return reactionMatchers.get(id);
 }
 function resultHandler(id: string): ReactionResult {
-  countOperation(`reaction result ${id}`);
   return reactionResults.get(id);
 }
 
