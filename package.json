@@ -30,7 +30,7 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",
-    "github-triage": "git+https://git@github.com/trebizondoculpepper/github_triage.git#35bc59385b542235178dc8a202be5a531b886b73",
+    "github-triage": "git+https://git@github.com/trebizondoculpepper/github_triage.git#main",
     "typescript": "~7.0.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.5.0",
     "vite-plus": "1.5.0"
