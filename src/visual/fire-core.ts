@@ -28,6 +28,9 @@ const fragmentShader = /* glsl */ `
   uniform float opacity;
   // World "up" in the block's own space: flames always rise, however the block is turned.
   uniform vec3 upLocal;
+  // How far below the centre the flame's base sits, along world down, as a fraction of the
+  // interior half-extent (#745).
+  uniform float baseOffset;
   varying vec3 vLocal;
 
   float hash(vec3 p) {
@@ -67,7 +70,7 @@ const fragmentShader = /* glsl */ `
     vec3 side = normalize(abs(up.x) < 0.9 ? cross(up, vec3(1, 0, 0)) : cross(up, vec3(0, 0, 1)));
     vec3 front = cross(side, up);
     q = vec3(dot(q, side), dot(q, up), dot(q, front));
-    float base = -0.45; // just below the centre
+    float base = -baseOffset; // below the centre, on world down
     float height = q.y - base;
     if (height < -0.08) return vec2(0.0);
     // Sway, more towards the tip.
@@ -115,6 +118,9 @@ const fragmentShader = /* glsl */ `
   }
 `;
 
+/** The flame base's default depth below the centre (doc/presentation-contracts.md, #745). */
+export const flameBaseOffset = 0.6;
+
 /** The fire inside one fire block; add it as a child of the block's mesh. */
 export function createFireCore(size: number): THREE.Mesh {
   const halfSize = (size / 2) * 0.96;
@@ -127,6 +133,7 @@ export function createFireCore(size: number): THREE.Mesh {
       cameraLocal: { value: new THREE.Vector3() },
       intensity: { value: 3.2 },
       upLocal: { value: new THREE.Vector3(0, 1, 0) },
+      baseOffset: { value: flameBaseOffset },
       // Read from the material's own opacity at render (set below), never a copy.
       opacity: { value: 1 },
     },
@@ -169,10 +176,10 @@ export function createFireCore(size: number): THREE.Mesh {
  * The flame's configuration (#355): how large it is within the interior and how bright, as
  * multiples of the original. Omitted, both are 1, the fire block's own flame.
  */
-export type FlameConfig = { scale?: number; brightness?: number };
+export type FlameConfig = { scale?: number; brightness?: number; baseOffset?: number };
 
 containedContents.register("flame", (boundary, raw) => {
-  const { scale = 1, brightness = 1 } = (raw ?? {}) as FlameConfig;
+  const { scale = 1, brightness = 1, baseOffset = flameBaseOffset } = (raw ?? {}) as FlameConfig;
   // It keeps the core's own order (drawn last, after the frame): it is an additive, non-depth-
   // writing material in the opaque queue, so the frame must be drawn first or its rear bars
   // would paint over the glow. The contained layer table orders the transparent queue only.
@@ -180,5 +187,6 @@ containedContents.register("flame", (boundary, raw) => {
   const core = createFireCore(boundary.halfSize * 2 * boundary.inset * Math.min(scale, 1 / 0.96));
   const uniforms = (core.material as THREE.ShaderMaterial).uniforms;
   uniforms.intensity!.value *= brightness;
+  uniforms.baseOffset!.value = baseOffset;
   return { meshes: [core], capabilities: {} };
 });
