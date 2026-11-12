@@ -406,3 +406,14 @@ describe("each handler a rule invokes counts (#661 review)", () => {
     expect(charged).toContain("condition always");
   });
 });
+
+describe("a caller's automatic-looking ID is remembered (#661 review)", () => {
+  it("rejects auto:1 submitted twice, and never generates it afterwards, across Continue too", () => {
+    const ledger = new ActionLedger();
+    ledger.remember("auto:1");
+    expect(ledger.has("auto:1")).toBe(true);
+    expect(ledger.next("play")).not.toBe("auto:1");
+    const restored = ActionLedger.restore(ledger.state);
+    expect(restored.has("auto:1")).toBe(true);
+  });
+});

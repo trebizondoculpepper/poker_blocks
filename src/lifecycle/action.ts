@@ -203,9 +203,13 @@ export class ActionLedger {
     return serial !== null && serial <= this.counter;
   }
 
-  /** Remember a resolved action ID (an automatic one is already spent by being issued). */
+  /**
+   * Remember a resolved action ID. One the counter already covers was spent when issued; any
+   * other, even a caller's ID shaped like `auto:<n>` beyond the counter, is kept (#661 review).
+   */
   remember(actionId: string): void {
-    if (autoSerial(actionId) === null) this.explicit.add(actionId);
+    const serial = autoSerial(actionId);
+    if (serial === null || serial > this.counter) this.explicit.add(actionId);
   }
 
   /** What a save keeps. */
