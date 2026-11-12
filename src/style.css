@@ -681,9 +681,33 @@ body,
   display: none;
 }
 
-.menu-confirm p {
-  margin: 4px 0 10px;
-  font-size: 14px;
+/* The title's choices as word cubes (#529): the block-menu stage fills this box. */
+.block-menu-host {
+  position: relative;
+  width: 100%;
+  height: 150px;
+}
+
+.block-menu-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.block-menu-message {
+  margin: 4px 0 0;
+  font-size: 15px;
+  text-align: center;
+}
+
+.block-menu-host .block-menu-caption {
+  position: absolute;
+  inset: auto 0 -1.6em;
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+  opacity: 0.8;
 }
 
 .menu-row {

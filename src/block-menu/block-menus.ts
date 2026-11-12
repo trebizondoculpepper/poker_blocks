@@ -64,6 +64,8 @@ export type ShownMenu = {
   setAvailability(action: string, availability: Availability): void;
   /** Move keyboard focus to the first available choice. */
   focusFirst(): void;
+  /** Move keyboard focus to this choice. */
+  focusAction(action: string): void;
   hide(): void;
 };
 
@@ -206,6 +208,9 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
       focusFirst() {
         buttons.find((button) => button.getAttribute("aria-disabled") !== "true")?.focus();
       },
+      focusAction(action) {
+        byAction.get(action)?.button.focus();
+      },
       hide,
     };
   }
@@ -220,6 +225,55 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
       caption.remove();
       list.remove();
       stage.dispose();
+    },
+  };
+}
+
+/** What a scene's dialog trait hands the dialogs service with its config (#529). */
+export type DialogHandlers = {
+  /** A choice was made: its opaque action. */
+  onAction(action: string): void;
+  /** Whether a choice is available now (its `enabledWhen` condition). */
+  availability(item: MenuBlockItem): boolean;
+};
+
+/**
+ * The game's dialogs service (#529): shows the dialog a scene hands it as a block menu in
+ * `host`, one at a time (a later one replaces it), with each choice's availability and its
+ * starting focus. Escape is the scene's own key action, not the dialog's. It names no dialog or action.
+ */
+export function createDialogPresenter(host: () => HTMLElement, options: BlockMenuOptions) {
+  let menus: ReturnType<typeof createBlockMenus> | null = null;
+  let message: HTMLParagraphElement | null = null;
+  return {
+    add(dialog: DialogConfig, handlers: DialogHandlers): () => void {
+      if (!menus) {
+        const into = host();
+        menus = createBlockMenus(into, options);
+        message = document.createElement("p");
+        message.className = "block-menu-message";
+        message.setAttribute("aria-live", "assertive");
+        into.before(message);
+      }
+      message!.textContent = dialog.message ?? "";
+      message!.hidden = !dialog.message;
+      const shown = menus.show(dialog, { onAction: (action) => handlers.onAction(action) });
+      for (const item of dialog.items)
+        shown.setAvailability(item.action, {
+          enabled: item.enabled !== false && handlers.availability(item),
+          reason: item.disabledReason,
+        });
+      if (dialog.focus) shown.focusAction(dialog.focus);
+      else shown.focusFirst();
+      return () => {
+        shown.hide();
+        if (message?.textContent === (dialog.message ?? "")) message.hidden = true;
+      };
+    },
+    dispose(): void {
+      message?.remove();
+      menus?.dispose();
+      menus = null;
     },
   };
 }

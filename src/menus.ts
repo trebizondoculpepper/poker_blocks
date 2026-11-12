@@ -38,8 +38,12 @@ export type Menus = {
   readonly menuButton: HTMLElement;
   /** The visible panel surface for scene-composed heading content. */
   panelHeadingHost(): HTMLElement;
-  /** The title's items are the title scene trait's decision, so they are passed in. */
-  showTitle(items: readonly MenuChoice[]): void;
+  /** Show the title panel; its choices are a block menu shown in `choicesHost` (#529). */
+  showTitle(): void;
+  /** Where the title's block-menu choices are drawn, under its heading. */
+  choicesHost(): HTMLElement;
+  /** A choice from a block menu: a title command if one is registered for it, else navigation. */
+  choose(action: string): void;
   hideTitle(): void;
   /** The footer of the panel in front: the version, then links out (#129). */
   showPanelFooter(links: readonly PanelLink[], version: string): void;
@@ -72,15 +76,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   title.panel.insertAdjacentHTML(
     "beforeend",
     `<p class="menu-subtitle">Poker solitaire in three dimensions</p>
-     <div class="menu-buttons" data-menu="items"></div>
-     <div class="menu-confirm" data-menu="confirm" role="alertdialog" aria-modal="true"
-          aria-labelledby="new-game-warning" hidden>
-       <p id="new-game-warning">Start a new game? The game in progress will be lost.</p>
-       <div class="menu-row">
-         <button type="button" data-menu="confirm-yes">Start New Game</button>
-         <button type="button" data-menu="confirm-no">Cancel</button>
-       </div>
-     </div>`,
+     <div class="block-menu-host" data-menu="items"></div>`,
   );
 
   // Created before Settings, so Settings opened from it sits on top.
@@ -135,7 +131,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   /** The footer currently shown, so hiding removes exactly that one. */
   let shownFooter: HTMLElement | null = null;
   const titleItems = find<HTMLDivElement>(title.panel, "items");
-  const confirm = find<HTMLDivElement>(title.panel, "confirm");
   const choices = find<HTMLDivElement>(pauseMenu.panel, "choices");
 
   function open(screen: HTMLElement): void {
@@ -159,18 +154,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     callbacks.onScreen?.("game");
   }
 
-  /**
-   * The New Game confirmation (#197) stands alone: while it is up, the title's own items
-   * (Continue, Settings and New Game itself) are hidden, so it offers only its two choices.
-   */
-  function confirmNewGame(shown: boolean): void {
-    confirm.hidden = !shown;
-    titleItems.hidden = shown;
-  }
-
-  function showTitle(items: readonly MenuChoice[]): void {
-    confirmNewGame(false);
-    fillTitleItems(items);
+  function showTitle(): void {
     open(title.root);
     callbacks.onScreen?.("title");
   }
@@ -228,25 +212,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   }
 
   /**
-   * The title's buttons come from the scene's `titleScreen` trait, so which ones appear (and
-   * whether Continue is offered at all) is configuration, not this file's decision.
-   */
-  function fillTitleItems(items: readonly MenuChoice[]): void {
-    titleItems.replaceChildren();
-    for (const item of items) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = item.label;
-      button.dataset.menu = item.id;
-      disableWithHint(button, item);
-      button.addEventListener("click", () =>
-        item.disabled ? playSfx("action.denied") : chooseTitleItem(item.id),
-      );
-      titleItems.append(button);
-    }
-  }
-
-  /**
    * The title's own commands, keyed by the item id its scene trait declares. An id not in this
    * table is a navigation action, which the run controller's flow data handles.
    */
@@ -258,18 +223,18 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     new() {
       // Starting again discards a saved run, so it asks first (#10). Focus goes to the
       // non-destructive choice, so a held or repeated Enter cannot overwrite the save.
-      if (callbacks.hasSave()) {
-        confirmNewGame(true);
-        find<HTMLButtonElement>(confirm, "confirm-no").focus();
-        return;
-      }
+      if (callbacks.hasSave()) return callbacks.onAction("openNewGameConfirm");
+      closeAll();
+      callbacks.onNewGame();
+    },
+    confirmNewGame() {
       closeAll();
       callbacks.onNewGame();
     },
   };
 
-  function chooseTitleItem(id: string): void {
-    playSfx("ui.click");
+  /** The chosen cube has already played its own sound (click, or denied while disabled). */
+  function choose(id: string): void {
     const command = Object.hasOwn(titleCommands, id) ? titleCommands[id] : null;
     if (command) return command();
     callbacks.onAction(id);
@@ -352,16 +317,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     settingsButton.hidden = !title.root.hidden || !gameOver.root.hidden || !stageWon.root.hidden;
   }
 
-  find(confirm, "confirm-yes").addEventListener("click", () => {
-    playSfx("ui.click");
-    closeAll();
-    callbacks.onNewGame();
-  });
-  find(confirm, "confirm-no").addEventListener("click", () => {
-    playSfx("ui.back");
-    confirmNewGame(false);
-    titleItems.querySelector<HTMLButtonElement>("button")?.focus();
-  });
   // The touch-visible button opens the same pause menu as Escape.
   settingsButton.addEventListener("click", () => {
     playSfx("ui.click");
@@ -499,6 +454,8 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     panelHeadingHost: () => overlayInFront()?.querySelector<HTMLElement>(".menu-panel") ?? host,
     showTitle,
     hideTitle,
+    choicesHost: () => titleItems,
+    choose,
     showPanelFooter,
     hidePanelFooter,
     closeAll,

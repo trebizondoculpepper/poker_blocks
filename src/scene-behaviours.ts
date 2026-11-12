@@ -21,6 +21,7 @@ import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
 import type { ActionLog } from "./action-log";
 import { firstPlayPrompt, type FirstPlayTable } from "./scene-traits/first-play-prompt";
 import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
+import type { DialogHandlers } from "./block-menu/block-menus";
 import type { AudioService } from "./audio-service";
 import type { CameraViewService } from "./camera-view";
 import type { Overlays } from "./overlays";
@@ -85,8 +86,11 @@ export type SceneHost = {
       show(config: SceneTraits["devWordCubeRoom"]): void;
       hide(): void;
     };
-    /** Shows the dialogs scenes compose; each `add` returns a function that takes it away. */
-    dialogs: { add(config: SceneTraits["titleMenuDialog"]): () => void };
+    /**
+     * Shows the dialogs scenes compose; each `add` returns a function that takes it away. The
+     * handlers route its choices and give each one's availability (#529).
+     */
+    dialogs: { add(config: SceneTraits["titleMenuDialog"], handlers: DialogHandlers): () => void };
     devDialogRoom: {
       show(config: SceneTraits["devDialogRoom"]): void;
       hide(): void;
@@ -112,6 +116,7 @@ export type SceneHost = {
       | "showSettings"
       | "hideSettings"
       | "showTitle"
+      | "choose"
       | "hideTitle"
       | "showGameOver"
       | "hideGameOver"
@@ -476,8 +481,22 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     "gameOverDialog",
   ] as const) {
     const shown = new WeakMap<object, () => void>();
+    const show = (context: Context, config: SceneTraits[typeof name]) => {
+      shown.get(config)?.();
+      const { services } = context;
+      shown.set(
+        config,
+        services.dialogs.add(config, {
+          onAction: (action) => services.overlays.choose(action),
+          availability: (item) =>
+            item.enabledWhen ? menuConditions[item.enabledWhen](context) : true,
+        }),
+      );
+    };
     behaviours.register(name, {
-      enter: ({ services }, config) => void shown.set(config, services.dialogs.add(config)),
+      enter: show,
+      // Back in front after a scene over it (Settings, the new-game confirmation) closed.
+      resume: show,
       exit: (_context, config) => {
         shown.get(config)?.();
         shown.delete(config);
@@ -548,8 +567,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     enter: ({ services }, { pool }) => services.audio.playStageMusic(pool),
   });
   behaviours.register("titleScreen", {
-    enter(context, { items }) {
-      context.services.overlays.showTitle(itemsToShow(context, items));
+    enter(context) {
+      context.services.overlays.showTitle();
     },
     // Back in front after a panel opened over it.
     resume(context, config) {
