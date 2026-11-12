@@ -113,7 +113,7 @@ Reviewers check both directions: architecture changes without corresponding prio
 
 ## One-command GitHub briefing
 
-The implementation lives in the standalone [github_triage repository](https://github.com/trebizondoculpepper/github_triage). This repository's `npm run triage` launches the sibling source checkout; see [source installation and launch](github-triage-cli.md#source-installation-and-launch-713). New triage features, bugs and tests belong in that project.
+The implementation lives in the standalone [github_triage repository](https://github.com/trebizondoculpepper/github_triage). This repository's `npm run triage` launches the installed Git dependency; see [Git dependency installation and launch](github-triage-cli.md#git-dependency-installation-and-launch-724). New triage features, bugs and tests belong in that project.
 
 Run `npm run triage` at intake and before selecting the next ticket; `npm run --silent triage -- --json` provides structured output and `npm run triage -- --issue N` provides full intake. Use `--help` for current flags. Read freshness, completeness and omissions before acting. Follow up on original issue/PR evidence, recheck live ownership/head and preserve the normal claim/review/merge process. Suggestions are not approval.
 
