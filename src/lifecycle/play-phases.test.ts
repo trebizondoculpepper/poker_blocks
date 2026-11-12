@@ -320,3 +320,53 @@ describe("the working aggregate and captured payloads (#682 review)", () => {
     expect((onField.traits as Record<string, unknown>).meddled).toBeUndefined();
   });
 });
+
+describe("aggregate ordering and dice (#682 review)", () => {
+  it("draws no random value for rules outside the aggregate phase", async () => {
+    const { createPassiveBlock } = await import("../passives");
+    const { resolveTotalWithPassives } = await import("../passive-effects");
+    const die = createPassiveBlock("d6", "die.1");
+    const never = () => {
+      throw new Error("drew a random value");
+    };
+    expect(resolveTotalWithPassives(7, [die], never).value).toBe(7);
+  });
+
+  it("delivers finalized-score hooks before the total is applied", async () => {
+    const { passiveTraits, createPassiveBlock } = await import("../passives");
+    const seen: number[] = [];
+    let game: GameRun | null = null;
+    if (!passiveTraits.has("test.finalized-probe"))
+      passiveTraits.register("test.finalized-probe", {
+        id: "test.finalized-probe",
+        listensTo: ["score.allLinesFinalized"],
+        respond: () => {
+          seen.push(probe.read());
+          return [];
+        },
+      });
+    const probe = { read: () => game!.state.round.score };
+    const base = createPassiveBlock("scrapper", "probe.1");
+    const rules = sandboxRunRules(demoRunRules);
+    const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    opening.installPassive({
+      ...base,
+      traits: { ...base.traits, passive: { traitId: "test.finalized-probe" } },
+    });
+    const hand = [standardDeck[0]!, standardDeck[13]!];
+    game = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      { ...opening.snapshot(), state: { ...opening.state, hand } },
+      () => 0,
+    );
+    const [first, second] = hand;
+    expect(game.play({ cardId: first!.id })).not.toBeNull();
+    const before = game.state.round.score;
+    seen.length = 0;
+    expect(game.play({ cardId: second!.id, targetId: first!.id, face: "east" })).not.toBeNull();
+    expect(game.state.round.score).toBeGreaterThan(before);
+    expect(seen).toEqual([before]);
+  });
+});

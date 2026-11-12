@@ -238,11 +238,15 @@ export function resolveTotalWithPassives(
   rack: readonly PassiveBlock[],
   random: () => number = noRandomSource,
 ): { value: number; activations: RuleActivation[] } {
+  // Only the aggregate's own rules resolve their values: every other phase's dice were rolled
+  // once by line scoring, and must not draw again (#682 review; doc/game.md, dice).
   const sources = rack.map((passive) => {
     const source = passiveSource(passive);
     return {
       ...source,
-      rules: source.rules.map((rule) => ruleHandlers.resolveValues(rule, random)),
+      rules: source.rules
+        .filter((rule) => rule.on === beforeTotalPhase)
+        .map((rule) => ruleHandlers.resolveValues(rule, random)),
     };
   });
   const resolved = evaluateRules(

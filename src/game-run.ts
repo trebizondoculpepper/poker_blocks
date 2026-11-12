@@ -773,6 +773,8 @@ export class GameRun {
         score: captured({ line: scored.line, intersections: crossingCells(scored.line, lines) }),
       });
     this.passiveEvents.emit({ type: "score.allLinesFinalized", amount: gained });
+    // Finalized-score hooks and their follow-ups resolve before the aggregate (#682 review).
+    this.drainPhase(context, "score", batchId);
     // The working aggregate: score.beforeTotalApplied may change the play's delta, never a
     // finalized line; it is applied once (#682 review).
     const total = resolveTotalWithPassives(gained, this.currentState.passiveRack, this.random);
