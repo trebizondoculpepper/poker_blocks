@@ -58,7 +58,15 @@ reviews:
           Pass/fail criteria. Judge whether the change fits the architecture in
           doc/game-architecture.md (especially "Agreed principles" and "Modes, scenes and
           traits") and AGENTS.md. Do not only check the diff compiles; ask where the
-          behaviour lives and whether that is the right place. FAIL if any of:
+          behaviour lives and whether that is the right place.
+          For lifecycle changes, read doc/game-events.md (#611): model controller traits
+          coordinate registered commands; presentation controllers and services cannot mutate
+          gameplay. Check phase barriers, snapshot subscription order/context, batch versus
+          per-block facts, action-wide cascade bounds, state/RNG rollback, restoration without
+          replay, and lazy snapshot-scoped queries. Flag concrete changed inconsistencies,
+          not missing unrelated optional hooks. Material behavior is composed on the playfield;
+          legacy direct calls/destruction-to-discard are migration gaps, not target precedents.
+          FAIL if any of:
           1. Behaviour is put in the wrong layer: game rules outside GameRun, run setup or a
              trait; rendering or DOM work inside GameRun or rules code; scene sequencing
              hard-coded rather than expressed as game-flow data on the game mode.
