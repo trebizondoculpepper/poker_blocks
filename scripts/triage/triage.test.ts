@@ -384,3 +384,48 @@ esac
     },
   );
 });
+
+describe("compact briefing contract", () => {
+  it("deduplicates targets, separates parked questions and preserves full detail", async () => {
+    const { compactBriefing, compactText, sourceContext } = await import("./compact.js");
+    const parked = issue(7, ["status:parked", "question"]);
+    const mine = issue(8, ["agent:reader"]);
+    mine.lastEditedAt = "2026-11-12T12:00:00Z";
+    mine.comments = page([
+      { body: "old question?", url: `${mine.url}#comment`, author: null, createdAt: time },
+    ]);
+    const data = snapshot([parked, mine, issue()], [pr()]);
+    const expanded = briefing(data, { limit: 100, issue: 8 }, new Date(time));
+    const compact = compactBriefing(data, { limit: 5, agent: "reader" }, expanded);
+    expect(compact.schemaVersion).toBe(2);
+    expect(new Set(compact.actions.items).size).toBe(compact.actions.items.length);
+    expect(compact.actions.items).not.toContain(parked.url);
+    expect(compact.sections.deferred.items).toContain(parked.url);
+    expect(compact.sections.current.items).toContain(mine.url);
+    expect(compact.detail?.comments.nodes[0].body).toBe("old question?");
+    expect(sourceContext(mine).chronology).toContain("superseded");
+    expect(sourceContext(parked).chronology).toContain("Unknown");
+    const noDetail = { ...compact, detail: null };
+    expect(compactText(noDetail, 1500).length).toBeLessThanOrEqual(1500);
+    expect(compactText(noDetail, 1500)).toContain("omitted");
+  });
+  it("bounds independent requests, retains order and propagates failure", async () => {
+    const { concurrentMap } = await import("./github.js");
+    let active = 0;
+    let peak = 0;
+    const results = await concurrentMap([1, 2, 3, 4, 5, 6, 7], async (n: number) => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      active--;
+      return n * 2;
+    });
+    expect(peak).toBe(4);
+    expect(results).toEqual([2, 4, 6, 8, 10, 12, 14]);
+    await expect(
+      concurrentMap([1], async () => {
+        throw new Error("failed");
+      }),
+    ).rejects.toThrow("failed");
+  });
+});

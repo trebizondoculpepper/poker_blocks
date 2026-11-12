@@ -27,6 +27,7 @@ export type Issue = {
   url: string;
   state: string;
   stateReason?: string | null;
+  lastEditedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   labels: Page<{ name: string }>;
@@ -71,6 +72,7 @@ export type Snapshot = {
   changed: { number: number; title: string; url: string; state: string; updatedAt: string }[];
   since: string | null;
   warnings: string[];
+  metrics?: { requestCount: number; durationMs: number };
   rateLimit: { remaining: number; resetAt: string } | null;
 };
 export type Action = {

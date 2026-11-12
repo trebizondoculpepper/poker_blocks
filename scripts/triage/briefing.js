@@ -113,7 +113,12 @@ analysisRules.set("ownership-and-labels", ({ issues }) =>
 );
 analysisRules.set("ready-work", ({ issues }) =>
   issues
-    .filter((issue) => !owners(issue).length && labels(issue).includes(workflow.ready))
+    .filter(
+      (issue) =>
+        !owners(issue).length &&
+        labels(issue).includes(workflow.ready) &&
+        !labels(issue).includes(workflow.parked),
+    )
     .map((issue) =>
       action(
         "ready-unclaimed",
@@ -126,7 +131,12 @@ analysisRules.set("ready-work", ({ issues }) =>
 );
 analysisRules.set("ready-dependencies", ({ snapshot, issues }) =>
   issues.flatMap((issue) => {
-    if (!labels(issue).includes(workflow.ready) || owners(issue).length) return [];
+    if (
+      !labels(issue).includes(workflow.ready) ||
+      owners(issue).length ||
+      labels(issue).includes(workflow.parked)
+    )
+      return [];
     const refs = declaredDependencies(issue.body, snapshot.repository);
     const unresolved = refs.filter(
       (ref) =>
@@ -153,7 +163,8 @@ analysisRules.set("ready-dependencies", ({ snapshot, issues }) =>
 );
 analysisRules.set("dependencies", ({ snapshot, issues }) =>
   issues.flatMap((issue) => {
-    if (!labels(issue).includes(workflow.blocked)) return [];
+    if (!labels(issue).includes(workflow.blocked) || labels(issue).includes(workflow.parked))
+      return [];
     const refs = declaredDependencies(issue.body, snapshot.repository);
     const deps = refs.map((ref) =>
       snapshot.dependencies.find(
@@ -194,7 +205,7 @@ analysisRules.set("attention", ({ issues }) =>
   issues.flatMap((issue) => {
     const findings = [];
     const attention = labels(issue).filter((label) => workflow.attention.includes(label));
-    if (attention.length)
+    if (attention.length && !labels(issue).includes(workflow.parked))
       findings.push(
         action(
           "attention-label",
@@ -413,7 +424,12 @@ export function briefing(snapshot, options, now = new Date()) {
     actions: limit(actions),
     ready: limit(
       issues
-        .filter((issue) => !owners(issue).length && labels(issue).includes(workflow.ready))
+        .filter(
+          (issue) =>
+            !owners(issue).length &&
+            labels(issue).includes(workflow.ready) &&
+            !labels(issue).includes(workflow.parked),
+        )
         .map(context),
     ),
     claimed: limit(issues.filter((issue) => owners(issue).length).map(context)),
