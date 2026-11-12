@@ -57,6 +57,7 @@ import { commitCommands, type CommandTarget } from "./rule-commands";
 import type { RandomCursor } from "./random";
 import {
   ActionContext,
+  captured,
   ActionLedger,
   defaultResolutionLimits,
   type ActionLedgerState,
@@ -135,7 +136,8 @@ export class GameRun {
   private version = 0;
   private lastFacts: readonly EventEnvelope[] = [];
   /** The action resolving now, if any: every drain and command inside it shares its budget. */
-  private activeAction: { context: ActionContext; phase: string } | null = null;
+  private activeAction: { context: ActionContext; phase: string; batchId: string | null } | null =
+    null;
   private lastFailure: Error | null = null;
 
   constructor(
@@ -232,7 +234,7 @@ export class GameRun {
       { stage: this.stageContext, round: this.currentRound },
     );
     try {
-      this.activeAction = { context: action, phase: kind };
+      this.activeAction = { context: action, phase: kind, batchId: null };
       // Everything evaluated inside the action is charged to its budget (#661 review).
       const result = withOperationCounter(
         // The event chain being delivered now, if any, names the cause in a diagnostic.
@@ -423,7 +425,7 @@ export class GameRun {
       undefined,
       action ? this.budgetFor(action.context, action.phase) : undefined,
     );
-    if (action) this.recordDelivered(action.context, action.phase, delivered);
+    if (action) this.recordDelivered(action.context, action.phase, delivered, action.batchId);
   }
 
   /** Once a stage is decided, announce the final stage.won or stage.lost exactly once. */
@@ -699,27 +701,64 @@ export class GameRun {
   }
 
   /**
-   * A play, with its material steps run where the playfield's composed controllers attached them
-   * (#658; doc/game-events.md, "Resolution order for a play"): before score (countdown
-   * deductions record pending triggers), then scoring, then after score (reactions, then the
-   * pending detonations). Without a composition, no material steps run.
+   * A play's model phases, in the documented order (#658; doc/game-events.md, "Resolution order
+   * for a play"): placement, before score (its configured steps), scoring, after score (its
+   * configured steps), then settlement, with play.completed last. Each phase's follow-ups are
+   * drained before the next begins. Nothing waits for presentation.
    */
   private resolvePlay(action: PlayAction, context: ActionContext): GameState | null {
+    // A group names its primary card first; one that doesn't is refused, so every fact names
+    // what was actually placed (#695 review).
+    if (action.cardIds?.length && action.cardIds[0] !== action.cardId) return null;
     const next = this.activeDealer.play(this.currentState, action);
     if (!next) return null;
-    const placed = action.cardIds?.length ? [...action.cardIds] : [action.cardId];
+    // Captured: listeners receive these IDs, and must not change the play (#682 review).
+    const placed = captured(action.cardIds?.length ? [...action.cardIds] : [action.cardId]);
+    const phases = this.playPhases;
     const steps: PlayStepContext = {
       target: this.commandTarget,
       placed: new Set(placed),
       pending: [],
       reactions: [],
     };
-    // The dealer's result already holds a provisional score; until scoring applies the committed
-    // one, pre-score steps see the score as it was.
+    // The score before this play: the dealer's next state is not the base the play's points add to.
     const scoreBefore = this.currentState.round.score;
+    // The dealer's result already holds a provisional score; until the scoring phase applies the
+    // committed one, placement and pre-score steps see the score as it was (#682 review).
     this.currentState = { ...next, round: { ...next.round, score: scoreBefore } };
-    this.runSteps(this.playPhases.beforeScore, steps, context);
 
+    // 1. Placement: the batch once, then each block in placement order.
+    const batchId = `${context.actionId}:play`;
+    // Each fact carries the block snapshots registered selectors read (`event-blocks`, #682 review).
+    // Captured copies, deeply frozen before delivery: a listener can't reach the model through
+    // them, and a rollback can't be undone by a shared nested object (#682 review).
+    const placedBlocks = () =>
+      captured(
+        placed.flatMap(
+          (id) => this.currentState.field.find(({ block }) => block.id === id)?.block ?? [],
+        ),
+      );
+    const blocksNow = placedBlocks();
+    this.passiveEvents.emit({
+      type: "play.placed",
+      blockId: action.cardId,
+      cardIds: placed,
+      blocks: blocksNow,
+    });
+    for (const block of blocksNow)
+      this.passiveEvents.emit({
+        type: "block.placed",
+        blockId: block.id,
+        blocks: captured([block]),
+      });
+    this.drainPhase(context, "placement", batchId);
+
+    // 2. Before score: its configured steps (countdown deductions record pending triggers).
+    this.passiveEvents.emit({ type: "play.beforeScore", cardIds: placed, blocks: placedBlocks() });
+    this.drainPhase(context, "beforeScore", batchId);
+    this.runSteps(phases.beforeScore, steps, context, "beforeScore", batchId);
+
+    // 3. Score the resolved field; the pure scorer is unchanged, its total applied once.
     this.scoredLines = scoreFieldWithPassives(
       this.currentState.field,
       this.currentState.passiveRack,
@@ -732,33 +771,66 @@ export class GameRun {
       ...this.currentState,
       round: { ...this.currentState.round, score: scoreBefore + gained },
     };
+    this.drainPhase(context, "score", batchId);
 
-    this.runSteps(this.playPhases.afterScore, steps, context);
+    // 4. After score: its configured steps (reactions, then pending detonations).
+    this.passiveEvents.emit({ type: "play.afterScore", cardIds: placed, blocks: placedBlocks() });
+    this.drainPhase(context, "afterScore", batchId);
+    this.runSteps(phases.afterScore, steps, context, "afterScore", batchId);
     this.lastReactions = steps.reactions;
-    // Every card placed, in placement order, so the fact describes the whole group (#661 review).
-    this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId, cardIds: placed });
-    this.recordDelivered(
-      context,
-      "play",
-      this.passiveEvents.drain(undefined, undefined, this.budgetFor(context, "play")),
-    );
+
+    // 5. Settle: the stage outcome, then play.completed last, both in the settle phase and batch.
+    this.activeAction = { ...this.activeAction!, phase: "settle", batchId };
     this.announceOutcome();
+    this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId, cardIds: placed });
+    this.drainPhase(context, "settle", batchId);
     return this.currentState;
   }
 
-  /**
-   * Run steps in order, delivering and recording each one's follow-ups before the next runs, so
-   * a listener's response to one step is in the working state the next step sees (#693 review).
-   */
-  private runSteps(names: readonly string[], steps: PlayStepContext, context: ActionContext): void {
+  /** Run a phase's configured steps in order, draining each one's follow-ups before the next. */
+  private runSteps(
+    names: readonly string[],
+    steps: PlayStepContext,
+    context: ActionContext,
+    phase: string,
+    batchId: string,
+  ): void {
     for (const name of names) {
       for (const event of playSteps.get(name)(steps)) this.passiveEvents.emit(event);
-      this.recordDelivered(
-        context,
-        "play",
-        this.passiveEvents.drain(undefined, undefined, this.budgetFor(context, "play")),
-      );
+      this.drainPhase(context, phase, batchId);
     }
+  }
+
+  /** Deliver and record what is queued, as this phase's facts, against the action's budget. */
+  private drainPhase(context: ActionContext, phase: string, batchId: string): void {
+    this.recordDelivered(
+      context,
+      phase,
+      this.passiveEvents.drain(
+        undefined,
+        (block, event) => this.commitRules(block, event),
+        this.budgetFor(context, phase),
+      ),
+      batchId,
+    );
+  }
+
+  /**
+   * A listener's registered event rules, evaluated and their commands committed as it resolves,
+   * so its follow-ups drain before the phase ends (#682 review; as discard does, #170).
+   */
+  private commitRules(
+    block: PassiveBlock,
+    event: GameEvent,
+    activations: RuleActivation[] = [],
+  ): GameEvent[] {
+    // Every rule it evaluates is charged by the action's counter (see transact).
+    const fired = passiveActivations(block, event, this.random);
+    activations.push(...fired);
+    return commitCommands(
+      fired.flatMap(({ commands }) => commands),
+      this.commandTarget,
+    );
   }
 
   /**
@@ -821,15 +893,7 @@ export class GameRun {
       this.discardActivations = [];
       this.discardEvents = this.passiveEvents.drain(
         128,
-        (block, event) => {
-          // Every rule it evaluates is charged by the action's counter (see transact).
-          const fired = passiveActivations(block, event);
-          this.discardActivations.push(...fired);
-          return commitCommands(
-            fired.flatMap(({ commands }) => commands),
-            this.commandTarget,
-          );
-        },
+        (block, event) => this.commitRules(block, event, this.discardActivations),
         this.budgetFor(context, "discard"),
       );
       this.recordDelivered(context, "discard", this.discardEvents, `${context.actionId}:discard`);

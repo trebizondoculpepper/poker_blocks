@@ -133,13 +133,28 @@ function scoreLines(
   const lines = findScoringLines(field);
   // One resolution: each passive's value sources (a die's roll) resolve once, here, before any
   // candidate hand is evaluated, and the same values apply to every line (#97).
-  const passives = rack.map((passive) => {
-    const source = passiveSource(passive);
-    return {
-      ...source,
-      rules: source.rules.map((rule) => ruleHandlers.resolveValues(rule, random)),
-    };
-  });
+  // Only line-scoring rules resolve here; every other hook resolves its own values, once, when
+  // it runs (#682 review).
+  // One resolution: a passive rule's value sources (a die's roll) resolve the first time line
+  // scoring evaluates it, once for the whole play, and the same values apply to every line
+  // (#97). A rule line scoring never evaluates is never resolved here, so a rule on any other hook
+  // rolls once, when that hook is delivered (#695 review).
+  // Cached per installed passive and rule: two copies of one die share their definition's rule
+  // objects but roll independently (#695 review).
+  const passives = rack.map(passiveSource);
+  const resolved = new Map(passives.map((source) => [source, new Map<EventRule, EventRule>()]));
+  const resolve = (source: RuleSource, rule: EventRule): EventRule => {
+    const cache = resolved.get(source);
+    if (!cache) return rule;
+    const known = cache.get(rule) ?? ruleHandlers.resolveValues(rule, random);
+    cache.set(rule, known);
+    return known;
+  };
+  const lineRules = (sources: readonly RuleSource[], on: string) =>
+    subscribedRules(sources, on).map((entry) => ({
+      ...entry,
+      rule: resolve(entry.source, entry.rule),
+    }));
   return lines.map((line) => {
     const intersections = crossingCells(line, lines);
     // Evaluate: a block's value is the same in every candidate, so each is worked out once.
@@ -147,7 +162,7 @@ function scoreLines(
       line.blocks.map((block) => [
         block.id,
         evaluateRules(
-          subscribedRules([cardSource(block, rulesForCard), ...passives], "score.beforeBlockValue"),
+          lineRules([cardSource(block, rulesForCard), ...passives], "score.beforeBlockValue"),
           { type: "score.beforeBlockValue", score: { line, intersections, block } },
           scorableValue(block),
         ),
@@ -192,7 +207,7 @@ function scoreLines(
     const phases = linePhases.reduce(
       (previous, phase) => {
         const next = evaluateRules(
-          subscribedRules(sources, phase),
+          lineRules(sources, phase),
           { type: phase, score: { line, intersections } },
           previous.value,
         );
@@ -203,7 +218,7 @@ function scoreLines(
     // The line is clamped at zero, then the after-clamp phase adds its flat bonuses.
     const clamped = Math.max(0, phases.value);
     const after = evaluateRules(
-      subscribedRules(sources, afterClampPhase),
+      lineRules(sources, afterClampPhase),
       { type: afterClampPhase, score: { line, intersections } },
       clamped,
     );
@@ -251,6 +266,12 @@ function crossingCells(line: Line, lines: readonly Line[]): number {
 export function passiveActivations(
   passive: PassiveBlock,
   event: Readonly<GameEvent>,
+  random: () => number = noRandomSource,
 ): RuleActivation[] {
-  return evaluateRules(subscribedRules([passiveSource(passive)], event.type), event, 0).activations;
+  // A hook's rules resolve their value sources (a roll) once, as it is delivered (#682 review).
+  const resolved = subscribedRules([passiveSource(passive)], event.type).map((entry) => ({
+    ...entry,
+    rule: ruleHandlers.resolveValues(entry.rule, random),
+  }));
+  return evaluateRules(resolved, event, 0).activations;
 }

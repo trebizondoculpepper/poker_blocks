@@ -142,3 +142,204 @@ describe("each step's follow-ups resolve before the next step (#693 review)", ()
     expect(seen).toHaveLength(1);
   });
 });
+
+/** A run with one passive whose rules (or trait) listen to the play's facts. */
+const withListener = async (
+  passive: Record<string, unknown>,
+  rules = sandboxRunRules(demoRunRules),
+) => {
+  const { createPassiveBlock } = await import("../passives");
+  const base = createPassiveBlock("scrapper", "listener.1");
+  const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+  opening.installPassive({
+    ...base,
+    traits: { ...base.traits, passive },
+  } as unknown as typeof base);
+  return GameRun.fromSnapshot(dealerRegistry, rules, standardDeck, opening.snapshot(), () => 0);
+};
+const rule = (on: string, effects: unknown[]) => ({
+  traitId: "passive.event-rules",
+  eventRules: [
+    {
+      on,
+      select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+      where: { id: "count-at-least", config: { minimum: 1 } },
+      effects,
+    },
+  ],
+});
+
+describe("a play resolves in the documented phases (#658)", () => {
+  it("records placement, before score, score, after score and settlement, in that order", () => {
+    const { game, hand } = runWith();
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    const phases = [...new Set(game.actionFacts.map(({ phase }) => phase))];
+    expect(phases).toEqual(["placement", "beforeScore", "afterScore", "settle"]);
+    const types = game.actionFacts.map(({ type }) => type);
+    expect(types.slice(0, 2)).toEqual(["play.placed", "block.placed"]);
+    expect(types.at(-1)).toBe("play.completed");
+  });
+
+  it("reports each placed block once, and the batch once", () => {
+    const { game, hand } = runWith();
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    const next = game.state.hand[0]!;
+    expect(game.play({ cardId: next.id, targetId: hand[0]!.id, face: "east" })).not.toBeNull();
+    const placed = game.actionFacts.filter(({ type }) => type === "block.placed");
+    expect(placed.map(({ subjectIds }) => subjectIds[0])).toEqual([next.id]);
+    expect(game.actionFacts.filter(({ type }) => type === "play.placed")).toHaveLength(1);
+  });
+
+  it("detonates a countdown in the after-score phase", () => {
+    const { game, hand } = runWith(undefined, true);
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    expect(game.actionFacts.find(({ type }) => type === "test.fired")?.phase).toBe("afterScore");
+  });
+
+  it("records a deciding play's outcome in the settle phase and batch", () => {
+    const base = sandboxRunRules(demoRunRules);
+    const rules: RunRules = {
+      ...base,
+      stage: (round, kind) => ({ ...base.stage(round, kind), targetScore: 1_000_000, plays: 1 }),
+    };
+    const { game, hand } = runWith(rules);
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    const completed = game.actionFacts.find(({ type }) => type === "play.completed")!;
+    const outcome = game.actionFacts.find(({ type }) => /^stage\.(won|lost)$/.test(type));
+    expect(outcome?.phase).toBe("settle");
+    expect(outcome?.batchId).toBe(completed.batchId);
+  });
+});
+
+describe("rules run at the play's phase barriers (#658)", () => {
+  it("commits a play.beforeScore rule's commands", async () => {
+    const game = await withListener(
+      rule("play.beforeScore", [{ id: "add-coins", config: { amount: 3 } }]),
+    );
+    const coins = game.state.coins;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(game.state.coins).toBe(coins + 3);
+  });
+
+  it("gives block.placed the block the event-blocks selector reads", async () => {
+    const game = await withListener(
+      rule("block.placed", [{ id: "add-coins", config: { amount: 2 } }]),
+    );
+    const coins = game.state.coins;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(game.state.coins).toBe(coins + 2);
+  });
+
+  it("rolls a hook rule's value as it is delivered, never during line scoring", async () => {
+    const roll = { id: "add-coins", config: { amount: { valueSource: "roll", sides: 6 } } };
+    const game = await withListener(rule("play.afterScore", [roll]));
+    const coins = game.state.coins;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(game.state.coins - coins).toBeGreaterThanOrEqual(1);
+    expect(game.state.coins - coins).toBeLessThanOrEqual(6);
+    const { scoreFieldWithPassives } = await import("../passive-effects");
+    const [listener] = game.state.passiveRack;
+    const never = () => {
+      throw new Error("drew a random value");
+    };
+    expect(() =>
+      scoreFieldWithPassives(game.state.field, [listener!], undefined, never),
+    ).not.toThrow();
+  });
+});
+
+describe("delivered payloads are captured (#658)", () => {
+  const meddler = async (on: string, meddle: (event: Record<string, unknown>) => void) => {
+    const { passiveTraits } = await import("../passives");
+    const id = `test.meddler.${on}`;
+    const state = { refused: false };
+    if (!passiveTraits.has(id))
+      passiveTraits.register(id, {
+        id,
+        listensTo: [on],
+        respond: (_block, event) => {
+          try {
+            meddle(event as unknown as Record<string, unknown>);
+          } catch {
+            state.refused = true;
+          }
+          return [];
+        },
+      });
+    return { game: await withListener({ traitId: id }), state };
+  };
+
+  it("refuses a listener's change to a placed block", async () => {
+    const { game, state } = await meddler("block.placed", (event) => {
+      (event.blocks as { traits: Record<string, unknown> }[])[0]!.traits.meddled = true;
+    });
+    const id = game.state.hand[0]!.id;
+    expect(game.play({ cardId: id })).not.toBeNull();
+    expect(state.refused).toBe(true);
+    const onField = game.state.field.find(({ block }) => block.id === id)!.block;
+    expect((onField.traits as Record<string, unknown>).meddled).toBeUndefined();
+  });
+
+  it("refuses a listener's change to the placed card IDs", async () => {
+    const { game, state } = await meddler("play.placed", (event) => {
+      (event.cardIds as string[]).push("intruder");
+    });
+    const id = game.state.hand[0]!.id;
+    expect(game.play({ cardId: id })).not.toBeNull();
+    expect(state.refused).toBe(true);
+    const completed = game.actionFacts.find(({ type }) => type === "play.completed")!;
+    expect(completed.subjectIds).toEqual([id]);
+  });
+});
+
+describe("per-block payloads are frozen too (#695 review)", () => {
+  it("refuses a listener's change to block.placed's block list", async () => {
+    const { passiveTraits } = await import("../passives");
+    let refused = false;
+    if (!passiveTraits.has("test.list-meddler"))
+      passiveTraits.register("test.list-meddler", {
+        id: "test.list-meddler",
+        listensTo: ["block.placed"],
+        respond: (_block, event) => {
+          try {
+            (event.blocks as unknown[]).pop();
+          } catch {
+            refused = true;
+          }
+          return [];
+        },
+      });
+    const game = await withListener({ traitId: "test.list-meddler" });
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(refused).toBe(true);
+    const placed = game.actionFacts.find(({ type }) => type === "block.placed")!;
+    expect((placed.payload as { blocks: unknown[] }).blocks).toHaveLength(1);
+  });
+});
+
+describe("a play's facts name what was placed (#695 review)", () => {
+  it("refuses a group whose primary card is not its first, changing nothing", () => {
+    const { game, hand } = runWith();
+    const before = game.state;
+    expect(game.play({ cardId: hand[0]!.id, cardIds: [hand[1]!.id] })).toBeNull();
+    expect(game.state).toEqual(before);
+  });
+});
+
+describe("each installed die rolls for itself (#695 review)", () => {
+  it("draws once per die instance, even when two share a definition", async () => {
+    const { createPassiveBlock } = await import("../passives");
+    const { scoreFieldWithPassives } = await import("../passive-effects");
+    const { game, hand } = runWith();
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    expect(game.play({ cardId: hand[1]!.id, targetId: hand[0]!.id, face: "east" })).not.toBeNull();
+    let draws = 0;
+    const counting = () => {
+      draws += 1;
+      return 0.5;
+    };
+    const dice = [createPassiveBlock("d6", "die.a"), createPassiveBlock("d6", "die.b")];
+    scoreFieldWithPassives(game.state.field, dice, undefined, counting);
+    expect(draws).toBe(2);
+  });
+});
