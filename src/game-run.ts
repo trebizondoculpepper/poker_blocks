@@ -1,9 +1,9 @@
 import { resetStageState } from "./stage-end";
 import { resetRoundState } from "./round-end";
 import {
-  defaultPlayPhases,
+  attachPlayfield,
   playSteps,
-  validatePlayPhases,
+  type PlayPhases,
   type PlayStepContext,
 } from "./lifecycle/play-phases";
 import { clearField, removeCardForRun } from "./card-ownership";
@@ -135,7 +135,10 @@ export class GameRun {
   private version = 0;
   private lastFacts: readonly EventEnvelope[] = [];
   /** The action resolving now, if any: every drain and command inside it shares its budget. */
-  private activeAction: { context: ActionContext; phase: string } | null = null;
+  private activeAction: { context: ActionContext; phase: string; batchId: string | null } | null =
+    null;
+  /** The steps the composed playfield controllers attached, for the run's lifetime. */
+  private readonly playPhases: PlayPhases;
   private lastFailure: Error | null = null;
 
   constructor(
@@ -147,8 +150,7 @@ export class GameRun {
     this.dealers = dealers;
     this.config = config;
     // A play's configured steps are checked as the run is composed, never mid-play (#682 review).
-    const problems = validatePlayPhases(config.playPhases ?? defaultPlayPhases);
-    if (problems.length) throw new Error(`Invalid play phases: ${problems.join("; ")}`);
+    this.playPhases = attachPlayfield(config.playfield);
     this.random = random;
     const setup = config.stage(1, "stage-1");
     this.activeDealer = dealers.get(setup.dealer);
@@ -233,7 +235,7 @@ export class GameRun {
       { stage: this.stageContext, round: this.currentRound },
     );
     try {
-      this.activeAction = { context: action, phase: kind };
+      this.activeAction = { context: action, phase: kind, batchId: null };
       // Everything evaluated inside the action is charged to its budget (#661 review).
       const result = withOperationCounter(
         // The event chain being delivered now, if any, names the cause in a diagnostic.
@@ -424,7 +426,7 @@ export class GameRun {
       undefined,
       action ? this.budgetFor(action.context, action.phase) : undefined,
     );
-    if (action) this.recordDelivered(action.context, action.phase, delivered);
+    if (action) this.recordDelivered(action.context, action.phase, delivered, action.batchId);
   }
 
   /** Once a stage is decided, announce the final stage.won or stage.lost exactly once. */
@@ -707,7 +709,7 @@ export class GameRun {
     const next = this.activeDealer.play(this.currentState, action);
     if (!next) return null;
     const placed = action.cardIds?.length ? [...action.cardIds] : [action.cardId];
-    const phases = this.config.playPhases ?? defaultPlayPhases;
+    const phases = this.playPhases;
     const steps: PlayStepContext = {
       target: this.commandTarget,
       placed: new Set(placed),
@@ -761,7 +763,8 @@ export class GameRun {
     this.runSteps(phases.afterScore, steps, context, "afterScore", batchId);
     this.lastReactions = steps.reactions;
 
-    // 5. Settle: the stage outcome, then play.completed last.
+    // 5. Settle: the stage outcome, then play.completed last, both in the settle phase and batch.
+    this.activeAction = { ...this.activeAction!, phase: "settle", batchId };
     this.announceOutcome();
     this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId, cardIds: placed });
     this.drainPhase(context, "settle", batchId);

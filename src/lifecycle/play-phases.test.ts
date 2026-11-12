@@ -71,10 +71,10 @@ describe("a play resolves in the documented phases (#658)", () => {
     expect(types.indexOf("test.fired")).toBeGreaterThan(types.indexOf("score.totalApplied"));
   });
 
-  it("runs no material steps when none are composed", () => {
+  it("runs no material steps when no controller is composed onto the playfield", () => {
     const rules = {
       ...sandboxRunRules(demoRunRules),
-      playPhases: { beforeScore: [], afterScore: [] },
+      playfield: [],
     };
     const { game, hand } = runWith(rules, true);
     expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
@@ -95,7 +95,12 @@ describe("play phase review fixes (#682 review)", () => {
   it("refuses to compose a run with an invalid phase configuration", () => {
     const rules = {
       ...sandboxRunRules(demoRunRules),
-      playPhases: { beforeScore: ["countdown-deductions", "countdown-deductions"], afterScore: [] },
+      playfield: [
+        {
+          id: "materialEffectsController",
+          config: { beforeScore: ["countdown-deductions", "countdown-deductions"], afterScore: [] },
+        },
+      ],
     };
     expect(() => new GameRun(dealerRegistry, rules, standardDeck, () => 0)).toThrow(/listed twice/);
   });
@@ -110,7 +115,12 @@ describe("play phase review fixes (#682 review)", () => {
       });
     const rules = {
       ...sandboxRunRules(demoRunRules),
-      playPhases: { beforeScore: ["test.score-probe"], afterScore: [] },
+      playfield: [
+        {
+          id: "materialEffectsController",
+          config: { beforeScore: ["test.score-probe"], afterScore: [] },
+        },
+      ],
     };
     const { game, hand } = runWith(rules);
     expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
@@ -120,5 +130,27 @@ describe("play phase review fixes (#682 review)", () => {
     expect(game.play({ cardId: hand[1]!.id, targetId: hand[0]!.id, face: "east" })).not.toBeNull();
     expect(game.state.round.score).toBeGreaterThan(before);
     expect(seen).toEqual([before]);
+  });
+});
+
+describe("material steps come from the composed playfield (#682 review)", () => {
+  it("refuses an unknown playfield controller", () => {
+    const rules = { ...sandboxRunRules(demoRunRules), playfield: [{ id: "nope", config: {} }] };
+    expect(() => new GameRun(dealerRegistry, rules, standardDeck, () => 0)).toThrow(/nope/);
+  });
+
+  it("records a deciding play's outcome in the settle phase and batch", () => {
+    const base = sandboxRunRules(demoRunRules);
+    const rules: RunRules = {
+      ...base,
+      stage: (round, kind) => ({ ...base.stage(round, kind), targetScore: 1_000_000, plays: 1 }),
+    };
+    const { game, hand } = runWith(rules);
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    const completed = game.actionFacts.find(({ type }) => type === "play.completed")!;
+    const outcome = game.actionFacts.find(({ type }) => /^stage\.(won|lost)$/.test(type));
+    expect(outcome).toBeDefined();
+    expect(outcome!.phase).toBe("settle");
+    expect(outcome!.batchId).toBe(completed.batchId);
   });
 });
