@@ -743,7 +743,11 @@ export class GameRun {
       blocks: blocksNow,
     });
     for (const block of blocksNow)
-      this.passiveEvents.emit({ type: "block.placed", blockId: block.id, blocks: [block] });
+      this.passiveEvents.emit({
+        type: "block.placed",
+        blockId: block.id,
+        blocks: captured([block]),
+      });
     this.drainPhase(context, "placement", batchId);
 
     // 2. Before score: its configured steps (countdown deductions record pending triggers).

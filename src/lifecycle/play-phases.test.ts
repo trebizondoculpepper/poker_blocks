@@ -291,3 +291,28 @@ describe("delivered payloads are captured (#658)", () => {
     expect(completed.subjectIds).toEqual([id]);
   });
 });
+
+describe("per-block payloads are frozen too (#695 review)", () => {
+  it("refuses a listener's change to block.placed's block list", async () => {
+    const { passiveTraits } = await import("../passives");
+    let refused = false;
+    if (!passiveTraits.has("test.list-meddler"))
+      passiveTraits.register("test.list-meddler", {
+        id: "test.list-meddler",
+        listensTo: ["block.placed"],
+        respond: (_block, event) => {
+          try {
+            (event.blocks as unknown[]).pop();
+          } catch {
+            refused = true;
+          }
+          return [];
+        },
+      });
+    const game = await withListener({ traitId: "test.list-meddler" });
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(refused).toBe(true);
+    const placed = game.actionFacts.find(({ type }) => type === "block.placed")!;
+    expect((placed.payload as { blocks: unknown[] }).blocks).toHaveLength(1);
+  });
+});
