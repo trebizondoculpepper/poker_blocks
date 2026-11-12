@@ -665,7 +665,7 @@ describe("creation timings per count (#723 review)", () => {
     // Building takes 2 ms per object in this case, so each count's build time scales with it.
     const base = testCase(memory);
     let clockShift = 0;
-    const now = env.now;
+    const now = env.now.bind(env);
     env.now = () => now() + clockShift;
     const slow: ProfilingCase = {
       ...base,
