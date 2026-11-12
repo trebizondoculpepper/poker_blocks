@@ -18,14 +18,8 @@ const allowed: Readonly<Record<string, string>> = {
   "src/letter-block.ts":
     "cosmetic writing materials; callers can inject a scene seed without consuming the run stream",
   "src/motion.ts": "the idle wobble of a block: presentation",
-  "src/visual/exit-fragments.ts":
-    "where scraps and splinters start and fly (#443): presentation, never the session stream",
-  "src/visual/exit-burst.ts":
-    "which way and how fast a burst particle launches (#444): presentation, never the session stream",
   "src/visual/dazzle.ts":
     "where a dazzle's circles bloom and how long its afterimages last (#493): presentation, never the session stream",
-  "src/visual/exit-fracture.ts":
-    "which way crack lines run and pieces fly (#442): presentation, never the session stream",
   "src/visual/block-effects.ts":
     "where ongoing block effects' particles start and drift (#464): presentation, never the session stream",
   "src/audio/music-plan.ts": "which track plays: presentation",

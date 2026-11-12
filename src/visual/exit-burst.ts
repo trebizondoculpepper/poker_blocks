@@ -10,9 +10,10 @@
  * - Gravity is world down, turned into the root's own space, so a tilted block still sprays down.
  * - The count is bounded (`maxParticles`), whatever the configuration asks.
  * - Under reduced motion it shows nothing and ends at once.
- * - Its randomness is cosmetic (`Math.random`), never the run's seeded stream. Presentation only.
+ * - Its randomness is cosmetic (`cosmeticRandom`), never the run's seeded stream. Presentation only.
  */
 import * as THREE from "three";
+import { cosmeticRandom } from "./block-effects";
 import { exitEffects, localBlockSize, localBounds } from "./exit-presentation";
 import { starTexture } from "./star-particles";
 import { keepWorldSize } from "./world-sized-points";
@@ -69,10 +70,10 @@ exitEffects.register("burst", ({ visual, targets, reducedMotion }, raw) => {
     positions[i * 3 + 1] = centre.y;
     positions[i * 3 + 2] = centre.z;
     // A random direction on the unit sphere, scaled by a random speed in range.
-    const z = Math.random() * 2 - 1;
-    const angle = Math.random() * Math.PI * 2;
+    const z = cosmeticRandom() * 2 - 1;
+    const angle = cosmeticRandom() * Math.PI * 2;
     const ring = Math.sqrt(1 - z * z);
-    const speed = config.speed[0] + Math.random() * (config.speed[1] - config.speed[0]);
+    const speed = config.speed[0] + cosmeticRandom() * (config.speed[1] - config.speed[0]);
     velocities[i * 3] = ring * Math.cos(angle) * speed * scale;
     velocities[i * 3 + 1] = (z * speed + config.lift) * scale;
     velocities[i * 3 + 2] = ring * Math.sin(angle) * speed * scale;

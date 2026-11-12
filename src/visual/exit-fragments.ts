@@ -10,6 +10,7 @@
  * on dispose. Counts are bounded. Randomness is cosmetic. Under reduced motion nothing shows.
  */
 import * as THREE from "three";
+import { cosmeticRandom } from "./block-effects";
 import { Registry } from "../core/registry";
 import { exitEffects, type ExitEffectInstance, type ExitVisual } from "./exit-presentation";
 
@@ -108,23 +109,27 @@ export function emitFragments(
     const mesh = new THREE.Mesh(geometry, material);
     mesh.scale.setScalar(size);
     mesh.position.set(
-      centre.x + (Math.random() - 0.5) * size * 0.6,
-      centre.y + (Math.random() - 0.5) * size * 0.6,
-      centre.z + (Math.random() - 0.5) * size * 0.6,
+      centre.x + (cosmeticRandom() - 0.5) * size * 0.6,
+      centre.y + (cosmeticRandom() - 0.5) * size * 0.6,
+      centre.z + (cosmeticRandom() - 0.5) * size * 0.6,
     );
     mesh.quaternion.random();
     visual.root.add(mesh);
-    const speed = config.speed[0] + Math.random() * (config.speed[1] - config.speed[0]);
+    const speed = config.speed[0] + cosmeticRandom() * (config.speed[1] - config.speed[0]);
     return {
       mesh,
-      velocity: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)
+      velocity: new THREE.Vector3(
+        cosmeticRandom() - 0.5,
+        cosmeticRandom() - 0.5,
+        cosmeticRandom() - 0.5,
+      )
         .normalize()
         .multiplyScalar(speed * size)
         .add(new THREE.Vector3(0, config.lift * size, 0)),
       axis: new THREE.Vector3(
-        Math.random() - 0.5,
-        Math.random() - 0.5,
-        Math.random() - 0.5,
+        cosmeticRandom() - 0.5,
+        cosmeticRandom() - 0.5,
+        cosmeticRandom() - 0.5,
       ).normalize(),
     };
   });
