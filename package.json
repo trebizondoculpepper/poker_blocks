@@ -16,7 +16,7 @@
     "release": "node scripts/release.ts",
     "version-guard": "node scripts/version-guard.ts",
     "prepare": "vp config --hooks --no-agent",
-    "triage": "node ../github_triage/src/cli.js"
+    "triage": "node node_modules/github-triage/src/cli.js"
   },
   "dependencies": {
     "@dnd-kit/abstract": "0.5.3",
@@ -30,6 +30,7 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",
+    "github-triage": "git+https://git@github.com/trebizondoculpepper/github_triage.git#35bc59385b542235178dc8a202be5a531b886b73",
     "typescript": "~7.0.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.5.0",
     "vite-plus": "1.5.0"
