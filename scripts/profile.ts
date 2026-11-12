@@ -1,6 +1,7 @@
 // The one-command profiler run (#734; doc/automatic-profiling.md, "Automatic report and entry
 // points"):
 //   npm run profile [-- --out DIR] [--port N] [--url URL] [--timeout-minutes N]
+// (--port picks the dev server's port; a free one by default.)
 //
 // It starts its own dev server (or uses --url), opens an isolated headless Chrome on the dev18
 // mode, which composes the same devProfiler trait as dev16 plus the command sink, waits for the
@@ -11,6 +12,7 @@
 // Chrome is found at its usual macOS path, or set CHROME to its executable.
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProfilerExport } from "../src/tools/profiler/export.ts";
@@ -23,7 +25,16 @@ const argument = (name: string) => {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const root = join(import.meta.dirname, "..");
 const startedAt = new Date().toISOString();
-const port = Number(argument("port") ?? 5299);
+/** A port nobody is listening on now, so this run never talks to another run's server or browser. */
+const freePort = () =>
+  new Promise<number>((resolve, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as AddressInfo;
+      probe.close(() => resolve(port));
+    });
+  });
 const timeoutMs = Number(argument("timeout-minutes") ?? 240) * 60_000;
 const out = argument("out") ?? join(root, "profiles", startedAt.replaceAll(":", "-"));
 const chromePath =
@@ -35,19 +46,47 @@ const revision = `${git("rev-parse", "--short", "HEAD")}${git("status", "--porce
 
 const started: ChildProcess[] = [];
 const profileDir = mkdtempSync(join(tmpdir(), "poker-blocks-profile-"));
+/** A launch failure (no Chrome at that path, say), surfaced to the waits below (#750 review). */
+let launchError: Error | null = null;
+
+/** Start a process this run owns, in its own process group, and watch for a failed launch. */
+function own(command: string, args: readonly string[]): ChildProcess {
+  const child = spawn(command, args, { cwd: root, stdio: "ignore", detached: true });
+  child.once("error", (error) => {
+    launchError ??= new Error(`Could not start ${command}: ${error.message}`);
+  });
+  started.push(child);
+  return child;
+}
+
+/** Signal a process's whole group, ignoring one that has already gone. */
+function signalGroup(child: ChildProcess, signal: NodeJS.Signals): void {
+  if (child.pid === undefined) return;
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    // Already exited.
+  }
+}
+
 /**
- * Stop only what this run started, wait for each to exit, then remove the browser's temporary
- * profile. A cleanup problem is reported but never changes the run's exit status.
+ * Stop only what this run started (each whole process group), wait for each to exit, then remove
+ * the browser's temporary profile. A cleanup problem is reported but never changes the run's
+ * exit status.
  */
 async function cleanUp(): Promise<void> {
   await Promise.all(
     started.map(
       (child) =>
         new Promise<void>((resolve) => {
-          if (child.exitCode !== null || child.signalCode !== null) return resolve();
+          if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null)
+            return resolve();
           child.once("exit", () => resolve());
-          child.kill();
-          setTimeout(resolve, 5000);
+          signalGroup(child, "SIGTERM");
+          setTimeout(() => {
+            signalGroup(child, "SIGKILL");
+            resolve();
+          }, 5000);
         }),
     ),
   );
@@ -70,6 +109,7 @@ async function waitFor<T>(
 ): Promise<T> {
   const until = Date.now() + ms;
   for (;;) {
+    if (launchError) throw launchError;
     const value = await probe().catch(() => undefined);
     if (value !== undefined) return value;
     if (Date.now() > until) throw new Error(`Timed out waiting for ${what}`);
@@ -81,11 +121,16 @@ async function main(): Promise<number> {
   // The page: the given URL, or a dev server of our own.
   let base = argument("url");
   if (!base) {
-    const server = spawn("npx", ["vite", "--port", String(port), "--strictPort"], {
-      cwd: root,
-      stdio: "ignore",
-    });
-    started.push(server);
+    const port = Number(argument("port") ?? (await freePort()));
+    // The project's own dev server, launched directly (no npx wrapper, nothing fetched), in a
+    // process group of its own so stopping it stops everything it started (#750 review).
+    own(process.execPath, [
+      join(root, "node_modules", "vite-plus", "bin", "vp"),
+      "dev",
+      "--port",
+      String(port),
+      "--strictPort",
+    ]);
     base = `http://localhost:${port}/`;
     await waitFor(
       "the dev server",
@@ -93,19 +138,15 @@ async function main(): Promise<number> {
       60_000,
     );
   }
-  const debugPort = port + 1;
-  const chrome = spawn(
-    chromePath,
-    [
-      "--headless=new",
-      `--remote-debugging-port=${debugPort}`,
-      `--user-data-dir=${profileDir}`,
-      "--window-size=1600,1000",
-      "about:blank",
-    ],
-    { stdio: "ignore" },
-  );
-  started.push(chrome);
+  // Chrome's debugging endpoint on a port of its own: never another run's browser (#750 review).
+  const debugPort = await freePort();
+  own(chromePath, [
+    "--headless=new",
+    `--remote-debugging-port=${debugPort}`,
+    `--user-data-dir=${profileDir}`,
+    "--window-size=1600,1000",
+    "about:blank",
+  ]);
   const target = await waitFor(
     "Chrome",
     async () =>
@@ -119,16 +160,46 @@ async function main(): Promise<number> {
   );
   const socket = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve) => socket.addEventListener("open", resolve, { once: true }));
+  // Every request settles: answered, timed out, or rejected when the connection is lost, so a
+  // crashed browser reaches the error and cleanup path instead of hanging (#750 review).
   let id = 0;
-  const pending = new Map<number, (value: unknown) => void>();
+  let lost: Error | null = null;
+  const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
+  const loseAll = (error: Error) => {
+    lost ??= error;
+    for (const request of pending.values()) request.reject(error);
+    pending.clear();
+  };
   socket.addEventListener("message", (message) => {
     const data = JSON.parse(String(message.data)) as { id?: number; result?: unknown };
-    if (data.id !== undefined) pending.get(data.id)?.(data.result);
+    if (data.id === undefined) return;
+    pending.get(data.id)?.resolve(data.result);
+    pending.delete(data.id);
   });
+  socket.addEventListener("close", () =>
+    loseAll(new Error("The browser's debugging connection closed")),
+  );
+  socket.addEventListener("error", () =>
+    loseAll(new Error("The browser's debugging connection failed")),
+  );
   const send = (method: string, params: object = {}) =>
-    new Promise<unknown>((resolve) => {
+    new Promise<unknown>((resolve, reject) => {
+      if (lost) return reject(lost);
       const call = ++id;
-      pending.set(call, resolve);
+      const timer = setTimeout(() => {
+        pending.delete(call);
+        reject(new Error(`The browser did not answer ${method} within 30 s`));
+      }, 30_000);
+      pending.set(call, {
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
       socket.send(JSON.stringify({ id: call, method, params }));
     });
   const evaluate = async <T>(expression: string) =>
