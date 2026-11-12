@@ -231,6 +231,8 @@ describe("typed reward entries (#729)", () => {
       read([{ ...coinEntry("a", "A", 1), effects: [{ id: "coins", config: { amount: -1 } }] }]),
     ).toBeNull();
     expect(read([{ ...trophy, presentation: "" }])).toBeNull();
+    // Named, but not a registered presentation: refused at load, not when the row is shown.
+    expect(read([{ ...trophy, presentation: "missing" }])).toBeNull();
     expect(read([{ source: "a", label: "A", coins: 1.5 }], 1.5)).toBeNull();
     // A balance that disagrees with the coin effects.
     expect(read([coinEntry("a", "A", 3)], 2)).toBeNull();

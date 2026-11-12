@@ -1,3 +1,4 @@
+import { rewardPresentations } from "./reward-presentation";
 import { coinEntry, ledgerTotal, rewardEffects, type RewardEntry } from "./stage-rewards";
 import type { CardBlock } from "./cards";
 import { Registry } from "./core/registry";
@@ -359,7 +360,13 @@ function parseRewardEntry(value: unknown): RewardEntry {
       throw new Error("bad reward entry");
     return coinEntry(row.source, row.label, coins);
   }
-  if (!Array.isArray(row.effects) || typeof row.presentation !== "string" || !row.presentation)
+  // The presentation must be registered: a receipt the screen can't show is refused at load,
+  // not when its row is due to appear (#731 review).
+  if (
+    !Array.isArray(row.effects) ||
+    typeof row.presentation !== "string" ||
+    !rewardPresentations.has(row.presentation)
+  )
     throw new Error("bad reward entry");
   const effects = row.effects.map((effect: unknown) => {
     const { id, config } = (effect ?? {}) as { id?: unknown; config?: unknown };
