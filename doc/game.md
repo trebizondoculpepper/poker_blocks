@@ -518,3 +518,7 @@ These are visual targets, not gameplay changes. [Agreed presentation contracts](
 ## Ordered deck and live inventory (#550)
 
 The deck is an ordered pile: draw removes the first card without rerolling; shuffle permutes the existing cards using the run RNG. Deck, hand, field and discard own their current contents; run inventory queries these zones rather than maintaining a second catalog. Destroyed/removed cards no longer exist in that inventory. Discards stay excluded through the round's stages and return at the configured round boundary. See [the ownership contract](ordered-card-ownership.md); it preserves existing rewards, identity and modifier/reset rules.
+
+## Retention and reset declarations (#580)
+
+Each block resolves one stage/round/run retention and an explicit reset policy, directly or through its declared parent. Ordinary run cards persist through the run; cooked meat reverts to raw after a stage, Cloud expires after a stage without joining the deck, and Gelato reverts to Custard after a round. Settlement reads outgoing state before cleanup. Reset/reversion and acquired-modifier expiry remain separate; run bonuses are not erased by ordinary state reset. See [clone/reset and boundary contracts](clone-reset.md). These engineering clone capabilities do not introduce a new player cloning item.
