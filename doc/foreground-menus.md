@@ -1,0 +1,23 @@
+# Foreground title and pause menus (#627)
+
+Owner-approved target for #628 and #530; Settings deliberately keeps its readable panel and real text controls. Source evidence: `menus.ts`, `block-menu/block-menus.ts` and `block-menu/cube-stage.ts` already separate dialog content/accessible actions from a three.js menu-cube stage; `menus.ts`/scene traits own showing the host. Inspect their current mounted style classes at implementation intake rather than removing the application's renderer canvas. The existing [input ownership](game-architecture.md#input-284-epic-271) and [menu scenes](game-architecture.md#menus-as-scenes-87) contracts remain authoritative.
+
+## Composition and layer ownership
+
+A reusable menu host accepts explicit presentation configuration: `panel: none|readable`, foreground placement/layout, accessible action list and covered-scene activity capability. These are registered style/layout/scene-stack behaviors, not branches on a title/pause/settings identity. Title and pause definitions compose the **panel-free foreground** configuration. Remove their legacy opaque/translucent menu rectangle/backdrop and any equivalent CSS pseudo-element behind choices; do not replace it with a different full-screen scrim. Their full-screen pointer-routing surface may remain transparent for input isolation.
+
+The existing 3D attract scene remains visible and **running** behind the title menu. The paused play scene remains visible but **frozen** behind pause choices; freezing is the covered scene's configured simulation/presentation pause behavior, not hiding its framebuffer or delaying model commands from an animation. The foreground menu's own spring/hover/tap feedback continues. Never stop the shared clock for the whole app merely to freeze the covered playfield. The scene manager dispatches configured suspend/resume capabilities to the covered scene, preserving exact board/camera pose and restoring it on Resume.
+
+Keep the block title and existing non-menu information such as version/footer/warnings unless a separate decision removes them. Cubes remain foreground at readable size with no rectangular panel behind them. Pause uses one horizontal row: **Resume, Settings, Quit to title**, in that order; narrow viewports wrap through the shared layout engine without clipping or overlap, keeping logical keyboard order. Initial target-centred placement and spacing are reversible layout defaults; inspect three-dimensional intersections/occlusion in portrait and landscape.
+
+## Settings and navigation
+
+Settings remains text with real sliders/toggles on its readable panel. Its Back action may use a menu cube under #530, but this does not convert sliders into cubes or remove Settings' panel. Returning from Settings to pause leaves the underlying playfield frozen; returning to title resumes the attract scene. Existing save/confirm/quit and Escape semantics remain unchanged. A reusable scene-stack activity configuration owns these differences; generic menu code receives resolved host behavior.
+
+## Input, inspection and cleanup
+
+The foreground menu owns its input layer while shown. Cubes compose inspectable, available/unavailable explanations, standard spring motion and keyboard/touch actions through the shared block-menu controller. Accessible semantic buttons remain mapped to the same registered action; hiding visible text menus does not remove accessibility. A transparent backdrop must still prevent pointer/keyboard fall-through to covered gameplay. Gesture adapters route to owners, never inspect scene identity. Focus enters the first enabled action, travels in logical order and returns appropriately when closing the menu.
+
+Scene exit disposes the foreground stage, observers, listeners and owned geometry/materials, not the covered scene's renderer/shared resources. Suspended scope cancellation/resume uses the existing scene contract; stale menu callbacks cannot navigate a later scene. Existing UI/navigation sounds retain their owners, once per action. Reduced motion follows the spring/menu effect configuration while preserving readable controls.
+
+Acceptance: title running scene visible behind panel-free cubes; pause exact frozen board visible with active menu feedback; Settings panel and working controls preserved; Resume/Settings/Quit row, keyboard/touch and inspectable descriptions; no input fall-through; confirmation/save behavior; resize/portrait; repeated enter/exit with no leaks. Provide before/after screenshots and a short pause/resume clip at the tested revision. This is a documentation decision, not a claim the background removal already shipped.

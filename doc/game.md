@@ -522,3 +522,7 @@ The deck is an ordered pile: draw removes the first card without rerolling; shuf
 ## Retention and reset declarations (#580)
 
 Each block resolves one stage/round/run retention and an explicit reset policy, directly or through its declared parent. Ordinary run cards persist through the run; cooked meat reverts to raw after a stage, Cloud expires after a stage without joining the deck, and Gelato reverts to Custard after a round. Settlement reads outgoing state before cleanup. Reset/reversion and acquired-modifier expiry remain separate; run bonuses are not erased by ordinary state reset. See [clone/reset and boundary contracts](clone-reset.md). These engineering clone capabilities do not introduce a new player cloning item.
+
+## Foreground menu presentation (#627)
+
+Title and pause menu blocks float over the visible 3D scene with no menu panel/backdrop behind them. The title background keeps running; pause freezes the playfield while foreground menu feedback remains active. Pause choices are Resume, Settings and Quit to title in a horizontal row, with responsive wrapping where needed. Settings keeps its readable panel and real text controls. See [the host contract](foreground-menus.md) for input, focus and lifecycle behavior.
