@@ -111,9 +111,11 @@ async function cleanUp(): Promise<void> {
     );
   }
 }
-process.on("SIGINT", () => {
-  void cleanUp().then(() => process.exit(1));
-});
+// Interrupted or stopped by a supervisor: still stop what this run started (#750 review).
+for (const signal of ["SIGINT", "SIGTERM"] as const)
+  process.on(signal, () => {
+    void cleanUp().then(() => process.exit(1));
+  });
 
 async function waitFor<T>(
   what: string,
@@ -181,7 +183,20 @@ async function main(): Promise<number> {
     30_000,
   );
   const socket = new WebSocket(target.webSocketDebuggerUrl);
-  await new Promise((resolve) => socket.addEventListener("open", resolve, { once: true }));
+  // The handshake settles too: opened, refused, closed, or out of time (#750 review).
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("The browser's debugging connection did not open within 30 s")),
+      30_000,
+    );
+    socket.addEventListener("open", () => (clearTimeout(timer), resolve()), { once: true });
+    const fail = () => {
+      clearTimeout(timer);
+      reject(new Error("The browser's debugging connection could not be opened"));
+    };
+    socket.addEventListener("error", fail, { once: true });
+    socket.addEventListener("close", fail, { once: true });
+  });
   // Every request settles: answered, timed out, or rejected when the connection is lost, so a
   // crashed browser reaches the error and cleanup path instead of hanging (#750 review).
   let id = 0;
