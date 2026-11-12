@@ -125,6 +125,8 @@ export class GameRun {
   /** Bumped by every committed action: the version a captured fact describes. */
   private version = 0;
   private lastFacts: readonly EventEnvelope[] = [];
+  /** The action resolving now, if any: every drain and command inside it shares its budget. */
+  private activeAction: { context: ActionContext; phase: string } | null = null;
   private lastFailure: Error | null = null;
 
   constructor(
@@ -215,7 +217,9 @@ export class GameRun {
       this.config.resolutionLimits ?? defaultResolutionLimits,
     );
     try {
+      this.activeAction = { context: action, phase: kind };
       const result = body(action);
+      this.activeAction = null;
       if (result === null) return null;
       this.actions.remember(id);
       this.version++;
@@ -229,6 +233,7 @@ export class GameRun {
       this.passiveEvents.syncRack(this.currentState.passiveRack);
       if (mark !== undefined) this.randomCheckpoints!.restore(mark);
       this.lastFailure = error instanceof Error ? error : new Error(String(error));
+      this.activeAction = null;
       return null;
     }
   }
@@ -347,7 +352,15 @@ export class GameRun {
   private lifecycle(type: string, extra: Omit<GameEvent, "type" | "stage"> = {}): void {
     const stage = this.stageContext;
     this.passiveEvents.emit({ type, ...(stage ? { stage } : {}), ...extra });
-    this.passiveEvents.drain();
+    // Inside an action (a play's or discard's outcome), delivery shares its budget and records
+    // its facts with it (#661 review); outside one (leaving the shop), it drains as before.
+    const action = this.activeAction;
+    const delivered = this.passiveEvents.drain(
+      undefined,
+      undefined,
+      action ? this.budgetFor(action.context, action.phase) : undefined,
+    );
+    if (action) this.recordDelivered(action.context, action.phase, delivered);
   }
 
   /** Once a stage is decided, announce the final stage.won or stage.lost exactly once. */
@@ -584,6 +597,8 @@ export class GameRun {
     },
     update: (state: GameState) => void (run.currentState = state),
     grantUnownedPassive: () => run.grantUnownedPassive(),
+    operate: (registration: string) =>
+      run.activeAction?.context.operate(registration, run.activeAction.phase, []),
   }))(this);
 
   /** A passive instance id no installed passive has: `passive.<n>`, from the rack size up. */

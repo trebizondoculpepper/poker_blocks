@@ -155,3 +155,59 @@ describe("an action is a transaction (#657)", () => {
     expect(game.actionFailure).toBeNull();
   });
 });
+
+describe("the action budget reaches commands and outcomes (#661 review)", () => {
+  const limitedRun = (limits: { events: number; operations: number }, plays = 1_000_000) => {
+    const rules = { ...sandboxRunRules(demoRunRules), resolutionLimits: limits };
+    const base = rules.stage;
+    const config = {
+      ...rules,
+      stage: (round: number, kind: Parameters<typeof base>[1]) => ({
+        ...base(round, kind),
+        targetScore: 1_000_000,
+        plays,
+      }),
+    };
+    const hand = [card("2", "clubs"), card("3", "clubs")];
+    const opening = new GameRun(dealerRegistry, config, standardDeck, () => 0);
+    opening.installPassive(createPassiveBlock("scrapper", "s.1"));
+    const game = GameRun.fromSnapshot(
+      dealerRegistry,
+      config,
+      standardDeck,
+      { ...opening.snapshot(), state: { ...opening.state, hand: [...hand] } },
+      () => 0,
+    );
+    return { game, hand };
+  };
+
+  it("counts each command, so a listener's commands can exhaust the operation budget", () => {
+    // The scrapper's listener is one operation and its add-coins command a second.
+    const { game, hand } = limitedRun({ events: 128, operations: 1 });
+    const before = game.state;
+    expect(game.discard(hand.map(({ id }) => id))).toBeNull();
+    expect(game.state).toBe(before);
+    expect((game.actionFailure as ResolutionBudgetExceeded).registration).toBe("command add-coins");
+    // With room for both, the same discard commits.
+    const roomy = limitedRun({ events: 128, operations: 2 });
+    expect(roomy.game.discard(roomy.hand.map(({ id }) => id))).not.toBeNull();
+  });
+
+  it("delivers a play's stage outcome inside the action, recording it as a fact", () => {
+    // One play allowed and an unreachable target: the play loses the stage.
+    const { game, hand } = limitedRun({ events: 128, operations: 4096 }, 1);
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    expect(game.actionFacts.map(({ type }) => type)).toContain("stage.lost");
+  });
+
+  it("never generates an action ID a caller has already used", () => {
+    // An explicit ID shaped like an automatic one, then an automatic discard: no collision.
+    const first = limitedRun({ events: 128, operations: 4096 });
+    expect(first.game.discard([first.hand[0]!.id], "discard-1")).not.toBeNull();
+    expect(first.game.discard([first.hand[1]!.id])).not.toBeNull();
+    // Even a caller using the automatic namespace is skipped, not collided with.
+    const second = limitedRun({ events: 128, operations: 4096 });
+    expect(second.game.discard([second.hand[0]!.id], "auto:discard-1")).not.toBeNull();
+    expect(second.game.discard([second.hand[1]!.id])).not.toBeNull();
+  });
+});

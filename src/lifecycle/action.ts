@@ -170,9 +170,15 @@ export class ActionLedger {
     this.capacity = capacity;
   }
 
-  /** A fresh action ID for an action submitted without one. */
+  /**
+   * A fresh action ID for an action submitted without one: in its own namespace, and never one
+   * already resolved, so it can't collide with a caller's explicit ID (#661 review).
+   */
   next(kind: string): string {
-    return `${kind}-${++this.counter}`;
+    let id: string;
+    do id = `auto:${kind}-${++this.counter}`;
+    while (this.seen.has(id));
+    return id;
   }
 
   /** Whether this action ID has already resolved. */

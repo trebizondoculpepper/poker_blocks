@@ -16,6 +16,11 @@ export type CommandTarget = {
   update(state: GameState): void;
   /** Install one random passive the rack doesn't hold; the events it causes. */
   grantUnownedPassive(): readonly GameEvent[];
+  /**
+   * Count one command against the resolving action's budget before it runs (#657), throwing when
+   * it is spent; nested trigger steps are commands too, so they count. Absent outside an action.
+   */
+  operate?(registration: string): void;
 };
 
 type CommandHandler = (config: unknown, target: CommandTarget) => readonly GameEvent[];
@@ -35,7 +40,10 @@ export function commitCommands(
   commands: readonly RuleCommand[],
   target: CommandTarget,
 ): GameEvent[] {
-  return commands.flatMap(({ id, config }) => [...ruleCommands.get(id)(config, target)]);
+  return commands.flatMap(({ id, config }) => {
+    target.operate?.(`command ${id}`);
+    return [...ruleCommands.get(id)(config, target)];
+  });
 }
 
 // Each command reports what it committed as an event carrying the sound its configuration names
