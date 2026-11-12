@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
 import { Registry } from "../../core/registry";
 import { uncoveredCases, type ProfilingCase } from "./cases";
-import { unavailableTimer, type GpuTimer } from "./gpu-timer";
+import { createGpuTimer, unavailableTimer, type GpuTimer } from "./gpu-timer";
 import {
   createProfilerRunner,
   distribution,
@@ -127,6 +127,7 @@ describe("the profiler runner (#618)", () => {
         else ready.push(2);
       },
       poll: () => ready.splice(0),
+      discard() {},
       get pending() {
         return 0;
       },
@@ -196,5 +197,107 @@ describe("profiler coverage (#618)", () => {
     expect(uncoveredCases(cases, coverage)).toEqual([
       { family: "material", missing: ["material:steel"] },
     ]);
+  });
+});
+
+/** A timer whose results arrive two frames after they were taken, tagged by what was drawn. */
+function delayedTimer(env: { objectsDrawn: () => number; frame: () => number }) {
+  const inFlight: { ready: number; value: number; dropped: boolean }[] = [];
+  const timer: GpuTimer = {
+    available: true,
+    begin() {},
+    end() {
+      // GPU time equals the number of objects drawn, so a warm-up frame's value is recognisable.
+      inFlight.push({ ready: env.frame() + 2, value: env.objectsDrawn() + 0.5, dropped: false });
+    },
+    poll() {
+      const done = inFlight.filter(({ ready }) => ready <= env.frame());
+      inFlight.splice(0, done.length);
+      return done.filter(({ dropped }) => !dropped).map(({ value }) => value);
+    },
+    discard() {
+      inFlight.forEach((entry) => (entry.dropped = true));
+    },
+    get pending() {
+      return inFlight.filter(({ dropped }) => !dropped).length;
+    },
+    rejected: 0,
+    dispose() {},
+  };
+  return timer;
+}
+
+describe("GPU results stay with their own set (#625 review)", () => {
+  it("never counts warm-up or another set's late results", async () => {
+    let drawn = 0;
+    const { env, memory, frameCount } = fakeEnvironment();
+    const render = env.renderer.render.bind(env.renderer);
+    env.renderer.render = (scene, camera) => {
+      drawn = scene.children.filter((child) => child.userData.profiled).length;
+      render(scene, camera);
+    };
+    env.timer = delayedTimer({ objectsDrawn: () => drawn, frame: frameCount });
+    const run = await createProfilerRunner(env).run([["cube", testCase(memory)]], options);
+    const [result] = run.results;
+    // Each set holds exactly its own frames: no warm-up values, nothing from the set before.
+    expect(result!.baseline.gpu).toEqual({ median: 0.5, p95: 0.5, samples: 10 });
+    expect(result!.one.gpu).toEqual({ median: 1.5, p95: 1.5, samples: 10 });
+    expect(result!.collection.gpu).toEqual({ median: 4.5, p95: 4.5, samples: 10 });
+  });
+});
+
+describe("the GPU timer (#625 review)", () => {
+  it("rejects a query in flight during a disjoint event, even if it is answered later", () => {
+    const ext = { TIME_ELAPSED_EXT: 1, GPU_DISJOINT_EXT: 2 };
+    let disjoint = false;
+    let available = false;
+    const gl = {
+      QUERY_RESULT_AVAILABLE: 3,
+      QUERY_RESULT: 4,
+      getExtension: () => ext,
+      createQuery: () => ({}),
+      beginQuery() {},
+      endQuery() {},
+      deleteQuery() {},
+      getParameter: (name: number) => name === ext.GPU_DISJOINT_EXT && disjoint,
+      getQueryParameter: (_query: unknown, name: number) => (name === 3 ? available : 2_000_000),
+    } as unknown as WebGL2RenderingContext;
+    const timer = createGpuTimer(gl);
+    timer.begin();
+    timer.end();
+    // The disjoint flag is seen while the query is not yet answered...
+    disjoint = true;
+    expect(timer.poll()).toEqual([]);
+    // ...and has cleared by the time it is: the result is still rejected.
+    disjoint = false;
+    available = true;
+    expect(timer.poll()).toEqual([]);
+    expect(timer.rejected).toBe(1);
+
+    timer.begin();
+    timer.end();
+    expect(timer.poll()).toEqual([2]);
+  });
+
+  it("drops discarded queries without counting them as rejected", () => {
+    const ext = { TIME_ELAPSED_EXT: 1, GPU_DISJOINT_EXT: 2 };
+    const gl = {
+      QUERY_RESULT_AVAILABLE: 3,
+      QUERY_RESULT: 4,
+      getExtension: () => ext,
+      createQuery: () => ({}),
+      beginQuery() {},
+      endQuery() {},
+      deleteQuery() {},
+      getParameter: () => false,
+      getQueryParameter: (_query: unknown, name: number) => (name === 3 ? true : 1_000_000),
+    } as unknown as WebGL2RenderingContext;
+    const timer = createGpuTimer(gl);
+    timer.begin();
+    timer.end();
+    timer.discard();
+    expect(timer.pending).toBe(0);
+    expect(timer.poll()).toEqual([]);
+    expect(timer.rejected).toBe(0);
   });
 });

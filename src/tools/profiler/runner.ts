@@ -149,7 +149,9 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     options: RunOptions,
     check: () => void,
   ): Promise<{ set: SampleSet; spoiled: boolean }> {
+    // Queries still in flight from warm-up or an earlier set never enter this one (#625 review).
     env.timer.poll();
+    env.timer.discard();
     const rejectedBefore = env.timer.rejected;
     const cpu: number[] = [];
     const frames: number[] = [];
@@ -173,6 +175,8 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       await env.nextFrame();
       gpu.push(...env.timer.poll());
     }
+    // Any still unanswered after the bounded drain are dropped, not left for the next set.
+    env.timer.discard();
     return {
       spoiled,
       set: {
@@ -235,6 +239,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       frame(objects, 1 / 60);
     }
     env.timer.poll();
+    env.timer.discard();
   }
 
   async function runCase(
