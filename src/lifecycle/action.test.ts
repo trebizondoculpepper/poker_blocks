@@ -138,7 +138,11 @@ describe("an action is a transaction (#657)", () => {
     const { game, hand } = runWith([createPassiveBlock("scrapper", "s.1")], randomizer);
     const ids = hand.map(({ id }) => id);
     expect(game.discard([ids[0]!], "discard-A")).not.toBeNull();
-    expect(game.actionFacts[0]).toMatchObject({ type: "discard.completed", actionId: "discard-A" });
+    expect(game.actionFacts.map(({ type }) => type).slice(0, 2)).toEqual([
+      "block.discarded",
+      "discard.completed",
+    ]);
+    expect(game.actionFacts[0]).toMatchObject({ actionId: "discard-A" });
     const after = game.state;
     // The same submission again does nothing, even though it would otherwise be valid.
     expect(game.discard([ids[1]!], "discard-A")).toBeNull();
