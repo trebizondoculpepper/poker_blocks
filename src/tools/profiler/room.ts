@@ -88,6 +88,17 @@ export type ProfilerRoom = {
   showReport(delivery: SweepDelivery<ProfilerExport>): void;
 };
 
+/**
+ * The command sink (#734): it publishes each delivery on the page, where the one-command run
+ * (\`npm run profile\`) collects it over the browser's debugging protocol and writes the files.
+ * It holds the record only; it never writes, downloads or decides anything itself.
+ */
+if (!profilerResultSinks.has("command"))
+  profilerResultSinks.register("command", () => (delivery) => {
+    const page = globalThis as unknown as { profilerDeliveries?: unknown[] };
+    (page.profilerDeliveries ??= []).push(delivery);
+  });
+
 // The room's on-screen sink, by name, for a trait's configuration to list.
 if (!profilerResultSinks.has("screen"))
   profilerResultSinks.register(
