@@ -102,8 +102,17 @@ export type LiquidSurface = {
   wet(point: THREE.Vector3): boolean;
 };
 
+/**
+ * How particles suspended in a contents' volume are drawn so they show through it (#742;
+ * doc/presentation-contracts.md, "Material audition corrections"): the optical contents own this
+ * integration. A transmissive fluid only shows what three.js captures behind it, which is the
+ * opaque scene, so it asks its particles to join that capture. Contents with no such need
+ * publish none, and particles keep their own look.
+ */
+export type InteriorContribution = { include(particles: THREE.Points): void };
+
 /** What contents publish for others to read (#329): only what they genuinely have. */
-export type Capabilities = { liquidSurface?: LiquidSurface };
+export type Capabilities = { liquidSurface?: LiquidSurface; interior?: InteriorContribution };
 
 /**
  * One frame of a contained block (#329 "Lifecycle and ownership"), built once per block per
