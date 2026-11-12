@@ -174,7 +174,7 @@ describe("a play resolves in the documented phases (#658)", () => {
     const { game, hand } = runWith();
     expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
     const phases = [...new Set(game.actionFacts.map(({ phase }) => phase))];
-    expect(phases).toEqual(["placement", "beforeScore", "afterScore", "settle"]);
+    expect(phases).toEqual(["placement", "beforeScore", "score", "afterScore", "settle"]);
     const types = game.actionFacts.map(({ type }) => type);
     expect(types.slice(0, 2)).toEqual(["play.placed", "block.placed"]);
     expect(types.at(-1)).toBe("play.completed");
@@ -341,5 +341,88 @@ describe("each installed die rolls for itself (#695 review)", () => {
     const dice = [createPassiveBlock("d6", "die.a"), createPassiveBlock("d6", "die.b")];
     scoreFieldWithPassives(game.state.field, dice, undefined, counting);
     expect(draws).toBe(2);
+  });
+});
+
+describe("score facts (#658, part 4)", () => {
+  it("reports each line, then all lines, then the total applied once", () => {
+    const { game, hand } = runWith();
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    expect(game.play({ cardId: hand[1]!.id, targetId: hand[0]!.id, face: "east" })).not.toBeNull();
+    const score = game.actionFacts.filter(({ phase }) => phase === "score").map(({ type }) => type);
+    expect(score).toEqual(["score.lineFinalized", "score.allLinesFinalized", "score.totalApplied"]);
+    const total = game.lastScoredLines.reduce((sum, { points }) => sum + points, 0);
+    const applied = game.actionFacts.find(({ type }) => type === "score.totalApplied")!;
+    expect((applied.payload as { amount: number }).amount).toBe(total);
+  });
+
+  it("gives score.lineFinalized the line the scored-line selector reads", async () => {
+    const game = await withListener({
+      traitId: "passive.event-rules",
+      eventRules: [
+        {
+          on: "score.lineFinalized",
+          select: { id: "scored-line", config: {} },
+          where: { id: "line-length", config: { minimum: 2 } },
+          effects: [{ id: "add-coins", config: { amount: 4 } }],
+        },
+      ],
+    });
+    const [first, second] = game.state.hand;
+    expect(game.play({ cardId: first!.id })).not.toBeNull();
+    const coins = game.state.coins;
+    expect(game.play({ cardId: second!.id, targetId: first!.id, face: "east" })).not.toBeNull();
+    expect(game.state.coins).toBe(coins + 4);
+  });
+
+  it("delivers finalized-score hooks before the total is applied", async () => {
+    const { passiveTraits } = await import("../passives");
+    const seen: number[] = [];
+    const probe = { read: () => 0 };
+    if (!passiveTraits.has("test.finalized-probe"))
+      passiveTraits.register("test.finalized-probe", {
+        id: "test.finalized-probe",
+        listensTo: ["score.allLinesFinalized"],
+        respond: () => {
+          seen.push(probe.read());
+          return [];
+        },
+      });
+    const game = await withListener({ traitId: "test.finalized-probe" });
+    probe.read = () => game.state.round.score;
+    const [first, second] = game.state.hand;
+    expect(game.play({ cardId: first!.id })).not.toBeNull();
+    const before = game.state.round.score;
+    seen.length = 0;
+    expect(game.play({ cardId: second!.id, targetId: first!.id, face: "east" })).not.toBeNull();
+    expect(game.state.round.score).toBeGreaterThan(before);
+    expect(seen).toEqual([before]);
+  });
+});
+
+describe("a finalized line's card IDs are frozen (#696 review)", () => {
+  it("refuses a listener's change to score.lineFinalized's card IDs", async () => {
+    const { passiveTraits } = await import("../passives");
+    let refused = false;
+    if (!passiveTraits.has("test.line-meddler"))
+      passiveTraits.register("test.line-meddler", {
+        id: "test.line-meddler",
+        listensTo: ["score.lineFinalized"],
+        respond: (_block, event) => {
+          try {
+            (event.cardIds as string[]).push("intruder");
+          } catch {
+            refused = true;
+          }
+          return [];
+        },
+      });
+    const game = await withListener({ traitId: "test.line-meddler" });
+    const [first, second] = game.state.hand;
+    expect(game.play({ cardId: first!.id })).not.toBeNull();
+    expect(game.play({ cardId: second!.id, targetId: first!.id, face: "east" })).not.toBeNull();
+    expect(refused).toBe(true);
+    const line = game.actionFacts.find(({ type }) => type === "score.lineFinalized")!;
+    expect(line.subjectIds).not.toContain("intruder");
   });
 });

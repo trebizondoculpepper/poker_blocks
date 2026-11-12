@@ -245,7 +245,7 @@ function noRandomSource(): number {
 }
 
 /** How many of a line's cells another line on a different axis also passes through. */
-function crossingCells(line: Line, lines: readonly Line[]): number {
+export function crossingCells(line: Line, lines: readonly Line[]): number {
   const ownCells = new Set(line.cells.map(cellKey));
   return line.cells.filter((cell) =>
     lines.some(

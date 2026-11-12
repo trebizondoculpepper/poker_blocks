@@ -47,6 +47,7 @@ import {
   type StageContext,
 } from "./passives";
 import {
+  crossingCells,
   passiveActivations,
   withOperationCounter,
   scoreFieldWithPassives,
@@ -758,7 +759,8 @@ export class GameRun {
     this.drainPhase(context, "beforeScore", batchId);
     this.runSteps(phases.beforeScore, steps, context, "beforeScore", batchId);
 
-    // 3. Score the resolved field; the pure scorer is unchanged, its total applied once.
+    // 3. Score the resolved field; the pure scorer is unchanged. Each line, then all, then the
+    //    total applied once.
     this.scoredLines = scoreFieldWithPassives(
       this.currentState.field,
       this.currentState.passiveRack,
@@ -766,11 +768,24 @@ export class GameRun {
       this.random,
     );
     const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
+    // Each line with the score context the `scored-line` selector reads, then all lines; their
+    // hooks and follow-ups resolve before the total is applied.
+    const lines = this.scoredLines.map(({ line }) => line);
+    for (const scored of this.scoredLines)
+      this.passiveEvents.emit({
+        type: "score.lineFinalized",
+        amount: scored.points,
+        cardIds: captured([...scored.blockIds]),
+        score: captured({ line: scored.line, intersections: crossingCells(scored.line, lines) }),
+      });
+    this.passiveEvents.emit({ type: "score.allLinesFinalized", amount: gained });
+    this.drainPhase(context, "score", batchId);
     this.runStats = recordPlay(this.runStats, gained, placed.length);
     this.currentState = {
       ...this.currentState,
       round: { ...this.currentState.round, score: scoreBefore + gained },
     };
+    this.passiveEvents.emit({ type: "score.totalApplied", amount: gained });
     this.drainPhase(context, "score", batchId);
 
     // 4. After score: its configured steps (reactions, then pending detonations).
