@@ -1,6 +1,6 @@
 import { resetStageState } from "./stage-end";
 import { resetRoundState } from "./round-end";
-import { clearField } from "./card-ownership";
+import { clearField, removeCardForRun } from "./card-ownership";
 // Registers the spawn-beyond-pair reaction result (#425).
 import "./pair-spawn";
 // Registers cooking's stage-end reset (#372).
@@ -262,7 +262,12 @@ export class GameRun {
   }
 
   /** Record the events an action delivered as its facts, in delivery order. */
-  private recordDelivered(action: ActionContext, phase: string, delivered: readonly GameEvent[]) {
+  private recordDelivered(
+    action: ActionContext,
+    phase: string,
+    delivered: readonly GameEvent[],
+    batchId: string | null = null,
+  ) {
     // Each fact names the fact it answered, from the parent the queue kept as it queued it
     // (#661 review); a fact from an earlier drain of this action is found the same way.
     for (const event of delivered) {
@@ -270,6 +275,7 @@ export class GameRun {
       const envelope = action.record(event.type, event, {
         phase,
         parent: cause ? this.recordedFacts.get(cause) : null,
+        batchId,
         // Ordered subjects, each once: the event's cards, or its block when it names no cards.
         subjectIds: [
           ...new Set([
@@ -298,17 +304,29 @@ export class GameRun {
    * play or discard and does not change the score; the block leaves a gap (nothing
    * settles) and goes to the discard pile, so a saved run still accounts for every card. Emits `block.destroyed`, not a discard event. Returns the removed block, or null when refused.
    */
-  destroyBlock(blockId: string, cause: DestroyCause): PlacedBlock | null {
-    const placed = this.currentState.field.find(({ block }) => block.id === blockId);
-    if (!placed || !blockCanDestroy(placed.block, cause)) return null;
-    this.currentState = {
-      ...this.currentState,
-      field: this.currentState.field.filter((other) => other !== placed),
-      // Out of play like a discard (and back in the deck when the discard pile returns).
-      discardPile: [...this.currentState.discardPile, placed.block],
-    };
-    this.lifecycle("block.destroyed", { blockId });
-    return placed;
+  destroyBlock(blockId: string, cause: DestroyCause, actionId?: string): PlacedBlock | null {
+    return this.transact("destroy", actionId, (context) => {
+      const placed = this.currentState.field.find(({ block }) => block.id === blockId);
+      if (!placed || !blockCanDestroy(placed.block, cause)) return null;
+      // Permanent: the card leaves the run for good, as doc/game.md's "Destructible blocks"
+      // requires; it never enters the discard pile or returns to the deck (#659).
+      const next = removeCardForRun(this.currentState, blockId);
+      if (!next) return null;
+      this.currentState = next;
+      // Two correlated facts: the authorized destruction, and the lower-level removal with its
+      // reason. Both name the block and share this action's batch.
+      const batchId = `${context.actionId}:destroy`;
+      this.passiveEvents.emit({ type: "block.destroyed", blockId, cause });
+      this.passiveEvents.emit({ type: "block.removed", blockId, cause });
+      const delivered = this.passiveEvents.drain(
+        undefined,
+        undefined,
+        this.budgetFor(context, "destroy"),
+      );
+      // Recorded like any action's facts: each response names the fact that caused it.
+      this.recordDelivered(context, "destroy", delivered, batchId);
+      return placed;
+    });
   }
 
   /** Developer console adjustment; never lets the persistent balance go below zero. */
@@ -763,6 +781,10 @@ export class GameRun {
     const next = this.activeDealer.discard(this.currentState, cardIds);
     if (next) {
       this.currentState = next;
+      // One fact per card actually moved, in selection order, then the once-per-action batch
+      // (#659; doc/game-events.md, "Lifecycle vocabulary and extension").
+      for (const block of discarded)
+        this.passiveEvents.emit({ type: "block.discarded", blockId: block.id, blocks: [block] });
       this.passiveEvents.emit({
         type: "discard.completed",
         cardIds: discarded.map(({ id }) => id),
@@ -783,7 +805,7 @@ export class GameRun {
         },
         this.budgetFor(context, "discard"),
       );
-      this.recordDelivered(context, "discard", this.discardEvents);
+      this.recordDelivered(context, "discard", this.discardEvents, `${context.actionId}:discard`);
       this.announceOutcome();
     }
     return next ? this.currentState : null;
