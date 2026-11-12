@@ -139,17 +139,22 @@ function scoreLines(
   // scoring evaluates it, once for the whole play, and the same values apply to every line
   // (#97). A rule line scoring never evaluates is never resolved here, so a rule on any other hook
   // rolls once, when that hook is delivered (#695 review).
+  // Cached per installed passive and rule: two copies of one die share their definition's rule
+  // objects but roll independently (#695 review).
   const passives = rack.map(passiveSource);
-  const passiveRules = new Set(passives.flatMap(({ rules }) => rules));
-  const resolved = new Map<EventRule, EventRule>();
-  const resolve = (rule: EventRule): EventRule => {
-    if (!passiveRules.has(rule)) return rule;
-    const known = resolved.get(rule) ?? ruleHandlers.resolveValues(rule, random);
-    resolved.set(rule, known);
+  const resolved = new Map(passives.map((source) => [source, new Map<EventRule, EventRule>()]));
+  const resolve = (source: RuleSource, rule: EventRule): EventRule => {
+    const cache = resolved.get(source);
+    if (!cache) return rule;
+    const known = cache.get(rule) ?? ruleHandlers.resolveValues(rule, random);
+    cache.set(rule, known);
     return known;
   };
   const lineRules = (sources: readonly RuleSource[], on: string) =>
-    subscribedRules(sources, on).map((entry) => ({ ...entry, rule: resolve(entry.rule) }));
+    subscribedRules(sources, on).map((entry) => ({
+      ...entry,
+      rule: resolve(entry.source, entry.rule),
+    }));
   return lines.map((line) => {
     const intersections = crossingCells(line, lines);
     // Evaluate: a block's value is the same in every candidate, so each is worked out once.

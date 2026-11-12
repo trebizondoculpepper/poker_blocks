@@ -325,3 +325,21 @@ describe("a play's facts name what was placed (#695 review)", () => {
     expect(game.state).toEqual(before);
   });
 });
+
+describe("each installed die rolls for itself (#695 review)", () => {
+  it("draws once per die instance, even when two share a definition", async () => {
+    const { createPassiveBlock } = await import("../passives");
+    const { scoreFieldWithPassives } = await import("../passive-effects");
+    const { game, hand } = runWith();
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    expect(game.play({ cardId: hand[1]!.id, targetId: hand[0]!.id, face: "east" })).not.toBeNull();
+    let draws = 0;
+    const counting = () => {
+      draws += 1;
+      return 0.5;
+    };
+    const dice = [createPassiveBlock("d6", "die.a"), createPassiveBlock("d6", "die.b")];
+    scoreFieldWithPassives(game.state.field, dice, undefined, counting);
+    expect(draws).toBe(2);
+  });
+});
