@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { collect, currentRepository } from "./github.js";
+import { compactBriefing, compactText } from "./compact.js";
 import { briefing, textReport } from "./briefing.js";
 
 export const help = `Usage: npm run triage -- [options]
@@ -16,7 +17,10 @@ Read-only LLM action briefing. Requires authenticated gh and Node 20+.
   --checkpoint PATH     Read last successful window; advance only after complete live output
   --cache PATH          Save full successful snapshot atomically
   --offline             Read explicit cache; no GitHub queries/checkpoint advancement
-  --limit N             Items per bounded section (default 10)
+  --full                Expanded version-1 report
+  --agent NAME          Focus current work on explicit inbox owner
+  --max-chars N         Compact text budget (default 10000)
+  --limit N             Next steps (default 5 compact, 10 expanded)
   --help                Show usage
 Exit: 0 complete; 2 incomplete evidence; 1 invalid arguments/API/cache failure.
 No GitHub mutations. Question/dependency hints require inspection, not blind action.
@@ -27,6 +31,9 @@ export function argumentsFor(args) {
     options: {
       repo: { type: "string" },
       json: { type: "boolean" },
+      full: { type: "boolean" },
+      agent: { type: "string" },
+      "max-chars": { type: "string" },
       issue: { type: "string" },
       since: { type: "string" },
       checkpoint: { type: "string" },
@@ -56,7 +63,8 @@ export function argumentsFor(args) {
   return {
     ...values,
     issue: values.issue ? positive(values.issue, "--issue") : undefined,
-    limit: positive(values.limit ?? "10", "--limit"),
+    limit: positive(values.limit ?? (values.full ? "10" : "5"), "--limit"),
+    maxChars: positive(values["max-chars"] ?? "10000", "--max-chars"),
     since: values.since ? new Date(values.since).toISOString() : undefined,
   };
 }
@@ -130,7 +138,16 @@ export async function main(
   }
   if (options.issue && !snapshot.issues.some((issue) => issue.number === options.issue))
     throw new Error(`Issue #${options.issue} not in this cache. Refresh live with --issue.`);
-  const report = briefing(snapshot, options);
+  const expanded = briefing(
+    snapshot,
+    options.full
+      ? options
+      : {
+          ...options,
+          limit: Math.max(snapshot.issues.length + snapshot.pullRequests.length, 1) * 20,
+        },
+  );
+  const report = options.full ? expanded : compactBriefing(snapshot, options, expanded);
   const checkpoint = options.checkpoint
     ? {
         previousWindow: snapshot.since,
@@ -147,7 +164,8 @@ export async function main(
   await output(
     options.json
       ? JSON.stringify({ ...report, checkpoint }, null, 2) + "\n"
-      : textReport(report) + checkpointText,
+      : (options.full ? textReport(expanded) : compactText(report, options.maxChars)) +
+          checkpointText,
   );
   if (!options.offline && options.checkpoint && report.completeness.complete)
     // Start time deliberately overlaps windows: updates arriving during collection are not lost.

@@ -39,7 +39,7 @@ export async function currentRepository() {
 }
 const info = "pageInfo{hasNextPage endCursor}";
 const comment = "body url author{login} createdAt updatedAt";
-const common = `number title body url state createdAt updatedAt labels(first:100){nodes{name} ${info}} comments(first:100){nodes{${comment}} ${info}}`;
+const common = `number title body url state createdAt updatedAt lastEditedAt labels(first:100){nodes{name} ${info}} comments(first:100){nodes{${comment}} ${info}}`;
 const prFields = `${common} headRefOid headRefName baseRefName isDraft mergeable mergeStateStatus reviewDecision mergedAt
  closingIssuesReferences(first:100){nodes{number url} ${info}}
  reviewThreads(first:100){nodes{isResolved isOutdated comments(first:1){totalCount nodes{${comment}} ${info}}} ${info}}
@@ -114,6 +114,12 @@ export function declaredDependencies(body, repository) {
  * @returns {Promise<import("./types.js").Snapshot>}
  */
 export async function collect(repository, options = {}, query = ghQuery, now = () => new Date()) {
+  const originalQuery = query;
+  let requestCount = 0;
+  query = (...args) => {
+    requestCount++;
+    return originalQuery(...args);
+  };
   const [owner, name] = repository.split("/");
   const vars = { owner: owner, name: name };
   const warnings = [];
@@ -147,7 +153,7 @@ export async function collect(repository, options = {}, query = ghQuery, now = (
     issues.push(detail);
   }
   // All comments are available for semantic reconciliation, even if the briefing shows excerpts.
-  for (const item of [...issues, ...pullRequests]) {
+  await concurrentMap([...issues, ...pullRequests], async (item) => {
     if (item.comments.pageInfo.hasNextPage) {
       const source = `query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){issueOrPullRequest(number:$number){... on Issue{comments(first:100,after:$cursor){nodes{${comment}} ${info}}} ... on PullRequest{comments(first:100,after:$cursor){nodes{${comment}} ${info}}}}}`;
       const initial = item.comments;
@@ -160,7 +166,7 @@ export async function collect(repository, options = {}, query = ghQuery, now = (
     }
     if (item.labels.pageInfo.hasNextPage)
       warnings.push(`${item.url}: labels exceed 100; label analysis incomplete.`);
-  }
+  });
   for (const pr of pullRequests) {
     const nested = [
       ["closing references", pr.closingIssuesReferences],
@@ -180,8 +186,7 @@ export async function collect(repository, options = {}, query = ghQuery, now = (
       .flatMap((item) => declaredDependencies(item.body, repository))
       .map((ref) => [`${ref.repository}#${ref.number}`, ref]),
   );
-  const dependencies = [];
-  for (const [key, ref] of refs) {
+  const dependencies = await concurrentMap([...refs], async ([key, ref]) => {
     let item = local.get(key);
     if (!item) {
       const [refOwner, refName] = ref.repository.split("/");
@@ -192,7 +197,7 @@ export async function collect(repository, options = {}, query = ghQuery, now = (
       const repo = data.repository;
       item = repo?.issueOrPullRequest;
     }
-    dependencies.push({
+    const dependency = {
       ...ref,
       available: !!item,
       ...(item
@@ -204,9 +209,10 @@ export async function collect(repository, options = {}, query = ghQuery, now = (
             url: item.url,
           }
         : {}),
-    });
+    };
     if (!item) warnings.push(`${ref.url}: declared prerequisite unavailable.`);
-  }
+    return dependency;
+  });
   let changed = [];
   if (options.since) {
     const values = await Promise.all([
@@ -233,5 +239,21 @@ export async function collect(repository, options = {}, query = ghQuery, now = (
     since: options.since ?? null,
     warnings,
     rateLimit,
+    metrics: { requestCount, durationMs: Date.parse(now().toISOString()) - Date.parse(startedAt) },
   };
+}
+
+/** Bounded independent reads; results retain input order. */
+export async function concurrentMap(items, handler, concurrency = 4) {
+  const results = Array.from({ length: items.length });
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await handler(items[index], index);
+      }
+    }),
+  );
+  return results;
 }
