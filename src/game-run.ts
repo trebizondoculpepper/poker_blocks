@@ -713,7 +713,8 @@ export class GameRun {
   private resolvePlay(action: PlayAction, context: ActionContext): GameState | null {
     const next = this.activeDealer.play(this.currentState, action);
     if (!next) return null;
-    const placed = action.cardIds?.length ? [...action.cardIds] : [action.cardId];
+    // Captured: listeners receive these IDs, and must not change the play (#682 review).
+    const placed = captured(action.cardIds?.length ? [...action.cardIds] : [action.cardId]);
     const phases = this.playPhases;
     const steps: PlayStepContext = {
       target: this.commandTarget,

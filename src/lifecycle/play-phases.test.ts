@@ -427,3 +427,42 @@ describe("aggregate rules: one roll, committed commands (#682 review)", () => {
     expect(game.state.coins).toBe(coins + 5);
   });
 });
+
+describe("play card IDs are immutable in events (#682 review)", () => {
+  it("refuses a listener's change to the placed card IDs", async () => {
+    const { passiveTraits, createPassiveBlock } = await import("../passives");
+    let refused = false;
+    if (!passiveTraits.has("test.ids-meddler"))
+      passiveTraits.register("test.ids-meddler", {
+        id: "test.ids-meddler",
+        listensTo: ["play.placed"],
+        respond: (_block, event) => {
+          try {
+            (event.cardIds as string[]).push("intruder");
+          } catch {
+            refused = true;
+          }
+          return [];
+        },
+      });
+    const base = createPassiveBlock("scrapper", "ids.1");
+    const rules = sandboxRunRules(demoRunRules);
+    const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    opening.installPassive({
+      ...base,
+      traits: { ...base.traits, passive: { traitId: "test.ids-meddler" } },
+    });
+    const game = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      opening.snapshot(),
+      () => 0,
+    );
+    const id = game.state.hand[0]!.id;
+    expect(game.play({ cardId: id })).not.toBeNull();
+    expect(refused).toBe(true);
+    const completed = game.actionFacts.find(({ type }) => type === "play.completed")!;
+    expect(completed.subjectIds).toEqual([id]);
+  });
+});
