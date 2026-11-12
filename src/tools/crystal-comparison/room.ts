@@ -71,6 +71,11 @@ export function wheelDistance(distance: number, deltaY: number, deltaMode: numbe
   return distance / wheelZoom(1, deltaY, deltaMode);
 }
 
+/** How far a two-finger twist turns the collection: the angle change since last event. */
+export function twistTurn(previousDegrees: number, degrees: number): number {
+  return THREE.MathUtils.degToRad(degrees - previousDegrees);
+}
+
 /** Camera distance for a pinch: the start distance scaled by start spacing over spacing now. */
 export function pinchDistance(startDistance: number, startSpacing: number, spacing: number) {
   return (startDistance * startSpacing) / Math.max(1, spacing);
@@ -142,11 +147,17 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       },
       // Pinch zoom follows the ratio of finger spacing to where it started, as the table does
       // (src/table-input.ts): equal gestures give equal zoom, however often events arrive.
-      onPinch: ({ first, da: [spacing], memo }) => {
-        const start = (memo ?? { distance, spacing }) as { distance: number; spacing: number };
+      // A two-finger twist turns the collection, as it turns the board (#637 review).
+      onPinch: ({ first, da: [spacing, angle], memo }) => {
+        const start = (memo ?? { distance, spacing, angle }) as {
+          distance: number;
+          spacing: number;
+          angle: number;
+        };
         if (first) playSfx("view.zoom");
         distance = clampDistance(pinchDistance(start.distance, start.spacing, spacing));
-        return start;
+        group.rotation.y += twistTurn(start.angle, angle);
+        return { ...start, angle };
       },
     },
     { drag: { pointer: { capture: true } } },

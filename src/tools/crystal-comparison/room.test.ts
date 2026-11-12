@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { gameModeFor } from "../../game-modes";
 import { opticsBackends } from "../../visual/optics-backends";
-import { comparisonLayout, distribution, pinchDistance, wheelDistance } from "./room";
+import { comparisonLayout, distribution, pinchDistance, twistTurn, wheelDistance } from "./room";
 
 describe("the crystal comparison room (#524)", () => {
   it("lays out the same cards, places and turns for a seed", () => {
@@ -47,5 +47,18 @@ describe("wheel zoom in the comparison room (#637 review)", () => {
     const twice = wheelDistance(wheelDistance(10, 50, 0), 50, 0);
     expect(twice).toBeCloseTo(once, 10);
     expect(wheelDistance(wheelDistance(10, 120, 0), -120, 0)).toBeCloseTo(10, 10);
+  });
+});
+
+describe("two-finger twist in the comparison room (#637 review)", () => {
+  it("turns by the change in finger angle, summing to the whole twist", () => {
+    expect(twistTurn(10, 100)).toBeCloseTo(Math.PI / 2, 10);
+    let turned = 0;
+    let previous = 0;
+    for (const angle of [15, 45, 90]) {
+      turned += twistTurn(previous, angle);
+      previous = angle;
+    }
+    expect(turned).toBeCloseTo(Math.PI / 2, 10);
   });
 });
