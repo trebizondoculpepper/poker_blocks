@@ -82,6 +82,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       <div data-part="backends" role="group" aria-label="Renderer"></div>
       <label>Count <input data-part="count" type="number" min="1" max="100" /></label>
       <p data-part="unsupported" class="crystal-comparison-note"></p>
+      <fieldset data-part="tuning" class="crystal-comparison-tuning" hidden><legend>Tuning</legend></fieldset>
       <output data-part="stats" class="crystal-comparison-stats"></output>
     </aside>
     <div class="crystal-comparison-stage" data-part="stage"></div>`;
@@ -185,8 +186,34 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     samples = [];
     cpu = [];
     part("unsupported").textContent = opticsBackends.get(backend).unsupported ?? "";
+    showTuning();
     for (const button of part("backends").querySelectorAll("button"))
       button.setAttribute("aria-pressed", String(button.dataset.backend === backend));
+  }
+
+  /** The chosen backend's live controls, as its registration lists them (none for most). */
+  function showTuning(): void {
+    const controls = opticsBackends.get(backend).controls ?? [];
+    const fieldset = part("tuning");
+    fieldset.hidden = controls.length === 0;
+    fieldset.querySelectorAll("label").forEach((label) => label.remove());
+    for (const control of controls) {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = String(control.min);
+      input.max = String(control.max);
+      input.step = String(control.step);
+      input.value = String(control.uniform.value);
+      const shown = document.createElement("output");
+      shown.textContent = String(control.uniform.value);
+      input.addEventListener("input", () => {
+        control.uniform.value = Number(input.value);
+        shown.textContent = input.value;
+      });
+      label.append(control.label, " ", input, " ", shown);
+      fieldset.append(label);
+    }
   }
 
   /** A new collection: only when the count changes, never when the backend does. */

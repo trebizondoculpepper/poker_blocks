@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { approximateOuter, createFacetShell, fillPane } from "./approximate-crystal";
+import { createCrystalV3Front, createCrystalV3Rear } from "./crystal-v3";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
@@ -1309,6 +1310,28 @@ function approximateCrystal(context: AssemblyContext): BlockAppearance {
   );
 }
 
+/**
+ * Crystal v3 (#645, doc/crystal-v3.md): the block's own clean faces as two mapped layers over a
+ * shared smooth spectral environment (rear through the block, front Fresnel-blended over it),
+ * with the existing print on top. The hand keeps the ordinary surface, as other crystals do.
+ */
+function crystalV3(context: AssemblyContext): BlockAppearance {
+  const { art, definition, geometry } = context;
+  const texture = faceTexture(art, definition, false, 0, false);
+  const height = heightFor(texture, art, definition.appearance);
+  const print = printSkin(art, definition.appearance, geometry);
+  const inHand = surface(texture, definition.appearance, height);
+  // A shader material in the board slot: the dev comparison room draws it; the game never does.
+  const front = createCrystalV3Front() as unknown as THREE.MeshStandardMaterial;
+  return appearanceBase(
+    context,
+    [texture, ...[height].filter((value) => value !== undefined), print.texture],
+    Array.from({ length: 6 }, () => inHand),
+    [createCrystalV3Rear(geometry), print.skin],
+    Array.from({ length: 6 }, () => front),
+  );
+}
+
 function frostedBlock(context: AssemblyContext): BlockAppearance {
   const { art, definition, geometry, size } = context;
   const texture = faceTexture(art, definition, false, 0, false);
@@ -1380,6 +1403,8 @@ const assemblyRegistry = new Map<string, AssemblyHandler>([
   ["refractiveCrystal", refractiveCrystal],
   // The cheaper crystal look for comparison (#523); no material uses it in the game yet.
   ["approximateCrystal", approximateCrystal],
+  // Crystal v3, the clean-surface layered experiment (#645); no material uses it in the game.
+  ["crystalV3", crystalV3],
   ["frostedBlock", frostedBlock],
   ["contained", contained],
   // A wrapped gift box (#496).
