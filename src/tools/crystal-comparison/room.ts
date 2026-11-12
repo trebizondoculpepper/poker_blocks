@@ -99,6 +99,9 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   part("stage").append(renderer.domElement);
+  // Counted per animation frame across every pass a look draws (its capture and rear passes as
+  // well as the main view), not just the last render call (#656 review).
+  renderer.info.autoReset = false;
   // Its own reflections: the game's environment belongs to another WebGL context (#637 review).
   const environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
   const scene = new THREE.Scene();
@@ -253,6 +256,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     camera.position.set(0, 0, view.distance);
     group.rotation.set(view.turnX, view.turnY, 0);
     camera.lookAt(0, 0, 0);
+    renderer.info.reset();
     const start = performance.now();
     // Any passes the chosen look needs first (a background capture), as its backend declares.
     opticsBackends.get(backend).frame?.({ renderer, scene, camera, hide: group });
