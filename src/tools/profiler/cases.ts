@@ -51,3 +51,92 @@ export function uncoveredCases(
     }))
     .filter(({ missing }) => missing.length > 0);
 }
+
+/**
+ * Appearances a family declares it cannot profile yet, each with its reason (#710;
+ * doc/automatic-profiling.md, "Automatic discovery and coverage"). An unsupported entry is
+ * reported and counted, never measured: the runner only enumerates `profilingCases`.
+ */
+export const profilingUnsupported = new Registry<{ family: string; reason: string }>(
+  "unsupported profiling case",
+);
+
+/** One expected catalog's coverage: whether its provider is installed, and what it lacks. */
+export type CatalogCoverage = {
+  catalog: string;
+  /** False when no provider is installed for it: a coverage failure, never an empty pass. */
+  installed: boolean;
+  expected: number;
+  available: number;
+  unsupported: { id: string; reason: string }[];
+  uncovered: string[];
+};
+
+export type CoverageReport = {
+  catalogs: CatalogCoverage[];
+  totals: { expected: number; available: number; unsupported: number; uncovered: number };
+  /** Every expected catalog's provider is installed and every expected case has a case. */
+  complete: boolean;
+};
+
+/**
+ * Coverage against the composed set of expected catalogs (#710): each expected catalog names its
+ * provider (a `profilingCoverage` entry). A missing provider, an expected case with no registered
+ * case, and an unsupported entry are each reported. An empty composition is never complete.
+ */
+export function catalogCoverage(
+  expected: readonly string[],
+  cases: Pick<Registry<ProfilingCase>, "has"> = profilingCases,
+  coverage: Pick<Registry<() => readonly string[]>, "has" | "get"> = profilingCoverage,
+  unsupported: Pick<
+    Registry<{ family: string; reason: string }>,
+    "has" | "get"
+  > = profilingUnsupported,
+): CoverageReport {
+  const catalogs = expected.map((catalog): CatalogCoverage => {
+    const ids = coverage.has(catalog) ? coverage.get(catalog)() : [];
+    const declared = ids.flatMap((id) =>
+      !cases.has(id) && unsupported.has(id) ? [{ id, reason: unsupported.get(id).reason }] : [],
+    );
+    return {
+      catalog,
+      installed: coverage.has(catalog),
+      expected: ids.length,
+      available: ids.filter((id) => cases.has(id)).length,
+      unsupported: declared,
+      uncovered: ids.filter((id) => !cases.has(id) && !unsupported.has(id)),
+    };
+  });
+  const sum = (pick: (entry: CatalogCoverage) => number) =>
+    catalogs.reduce((total, entry) => total + pick(entry), 0);
+  const totals = {
+    expected: sum(({ expected }) => expected),
+    available: sum(({ available }) => available),
+    unsupported: sum(({ unsupported }) => unsupported.length),
+    uncovered: sum(({ uncovered }) => uncovered.length),
+  };
+  return {
+    catalogs,
+    totals,
+    complete:
+      catalogs.length > 0 &&
+      catalogs.every(({ installed, uncovered }) => installed && uncovered.length === 0),
+  };
+}
+
+/** One line for a person: the totals, then each problem by catalog. */
+export function describeCoverage(report: CoverageReport): string {
+  const { expected, available, unsupported, uncovered } = report.totals;
+  const problems = report.catalogs.flatMap(
+    ({ catalog, installed, uncovered: missing, unsupported: declared }) => [
+      ...(installed ? [] : [`${catalog}: no provider installed`]),
+      ...(missing.length ? [`${catalog}: no case for ${missing.join(", ")}`] : []),
+      ...declared.map(({ id, reason }) => `${catalog}: ${id} unsupported (${reason})`),
+    ],
+  );
+  const verdict = report.complete ? "Complete" : "Incomplete";
+  return [
+    `${verdict}: ${available} of ${expected} expected available, ${unsupported} unsupported, ${uncovered} uncovered`,
+    ...problems,
+  ].join("; ");
+}

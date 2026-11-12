@@ -45,6 +45,7 @@ import { sceneBehaviours, type SceneHost } from "./scene-behaviours";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView, type ShopView } from "./shop-view";
 import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
+import type { ProfilerRoom } from "./tools/profiler/room";
 import type { CrystalComparisonRoom } from "./tools/crystal-comparison/room";
 import { createBinView, type BinView } from "./bin-view";
 import { createSelectionBadge, type SelectionBadge } from "./selection-badge";
@@ -145,7 +146,7 @@ type TraitContext = {
     devObjectBrowser: ShopBalanceEditor;
     devBlockDesigner: ShopBalanceEditor;
     devContainedProof: ShopBalanceEditor;
-    devProfiler: ShopBalanceEditor;
+    devProfiler: ProfilerRoom;
     devCrystalComparison: CrystalComparisonRoom;
     devWordCubeRoom: WordCubeRoom;
     dialogs: SceneHost["services"]["dialogs"];
@@ -167,7 +168,7 @@ const devBlockDesigner: ShopBalanceEditor = import.meta.env.DEV
 const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/contained-proof/room")).createContainedProofRoom(host)
   : { show() {}, hide() {}, dispose() {} };
-const devProfiler: ShopBalanceEditor = import.meta.env.DEV
+const devProfiler: ProfilerRoom = import.meta.env.DEV
   ? (await import("./tools/profiler/room")).createProfilerRoom(host)
   : { show() {}, hide() {}, dispose() {} };
 const devCrystalComparison: CrystalComparisonRoom = import.meta.env.DEV

@@ -47,7 +47,28 @@ describe("profiler export (#619)", () => {
         pixelRatio: 1.5,
         quality: "standard",
       },
-      [{ family: "material", missing: ["material:steel"] }],
+      {
+        catalogs: [
+          {
+            catalog: "material",
+            installed: true,
+            expected: 2,
+            available: 1,
+            unsupported: [],
+            uncovered: ["material:steel"],
+          },
+          {
+            catalog: "rack item",
+            installed: false,
+            expected: 0,
+            available: 0,
+            unsupported: [],
+            uncovered: [],
+          },
+        ],
+        totals: { expected: 2, available: 1, unsupported: 0, uncovered: 1 },
+        complete: false,
+      },
       new Date("2026-11-12T00:00:00Z"),
     );
     const round = JSON.parse(JSON.stringify(exported));
@@ -55,6 +76,8 @@ describe("profiler export (#619)", () => {
     expect(round.gpuTiming).toBe("unavailable");
     expect(round.results[0].collection.gpu).toBeNull();
     expect(round.uncovered).toEqual([{ family: "material", missing: ["material:steel"] }]);
+    expect(round.coverage.complete).toBe(false);
+    expect(round.coverage.catalogs[1]).toMatchObject({ catalog: "rack item", installed: false });
     expect(round.method.version).toBe(1);
     expect(round.exportedAt).toBe("2026-11-12T00:00:00.000Z");
   });
