@@ -1406,8 +1406,6 @@ A small panel shows the backend's name and the renderer counts (draw calls, tria
 
 Visual acceptance is the owner's comparison in the room, reported on #524.
 
-## GitHub action briefing tool (#626)
+## GitHub action briefing tool
 
-The plain JavaScript [read-only triage CLI](github-triage-cli.md), run through npm on Node 20+ with the existing gh authentication/session, collects paginated GitHub facts through authenticated `gh`, applies registered workflow analysis rules and emits a compact evidence-linked action briefing or versioned JSON. Full-ticket mode provides intake context; explicit since/checkpoint and offline-cache semantics prevent stale snapshots from looking current. Natural-language questions and apparently satisfied dependencies remain inspection candidates, never authoritative decisions. The tool does not mutate GitHub and stays outside production.
-
-The [compact briefing refinement](github-triage-cli.md#compact-briefing-refinement-698) separates registered analysis concerns, deduplicates subject context, preserves expanded/full intake and adds deterministic body/comment chronology. Optional agent focus and bounded concurrent read-only collection support routine status automation; they never confer authority to claim, mutate or merge.
+The developer-only action briefing tool is owned by the standalone [github_triage project](https://github.com/trebizondoculpepper/github_triage). poker_blocks keeps only npm wiring to its sibling source entry, `node ../github_triage/src/cli.js`; see [the consumer launch contract and evidence](github-triage-cli.md). The CLI inherits the game checkout's working directory and authenticated gh session. Collector, registered workflow rules, presentation, configuration, lifecycle and tests are composed and maintained in that project, outside the game build. No local implementation or fallback is retained. Freshness/completeness and candidate-only advice do not confer authority to mutate or merge.
