@@ -199,7 +199,7 @@ export function createTableInput(options: {
   field: FieldView;
   /** Built after the input, so reached when a gesture happens. */
   overlays(): Overlays;
-  audio: Pick<AudioService, "zoomed">;
+  audio: Pick<AudioService, "zoomed" | "turned">;
   rack: RackDragTarget;
   /** The bin's presentation (Discard or Sell, shown or hidden; #278). */
   bin: BinView;
@@ -733,6 +733,8 @@ export function createTableInput(options: {
             }
             trace("board drag", "turning the structure");
             boardDragging = true;
+            // Turning the board is a player action, so it has a sound (#641).
+            options.audio.turned();
             cameraView.changeMotionRate(0);
             options.overlays().hideTooltip();
           }
