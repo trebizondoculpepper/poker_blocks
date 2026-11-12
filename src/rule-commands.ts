@@ -35,6 +35,7 @@ export function commitCommands(
   commands: readonly RuleCommand[],
   target: CommandTarget,
 ): GameEvent[] {
+  // Each command is charged by the registry as it is looked up (see Registry.get, #661 review).
   return commands.flatMap(({ id, config }) => [...ruleCommands.get(id)(config, target)]);
 }
 

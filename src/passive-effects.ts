@@ -1,4 +1,5 @@
 import type { PlacedBlock } from "./game-state";
+import { withOperationCounter } from "./lifecycle/operations";
 import type { EventRule, RuleCommand } from "./event-rules";
 import type { GameEvent, PassiveBlock } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
@@ -71,6 +72,8 @@ function subscribedRules(
  * Run the subscribed rules over a working value, left to right, each seeing the value the
  * previous one left. Pure: it returns the result and the rules that fired, applying nothing.
  */
+export { withOperationCounter } from "./lifecycle/operations";
+
 function evaluateRules(
   rules: readonly { source: RuleSource; rule: EventRule }[],
   event: GameEvent,
@@ -112,6 +115,20 @@ export function scoreFieldWithPassives(
   rack: readonly PassiveBlock[],
   rulesForCard: (block: CardBlock) => EventRule[] = cardScoringRules,
   random: () => number = noRandomSource,
+  /** Count each rule against the resolving action's budget: committed scoring only. */
+  operate?: (registration: string) => void,
+): PassiveScoredLine[] {
+  // Given a counter, install it; otherwise leave whatever the resolving action installed.
+  return operate
+    ? withOperationCounter(operate, () => scoreLines(field, rack, rulesForCard, random))
+    : scoreLines(field, rack, rulesForCard, random);
+}
+
+function scoreLines(
+  field: readonly PlacedBlock[],
+  rack: readonly PassiveBlock[],
+  rulesForCard: (block: CardBlock) => EventRule[],
+  random: () => number,
 ): PassiveScoredLine[] {
   const lines = findScoringLines(field);
   // One resolution: each passive's value sources (a die's roll) resolve once, here, before any

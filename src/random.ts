@@ -32,6 +32,17 @@ export class Randomizer {
     this.draws = position;
   }
 
+  /** A point in the sequence to come back to: an action that fails rolls its draws back (#657). */
+  checkpoint(): { state: number; draws: number } {
+    return { state: this.state, draws: this.draws };
+  }
+
+  /** Return to a checkpoint, as if the draws since it had never happened. */
+  restore(mark: { state: number; draws: number }): void {
+    this.state = mark.state;
+    this.draws = mark.draws;
+  }
+
   /** Where the sequence has reached, saved with the run so Continue resumes it. */
   get cursor(): number {
     return this.draws;

@@ -43,12 +43,26 @@ import {
 } from "./passives";
 import {
   passiveActivations,
+  withOperationCounter,
   scoreFieldWithPassives,
   type PassiveScoredLine,
   type RuleActivation,
 } from "./passive-effects";
 import { commitCommands, type CommandTarget } from "./rule-commands";
 import type { RandomCursor } from "./random";
+import {
+  ActionContext,
+  ActionLedger,
+  defaultResolutionLimits,
+  type ActionLedgerState,
+  type EventEnvelope,
+} from "./lifecycle/action";
+
+/** What a session's random stream offers for rolling an action's draws back (#657). */
+export type RandomCheckpoints = {
+  checkpoint(): { state: number; draws: number };
+  restore(mark: { state: number; draws: number }): void;
+};
 import { offerKind, type OfferDestination, type OfferRun, type ShopOffer } from "./offer-kinds";
 
 /** Where a run is: one of a round's three stages, the shop, or finished after a loss. */
@@ -80,6 +94,8 @@ export type RunSnapshot = {
    * same sequence rather than replaying it (#134).
    */
   random?: RandomCursor;
+  /** Which actions have resolved, so Continue still rejects a duplicate (#661 review). */
+  actions?: ActionLedgerState;
 };
 
 /**
@@ -106,6 +122,16 @@ export class GameRun {
   private runSeed: number | undefined;
   /** The stage (round:phase) whose final stage.won or stage.lost has been emitted. */
   private decidedStage: string | null = null;
+  /** Rewinds the session's random stream when an action rolls back (#657); none in tests. */
+  private randomCheckpoints: RandomCheckpoints | null = null;
+  /** Resolved action IDs, so a duplicate submission is rejected (#657). */
+  private actions = new ActionLedger();
+  /** Bumped by every committed action: the version a captured fact describes. */
+  private version = 0;
+  private lastFacts: readonly EventEnvelope[] = [];
+  /** The action resolving now, if any: every drain and command inside it shares its budget. */
+  private activeAction: { context: ActionContext; phase: string } | null = null;
+  private lastFailure: Error | null = null;
 
   constructor(
     dealers: Registry<Dealer>,
@@ -148,6 +174,7 @@ export class GameRun {
     session.rewarded = snapshot.rewarded ?? null;
     session.runSeed = snapshot.seed;
     session.randomCursor = snapshot.random;
+    session.actions = ActionLedger.restore(snapshot.actions);
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
     // A stage saved after it was decided already announced its outcome.
     session.decidedStage =
@@ -155,6 +182,108 @@ export class GameRun {
     session.stockEmptyShop();
     return session;
   }
+
+  /** Let failed actions rewind the session's random stream with them (#657). */
+  attachRandomCheckpoints(checkpoints: RandomCheckpoints): void {
+    this.randomCheckpoints = checkpoints;
+  }
+
+  /** The facts the last committed action recorded, in order, each in its envelope (#657). */
+  get actionFacts(): readonly EventEnvelope[] {
+    return this.lastFacts;
+  }
+
+  /** Why the last action failed and was rolled back, if it did (diagnostics only). */
+  get actionFailure(): Error | null {
+    return this.lastFailure;
+  }
+
+  /**
+   * Resolve one action as a transaction (#657; doc/game-events.md, "Delivery order, cascades and
+   * failure"): its state changes, rewards, use consumption and random draws are staged, and an
+   * error rolls all of them back together and publishes nothing; the failure is kept for
+   * diagnostics. A duplicate action ID is rejected without effect. `body` returns null for an
+   * invalid action, which consumes nothing.
+   */
+  private transact<T>(
+    kind: string,
+    actionId: string | undefined,
+    body: (action: ActionContext) => T | null,
+  ): T | null {
+    // A generated ID is fresh by construction; only a caller's own can be a duplicate.
+    const id = actionId ?? this.actions.next(kind);
+    if (actionId !== undefined && this.actions.has(id)) return null;
+    // The run's own fields as they are now (its state is immutable; arrays are replaced, not
+    // mutated), restored wholesale if the action fails.
+    const saved = Object.fromEntries(Object.entries(this));
+    const mark = this.randomCheckpoints?.checkpoint();
+    const action = new ActionContext(
+      id,
+      this.version,
+      this.config.resolutionLimits ?? defaultResolutionLimits,
+      // The stage the action resolves in, fixed now: every fact it records carries it.
+      { stage: this.stageContext, round: this.currentRound },
+    );
+    try {
+      this.activeAction = { context: action, phase: kind };
+      // Everything evaluated inside the action is charged to its budget (#661 review).
+      const result = withOperationCounter(
+        // The event chain being delivered now, if any, names the cause in a diagnostic.
+        (registration) => action.operate(registration, kind, this.passiveEvents.ancestry),
+        () => body(action),
+      );
+      this.activeAction = null;
+      if (result === null) return null;
+      this.actions.remember(id);
+      this.version++;
+      this.lastFacts = action.facts;
+      this.lastFailure = null;
+      return result;
+    } catch (error) {
+      // Everything back as it was: the run's own fields, the queued events and the stream.
+      Object.assign(this, saved);
+      this.passiveEvents.clear();
+      this.passiveEvents.syncRack(this.currentState.passiveRack);
+      if (mark !== undefined) this.randomCheckpoints!.restore(mark);
+      this.lastFailure = error instanceof Error ? error : new Error(String(error));
+      this.activeAction = null;
+      return null;
+    }
+  }
+
+  /** The action's budget, in the shape the passive event queue counts against. */
+  private budgetFor(action: ActionContext, phase: string) {
+    return {
+      deliver: (event: { type: string }, ancestry: readonly string[]) =>
+        action.deliver(event, phase, ancestry),
+      operate: (registration: string, ancestry: readonly string[]) =>
+        action.operate(registration, phase, ancestry),
+    };
+  }
+
+  /** Record the events an action delivered as its facts, in delivery order. */
+  private recordDelivered(action: ActionContext, phase: string, delivered: readonly GameEvent[]) {
+    // Each fact names the fact it answered, from the parent the queue kept as it queued it
+    // (#661 review); a fact from an earlier drain of this action is found the same way.
+    for (const event of delivered) {
+      const cause = this.passiveEvents.parentOf(event);
+      const envelope = action.record(event.type, event, {
+        phase,
+        parent: cause ? this.recordedFacts.get(cause) : null,
+        // Ordered subjects, each once: the event's cards, or its block when it names no cards.
+        subjectIds: [
+          ...new Set([
+            ...(event.cardIds ?? []),
+            ...(event.cardIds?.length ? [] : [event.blockId ?? []].flat()),
+          ]),
+        ],
+      });
+      this.recordedFacts.set(event, envelope);
+    }
+  }
+
+  /** The envelope recorded for each delivered event, so a follow-up can name its parent. */
+  private recordedFacts = new WeakMap<GameEvent, EventEnvelope>();
 
   get dealer(): Dealer {
     return this.activeDealer;
@@ -261,7 +390,15 @@ export class GameRun {
   private lifecycle(type: string, extra: Omit<GameEvent, "type" | "stage"> = {}): void {
     const stage = this.stageContext;
     this.passiveEvents.emit({ type, ...(stage ? { stage } : {}), ...extra });
-    this.passiveEvents.drain();
+    // Inside an action (a play's or discard's outcome), delivery shares its budget and records
+    // its facts with it (#661 review); outside one (leaving the shop), it drains as before.
+    const action = this.activeAction;
+    const delivered = this.passiveEvents.drain(
+      undefined,
+      undefined,
+      action ? this.budgetFor(action.context, action.phase) : undefined,
+    );
+    if (action) this.recordDelivered(action.context, action.phase, delivered);
   }
 
   /** Once a stage is decided, announce the final stage.won or stage.lost exactly once. */
@@ -289,6 +426,7 @@ export class GameRun {
       ...(this.rewarded ? { rewarded: this.rewarded } : {}),
       ...(this.runSeed === undefined ? {} : { seed: this.runSeed }),
       ...(this.randomCursor === undefined ? {} : { random: this.randomCursor }),
+      actions: this.actions.state,
     };
   }
 
@@ -523,8 +661,17 @@ export class GameRun {
   /** The reactions the last play set off, in field order, for presentation (#366). */
   lastReactions: readonly AppliedReaction[] = [];
 
-  play(action: PlayAction): GameState | null {
+  /**
+   * Play from the hand, resolved as one transaction (#657): invalid plays consume nothing; an
+   * error anywhere in scoring, reactions or listeners rolls the whole play back. `actionId`
+   * identifies the submission, so a duplicate is rejected.
+   */
+  play(action: PlayAction, actionId?: string): GameState | null {
     if (!this.inStage) return null;
+    return this.transact("play", actionId, (context) => this.resolvePlay(action, context));
+  }
+
+  private resolvePlay(action: PlayAction, context: ActionContext): GameState | null {
     const next = this.activeDealer.play(this.currentState, action);
     if (next) {
       this.scoredLines = scoreFieldWithPassives(
@@ -550,11 +697,20 @@ export class GameRun {
       );
       // The current dealer scores in play(); this is a post-play event until
       // placement and scoring are separated by the gameplay coordinator.
-      this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId });
+      // Every card placed, in placement order, so the fact describes the whole group (#661 review).
+      this.passiveEvents.emit({
+        type: "play.completed",
+        blockId: action.cardId,
+        cardIds: action.cardIds?.length ? [...action.cardIds] : [action.cardId],
+      });
       for (const { blockId, from, to } of this.lastReactions)
         this.passiveEvents.emit({ type: "reaction.applied", blockId, reaction: { from, to } });
       for (const event of counted) this.passiveEvents.emit(event);
-      this.passiveEvents.drain();
+      this.recordDelivered(
+        context,
+        "play",
+        this.passiveEvents.drain(undefined, undefined, this.budgetFor(context, "play")),
+      );
       this.announceOutcome();
     }
     return next ? this.currentState : null;
@@ -592,8 +748,16 @@ export class GameRun {
   }
 
   /** Discard one card, or several as one discard. */
-  discard(cardIds: string | readonly string[]): GameState | null {
+  /** Discard from the hand, resolved as one transaction (#657); see `play`. */
+  discard(cardIds: string | readonly string[], actionId?: string): GameState | null {
     if (!this.inStage) return null;
+    return this.transact("discard", actionId, (context) => this.resolveDiscard(cardIds, context));
+  }
+
+  private resolveDiscard(
+    cardIds: string | readonly string[],
+    context: ActionContext,
+  ): GameState | null {
     const ids = new Set(typeof cardIds === "string" ? [cardIds] : cardIds);
     const discarded = this.currentState.hand.filter(({ id }) => ids.has(id));
     const next = this.activeDealer.discard(this.currentState, cardIds);
@@ -606,14 +770,20 @@ export class GameRun {
       });
       // Each listener's fired rules are committed as they resolve, left to right (#170).
       this.discardActivations = [];
-      this.discardEvents = this.passiveEvents.drain(128, (block, event) => {
-        const fired = passiveActivations(block, event);
-        this.discardActivations.push(...fired);
-        return commitCommands(
-          fired.flatMap(({ commands }) => commands),
-          this.commandTarget,
-        );
-      });
+      this.discardEvents = this.passiveEvents.drain(
+        128,
+        (block, event) => {
+          // Every rule it evaluates is charged by the action's counter (see transact).
+          const fired = passiveActivations(block, event);
+          this.discardActivations.push(...fired);
+          return commitCommands(
+            fired.flatMap(({ commands }) => commands),
+            this.commandTarget,
+          );
+        },
+        this.budgetFor(context, "discard"),
+      );
+      this.recordDelivered(context, "discard", this.discardEvents);
       this.announceOutcome();
     }
     return next ? this.currentState : null;

@@ -1,4 +1,5 @@
 import type { CardBlock } from "./cards";
+import { countOperation } from "./lifecycle/operations";
 import { attachableBehavior, type Cell, type Face } from "./traits/attachable";
 import { destructibleBehavior, type DestroyCause } from "./traits/destructible";
 import { selectableBehavior, type Selection } from "./traits/selectable";
@@ -38,7 +39,11 @@ function eachBehavior(
 ): void {
   for (const [name, config] of Object.entries(block.traits)) {
     const behavior = blockTraitRegistry.get(name);
-    if (behavior) apply(behavior, config);
+    if (!behavior) continue;
+    // Inside a committed action each trait callback is charged to its budget (#661 review), like
+    // any registered handler; selection and highlighting run outside actions and cost nothing.
+    countOperation(`block trait ${name}`);
+    apply(behavior, config);
   }
 }
 

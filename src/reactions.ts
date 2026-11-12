@@ -51,6 +51,18 @@ export type ReactionResult = (
 export const reactionMatchers = new Registry<ReactionMatcher>("reaction matcher");
 export const reactionResults = new Registry<ReactionResult>("reaction result");
 
+/**
+ * A registered matcher or result, about to be invoked: each lookup is charged to the resolving
+ * action's budget (#661 review), the nested matchers a matcher consults (`unlessNeighbour`) as
+ * much as the outer ones. Nothing counts outside an action.
+ */
+function matcher(id: string): ReactionMatcher {
+  return reactionMatchers.get(id);
+}
+function resultHandler(id: string): ReactionResult {
+  return reactionResults.get(id);
+}
+
 // A neighbour made of a given material and, optionally, holding a given state bonus (hot water
 // is water with the "heated" bonus, #367).
 reactionMatchers.register("neighbour-state", (_block, neighbours, config) => {
@@ -75,7 +87,7 @@ reactionMatchers.register("neighbour-material", (block, neighbours, config) => {
     unlessNeighbour?: readonly HandlerRef[];
   };
   if (unlessState.includes(block.traits.stateBonus?.id ?? "")) return false;
-  if (unlessNeighbour.some(({ id, config }) => reactionMatchers.get(id)(block, neighbours, config)))
+  if (unlessNeighbour.some(({ id, config }) => matcher(id)(block, neighbours, config)))
     return false;
   return neighbours.some((neighbour) => materialOf(neighbour) === material);
 });
@@ -182,10 +194,10 @@ export function resolveReactions(
   return state.field.flatMap((placed) => {
     const neighbours = faceNeighbours(placed, byCell);
     const reaction = reactionsFor(placed.block).find(({ when }) =>
-      reactionMatchers.get(when.id)(placed.block, neighbours, when.config),
+      matcher(when.id)(placed.block, neighbours, when.config),
     );
     return (reaction?.results ?? []).flatMap((result) =>
-      reactionResults.get(result.id)(placed.block, result.config, neighbours),
+      resultHandler(result.id)(placed.block, result.config, neighbours),
     );
   });
 }

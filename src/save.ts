@@ -3,6 +3,7 @@ import { Registry } from "./core/registry";
 import type { Dealer } from "./dealer";
 import type { RunPhase, RunSnapshot } from "./game-run";
 import type { RandomCursor } from "./random";
+import type { ActionLedgerState } from "./lifecycle/action";
 import type { GameState } from "./game-state";
 import type { Cell } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
@@ -93,6 +94,8 @@ export type SaveRecord = {
   seed?: number;
   /** The session's random seed and its sequence position, so Continue resumes it (#134). */
   random?: { seed: number; position: number };
+  /** Resolved actions, so a duplicate submission is still rejected after Continue (#661). */
+  actions?: { counter: number; explicit: string[] };
 };
 
 /**
@@ -173,6 +176,9 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
     ...(snapshot.rewarded ? { rewarded: snapshot.rewarded } : {}),
     ...(snapshot.seed === undefined ? {} : { seed: snapshot.seed }),
     ...(snapshot.random === undefined ? {} : { random: snapshot.random }),
+    ...(snapshot.actions
+      ? { actions: { counter: snapshot.actions.counter, explicit: [...snapshot.actions.explicit] } }
+      : {}),
   };
 }
 
@@ -286,10 +292,27 @@ export function fromSaveRecord(
       ...parseRewarded(record.rewarded),
       ...parseSeed(record.seed),
       ...parseRandom(record.random),
+      ...parseActions(record.actions),
     };
   } catch {
     return null;
   }
+}
+
+/** A saved action ledger; nothing when absent or malformed, so older saves load fresh. */
+function parseActions(value: unknown): { actions: ActionLedgerState } | Record<string, never> {
+  const saved = value as { counter?: unknown; explicit?: unknown } | undefined;
+  const counter = saved?.counter;
+  const explicit = saved?.explicit;
+  if (
+    typeof counter !== "number" ||
+    !Number.isInteger(counter) ||
+    counter < 0 ||
+    !Array.isArray(explicit) ||
+    !explicit.every((id) => typeof id === "string")
+  )
+    return {};
+  return { actions: { counter, explicit: [...(explicit as string[])] } };
 }
 
 /** A saved random cursor; nothing when the run has none, so older saves still load. */

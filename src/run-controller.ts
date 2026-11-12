@@ -192,7 +192,13 @@ export function createRunController<Context>(options: {
   // One reproducible sequence for the session (#134). A new run reseeds it; Continue restores
   // the saved seed and position, so the same requests replay.
   let randomizer = new Randomizer(newSeed());
+  // An action that rolls back rewinds whichever stream is the session's now (#657).
+  const randomCheckpoints = {
+    checkpoint: () => randomizer.checkpoint(),
+    restore: (mark: { state: number; draws: number }) => randomizer.restore(mark),
+  };
   let game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+  game.attachRandomCheckpoints(randomCheckpoints);
   let settings = loadSettings(storage);
   let reducedMotion = false;
   let stageWonAt: number | null = null;
@@ -461,6 +467,7 @@ export function createRunController<Context>(options: {
   function startRun(session: GameRun): void {
     const { rack, cameraView, audio } = services;
     game = session;
+    game.attachRandomCheckpoints(randomCheckpoints);
     rack.render(game.state.passiveRack);
     gameOverAt = null;
     // A run resumed on a won stage moves on from its pop-up (paid once; see the run).
@@ -545,6 +552,7 @@ export function createRunController<Context>(options: {
       // its run before changing scenes so neither can resume into this scene-only tool.
       stageWonAt = gameOverAt = null;
       game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+      game.attachRandomCheckpoints(randomCheckpoints);
       resetTable();
       showScene(currentMode.startScene);
     },
@@ -682,6 +690,7 @@ export function createRunController<Context>(options: {
       clearRun(storage, runSaveKey);
       // The run on screen is gone too, so the table returns to its empty start.
       game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+      game.attachRandomCheckpoints(randomCheckpoints);
       stageWonAt = gameOverAt = null;
       services.presenter.reset();
       resetTable();

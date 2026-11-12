@@ -26,6 +26,8 @@ export type RunRules = {
   stage(round: number, kind: StageKind): StageSetup;
   /** Cards still in hand when a stage ends. Open rule; only one option exists so far. */
   handAtStageEnd: "return-to-deck";
+  /** How much one action may resolve before it is rolled back (#657); the documented defaults. */
+  resolutionLimits?: { events: number; operations: number };
   /** Whether the discard pile returns to the deck after the boss-stage shop. */
   discardPileAfterShop: "keep-out" | "return-to-deck";
   /** Coins for completing a stage; the stage rewards' default (4) when left out. */

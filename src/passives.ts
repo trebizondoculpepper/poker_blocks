@@ -437,6 +437,28 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
 export class PassiveEventQueue {
   private readonly listeners = new Map<string, PassiveBlock[]>();
   private readonly pending: GameEvent[] = [];
+  /** Which delivered event each queued response answered, kept as it is queued (#661 review). */
+  private readonly parents = new WeakMap<GameEvent, GameEvent>();
+
+  /** The causal chain of the event whose listeners are running now, oldest first (#661 review). */
+  private delivering: readonly string[] = [];
+
+  /** The event types from the first cause to the event now being delivered; empty between. */
+  get ancestry(): readonly string[] {
+    return this.delivering;
+  }
+
+  private chainOf(event: GameEvent): string[] {
+    const chain: string[] = [];
+    for (let at: GameEvent | undefined = event; at; at = this.parents.get(at))
+      chain.unshift(at.type);
+    return chain;
+  }
+
+  /** The event `event` was a response to, if it was one. */
+  parentOf(event: GameEvent): GameEvent | undefined {
+    return this.parents.get(event);
+  }
 
   syncRack(rack: readonly PassiveBlock[]): void {
     this.listeners.clear();
@@ -453,6 +475,11 @@ export class PassiveEventQueue {
     }
   }
 
+  /** Drop every queued event: an action that rolled back leaves none behind (#657). */
+  clear(): void {
+    this.pending.length = 0;
+  }
+
   emit(event: GameEvent): void {
     this.pending.push(event);
   }
@@ -461,10 +488,25 @@ export class PassiveEventQueue {
   drain(
     limit = 128,
     onResponse?: (block: PassiveBlock, event: Readonly<GameEvent>) => readonly GameEvent[],
+    /** The action's shared budget (#657), counting deliveries and listener operations. */
+    budget?: {
+      deliver(event: { type: string }, ancestry: readonly string[]): void;
+      operate(registration: string, ancestry: readonly string[]): void;
+    },
   ): GameEvent[] {
     const delivered: GameEvent[] = [];
     while (this.pending.length) {
-      if (delivered.length >= limit) {
+      if (budget) {
+        try {
+          budget.deliver(
+            this.pending[0]!,
+            delivered.map(({ type }) => type),
+          );
+        } catch (error) {
+          this.pending.length = 0;
+          throw error;
+        }
+      } else if (delivered.length >= limit) {
         const chain = [...delivered, ...this.pending].map(({ type }) => type).join(" → ");
         this.pending.length = 0;
         throw new Error(`Passive event limit exceeded: ${chain}`);
@@ -474,8 +516,27 @@ export class PassiveEventQueue {
       const listeners = this.listeners.get(event.type)?.slice() ?? [];
       for (const block of listeners) {
         const trait = passiveTraits.get(block.traits.passive.traitId);
-        this.pending.push(...(trait.respond?.(block, Object.freeze({ ...event })) ?? []));
-        this.pending.push(...(onResponse?.(block, Object.freeze({ ...event })) ?? []));
+        try {
+          budget?.operate(
+            `${block.traits.passive.traitId} on ${event.type}`,
+            delivered.map(({ type }) => type),
+          );
+        } catch (error) {
+          this.pending.length = 0;
+          throw error;
+        }
+        this.delivering = this.chainOf(event);
+        let responses: GameEvent[];
+        try {
+          responses = [
+            ...(trait.respond?.(block, Object.freeze({ ...event })) ?? []),
+            ...(onResponse?.(block, Object.freeze({ ...event })) ?? []),
+          ];
+        } finally {
+          this.delivering = [];
+        }
+        for (const response of responses) this.parents.set(response, event);
+        this.pending.push(...responses);
       }
     }
     return delivered;
