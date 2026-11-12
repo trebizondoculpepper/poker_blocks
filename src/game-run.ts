@@ -323,12 +323,8 @@ export class GameRun {
         undefined,
         this.budgetFor(context, "destroy"),
       );
-      for (const event of delivered)
-        context.record(event.type, event, {
-          phase: "destroy",
-          batchId,
-          subjectIds: event.blockId ? [event.blockId] : [],
-        });
+      // Recorded like any action's facts: each response names the fact that caused it.
+      this.recordDelivered(context, "destroy", delivered, batchId);
       return placed;
     });
   }

@@ -69,3 +69,26 @@ describe("destruction facts (#659)", () => {
     expect(game.actionFacts).toBe(before.facts);
   });
 });
+
+describe("a response to destruction names its cause (#681 review)", () => {
+  it("records a listener's follow-up with the destruction fact as its parent", async () => {
+    const { passiveTraits, createPassiveBlock } = await import("../passives");
+    if (!passiveTraits.has("test.destroyed-echo"))
+      passiveTraits.register("test.destroyed-echo", {
+        id: "test.destroyed-echo",
+        listensTo: ["block.destroyed"],
+        respond: () => [{ type: "test.after-destroyed" }],
+      });
+    const game = session();
+    const base = createPassiveBlock("scrapper", "echo.1");
+    game.installPassive({
+      ...base,
+      traits: { ...base.traits, passive: { traitId: "test.destroyed-echo" } },
+    });
+    game.play({ cardId: game.state.hand[0]!.id });
+    expect(game.destroyBlock(game.state.field[0]!.block.id, "manual")).not.toBeNull();
+    const destroyed = game.actionFacts.find(({ type }) => type === "block.destroyed")!;
+    const echo = game.actionFacts.find(({ type }) => type === "test.after-destroyed")!;
+    expect(echo.parentId).toBe(destroyed.eventId);
+  });
+});
