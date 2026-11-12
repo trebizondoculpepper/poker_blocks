@@ -46,6 +46,7 @@ import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView, type ShopView } from "./shop-view";
 import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
 import type { ProfilerRoom } from "./tools/profiler/room";
+import { createRenderGate } from "./render-gate";
 import type { CrystalComparisonRoom } from "./tools/crystal-comparison/room";
 import { createBinView, type BinView } from "./bin-view";
 import { createSelectionBadge, type SelectionBadge } from "./selection-badge";
@@ -168,9 +169,25 @@ const devBlockDesigner: ShopBalanceEditor = import.meta.env.DEV
 const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/contained-proof/room")).createContainedProofRoom(host)
   : { show() {}, hide() {}, dispose() {} };
+// The frame loop's pause capability, for tools that need the GPU to themselves.
+const renderGate = createRenderGate();
 const devProfiler: ProfilerRoom = import.meta.env.DEV
-  ? (await import("./tools/profiler/room")).createProfilerRoom(host)
-  : { show() {}, hide() {}, dispose() {} };
+  ? (await import("./tools/profiler/room")).createProfilerRoom(host, {
+      pauseRendering: () => renderGate.pause(),
+    })
+  : {
+      show() {},
+      hide() {},
+      dispose() {},
+      orchestration: () => ({
+        enter: async () => {},
+        rerun: async () => {},
+        exit: async () => {},
+        generation: 0,
+      }),
+      onRunAll: () => () => {},
+      showReport() {},
+    };
 const devCrystalComparison: CrystalComparisonRoom = import.meta.env.DEV
   ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host)
   : { show() {}, hide() {}, dispose() {} };
@@ -423,7 +440,8 @@ cameraView.start();
 
 let frame = 0;
 let lastTime = 0;
-const animate = (time: number) => {
+// One frame's updates and render; the render gate runs it only while no tool holds the GPU.
+const step = (time: number) => {
   const delta = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
   lastTime = time;
   actionLog.tick();
@@ -443,6 +461,9 @@ const animate = (time: number) => {
   passiveRackView.frame(time, run.reducedMotion);
   shopView.frame();
   render();
+};
+const animate = (time: number) => {
+  renderGate.run(time, step);
   frame = requestAnimationFrame(animate);
 };
 frame = requestAnimationFrame(animate);

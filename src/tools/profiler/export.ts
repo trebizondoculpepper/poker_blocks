@@ -43,6 +43,11 @@ export type ProfilerExport = {
   invalidated: string[];
   /** Expected cases with no case, by catalog (kept for readers of earlier exports). */
   uncovered: { family: string; missing: string[] }[];
+  /**
+   * Whether the application's own rendering was paused while sampling (`paused`), or may have
+   * shared the frames (`shared`): a saved benchmark keeps the difference (#735 review).
+   */
+  isolation: "paused" | "shared";
   /** Coverage against the composed expected catalogs (#710): providers, unsupported, totals. */
   coverage: CoverageReport;
   results: CaseResult[];
@@ -54,9 +59,12 @@ export function profilerExport(
   environment: ProfilerEnvironmentInfo,
   coverage: CoverageReport,
   now = new Date(),
+  /** Whether the application's own rendering was paused for the run (#735 review). */
+  isolation: ProfilerExport["isolation"] = "shared",
 ): ProfilerExport {
   const { signal: _signal, ...settings } = options;
   return {
+    isolation,
     exportedAt: now.toISOString(),
     method: profilerMethod,
     environment,
