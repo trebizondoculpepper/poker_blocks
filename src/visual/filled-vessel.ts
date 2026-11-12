@@ -30,6 +30,7 @@ import {
   type ContentsHandler,
   type ResidueHandler,
   type ShellHandler,
+  type InteriorContribution,
 } from "./contained";
 import type { Simulation } from "./shared-simulation";
 
@@ -74,7 +75,12 @@ export type FluidSurfaceUniforms = {
 export type FluidLook = (
   surface: FluidSurfaceUniforms,
   config: unknown,
-) => { material: THREE.Material; layer: "contentsOpaque" | "contentsTransparent" };
+) => {
+  material: THREE.Material;
+  layer: "contentsOpaque" | "contentsTransparent";
+  /** How particles inside this look are drawn to show through it, if it needs a say (#742). */
+  interior?: InteriorContribution;
+};
 export const fluidLooks = new Registry<FluidLook>("fluid look");
 
 /** Custard's look (#227): flat-shaded colour and a lighter, flat top seen through the cut. */
@@ -96,6 +102,35 @@ fluidLooks.register("opaqueFluid", (surface, raw) => {
   Object.defineProperty(material.uniforms.opacity!, "value", { get: () => material.opacity });
   return { material, layer: "contentsOpaque" };
 });
+
+/**
+ * Particles inside a transmissive fluid join three.js's transmission capture (#742): it samples
+ * only the opaque scene behind the fluid, so transparent particles were seen through the top
+ * opening alone and never through the sides. Drawn opaque and alpha-tested, they are captured and
+ * refracted with everything else through every face. Their soft disc is kept whole (a low alpha
+ * test), and a resting particle, which is black, is discarded rather than drawn dark.
+ */
+const transmissionCapture: InteriorContribution = {
+  include(particles) {
+    const { material: held } = particles;
+    for (const each of Array.isArray(held) ? held : Array.of(held)) {
+      each.transparent = false;
+      each.blending = THREE.NormalBlending;
+      each.depthWrite = true;
+      // Low enough to keep the whole soft disc, not only its rim: the capture is drawn at
+      // reduced resolution and softened, where a thin ring all but vanishes.
+      each.alphaTest = 0.15;
+      each.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          "#include <alphatest_fragment>",
+          "#include <alphatest_fragment>\n#ifdef USE_COLOR\nif (dot(vColor.rgb, vec3(1.0)) < 0.01) discard;\n#endif",
+        );
+      };
+      each.needsUpdate = true;
+    }
+    particles.renderOrder = containedLayers.contentsOpaque;
+  },
+};
 
 /**
  * Clear, refracting fluid (#333): a physical material with transmission and an index of
@@ -140,7 +175,7 @@ fluidLooks.register("refractiveFluid", (surface, raw) => {
         "#include <clipping_planes_fragment>\nif (dot(vFluidLocal, surfaceNormal) > height) discard;",
       );
   };
-  return { material, layer: "contentsTransparent" };
+  return { material, layer: "contentsTransparent", interior: transmissionCapture };
 });
 
 /** The wall trace (#227): where the fluid was, fading as its own lagging plane catches up. */
@@ -281,6 +316,8 @@ export const levellingFluid: ContentsHandler = (boundary, raw) => {
         height: height * boundary.volumeScale,
         wet: (point) => point.dot(normal) <= height * boundary.volumeScale,
       },
+      // The look decides how particles inside it show through it (#742).
+      ...(look.interior ? { interior: look.interior } : {}),
     },
   };
 };

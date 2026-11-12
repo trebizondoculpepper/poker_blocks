@@ -58,7 +58,7 @@ export function bubbleTexture(): THREE.DataTexture {
 
 export const risingBubbles: InclusionHandler = {
   requires: "liquidSurface",
-  build(boundary, { liquidSurface }, raw) {
+  build(boundary, { liquidSurface, interior }, raw) {
     const config = raw as RisingBubblesConfig;
     const surface = liquidSurface!;
     const half = boundary.halfSize;
@@ -118,6 +118,8 @@ export const risingBubbles: InclusionHandler = {
     points.renderOrder = containedLayers.contentsTransparent;
     points.frustumCulled = false;
     keepWorldSize(points, material, config.size * width);
+    // The liquid says how its particles show through it (#742); the bubbles never ask what it is.
+    interior?.include(points);
     const up = new THREE.Vector3();
     const side = new THREE.Vector3();
     const point = new THREE.Vector3();
