@@ -1162,6 +1162,35 @@ const gameModes: GameMode[] = [
             music: { style: "quiet" },
           },
         } satisfies GameMode,
+        {
+          // The unattended profiler run (#734): the same devProfiler trait as dev16, composed with
+          // the command sink as well, so \`npm run profile\` can collect the record and write
+          // JSON, CSV and HTML. Opened by that command; usable by hand too.
+          id: "dev18",
+          scenes: composeScenes("dev18", [
+            {
+              scenes: ["profiler"],
+              traits: {
+                devProfiler: {
+                  backTo: "game",
+                  catalogs: ["material", "rack item", "letter block", "menu cube", "exit effect"],
+                  autoRun: true,
+                  sinks: ["screen", "command"],
+                },
+              },
+            },
+          ]),
+          startScene: "profiler",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev18-run" },
+            console: { name: "dev18" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
       ]
     : []),
 ];
