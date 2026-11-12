@@ -26,14 +26,8 @@ const allowed: Readonly<Record<string, string>> = {
     "where a dazzle's circles bloom and how long its afterimages last (#493): presentation, never the session stream",
   "src/visual/exit-fracture.ts":
     "which way crack lines run and pieces fly (#442): presentation, never the session stream",
-  "src/visual/growing-grass.ts":
-    "where a grass blade grows and how it leans (#358): presentation, never the session stream",
-  "src/visual/rising-bubbles.ts":
-    "where a bubble is born and how fast it rises (#353): presentation, never the session stream",
   "src/visual/block-effects.ts":
     "where ongoing block effects' particles start and drift (#464): presentation, never the session stream",
-  "src/visual/contained-stars.ts":
-    "where a contained star is born and how it drifts (#349): presentation, never the session stream",
   "src/audio/music-plan.ts": "which track plays: presentation",
   "src/audio/music-controller.ts": "shuffling the music queue: presentation",
   "src/audio/sfx.ts": "a sound's variation: presentation",
