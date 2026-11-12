@@ -37,8 +37,19 @@ export type PassiveBlock = {
 /** What a `score.*` event carries for its rules' selectors. */
 export type ScoreEventContext = { line: Line; intersections: number; block?: CardBlock };
 
-/** Which stage a lifecycle event belongs to, so a trait can match a moment by condition. */
-export type StageContext = { round: number; kind: StageKind; dealer: string };
+/**
+ * Which stage a lifecycle event belongs to, so a trait can match a moment by condition (#660;
+ * doc/game-events.md, "Numbered stage lifecycle"): its round, its ordinal in the round (1, 2 or 3,
+ * stage three being the one labelled Boss), a stable ID for this stage instance, its dealer, and
+ * its legacy `kind` handle, kept for saved data and older rules.
+ */
+export type StageContext = {
+  round: number;
+  ordinal: number;
+  instance: string;
+  kind: StageKind;
+  dealer: string;
+};
 
 /** What a reaction changes about a block: its material and its state bonus, if any. */
 export type ReactionState = { material: string; stateBonus?: string; doneness?: string };

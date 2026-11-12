@@ -5,6 +5,16 @@ import { stageTargetBalance, type StageTargetBalance } from "./balance";
 export type StageKind = (typeof stageTargetBalance.stages)[number]["kind"];
 export const stageKinds: readonly StageKind[] = stageTargetBalance.stages.map(({ kind }) => kind);
 
+/**
+ * Each stage's ordinal in the round (1, 2, 3), from the configured stage order (#660;
+ * doc/game-events.md, "Numbered stage lifecycle"). The legacy kind handles are mapped here, at the
+ * configuration boundary, so gameplay never compares one.
+ */
+const stageOrdinals = new Map(
+  stageTargetBalance.stages.map((stage, index) => [stage.kind, index + 1]),
+);
+export const stageOrdinal = (handle: StageKind): number => stageOrdinals.get(handle) ?? 0;
+
 /** A stage's dealer and the numbers it starts with. */
 export type StageSetup = StageRules & { dealer: string };
 
