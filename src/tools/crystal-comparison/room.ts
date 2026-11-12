@@ -23,7 +23,13 @@ import {
   type BlockAppearance,
 } from "../../visual/block-appearance";
 import { cardFaceArt } from "../../visual/face-art";
-import { opticsBackends, withOpticsBackend } from "../../visual/optics-backends";
+import {
+  opticsBackends,
+  withOpticsBackend,
+  type OpticsControl,
+} from "../../visual/optics-backends";
+import { disposeRefraction } from "../../visual/crystal-refraction";
+import { disposeInternal } from "../../visual/crystal-internal";
 import { viewControls } from "./view-controls";
 import "./room.css";
 
@@ -93,6 +99,9 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   part("stage").append(renderer.domElement);
+  // Counted per animation frame across every pass a look draws (its capture and rear passes as
+  // well as the main view), not just the last render call (#656 review).
+  renderer.info.autoReset = false;
   // Its own reflections: the game's environment belongs to another WebGL context (#637 review).
   const environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
   const scene = new THREE.Scene();
@@ -199,21 +208,38 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     fieldset.querySelectorAll("label").forEach((label) => label.remove());
     for (const control of controls) {
       const label = document.createElement("label");
-      const input = document.createElement("input");
-      input.type = "range";
-      input.min = String(control.min);
-      input.max = String(control.max);
-      input.step = String(control.step);
-      input.value = String(control.uniform.value);
-      const shown = document.createElement("output");
-      shown.textContent = String(control.uniform.value);
-      input.addEventListener("input", () => {
-        control.uniform.value = Number(input.value);
-        shown.textContent = input.value;
-      });
-      label.append(control.label, " ", input, " ", shown);
+      // A choice is a dropdown, a number a slider: what each control is, its data says.
+      const field = "options" in control ? choiceField(control) : sliderField(control);
+      label.append(control.label, " ", ...field);
       fieldset.append(label);
     }
+  }
+
+  function choiceField(control: Extract<OpticsControl, { options: readonly string[] }>) {
+    const select = document.createElement("select");
+    for (const option of control.options) select.append(new Option(option, option));
+    select.value = control.value();
+    select.addEventListener("change", () => {
+      playSfx("ui.click");
+      control.set(select.value);
+    });
+    return [select];
+  }
+
+  function sliderField(control: Extract<OpticsControl, { min: number }>) {
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = String(control.min);
+    input.max = String(control.max);
+    input.step = String(control.step);
+    input.value = String(control.value());
+    const shown = document.createElement("output");
+    shown.textContent = String(control.value());
+    input.addEventListener("input", () => {
+      control.set(Number(input.value));
+      shown.textContent = input.value;
+    });
+    return [input, " ", shown];
   }
 
   /** A new collection: only when the count changes, never when the backend does. */
@@ -230,7 +256,10 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     camera.position.set(0, 0, view.distance);
     group.rotation.set(view.turnX, view.turnY, 0);
     camera.lookAt(0, 0, 0);
+    renderer.info.reset();
     const start = performance.now();
+    // Any passes the chosen look needs first (a background capture), as its backend declares.
+    opticsBackends.get(backend).frame?.({ renderer, scene, camera, hide: group });
     renderer.render(scene, camera);
     const submitted = performance.now() - start;
     if (last !== null) {
@@ -326,6 +355,8 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       cancelAnimationFrame(frame);
       slots.forEach(release);
       gesture.destroy();
+      disposeRefraction();
+      disposeInternal();
       environment.dispose();
       (backdrop.material as THREE.MeshBasicMaterial).map?.dispose();
       (backdrop.material as THREE.Material).dispose();

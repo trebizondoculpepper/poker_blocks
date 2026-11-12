@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { approximateOuter, createFacetShell, fillPane } from "./approximate-crystal";
 import { createCrystalV3Front, createCrystalV3Rear } from "./crystal-v3";
+import { createRefractionFront, createRefractionRear } from "./crystal-refraction";
+import { createInternalFront, createInternalRear } from "./crystal-internal";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
@@ -1332,6 +1334,40 @@ function crystalV3(context: AssemblyContext): BlockAppearance {
   );
 }
 
+/** Faked background refraction (prototype, src/visual/crystal-refraction.ts). */
+function crystalRefraction(context: AssemblyContext): BlockAppearance {
+  const { art, definition, geometry } = context;
+  const texture = faceTexture(art, definition, false, 0, false);
+  const height = heightFor(texture, art, definition.appearance);
+  const print = printSkin(art, definition.appearance, geometry);
+  const inHand = surface(texture, definition.appearance, height);
+  const front = createRefractionFront() as unknown as THREE.MeshStandardMaterial;
+  return appearanceBase(
+    context,
+    [texture, ...[height].filter((value) => value !== undefined), print.texture],
+    Array.from({ length: 6 }, () => inHand),
+    [createRefractionRear(geometry), print.skin],
+    Array.from({ length: 6 }, () => front),
+  );
+}
+
+/** Internal reflections, ignoring the background (prototype, src/visual/crystal-internal.ts). */
+function crystalInternal(context: AssemblyContext): BlockAppearance {
+  const { art, definition, geometry } = context;
+  const texture = faceTexture(art, definition, false, 0, false);
+  const height = heightFor(texture, art, definition.appearance);
+  const print = printSkin(art, definition.appearance, geometry);
+  const inHand = surface(texture, definition.appearance, height);
+  const front = createInternalFront() as unknown as THREE.MeshStandardMaterial;
+  return appearanceBase(
+    context,
+    [texture, ...[height].filter((value) => value !== undefined), print.texture],
+    Array.from({ length: 6 }, () => inHand),
+    [createInternalRear(geometry), print.skin],
+    Array.from({ length: 6 }, () => front),
+  );
+}
+
 function frostedBlock(context: AssemblyContext): BlockAppearance {
   const { art, definition, geometry, size } = context;
   const texture = faceTexture(art, definition, false, 0, false);
@@ -1405,6 +1441,10 @@ const assemblyRegistry = new Map<string, AssemblyHandler>([
   ["approximateCrystal", approximateCrystal],
   // Crystal v3, the clean-surface layered experiment (#645); no material uses it in the game.
   ["crystalV3", crystalV3],
+  // Faked background refraction, a prototype for the owner (no material uses it).
+  ["crystalRefraction", crystalRefraction],
+  // Internal reflections only, a prototype for the owner (no material uses it).
+  ["crystalInternal", crystalInternal],
   ["frostedBlock", frostedBlock],
   ["contained", contained],
   // A wrapped gift box (#496).
