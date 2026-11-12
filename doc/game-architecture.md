@@ -1409,3 +1409,5 @@ Visual acceptance is the owner's comparison in the room, reported on #524.
 ## GitHub action briefing tool (#626)
 
 The plain JavaScript [read-only triage CLI](github-triage-cli.md), run through npm on Node 20+ with the existing gh authentication/session, collects paginated GitHub facts through authenticated `gh`, applies registered workflow analysis rules and emits a compact evidence-linked action briefing or versioned JSON. Full-ticket mode provides intake context; explicit since/checkpoint and offline-cache semantics prevent stale snapshots from looking current. Natural-language questions and apparently satisfied dependencies remain inspection candidates, never authoritative decisions. The tool does not mutate GitHub and stays outside production.
+
+The [compact briefing refinement](github-triage-cli.md#compact-briefing-refinement-698) separates registered analysis concerns, deduplicates subject context, preserves expanded/full intake and adds deterministic body/comment chronology. Optional agent focus and bounded concurrent read-only collection support routine status automation; they never confer authority to claim, mutate or merge.
