@@ -241,3 +241,82 @@ describe("phase facts carry what registered selectors read (#682 review)", () =>
     expect(game.state.coins).toBe(coins + 2);
   });
 });
+
+describe("the working aggregate and captured payloads (#682 review)", () => {
+  it("lets a score.beforeTotalApplied rule change the play's total, applied once", async () => {
+    const { createPassiveBlock } = await import("../passives");
+    const base = createPassiveBlock("scrapper", "total.1");
+    const listener = {
+      ...base,
+      traits: {
+        ...base.traits,
+        passive: {
+          traitId: "passive.event-rules",
+          eventRules: [
+            {
+              on: "score.beforeTotalApplied",
+              select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+              where: { id: "always", config: {} },
+              effects: [{ id: "add-line-score", config: { amount: 10 } }],
+            },
+          ],
+        },
+      },
+    } as unknown as typeof base;
+    const rules = sandboxRunRules(demoRunRules);
+    const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    opening.installPassive(listener);
+    const game = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      opening.snapshot(),
+      () => 0,
+    );
+    const before = game.state.round.score;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    const lines = game.lastScoredLines.reduce((sum, { points }) => sum + points, 0);
+    expect(game.state.round.score).toBe(before + lines + 10);
+    const applied = game.actionFacts.filter(({ type }) => type === "score.totalApplied");
+    expect(applied).toHaveLength(1);
+    expect((applied[0]!.payload as { amount: number }).amount).toBe(lines + 10);
+  });
+
+  it("delivers placed blocks as frozen copies a listener cannot use to change the model", async () => {
+    const { passiveTraits, createPassiveBlock } = await import("../passives");
+    let attempted = false;
+    if (!passiveTraits.has("test.placed-meddler"))
+      passiveTraits.register("test.placed-meddler", {
+        id: "test.placed-meddler",
+        listensTo: ["block.placed"],
+        respond: (_block, event) => {
+          const block = event.blocks![0]! as { traits: Record<string, unknown> };
+          try {
+            block.traits.meddled = true;
+          } catch {
+            attempted = true;
+          }
+          return [];
+        },
+      });
+    const base = createPassiveBlock("scrapper", "meddle.1");
+    const rules = sandboxRunRules(demoRunRules);
+    const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    opening.installPassive({
+      ...base,
+      traits: { ...base.traits, passive: { traitId: "test.placed-meddler" } },
+    });
+    const game = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      opening.snapshot(),
+      () => 0,
+    );
+    const id = game.state.hand[0]!.id;
+    expect(game.play({ cardId: id })).not.toBeNull();
+    expect(attempted).toBe(true);
+    const onField = game.state.field.find(({ block }) => block.id === id)!.block;
+    expect((onField.traits as Record<string, unknown>).meddled).toBeUndefined();
+  });
+});
