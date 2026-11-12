@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { gameModeFor } from "../../game-modes";
 import { opticsBackends } from "../../visual/optics-backends";
-import { comparisonLayout, distribution, pinchDistance } from "./room";
+import { comparisonLayout, distribution, pinchDistance, wheelDistance } from "./room";
 
 describe("the crystal comparison room (#524)", () => {
   it("lays out the same cards, places and turns for a seed", () => {
@@ -38,5 +38,14 @@ describe("pinch zoom in the comparison room (#637 review)", () => {
     let last = 10;
     for (let step = 1; step <= 10; step++) last = pinchDistance(10, 100, 100 + step * 10);
     expect(last).toBe(5);
+  });
+});
+
+describe("wheel zoom in the comparison room (#637 review)", () => {
+  it("is exponential: steps compose the same however they are split, and opposites cancel", () => {
+    const once = wheelDistance(10, 100, 0);
+    const twice = wheelDistance(wheelDistance(10, 50, 0), 50, 0);
+    expect(twice).toBeCloseTo(once, 10);
+    expect(wheelDistance(wheelDistance(10, 120, 0), -120, 0)).toBeCloseTo(10, 10);
   });
 });

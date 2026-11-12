@@ -11,12 +11,18 @@
  * Developer-only: production never imports it (src/main.ts).
  */
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Gesture } from "@use-gesture/vanilla";
 import { playSfx } from "../../audio/sfx";
 import { standardDeck } from "../../cards";
 import { gameModeFor, modeLink, type DevCrystalComparisonConfig } from "../../game-modes";
 import { getMaterialDefinition, type BlockMaterial } from "../../materials";
-import { createBlockAppearance, type BlockAppearance } from "../../visual/block-appearance";
+import {
+  createBlockAppearance,
+  setReflectionEnvironment,
+  type BlockAppearance,
+} from "../../visual/block-appearance";
+import { wheelZoom } from "../../view-zoom";
 import { cardFaceArt } from "../../visual/face-art";
 import { opticsBackends, withOpticsBackend } from "../../visual/optics-backends";
 import "./room.css";
@@ -60,6 +66,11 @@ export function distribution(values: readonly number[]) {
   return { median: rank(0.5), p95: rank(0.95), samples: sorted.length };
 }
 
+/** Camera distance after a wheel step: the table's exponential zoom, applied to distance. */
+export function wheelDistance(distance: number, deltaY: number, deltaMode: number) {
+  return distance / wheelZoom(1, deltaY, deltaMode);
+}
+
 /** Camera distance for a pinch: the start distance scaled by start spacing over spacing now. */
 export function pinchDistance(startDistance: number, startSpacing: number, spacing: number) {
   return (startDistance * startSpacing) / Math.max(1, spacing);
@@ -91,6 +102,8 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   part("stage").append(renderer.domElement);
+  // Its own reflections: the game's environment belongs to another WebGL context (#637 review).
+  const environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x10161d);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 1.4));
@@ -120,10 +133,12 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
         group.rotation.y += dx * 0.01;
         group.rotation.x += dy * 0.01;
       },
-      onWheel: ({ first, delta: [, dy] }) => {
+      onWheel: ({ first, event }) => {
         // The game's zoom sound, once as the gesture begins (#637 review).
         if (first) playSfx("view.zoom");
-        zoom(1 + dy * 0.001);
+        // The game's exponential, normalised and capped wheel step (src/view-zoom.ts): moving
+        // the camera back by the factor the table would zoom in by.
+        distance = clampDistance(wheelDistance(distance, event.deltaY, event.deltaMode));
       },
       // Pinch zoom follows the ratio of finger spacing to where it started, as the table does
       // (src/table-input.ts): equal gestures give equal zoom, however often events arrive.
@@ -139,10 +154,6 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
 
   function clampDistance(value: number): number {
     return Math.min(80, Math.max(2, value));
-  }
-
-  function zoom(factor: number): void {
-    distance = clampDistance(distance * factor);
   }
 
   function material(): BlockMaterial {
@@ -298,6 +309,8 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       );
       part<HTMLInputElement>("count").value = String(next.count);
       root.hidden = false;
+      // Blocks built here reflect this room's own environment, as in the object browser.
+      setReflectionEnvironment(environment.texture);
       layout(next.count);
       last = null;
       frame = requestAnimationFrame(tick);
@@ -313,6 +326,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       cancelAnimationFrame(frame);
       slots.forEach(release);
       gesture.destroy();
+      environment.dispose();
       (backdrop.material as THREE.MeshBasicMaterial).map?.dispose();
       (backdrop.material as THREE.Material).dispose();
       backdrop.geometry.dispose();
