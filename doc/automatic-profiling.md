@@ -76,3 +76,7 @@ First merge this documentation. Then implement focused coverage/host validation,
 ## Animation fidelity follow-up (#752)
 
 [Profiler animation fidelity](presentation-contracts.md#profiler-animation-fidelity-752) makes representative production update/prepass wiring explicit, separating stationary ambient and registered motion-triggered phases. The existing runner calling `update(dt)` is not sufficient evidence that every recipe advances every contained shader/effect. Static results do not certify animated complexity. Preserve phase/count/clock identity and verify with clips and raw timing records.
+
+## Render-pipeline measurement contract (#776, #764)
+
+[Profiler render-pass capability](profiler-render-passes.md) defines a case-declared, host-owned registered render pipeline, including all production optical capture/interior passes inside CPU/GPU timing, aggregated renderer counters, matched baselines and set-scoped resource cleanup. Missing pipeline support is an explicit unsupported/setup failure, never an empty-capture success. Implementation #764 and optics recipes follow this documentation.

@@ -1596,3 +1596,7 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 ## Clone, reset and inherited lifecycle facets (#580)
 
 [Clone and reset facets](clone-reset.md) defines exact unplaced cloning, resettable/nonResettable behavior, atomic reset-clone, inherited explicit retention/reset configuration and lifecycle integration. It preserves identity/state/RNG boundaries, run bonuses and fixed hidden payloads. It is the target for #581–#584 and #504–#506; generic lifecycle callers dispatch registered behavior instead of checking material or trait flags.
+
+## Profiler capture-pass ownership (#776)
+
+[Profiler render-pass capability](profiler-render-passes.md) extends the automatic-profiler host contract for multi-pass appearances. Recipes declare registered production pipeline requirements; hosts own scoped targets, timing and disposal. Generic measurement code never branches on an optics/material identity, and all contributing passes are measured.
