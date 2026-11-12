@@ -743,4 +743,25 @@ describe("the visual-event scheduler (#546)", () => {
     }
     expect(fallbackRuns).toBe(0);
   });
+
+  it("keeps counts whole when an effect's cancel disposes the generation (#785 review)", () => {
+    const { scheduler, handlers } = harness();
+    handlers.register("disposer", () => ({
+      update: () => "running",
+      cancel: () => scheduler.disposeGeneration(),
+      dispose: () => {},
+    }));
+    const scope = scheduler.createScope(null);
+    scheduler.schedule(scope, { handler: "disposer", dueUnits: 0 });
+    scheduler.schedule(scope, { handler: "mark", payload: { label: "later" }, dueUnits: 100 });
+    scheduler.update(0, true);
+    scheduler.cancel(scope);
+    expect(scheduler.counts).toMatchObject({ pending: 0, active: 0, entries: 0, scopes: 0 });
+    // The old scope is gone: the new generation starts with a full budget.
+    const fresh = scheduler.createScope(null);
+    expect(
+      scheduler.schedule(fresh, { handler: "mark", payload: { label: "x" }, dueUnits: 0 }).accepted,
+    ).toBe(true);
+    expect(scheduler.counts.pending).toBe(1);
+  });
 });

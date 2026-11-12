@@ -200,6 +200,8 @@ export function createVisualScheduler(
   let lastRealMs: number | null = null;
   let updating = false;
   let disposing = false;
+  let cancelDepth = 0;
+  let disposeRequested = false;
 
   /** Rebuild the heap from what is still pending: TinyQueue has no delete (O(n), bounded). */
   const rebuild = () => {
@@ -309,6 +311,21 @@ export function createVisualScheduler(
 
   const cancelScope = (scope: Scope) => {
     if (scope.state !== "pending" || scope.cancelling) return;
+    cancelDepth++;
+    try {
+      cancelScopeBody(scope);
+    } finally {
+      cancelDepth--;
+    }
+    // A generation disposal asked for mid-cancellation runs once that cancellation's accounting
+    // is complete, so old-generation cleanup never touches the new generation's counts (#785 review).
+    if (cancelDepth === 0 && disposeRequested) {
+      disposeRequested = false;
+      api.disposeGeneration();
+    }
+  };
+
+  const cancelScopeBody = (scope: Scope) => {
     // Marked first, so the children cancelled below cannot settle this scope as finished.
     scope.cancelling = true;
     for (const child of Array.from(scope.children)) cancelScope(child);
@@ -567,6 +584,10 @@ export function createVisualScheduler(
     },
     /** Cancel everything this generation owns; anything later from it does nothing. */
     disposeGeneration(): void {
+      if (cancelDepth > 0) {
+        disposeRequested = true;
+        return;
+      }
       // Scopes created while disposing (by an observer) are born cancelled (#785 review).
       disposing = true;
       try {
