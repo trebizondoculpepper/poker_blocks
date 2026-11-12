@@ -137,3 +137,30 @@ describe("trigger countdowns (#434)", () => {
     expect(run.state.cardStates?.[bomb.id]?.countdown).toBeUndefined();
   });
 });
+
+describe("deducting and detonating are separate steps (#658)", () => {
+  it("deducts without triggering, then detonates only what is still on the table", async () => {
+    const { deductCountdowns, detonateCountdowns } = await import("./trigger-countdown");
+    lend(true);
+    wood.triggerCountdown = { start: 1, countPlacement: true };
+    const block = woodCard(0);
+    let state: GameState = {
+      ...new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0).state,
+      field: [{ block, cell: { x: 0, y: 0, z: 0 } as Cell }],
+    };
+    const target: CommandTarget = {
+      get state() {
+        return state;
+      },
+      update(next) {
+        state = next;
+      },
+    } as CommandTarget;
+    const pending = deductCountdowns(target, new Set([block.id]));
+    expect(pending).toEqual([block.id]);
+    expect(fired).toEqual([]);
+    state = { ...state, field: [] };
+    expect(detonateCountdowns(target, pending)).toEqual([]);
+    expect(fired).toEqual([]);
+  });
+});
