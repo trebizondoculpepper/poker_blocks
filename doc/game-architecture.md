@@ -1592,3 +1592,7 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 ## Rankless opaque active contract (#552)
 
 [Opaque rankless actives and replacement](opaque-actives.md) defines capability-based placement/value/inspection/discard, nested creation-fixed payload ownership, transactional opening/adoption, generation policy, validation and save/clone boundaries. Present composes these generic capabilities; it is not a branch in generic code. This supplements the acquisition/reward contract in `presents.md` and leaves runtime to #553–#555/#497.
+
+## Clone, reset and inherited lifecycle facets (#580)
+
+[Clone and reset facets](clone-reset.md) defines exact unplaced cloning, resettable/nonResettable behavior, atomic reset-clone, inherited explicit retention/reset configuration and lifecycle integration. It preserves identity/state/RNG boundaries, run bonuses and fixed hidden payloads. It is the target for #581–#584 and #504–#506; generic lifecycle callers dispatch registered behavior instead of checking material or trait flags.
