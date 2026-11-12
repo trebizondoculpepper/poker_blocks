@@ -230,6 +230,27 @@ describe("follow-up facts name their cause (#661 review)", () => {
   });
 });
 
+/** A run with a known hand (a pair of sevens and a two), for play tests. */
+function scoringRunFor(rack: readonly PassiveBlock[], operations = 4096) {
+  const config = {
+    ...sandboxRunRules(demoRunRules),
+    resolutionLimits: { events: 128, operations },
+  };
+  const opening = new GameRun(dealerRegistry, config, standardDeck, () => 0);
+  for (const block of rack) opening.installPassive(block);
+  const hand = [card("7", "hearts"), card("7", "spades"), card("2", "clubs")];
+  return {
+    game: GameRun.fromSnapshot(
+      dealerRegistry,
+      config,
+      standardDeck,
+      { ...opening.snapshot(), state: { ...opening.state, hand } },
+      () => 0,
+    ),
+    hand,
+  };
+}
+
 describe("scoring rules and the duplicate ledger (#661 review)", () => {
   const scoringRun = (rack: readonly PassiveBlock[], operations: number) => {
     const config = {
@@ -545,5 +566,15 @@ describe("budget failures name the events that led to them (#661 review)", () =>
     }
     // The last failure happened inside the listener: its ancestry names the discard.
     expect(failure?.ancestry).toContain("discard.completed");
+  });
+});
+
+describe("a grouped play's fact names every card placed (#661 review)", () => {
+  it("records the whole ordered group as the play's subjects", () => {
+    const { game, hand } = scoringRunFor([]);
+    const group = hand.slice(0, 2).map(({ id }) => id);
+    expect(game.play({ cardId: group[0]!, cardIds: group })).not.toBeNull();
+    const completed = game.actionFacts.find(({ type }) => type === "play.completed")!;
+    expect(completed.subjectIds).toEqual(group);
   });
 });

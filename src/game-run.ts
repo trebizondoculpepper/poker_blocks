@@ -270,7 +270,13 @@ export class GameRun {
       const envelope = action.record(event.type, event, {
         phase,
         parent: cause ? this.recordedFacts.get(cause) : null,
-        subjectIds: [event.blockId ?? [], ...(event.cardIds ?? [])].flat(),
+        // Ordered subjects, each once: the event's cards, or its block when it names no cards.
+        subjectIds: [
+          ...new Set([
+            ...(event.cardIds ?? []),
+            ...(event.cardIds?.length ? [] : [event.blockId ?? []].flat()),
+          ]),
+        ],
       });
       this.recordedFacts.set(event, envelope);
     }
@@ -691,7 +697,12 @@ export class GameRun {
       );
       // The current dealer scores in play(); this is a post-play event until
       // placement and scoring are separated by the gameplay coordinator.
-      this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId });
+      // Every card placed, in placement order, so the fact describes the whole group (#661 review).
+      this.passiveEvents.emit({
+        type: "play.completed",
+        blockId: action.cardId,
+        cardIds: action.cardIds?.length ? [...action.cardIds] : [action.cardId],
+      });
       for (const { blockId, from, to } of this.lastReactions)
         this.passiveEvents.emit({ type: "reaction.applied", blockId, reaction: { from, to } });
       for (const event of counted) this.passiveEvents.emit(event);
