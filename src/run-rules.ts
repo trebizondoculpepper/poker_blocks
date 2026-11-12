@@ -26,6 +26,11 @@ export type RunRules = {
   stage(round: number, kind: StageKind): StageSetup;
   /** Cards still in hand when a stage ends. Open rule; only one option exists so far. */
   handAtStageEnd: "return-to-deck";
+  /**
+   * The model controllers composed onto the playfield (#658; doc/game-events.md, "Ownership and
+   * composition"). None composed: no material steps run.
+   */
+  playfield?: readonly import("./lifecycle/play-phases").PlayfieldController[];
   /** How much one action may resolve before it is rolled back (#657); the documented defaults. */
   resolutionLimits?: { events: number; operations: number };
   /** Whether the discard pile returns to the deck after the boss-stage shop. */
@@ -81,6 +86,17 @@ export function targetForStage<Kind extends string>(
  * the base dealer until boss rules exist.
  */
 export const demoRunRules: RunRules = {
+  // Material effects in the documented order: countdowns deduct before scoring; reactions, then
+  // the pending detonations, after it.
+  playfield: [
+    {
+      id: "materialEffectsController",
+      config: {
+        beforeScore: ["countdown-deductions"],
+        afterScore: ["reactions", "countdown-detonations"],
+      },
+    },
+  ],
   stage(round, kind) {
     return {
       dealer: "base",
