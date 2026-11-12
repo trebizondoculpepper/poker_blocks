@@ -485,8 +485,13 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       // single object should leave the counts where they were.
       const before = rendererCounts();
       const again = await build(profile, 1, options, phase, check);
-      frame(again, 0);
-      remove(again);
+      // Removed and freed whatever happens: a throw here must not leave it in the shared scene
+      // for the next case to measure (#726 review).
+      try {
+        frame(again, 0);
+      } finally {
+        remove(again);
+      }
       frame([], 0);
       const after = rendererCounts();
       return {

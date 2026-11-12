@@ -839,3 +839,38 @@ describe("failure isolation, timeouts and context loss (#722)", () => {
     expect(run.failures).toEqual([]);
   });
 });
+
+describe("the leak probe cleans up after itself (#726 review)", () => {
+  it("removes the probe object when rendering it throws, so the next case measures clean", async () => {
+    const { env, memory } = fakeEnvironment();
+    const runner = createProfilerRunner(env);
+    let builds = 0;
+    const base = testCase(memory);
+    // Two builds for counts [1]: the measured set, then the leak probe, whose render throws.
+    const probeFails: ProfilingCase = {
+      ...base,
+      create: (context) => {
+        builds++;
+        const one = base.create(context) as Awaited<ReturnType<typeof base.create>>;
+        if (builds === 2) one.object.userData.explodes = true;
+        return one;
+      },
+    };
+    const render = env.renderer.render.bind(env.renderer);
+    env.renderer.render = (scene, camera) => {
+      if (scene.children.some((child) => child.userData.explodes)) throw new Error("probe failed");
+      render(scene, camera);
+    };
+    const run = await runner.run(
+      [
+        ["probe", probeFails],
+        ["next", testCase(memory)],
+      ],
+      { ...options, counts: [1] },
+    );
+    expect(run.failures.map(({ id }) => id)).toEqual(["probe"]);
+    expect(runner.scene.children.some((child) => child.userData.profiled)).toBe(false);
+    // The next case's baseline drew nothing left over.
+    expect(run.results[0]!.baseline.counts.calls).toBe(0);
+  });
+});
