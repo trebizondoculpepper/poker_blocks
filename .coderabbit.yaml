@@ -109,6 +109,17 @@ reviews:
              outcome; or policy (when or why something plays) lives in a service, the run
              controller or src/main.ts instead of a configured controller trait. A
              controller trait has no exemption from "No special cases".
+          10. Presentation timing ("Visual-event scheduler and game-time units" in
+             doc/game-architecture.md, #541): timed feedback added outside the one shared
+             scheduler and presentation clock (a new setTimeout, setInterval,
+             performance.now() deadline, presenter-owned queue or parallel stagger timer);
+             timings hard-coded in ms or frames where configuration should use game-time
+             units (1/15 s); performance.now() mixed with rAF time; a delayed handler that
+             reads live GameRun state, mutates the model or draws session RNG instead of
+             presenting its captured payload; input or model resolution held for
+             presentation; a result screen gated on anything but a terminal model plus the
+             action's required scopes; ambient per-frame work pushed through the scheduler.
+             The timers listed under "Today's scheduling" are migration gaps, not precedents.
           PASS otherwise. When failing, explain which principle is broken, cite the doc
           section, and propose the architecturally correct shape (which trait, service,
           registry or scene should own it).
