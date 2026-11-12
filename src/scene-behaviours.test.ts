@@ -335,7 +335,7 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toContain("balance:hide");
   });
 
-  it("drives the profiler's run scope: enter, Run all, and exit, then stops listening (#732)", () => {
+  it("drives the profiler's run scope: enter, Run all, and exit, then stops listening (#732)", async () => {
     const { host, calls, runAll } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
     scenes.register(
@@ -344,12 +344,50 @@ describe("scene traits own their behaviour", () => {
     scenes.register(scene("table", {}));
     scenes.switchTo("profiler");
     expect(calls).toContain("profiler:show:game");
+    await Promise.resolve();
     expect(calls).toContain("profiler:enter:true");
     for (const listener of runAll) listener();
     expect(calls).toContain("profiler:rerun");
     scenes.switchTo("table");
+    await Promise.resolve();
     expect(calls).toEqual(expect.arrayContaining(["profiler:exit", "profiler:hide"]));
     expect(runAll.size).toBe(0);
+  });
+
+  it("waits for the previous profiler exit to settle before a new entry starts (#735 review)", async () => {
+    const { host, calls } = recordingHost();
+    let finishExit = () => {};
+    host.services.devProfiler.orchestration = () => ({
+      enter: async () => void calls.push("profiler:enter"),
+      rerun: async () => {},
+      exit: () =>
+        new Promise<void>((resolve) => {
+          calls.push("profiler:exit:started");
+          finishExit = () => {
+            calls.push("profiler:exit:settled");
+            resolve();
+          };
+        }),
+    });
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("profiler", { devProfiler: { backTo: "game", catalogs: [] } }));
+    scenes.register(scene("table", {}));
+    scenes.switchTo("profiler");
+    await Promise.resolve();
+    // Left and entered again at once, as a refresh does.
+    scenes.switchTo("table");
+    scenes.switchTo("profiler");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls.filter((call) => call === "profiler:enter")).toHaveLength(1);
+    finishExit();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const order = calls.filter((call) => call.startsWith("profiler:e"));
+    expect(order).toEqual([
+      "profiler:enter",
+      "profiler:exit:started",
+      "profiler:exit:settled",
+      "profiler:enter",
+    ]);
   });
 
   it("mounts the menu block room with its configured items only while its scene is active (#303)", () => {

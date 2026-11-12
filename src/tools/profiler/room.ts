@@ -101,7 +101,13 @@ const previewFrames = 30;
 /** Render qualities offered: the pixel ratio each one uses. */
 const qualities = { low: 1, standard: 1.5, high: 2 };
 
-export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
+/** What the application lends the room: pausing its own frame loop during a sweep (#735 review). */
+export type ProfilerRoomCapabilities = { pauseRendering?: () => () => void };
+
+export function createProfilerRoom(
+  host: HTMLElement,
+  capabilities: ProfilerRoomCapabilities = {},
+): ProfilerRoom {
   // The catalogs the composing trait expects, captured on entry; none until then.
   let expectedCatalogs: string[] = [];
   const root = document.createElement("section");
@@ -491,12 +497,18 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
             ),
           // Cancelled in the room, stopped by a lost context, or cut short by the trait.
           partial: (record) => record.cancelled || record.aborted !== null,
-          isolate: () => {
-            previewToken++;
-            if (activePreview) endPreview(activePreview);
-            previewHostTracker.releaseAll();
-            return () => {};
-          },
+          // Isolated only when the application's rendering can actually be paused; otherwise
+          // the capability is absent and the delivery says the frames were shared.
+          ...(capabilities.pauseRendering
+            ? {
+                isolate: () => {
+                  previewToken++;
+                  if (activePreview) endPreview(activePreview);
+                  previewHostTracker.releaseAll();
+                  return capabilities.pauseRendering!();
+                },
+              }
+            : {}),
         },
         room,
       );

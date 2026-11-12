@@ -487,18 +487,32 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // profiler trait (#669)"): on entry it opens a run scope and, unless configured otherwise,
   // starts the sweep; Run all reruns; exit cancels and delivers any partial result once. The
   // room only measures what it is asked. One scene composes it at a time.
-  let profiling: { exit(): Promise<void>; stopRunAll(): void } | null = null;
+  // Entries are serialised (#735 review): a new entry waits until the previous exit has settled
+  // (its sweep cancelled and its partial result delivered), so two sweeps never share the room's
+  // runner, and a late result can't land on the next entry. An entry left before it began never
+  // starts.
+  let profiling: { leave(): Promise<void> } | null = null;
+  let settling: Promise<void> = Promise.resolve();
   behaviours.register("devProfiler", {
     enter: ({ services }, config) => {
       services.devProfiler.show(config);
       const scope = services.devProfiler.orchestration();
       const stopRunAll = services.devProfiler.onRunAll(() => void scope.rerun());
-      profiling = { exit: () => scope.exit(), stopRunAll };
-      void scope.enter(config);
+      const previous = settling;
+      let left = false;
+      void previous.then(() => {
+        if (!left) void scope.enter(config);
+      });
+      profiling = {
+        leave: () => {
+          left = true;
+          stopRunAll();
+          return previous.then(() => scope.exit());
+        },
+      };
     },
     exit: ({ services }) => {
-      profiling?.stopRunAll();
-      void profiling?.exit();
+      settling = profiling?.leave() ?? settling;
       profiling = null;
       services.devProfiler.hide();
     },
