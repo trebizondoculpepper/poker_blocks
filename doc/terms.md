@@ -82,3 +82,7 @@ Mode-wide configuration and scene traits are distinct attachment scopes. Run cre
 ## Numbered stage terminology (#648)
 
 Each round has **stage one**, **stage two** and **stage three**. Lifecycle context uses their ordinal 1/2/3 and round number. **Boss** is a gameplay label commonly applied to stage three, whose dealer may differ; it is not a fourth stage or a different lifecycle category. Legacy serialized handles remain compatibility data until migrated. See [numbered stage lifecycle](game-events.md#numbered-stage-lifecycle) and [Present rewards](presents.md).
+
+## Transparent materials bench (#679)
+
+The **Transparent materials bench** is the display name of developer room Dev 17, entered through `?mode=dev17`. It hosts crystal, refractive-water and other transparent-material experiments and their tuning/export controls. Former display names such as “Crystal comparison” are historical. This naming change does not rename code symbols, import/module/filesystem paths, serialized identifiers, URL keys, commands or telemetry. Current human-facing titles and accessible labels use the canonical name; tests of those visible labels should follow it, while historical fixtures/evidence remain unchanged.
