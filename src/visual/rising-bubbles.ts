@@ -14,6 +14,7 @@
  * Cosmetic randomness only: never the session's seeded stream.
  */
 import * as THREE from "three";
+import { cosmeticRandom } from "./block-effects";
 import { containedInclusions, containedLayers, type InclusionHandler } from "./contained";
 import { keepWorldSize } from "./world-sized-points";
 
@@ -69,7 +70,7 @@ export const risingBubbles: InclusionHandler = {
     const speed = new Float32Array(count);
     const phase = new Float32Array(count);
     const resting = new Float32Array(count);
-    const random = Math.random;
+    const random = cosmeticRandom;
     const probe = new THREE.Vector3();
     const born = (i: number): boolean => {
       // A few tries for a wet place; an empty or nearly empty vessel leaves the bubble resting.

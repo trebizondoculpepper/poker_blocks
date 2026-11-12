@@ -36,8 +36,23 @@ export type BlockEffectHandler = (
 
 export const blockEffects = new Registry<BlockEffectHandler>("block effect");
 
+/** Where cosmetic randomness comes from: `Math.random` unless a tool asks for a fixed stream. */
+let cosmeticSource: () => number = Math.random;
+
 /** Cosmetic randomness for effects: presentation, never the session's stream. */
-export const cosmeticRandom = (): number => Math.random();
+export const cosmeticRandom = (): number => cosmeticSource();
+
+/**
+ * Draw cosmetic randomness from `source` until the returned function restores the previous one:
+ * a profiler uses this so a case's stars, bubbles and grass repeat exactly from run to run (#653).
+ */
+export function useCosmeticRandom(source: () => number): () => void {
+  const previous = cosmeticSource;
+  cosmeticSource = source;
+  return () => {
+    cosmeticSource = previous;
+  };
+}
 
 /** Build every effect a look lists. */
 export function createBlockEffects(
