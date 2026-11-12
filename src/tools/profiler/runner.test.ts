@@ -38,6 +38,7 @@ function fakeEnvironment(timer: GpuTimer = unavailableTimer(), hiddenFrames = ne
       clock += 16;
     },
     hidden: () => hiddenFrames.has(frames),
+    visibilityChanges: () => 0,
   };
   return { env, memory, frameCount: () => frames };
 }
@@ -162,7 +163,7 @@ describe("the profiler runner (#618)", () => {
   it("stops when cancelled, disposing what it built", async () => {
     const { env, memory, frameCount } = fakeEnvironment();
     const controller = new AbortController();
-    const next = env.nextFrame;
+    const next = env.nextFrame.bind(env);
     env.nextFrame = async () => {
       await next();
       if (frameCount() === 20) controller.abort();
@@ -349,5 +350,29 @@ describe("the runner's fairness and cancellation (#625 review)", () => {
     });
     expect(run.cancelled).toBe(true);
     expect(run.results).toEqual([]);
+  });
+});
+
+describe("hidden-tab detection between checks (#625 review)", () => {
+  it("retakes a set whose tab was hidden and shown again between two frames", async () => {
+    const { env, memory, frameCount } = fakeEnvironment();
+    // Hidden for five seconds while one frame was pending, visible again before it resumed.
+    let changes = 0;
+    const next = env.nextFrame.bind(env);
+    const now = env.now.bind(env);
+    let paused = 0;
+    env.nextFrame = async () => {
+      await next();
+      if (frameCount() === 8) {
+        changes += 2;
+        paused = 5000;
+      }
+    };
+    env.now = () => now() + paused;
+    env.visibilityChanges = () => changes;
+    const run = await createProfilerRunner(env).run([["cube", testCase(memory)]], options);
+    // The baseline set (frames 4 to 13) was retaken, so the pause never reaches its timings.
+    expect(run.invalidated).toEqual([]);
+    expect(run.results[0]!.baseline.frame.p95).toBeLessThan(100);
   });
 });

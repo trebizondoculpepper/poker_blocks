@@ -40,6 +40,11 @@ export type ProfilerEnvironment = {
   nextFrame(): Promise<void>;
   /** Whether the page is hidden now (its timing is not trustworthy). */
   hidden(): boolean;
+  /**
+   * How many times the page's visibility has changed so far: a set during which it changed was
+   * interrupted, even if the page is visible at every check (#625 review).
+   */
+  visibilityChanges(): number;
 };
 
 export type RunOptions = {
@@ -156,7 +161,8 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     const cpu: number[] = [];
     const frames: number[] = [];
     const gpu: number[] = [];
-    let spoiled = false;
+    let spoiled = env.hidden();
+    const changesBefore = env.visibilityChanges();
     let last = env.now();
     let setCounts = counts();
     for (let i = 0; i < options.frames; i++) {
@@ -168,7 +174,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       cpu.push(frame(objects, frames.at(-1)! / 1000));
       if (i === 0) setCounts = counts();
       gpu.push(...env.timer.poll());
-      if (env.hidden()) spoiled = true;
+      if (env.hidden() || env.visibilityChanges() !== changesBefore) spoiled = true;
     }
     // Collect the queries still in flight, a bounded number of frames.
     for (let i = 0; i < 30 && env.timer.pending > 0; i++) {
