@@ -38,7 +38,7 @@ import { createPassiveRack } from "./passive-rack";
 import { createPlayPresenter, type PlayPresenter } from "./play-presenter";
 import { createBlockViews, type BlockViews } from "./rendered-blocks";
 import { blockMenuMotion, gameModeRegistry } from "./game-modes";
-import { createRunController, type RunController } from "./run-controller";
+import { createGameRunController, type GameRunController } from "./game-run-controller";
 import { browserStorage } from "./save";
 import { SceneManager } from "./scenes";
 import { sceneBehaviours, type SceneHost } from "./scene-behaviours";
@@ -131,7 +131,7 @@ type TraitContext = {
     actionWatch: ActionWatch;
     presenter: PlayPresenter;
     input: TableInput;
-    run: RunController;
+    run: GameRunController;
     board: BlockDestroyerBoard;
     blockTitles: BlockTitles;
     attract: {
@@ -305,7 +305,7 @@ for (const modeId of gameModeRegistry.names()) {
 // The shared HUD frame (#116), over the back canvas; the run lays it out from settings (#119).
 const hudFrame = createHudFrame(host);
 const storage = browserStorage();
-const run: RunController = createRunController({
+const run: GameRunController = createGameRunController({
   host,
   storage,
   params: new URLSearchParams(window.location.search),
