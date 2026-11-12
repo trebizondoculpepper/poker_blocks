@@ -24,6 +24,7 @@ import {
 } from "../../visual/block-appearance";
 import { cardFaceArt } from "../../visual/face-art";
 import { opticsBackends, withOpticsBackend } from "../../visual/optics-backends";
+import { disposeRefraction } from "../../visual/crystal-refraction";
 import { viewControls } from "./view-controls";
 import "./room.css";
 
@@ -231,6 +232,8 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     group.rotation.set(view.turnX, view.turnY, 0);
     camera.lookAt(0, 0, 0);
     const start = performance.now();
+    // Any passes the chosen look needs first (a background capture), as its backend declares.
+    opticsBackends.get(backend).frame?.({ renderer, scene, camera, hide: group });
     renderer.render(scene, camera);
     const submitted = performance.now() - start;
     if (last !== null) {
@@ -326,6 +329,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       cancelAnimationFrame(frame);
       slots.forEach(release);
       gesture.destroy();
+      disposeRefraction();
       environment.dispose();
       (backdrop.material as THREE.MeshBasicMaterial).map?.dispose();
       (backdrop.material as THREE.Material).dispose();
