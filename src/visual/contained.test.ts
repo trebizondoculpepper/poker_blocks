@@ -398,3 +398,23 @@ describe("flame configuration (#355)", () => {
     expect(size(build({ scale: 5 }))).toBeLessThanOrEqual(boundary.halfSize * 2 + 1e-9);
   });
 });
+
+describe("a contained block tells its contents from its shell (#672 review)", () => {
+  it("marks only the contents' meshes, never the shell's inner layers or gloss", () => {
+    const water = build("water");
+    const marked = water.extras.filter((mesh) => mesh.userData.containedContents);
+    const unmarked = water.extras.filter((mesh) => !mesh.userData.containedContents);
+    // Water has both: its fluid is contents; the plastic shell's inner wall and gloss are shell.
+    expect(marked.length).toBeGreaterThan(0);
+    expect(unmarked.length).toBeGreaterThan(0);
+    // The unmarked extras are the shell's own layers; the marked ones are not.
+    const shellLayers: number[] = [
+      containedLayers.shellBack,
+      containedLayers.shellFront,
+      containedLayers.gloss,
+    ];
+    for (const mesh of unmarked) expect(shellLayers).toContain(mesh.renderOrder);
+    for (const mesh of marked) expect(shellLayers).not.toContain(mesh.renderOrder);
+    water.extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+  });
+});

@@ -238,6 +238,9 @@ export function composeContained(
       previous(...args);
     };
   }
+  // The contents' own meshes say so, so an exit can tell them from the shell's inner layers and
+  // gloss, which are extras too (#672 review): the shell breaks, the contents fade.
+  for (const mesh of meshes) mesh.userData.containedContents = true;
   const faces = [shell.faces].flat();
   return {
     faces: Array.from({ length: 6 }, (_, face) => faces[face % faces.length]!),
