@@ -23,8 +23,13 @@ import {
   type BlockAppearance,
 } from "../../visual/block-appearance";
 import { cardFaceArt } from "../../visual/face-art";
-import { opticsBackends, withOpticsBackend } from "../../visual/optics-backends";
+import {
+  opticsBackends,
+  withOpticsBackend,
+  type OpticsControl,
+} from "../../visual/optics-backends";
 import { disposeRefraction } from "../../visual/crystal-refraction";
+import { disposeInternal } from "../../visual/crystal-internal";
 import { viewControls } from "./view-controls";
 import "./room.css";
 
@@ -200,21 +205,38 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     fieldset.querySelectorAll("label").forEach((label) => label.remove());
     for (const control of controls) {
       const label = document.createElement("label");
-      const input = document.createElement("input");
-      input.type = "range";
-      input.min = String(control.min);
-      input.max = String(control.max);
-      input.step = String(control.step);
-      input.value = String(control.uniform.value);
-      const shown = document.createElement("output");
-      shown.textContent = String(control.uniform.value);
-      input.addEventListener("input", () => {
-        control.uniform.value = Number(input.value);
-        shown.textContent = input.value;
-      });
-      label.append(control.label, " ", input, " ", shown);
+      // A choice is a dropdown, a number a slider: what each control is, its data says.
+      const field = "options" in control ? choiceField(control) : sliderField(control);
+      label.append(control.label, " ", ...field);
       fieldset.append(label);
     }
+  }
+
+  function choiceField(control: Extract<OpticsControl, { options: readonly string[] }>) {
+    const select = document.createElement("select");
+    for (const option of control.options) select.append(new Option(option, option));
+    select.value = control.value();
+    select.addEventListener("change", () => {
+      playSfx("ui.click");
+      control.set(select.value);
+    });
+    return [select];
+  }
+
+  function sliderField(control: Extract<OpticsControl, { min: number }>) {
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = String(control.min);
+    input.max = String(control.max);
+    input.step = String(control.step);
+    input.value = String(control.value());
+    const shown = document.createElement("output");
+    shown.textContent = String(control.value());
+    input.addEventListener("input", () => {
+      control.set(Number(input.value));
+      shown.textContent = input.value;
+    });
+    return [input, " ", shown];
   }
 
   /** A new collection: only when the count changes, never when the backend does. */
@@ -330,6 +352,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       slots.forEach(release);
       gesture.destroy();
       disposeRefraction();
+      disposeInternal();
       environment.dispose();
       (backdrop.material as THREE.MeshBasicMaterial).map?.dispose();
       (backdrop.material as THREE.Material).dispose();

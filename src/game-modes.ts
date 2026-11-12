@@ -1092,7 +1092,7 @@ const gameModes: GameMode[] = [
                 devCrystalComparison: {
                   backTo: "game",
                   material: "prismatic",
-                  backends: ["current", "approximation", "crystalV3", "refraction"],
+                  backends: ["current", "approximation", "crystalV3", "refraction", "internal"],
                   count: 9,
                   seed: 524,
                 },

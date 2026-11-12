@@ -6,18 +6,56 @@
  */
 import { Registry } from "../core/registry";
 import type { MaterialDefinition } from "../materials";
-import { crystalV3Tuning } from "./crystal-v3";
+import { crystalV3Tuning, setSpectralShape, spectralPatterns, spectralShape } from "./crystal-v3";
 import { refractionFrame, refractionTuning } from "./crystal-refraction";
+import { internalFrame, internalTuning } from "./crystal-internal";
 import type * as THREE from "three";
 
-/** A live tuning control a comparison tool may show for a backend: one shared uniform. */
-export type OpticsControl = {
-  label: string;
-  min: number;
-  max: number;
-  step: number;
-  uniform: { value: number };
-};
+/** A live tuning control a comparison tool may show for a backend. */
+export type OpticsControl =
+  | {
+      label: string;
+      min: number;
+      max: number;
+      step: number;
+      value(): number;
+      set(value: number): void;
+    }
+  | { label: string; options: readonly string[]; value(): string; set(value: string): void };
+
+/** A slider bound to one shared uniform. */
+const slider = (
+  label: string,
+  min: number,
+  max: number,
+  step: number,
+  uniform: { value: number },
+): OpticsControl => ({
+  label,
+  min,
+  max,
+  step,
+  value: () => uniform.value,
+  set: (value: number) => void (uniform.value = value),
+});
+
+/** The shared spectral map's shape, offered by every look that reads it. */
+const mapControls: readonly OpticsControl[] = [
+  {
+    label: "Map pattern",
+    options: Object.keys(spectralPatterns),
+    value: () => spectralShape.pattern,
+    set: (pattern: string) => setSpectralShape({ pattern }),
+  },
+  {
+    label: "Map frequency",
+    min: 1,
+    max: 16,
+    step: 1,
+    value: () => spectralShape.frequency,
+    set: (frequency: number) => setSpectralShape({ frequency }),
+  },
+];
 
 export type OpticsBackend = {
   /** Shown in comparison tools. */
@@ -56,20 +94,15 @@ opticsBackends.register("crystalV3", {
   unsupported:
     "Clean faces with two mapped layers: the front blends over the rear but does not refract it, nothing behind a block is bent, and overlapping blocks are not sorted face by face.",
   controls: [
-    { label: "Spectral strength", min: 0, max: 1, step: 0.05, uniform: crystalV3Tuning.spectral },
-    {
-      label: "Front intensity",
-      min: 0,
-      max: 2,
-      step: 0.05,
-      uniform: crystalV3Tuning.frontIntensity,
-    },
-    { label: "Rear intensity", min: 0, max: 2, step: 0.05, uniform: crystalV3Tuning.rearIntensity },
-    { label: "Front offset", min: 0, max: 1, step: 0.05, uniform: crystalV3Tuning.frontOffset },
-    { label: "Rear offset", min: 0, max: 1.5, step: 0.05, uniform: crystalV3Tuning.rearOffset },
-    { label: "Rear opacity", min: 0, max: 1, step: 0.05, uniform: crystalV3Tuning.rearOpacity },
-    { label: "Fresnel base", min: 0, max: 1, step: 0.02, uniform: crystalV3Tuning.fresnelBase },
-    { label: "Fresnel power", min: 0.5, max: 8, step: 0.25, uniform: crystalV3Tuning.fresnelPower },
+    ...mapControls,
+    slider("Spectral strength", 0, 1, 0.05, crystalV3Tuning.spectral),
+    slider("Front intensity", 0, 2, 0.05, crystalV3Tuning.frontIntensity),
+    slider("Rear intensity", 0, 2, 0.05, crystalV3Tuning.rearIntensity),
+    slider("Front offset", 0, 1, 0.05, crystalV3Tuning.frontOffset),
+    slider("Rear offset", 0, 1.5, 0.05, crystalV3Tuning.rearOffset),
+    slider("Rear opacity", 0, 1, 0.05, crystalV3Tuning.rearOpacity),
+    slider("Fresnel base", 0, 1, 0.02, crystalV3Tuning.fresnelBase),
+    slider("Fresnel power", 0.5, 8, 0.25, crystalV3Tuning.fresnelPower),
   ],
 });
 
@@ -80,21 +113,36 @@ opticsBackends.register("refraction", {
     "Prototype: background bent per facet from a shared capture. Crystals do not refract each other, overlapping blocks take the nearest rear facet's bend, and the hand has nothing captured behind it.",
   frame: refractionFrame,
   controls: [
-    { label: "Rear bend", min: 0, max: 0.2, step: 0.005, uniform: refractionTuning.rearStrength },
-    { label: "Front bend", min: 0, max: 0.2, step: 0.005, uniform: refractionTuning.frontStrength },
-    { label: "Magnify", min: 0, max: 0.6, step: 0.01, uniform: refractionTuning.magnify },
-    { label: "Colour split", min: 0, max: 0.5, step: 0.01, uniform: refractionTuning.dispersion },
-    { label: "Reflection base", min: 0, max: 1, step: 0.02, uniform: refractionTuning.fresnelBase },
-    {
-      label: "Reflection power",
-      min: 0.5,
-      max: 8,
-      step: 0.25,
-      uniform: refractionTuning.fresnelPower,
-    },
-    { label: "Spectral", min: 0, max: 1, step: 0.05, uniform: refractionTuning.spectral },
-    { label: "Reflection", min: 0, max: 1.5, step: 0.05, uniform: refractionTuning.reflection },
-    { label: "Clarity", min: 0.5, max: 1, step: 0.02, uniform: refractionTuning.clarity },
+    ...mapControls,
+    slider("Rear bend", 0, 0.2, 0.005, refractionTuning.rearStrength),
+    slider("Front bend", 0, 0.2, 0.005, refractionTuning.frontStrength),
+    slider("Magnify", 0, 0.6, 0.01, refractionTuning.magnify),
+    slider("Colour split", 0, 0.5, 0.01, refractionTuning.dispersion),
+    slider("Reflection base", 0, 1, 0.02, refractionTuning.fresnelBase),
+    slider("Reflection power", 0.5, 8, 0.25, refractionTuning.fresnelPower),
+    slider("Spectral", 0, 1, 0.05, refractionTuning.spectral),
+    slider("Reflection", 0, 1.5, 0.05, refractionTuning.reflection),
+    slider("Clarity", 0.5, 1, 0.02, refractionTuning.clarity),
+  ],
+});
+
+opticsBackends.register("internal", {
+  label: "Internal (prototype)",
+  assembly: "crystalInternal",
+  unsupported:
+    "Prototype: ignores the background. Back facets show the rainbow map reflected inside the crystal; front facets distort that by how far their outer and inner rays part. Overlapping blocks share one inner image, nearest facet first.",
+  frame: internalFrame,
+  controls: [
+    ...mapControls,
+    slider("Distortion", 0, 0.4, 0.01, internalTuning.distortion),
+    slider("Normal shift", 0, 0.2, 0.005, internalTuning.normalShift),
+    slider("Index of refraction", 1.1, 2.6, 0.05, internalTuning.ior),
+    slider("Inner brightness", 0, 2, 0.05, internalTuning.inner),
+    slider("Outer brightness", 0, 2, 0.05, internalTuning.outer),
+    slider("Colour split", 0, 0.5, 0.01, internalTuning.dispersion),
+    slider("Reflection base", 0, 1, 0.02, internalTuning.fresnelBase),
+    slider("Reflection power", 0.5, 8, 0.25, internalTuning.fresnelPower),
+    slider("Spectral", 0, 1, 0.05, internalTuning.spectral),
   ],
 });
 
