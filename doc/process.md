@@ -110,4 +110,4 @@ Reviewers check both directions: architecture changes without corresponding prio
 
 ## One-command GitHub briefing (#626)
 
-Use `npm run triage` (after implementation) for a read-only current action briefing, `npm run triage -- --json` for structured agent input, or `npm run triage -- --issue N` for full intake. See [the CLI contract](github-triage-cli.md) for checkpoints, dependencies, freshness and uncertainty. Recommendations supplement the ticket/PR evidence and this process; they never automatically claim work, edit labels or authorize a merge.
+Use `npm run triage` for a read-only current action briefing, `npm run --silent triage -- --json` for structured agent input, or `npm run triage -- --issue N` for full intake. See [the CLI contract](github-triage-cli.md) for checkpoints, dependencies, freshness and uncertainty. Recommendations supplement the ticket/PR evidence and this process; they never automatically claim work, edit labels or authorize a merge.

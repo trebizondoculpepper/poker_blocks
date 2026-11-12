@@ -15,7 +15,8 @@
     "sfx:usage": "node scripts/sfx-usage.ts",
     "release": "node scripts/release.ts",
     "version-guard": "node scripts/version-guard.ts",
-    "prepare": "vp config --hooks --no-agent"
+    "prepare": "vp config --hooks --no-agent",
+    "triage": "node scripts/triage/cli.ts"
   },
   "dependencies": {
     "@dnd-kit/abstract": "0.5.3",
