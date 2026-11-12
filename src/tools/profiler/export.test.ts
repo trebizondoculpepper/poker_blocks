@@ -39,6 +39,9 @@ describe("profiler export (#619)", () => {
     const run: RunResult = {
       results: [result("a", null, 2)],
       cancelled: false,
+      failures: [{ id: "b", kind: "timeout", reason: "exceeded 120000 ms" }],
+      aborted: null,
+      notRun: [],
       gpuTiming: "unavailable",
       invalidated: [],
     };
@@ -101,6 +104,7 @@ describe("profiler export (#619)", () => {
     expect(round.results[0].unit).toEqual({ kind: "group", size: 4 });
     expect(round.coverage.catalogs[1]).toMatchObject({ catalog: "rack item", installed: false });
     expect(round.method.version).toBe(2);
+    expect(round.failures).toEqual([{ id: "b", kind: "timeout", reason: "exceeded 120000 ms" }]);
     expect(round.exportedAt).toBe("2026-11-12T00:00:00.000Z");
   });
 });

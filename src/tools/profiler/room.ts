@@ -140,8 +140,21 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     reflections: () => reflections.texture,
     hidden: () => document.hidden,
     visibilityChanges: () => visibilityChanges,
+    // A lost context stops the run with the reason recorded (#722).
+    contextLost: () => contextLost,
+    onContextLost: (listener) => {
+      renderer.domElement.addEventListener("webglcontextlost", listener);
+      return () => renderer.domElement.removeEventListener("webglcontextlost", listener);
+    },
   });
 
+  let contextLost = false;
+  renderer.domElement.addEventListener("webglcontextlost", () => {
+    contextLost = true;
+  });
+  renderer.domElement.addEventListener("webglcontextrestored", () => {
+    contextLost = false;
+  });
   let visibilityChanges = 0;
   const countVisibility = () => visibilityChanges++;
   document.addEventListener("visibilitychange", countVisibility);
@@ -337,8 +350,22 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
         null,
         2,
       );
+      const ending = outcome.aborted
+        ? `Stopped (${outcome.aborted})`
+        : outcome.cancelled
+          ? "Cancelled"
+          : "Done";
+      const notes = [
+        outcome.failures.length
+          ? `failed: ${outcome.failures.map(({ id, phase, kind, reason }) => `${phase ? `${id}:${phase}` : id} (${kind}: ${reason})`).join(", ")}`
+          : "",
+        outcome.notRun.length ? `not run: ${outcome.notRun.length}` : "",
+        outcome.invalidated.length
+          ? `invalidated (tab hidden): ${outcome.invalidated.join(", ")}`
+          : "",
+      ].filter(Boolean);
       part("status").textContent =
-        `${outcome.cancelled ? "Cancelled" : "Done"}: ${outcome.results.length} result(s); GPU timing ${outcome.gpuTiming}${outcome.invalidated.length ? `; invalidated (tab hidden): ${outcome.invalidated.join(", ")}` : ""}.`;
+        `${ending}: ${outcome.results.length} result(s); GPU timing ${outcome.gpuTiming}${notes.length ? `; ${notes.join("; ")}` : ""}.`;
       part<HTMLButtonElement>("export").disabled = false;
       showResults();
     } finally {
