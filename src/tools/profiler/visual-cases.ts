@@ -20,6 +20,7 @@ import {
   type MaterialDefinition,
 } from "../../materials";
 import { createExitRunner } from "../../visual/exit-effects";
+import { resolvedExit } from "../../visual/exit-defaults";
 import { createWordCube } from "../../word-cube";
 import { tableBlock } from "./block-object";
 import { profilingCases, profilingCoverage, type ProfiledObject } from "./cases";
@@ -28,7 +29,8 @@ const allMaterials = (): readonly MaterialDefinition[] => [
   ...materialDefinitions,
   ...experimentalMaterials,
 ];
-const withExit = () => allMaterials().filter(({ appearance }) => appearance.exit);
+// Every look that plays an exit: its own recipe or its composition's default (#655).
+const withExit = () => allMaterials().filter(({ appearance }) => resolvedExit(appearance));
 
 /** A fixed three-quarter turn, so three faces show. */
 const turned = (object: THREE.Object3D) => object.rotation.set(0.45, 0.6, 0);
@@ -70,7 +72,7 @@ for (const definition of allMaterials()) {
 function repeatingExit(definition: MaterialDefinition, seed: number): ProfiledObject {
   const holder = new THREE.Group();
   const runner = createExitRunner();
-  const sequence = definition.appearance.exit!;
+  const sequence = resolvedExit(definition.appearance)!;
   let generation = 0;
   const start = () => {
     const block = tableBlock(standardDeck[(seed + generation) % standardDeck.length]!, definition);

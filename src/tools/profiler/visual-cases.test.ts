@@ -5,6 +5,7 @@ import {
   type MaterialDefinition,
 } from "../../materials";
 import { profilingCases, uncoveredCases } from "./cases";
+import { resolvedExit } from "../../visual/exit-defaults";
 import "./all-cases";
 
 describe("letter, menu cube and exit profiling cases (#622)", () => {
@@ -18,7 +19,9 @@ describe("letter, menu cube and exit profiling cases (#622)", () => {
   });
 
   it("profiles every material's exit at rest and while it plays", () => {
-    const exiting = all.filter(({ appearance }) => appearance.exit);
+    const exiting = all.filter(({ appearance }) => resolvedExit(appearance));
+    // Contained looks get their composition's default exit, so water has a case too.
+    expect(exiting.map(({ id }) => id)).toContain("water");
     expect(exiting.length).toBeGreaterThan(0);
     for (const { id } of exiting)
       expect(profilingCases.get(`exit:${id}`).phases).toEqual(["idle", "exit"]);
