@@ -380,6 +380,19 @@ describe("a contained cloud (#336)", () => {
 });
 
 describe("flame configuration (#355)", () => {
+  it("sits its base 0.60 below the centre by default, configurable on the definition (#745)", async () => {
+    await import("./fire-core");
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    const boundary = createInteriorBoundary(new THREE.BoxGeometry(1, 1, 1), 1, 0.9);
+    const offset = (config: unknown) =>
+      (
+        (containedContents.get("flame")(boundary, config).meshes[0] as THREE.Mesh)
+          .material as THREE.ShaderMaterial
+      ).uniforms.baseOffset!.value;
+    expect(offset({})).toBe(0.6);
+    expect(offset({ baseOffset: 0.5 })).toBe(0.5);
+  });
+
   it("defaults to the original flame, and scales size and brightness by configuration", async () => {
     await import("./fire-core");
     const { containedContents, createInteriorBoundary } = await import("./contained");
