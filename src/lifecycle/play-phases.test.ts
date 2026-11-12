@@ -99,3 +99,46 @@ describe("material steps come from the playfield's composed controllers (#658)",
     ).toEqual(['unknown play step "nope"', 'play step "reactions" listed twice']);
   });
 });
+
+describe("each step's follow-ups resolve before the next step (#693 review)", () => {
+  it("lets a listener's response to one step change what the next step sees", async () => {
+    const { passiveTraits, createPassiveBlock } = await import("../passives");
+    const seen: number[] = [];
+    if (!playSteps.has("test.emit-step"))
+      playSteps.register("test.emit-step", () => [{ type: "test.step-emitted" }]);
+    if (!playSteps.has("test.coin-probe"))
+      playSteps.register("test.coin-probe", (context) => {
+        seen.push(context.target.state.coins);
+        return [];
+      });
+    if (!passiveTraits.has("test.step-listener"))
+      passiveTraits.register("test.step-listener", {
+        id: "test.step-listener",
+        listensTo: ["test.step-emitted"],
+        respond: () => [{ type: "test.step-answered" }],
+      });
+    const rules = {
+      ...sandboxRunRules(demoRunRules),
+      playfield: material(["test.emit-step", "test.coin-probe"], []),
+    };
+    const base = createPassiveBlock("scrapper", "step.1");
+    const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    opening.installPassive({
+      ...base,
+      traits: { ...base.traits, passive: { traitId: "test.step-listener" } },
+    });
+    const game = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      opening.snapshot(),
+      () => 0,
+    );
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    const types = game.actionFacts.map(({ type }) => type);
+    // The listener answered the first step before scoring and before the play completed.
+    expect(types.indexOf("test.step-answered")).toBeGreaterThan(-1);
+    expect(types.indexOf("test.step-answered")).toBeLessThan(types.indexOf("play.completed"));
+    expect(seen).toHaveLength(1);
+  });
+});

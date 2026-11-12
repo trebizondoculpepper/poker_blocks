@@ -718,8 +718,7 @@ export class GameRun {
     // one, pre-score steps see the score as it was.
     const scoreBefore = this.currentState.round.score;
     this.currentState = { ...next, round: { ...next.round, score: scoreBefore } };
-    const caused: GameEvent[] = [];
-    for (const name of this.playPhases.beforeScore) caused.push(...playSteps.get(name)(steps));
+    this.runSteps(this.playPhases.beforeScore, steps, context);
 
     this.scoredLines = scoreFieldWithPassives(
       this.currentState.field,
@@ -734,11 +733,10 @@ export class GameRun {
       round: { ...this.currentState.round, score: scoreBefore + gained },
     };
 
-    for (const name of this.playPhases.afterScore) caused.push(...playSteps.get(name)(steps));
+    this.runSteps(this.playPhases.afterScore, steps, context);
     this.lastReactions = steps.reactions;
     // Every card placed, in placement order, so the fact describes the whole group (#661 review).
     this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId, cardIds: placed });
-    for (const event of caused) this.passiveEvents.emit(event);
     this.recordDelivered(
       context,
       "play",
@@ -746,6 +744,21 @@ export class GameRun {
     );
     this.announceOutcome();
     return this.currentState;
+  }
+
+  /**
+   * Run steps in order, delivering and recording each one's follow-ups before the next runs, so
+   * a listener's response to one step is in the working state the next step sees (#693 review).
+   */
+  private runSteps(names: readonly string[], steps: PlayStepContext, context: ActionContext): void {
+    for (const name of names) {
+      for (const event of playSteps.get(name)(steps)) this.passiveEvents.emit(event);
+      this.recordDelivered(
+        context,
+        "play",
+        this.passiveEvents.drain(undefined, undefined, this.budgetFor(context, "play")),
+      );
+    }
   }
 
   /**
