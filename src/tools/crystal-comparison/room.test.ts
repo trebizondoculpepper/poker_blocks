@@ -21,7 +21,13 @@ describe("the crystal comparison room (#524)", () => {
   it("is a developer mode offering only registered backends", () => {
     const scene = gameModeFor("dev17").scenes.find(({ id }) => id === "dev17/crystal-comparison");
     const config = scene?.traits.devCrystalComparison;
-    expect(config?.backends).toEqual(["current", "approximation", "crystalV3"]);
+    expect(config?.backends).toEqual([
+      "current",
+      "approximation",
+      "crystalV3",
+      "refraction",
+      "internal",
+    ]);
     for (const name of config!.backends) expect(opticsBackends.has(name)).toBe(true);
     expect(gameModeFor("dev17").traits.console).toEqual({ name: "dev17" });
   });

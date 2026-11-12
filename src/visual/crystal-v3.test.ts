@@ -81,6 +81,11 @@ describe("Crystal v3's layers (#645)", () => {
   it("is a registered backend whose tuning controls are its shared uniforms", () => {
     const backend = opticsBackends.get("crystalV3");
     expect(backend.assembly).toBe("crystalV3");
-    expect(backend.controls?.map(({ uniform }) => uniform)).toContain(crystalV3Tuning.rearOpacity);
+    // A control drives its shared uniform.
+    const opacity = backend.controls?.find(({ label }) => label === "Rear opacity");
+    if (!opacity || "options" in opacity) throw new Error("Rear opacity should be a slider");
+    opacity.set(0.5);
+    expect(crystalV3Tuning.rearOpacity.value).toBe(0.5);
+    opacity.set(0.92);
   });
 });

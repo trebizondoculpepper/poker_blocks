@@ -7,7 +7,7 @@ import { donenessSteps } from "./cooking";
 import type { GameState } from "./game-state";
 import { passiveActivations } from "./passive-effects";
 import { commitCommands } from "./rule-commands";
-import type { PassiveBlock } from "./passives";
+import type { PassiveBlock, StageContext } from "./passives";
 import { passiveDefinitions } from "./passives";
 import type { StageKind } from "./run-rules";
 import { getMaterialDefinition, materialOf, materialDefinitions } from "./materials";
@@ -33,6 +33,8 @@ export function stageRewardLedger(
   state: GameState,
   bonus = stageCompleteBonus,
   stage?: StageKind,
+  /** The won stage's full context (round, ordinal), for rules that filter on it (#664 review). */
+  context?: StageContext,
 ): RewardEntry[] {
   const entries: RewardEntry[] = [
     { source: "stage.complete", label: "Stage complete bonus", coins: bonus },
@@ -41,7 +43,7 @@ export function stageRewardLedger(
     ...materialFieldRewardEntries(state),
   ];
   for (const passive of state.passiveRack) {
-    const coins = stageWonCoins(state, passive, stage);
+    const coins = stageWonCoins(state, passive, stage, context);
     if (!coins) continue;
     const name = passiveDefinitions.has(passive.definitionId)
       ? passiveDefinitions.get(passive.definitionId).name
@@ -135,11 +137,17 @@ export function materialFieldRewardEntries(state: GameState): RewardEntry[] {
  * The coins one passive's `stage.won` rules pay, judged on the hand still held: its fired
  * rules' commands committed to a copy of the state (#170), so the ledger stays pure.
  */
-function stageWonCoins(state: GameState, passive: PassiveBlock, stage?: StageKind): number {
+function stageWonCoins(
+  state: GameState,
+  passive: PassiveBlock,
+  stage?: StageKind,
+  context?: StageContext,
+): number {
   const commands = passiveActivations(passive, {
     type: "stage.won",
     blocks: state.hand,
     stageKind: stage,
+    ...(context ? { stage: context } : {}),
   }).flatMap(({ commands }) => commands);
   let preview = state;
   commitCommands(commands, {

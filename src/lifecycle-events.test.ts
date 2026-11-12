@@ -3,6 +3,7 @@ import { standardDeck } from "./cards";
 import { Registry } from "./core/registry";
 import { baseDealer, type Dealer } from "./dealer";
 import { GameRun } from "./game-run";
+import { passiveActivations } from "./passive-effects";
 import { passiveTraits, type GameEvent, type PassiveBlock } from "./passives";
 import type { EventRule } from "./event-rules";
 import type { RunRules, StageKind } from "./run-rules";
@@ -88,7 +89,13 @@ describe("session lifecycle events (issue #13)", () => {
       "stage.started 2:stage-1",
     ]);
     const boss = heard.find(({ type, stage }) => type === "stage.won" && stage?.kind === "boss");
-    expect(boss?.stage).toEqual({ round: 1, kind: "boss", dealer: "boss" });
+    expect(boss?.stage).toEqual({
+      round: 1,
+      ordinal: 3,
+      instance: "1.3",
+      kind: "boss",
+      dealer: "boss",
+    });
     const reward = heard.find(({ type }) => type === "reward.finalized");
     // The completion bonus (4) and a coin for each of the three unused plays.
     expect(reward?.reward).toEqual({ coins: 7, balanceBefore: 0, balance: 7 });
@@ -154,5 +161,98 @@ describe("session lifecycle events (issue #13)", () => {
       [4, 3, 3],
     ]);
     expect(session.state.coins).toBe(24);
+  });
+});
+
+describe("numbered stage lifecycle (#660)", () => {
+  /** Play `stages` stages through, winning each, recording what the rack heard. */
+  const playThrough = (session: GameRun, stages: number) => {
+    for (let stage = 0; stage < stages; stage++) {
+      session.forceOutcome("won");
+      session.advance();
+      session.leaveShop();
+    }
+  };
+
+  it("carries each stage's round, ordinal and instance on start, win and loss", () => {
+    const session = recording();
+    playThrough(session, 4);
+    const won = heard.filter(({ type }) => type === "stage.won").map(({ stage }) => stage);
+    expect(won.map((stage) => `${stage?.round}.${stage?.ordinal}`)).toEqual([
+      "1.1",
+      "1.2",
+      "1.3",
+      "2.1",
+    ]);
+    expect(won.map((stage) => stage?.instance)).toEqual(["1.1", "1.2", "1.3", "2.1"]);
+  });
+
+  /** The stage.started events of six stages, as the run emitted them, and which a rule matches. */
+  const matchedStarts = (where: EventRule["where"]) => {
+    const session = recording();
+    playThrough(session, 6);
+    const rule = passive("matcher", "passive.event-rules", [
+      { on: "stage.started", select: { id: "event-stage", config: {} }, where, effects: [] },
+    ]);
+    return heard
+      .filter(({ type }) => type === "stage.started")
+      .map((event) => ({
+        at: `${event.stage?.round}.${event.stage?.ordinal}`,
+        matched: passiveActivations(rule, event).length > 0,
+      }));
+  };
+
+  it("lets a rule target stage two in every round, never stage one or three", () => {
+    expect(matchedStarts({ id: "stage-ordinal-in", config: { ordinals: [2] } })).toEqual([
+      { at: "1.2", matched: true },
+      { at: "1.3", matched: false },
+      { at: "2.1", matched: false },
+      { at: "2.2", matched: true },
+      { at: "2.3", matched: false },
+      { at: "3.1", matched: false },
+    ]);
+  });
+
+  it("narrows to one round when the rule names it", () => {
+    const matched = matchedStarts({
+      id: "stage-ordinal-in",
+      config: { ordinals: [2], rounds: [2] },
+    })
+      .filter(({ matched }) => matched)
+      .map(({ at }) => at);
+    expect(matched).toEqual(["2.2"]);
+  });
+
+  it("pays a stage-won reward filtered by ordinal only for stage two, in every round", () => {
+    const session = makeSession();
+    session.installPassive(
+      passive("stage-two-bounty", "passive.event-rules", [
+        {
+          on: "stage.won",
+          select: { id: "event-stage", config: {} },
+          where: { id: "stage-ordinal-in", config: { ordinals: [2] } },
+          effects: [{ id: "add-coins", config: { amount: 50 } }],
+        },
+      ]),
+    );
+    const bounty: number[] = [];
+    for (let stage = 0; stage < 6; stage++) {
+      session.forceOutcome("won");
+      const entries = session.claimStageRewards()!.entries;
+      bounty.push(entries.find(({ coins }) => coins === 50) ? 1 : 0);
+      session.advance();
+      session.leaveShop();
+    }
+    expect(bounty).toEqual([0, 1, 0, 0, 1, 0]);
+  });
+
+  it("does not replay a stage's start when a run is restored", () => {
+    const session = recording();
+    playThrough(session, 1);
+    const restoredFrom = session.snapshot();
+    heard.length = 0;
+    const restored = GameRun.fromSnapshot(dealers, config, standardDeck, restoredFrom);
+    restored.installPassive(passive("recorder-2", "test.lifecycle.recorder"));
+    expect(heard.filter(({ type }) => type === "stage.started")).toEqual([]);
   });
 });
