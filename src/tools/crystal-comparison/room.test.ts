@@ -95,3 +95,21 @@ describe("the comparison room's gesture lifecycle (#637 review)", () => {
     expect(sounds).toEqual(["zoom"]);
   });
 });
+
+describe("turning the comparison collection plays a sound (#637 review)", () => {
+  it("plays the view-turn sound once as a drag begins, not during a pinch", () => {
+    const view = { distance: 10, turnX: 0, turnY: 0 };
+    const sounds: string[] = [];
+    const controls = viewControls(
+      view,
+      () => void sounds.push("zoom"),
+      () => void sounds.push("rotate"),
+    );
+    controls.onDrag({ first: true, delta: [5, 0] });
+    controls.onDrag({ first: false, delta: [5, 0] });
+    expect(sounds).toEqual(["rotate"]);
+    controls.onPinch({ first: true, last: false, da: [100, 0] });
+    controls.onDrag({ first: true, delta: [5, 0] });
+    expect(sounds).toEqual(["rotate", "zoom"]);
+  });
+});

@@ -462,6 +462,13 @@ const entries = [
     description: "A wheel zoom burst or two-finger pinch begins on the playing field",
   },
   {
+    id: "view.rotate",
+    name: "Turn view",
+    family: "view",
+    description: "A drag that turns a displayed collection of blocks begins",
+    placeholder: "ui.hover",
+  },
+  {
     id: "reward.coin",
     name: "Coin",
     family: "reward",

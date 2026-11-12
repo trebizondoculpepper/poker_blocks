@@ -245,8 +245,9 @@
     }
   },
   "ui.hover": {
-    "uses": 3,
+    "uses": 4,
     "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
       "menus.ts": 2,
       "traits/menu-action.ts": 1
     }
@@ -270,6 +271,12 @@
     "uses": 3,
     "files": {
       "audio-service.ts": 2,
+      "tools/crystal-comparison/room.ts": 1
+    }
+  },
+  "view.rotate": {
+    "uses": 1,
+    "files": {
       "tools/crystal-comparison/room.ts": 1
     }
   },

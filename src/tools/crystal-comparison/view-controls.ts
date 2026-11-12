@@ -9,7 +9,8 @@
  * - **Pinch** zooms by the ratio of finger spacing to where it started, and a two-finger twist
  *   turns the collection.
  *
- * Wheel and pinch play the game's zoom sound once, as each gesture begins.
+ * Wheel and pinch play the game's zoom sound once, as each gesture begins; a turning drag plays
+ * the view-turn sound once as it begins.
  */
 import * as THREE from "three";
 import { wheelZoom } from "../../view-zoom";
@@ -38,11 +39,16 @@ export function twistTurn(previousDegrees: number, degrees: number): number {
 
 type PinchMemo = { distance: number; spacing: number; angle: number };
 
-export function viewControls(view: ViewState, zoomSound: () => void) {
+export function viewControls(
+  view: ViewState,
+  zoomSound: () => void,
+  rotateSound: () => void = () => {},
+) {
   let pinching = false;
   return {
-    onDrag({ delta: [dx, dy] }: { delta: [number, number] }) {
+    onDrag({ first, delta: [dx, dy] }: { first?: boolean; delta: [number, number] }) {
       if (pinching) return;
+      if (first) rotateSound();
       view.turnY += dx * 0.01;
       view.turnX += dy * 0.01;
     },

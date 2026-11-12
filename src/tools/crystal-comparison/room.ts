@@ -118,7 +118,11 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
   const view = { distance: 10, turnX: 0, turnY: 0 };
   const gesture = new Gesture(
     renderer.domElement,
-    viewControls(view, () => playSfx("view.zoom")),
+    viewControls(
+      view,
+      () => playSfx("view.zoom"),
+      () => playSfx("view.rotate"),
+    ),
     {
       drag: { pointer: { capture: true } },
     },
