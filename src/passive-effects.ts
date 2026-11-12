@@ -133,11 +133,15 @@ function scoreLines(
   const lines = findScoringLines(field);
   // One resolution: each passive's value sources (a die's roll) resolve once, here, before any
   // candidate hand is evaluated, and the same values apply to every line (#97).
+  // Only line-scoring rules resolve here; every other hook resolves its own values, once, when
+  // it runs (#682 review).
   const passives = rack.map((passive) => {
     const source = passiveSource(passive);
     return {
       ...source,
-      rules: source.rules.map((rule) => ruleHandlers.resolveValues(rule, random)),
+      rules: source.rules
+        .filter((rule) => lineScoringPhases.has(rule.on))
+        .map((rule) => ruleHandlers.resolveValues(rule, random)),
     };
   });
   return lines.map((line) => {
@@ -224,6 +228,13 @@ function scoreLines(
   });
 }
 
+/** The phases line scoring evaluates itself: only their rules resolve values during it. */
+const lineScoringPhases: ReadonlySet<string> = new Set([
+  "score.beforeBlockValue",
+  ...linePhases,
+  afterClampPhase,
+]);
+
 /** For callers without the run's random source: fine until a rule tries to draw from it. */
 function noRandomSource(): number {
   throw new Error("This rule draws a random value: pass the run's random source");
@@ -251,6 +262,12 @@ function crossingCells(line: Line, lines: readonly Line[]): number {
 export function passiveActivations(
   passive: PassiveBlock,
   event: Readonly<GameEvent>,
+  random: () => number = noRandomSource,
 ): RuleActivation[] {
-  return evaluateRules(subscribedRules([passiveSource(passive)], event.type), event, 0).activations;
+  // A hook's rules resolve their value sources (a roll) once, as it is delivered (#682 review).
+  const resolved = subscribedRules([passiveSource(passive)], event.type).map((entry) => ({
+    ...entry,
+    rule: ruleHandlers.resolveValues(entry.rule, random),
+  }));
+  return evaluateRules(resolved, event, 0).activations;
 }
