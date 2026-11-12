@@ -71,6 +71,8 @@ export type ProfilerEnvironment = {
    * it can't make them (a test).
    */
   reflections?(): THREE.Texture;
+  /** Whether the renderer's WebGL context has been lost (#722); the run stops if so. */
+  contextLost?(): boolean;
   /** Whether the page is hidden now (its timing is not trustworthy). */
   hidden(): boolean;
   /**
@@ -88,6 +90,8 @@ export type RunOptions = {
   /** Frames rendered before sampling, to compile shaders and settle. */
   warmupFrames: number;
   seed: number;
+  /** Milliseconds one case or phase may take before it is recorded as timed out (#722). */
+  timeoutMs?: number;
   /** Retakes allowed for a set spoiled by the tab being hidden. */
   retries?: number;
   signal?: AbortSignal;
@@ -125,6 +129,9 @@ export type CountResult = {
 /** The standard sweep's counts (doc/automatic-profiling.md, "Sweep and representative host"). */
 export const standardCounts: readonly number[] = [1, 10, 50];
 
+/** How long one case or phase may run, by default (doc/automatic-profiling.md): 120 seconds. */
+export const defaultCaseTimeout = 120_000;
+
 export type CaseResult = {
   id: string;
   family: string;
@@ -143,8 +150,22 @@ export type CaseResult = {
   leaked: { geometries: number; textures: number };
 };
 
+/** A case or phase that produced no result, and why (#722): recorded, never a zero-cost row. */
+export type CaseFailure = {
+  id: string;
+  phase?: string;
+  kind: "error" | "timeout";
+  reason: string;
+};
+
 export type RunResult = {
   results: CaseResult[];
+  /** Cases that failed or timed out; the run went on with the next independent case. */
+  failures: CaseFailure[];
+  /** Why the run stopped before every case ran, other than a cancel: a lost WebGL context. */
+  aborted: "context-lost" | null;
+  /** Cases and phases never started because the run stopped (cancelled or aborted). */
+  notRun: string[];
   cancelled: boolean;
   gpuTiming: "available" | "unavailable";
   /** Sets that stayed spoiled by a hidden tab after every retry. */
@@ -193,6 +214,43 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
         signal?.removeEventListener("abort", onAbort);
         resolve();
       }, reject);
+    });
+  }
+
+  /**
+   * A factory's promise, or the current signal's abort, whichever comes first (#722): a factory
+   * that never settles can't hold a run past its deadline. One that settles later is disposed.
+   */
+  function untilAborted(made: ProfiledObject | Promise<ProfiledObject>): Promise<ProfiledObject> {
+    const current = signal;
+    if (!current) return Promise.resolve(made);
+    if (current.aborted) {
+      void Promise.resolve(made).then(
+        (late) => late.dispose(),
+        () => {},
+      );
+      return Promise.reject(new Cancelled());
+    }
+    return new Promise<ProfiledObject>((resolve, reject) => {
+      const onAbort = () => {
+        void Promise.resolve(made).then(
+          (late) => late.dispose(),
+          () => {},
+        );
+        reject(new Cancelled());
+      };
+      current.addEventListener("abort", onAbort, { once: true });
+      Promise.resolve(made).then(
+        (one) => {
+          current.removeEventListener("abort", onAbort);
+          // Already aborted: the abort handler owns disposing it, exactly once.
+          if (!current.aborted) resolve(one);
+        },
+        (error: unknown) => {
+          current.removeEventListener("abort", onAbort);
+          reject(error);
+        },
+      );
     });
   }
 
@@ -307,7 +365,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       for (let index = 0; index < count; index++) {
         // A cancel stops the build between creations, not after the whole collection (#625).
         check();
-        const one = await profile.create({ seed: options.seed + index, phase });
+        const one = await untilAborted(profile.create({ seed: options.seed + index, phase }));
         one.object.position.copy(positions[index]!);
         scene.add(one.object);
         made.push(one);
@@ -456,28 +514,75 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       options: RunOptions,
     ): Promise<RunResult> {
       const results: CaseResult[] = [];
+      const failures: CaseFailure[] = [];
       const invalidated: string[] = [];
-      const check = () => {
-        if (options.signal?.aborted) throw new Cancelled();
-      };
-      signal = options.signal;
-      try {
-        for (const [id, profile] of cases)
-          for (const { name: phase, sampling } of profile.phases ?? [steadyPhase]) {
-            // Cosmetic randomness (stars, bubbles, grass) repeats exactly for a seed (#653 review).
-            const restore = useCosmeticRandom(seededStream(options.seed));
-            try {
-              const result = await runCase(id, profile, phase, options, check, invalidated);
-              results.push({ ...result, sampling });
-            } finally {
-              restore();
-            }
-          }
-      } catch (error) {
-        if (!(error instanceof Cancelled)) throw error;
-        return { results, cancelled: true, gpuTiming: timing(), invalidated };
+      const queue = cases.flatMap(([id, profile]) =>
+        (profile.phases ?? [steadyPhase]).map(({ name: phase, sampling }) => ({
+          id,
+          profile,
+          phase,
+          sampling,
+        })),
+      );
+      const labelOf = ({ id, phase }: { id: string; phase?: string }) =>
+        phase ? `${id}:${phase}` : id;
+      const finish = (from: number, ending: Pick<RunResult, "cancelled" | "aborted">) => ({
+        results,
+        failures,
+        notRun: queue.slice(from).map(labelOf),
+        gpuTiming: timing(),
+        invalidated,
+        ...ending,
+      });
+      for (const [index, entry] of queue.entries()) {
+        if (options.signal?.aborted) return finish(index, { cancelled: true, aborted: null });
+        // A lost context can't measure anything more: stop, and say so (#722).
+        if (env.contextLost?.())
+          return finish(index, { cancelled: false, aborted: "context-lost" });
+        // Each case or phase gets its own deadline, combined with the run's cancel.
+        const deadline = new AbortController();
+        const timer = setTimeout(() => deadline.abort(), options.timeoutMs ?? defaultCaseTimeout);
+        signal = options.signal
+          ? AbortSignal.any([options.signal, deadline.signal])
+          : deadline.signal;
+        const caseSignal = signal;
+        const check = () => {
+          if (caseSignal.aborted) throw new Cancelled();
+        };
+        // Cosmetic randomness (stars, bubbles, grass) repeats exactly for a seed (#653 review).
+        const restore = useCosmeticRandom(seededStream(options.seed));
+        try {
+          const result = await runCase(
+            entry.id,
+            entry.profile,
+            entry.phase,
+            options,
+            check,
+            invalidated,
+          );
+          results.push({ ...result, sampling: entry.sampling });
+        } catch (error) {
+          if (options.signal?.aborted) return finish(index, { cancelled: true, aborted: null });
+          // The case's own resources were released by its cleanup; independent cases go on.
+          failures.push({
+            id: entry.id,
+            ...(entry.phase ? { phase: entry.phase } : {}),
+            ...(deadline.signal.aborted
+              ? {
+                  kind: "timeout" as const,
+                  reason: `exceeded ${options.timeoutMs ?? defaultCaseTimeout} ms`,
+                }
+              : {
+                  kind: "error" as const,
+                  reason: error instanceof Error ? error.message : String(error),
+                }),
+          });
+        } finally {
+          clearTimeout(timer);
+          restore();
+        }
       }
-      return { results, cancelled: false, gpuTiming: timing(), invalidated };
+      return finish(queue.length, { cancelled: false, aborted: null });
     },
   };
 
