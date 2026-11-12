@@ -228,7 +228,7 @@
     }
   },
   "ui.click": {
-    "uses": 42,
+    "uses": 43,
     "files": {
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 3,
@@ -238,7 +238,7 @@
       "settings-panel.ts": 7,
       "tools/block-designer.ts": 3,
       "tools/contained-proof/room.ts": 4,
-      "tools/crystal-comparison/room.ts": 3,
+      "tools/crystal-comparison/room.ts": 4,
       "tools/dialog-room.ts": 1,
       "tools/profiler/room.ts": 5,
       "tools/shop-balance-editor.ts": 6,

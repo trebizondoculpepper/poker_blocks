@@ -25,6 +25,7 @@ import {
 import { cardFaceArt } from "../../visual/face-art";
 import {
   opticsBackends,
+  snapshotOptics,
   withOpticsBackend,
   type OpticsControl,
 } from "../../visual/optics-backends";
@@ -81,7 +82,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
   root.hidden = true;
   root.innerHTML = `
     <header class="crystal-comparison-header">
-      <h1>Crystal comparison</h1>
+      <h1>Transparent materials bench</h1>
       <a data-part="back" href="#">Back to the game</a>
     </header>
     <aside class="crystal-comparison-controls">
@@ -89,6 +90,12 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       <label>Count <input data-part="count" type="number" min="1" max="100" /></label>
       <p data-part="unsupported" class="crystal-comparison-note"></p>
       <fieldset data-part="tuning" class="crystal-comparison-tuning" hidden><legend>Tuning</legend></fieldset>
+      <div class="crystal-comparison-copy">
+        <button type="button" data-part="copy">Copy settings</button>
+        <p data-part="copy-status" role="status"></p>
+        <textarea data-part="copy-fallback" readonly hidden rows="10"
+          aria-label="Settings JSON: select it and copy"></textarea>
+      </div>
       <output data-part="stats" class="crystal-comparison-stats"></output>
     </aside>
     <div class="crystal-comparison-stage" data-part="stage"></div>`;
@@ -200,6 +207,30 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       button.setAttribute("aria-pressed", String(button.dataset.backend === backend));
   }
 
+  /**
+   * Copy the selected backend's complete settings as versioned JSON (#677;
+   * doc/refractive-water-prototypes.md, "Copy settings"): reported as copied only once the
+   * clipboard accepts it, else shown in a selectable box, so tuned values are never lost.
+   */
+  async function copySettings(): Promise<void> {
+    playSfx("ui.click");
+    const json = JSON.stringify(snapshotOptics(backend), null, 2);
+    const status = part("copy-status");
+    const fallback = part<HTMLTextAreaElement>("copy-fallback");
+    try {
+      if (!navigator.clipboard) throw new Error("no clipboard");
+      await navigator.clipboard.writeText(json);
+      status.textContent = `${opticsBackends.get(backend).label} settings copied`;
+      fallback.hidden = true;
+    } catch {
+      status.textContent = "Clipboard unavailable: select the settings below and copy them";
+      fallback.value = json;
+      fallback.hidden = false;
+      fallback.focus();
+      fallback.select();
+    }
+  }
+
   /** The chosen backend's live controls, as its registration lists them (none for most). */
   function showTuning(): void {
     const controls = opticsBackends.get(backend).controls ?? [];
@@ -309,6 +340,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     camera.updateProjectionMatrix();
   }
 
+  part("copy").addEventListener("click", () => void copySettings());
   part("count").addEventListener("change", () => {
     playSfx("ui.click");
     layout(Math.max(1, Math.min(100, Number(part<HTMLInputElement>("count").value) || 1)));
