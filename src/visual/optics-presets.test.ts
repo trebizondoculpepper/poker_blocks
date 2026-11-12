@@ -71,3 +71,23 @@ describe("copy settings: complete, versioned optics presets (#677)", () => {
     }
   });
 });
+
+describe("calm water keeps its own tuning (#675)", () => {
+  it("changing every calm-water control leaves the crystal refraction preset untouched", () => {
+    const crystal = snapshotOptics("refraction");
+    const water = snapshotOptics("calmWater");
+    for (const control of opticsBackends.get("calmWater").controls!)
+      (control.set as (value: number | string) => void)(changed(control));
+    expect(snapshotOptics("calmWater")).not.toEqual(water);
+    expect(snapshotOptics("refraction")).toEqual(crystal);
+  });
+
+  it("starts gentle and colourless: a slow ripple, little colour split, no spectral rainbow", () => {
+    const { config } = snapshotOptics("calmWater");
+    expect(config.spectral).toBe(0);
+    expect(config.dispersion).toBeLessThanOrEqual(0.03);
+    expect(config.rippleAmplitude).toBeGreaterThan(0);
+    expect(config.ripplePeriod).toBe(10);
+    expect(Object.keys(config)).not.toContain("mapPattern");
+  });
+});

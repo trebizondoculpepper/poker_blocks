@@ -1135,7 +1135,7 @@ const gameModes: GameMode[] = [
           },
         } satisfies GameMode,
         {
-          // Crystal looks side by side (#524): the same collection, current or approximate optics.
+          // Transparent looks side by side (#524, #675): the same collection, crystal or water optics.
           id: "dev17",
           scenes: composeScenes("dev17", [
             {
@@ -1144,7 +1144,14 @@ const gameModes: GameMode[] = [
                 devCrystalComparison: {
                   backTo: "game",
                   material: "prismatic",
-                  backends: ["current", "approximation", "crystalV3", "refraction", "internal"],
+                  backends: [
+                    "current",
+                    "approximation",
+                    "crystalV3",
+                    "refraction",
+                    "internal",
+                    "calmWater",
+                  ],
                   count: 9,
                   seed: 524,
                 },
