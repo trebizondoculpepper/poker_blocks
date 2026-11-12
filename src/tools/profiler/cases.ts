@@ -15,15 +15,38 @@ export type ProfiledObject = {
   dispose(): void;
 };
 
+/**
+ * What one instance of a case is (#711; doc/automatic-profiling.md, "Automatic discovery and
+ * coverage"): a single block, a group of blocks (a word, a menu) with its block count, or one
+ * complete configured emitter (an exit or particle effect, not one particle). Every result row
+ * records it, so a large object can't pass as one block.
+ */
+export type ProfilingUnit = { kind: "block" | "group" | "emitter"; size: number };
+
+/** One block, the default unit. */
+export const oneBlock: ProfilingUnit = { kind: "block", size: 1 };
+
+/**
+ * A phase of a transient effect and how it is sampled (#711): `steady` (it looks the same on
+ * every frame) or `restarting` (each instance restarts from seeded state as soon as it ends, so
+ * no sampled frame shows an effect that has already finished).
+ */
+export type ProfilingPhase = { name: string; sampling: "steady" | "restarting" };
+
 export type ProfilingCase = {
   /** Which kind of visual it is, for grouping and coverage (material, rack item, ...). */
   family: string;
   /** What the case shows, for the results table. */
   label: string;
+  /** What one instance is; one block when omitted. */
+  unit?: ProfilingUnit;
+  /** The representative configuration chosen, for the results table (a word, a card). */
+  variant?: string;
   /** The collection size used unless the run overrides it. */
   defaultCount?: number;
-  /** Named phases of a transient effect (idle, active, pulse, exit); one when omitted. */
-  phases?: readonly string[];
+  /** Phases of a transient effect (idle, active, pulse, exit), each with its sampling; one steady
+   *  phase when omitted. */
+  phases?: readonly ProfilingPhase[];
   /** Build one object through the production factory, with a fixed seed. */
   create(context: { seed: number; phase?: string }): ProfiledObject | Promise<ProfiledObject>;
 };

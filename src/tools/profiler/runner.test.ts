@@ -183,9 +183,43 @@ describe("the profiler runner (#618)", () => {
 
   it("runs each phase of a transient effect as its own result", async () => {
     const { env, memory } = fakeEnvironment();
-    const phased = { ...testCase(memory), phases: ["idle", "exit"] };
+    const phased = {
+      ...testCase(memory),
+      phases: [
+        { name: "idle", sampling: "steady" as const },
+        { name: "exit", sampling: "restarting" as const },
+      ],
+    };
     const run = await createProfilerRunner(env).run([["effect", phased]], options);
     expect(run.results.map(({ phase }) => phase)).toEqual(["idle", "exit"]);
+  });
+
+  it("records each row's unit, variant and phase sampling (#711)", async () => {
+    const { env, memory } = fakeEnvironment();
+    const word = {
+      ...testCase(memory),
+      unit: { kind: "group" as const, size: 4 },
+      variant: "the word Play",
+      phases: [
+        { name: "idle", sampling: "steady" as const },
+        { name: "exit", sampling: "restarting" as const },
+      ],
+    };
+    const plain = testCase(memory);
+    const run = await createProfilerRunner(env).run(
+      [
+        ["word", word],
+        ["plain", plain],
+      ],
+      options,
+    );
+    expect(run.results.map(({ unit, variant, sampling }) => ({ unit, variant, sampling }))).toEqual(
+      [
+        { unit: { kind: "group", size: 4 }, variant: "the word Play", sampling: "steady" },
+        { unit: { kind: "group", size: 4 }, variant: "the word Play", sampling: "restarting" },
+        { unit: { kind: "block", size: 1 }, variant: undefined, sampling: "steady" },
+      ],
+    );
   });
 });
 

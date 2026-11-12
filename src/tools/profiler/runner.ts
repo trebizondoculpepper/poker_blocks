@@ -10,7 +10,19 @@
  * so the runner itself is tested with fakes.
  */
 import * as THREE from "three";
-import type { ProfiledObject, ProfilingCase } from "./cases";
+import {
+  oneBlock,
+  type ProfiledObject,
+  type ProfilingCase,
+  type ProfilingPhase,
+  type ProfilingUnit,
+} from "./cases";
+
+/** A case without phases is sampled once, as one steady phase with no name. */
+const steadyPhase: { name: string | undefined; sampling: ProfilingPhase["sampling"] } = {
+  name: undefined,
+  sampling: "steady",
+};
 import type { GpuTimer } from "./gpu-timer";
 import { useCosmeticRandom } from "../../visual/block-effects";
 
@@ -90,6 +102,10 @@ export type CaseResult = {
   family: string;
   label: string;
   phase?: string;
+  /** What one instance is, its representative variant, and how its phase was sampled (#711). */
+  unit: ProfilingUnit;
+  variant?: string;
+  sampling: ProfilingPhase["sampling"];
   /** Milliseconds to build one object and to render its first (compiling) frame. */
   creation: { build: number; firstFrame: number };
   baseline: SampleSet;
@@ -355,6 +371,9 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
         family: profile.family,
         label: profile.label,
         ...(phase ? { phase } : {}),
+        unit: profile.unit ?? oneBlock,
+        ...(profile.variant ? { variant: profile.variant } : {}),
+        sampling: "steady" as ProfilingPhase["sampling"],
         creation: { build: buildTime, firstFrame },
         baseline,
         one,
@@ -390,11 +409,12 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       signal = options.signal;
       try {
         for (const [id, profile] of cases)
-          for (const phase of profile.phases ?? [undefined]) {
+          for (const { name: phase, sampling } of profile.phases ?? [steadyPhase]) {
             // Cosmetic randomness (stars, bubbles, grass) repeats exactly for a seed (#653 review).
             const restore = useCosmeticRandom(seededStream(options.seed));
             try {
-              results.push(await runCase(id, profile, phase, options, check, invalidated));
+              const result = await runCase(id, profile, phase, options, check, invalidated);
+              results.push({ ...result, sampling });
             } finally {
               restore();
             }
