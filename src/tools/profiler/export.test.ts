@@ -16,6 +16,7 @@ const result = (id: string, gpu: number | null, cpu: number): CaseResult => ({
   label: id,
   unit: { kind: "group", size: 4 },
   sampling: "steady",
+  host: "board",
   creation: { build: 1, firstFrame: 2 },
   baseline: set(gpu === null ? null : 0.1, 0.1),
   one: set(gpu, cpu),

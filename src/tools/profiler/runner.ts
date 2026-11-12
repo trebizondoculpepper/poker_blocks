@@ -10,8 +10,11 @@
  * so the runner itself is tested with fakes.
  */
 import * as THREE from "three";
+import "./hosts";
 import {
+  defaultProfilingHost,
   oneBlock,
+  profilingHosts,
   type ProfiledObject,
   type ProfilingCase,
   type ProfilingPhase,
@@ -63,6 +66,11 @@ export type ProfilerEnvironment = {
   now(): number;
   /** Resolves on the next animation frame. */
   nextFrame(): Promise<void>;
+  /**
+   * Reflections made by this environment's own renderer, for reflective looks (#712); none when
+   * it can't make them (a test).
+   */
+  reflections?(): THREE.Texture;
   /** Whether the page is hidden now (its timing is not trustworthy). */
   hidden(): boolean;
   /**
@@ -106,6 +114,8 @@ export type CaseResult = {
   unit: ProfilingUnit;
   variant?: string;
   sampling: ProfilingPhase["sampling"];
+  /** The registered host it was drawn in (#712). */
+  host: string;
   /** Milliseconds to build one object and to render its first (compiling) frame. */
   creation: { build: number; firstFrame: number };
   baseline: SampleSet;
@@ -148,10 +158,7 @@ class Cancelled extends Error {}
 
 export function createProfilerRunner(env: ProfilerEnvironment) {
   const scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-  sun.position.set(3, 5, 4);
-  scene.add(sun);
+  // No lights of its own: each case's registered host lights the scene (#712).
   const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 200);
 
   /** The running run's cancel signal, so frame waits can be abandoned when it fires. */
@@ -322,6 +329,34 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
   ): Promise<CaseResult> {
     const label = phase ? `${id}:${phase}` : id;
     const count = options.count ?? profile.defaultCount ?? 25;
+    // The case's host sets the scene up before anything is built, and is undone after (#712).
+    const host = profile.host ?? defaultProfilingHost;
+    const undoHost = prepareHost(host);
+    try {
+      return {
+        ...(await measureCase(id, profile, phase, options, check, invalidated, label, count)),
+        host,
+      };
+    } finally {
+      undoHost();
+    }
+  }
+
+  /** Prepare a registered host on the run's scene; returns how to undo it. */
+  function prepareHost(host: string): () => void {
+    return profilingHosts.get(host).prepare({ scene, reflections: env.reflections?.() ?? null });
+  }
+
+  async function measureCase(
+    id: string,
+    profile: ProfilingCase,
+    phase: string | undefined,
+    options: RunOptions,
+    check: () => void,
+    invalidated: string[],
+    label: string,
+    count: number,
+  ): Promise<Omit<CaseResult, "host">> {
     // One framing for every set of the case, chosen for its collection: baseline, one object and
     // collection are all seen from the same place, so each object covers the same screen area
     // in every set (#625 review).
@@ -396,6 +431,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
   return {
     scene,
     camera,
+    prepareHost,
     /** Measure these cases one at a time, in order. */
     async run(
       cases: readonly (readonly [string, ProfilingCase])[],

@@ -11,11 +11,16 @@
  */
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { setReflectionEnvironment } from "../../visual/block-appearance";
 import { playSfx } from "../../audio/sfx";
 import { gameModeFor, modeLink } from "../../game-modes";
 import "./all-cases";
-import { catalogCoverage, describeCoverage, profilingCases, type ProfiledObject } from "./cases";
+import {
+  catalogCoverage,
+  defaultProfilingHost,
+  describeCoverage,
+  profilingCases,
+  type ProfiledObject,
+} from "./cases";
 import { costMeasures, profilerExport, sortedByCost, type ProfilerEnvironmentInfo } from "./export";
 import { createGpuTimer } from "./gpu-timer";
 import { createProfilerRunner, type CaseResult, type RunOptions } from "./runner";
@@ -107,6 +112,9 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     timer,
     now: () => performance.now(),
     nextFrame: () => new Promise((resolve) => requestAnimationFrame(() => resolve())),
+    // Its own reflections: the game's environment belongs to another WebGL context, so metals and
+    // crystal would otherwise be measured reflecting nothing (#653 review). Hosts apply it (#712).
+    reflections: () => reflections.texture,
     hidden: () => document.hidden,
     visibilityChanges: () => visibilityChanges,
   });
@@ -119,6 +127,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
   let previewToken = 0;
   /** The preview on the stage now, if any: a run takes it off before measuring. */
   let activePreview: ProfiledObject | null = null;
+  /** How to undo each preview's host, once, when that preview ends. */
+  const previewHosts = new Map<ProfiledObject, () => void>();
   let lastExport: string | null = null;
   let results: CaseResult[] = [];
 
@@ -199,10 +209,21 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     if (controller) return;
     playSfx("ui.click");
     const mine = ++previewToken;
-    const one = await profilingCases.get(id).create({ seed: 1, phase });
+    // The case's own host, as a run would draw it (#712), undone when the preview ends.
+    const undoHost = runner.prepareHost(profilingCases.get(id).host ?? defaultProfilingHost);
+    let one: ProfiledObject;
+    try {
+      one = await profilingCases.get(id).create({ seed: 1, phase });
+    } catch (error) {
+      undoHost();
+      throw error;
+    }
+    previewHosts.set(one, undoHost);
     // A run started (or another preview) while this one was being built: free it unseen, and
     // leave the run's scene and camera alone (#640 review).
     if (mine !== previewToken || controller) {
+      previewHosts.get(one)?.();
+      previewHosts.delete(one);
       one.dispose();
       return;
     }
@@ -228,6 +249,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
   function endPreview(one: ProfiledObject): void {
     if (activePreview !== one) return;
     activePreview = null;
+    previewHosts.get(one)?.();
+    previewHosts.delete(one);
     one.object.removeFromParent();
     one.dispose();
   }
@@ -316,8 +339,6 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
         window.location.href,
       ).href;
       root.hidden = false;
-      // Blocks built here reflect the room's own environment, as in the object browser.
-      setReflectionEnvironment(reflections.texture);
       applySize();
       listCases();
     },
