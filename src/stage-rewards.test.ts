@@ -447,6 +447,8 @@ describe("grant receipts (#740 review)", () => {
       },
     ]);
     expect(game.state.coins).toBe(coins + 7);
+    // The receipt's balance matches the wallet (#740 review).
+    expect(game.stageReward!.balance).toBe(game.state.coins);
   });
 
   it("refuses a saved grant receipt that records nothing granted", async () => {

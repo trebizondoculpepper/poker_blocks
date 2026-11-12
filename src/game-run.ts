@@ -509,7 +509,6 @@ export class GameRun {
     if (this.rewarded?.stage === stage) return this.rewarded.reward;
     this.settlementFailed = false;
     const settled = this.transact("reward", undefined, (context) => {
-      const balanceBefore = this.currentState.coins;
       const finalized = entries.map((entry) => ({
         ...entry,
         effects: entry.effects.map((effect) => {
@@ -529,9 +528,12 @@ export class GameRun {
             : effect;
         }),
       }));
+      // The wallet as the grants (and anything they set off) left it: the receipt's balances
+      // then match the wallet, and still differ by exactly the ledger's coin effects (#740 review).
+      const balanceBefore = this.currentState.coins;
       const paid = ledgerTotal(finalized);
       const balance = balanceBefore + paid;
-      this.currentState = { ...this.currentState, coins: this.currentState.coins + paid };
+      this.currentState = { ...this.currentState, coins: balance };
       this.rewarded = { stage, reward: { entries: finalized, balanceBefore, balance } };
       this.lifecycle("reward.finalized", {
         reward: { coins: paid, balanceBefore, balance },
