@@ -417,3 +417,35 @@ describe("a caller's automatic-looking ID is remembered (#661 review)", () => {
     expect(restored.has("auto:1")).toBe(true);
   });
 });
+
+describe("nested reaction matchers count too (#661 review)", () => {
+  it("charges the matchers a matcher consults, as well as the matcher itself", async () => {
+    const { reactionMatchers, resolveReactions } = await import("../reactions");
+    const { withOperationCounter } = await import("./operations");
+    if (!reactionMatchers.has("test.nested-never"))
+      reactionMatchers.register("test.nested-never", () => false);
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
+    game.play({ cardId: game.state.hand[0]!.id });
+    const charged: string[] = [];
+    withOperationCounter(
+      (registration) => void charged.push(registration),
+      () =>
+        resolveReactions(game.state, () => [
+          {
+            when: {
+              id: "neighbour-material",
+              config: {
+                material: "fire",
+                unlessNeighbour: [{ id: "test.nested-never", config: {} }],
+              },
+            },
+            results: [],
+          },
+        ]),
+    );
+    expect(charged).toEqual([
+      "reaction matcher neighbour-material",
+      "reaction matcher test.nested-never",
+    ]);
+  });
+});
