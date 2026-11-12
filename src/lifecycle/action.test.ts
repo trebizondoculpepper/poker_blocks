@@ -159,7 +159,7 @@ describe("an action is a transaction (#657)", () => {
 describe("the action budget reaches commands and outcomes (#661 review)", () => {
   const limitedRun = (limits: { events: number; operations: number }, plays = 1_000_000) => {
     const rules = { ...sandboxRunRules(demoRunRules), resolutionLimits: limits };
-    const base = rules.stage;
+    const base = rules.stage.bind(rules);
     const config = {
       ...rules,
       stage: (round: number, kind: Parameters<typeof base>[1]) => ({
