@@ -32,6 +32,7 @@ export function reportCsv(record: ProfilerExport): string {
     "cpu_median_ms",
     "draw_calls",
     "triangles",
+    "leaked",
   ];
   const lines = report.rows.flatMap((row) =>
     row.counts.map((count, index) =>
@@ -50,6 +51,7 @@ export function reportCsv(record: ProfilerExport): string {
         row.cpu[index] ?? null,
         row.calls[index] ?? null,
         row.triangles[index] ?? null,
+        row.leaked ? "yes" : "",
       ]
         .map(csvCell)
         .join(","),
@@ -81,7 +83,7 @@ export function reportHtml(record: ProfilerExport, provenance: RunProvenance): s
   const rows = report.rows
     .map(
       (row) =>
-        `<tr><td>${escape(row.phase ? `${row.label} (${row.phase})` : row.label)}</td><td>${escape(row.family)}</td><td>${escape(row.host)}</td><td>${escape(`${row.unit.kind} ×${row.unit.size}`)}</td><td>${row.counts.join(" / ")}</td><td>${row.gpu.map(ms).join(" / ")}</td><td>${row.cpu.map(ms).join(" / ")}</td><td>${row.calls.join(" / ")}</td><td>${row.triangles.join(" / ")}</td><td>${row.invalid.some(Boolean) ? "invalid set" : ""}</td></tr>`,
+        `<tr><td>${escape(row.phase ? `${row.label} (${row.phase})` : row.label)}</td><td>${escape(row.family)}</td><td>${escape(row.host)}</td><td>${escape(`${row.unit.kind} ×${row.unit.size}`)}</td><td>${row.counts.join(" / ")}</td><td>${row.gpu.map(ms).join(" / ")}</td><td>${row.cpu.map(ms).join(" / ")}</td><td>${row.calls.join(" / ")}</td><td>${row.triangles.join(" / ")}</td><td>${caseNotes(row)}</td></tr>`,
     )
     .join("");
   return `<!doctype html>
@@ -104,6 +106,14 @@ ${rankings}
 <table><thead><tr><th>Case</th><th>Family</th><th>Host</th><th>Unit</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Calls</th><th>Triangles</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table>
 </body></html>
 `;
+}
+
+/** A case's flags for a person: invalid sets, and resources left after disposal (#750 review). */
+function caseNotes(row: ProfilerReport["rows"][number]): string {
+  return [
+    ...(row.invalid.some(Boolean) ? ["invalid set"] : []),
+    ...(row.leaked ? ["resources left after disposal"] : []),
+  ].join("; ");
 }
 
 /** The run's exit status: success only for complete supported coverage without errors. */

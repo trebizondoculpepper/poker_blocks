@@ -70,10 +70,10 @@ describe("the one-command run's artifacts (#734)", () => {
     const csv = reportCsv(record([result("a", 'Steel, "brushed"')]));
     const lines = csv.trim().split("\n");
     expect(lines[0]).toBe(
-      "case,label,phase,family,host,unit,unit_size,count,invalid,gpu_median_ms,gpu_p95_ms,cpu_median_ms,draw_calls,triangles",
+      "case,label,phase,family,host,unit,unit_size,count,invalid,gpu_median_ms,gpu_p95_ms,cpu_median_ms,draw_calls,triangles,leaked",
     );
     expect(lines).toHaveLength(4);
-    expect(lines[3]).toBe('a,"Steel, ""brushed""",,material,board,block,1,50,,0.5,0.5,5,50,600');
+    expect(lines[3]).toBe('a,"Steel, ""brushed""",,material,board,block,1,50,,0.5,0.5,5,50,600,');
   });
 
   it("builds a self-contained HTML page with the banner, provenance and every case, escaped", () => {
@@ -93,5 +93,19 @@ describe("the one-command run's artifacts (#734)", () => {
     expect(exitCodeFor(record([], { failures: [{ id: "a", kind: "error", reason: "x" }] }))).toBe(
       2,
     );
+  });
+});
+
+describe("resource residuals in the artifacts (#750 review)", () => {
+  it("flags a case that left resources behind, in the HTML notes and the CSV", () => {
+    const leaky = { ...result("leaky"), leaked: { geometries: 2, textures: 0 } };
+    const html = reportHtml(record([leaky]), provenance);
+    expect(html).toContain("resources left after disposal");
+    expect(
+      reportCsv(record([leaky]))
+        .trim()
+        .split("\n")[1]!
+        .endsWith(",yes"),
+    ).toBe(true);
   });
 });
