@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { approximateOuter, createFacetShell } from "./approximate-crystal";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
@@ -1263,6 +1264,34 @@ function refractiveCrystal(context: AssemblyContext): BlockAppearance {
   );
 }
 
+/**
+ * Approximate crystal (#523): the same artwork, hand look and print, but on the table a tinted
+ * see-through layer and a parallax facet shell instead of transmission and the crystal fire.
+ */
+function approximateCrystal(context: AssemblyContext): BlockAppearance {
+  const { art, definition, geometry } = context;
+  const optics = definition.appearance.optics;
+  if (!optics) throw new Error("Approximate crystal needs optics");
+  const texture = faceTexture(art, definition, false, 0, false);
+  const height = heightFor(texture, art, definition.appearance);
+  const print = printSkin(art, definition.appearance, geometry);
+  const inHand = surface(texture, definition.appearance, height);
+  const onTable = approximateOuter(
+    texture,
+    optics.tint,
+    reflectionEnvironment,
+    optics.tableEnvironment,
+    optics.iridescence,
+  );
+  return appearanceBase(
+    context,
+    [texture, ...[height].filter((value) => value !== undefined), print.texture],
+    Array.from({ length: 6 }, () => inHand),
+    [createFacetShell(geometry, optics.tint), print.skin],
+    Array.from({ length: 6 }, () => onTable),
+  );
+}
+
 function frostedBlock(context: AssemblyContext): BlockAppearance {
   const { art, definition, geometry, size } = context;
   const texture = faceTexture(art, definition, false, 0, false);
@@ -1332,6 +1361,8 @@ const assemblyRegistry = new Map<string, AssemblyHandler>([
   ["sixFaces", sixFaces],
   ["brushedFaces", brushedFaces],
   ["refractiveCrystal", refractiveCrystal],
+  // The cheaper crystal look for comparison (#523); no material uses it in the game yet.
+  ["approximateCrystal", approximateCrystal],
   ["frostedBlock", frostedBlock],
   ["contained", contained],
   // A wrapped gift box (#496).
