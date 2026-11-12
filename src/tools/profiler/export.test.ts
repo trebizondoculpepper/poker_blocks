@@ -104,6 +104,8 @@ describe("profiler export (#619)", () => {
     expect(round.results[0].unit).toEqual({ kind: "group", size: 4 });
     expect(round.coverage.catalogs[1]).toMatchObject({ catalog: "rack item", installed: false });
     expect(round.method.version).toBe(2);
+    // No isolation stated: the default is the honest one, that frames may have been shared.
+    expect(round.isolation).toBe("shared");
     expect(round.failures).toEqual([{ id: "b", kind: "timeout", reason: "exceeded 120000 ms" }]);
     expect(round.exportedAt).toBe("2026-11-12T00:00:00.000Z");
   });
@@ -128,5 +130,40 @@ describe("export schema versions (#721)", () => {
       "gpu",
     );
     expect(ranked.map(({ id }) => id)).toEqual(["big", "small", "none"]);
+  });
+});
+
+describe("isolation in the exported record (#735 review)", () => {
+  it("keeps whether the application's rendering was paused", async () => {
+    const { profilerExport } = await import("./export");
+    const run = {
+      results: [],
+      failures: [],
+      aborted: null,
+      notRun: [],
+      cancelled: false,
+      gpuTiming: "unavailable" as const,
+      invalidated: [],
+    };
+    const coverage = {
+      catalogs: [],
+      totals: { expected: 0, available: 0, unsupported: 0, uncovered: 0 },
+      complete: false,
+    };
+    const environment = {
+      userAgent: "test",
+      gpu: null,
+      width: 1,
+      height: 1,
+      pixelRatio: 1,
+      quality: "standard",
+    };
+    const options = { frames: 10, warmupFrames: 3, seed: 1 };
+    expect(profilerExport(run, options, environment, coverage, undefined, "paused").isolation).toBe(
+      "paused",
+    );
+    expect(
+      JSON.parse(JSON.stringify(profilerExport(run, options, environment, coverage))).isolation,
+    ).toBe("shared");
   });
 });

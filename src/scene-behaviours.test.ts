@@ -14,6 +14,7 @@ let turnStarted: (() => void) | undefined;
 
 function recordingHost() {
   const calls: string[] = [];
+  const runAll = new Set<() => void>();
   const shown = new Set<HudPanel>();
   let deckClose = () => {};
   const host: SceneHost = {
@@ -115,6 +116,15 @@ function recordingHost() {
       devProfiler: {
         show: ({ backTo }) => void calls.push(`profiler:show:${backTo}`),
         hide: () => void calls.push("profiler:hide"),
+        orchestration: () => ({
+          enter: async ({ autoRun }) => void calls.push(`profiler:enter:${autoRun ?? true}`),
+          rerun: async () => void calls.push("profiler:rerun"),
+          exit: async () => void calls.push("profiler:exit"),
+        }),
+        onRunAll: (listener) => {
+          runAll.add(listener);
+          return () => runAll.delete(listener);
+        },
       },
       devCrystalComparison: {
         show: ({ backends }) => void calls.push(`crystal:show:${backends.join(",")}`),
@@ -207,7 +217,7 @@ function recordingHost() {
       sound: (id) => void calls.push(`sound:${id}`),
     },
   };
-  return { host, calls, shown, closeDeck: () => deckClose() };
+  return { host, calls, runAll, shown, closeDeck: () => deckClose() };
 }
 
 const scene = (id: string, traits: Partial<SceneTraits>) => ({ id, traits });
@@ -323,6 +333,61 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toContain("balance:show");
     scenes.switchTo("table");
     expect(calls).toContain("balance:hide");
+  });
+
+  it("drives the profiler's run scope: enter, Run all, and exit, then stops listening (#732)", async () => {
+    const { host, calls, runAll } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(
+      scene("profiler", { devProfiler: { backTo: "game", catalogs: ["material"], autoRun: true } }),
+    );
+    scenes.register(scene("table", {}));
+    scenes.switchTo("profiler");
+    expect(calls).toContain("profiler:show:game");
+    await Promise.resolve();
+    expect(calls).toContain("profiler:enter:true");
+    for (const listener of runAll) listener();
+    expect(calls).toContain("profiler:rerun");
+    scenes.switchTo("table");
+    await Promise.resolve();
+    expect(calls).toEqual(expect.arrayContaining(["profiler:exit", "profiler:hide"]));
+    expect(runAll.size).toBe(0);
+  });
+
+  it("waits for the previous profiler exit to settle before a new entry starts (#735 review)", async () => {
+    const { host, calls } = recordingHost();
+    let finishExit = () => {};
+    host.services.devProfiler.orchestration = () => ({
+      enter: async () => void calls.push("profiler:enter"),
+      rerun: async () => {},
+      exit: () =>
+        new Promise<void>((resolve) => {
+          calls.push("profiler:exit:started");
+          finishExit = () => {
+            calls.push("profiler:exit:settled");
+            resolve();
+          };
+        }),
+    });
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("profiler", { devProfiler: { backTo: "game", catalogs: [] } }));
+    scenes.register(scene("table", {}));
+    scenes.switchTo("profiler");
+    await Promise.resolve();
+    // Left and entered again at once, as a refresh does.
+    scenes.switchTo("table");
+    scenes.switchTo("profiler");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls.filter((call) => call === "profiler:enter")).toHaveLength(1);
+    finishExit();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const order = calls.filter((call) => call.startsWith("profiler:e"));
+    expect(order).toEqual([
+      "profiler:enter",
+      "profiler:exit:started",
+      "profiler:exit:settled",
+      "profiler:enter",
+    ]);
   });
 
   it("mounts the menu block room with its configured items only while its scene is active (#303)", () => {

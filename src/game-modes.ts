@@ -101,6 +101,16 @@ export type SceneTraits = {
   /** Developer tool: the visual performance profiler (dev16, #527). */
   devProfiler: {
     backTo: string;
+    /** Start the sweep on entry (#732); a manual preset turns it off. Default true. */
+    autoRun?: boolean;
+    /** Registered result sinks that receive each sweep's record, by name. */
+    sinks?: readonly string[];
+    /** The sweep's counts, frames, warm-up, seed and per-case timeout; the standard by default. */
+    counts?: readonly number[];
+    frames?: number;
+    warmupFrames?: number;
+    seed?: number;
+    timeoutMs?: number;
     /**
      * The catalogs a complete run must cover (#710): each names its provider, a registered
      * profiling coverage family. A missing provider is reported, never treated as covered.
@@ -1106,6 +1116,9 @@ const gameModes: GameMode[] = [
                 devProfiler: {
                   backTo: "game",
                   catalogs: ["material", "rack item", "letter block", "menu cube", "exit effect"],
+                  // The standard sweep runs on entry, its result shown in the room.
+                  autoRun: true,
+                  sinks: ["screen"],
                 },
               },
             },
