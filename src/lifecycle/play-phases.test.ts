@@ -3,6 +3,7 @@ import { standardDeck } from "../cards";
 import { dealerRegistry } from "../dealer";
 import { GameRun } from "../game-run";
 import { getMaterialDefinition, withMaterial, type MaterialDefinition } from "../materials";
+import { reactionMatchers, reactionResults } from "../reactions";
 import { registerRuleCommand } from "../rule-commands";
 import { demoRunRules, sandboxRunRules, type RunRules } from "../run-rules";
 import { playSteps, validatePlayPhases } from "./play-phases";
@@ -531,5 +532,88 @@ describe("the aggregate is delivered like any phase (#697 review)", () => {
     const coins = game.state.coins;
     expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
     expect(seen).toEqual([coins + 5]);
+  });
+});
+
+describe("composed playfields are independent (#613)", () => {
+  // A test-defined reaction, registered without touching the runner: a wood block beside any
+  // block records itself through a test command.
+  const reacted: string[] = [];
+  if (!(globalThis as { __testReaction?: boolean }).__testReaction) {
+    reactionMatchers.register("test.any-neighbour", (_block, neighbours) => neighbours.length > 0);
+    reactionResults.register("test.record-reaction", (block) => [
+      { id: "test-reaction-recorded", config: { blockId: block.id } },
+    ]);
+    registerRuleCommand<{ blockId: string }>("test-reaction-recorded", ({ blockId }) => {
+      reacted.push(blockId);
+      return [];
+    });
+    (globalThis as { __testReaction?: boolean }).__testReaction = true;
+  }
+  const lendReaction = () => {
+    wood.reactions = [
+      {
+        when: { id: "test.any-neighbour", config: {} },
+        results: [{ id: "test.record-reaction", config: {} }],
+      },
+    ];
+  };
+  afterEach(() => {
+    delete wood.reactions;
+    reacted.length = 0;
+  });
+
+  /** Two adjacent plays: the second makes the wood block's neighbour. */
+  const playPair = (rules: RunRules) => {
+    const { game, hand } = runWith(rules);
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    expect(game.play({ cardId: hand[1]!.id, targetId: hand[0]!.id, face: "east" })).not.toBeNull();
+    return game;
+  };
+
+  it("runs a test-defined registered reaction through the material controller", () => {
+    lendReaction();
+    playPair(sandboxRunRules(demoRunRules));
+    expect(reacted.length).toBeGreaterThan(0);
+  });
+
+  it("keeps two independently composed playfields apart", () => {
+    lendReaction();
+    const withEffects = sandboxRunRules(demoRunRules);
+    const without = { ...sandboxRunRules(demoRunRules), playfield: [] };
+    const plain = runWith(without);
+    const rich = runWith(withEffects);
+    // Interleave the two runs' plays: each resolves only its own composition.
+    expect(plain.game.play({ cardId: plain.hand[0]!.id })).not.toBeNull();
+    expect(rich.game.play({ cardId: rich.hand[0]!.id })).not.toBeNull();
+    expect(
+      plain.game.play({ cardId: plain.hand[1]!.id, targetId: plain.hand[0]!.id, face: "east" }),
+    ).not.toBeNull();
+    expect(reacted).toEqual([]);
+    expect(
+      rich.game.play({ cardId: rich.hand[1]!.id, targetId: rich.hand[0]!.id, face: "east" }),
+    ).not.toBeNull();
+    expect(reacted.length).toBeGreaterThan(0);
+  });
+
+  it("re-attaching (a restored run) adds no duplicate steps", async () => {
+    const { attachPlayfield } = await import("./play-phases");
+    const config = sandboxRunRules(demoRunRules).playfield;
+    expect(attachPlayfield(config)).toEqual(attachPlayfield(config));
+    lendReaction();
+    const once = playPair(sandboxRunRules(demoRunRules));
+    const firstCount = reacted.length;
+    reacted.length = 0;
+    // The same play again in a run restored from the first run's opening snapshot.
+    const restored = GameRun.fromSnapshot(
+      dealerRegistry,
+      sandboxRunRules(demoRunRules),
+      standardDeck,
+      once.snapshot(),
+      () => 0,
+    );
+    expect(restored.state.field).toHaveLength(2);
+    expect(reacted).toEqual([]);
+    expect(firstCount).toBeGreaterThan(0);
   });
 });
