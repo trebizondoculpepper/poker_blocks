@@ -21,7 +21,7 @@ type MusicOutput = {
 type SfxOutput = {
   setVolume(volume: number): void;
   setMuted(muted: boolean): void;
-  play(id: "view.zoom" | "view.rotate"): void;
+  play(id: "view.zoom"): void;
 };
 
 export type AudioService = {
@@ -47,8 +47,6 @@ export type AudioService = {
   setMusicFilter(kind: MusicFilter | null): void;
   /** The board view zoomed; the zoom sound plays at most every 350 ms. */
   zoomed(): void;
-  /** A drag began turning the board view (#641); the turn sound plays at most every 350 ms. */
-  turned(): void;
   /** Listen for the first gesture, which browsers require before audio can play. */
   start(): void;
   dispose(): void;
@@ -86,7 +84,6 @@ export function createAudioService(options: {
   });
   let modeMusic: ModeMusicBehaviour = modeMusicBehaviours.ordinary;
   let lastZoomSoundAt = -Infinity;
-  let lastTurnSoundAt = -Infinity;
 
   /** What each music cue does; a scene names one through its `musicCue` trait. */
   const musicCues: Record<MusicCue, () => void> = {
@@ -128,11 +125,6 @@ export function createAudioService(options: {
       const at = now();
       if (at - lastZoomSoundAt > zoomSoundGapMs) sfx.play("view.zoom");
       lastZoomSoundAt = at;
-    },
-    turned() {
-      const at = now();
-      if (at - lastTurnSoundAt > zoomSoundGapMs) sfx.play("view.rotate");
-      lastTurnSoundAt = at;
     },
     start() {
       if (started) return;

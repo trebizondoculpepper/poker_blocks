@@ -94,16 +94,6 @@ describe("audio service", () => {
     expect(calls).toEqual(["sfx view.zoom", "sfx view.zoom"]);
   });
 
-  it("plays the turn sound as a board drag begins, at most every 350 ms (#641)", () => {
-    const { audio, calls, tick } = setup();
-    audio.turned();
-    tick(100);
-    audio.turned();
-    tick(400);
-    audio.turned();
-    expect(calls).toEqual(["sfx view.rotate", "sfx view.rotate"]);
-  });
-
   it("unlocks the music on the first gesture, until disposed", () => {
     const { audio, calls, gestures } = setup();
     audio.start();

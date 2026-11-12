@@ -277,9 +277,9 @@
     }
   },
   "view.rotate": {
-    "uses": 3,
+    "uses": 2,
     "files": {
-      "audio-service.ts": 2,
+      "game-modes.ts": 1,
       "tools/crystal-comparison/room.ts": 1
     }
   },

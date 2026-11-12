@@ -88,6 +88,12 @@ type RackDragTarget = {
   preview(order: readonly string[] | null): void;
 };
 
+/** What a board-gesture binding reports back to the trait that made it (#641). */
+export type BoardGestureHandlers = {
+  /** A drag claimed the structure and began turning it. */
+  turnStarted?(): void;
+};
+
 export type TableInput = {
   /**
    * Allow a drop target while a scene shows (the `dropTarget` trait, #273); returns a function
@@ -111,7 +117,7 @@ export type TableInput = {
    * structure turns it, a pinch zooms and a two-finger twist turns it, the wheel zooms. Returns
    * a function that unbinds them.
    */
-  enableBoardGestures(): () => void;
+  enableBoardGestures(handlers?: BoardGestureHandlers): () => void;
   /** The selected block ids (hand and field). */
   readonly selection: Selection;
   /** Forget these blocks from the selection (they were played or discarded). */
@@ -199,7 +205,7 @@ export function createTableInput(options: {
   field: FieldView;
   /** Built after the input, so reached when a gesture happens. */
   overlays(): Overlays;
-  audio: Pick<AudioService, "zoomed" | "turned">;
+  audio: Pick<AudioService, "zoomed">;
   rack: RackDragTarget;
   /** The bin's presentation (Discard or Sell, shown or hidden; #278). */
   bin: BinView;
@@ -704,7 +710,10 @@ export function createTableInput(options: {
     canvas.style.cursor = "default";
   }
 
-  function bindBoardGestures(): () => void {
+  /** What the trait that bound the board gestures asked to hear about. */
+  let boardHandlers: BoardGestureHandlers = {};
+  function bindBoardGestures(handlers: BoardGestureHandlers = {}): () => void {
+    boardHandlers = handlers;
     /** Radians per pixel of twist, matched to `rotateBy`'s 0.005 per pixel of drag. */
     const twistPixelsPerDegree = Math.PI / 180 / 0.005;
     const gesture = new Gesture(
@@ -733,8 +742,8 @@ export function createTableInput(options: {
             }
             trace("board drag", "turning the structure");
             boardDragging = true;
-            // Turning the board is a player action, so it has a sound (#641).
-            options.audio.turned();
+            // Reported to whoever bound the gestures, which decides what it means (#641).
+            boardHandlers.turnStarted?.();
             cameraView.changeMotionRate(0);
             options.overlays().hideTooltip();
           }
