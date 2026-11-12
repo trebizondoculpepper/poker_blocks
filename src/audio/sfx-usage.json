@@ -267,9 +267,10 @@
     }
   },
   "view.zoom": {
-    "uses": 2,
+    "uses": 4,
     "files": {
-      "audio-service.ts": 2
+      "audio-service.ts": 2,
+      "tools/crystal-comparison/room.ts": 2
     }
   },
   "reward.coin": {

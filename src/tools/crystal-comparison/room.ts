@@ -60,6 +60,11 @@ export function distribution(values: readonly number[]) {
   return { median: rank(0.5), p95: rank(0.95), samples: sorted.length };
 }
 
+/** Camera distance for a pinch: the start distance scaled by start spacing over spacing now. */
+export function pinchDistance(startDistance: number, startSpacing: number, spacing: number) {
+  return (startDistance * startSpacing) / Math.max(1, spacing);
+}
+
 const warmupFrames = 60;
 const sampleFrames = 120;
 
@@ -115,14 +120,29 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
         group.rotation.y += dx * 0.01;
         group.rotation.x += dy * 0.01;
       },
-      onWheel: ({ delta: [, dy] }) => zoom(1 + dy * 0.001),
-      onPinch: ({ delta: [scale] }) => zoom(1 - scale),
+      onWheel: ({ first, delta: [, dy] }) => {
+        // The game's zoom sound, once as the gesture begins (#637 review).
+        if (first) playSfx("view.zoom");
+        zoom(1 + dy * 0.001);
+      },
+      // Pinch zoom follows the ratio of finger spacing to where it started, as the table does
+      // (src/table-input.ts): equal gestures give equal zoom, however often events arrive.
+      onPinch: ({ first, da: [spacing], memo }) => {
+        const start = (memo ?? { distance, spacing }) as { distance: number; spacing: number };
+        if (first) playSfx("view.zoom");
+        distance = clampDistance(pinchDistance(start.distance, start.spacing, spacing));
+        return start;
+      },
     },
     { drag: { pointer: { capture: true } } },
   );
 
+  function clampDistance(value: number): number {
+    return Math.min(80, Math.max(2, value));
+  }
+
   function zoom(factor: number): void {
-    distance = Math.min(80, Math.max(2, distance * factor));
+    distance = clampDistance(distance * factor);
   }
 
   function material(): BlockMaterial {
