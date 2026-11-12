@@ -75,6 +75,8 @@ What an operation does to the selected cards is still to be decided.
 
 ## Inspectable trait
 
+**Target extension (#751):** [Acquired bonus artwork and inspection](presentation-contracts.md#acquired-bonus-artwork-and-inspection-432-751) defines full live bonus descriptions, separate from the compact face label.
+
 An inspectable trait instance implements `inspect(): string`. The hover UI calls that method and displays its result beside the pointer for a block in the hand or in play. Standard cards configure the trait with their rank and suit name. Future block types can provide their own description through the same trait, with no tooltip behavior on the block itself.
 
 ## Attachable trait and dealer
@@ -460,6 +462,8 @@ This is a presentation default **after authoritative destruction**. It does not 
 Acceptance for that follow-up includes a new test-only contained definition receiving the default without a dispatcher edit, explicit alternative precedence, water/hot/boiling coverage, independent target ownership, and no destruction on table return/reset/unmount. A surviving block must never run an exit sequence just because a default recipe exists.
 
 ### Acquired modifier registers (#431)
+
+**Display contract (#432, #751):** [Acquired bonus artwork and inspection](presentation-contracts.md#acquired-bonus-artwork-and-inspection-432-751) specifies model-derived priority, face placement, formatting, live refresh and the full inspection breakdown.
 
 `src/modifier-registers.ts`. A card's acquired modifiers live in its `modifiers` trait, one `ScoringModifier` per lifetime register, apart from its material's values. Lifetimes are registered (`modifierLifetimes`): `stage` and `round` each register their clearing with `stageEndResets` and `roundEndResets`, `run` registers none, so neither the run nor the scorer names a lifetime. `addCardModifier(state, cardId, lifetime, modifier)` combines into a register on the card wherever it is, and records it in the card-state ledger (`cardStates[id].modifiers`). Saves validate each entry (a registered lifetime, valid numbers) and the `modifiers` card-state applier restores it. `cardScoringRules` adds the combined acquired modifier's rules after the material's and state bonus's, so the scorer needs no change. They are the card's own rules, so they share its scoring eligibility (`scoringEligibilities`): a cloud's acquired bonus applies in any scored line it is in, as its material's does (scored-subset eligibility is preserved, #431). The power phase composes exponents additively (see "State bonuses"). Nothing in the normal game writes a register yet; bombs (#24, #436) will.
 
@@ -1327,12 +1331,12 @@ A contained block may list **inclusions**: things suspended in its contents, reg
 
 **`growingGrass`** (`src/visual/growing-grass.ts`) is an inclusion reading `liquidSurface` and the shared frame's rotation:
 
-- **Turning:** the block's world rotation moving more than `turnDegrees` (30°) from where the grass started clears every blade at once and resets the stillness timer. Camera motion doesn't change the block's rotation. The tolerance sits above the board's automatic wobble (8–12°), which would otherwise reset it forever, and far below a deliberate quarter turn (90°).
+- **Target correction (#761):** turning resets new-growth stillness but does not clear existing blades. Blades stay at stored local roots/orientations and disappear only when fully buried, not on partial cover or falling soil. [Grass burial](presentation-contracts.md#grass-survives-until-fully-buried) supersedes the current clear-on-turn and live-root-projection implementation. Camera movement never deletes grass.
 - **Surface readiness:** stillness is timed from the end of the last turn. No blade is born until the published surface normal is within `settledDegrees` (20°) of world up seen from the block, so grass never grows on an obsolete top. The first blade therefore appears at whichever comes later: `delay` (5 s) of stillness, or the earth settling. After a quarter turn at `settleSeconds: 5`, settling to 20° takes about 7.5 s.
 - **Growth:** one blade at a time, about `interval` (0.12 s) apart with jitter, at random places on the top inside the walls. Each tip draws up from its base over `growSeconds` (0.8 s), and earlier blades stay. The pool is bounded (90 blades).
 - **Rendering:** one opaque mesh of triangles, in the contents' opaque layer.
 - **Reduced motion:** blades appear at full height instead of growing.
-- **Previewing:** the object browser's turntable keeps turning the block, so grass correctly never grows there. To see it, hold a block still in the game.
+- **Previewing:** automatic turntable motion can prevent new growth. The target [manual preview rotation](presentation-contracts.md#object-browser-manual-rotation-746) pauses the pose on release and continues internal animation, allowing inspection after stillness.
 
 ### Magic Lock: contained stars (#349)
 
@@ -1523,6 +1527,8 @@ The runner's tests use a fake timer and renderer, so they check the logic (rejec
 
 ## Approximate crystal optics and the comparison room (#523, #524)
 
+**Production decision (#749, supersedes earlier “production unchanged” statements below):** the owner selected the Internal look as **Total Internal Reflection Crystal**, including its transmogrifier. [Promotion contract](presentation-contracts.md#prismatic-crystal-promotion-749) covers shared prepasses, renderer ownership, initial settings and verification. Earlier sections below describe historical experiments/current implementation; they do not override this target. Precise slider tuning is optional later optimization, not a blocker.
+
 **Room name (#679).** Dev 17 is the **Transparent materials bench**, reflecting its broader crystal, water and transparent-material experiments. This is the current human-facing title and documentation term. Its entry remains `?mode=dev17`; existing `devCrystalComparison`, `crystal-comparison` module paths and serialized handles remain compatibility/internal names. Current UI/accessible room labels should use the new name; historical screenshots, source-audit references and issue history remain evidence under their original names.
 
 **Water gallery and preset export (#673).** [Refractive water prototypes](refractive-water-prototypes.md) defines the next two Dev 17 experiments: calm cyclic lookup distortion and the same with composable rising bubbles, using the existing fake-refraction baseline. It also defines complete Copy settings JSON via registered backend schemas, independent of slider labels and scoped tuning. Existing production water/crystal choices remain unchanged; capture, volume, reduced-motion and reproducibility boundaries are explicit in that design.
@@ -1570,3 +1576,7 @@ Visual acceptance is the owner's comparison in the room, reported on #524.
 ## GitHub action briefing tool
 
 The developer-only action briefing tool is owned by the standalone [github_triage project](https://github.com/trebizondoculpepper/github_triage). poker_blocks keeps only npm wiring to its installed Git development dependency, `node node_modules/github-triage/src/cli.js`; see [the consumer launch contract and evidence](github-triage-cli.md). The CLI inherits the game checkout's working directory and authenticated gh session. Collector, registered workflow rules, presentation, configuration, lifecycle and tests are composed and maintained in that project, outside the game build. No local implementation or fallback is retained. Freshness/completeness and candidate-only advice do not confer authority to mutate or merge.
+
+## Agreed presentation follow-ups (#761)
+
+[Agreed presentation contracts](presentation-contracts.md) is the target for material transition facts and independent dissolve/audio responses (#479/#539), resolved activation operands (#483), laser target-guide controller (#500), experimental smoke/dust composition (#466), manual preview rotation (#746), reviewed water/flame/grass corrections, lightweight imported assets (#747/#748/#753/#759), crystal promotion (#749), profiler animation fidelity (#752), and configured music operations (#758). It records ownership, configuration, lifecycle, composition, source evidence and initial defaults. These are documentation-first targets, not claims that runtime migration has shipped.
