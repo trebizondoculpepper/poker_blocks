@@ -1339,3 +1339,43 @@ The runner's tests use a fake timer and renderer, so they check the logic (rejec
 1. #618: the registry and runner, tested with test-only cases and a fake timer.
 2. #619: the room and the export.
 3. Cases for materials (#620), rack items (#621), and letter, menu and effect visuals (#622).
+
+## Approximate crystal optics and the comparison room (#523, #524)
+
+**Today's crystal, audited.** Prismatic crystal's table look (`refractiveCrystal` in `src/visual/block-appearance.ts`) is a `MeshPhysicalMaterial` with `transmission: 1`, dispersion, thickness and attenuation. Any transmissive material makes three.js render the opaque scene a **second time** into a transmission target every frame, and dispersion samples it three times per pixel. On top of that sits the crystal fire (`src/visual/crystal-fire.ts`): a back-face copy of the block whose shader does three refractions into a made-up studio, plus a glint. The print skin is a third layer. These are the costs to compare; no speed-up is claimed until the profiler (#527) or the comparison room measures one.
+
+_Source audit (three.js 0.187.0, the version in `package-lock.json`):_
+
+- **The second opaque render.** `WebGLRenderer.render` calls `renderTransmissionPass` whenever the frame has any transmissive object (`src/renderers/WebGLRenderer.js`, around lines 1777 and 1795). That function (around line 2015):
+  - renders every opaque object again into a mipmapped `transmissionRenderTarget`, sized to the viewport times `transmissionResolutionScale`;
+  - regenerates the target's mipmaps;
+  - if a transmissive material is double-sided, draws its back faces into the target and regenerates the mipmaps again.
+    This applies to every camera that renders transmissive objects, once per frame. It does not apply while `scene.overrideMaterial` is set.
+- **The dispersion samples.** With `dispersion` set, `getIBLVolumeRefraction` in `src/renderers/shaders/ShaderChunk/transmission_pars_fragment.glsl.js` (around line 180) loops over three IORs. Each pass calls `getTransmissionSample`, which is `textureBicubic`: four `textureLod` taps at each of two mip levels. So each crystal pixel takes 3 × 8 = 24 texture taps from the transmission target, against 8 without dispersion.
+
+These are what the code does. How much they cost on a given device is what the comparison room and the profiler measure.
+
+**The approximation (#523).** A second registered assembly, `approximateCrystal`, builds a crystal-compatible block with no physical transmission, no scene refraction and no crystal fire. It has two layers.
+
+- **Outer:** a tinted, see-through standard material. Its map is the block's own face artwork, so the rank, suit and letters are unchanged. A clearcoat, the shared static reflection environment (`getReflectionEnvironment()`) and the material's own thin-film iridescence add facet highlights and colour.
+- **Inner:** one back-face shell, shared by every approximate crystal of a size. It is drawn additively with a small shader that samples a procedural facet texture at texture coordinates offset by the tangent-space view direction (parallax). Inner facets seem to lie at depth and shift as the block turns, and a tight glint term adds sparkle. The shader uses a single texture lookup, with no refraction loop and no studio function.
+
+Everything shared (the facet texture, the inner shader program) is created once and never disposed per block; what a block makes itself is disposed with it, through the same `BlockAppearance` contract as every other assembly. The approach follows the layered-gem and environment-mapping references cited on #523. The implementation is original, and no third-party code or assets are imported.
+
+**Selecting a look by configuration.** A material picks its look by its `appearance.assembly` name, as now; the production game is unchanged and keeps `refractiveCrystal`. An `opticsBackends` registry names the interchangeable crystal looks (`current` → `refractiveCrystal`, `approximation` → `approximateCrystal`). Code that wants a different look builds the block from the same definition with only `appearance.assembly` replaced. It never branches on a material's name. A composition the approximation cannot show faithfully (contained blocks, glass panes, and anything behind a block bent or split into colours) is listed in the backend's own `unsupported` note, not silently drawn wrong.
+
+**The comparison room (#524).** `?mode=dev17` is a developer mode composing a `devCrystalComparison` trait (`src/tools/crystal-comparison/`). It shows a fixed collection of crystal blocks:
+
+- the count can be chosen, including a many-block case;
+- each block keeps its card, art seed, position and orientation from a fixed collection seed.
+
+**Current** and **Approximation** buttons rebuild only the blocks' appearances through the chosen backend. They keep every transform, the camera, the lighting and the environment, so nothing is reshuffled. Switching disposes the replaced appearances, and leaving the mode disposes everything and removes its listeners. The structure turns and zooms with the existing board gestures.
+
+A small panel shows the backend's name and the renderer counts (draw calls, triangles, programs). It also shows CPU frame time as a median and a 95th percentile, labelled as frame time, never as GPU time, together with the size and pixel ratio. Sampling starts only after a warm-up, so shader compilation is excluded. The room makes no production choice.
+
+**Delivery.**
+
+- #523: the `approximateCrystal` assembly and the `opticsBackends` registry, with resource and disposal tests.
+- #524: the room. Its control buttons use the existing `ui.click` sound.
+
+Visual acceptance is the owner's comparison in the room, reported on #524.
