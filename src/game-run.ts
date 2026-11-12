@@ -790,8 +790,30 @@ export class GameRun {
     this.recordDelivered(
       context,
       phase,
-      this.passiveEvents.drain(undefined, undefined, this.budgetFor(context, phase)),
+      this.passiveEvents.drain(
+        undefined,
+        (block, event) => this.commitRules(block, event),
+        this.budgetFor(context, phase),
+      ),
       batchId,
+    );
+  }
+
+  /**
+   * A listener's registered event rules, evaluated and their commands committed as it resolves,
+   * so its follow-ups drain before the phase ends (#682 review; as discard does, #170).
+   */
+  private commitRules(
+    block: PassiveBlock,
+    event: GameEvent,
+    activations: RuleActivation[] = [],
+  ): GameEvent[] {
+    // Every rule it evaluates is charged by the action's counter (see transact).
+    const fired = passiveActivations(block, event);
+    activations.push(...fired);
+    return commitCommands(
+      fired.flatMap(({ commands }) => commands),
+      this.commandTarget,
     );
   }
 
@@ -855,15 +877,7 @@ export class GameRun {
       this.discardActivations = [];
       this.discardEvents = this.passiveEvents.drain(
         128,
-        (block, event) => {
-          // Every rule it evaluates is charged by the action's counter (see transact).
-          const fired = passiveActivations(block, event);
-          this.discardActivations.push(...fired);
-          return commitCommands(
-            fired.flatMap(({ commands }) => commands),
-            this.commandTarget,
-          );
-        },
+        (block, event) => this.commitRules(block, event, this.discardActivations),
         this.budgetFor(context, "discard"),
       );
       this.recordDelivered(context, "discard", this.discardEvents, `${context.actionId}:discard`);

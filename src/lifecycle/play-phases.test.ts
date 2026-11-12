@@ -154,3 +154,42 @@ describe("material steps come from the composed playfield (#682 review)", () => 
     expect(outcome!.batchId).toBe(completed.batchId);
   });
 });
+
+describe("event rules run at the play's phase barriers (#682 review)", () => {
+  it("commits a passive's play.beforeScore rule before the play scores", async () => {
+    const { createPassiveBlock } = await import("../passives");
+    const base = createPassiveBlock("scrapper", "phase.1");
+    const listener = {
+      ...base,
+      traits: {
+        ...base.traits,
+        passive: {
+          traitId: "passive.event-rules",
+          eventRules: [
+            {
+              on: "play.beforeScore",
+              select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+              where: { id: "always", config: {} },
+              effects: [{ id: "add-coins", config: { amount: 3 } }],
+            },
+          ],
+        },
+      },
+    };
+    const rules = sandboxRunRules(demoRunRules);
+    const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    opening.installPassive(listener);
+    const game = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      opening.snapshot(),
+      () => 0,
+    );
+    const coins = game.state.coins;
+    const played = game.play({ cardId: game.state.hand[0]!.id });
+    expect(game.actionFailure).toBeNull();
+    expect(played).not.toBeNull();
+    expect(game.state.coins).toBe(coins + 3);
+  });
+});
