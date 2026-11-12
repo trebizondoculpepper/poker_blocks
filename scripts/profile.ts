@@ -25,6 +25,19 @@ const argument = (name: string) => {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const root = join(import.meta.dirname, "..");
 const startedAt = new Date().toISOString();
+/** Whether nothing is listening on this port now, on IPv4 or IPv6 loopback. */
+const portIsFreeOn = (port: number, host: string) =>
+  new Promise<boolean>((resolve) => {
+    const probe = createServer();
+    probe.once("error", (error: NodeJS.ErrnoException) =>
+      // A host this machine doesn't offer (no IPv6) can't be occupied.
+      resolve(error.code === "EADDRNOTAVAIL" || error.code === "EAFNOSUPPORT"),
+    );
+    probe.listen(port, host, () => probe.close(() => resolve(true)));
+  });
+const portIsFree = async (port: number) =>
+  (await portIsFreeOn(port, "127.0.0.1")) && (await portIsFreeOn(port, "::1"));
+
 /** A port nobody is listening on now, so this run never talks to another run's server or browser. */
 const freePort = () =>
   new Promise<number>((resolve, reject) => {
@@ -122,9 +135,13 @@ async function main(): Promise<number> {
   let base = argument("url");
   if (!base) {
     const port = Number(argument("port") ?? (await freePort()));
+    // A port someone else already serves would be profiled under this checkout's revision:
+    // refuse it rather than measure the wrong code (#750 review).
+    if (!(await portIsFree(port)))
+      throw new Error(`Port ${port} is already in use; choose another`);
     // The project's own dev server, launched directly (no npx wrapper, nothing fetched), in a
     // process group of its own so stopping it stops everything it started (#750 review).
-    own(process.execPath, [
+    const server = own(process.execPath, [
       join(root, "node_modules", "vite-plus", "bin", "vp"),
       "dev",
       "--port",
@@ -132,9 +149,14 @@ async function main(): Promise<number> {
       "--strictPort",
     ]);
     base = `http://localhost:${port}/`;
+    // Ready only when our own server answers; if it exits first, that is the error.
     await waitFor(
       "the dev server",
-      async () => ((await fetch(base!)).ok ? true : undefined),
+      async () => {
+        if (server.exitCode !== null || server.signalCode !== null)
+          launchError ??= new Error("The dev server exited before it was ready");
+        return (await fetch(base!)).ok ? true : undefined;
+      },
       60_000,
     );
   }
