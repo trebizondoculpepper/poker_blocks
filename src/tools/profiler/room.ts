@@ -32,6 +32,9 @@ export function runSettings(countText: string, framesText: string) {
 
 export type ProfilerRoom = { show(backTo: string): void; hide(): void; dispose(): void };
 
+/** Frames a preview advances before it is shown. */
+const previewFrames = 30;
+
 /** Render qualities offered: the pixel ratio each one uses. */
 const qualities = { low: 1, standard: 1.5, high: 2 };
 
@@ -199,6 +202,9 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     runner.scene.add(one.object);
     runner.camera.position.set(0, 0, 5);
     runner.camera.lookAt(0, 0, 0);
+    // Advance it half a second first, so ongoing effects (smoke, dust) and animated contents are
+    // there in the preview as they are in the measurement (#653 review); the last frame stays.
+    for (let step = 0; step < previewFrames; step++) one.update?.(1 / 60);
     renderer.render(runner.scene, runner.camera);
     one.object.removeFromParent();
     one.dispose();
