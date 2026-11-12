@@ -168,7 +168,8 @@ const autoPrefix = "auto:";
  * identity, #661 review), or null for any other ID, compared in full as a caller's own.
  */
 function autoSerial(actionId: string): number | null {
-  const match = /^auto:(\d+)$/.exec(actionId);
+  // Only the canonical form `next()` generates: positive, no leading zeros (#661 review).
+  const match = /^auto:([1-9]\d*)$/.exec(actionId);
   return match ? Number(match[1]) : null;
 }
 

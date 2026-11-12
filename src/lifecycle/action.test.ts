@@ -491,3 +491,15 @@ describe("block-trait callbacks count too (#661 review)", () => {
     expect(charged).toContain("block trait resistant");
   });
 });
+
+describe("only canonical automatic IDs are automatic (#661 review)", () => {
+  it("compares auto:0 and auto:01 in full, as a caller's own IDs", () => {
+    const ledger = new ActionLedger();
+    expect(ledger.has("auto:0")).toBe(false);
+    ledger.remember(ledger.next("play"));
+    expect(ledger.has("auto:1")).toBe(true);
+    expect(ledger.has("auto:01")).toBe(false);
+    ledger.remember("auto:01");
+    expect(ledger.has("auto:01")).toBe(true);
+  });
+});
