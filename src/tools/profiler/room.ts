@@ -39,6 +39,7 @@ import {
 } from "./autorun";
 import { createGpuTimer } from "./gpu-timer";
 import { createHostTracker } from "./host-tracker";
+import { profilerReport, type ProfilerReport } from "./report";
 import {
   createProfilerRunner,
   standardCounts,
@@ -148,8 +149,9 @@ export function createProfilerRoom(
     </aside>
     <div class="profiler-room-main">
       <div class="profiler-room-stage" data-part="stage"></div>
+      <section class="profiler-room-report" data-part="report" aria-live="polite"></section>
       <table class="profiler-room-results">
-        <thead><tr><th>Case</th><th>Family</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Frame ms (p95), largest</th><th>Calls, largest</th><th>Triangles, largest</th><th>Create ms</th><th>Leak</th></tr></thead>
+        <thead><tr><th>Case</th><th>Family</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Frame ms (p95), largest</th><th>Calls</th><th>Triangles</th><th>Create ms</th><th>Leak</th></tr></thead>
         <tbody data-part="results"></tbody>
       </table>
     </div>`;
@@ -264,8 +266,9 @@ export function createProfilerRoom(
           cell(result.counts.map(({ set }) => ms(set.gpu?.median)).join(" / ")),
           cell(result.counts.map(({ set }) => ms(set.cpu.median)).join(" / ")),
           cell(`${ms(largestSet(result)?.frame.median)} (${ms(largestSet(result)?.frame.p95)})`),
-          cell(String(largestSet(result)?.counts.calls ?? "n/a")),
-          cell(String(largestSet(result)?.counts.triangles ?? "n/a")),
+          // Geometry at every count, so batching and growth show without the export (#741 review).
+          cell(result.counts.map(({ set }) => String(set.counts.calls)).join(" / ")),
+          cell(result.counts.map(({ set }) => String(set.counts.triangles)).join(" / ")),
           // Creation per count, raw for the whole set (build plus compiling first frame).
           cell(
             result.counts
@@ -415,6 +418,7 @@ export function createProfilerRoom(
       results = outcome.results;
       lastExport = JSON.stringify(record, null, 2);
       part("status").textContent = describeOutcome(outcome);
+      showReport(profilerReport(record));
       part<HTMLButtonElement>("export").disabled = false;
       showResults();
       return record;
@@ -426,6 +430,39 @@ export function createProfilerRoom(
       part<HTMLButtonElement>("run-all").disabled = false;
       part<HTMLButtonElement>("cancel").disabled = true;
     }
+  }
+
+  /** The end-of-run report (#733): banner, rankings at the largest count, and unit summaries. */
+  function showReport(report: ProfilerReport): void {
+    const line = (tag: string, text: string) => {
+      const element = document.createElement(tag);
+      element.textContent = text;
+      return element;
+    };
+    const sections: HTMLElement[] = [
+      line("p", `${report.banner.summary} · ${report.banner.coverage}`),
+      ...report.banner.notes.map((note) => line("p", note)),
+    ];
+    for (const ranking of report.rankings) {
+      sections.push(
+        line("h3", `${ranking.title}${ranking.count ? `, ${ranking.count} instances` : ""}`),
+      );
+      const list = document.createElement("ol");
+      list.append(...ranking.entries.map(({ text }) => line("li", text)));
+      sections.push(list);
+    }
+    sections.push(
+      line(
+        "p",
+        report.byUnit.map(({ kind, rows }) => `${rows.length} ${kind} case(s)`).join(" · "),
+      ),
+    );
+    // How each case's cost grew from the smallest count to the largest (#741 review).
+    sections.push(line("h3", "Growth by case"));
+    const growth = document.createElement("ul");
+    growth.append(...report.rows.map(({ growthText }) => line("li", growthText)));
+    sections.push(growth);
+    part("report").replaceChildren(...sections);
   }
 
   /** The status line for a finished, cancelled or stopped run. */
