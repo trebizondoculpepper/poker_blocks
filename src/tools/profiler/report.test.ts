@@ -175,3 +175,30 @@ describe("a selected run never claims full coverage (#733)", () => {
     expect(report.banner.notes).toContain("Selected run: 1 of 162 available cases measured");
   });
 });
+
+describe("invalidated sets and growth (#741 review)", () => {
+  it("leaves an invalidated set out of the rankings, withholds its growth, and marks the run partial", () => {
+    const report = profilerReport(
+      record([result("hidden", 0.5, 0.5), result("fine", 0.01, 0.01)], {
+        invalidated: ["hidden/50"],
+      }),
+    );
+    expect(report.rankings[0]!.entries.map(({ row }) => row.id)).toEqual(["fine"]);
+    const hidden = report.rows.find(({ id }) => id === "hidden")!;
+    expect(hidden.invalid).toEqual([false, false, true]);
+    expect(hidden.growth).toEqual({ gpu: null, cpu: null });
+    expect(report.banner.status).toBe("partial");
+    expect(report.banner.notes.join(" ")).toMatch(/1 set\(s\) invalidated.*hidden\/50/);
+  });
+
+  it("withholds baseline-relative estimates when the baseline was invalidated", () => {
+    const report = profilerReport(record([result("a", 0.1, 0.1)], { invalidated: ["a/baseline"] }));
+    expect(report.rankings[0]!.entries[0]!.relative).toBeNull();
+    expect(report.rankings[0]!.entries[0]!.text).toMatch(/vs baseline n\/a/);
+  });
+
+  it("states each case's growth from the smallest count to the largest", () => {
+    const [row] = profilerReport(record([result("a", 0.02, 0.1)])).rows;
+    expect(row!.growthText).toBe("a: GPU ×50.0, CPU ×50.0 (1 → 50)");
+  });
+});

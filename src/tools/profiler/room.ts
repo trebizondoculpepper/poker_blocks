@@ -456,6 +456,11 @@ export function createProfilerRoom(
         report.byUnit.map(({ kind, rows }) => `${rows.length} ${kind} case(s)`).join(" · "),
       ),
     );
+    // How each case's cost grew from the smallest count to the largest (#741 review).
+    sections.push(line("h3", "Growth by case"));
+    const growth = document.createElement("ul");
+    growth.append(...report.rows.map(({ growthText }) => line("li", growthText)));
+    sections.push(growth);
     part("report").replaceChildren(...sections);
   }
 

@@ -40,6 +40,12 @@ export type ReportRow = {
   triangles: number[];
   /** Largest count's median over the smallest count's: how the cost grew (null when unknown). */
   growth: { gpu: number | null; cpu: number | null };
+  /** Growth from the smallest count to the largest, as a person reads it. */
+  growthText: string;
+  /** Per count: whether its set was invalidated (the tab stayed hidden through every retry). */
+  invalid: boolean[];
+  /** The empty baseline was invalidated, so baseline-relative estimates are withheld. */
+  baselineInvalid: boolean;
   leaked: boolean;
 };
 
@@ -92,10 +98,30 @@ const smallest = (counts: readonly CountResult[]): CountResult | null =>
 const ratio = (top: number | null | undefined, bottom: number | null | undefined) =>
   top === null || top === undefined || !bottom ? null : top / bottom;
 
-function rowOf(result: CaseResult): ReportRow {
+/** The name the runner gives a case's set when it invalidates it: `<case>[:<phase>]/<set>`. */
+const setName = (result: CaseResult, set: string | number) =>
+  `${result.phase ? `${result.id}:${result.phase}` : result.id}/${set}`;
+
+function rowOf(result: CaseResult, invalidated: ReadonlySet<string>): ReportRow {
   const top = largest(result.counts);
   const bottom = smallest(result.counts);
+  const invalid = result.counts.map(({ count }) => invalidated.has(setName(result, count)));
+  // Growth only between two trustworthy sets.
+  const trusted = (entry: CountResult | null) =>
+    entry !== null && !invalidated.has(setName(result, entry.count));
+  const growth =
+    trusted(top) && trusted(bottom)
+      ? {
+          gpu: ratio(top?.set.gpu?.median, bottom?.set.gpu?.median),
+          cpu: ratio(top?.set.cpu.median, bottom?.set.cpu.median),
+        }
+      : { gpu: null, cpu: null };
+  const times = (value: number | null) => (value === null ? "n/a" : `×${value.toFixed(1)}`);
+  const name = result.phase ? `${result.label} (${result.phase})` : result.label;
   return {
+    invalid,
+    baselineInvalid: invalidated.has(setName(result, "baseline")),
+    growthText: `${name}: GPU ${times(growth.gpu)}, CPU ${times(growth.cpu)} (${bottom?.count ?? "?"} → ${top?.count ?? "?"})`,
     id: result.id,
     label: result.label,
     family: result.family,
@@ -108,10 +134,7 @@ function rowOf(result: CaseResult): ReportRow {
     cpu: result.counts.map(({ set }) => set.cpu.median),
     calls: result.counts.map(({ set }) => set.counts.calls),
     triangles: result.counts.map(({ set }) => set.counts.triangles),
-    growth: {
-      gpu: ratio(top?.set.gpu?.median, bottom?.set.gpu?.median),
-      cpu: ratio(top?.set.cpu.median, bottom?.set.cpu.median),
-    },
+    growth,
     leaked: result.leaked.geometries > 0 || result.leaked.textures > 0,
   };
 }
@@ -137,8 +160,11 @@ function ranked(
   return pairs
     .flatMap(({ row, result }) => {
       const top = largest(result.counts);
-      if (!top) return [];
-      const { value, p95, relative } = pick(top);
+      // An invalidated set is not a valid measurement: it is never ranked.
+      if (!top || row.invalid[result.counts.indexOf(top)]) return [];
+      const picked = pick(top);
+      const { value, p95 } = picked;
+      const relative = row.baselineInvalid ? null : picked.relative;
       return value === null
         ? []
         : [{ row, text: describe(row, value, p95, relative), value, p95, relative }];
@@ -148,7 +174,8 @@ function ranked(
 }
 
 export function profilerReport(record: ProfilerExport, topN = 10): ProfilerReport {
-  const pairs = record.results.map((result) => ({ result, row: rowOf(result) }));
+  const invalidated = new Set(record.invalidated);
+  const pairs = record.results.map((result) => ({ result, row: rowOf(result, invalidated) }));
   const rows = pairs.map(({ row }) => row);
   const top = Math.max(
     0,
@@ -200,7 +227,7 @@ export function profilerReport(record: ProfilerExport, topN = 10): ProfilerRepor
   const selected = measured < record.coverage.totals.available;
   const [status, statusText] = record.failures.length
     ? (["errors", "With errors"] as const)
-    : stopped || selected || !record.coverage.complete
+    : stopped || selected || record.invalidated.length > 0 || !record.coverage.complete
       ? (["partial", "Partial"] as const)
       : (["complete", "Complete"] as const);
   const renderer = rendererKind(record.environment.gpu);
@@ -230,6 +257,11 @@ export function profilerReport(record: ProfilerExport, topN = 10): ProfilerRepor
             `${phase ? `${id}:${phase}` : id} failed (${kind}): ${reason}`,
         ),
         ...(isolated ? [] : ["Not isolated: other rendering may have shared the frames"]),
+        ...(record.invalidated.length
+          ? [
+              `${record.invalidated.length} set(s) invalidated (tab hidden through every retry), left out of the rankings: ${record.invalidated.join(", ")}`,
+            ]
+          : []),
       ],
     },
     rows,
