@@ -280,10 +280,12 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     const buildStart = env.now();
     let objects = await build(profile, 1, options, phase, check);
     const buildTime = env.now() - buildStart;
-    const firstStart = env.now();
-    frame(objects, 0);
-    const firstFrame = env.now() - firstStart;
     try {
+      // The compiling first frame is inside the cleanup, so a case that throws here is still
+      // removed and freed (#625 review).
+      const firstStart = env.now();
+      frame(objects, 0);
+      const firstFrame = env.now() - firstStart;
       await warm(objects, options, check);
       const one = await measured(`${label}/one`, objects, options, check, invalidated);
       remove(objects);

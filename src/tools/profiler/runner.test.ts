@@ -424,3 +424,28 @@ describe("cancelling while a collection is built (#625 review)", () => {
     expect(memory.geometries).toBe(0);
   });
 });
+
+describe("a case that fails on its first frame (#625 review)", () => {
+  it("is still removed from the scene and freed", async () => {
+    const { env, memory } = fakeEnvironment();
+    const base = testCase(memory);
+    const failing: ProfilingCase = {
+      ...base,
+      create(context) {
+        const made = base.create(context) as ReturnType<ProfilingCase["create"]> & {
+          update?: (dt: number) => void;
+        };
+        return {
+          ...(made as { object: THREE.Object3D; dispose(): void }),
+          update() {
+            throw new Error("broken case");
+          },
+        };
+      },
+    };
+    const runner = createProfilerRunner(env);
+    await expect(runner.run([["broken", failing]], options)).rejects.toThrow("broken case");
+    expect(runner.scene.children.some((child) => child.userData.profiled)).toBe(false);
+    expect(memory.geometries).toBe(0);
+  });
+});
