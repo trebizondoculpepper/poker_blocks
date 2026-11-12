@@ -4,12 +4,11 @@ import { readFile, writeFile, rename, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { collect, currentRepository } from "./github.ts";
-import { briefing, textReport } from "./briefing.ts";
-import type { Snapshot } from "./types.ts";
+import { collect, currentRepository } from "./github.js";
+import { briefing, textReport } from "./briefing.js";
 
 export const help = `Usage: npm run triage -- [options]
-Read-only LLM action briefing. Requires authenticated gh and Node 22.18+.
+Read-only LLM action briefing. Requires authenticated gh and Node 20+.
   --repo owner/name     Repository (default: current gh checkout)
   --json                Versioned structured output (use npm run --silent triage)
   --issue N             Include full issue body/history, even if closed
@@ -22,7 +21,7 @@ Read-only LLM action briefing. Requires authenticated gh and Node 22.18+.
 Exit: 0 complete; 2 incomplete evidence; 1 invalid arguments/API/cache failure.
 No GitHub mutations. Question/dependency hints require inspection, not blind action.
 `;
-export function argumentsFor(args: string[]) {
+export function argumentsFor(args) {
   const { values } = parseArgs({
     args,
     options: {
@@ -39,7 +38,7 @@ export function argumentsFor(args: string[]) {
   });
   if (values.repo && !/^[\w.-]+\/[\w.-]+$/.test(values.repo))
     throw new Error("--repo must be owner/name.");
-  const positive = (text: string, option: string) => {
+  const positive = (text, option) => {
     if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(Number(text)))
       throw new Error(`${option} must be a positive integer.`);
     return Number(text);
@@ -61,14 +60,14 @@ export function argumentsFor(args: string[]) {
     since: values.since ? new Date(values.since).toISOString() : undefined,
   };
 }
-export async function atomicJson(path: string, value: unknown): Promise<void> {
+export async function atomicJson(path, value) {
   await mkdir(dirname(resolve(path)), { recursive: true });
   const temporary = `${path}.${process.pid}.tmp`;
   await writeFile(temporary, JSON.stringify(value, null, 2) + "\n", { mode: 0o600 });
   await rename(temporary, path);
 }
-export async function cachedSnapshot(path: string, repository?: string): Promise<Snapshot> {
-  const data = JSON.parse(await readFile(path, "utf8")) as Snapshot;
+export async function cachedSnapshot(path, repository) {
+  const data = JSON.parse(await readFile(path, "utf8"));
   if (
     data.schemaVersion !== 1 ||
     typeof data.repository !== "string" ||
@@ -82,10 +81,7 @@ export async function cachedSnapshot(path: string, repository?: string): Promise
     throw new Error("Cache schema/repository is invalid or unsupported.");
   return data;
 }
-export async function checkpointSince(
-  path: string,
-  repository: string,
-): Promise<string | undefined> {
+export async function checkpointSince(path, repository) {
   try {
     const data = JSON.parse(await readFile(path, "utf8"));
     if (
@@ -96,25 +92,31 @@ export async function checkpointSince(
       throw new Error("Checkpoint schema/repository is invalid.");
     return data.through;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    if (error.code === "ENOENT") return undefined;
     throw error;
   }
 }
+/**
+ * @param {string[]} args
+ * @param {(text: string) => Promise<void>} [output]
+ * @param {{collect: typeof collect, currentRepository: typeof currentRepository}} [runtime]
+ * @returns {Promise<number>}
+ */
 export async function main(
-  args: string[],
-  output: (text: string) => Promise<void> = (text) =>
+  args,
+  output = (text) =>
     new Promise((resolve, reject) =>
       process.stdout.write(text, (error) => (error ? reject(error) : resolve())),
     ),
   runtime = { collect, currentRepository },
-): Promise<number> {
+) {
   const options = argumentsFor(args);
   if (options.help) {
     await output(help);
     return 0;
   }
-  let snapshot: Snapshot;
-  if (options.offline) snapshot = await cachedSnapshot(options.cache!, options.repo);
+  let snapshot;
+  if (options.offline) snapshot = await cachedSnapshot(options.cache, options.repo);
   else {
     const repository = options.repo ?? (await runtime.currentRepository());
     const previous = options.checkpoint
@@ -160,7 +162,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   try {
     process.exitCode = await main(process.argv.slice(2));
   } catch (error) {
-    console.error(`triage: ${(error as Error).message}`);
+    console.error(`triage: ${error.message}`);
     process.exitCode = 1;
   }
 }

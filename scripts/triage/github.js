@@ -1,17 +1,15 @@
 /** Read-only, paginated gh GraphQL collector. Never invokes a mutation or shell. */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { Dependency, Issue, Page, PullRequest, Reference, Snapshot } from "./types.ts";
 
 const execute = promisify(execFile);
-export type Query = (
-  query: string,
-  variables: Record<string, string | number>,
-) => Promise<Record<string, unknown>>;
-export const ghQuery: Query = async (query, variables) => {
+
+/** @typedef {(query: string, variables: Record<string, string | number>) => Promise<Record<string, unknown>>} Query */
+/** @type {Query} */
+export const ghQuery = async (query, variables) => {
   const args = ["api", "graphql", "-f", `query=${query}`];
   for (const [key, value] of Object.entries(variables)) args.push("-F", `${key}=${value}`);
-  let stdout: string;
+  let stdout;
   try {
     ({ stdout } = await execute("gh", args, { maxBuffer: 32 * 1024 * 1024, timeout: 60_000 }));
   } catch {
@@ -25,7 +23,7 @@ export const ghQuery: Query = async (query, variables) => {
     throw new Error("GitHub returned incomplete query data; no fresh report saved.");
   return parsed.data;
 };
-export async function currentRepository(): Promise<string> {
+export async function currentRepository() {
   try {
     const { stdout } = await execute(
       "gh",
@@ -49,13 +47,16 @@ const prFields = `${common} headRefOid headRefName baseRefName isDraft mergeable
  commits(last:1){nodes{commit{statusCheckRollup{state contexts(first:100){nodes{__typename ... on CheckRun{name status conclusion detailsUrl} ... on StatusContext{context state targetUrl}} ${info}}}}}}`;
 
 /** Cursor pagination also detects a broken/repeating cursor instead of spinning forever. */
-export async function pages<T>(
-  fetch: (cursor?: string) => Promise<Page<T>>,
-  stop: (page: T[]) => boolean = () => false,
-): Promise<T[]> {
-  const result: T[] = [];
-  const seen = new Set<string>();
-  let cursor: string | undefined;
+/**
+ * @template T
+ * @param {(cursor?: string) => Promise<import("./types.js").Page<T>>} fetch
+ * @param {(page: T[]) => boolean} [stop]
+ * @returns {Promise<T[]>}
+ */
+export async function pages(fetch, stop = () => false) {
+  const result = [];
+  const seen = new Set();
+  let cursor;
   for (;;) {
     const page = await fetch(cursor);
     if (!page || !Array.isArray(page.nodes) || !page.pageInfo)
@@ -70,8 +71,9 @@ export async function pages<T>(
 }
 
 /** Only explicitly declared prerequisites, never every #mention in the body. */
-export function declaredDependencies(body: string, repository: string): Reference[] {
-  const refs = new Map<string, Reference>();
+/** @param {string} body @param {string} repository @returns {import("./types.js").Reference[]} */
+export function declaredDependencies(body, repository) {
+  const refs = new Map();
   let section = false;
   for (const original of body.split("\n")) {
     const line = original.replaceAll("**", "");
@@ -90,12 +92,12 @@ export function declaredDependencies(body: string, repository: string): Referenc
         sentence,
       );
       const text = declaration?.[1] ?? (section && /^\s*[-*]\s/.test(sentence) ? sentence : "");
-      const add = (repo: string, number: number, url: string) =>
+      const add = (repo, number, url) =>
         refs.set(`${repo}#${number}`, { repository: repo, number, url });
       for (const match of text.matchAll(
         /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/(?:issues|pull)\/(\d+)/g,
       ))
-        add(match[1]!, Number(match[2]), match[0]);
+        add(match[1], Number(match[2]), match[0]);
       const local = text.replace(/https:\/\/github\.com\/[^\s)\]]+/g, "");
       for (const match of local.matchAll(/(?<![\w/])#([1-9]\d*)\b/g))
         add(repository, Number(match[1]), `https://github.com/${repository}/issues/${match[1]}`);
@@ -104,33 +106,30 @@ export function declaredDependencies(body: string, repository: string): Referenc
   return [...refs.values()];
 }
 
-export async function collect(
-  repository: string,
-  options: { since?: string; issue?: number } = {},
-  query: Query = ghQuery,
-  now: () => Date = () => new Date(),
-): Promise<Snapshot> {
+/**
+ * @param {string} repository
+ * @param {{ since?: string, issue?: number }} [options]
+ * @param {Query} [query]
+ * @param {() => Date} [now]
+ * @returns {Promise<import("./types.js").Snapshot>}
+ */
+export async function collect(repository, options = {}, query = ghQuery, now = () => new Date()) {
   const [owner, name] = repository.split("/");
-  const vars = { owner: owner!, name: name! };
-  const warnings: string[] = [];
+  const vars = { owner: owner, name: name };
+  const warnings = [];
   const startedAt = now().toISOString();
-  let rateLimit: Snapshot["rateLimit"] = null;
-  const request = async (source: string, variables: Record<string, string | number> = {}) => {
+  let rateLimit = null;
+  const request = async (source, variables = {}) => {
     const data = await query(source, { ...vars, ...variables });
-    rateLimit = (data.rateLimit as Snapshot["rateLimit"]) ?? rateLimit;
-    const repo = data.repository as Record<string, unknown> | null;
+    rateLimit = data.rateLimit ?? rateLimit;
+    const repo = data.repository;
     if (!repo) throw new Error(`Repository unavailable: ${repository}`);
     return repo;
   };
-  const collection = async <T extends { updatedAt: string }>(
-    field: string,
-    fields: string,
-    states: string,
-    cutoff?: string,
-  ) => {
+  const collection = async (field, fields, states, cutoff) => {
     const source = `query($owner:String!,$name:String!,$cursor:String){repository(owner:$owner,name:$name){${field}(first:50,after:$cursor,orderBy:{field:UPDATED_AT,direction:DESC}${states}){nodes{${fields}} ${info}}} rateLimit{remaining resetAt}}`;
-    const nodes = await pages<T>(
-      async (cursor) => (await request(source, cursor ? { cursor } : {}))[field] as Page<T>,
+    const nodes = await pages(
+      async (cursor) => (await request(source, cursor ? { cursor } : {}))[field],
       (batch) => !!cutoff && batch.some((node) => Date.parse(node.updatedAt) < Date.parse(cutoff)),
     );
     return cutoff
@@ -138,12 +137,12 @@ export async function collect(
       : nodes;
   };
   const [issues, pullRequests] = await Promise.all([
-    collection<Issue>("issues", `${common} stateReason`, ",states:OPEN"),
-    collection<PullRequest>("pullRequests", prFields, ",states:OPEN"),
+    collection("issues", `${common} stateReason`, ",states:OPEN"),
+    collection("pullRequests", prFields, ",states:OPEN"),
   ]);
   const issueSource = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){${common} stateReason}}}`;
   if (options.issue && !issues.some((issue) => issue.number === options.issue)) {
-    const detail = (await request(issueSource, { number: options.issue })).issue as Issue | null;
+    const detail = (await request(issueSource, { number: options.issue })).issue;
     if (!detail) throw new Error(`Issue #${options.issue} is unavailable.`);
     issues.push(detail);
   }
@@ -154,8 +153,7 @@ export async function collect(
       const initial = item.comments;
       item.comments.nodes = await pages(async (cursor) => {
         if (!cursor) return initial;
-        const node = (await request(source, { number: item.number, cursor }))
-          .issueOrPullRequest as { comments: Issue["comments"] };
+        const node = (await request(source, { number: item.number, cursor })).issueOrPullRequest;
         return node.comments;
       });
       item.comments.pageInfo = { hasNextPage: false, endCursor: null };
@@ -169,7 +167,7 @@ export async function collect(
       ["review threads", pr.reviewThreads],
       ["reviews", pr.reviews],
       ["head checks", pr.commits.nodes[0]?.commit.statusCheckRollup?.contexts],
-    ] as const;
+    ];
     for (const [label, connection] of nested)
       if (connection?.pageInfo.hasNextPage)
         warnings.push(`${pr.url}: ${label} exceed 100; review/merge evidence incomplete.`);
@@ -182,16 +180,16 @@ export async function collect(
       .flatMap((item) => declaredDependencies(item.body, repository))
       .map((ref) => [`${ref.repository}#${ref.number}`, ref]),
   );
-  const dependencies: Dependency[] = [];
+  const dependencies = [];
   for (const [key, ref] of refs) {
-    let item = local.get(key) as (Issue & { mergedAt?: string | null }) | undefined;
+    let item = local.get(key);
     if (!item) {
       const [refOwner, refName] = ref.repository.split("/");
       const data = await query(
         `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issueOrPullRequest(number:$number){... on Issue{title state stateReason url} ... on PullRequest{title state mergedAt url}}}}`,
-        { owner: refOwner!, name: refName!, number: ref.number },
+        { owner: refOwner, name: refName, number: ref.number },
       );
-      const repo = data.repository as { issueOrPullRequest: typeof item } | null;
+      const repo = data.repository;
       item = repo?.issueOrPullRequest;
     }
     dependencies.push({
@@ -209,16 +207,11 @@ export async function collect(
     });
     if (!item) warnings.push(`${ref.url}: declared prerequisite unavailable.`);
   }
-  let changed: Snapshot["changed"] = [];
+  let changed = [];
   if (options.since) {
     const values = await Promise.all([
-      collection<Issue>("issues", `${common} stateReason`, ",states:[OPEN,CLOSED]", options.since),
-      collection<PullRequest>(
-        "pullRequests",
-        prFields,
-        ",states:[OPEN,CLOSED,MERGED]",
-        options.since,
-      ),
+      collection("issues", `${common} stateReason`, ",states:[OPEN,CLOSED]", options.since),
+      collection("pullRequests", prFields, ",states:[OPEN,CLOSED,MERGED]", options.since),
     ]);
     changed = values.flat().map(({ number, title, url, state, updatedAt }) => ({
       number,

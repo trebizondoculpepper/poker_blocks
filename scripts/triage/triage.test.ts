@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { argumentsFor, atomicJson, cachedSnapshot, checkpointSince, main } from "./cli.ts";
-import { briefing, dependencyDone, textReport } from "./briefing.ts";
-import { collect, declaredDependencies, pages, type Query } from "./github.ts";
-import type { Issue, Page, PullRequest, Snapshot } from "./types.ts";
+import { argumentsFor, atomicJson, cachedSnapshot, checkpointSince, main } from "./cli.js";
+import { briefing, dependencyDone, textReport } from "./briefing.js";
+import { collect, declaredDependencies, pages, type Query } from "./github.js";
+import type { Issue, Page, PullRequest, Snapshot } from "./types.js";
 
 const repo = "example/project";
 const time = "2026-11-12T10:00:00.000Z";
@@ -335,4 +338,49 @@ describe("CLI freshness and local state safety", () => {
       await rm(dir, { recursive: true });
     }
   });
+});
+
+describe("plain JavaScript gh wrapper", () => {
+  it.skipIf(process.platform === "win32")(
+    "runs directly with Node and reuses the inherited gh session without login",
+    async () => {
+      const dir = await mkdtemp(join(tmpdir(), "triage-gh-test-"));
+      try {
+        const log = join(dir, "calls");
+        const response = JSON.stringify({
+          data: { repository: { issues: page([]), pullRequests: page([]) } },
+        });
+        const fake = `#!/bin/sh
+[ "$TRIAGE_TEST_SESSION" = "already-configured" ] || exit 98
+echo "$1" >> "$TRIAGE_TEST_LOG"
+case "$1" in
+repo) printf '%s\\n' 'example/project' ;;
+api) printf '%s\\n' '${response}' ;;
+*) exit 99 ;;
+esac
+`;
+        await writeFile(join(dir, "gh"), fake, { mode: 0o700 });
+        const { stdout } = await promisify(execFile)(
+          process.execPath,
+          [fileURLToPath(new URL("./cli.js", import.meta.url)), "--json"],
+          {
+            env: {
+              ...process.env,
+              PATH: `${dir}:${process.env.PATH}`,
+              TRIAGE_TEST_SESSION: "already-configured",
+              TRIAGE_TEST_LOG: log,
+            },
+          },
+        );
+        expect(JSON.parse(stdout).repository).toBe(repo);
+        expect((await readFile(log, "utf8")).trim().split("\n")).toEqual(["repo", "api", "api"]);
+        for (const name of ["cli", "github", "briefing"]) {
+          const code = await readFile(new URL(`./${name}.js`, import.meta.url), "utf8");
+          expect(code).not.toMatch(/(?:from|import)\s+["'][^"']+\.ts["']/);
+        }
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    },
+  );
 });
