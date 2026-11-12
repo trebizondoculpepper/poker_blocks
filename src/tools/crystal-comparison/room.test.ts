@@ -27,6 +27,7 @@ describe("the crystal comparison room (#524)", () => {
       "crystalV3",
       "refraction",
       "internal",
+      "calmWater",
     ]);
     for (const name of config!.backends) expect(opticsBackends.has(name)).toBe(true);
     expect(gameModeFor("dev17").traits.console).toEqual({ name: "dev17" });
