@@ -5,15 +5,17 @@
  * a material still picks its look by its own `appearance.assembly`.
  *
  * Copy settings (#677): a preset's `config` keys are the fields of each look's tuning object
- * (`crystalV3Tuning` in `crystal-v3.ts`, `refractionTuning` in `crystal-refraction.ts`,
- * `internalTuning` in `crystal-internal.ts`), plus `mapPattern` and `mapFrequency` for the shared
+ * (`crystalV3Tuning` in `crystal-v3.ts`, a refraction preset's settings in `crystal-refraction.ts`
+ * such as `crystalRefractionSettings`, `internalTuning` in `crystal-internal.ts`), plus its
+ * ripple's `rippleAmplitude`, `ripplePeriod` and `rippleScale` where it has one, plus `mapPattern` and `mapFrequency` for the shared
  * spectral map (`spectralShape`, `setSpectralShape`). To adopt a copied preset, set each field's
  * `value` (or the map shape) to its value; `applyOptics(preset)` does the same at runtime.
  */
 import { Registry } from "../core/registry";
 import type { MaterialDefinition } from "../materials";
 import { crystalV3Tuning, setSpectralShape, spectralPatterns, spectralShape } from "./crystal-v3";
-import { refractionFrame, refractionTuning } from "./crystal-refraction";
+import { refractionFrameFor, refractionPresets, type FrameTime } from "./crystal-refraction";
+import { rippleBounds, type LookupRipple } from "./lookup-ripple";
 import { internalFrame, internalTuning } from "./crystal-internal";
 import type * as THREE from "three";
 
@@ -84,25 +86,79 @@ const mapControls: readonly OpticsControl[] = [
   },
 ];
 
+/** A refraction preset's live controls: its own uniforms, so presets never share tuning. */
+const refractionControls = (preset: string): readonly OpticsControl[] => {
+  const { tuning } = refractionPresets.get(preset);
+  return [
+    slider("rearStrength", "Rear bend", 0, 0.2, 0.005, tuning.rearStrength),
+    slider("frontStrength", "Front bend", 0, 0.2, 0.005, tuning.frontStrength),
+    slider("magnify", "Magnify", 0, 0.6, 0.01, tuning.magnify),
+    slider("dispersion", "Colour split", 0, 0.5, 0.01, tuning.dispersion),
+    slider("fresnelBase", "Reflection base", 0, 1, 0.02, tuning.fresnelBase),
+    slider("fresnelPower", "Reflection power", 0.5, 8, 0.25, tuning.fresnelPower),
+    slider("spectral", "Spectral", 0, 1, 0.05, tuning.spectral),
+    slider("reflection", "Reflection", 0, 1.5, 0.05, tuning.reflection),
+    slider("clarity", "Clarity", 0.5, 1, 0.02, tuning.clarity),
+    ...rippleControls(refractionPresets.get(preset).ripple),
+  ];
+};
+
+/** A lookup ripple's settings (#674): strength, loop length and spatial scale. */
+const rippleControls = (ripple: LookupRipple): readonly OpticsControl[] => [
+  slider(
+    "rippleAmplitude",
+    "Ripple strength",
+    rippleBounds.amplitude.min,
+    rippleBounds.amplitude.max,
+    0.001,
+    ripple.amplitude,
+  ),
+  slider(
+    "ripplePeriod",
+    "Ripple period (s)",
+    rippleBounds.period.min,
+    rippleBounds.period.max,
+    0.5,
+    ripple.period,
+  ),
+  slider(
+    "rippleScale",
+    "Ripple scale",
+    rippleBounds.scale.min,
+    rippleBounds.scale.max,
+    0.1,
+    ripple.scale,
+  ),
+];
+
 export type OpticsBackend = {
   /** Shown in comparison tools. */
   label: string;
   /** The registered appearance assembly that draws this look. */
   assembly: string;
+  /**
+   * Further appearance data this look sets on the block's definition, such as the refraction
+   * preset it draws with (#674): configuration, read uniformly by the assembly.
+   */
+  appearance?: Partial<MaterialDefinition["appearance"]>;
   /** Compositions this look cannot show faithfully, said rather than drawn wrong. */
   unsupported?: string;
   /** Live tuning this look offers, as data: a tool shows whichever controls a backend lists. */
   controls?: readonly OpticsControl[];
   /**
    * Passes this look needs each frame before the main render (a background capture), run by the
-   * tool that draws it; `hide` holds the blocks drawn with this look.
+   * tool that draws it; `hide` holds the blocks drawn with this look. `delta` is the presentation
+   * time since the last frame in seconds (zero on the first), for a look that animates (#674).
    */
-  frame?: (context: {
-    renderer: THREE.WebGLRenderer;
-    scene: THREE.Scene;
-    camera: THREE.Camera;
-    hide: THREE.Object3D;
-  }) => void;
+  frame?: (context: OpticsFrame) => void;
+};
+
+/** What a tool passes a backend's `frame` hook each frame. */
+export type OpticsFrame = FrameTime & {
+  renderer: THREE.WebGLRenderer;
+  scene: THREE.Scene;
+  camera: THREE.Camera;
+  hide: THREE.Object3D;
 };
 
 export const opticsBackends = new Registry<OpticsBackend>("optics backend");
@@ -138,19 +194,9 @@ opticsBackends.register("refraction", {
   assembly: "crystalRefraction",
   unsupported:
     "Prototype: background bent per facet from a shared capture. Crystals do not refract each other, overlapping blocks take the nearest rear facet's bend, and the hand has nothing captured behind it.",
-  frame: refractionFrame,
-  controls: [
-    ...mapControls,
-    slider("rearStrength", "Rear bend", 0, 0.2, 0.005, refractionTuning.rearStrength),
-    slider("frontStrength", "Front bend", 0, 0.2, 0.005, refractionTuning.frontStrength),
-    slider("magnify", "Magnify", 0, 0.6, 0.01, refractionTuning.magnify),
-    slider("dispersion", "Colour split", 0, 0.5, 0.01, refractionTuning.dispersion),
-    slider("fresnelBase", "Reflection base", 0, 1, 0.02, refractionTuning.fresnelBase),
-    slider("fresnelPower", "Reflection power", 0.5, 8, 0.25, refractionTuning.fresnelPower),
-    slider("spectral", "Spectral", 0, 1, 0.05, refractionTuning.spectral),
-    slider("reflection", "Reflection", 0, 1.5, 0.05, refractionTuning.reflection),
-    slider("clarity", "Clarity", 0.5, 1, 0.02, refractionTuning.clarity),
-  ],
+  appearance: { refraction: "crystal" },
+  frame: refractionFrameFor("crystal"),
+  controls: [...mapControls, ...refractionControls("crystal")],
 });
 
 opticsBackends.register("internal", {
@@ -177,10 +223,8 @@ export function withOpticsBackend(
   definition: MaterialDefinition,
   backend: string,
 ): MaterialDefinition {
-  return {
-    ...definition,
-    appearance: { ...definition.appearance, assembly: opticsBackends.get(backend).assembly },
-  };
+  const { assembly, appearance } = opticsBackends.get(backend);
+  return { ...definition, appearance: { ...definition.appearance, ...appearance, assembly } };
 }
 
 /** A copied preset: a backend's complete effective settings, versioned (#677). */

@@ -189,7 +189,9 @@ const devProfiler: ProfilerRoom = import.meta.env.DEV
       showReport() {},
     };
 const devCrystalComparison: CrystalComparisonRoom = import.meta.env.DEV
-  ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host)
+  ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host, {
+      reducedMotion: () => run.reducedMotion,
+    })
   : { show() {}, hide() {}, dispose() {} };
 const devWordCubeRoom: WordCubeRoom = import.meta.env.DEV
   ? (await import("./tools/word-cube-room")).createWordCubeRoom(host)
