@@ -182,15 +182,19 @@ describe("the action budget reaches commands and outcomes (#661 review)", () => 
   };
 
   it("counts each command, so a listener's commands can exhaust the operation budget", () => {
-    // The scrapper's listener, its rule and its add-coins command are one operation each.
-    const { game, hand } = limitedRun({ events: 128, operations: 2 });
+    // The smallest budget the scrapper's discard needs: listener, rule handlers and command.
+    let needed = 0;
+    while (true) {
+      const { game, hand } = limitedRun({ events: 128, operations: needed });
+      if (game.discard(hand.map(({ id }) => id)) !== null) break;
+      needed++;
+    }
+    // One less, and the last operation, its add-coins command, is the one refused.
+    const { game, hand } = limitedRun({ events: 128, operations: needed - 1 });
     const before = game.state;
     expect(game.discard(hand.map(({ id }) => id))).toBeNull();
     expect(game.state).toBe(before);
     expect((game.actionFailure as ResolutionBudgetExceeded).registration).toBe("command add-coins");
-    // With room for both, the same discard commits.
-    const roomy = limitedRun({ events: 128, operations: 3 });
-    expect(roomy.game.discard(roomy.hand.map(({ id }) => id))).not.toBeNull();
   });
 
   it("delivers a play's stage outcome inside the action, recording it as a fact", () => {
@@ -372,5 +376,33 @@ describe("reaction checks count against the budget (#661 review)", () => {
         ]),
     );
     expect(charged).toEqual(["reaction matcher test.never"]);
+  });
+});
+
+describe("each handler a rule invokes counts (#661 review)", () => {
+  it("charges a rule's selector, condition and every effect, not one per rule", async () => {
+    const { ruleHandlers } = await import("../rule-handlers");
+    const { withOperationCounter } = await import("./operations");
+    const charged: string[] = [];
+    const rule = {
+      on: "test.event",
+      select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+      where: { id: "always", config: {} },
+      effects: Array.from({ length: 5 }, () => ({ id: "add-block-value", config: { amount: 1 } })),
+    };
+    withOperationCounter(
+      (registration) => void charged.push(registration),
+      () =>
+        ruleHandlers.evaluate(rule, {
+          event: { type: "test.event", blocks: [] },
+          workingValue: 0,
+          exponent: 1,
+          powerBase: 0,
+          commands: [],
+        }),
+    );
+    expect(charged.filter((name) => name.startsWith("effect "))).toHaveLength(5);
+    expect(charged).toContain("selector event-blocks");
+    expect(charged).toContain("condition always");
   });
 });

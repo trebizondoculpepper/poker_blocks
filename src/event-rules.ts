@@ -1,4 +1,5 @@
 import type { GameState } from "./game-state";
+import { countOperation } from "./lifecycle/operations";
 import type { GameEvent } from "./passives";
 
 /** A serializable reference to a reusable handler and its configuration. */
@@ -136,9 +137,15 @@ function register<T>(registry: Map<string, T>, id: string, handler: T, what: str
   registry.set(id, handler);
 }
 
+/**
+ * A registered handler, about to be invoked: each lookup is charged to the resolving action's
+ * operation budget (#661 review), so selectors, conditions (nested ones too), effects and value
+ * sources all count, however many a single rule holds. Nothing counts outside an action.
+ */
 function get<T>(registry: Map<string, T>, id: string, what: string): T {
   const handler = registry.get(id);
   if (!handler) throw new Error(`Unknown ${what}: ${id}`);
+  countOperation(`${what} ${id}`);
   return handler;
 }
 

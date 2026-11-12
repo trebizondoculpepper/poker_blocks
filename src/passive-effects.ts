@@ -1,5 +1,5 @@
 import type { PlacedBlock } from "./game-state";
-import { countOperation, withOperationCounter } from "./lifecycle/operations";
+import { withOperationCounter } from "./lifecycle/operations";
 import type { EventRule, RuleCommand } from "./event-rules";
 import type { GameEvent, PassiveBlock } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
@@ -84,7 +84,6 @@ function evaluateRules(
   // The phase's total exponent so far: each power rule moves it (#431).
   let exponent = 1;
   for (const { source, rule } of rules) {
-    countOperation(`rule ${rule.on} from ${source.id}`);
     const frame = ruleHandlers.evaluate(rule, {
       event,
       workingValue: value,
