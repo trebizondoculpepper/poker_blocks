@@ -6,7 +6,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { clamp01, easeInOutCubic, lerp } from "./easing";
 import { playSfx } from "./audio/sfx";
 import { cardName } from "./cards";
-import { createPassiveVisual } from "./passive-visual";
+import { addExtras, createPassiveVisual } from "./passive-visual";
 import { passiveAppearance, passiveDefinitions } from "./passives";
 import type { ShopOffer } from "./shop-stock";
 import { offerKind, type OfferBlock, type OfferDestination } from "./offer-kinds";
@@ -89,7 +89,7 @@ function passiveCube(block: PassiveBlock): OfferCube {
   const appearance = passiveAppearance(block);
   const visual = createPassiveVisual(appearance, 1.35);
   const mesh = new THREE.Mesh(visual.geometry, visual.materials);
-  mesh.add(...(visual.extras ?? []));
+  addExtras(mesh, visual.extras);
   const edgeMaterial = new THREE.LineBasicMaterial({ color: appearance.palette.edge });
   mesh.add(new THREE.LineSegments(visual.edges, edgeMaterial));
   return {

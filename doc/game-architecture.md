@@ -445,6 +445,20 @@ How a block leaving play is presented: the shared lifecycle the per-material bla
 
 - **Reuse.** The lifecycle knows nothing of explosions. Any removal (the Nothingifier, a future destroyer) can present an exit through it.
 
+### Default destruction of contained blocks (#632)
+
+**Target design, approved by the owner.** Unless a definition explicitly supplies another destruction presentation, a contained block uses its shared container composition to crack and break apart the shell, followed by its contents fading. Water, Hot Water and Boiling Water use this default. Explicit alternatives remain authoritative: Earth's shell releases ballistic soil particles, and Magic releases stars. The default does not replace these or any other configured alternative.
+
+The contained composition brings a reusable destruction-presentation behavior and its plain configuration. It supplies the default exit recipe when the definition is composed/resolved; an explicit recipe overrides it. The exit runner receives a resolved `ExitSequence` and dispatches registered effects and targets uniformly. It never discovers behavior by testing a contained marker, checking a material name or looking up a kind-keyed fallback table. A newly registered contained definition can therefore receive the same default without an edit to generic rendering or lifecycle code. This specifies the target contract, not an assertion that automatic default resolution already exists.
+
+Use the existing `crack`/`fracture` shell targets and `fade` contents target, with the container's configured shell appearance and bounded resources. The shell first cracks and begins breaking apart; contents then fade during the breakup. This preserves the existing shared recipe's overlap, rather than requiring a new fluid or fracture simulation or waiting for every shard to disappear before fading begins. Timing/colour remain configuration and can be auditioned. Shell and contents own separate resources; fade must not alter sibling debris, shared materials or another block's contents. Reduced motion, cancellation and scene disposal retain the Block exits completion and cleanup contract.
+
+This is a presentation default **after authoritative destruction**. It does not grant permission to destroy a block, bypass resistance, award rewards, create new cards, or turn unwrapping into destruction. Normal table collection, retention expiry, state reset and visual unmount do not invoke it merely because a mesh leaves the scene. Other lifecycle transitions can explicitly reuse low-level effects without claiming destruction occurred.
+
+**Evidence and delivery.** At inspected revision `718f7ea`, `src/materials.ts` already has a shared `containerBreak` recipe used by Flame, Custard and Gelato: shell crack, then shell fracture alongside contents fade. `src/visual/exit-presentation.ts` provides the resolved sequence/registered target contract; `src/visual/contained.ts` separates shell and contents. The owner extended that established pattern to all contained definitions and the three water appearances. Implementation still needs default composition/coverage and wiring through #438/#516; this documentation PR installs no runtime behavior.
+
+Acceptance for that follow-up includes a new test-only contained definition receiving the default without a dispatcher edit, explicit alternative precedence, water/hot/boiling coverage, independent target ownership, and no destruction on table return/reset/unmount. A surviving block must never run an exit sequence just because a default recipe exists.
+
 ### Acquired modifier registers (#431)
 
 `src/modifier-registers.ts`. A card's acquired modifiers live in its `modifiers` trait, one `ScoringModifier` per lifetime register, apart from its material's values. Lifetimes are registered (`modifierLifetimes`): `stage` and `round` each register their clearing with `stageEndResets` and `roundEndResets`, `run` registers none, so neither the run nor the scorer names a lifetime. `addCardModifier(state, cardId, lifetime, modifier)` combines into a register on the card wherever it is, and records it in the card-state ledger (`cardStates[id].modifiers`). Saves validate each entry (a registered lifetime, valid numbers) and the `modifiers` card-state applier restores it. `cardScoringRules` adds the combined acquired modifier's rules after the material's and state bonus's, so the scorer needs no change. They are the card's own rules, so they share its scoring eligibility (`scoringEligibilities`): a cloud's acquired bonus applies in any scored line it is in, as its material's does (scored-subset eligibility is preserved, #431). The power phase composes exponents additively (see "State bonuses"). Nothing in the normal game writes a register yet; bombs (#24, #436) will.
@@ -1325,3 +1339,43 @@ The runner's tests use a fake timer and renderer, so they check the logic (rejec
 1. #618: the registry and runner, tested with test-only cases and a fake timer.
 2. #619: the room and the export.
 3. Cases for materials (#620), rack items (#621), and letter, menu and effect visuals (#622).
+
+## Approximate crystal optics and the comparison room (#523, #524)
+
+**Today's crystal, audited.** Prismatic crystal's table look (`refractiveCrystal` in `src/visual/block-appearance.ts`) is a `MeshPhysicalMaterial` with `transmission: 1`, dispersion, thickness and attenuation. Any transmissive material makes three.js render the opaque scene a **second time** into a transmission target every frame, and dispersion samples it three times per pixel. On top of that sits the crystal fire (`src/visual/crystal-fire.ts`): a back-face copy of the block whose shader does three refractions into a made-up studio, plus a glint. The print skin is a third layer. These are the costs to compare; no speed-up is claimed until the profiler (#527) or the comparison room measures one.
+
+_Source audit (three.js 0.187.0, the version in `package-lock.json`):_
+
+- **The second opaque render.** `WebGLRenderer.render` calls `renderTransmissionPass` whenever the frame has any transmissive object (`src/renderers/WebGLRenderer.js`, around lines 1777 and 1795). That function (around line 2015):
+  - renders every opaque object again into a mipmapped `transmissionRenderTarget`, sized to the viewport times `transmissionResolutionScale`;
+  - regenerates the target's mipmaps;
+  - if a transmissive material is double-sided, draws its back faces into the target and regenerates the mipmaps again.
+    This applies to every camera that renders transmissive objects, once per frame. It does not apply while `scene.overrideMaterial` is set.
+- **The dispersion samples.** With `dispersion` set, `getIBLVolumeRefraction` in `src/renderers/shaders/ShaderChunk/transmission_pars_fragment.glsl.js` (around line 180) loops over three IORs. Each pass calls `getTransmissionSample`, which is `textureBicubic`: four `textureLod` taps at each of two mip levels. So each crystal pixel takes 3 × 8 = 24 texture taps from the transmission target, against 8 without dispersion.
+
+These are what the code does. How much they cost on a given device is what the comparison room and the profiler measure.
+
+**The approximation (#523).** A second registered assembly, `approximateCrystal`, builds a crystal-compatible block with no physical transmission, no scene refraction and no crystal fire. It has two layers.
+
+- **Outer:** a tinted, see-through standard material. Its map is the block's own face artwork, so the rank, suit and letters are unchanged. A clearcoat, the shared static reflection environment (`getReflectionEnvironment()`) and the material's own thin-film iridescence add facet highlights and colour.
+- **Inner:** one back-face shell, shared by every approximate crystal of a size. It is drawn additively with a small shader that samples a procedural facet texture at texture coordinates offset by the tangent-space view direction (parallax). Inner facets seem to lie at depth and shift as the block turns, and a tight glint term adds sparkle. The shader uses a single texture lookup, with no refraction loop and no studio function.
+
+Everything shared (the facet texture, the inner shader program) is created once and never disposed per block; what a block makes itself is disposed with it, through the same `BlockAppearance` contract as every other assembly. The approach follows the layered-gem and environment-mapping references cited on #523. The implementation is original, and no third-party code or assets are imported.
+
+**Selecting a look by configuration.** A material picks its look by its `appearance.assembly` name, as now; the production game is unchanged and keeps `refractiveCrystal`. An `opticsBackends` registry names the interchangeable crystal looks (`current` → `refractiveCrystal`, `approximation` → `approximateCrystal`). Code that wants a different look builds the block from the same definition with only `appearance.assembly` replaced. It never branches on a material's name. A composition the approximation cannot show faithfully (contained blocks, glass panes, and anything behind a block bent or split into colours) is listed in the backend's own `unsupported` note, not silently drawn wrong.
+
+**The comparison room (#524).** `?mode=dev17` is a developer mode composing a `devCrystalComparison` trait (`src/tools/crystal-comparison/`). It shows a fixed collection of crystal blocks:
+
+- the count can be chosen, including a many-block case;
+- each block keeps its card, art seed, position and orientation from a fixed collection seed.
+
+**Current** and **Approximation** buttons rebuild only the blocks' appearances through the chosen backend. They keep every transform, the camera, the lighting and the environment, so nothing is reshuffled. Switching disposes the replaced appearances, and leaving the mode disposes everything and removes its listeners. The structure turns and zooms with the existing board gestures.
+
+A small panel shows the backend's name and the renderer counts (draw calls, triangles, programs). It also shows CPU frame time as a median and a 95th percentile, labelled as frame time, never as GPU time, together with the size and pixel ratio. Sampling starts only after a warm-up, so shader compilation is excluded. The room makes no production choice.
+
+**Delivery.**
+
+- #523: the `approximateCrystal` assembly and the `opticsBackends` registry, with resource and disposal tests.
+- #524: the room. Its control buttons use the existing `ui.click` sound.
+
+Visual acceptance is the owner's comparison in the room, reported on #524.
