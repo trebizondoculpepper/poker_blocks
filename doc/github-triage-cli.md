@@ -64,3 +64,7 @@ npm run triage -- --offline --cache /tmp/poker-triage-cache.json
 ```
 
 Requires Node 20+ and an already authenticated `gh`. All API requests run through that existing gh installation/session, including its existing host/account credential handling; the CLI never calls `gh auth login`, reads a token itself or asks the user to reauthenticate. The cache contains repository issue/comment data; keep it outside git. Offline mode always uses its recorded timestamp, does not poll GitHub or advance a checkpoint, and cannot be combined with `--since`. Primary issues/PRs and comment history are paginated fully; unusually large nested PR/label connections are explicitly incomplete with exit 2 rather than silently certified for merge. Review thread previews retain total/omitted comment metadata. No background daemon is installed: invoke the command whenever the agent needs a new briefing, or use an external caller to poll it.
+
+## Development-process use and feedback
+
+[One-command GitHub briefing in the process guide](process.md#one-command-github-briefing-626) is the operating workflow: session orientation, full-ticket intake, live ownership/head recheck, checkpoint polling, explicit offline/error handling and evidence-backed improvements. Start there when using the tool to decide an agent's next action. The CLI contract describes available facts and limitations; the process guide explains how to act on them.
