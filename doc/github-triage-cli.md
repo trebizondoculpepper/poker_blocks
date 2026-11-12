@@ -68,3 +68,7 @@ Requires Node 20+ and an already authenticated `gh`. All API requests run throug
 ## Development-process use and feedback
 
 [One-command GitHub briefing in the process guide](process.md#one-command-github-briefing-626) is the operating workflow: session orientation, full-ticket intake, live ownership/head recheck, checkpoint polling, explicit offline/error handling and evidence-backed improvements. Start there when using the tool to decide an agent's next action. The CLI contract describes available facts and limitations; the process guide explains how to act on them.
+
+## Issue dependencies (#703)
+
+Ticket dependencies are GitHub's built-in "blocked by" relationships, and readiness comes from GitHub's computed Blocked state, not from `Depends on` text. [Issue dependencies](issue-dependencies.md) defines the `deps` commands, the briefing changes, the one-time migration, and the rules shared by commands that change tickets. Those commands are the first exception to this tool being read-only. The briefing itself stays read-only.
