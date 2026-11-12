@@ -206,6 +206,20 @@ export function createVisualScheduler(
     );
   };
 
+  /**
+   * Run an effect's cleanup callback; a throw is reported afterwards and never interrupts the
+   * bookkeeping around it (#785 review).
+   */
+  const guarded = (callback: (() => void) | undefined) => {
+    try {
+      callback?.();
+    } catch (error) {
+      queueMicrotask(() => {
+        throw error;
+      });
+    }
+  };
+
   const notify = (scope: Scope) => {
     const status = statusOf(scope);
     const listeners = Array.from(scope.listeners);
@@ -265,7 +279,7 @@ export function createVisualScheduler(
     if (wasActive) {
       active.delete(entry);
       entry.scope.active--;
-      entry.effect?.dispose();
+      guarded(() => entry.effect?.dispose());
       entry.effect = null;
     } else {
       pending--;
@@ -278,7 +292,7 @@ export function createVisualScheduler(
   const cancelEffect = (entry: Entry) => {
     if (entry.cancelling) return;
     entry.cancelling = true;
-    entry.effect?.cancel();
+    guarded(() => entry.effect?.cancel());
   };
 
   const cancelEntry = (entry: Entry) => {
@@ -302,7 +316,7 @@ export function createVisualScheduler(
         entry.payload = null;
         if (wasActive) {
           active.delete(entry);
-          entry.effect?.dispose();
+          guarded(() => entry.effect?.dispose());
           entry.effect = null;
         } else pending--;
       }
@@ -323,7 +337,8 @@ export function createVisualScheduler(
     leased: boolean,
   ): Admission => {
     if (scope.generation !== generation) return { accepted: false, reason: "stale generation" };
-    if (scope.state !== "pending") return { accepted: false, reason: "scope already settled" };
+    if (scope.state !== "pending" || scope.cancelling)
+      return { accepted: false, reason: "scope already settled" };
     if (scope.sealed && !leased) return { accepted: false, reason: "scope is sealed" };
     if (depth > limits.depth) return { accepted: false, reason: `deeper than ${limits.depth}` };
     if (!handlers.has(description.handler))
@@ -403,8 +418,8 @@ export function createVisualScheduler(
     // never mounted, so it is cancelled and released at once, exactly once (#785 review).
     // Re-read: the handler may have settled this entry (TypeScript can't see that side effect).
     if ((entry.state as Entry["state"]) === "settled") {
-      result.cancel();
-      result.dispose();
+      guarded(() => result.cancel());
+      guarded(() => result.dispose());
       return;
     }
     entry.effect = {

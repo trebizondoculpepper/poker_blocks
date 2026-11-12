@@ -575,4 +575,60 @@ describe("the visual-event scheduler (#546)", () => {
     expect(scheduler.status(parent).state).toBe("finished");
     expect(errors).toHaveLength(1);
   });
+
+  it("refuses new work in a scope that is cancelling (#785 review)", () => {
+    const { scheduler, handlers, log } = harness();
+    handlers.register("sneaky", (_payload, context) => ({
+      update: () => "running",
+      cancel: () => {
+        scheduler.schedule(context.scope, {
+          handler: "mark",
+          payload: { label: "escaped" },
+          dueUnits: 0,
+        });
+      },
+      dispose: () => {},
+    }));
+    const scope = scheduler.createScope(null);
+    scheduler.schedule(scope, { handler: "sneaky", dueUnits: 0 });
+    scheduler.update(0, true);
+    scheduler.cancel(scope);
+    scheduler.update(100, true);
+    expect(log).toEqual([]);
+    expect(scheduler.counts).toMatchObject({ pending: 0, active: 0, entries: 0 });
+  });
+
+  it("finishes cancelling when an effect's cleanup throws (#785 review)", () => {
+    const { scheduler, handlers } = harness();
+    let disposed = 0;
+    handlers.register("brittle", () => ({
+      update: () => "running",
+      cancel: () => {
+        throw new Error("cancel");
+      },
+      dispose: () => void disposed++,
+    }));
+    const original = globalThis.queueMicrotask;
+    const errors: unknown[] = [];
+    globalThis.queueMicrotask = (task) => {
+      try {
+        task();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+    try {
+      const scope = scheduler.createScope(null);
+      scheduler.schedule(scope, { handler: "brittle", dueUnits: 0 });
+      scheduler.seal(scope);
+      scheduler.update(0, true);
+      scheduler.cancel(scope);
+      expect(scheduler.status(scope).state).toBe("cancelled");
+    } finally {
+      globalThis.queueMicrotask = original;
+    }
+    expect(disposed).toBe(1);
+    expect(errors).toHaveLength(1);
+    expect(scheduler.counts).toMatchObject({ active: 0, entries: 0 });
+  });
 });
