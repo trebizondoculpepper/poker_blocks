@@ -75,6 +75,20 @@ The primary review question is whether this PR moves the code toward the **targe
 
 - Check that scoring, purchases, rewards, and other gameplay outcomes come from game state and rules, while animations, tinting, audio, and camera movement only present those outcomes. Flag a presentation effect that decides or mutates gameplay results. Pure visual changes do not need a game-rules document update.
 
+### Presentation timing (#541)
+
+- Compare timed presentation with "Visual-event scheduler and game-time units" in [doc/game-architecture.md](doc/game-architecture.md). All timed feedback goes through the one shared scheduler, on the one presentation clock, with timings configured in game-time units (1/15 s; stagger spacing defaults to 2 units). Flag:
+  - a new timer for presentation: `setTimeout`, `setInterval`, a `performance.now()` deadline, or a presenter-owned queue such as today's `scoreSteps`;
+  - a second scheduler or a parallel stagger timer;
+  - a millisecond or frame constant where the configuration should state units;
+  - `performance.now()` mixed with rAF time;
+  - a delayed handler that reads live `GameRun` state, mutates the model or draws session RNG, instead of presenting its captured payload;
+  - input refused or queued because feedback is playing;
+  - a result screen gated on anything other than a terminal model plus the action's required scopes;
+  - a scope that can settle before its children, or cancellation that can settle an effect twice;
+  - per-frame ambient work (sway, smoke, haze, springs, shader clocks) pushed through the scheduler.
+- The existing timers listed under "Today's scheduling" are migration gaps (#544's children), not precedents. Untouched legacy timers are not a finding.
+
 ## Design and implementation ownership
 
 The design agent owns initial design decisions with the user and the initial updates to `doc/game.md` and `doc/game-architecture.md`, including while creating implementation tickets. Research is a joint responsibility: either design or implementation agents may investigate a concrete uncertainty and contribute evidence. Initial design-document ownership is not exclusive research ownership.

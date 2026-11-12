@@ -627,7 +627,7 @@ controller traits (composed, configured) ─┤ subscribe; choose policy from co
 
 - _Music:_ the music player and its controller are capabilities: play, fade, filter, wind down. Scene traits (`musicCue`, `musicTrack`, `musicFilter`) are the controllers: the scene's configuration says what to request on enter and exit.
 - _Explosions:_ the dazzle (`createDazzle`), smoke and the SFX player are services that render or play at a supplied location. An `explosionEffects` controller trait consumes a committed detonation (`block.removed` with cause `explosion`) and coordinates dazzle, smoke and sound from its configuration. The removal happened in the model already.
-- _Tweening:_ the Tween.js service (`doc/tweening-library-research.md`, #556) supplies interpolation only; effect and controller traits choose endpoints, easing and interruption, and the visual-event scheduler decides when (#541, #545).
+- _Tweening:_ the Tween.js service (`doc/tweening-library-research.md`, #556) supplies interpolation only; effect and controller traits choose endpoints, easing and interruption, and the visual-event scheduler decides when ("Visual-event scheduler and game-time units" below; #541, #545).
 
 **Naming.** `X` / `XController` names a genuine pair: one object and the controller that drives only it (`MusicPlayer` / `MusicController`). A controller trait that coordinates several services is named for its **responsibility** (`explosionEffects`, `scoringFeedback`), not forced to look like one service's controller. #473 audits existing names against this.
 
@@ -641,6 +641,167 @@ controller traits (composed, configured) ─┤ subscribe; choose policy from co
 | `src/audio/music-controller.ts`   | The controller's API names scene meanings (`switchToBossTrack`, `playTitle`).                                                                                                                                                                                                                      | Cue names come from scene trait configuration; the controller maps a cue to tracks through the music plan, knowing no scene. |
 
 Acceptance for #538 children: the gap's row is gone or rewritten; the behaviour players see and hear is unchanged; tests cover the event and its configured response; the guardrail and production build pass.
+
+### Visual-event scheduler and game-time units (#541)
+
+**Target architecture; nothing here is built yet.** All timed presentation goes through **one shared visual-event scheduler**: score narration, flights, discards, exits, staggered activations and any later feedback. The scheduler is a service (see "Services and controller traits" above). Presentation controller traits decide what to present; the scheduler decides when it starts and tracks when it has finished. It presents outcomes the model has already committed, so it is not a gameplay bus. The synchronous core emitter (`src/core/emitter.ts`) keeps its meaning for local notifications. The **concrete interface, numeric limits and per-migration acceptance checks are #545's**, and must merge before #546 starts.
+
+_Evidence:_
+
+- the research result on #543 (patterns, a current-code map, and a recommended contract);
+- [the scheduler library decision](visual-scheduler-library-research.md) (#557, which supersedes #543's no-package preference);
+- [the tweening decision](tweening-library-research.md) (#556);
+- the gameplay lifecycle's presentation contract in [game-events.md](game-events.md), "Presentation and verification";
+- a source audit at `d023b29`, summarised under "Today's scheduling" below.
+
+The decisions below combine that evidence with the owner's requirements on #541 (game-time units, model first, concurrent interaction). Where this section picks a default the evidence leaves open, it says so.
+
+**Game-time units.** Presentation timing is configured in **game-time units**. One unit is **1/15 second** (1000/15 ms ≈ 66.667 ms).
+
+- A unit is a continuous length of time. It is not a rendering frame and not a 15 Hz simulation tick, so timings stay frame-rate independent.
+- Trait and effect configuration states durations and spacing in units. Only the scheduler's clock converts units to milliseconds.
+- A future gameplay-speed setting would scale that one conversion: one multiplier on the presentation clock, never a change to each effect. No speed setting or UI is built now.
+- Examples: the default stagger spacing is **2 units** (≈ 133.333 ms). This supersedes the 125 ms first written on #540. The Present reveal delay is 5 units (game-events.md).
+
+**One presentation clock.** The scheduler, the Tween.js service (#562) and every effect's progress read **one monotonic presentation clock**, in milliseconds.
+
+- The existing frame loop advances it by the real time between visible frames. It is not capped.
+- Today's 0.05 s cap on `delta` (`src/main.ts`, `animate`) stays as a stability limit for per-frame simulation. The scheduler never mixes that capped delta with absolute deadlines, and no presenter mixes `performance.now()` stamps with rAF timestamps (the mixing in today's code is a gap; see below).
+- **Hidden tab (proposed default):** the clock pauses while the document is hidden and resumes where it stopped. A returning player sees the remaining feedback continue, not a burst of every overdue flash and sound. This pauses presentation only. The model, saving and the legality of moves are unaffected. The owner has not separately decided this; it is the reversible engineering default the research recommended (#543, #557).
+
+**Events and handlers.** A scheduled event is plain data:
+
+- a registered **handler key**;
+- an immutable captured **payload**;
+- the **run generation** it belongs to;
+- its **scope**;
+- its **due time** on the presentation clock;
+- a monotonic **insertion number**.
+
+Handlers are registered by handler or step name and own all behaviour. The scheduler orders and dispatches entries and never asks what an event, item, material, scene or mode is.
+
+A handler receives a narrow presentation context: services, the clock, and the scheduler's own schedule/cancel capability for child events. It never receives `GameRun`, mutation access or the session RNG. A handler either completes instantly or returns an **effect handle** that advances on the clock and settles exactly once, as finished or as cancelled. The existing exit lifecycle (`ExitEffectInstance`: `update`/`finish`/`dispose`, run by `createExitRunner` in `src/visual/exit-presentation.ts`) is adapted to that handle, not rewritten. The same goes for the activation pulse's `start`/`frame`/`stop`.
+
+**Ordering, late frames and re-entry.** On each update the scheduler dispatches every entry whose due time has passed, in **(due time, insertion number)** order. TinyQueue 3.0.0 holds that order, behind the scheduler's adapter, as #557 decided.
+
+- **Late frames:** a late frame dispatches each due entry **exactly once**, in order. Each effect is started **at its scheduled due time**, not the frame's time, so a slow frame does not push later starts back. No entry is lost or repeated, and no minimum frame duration is invented.
+- **Budget:** work beyond the per-update budget stays due and goes first on the next update, still in order.
+- **Re-entry:** a handler that schedules a child goes through the same API, never recursing into the update. A child that is already due joins the same bounded pass.
+- **Tween callbacks:** Tween.js callbacks schedule only through this API (#556).
+
+**Composition.** Three compositions are built on scheduling and completion, not on new timers:
+
+- **Sequence:** a step starts when the previous step's scope settles.
+- **Parallel:** a scope settles when all its children settle.
+- **Stagger:** children start at fixed offsets and do not wait for one another.
+
+Starts may overlap. For example, a 450 ms pulse is still running when the next one starts 2 units later. That is why the scheduler is a timeline and not a FIFO that waits for each effect to finish.
+
+**`staggerEvents`.** `staggerEvents` is a reusable trait and a client of this scheduler. It is not a timer of its own.
+
+- **Input:** an ordered, captured sequence of event descriptions, from whichever controller trait produced them. The rack's order is captured when scoring commits (#540).
+- **Configuration:** `spacing` in units (default **2**) and `first` in units (default **0**, so the first event starts immediately).
+- **Schedule:** event _i_ starts at _t_ + `first` + _i_ × `spacing`. With the defaults, the starts are at _t_, _t_ + 2 units and _t_ + 4 units: 0, ≈133.333 and ≈266.667 ms after _t_.
+- **Completion:** it returns a scope that settles when every child has settled.
+- **What it doesn't know:** rack, passive, scoring and item identity. Each event's handler, for example an item's own activation pulse (#485), owns that event's look and sound.
+
+**Scopes, completion and cancellation.** Every event belongs to a scope.
+
+- **Hierarchy:** scopes nest: run generation, then scene, then committed action (a play or a discard), then event, then descendants.
+- **Completion:** a scope is complete only when all of these have settled: its pending starts, its active effects, and every descendant. A handler registers its children before its own effect settles, so a parent cannot settle early. An empty queue is not completion while an effect is still running.
+- **Cancellation:**
+  - It is idempotent and cascades to descendants.
+  - It settles each effect once, as cancelled, and releases its resources once.
+  - It never undoes committed gameplay.
+  - A new run invalidates the old generation, so late callbacks from it do nothing.
+  - Leaving a scene cancels that scene's scopes, unless a documented transfer moves them to a compatible scene.
+
+**Model first, concurrent play.** The scheduler is downstream of committed outcomes (game-events.md).
+
+- **Immediate commit:** every valid placement, discard or other action commits immediately. That covers scoring arithmetic, RNG, rewards and the stage outcome.
+- **Input is never gated:** nothing refuses, queues or ignores input because presentation is busy. Only a terminal model state may forbid moves, by the game's rules.
+- **One scope per action:** each committed action gets its own scope, with an immutable payload: the captured lines, shown-score endpoints, activations, source handles and captured order. A later play cannot change an earlier play's feedback. Earlier feedback cannot overwrite newer state, re-award points or present a stale outcome.
+- **Ordering across plays:** **score narration is sequenced in committed-play order**: play 2's narration starts when play 1's has settled. Independent feedback such as play 2's flight starts at once and may overlap.
+- **Missing targets:** a handler whose live visual target has gone uses its declared policy: settle without drawing, or draw from its snapshot. It never picks up a replacement card.
+
+**Result screens.** A stage-won or game-over presentation needs both of these:
+
+- the model is terminal for that generation;
+- that action's **required** scoring and material narration scopes have settled.
+
+Required scopes contain only bounded effects. Ambient effects never hold a result screen open, and a cancelled or stale generation cannot announce a result. The model's rewards and outcome are not delayed by this wait.
+
+**Bounds and overload.** #545 sets finite limits, each with synthetic-load evidence:
+
+- queued entries;
+- active effects;
+- dispatch work per update;
+- descendant depth;
+- the longest an effect may run before it is force-settled with a diagnostic.
+
+What happens at a limit:
+
+- An admission failure can't lock input, unbalance a scope's count or silently drop a score.
+- The producing controller trait's declared fallback applies, for example collapsing to a captured summary. Optional decorative work may be omitted under configured policy.
+- The scheduler itself never hard-codes "score" or "decorative" categories.
+
+**Reduced motion.** Reduced motion is effect policy, not scheduling. Effects and controller traits choose their shorter or still path from their configuration, as the activation pulse and exit effects already do, and still settle their handles. Scheduling order, scope completion and scoring correctness are the same either way.
+
+**Sound.** A handler plays registered sounds through `playSfx` when it dispatches. No effect creates its own audio context or timer.
+
+**Saving.** The queue is never saved. Continue restores the authoritative run and renders its current state, without replaying scoring, rewards or sounds.
+
+**What stays outside the scheduler.** Continuous per-frame behaviour keeps its own `update`/`frame` loop:
+
+- grass sway and rocking;
+- smoke emission and laser haze;
+- springs;
+- bubbles;
+- shader clocks such as the refraction ripple (#674).
+
+These aren't discrete events: scheduling them would turn every frame into queue entries. They never gate completion. A bounded effect that a committed action starts, such as an exit or a pulse, belongs in the scheduler.
+
+**Today's scheduling (source audit, `d023b29`).** These are migration gaps, not precedents:
+
+| Where                                                                 | Today                                                                                                                                                                                                      | Target                                                                                                             |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/play-presenter.ts` `queueScoreSteps`/`updateScore`               | Its own timed queue: `scoreSteps` 320 ms apart, then `outcomeAt`. At `outcomeAt` it reads the **live** `game().state` for the shown score and `roundOutcome` (stale-outcome risk). Only `reset()` cancels. | Score narration events with captured endpoints and outcome, in a per-play scope sequenced in play order (#547).    |
+| `src/play-presenter.ts` flights and discards                          | `startedAt: performance.now()` compared with rAF time (two time bases). A landing re-reads the live field.                                                                                                 | Flight and discard effects on the presentation clock with captured targets and a missing-target policy (#548).     |
+| `src/game-run-controller.ts` `decided`/`followOutcomes`               | `stageWonAt`/`gameOverAt` absolute deadlines (900/1400 ms) gated on `presenter.busy`, not on score narration settling.                                                                                     | Result screens wait on the terminal model and the required scopes.                                                 |
+| `src/main.ts` `animate`                                               | No hidden-tab handling. After a long gap every absolute deadline falls due on the same frame.                                                                                                              | The presentation clock pauses while the tab is hidden.                                                             |
+| `src/visual/exit-presentation.ts`                                     | A good lifecycle (parallel steps, `maxSeconds`, finish/dispose), but `createExitRunner` has no gameplay caller yet.                                                                                        | Adapted as scheduler effect handles when exits are presented (#549, with #510/#520).                               |
+| `src/passive-rack.ts` `activate`, `arrivalAt`                         | The pulse starts at `performance.now()`. The stagger is a side effect of score-step timing. Arrivals are spaced 180 ms by `performance.now()`.                                                             | Activations scheduled by `staggerEvents` from the captured order (#542, #540). Arrivals on the presentation clock. |
+| `src/menus.ts` stage-won ledger rows, `src/shop-view.ts` `burnUnsold` | Their own `setTimeout`/`performance.now()` timers.                                                                                                                                                         | Scheduler clients when next changed. Not part of #544's required migration.                                        |
+
+Neither `tinyqueue` nor `@tweenjs/tween.js` is installed today. #546 and #562 pin them when they implement.
+
+**Order of work.**
+
+1. **#545:** the concrete interface and limits. Documentation only, merged first.
+2. **#546:** the scheduler, clock and scopes, with a test handler. No production code uses it yet.
+3. **#547, #548, #549:** migrate scoring, then flights and discards, then exits. Each reuses the existing effect implementations and removes only the scheduling it replaces.
+4. **#542:** `staggerEvents`.
+5. **#540:** the rack integration, with 2-unit spacing.
+
+The Tween.js service (#562) can land alongside. Nothing in this list may start before the step above it has merged.
+
+**Implementation acceptance.** Tests use an injected clock and fake handlers, never real sleeps. They cover:
+
+- tied due times keeping insertion order;
+- a long late frame, with every event dispatched once at its scheduled start;
+- nested and same-time children within the budget;
+- sequence, parallel and stagger completion, including effects still running after the queue empties;
+- cancellation before and during effects, cascading once;
+- a new run and a scene exit;
+- a missing target;
+- overload fallback after partial admission, without hanging completion;
+- two plays committed in quick succession: the second plays while the first's long stagger is still running, the totals and RNG are correct, each keeps its own feedback, and the narration stays in order;
+- the result screen waiting for required scopes but not for ambient ones;
+- the hidden-tab pause;
+- no model mutation or RNG draw from any handler;
+- a new handler registered without editing the scheduler.
+
+A browser check confirms sound/visual order and that input stays responsive during long sequences.
 
 ### Example: game progression is a flow
 
