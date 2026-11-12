@@ -716,4 +716,31 @@ describe("the visual-event scheduler (#546)", () => {
     scheduler.disposeGeneration();
     expect(seen).toEqual([{ state: "cancelled" }]);
   });
+
+  it("runs no fallback when a callback cancels its own scope and then throws (#785 review)", () => {
+    const { scheduler, handlers, fallbacks } = harness();
+    let fallbackRuns = 0;
+    fallbacks.register("count", () => void fallbackRuns++);
+    handlers.register("cancelThenThrowStart", (_payload, context) => {
+      context.cancel(context.scope);
+      throw new Error("after cancel");
+    });
+    handlers.register("cancelThenThrowUpdate", (_payload, context) => ({
+      update: () => {
+        context.cancel(context.scope);
+        throw new Error("after cancel");
+      },
+      cancel: () => {},
+      dispose: () => {},
+    }));
+    for (const handler of ["cancelThenThrowStart", "cancelThenThrowUpdate"]) {
+      const scope = scheduler.createScope(null, { fallback: "count" });
+      scheduler.schedule(scope, { handler, dueUnits: 0 });
+      scheduler.seal(scope);
+      scheduler.update(0, true);
+      scheduler.update(10, true);
+      expect(scheduler.status(scope).state).toBe("cancelled");
+    }
+    expect(fallbackRuns).toBe(0);
+  });
 });

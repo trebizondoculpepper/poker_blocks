@@ -255,6 +255,9 @@ export function createVisualScheduler(
   };
 
   const fail = (scope: Scope, reason: string) => {
+    // A scope already cancelled (even from inside the failing callback) or from a disposed
+    // generation gets no failure policy: cancelled presentation emits nothing more (#785 review).
+    if (scope.state !== "pending" || scope.cancelling || scope.generation !== generation) return;
     scope.failure ??= reason;
     runFallback(scope, reason);
   };
