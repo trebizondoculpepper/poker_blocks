@@ -60,7 +60,9 @@ export function tableBlock(card: CardBlock, definition: MaterialDefinition): Pro
       );
       for (const extra of appearance.extras ?? [])
         for (const material of ([] as THREE.Material[]).concat(extra.material)) {
-          (material as THREE.MeshStandardMaterial).map?.dispose();
+          // An extra's own texture copy is freed; a shared one (marked) stays for its other users.
+          const map = (material as THREE.MeshStandardMaterial).map;
+          if (map && !map.userData.shared) map.dispose();
           material.dispose();
         }
       edges.geometry.dispose();

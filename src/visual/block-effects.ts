@@ -79,6 +79,8 @@ function puff(): THREE.DataTexture {
   puffTexture = new THREE.DataTexture(data, n, n);
   puffTexture.magFilter = puffTexture.minFilter = THREE.LinearFilter;
   puffTexture.needsUpdate = true;
+  // Shared: never freed with one block's resources (#653 review).
+  puffTexture.userData.shared = true;
   return puffTexture;
 }
 

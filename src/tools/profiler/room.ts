@@ -10,6 +10,8 @@
  * Developer-only: production never imports it (src/main.ts).
  */
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { setReflectionEnvironment } from "../../visual/block-appearance";
 import { playSfx } from "../../audio/sfx";
 import { gameModeFor, modeLink } from "../../game-modes";
 import "./all-cases";
@@ -85,6 +87,9 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: false });
   part("stage").append(renderer.domElement);
+  // Its own reflections: the game's environment belongs to another WebGL context, so metals and
+  // crystal would otherwise be measured reflecting nothing (#653 review).
+  const reflections = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
   const timer = createGpuTimer(renderer.getContext() as WebGL2RenderingContext);
   const runner = createProfilerRunner({
     renderer,
@@ -280,6 +285,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
         window.location.href,
       ).href;
       root.hidden = false;
+      // Blocks built here reflect the room's own environment, as in the object browser.
+      setReflectionEnvironment(reflections.texture);
       applySize();
       listCases();
     },
@@ -291,6 +298,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       controller?.abort();
       document.removeEventListener("visibilitychange", countVisibility);
       timer.dispose();
+      reflections.dispose();
       renderer.dispose();
       root.remove();
     },

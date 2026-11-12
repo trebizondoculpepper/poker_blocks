@@ -4,8 +4,17 @@ import { getMaterialDefinition, type MaterialDefinition } from "../../materials"
 import { standardDeck } from "../../cards";
 import { blockEffects } from "../../visual/block-effects";
 
+const extraMaps: { own: THREE.Texture; shared: THREE.Texture } = {
+  own: new THREE.Texture(),
+  shared: Object.assign(new THREE.Texture(), { userData: { shared: true } }),
+};
+
 vi.mock("../../visual/block-appearance", () => ({
   createBlockAppearance: () => ({
+    extras: [
+      new THREE.Mesh(undefined, new THREE.MeshBasicMaterial({ map: extraMaps.own })),
+      new THREE.Points(undefined, new THREE.PointsMaterial({ map: extraMaps.shared })),
+    ],
     geometry: new THREE.BoxGeometry(1, 1, 1),
     textures: [],
     materials: [new THREE.MeshStandardMaterial()],
@@ -40,5 +49,18 @@ describe("a profiled table block includes its look's ongoing effects (#653 revie
     block.dispose();
     expect(emitted.parent).toBeNull();
     expect(disposed).toBe(1);
+  });
+});
+
+describe("freeing a profiled block (#653 review)", () => {
+  it("frees its own extra textures but leaves a shared one for its other users", async () => {
+    const { tableBlock } = await import("./block-object");
+    let own = 0;
+    let shared = 0;
+    extraMaps.own.addEventListener("dispose", () => void own++);
+    extraMaps.shared.addEventListener("dispose", () => void shared++);
+    tableBlock(standardDeck[0]!, getMaterialDefinition("paper")).dispose();
+    expect(own).toBe(1);
+    expect(shared).toBe(0);
   });
 });

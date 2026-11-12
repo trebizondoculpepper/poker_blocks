@@ -47,7 +47,11 @@ let shared: THREE.Texture | null = null;
 
 /** The one star texture every star effect shares; never disposed by a single user. */
 export function starTexture(): THREE.Texture {
-  shared ??= drawStar();
+  if (!shared) {
+    shared = drawStar();
+    // Shared: whoever frees a block's own textures must leave this one (#653 review).
+    shared.userData.shared = true;
+  }
   return shared;
 }
 
