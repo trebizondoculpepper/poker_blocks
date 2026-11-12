@@ -117,3 +117,11 @@
   font-size: 12px;
   opacity: 0.8;
 }
+.crystal-comparison-tuning label {
+  display: block;
+  font-size: 12px;
+}
+.crystal-comparison-tuning input[type="range"] {
+  width: 120px;
+  vertical-align: middle;
+}
