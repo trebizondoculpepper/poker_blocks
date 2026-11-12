@@ -1,4 +1,5 @@
 import { beatShapes } from "./dance/beat-shapes";
+import { coinEntry } from "./stage-rewards";
 import { danceCycles } from "./dance/dance-floor";
 import { createActionLog } from "./action-log";
 import { describe, expect, it } from "vite-plus/test";
@@ -169,7 +170,7 @@ function recordingHost() {
           blocksPlayed: 40,
         }),
         stageReward: () => ({
-          entries: [{ source: "stage.complete", label: "Stage complete bonus", coins: 4 }],
+          entries: [coinEntry("stage.complete", "Stage complete bonus", 4)],
           balanceBefore: 1,
           balance: 5,
         }),

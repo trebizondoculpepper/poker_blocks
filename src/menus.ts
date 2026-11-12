@@ -5,6 +5,7 @@ import type { SoundEffectId } from "./audio/sfx-registry";
 import type { PanelLink } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
+import { rewardPresentations } from "./reward-presentation";
 import type { Settings } from "./settings";
 import { createSettingsPanel } from "./settings-panel";
 
@@ -412,11 +413,13 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
       row.className = "reward-row";
       const label = document.createElement("dt");
       label.textContent = entry.label;
-      const coins = document.createElement("dd");
-      coins.textContent = `+${entry.coins} coin${entry.coins === 1 ? "" : "s"}`;
-      row.append(label, coins);
+      // Each row through its own registered presentation: its value text and its cue.
+      const presentation = rewardPresentations.get(entry.presentation);
+      const value = document.createElement("dd");
+      value.textContent = presentation.value(entry);
+      row.append(label, value);
       ledger.append(row);
-      playSfx("reward.coin");
+      playSfx(presentation.cue);
     };
     rowTimers = reward.entries.map((_, index) =>
       window.setTimeout(() => reveal(index), (index + 1) * rowSeconds * 1000),

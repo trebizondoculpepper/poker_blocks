@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { entryCoins } from "./stage-rewards";
 import { standardDeck } from "./cards";
 import { Registry } from "./core/registry";
 import { baseDealer, type Dealer } from "./dealer";
@@ -150,7 +151,7 @@ describe("session lifecycle events (issue #13)", () => {
     const paid: number[][] = [];
     for (let stage = 0; stage < 3; stage++) {
       session.forceOutcome("won");
-      paid.push(session.claimStageRewards()!.entries.map(({ coins }) => coins));
+      paid.push(session.claimStageRewards()!.entries.map(entryCoins));
       session.advance();
       session.leaveShop();
     }
@@ -239,7 +240,7 @@ describe("numbered stage lifecycle (#660)", () => {
     for (let stage = 0; stage < 6; stage++) {
       session.forceOutcome("won");
       const entries = session.claimStageRewards()!.entries;
-      bounty.push(entries.find(({ coins }) => coins === 50) ? 1 : 0);
+      bounty.push(entries.find((entry) => entryCoins(entry) === 50) ? 1 : 0);
       session.advance();
       session.leaveShop();
     }
