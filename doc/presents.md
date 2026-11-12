@@ -46,3 +46,7 @@ Source audit at `e26e73e`:
 - #492/#497 and #552–#555 still described shop acquisition/stocking-time creation; update their scope to reward-time creation. Reuse their rankless container, generator and atomic replacement work. #580/#581 exact cloning remains relevant. These are outstanding implementation paths, not shipped features claimed by these docs.
 
 Verify stage-one/two wins and all losses grant nothing; stage-three wins with any configured dealer grant exactly once across repeated settlement, save/Continue and ledger re-entry, including the final configured round. Validate creation-fixed payload and RNG continuity through save, clone, deferred opening and replacement; no inventory double count, hidden-content leak or sale capability. Test mixed ledger totals, row ordering and SFX; stage-specific subscriptions; round shuffle/pop and discard return; and input during delayed presentation. No new reward for losses or post-game mode is implied.
+
+## Generic engineering contract (#552)
+
+[Opaque rankless actives and replacement](opaque-actives.md) specifies the reusable rankless/value/opening capabilities, one owned nested payload, identity adoption, generator eligibility, transaction rollback and persistence/cloning checks. It preserves the reward-time creation and stored opening policy above. Source inspection distinguishes current ordinary-card previews from missing runtime support.
