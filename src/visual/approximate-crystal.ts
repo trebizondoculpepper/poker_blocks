@@ -65,8 +65,9 @@ export function facetPattern(size = facetSize, points = 18, seed = 7): Uint8Arra
   const sites = Array.from({ length: points }, () => ({
     x: random() * size,
     y: random() * size,
-    colour: [0.6 + random() * 0.4, 0.6 + random() * 0.4, 0.7 + random() * 0.3],
-    shade: 0.15 + random() * 0.85,
+    // A spectral colour per facet, as a gem's fire splits light (#524: filled, coloured facets).
+    colour: new THREE.Color().setHSL(random(), 0.85, 0.62).toArray(),
+    shade: 0.45 + random() * 0.55,
   }));
   const data = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++)
@@ -85,9 +86,10 @@ export function facetPattern(size = facetSize, points = 18, seed = 7): Uint8Arra
           nearest = site;
         } else if (distance < second) second = distance;
       }
-      // Bright edges between facets, each facet's own shade inside.
-      const edge = Math.max(0, 1 - (Math.sqrt(second) - Math.sqrt(first)) / 3);
-      const value = Math.min(1, nearest.shade * 0.6 + edge);
+      // Each facet filled with its own colour and shade; only a faint seam between facets, so the
+      // fill, not an outline, is what shows (#524).
+      const edge = Math.max(0, 1 - (Math.sqrt(second) - Math.sqrt(first)) / 2);
+      const value = Math.min(1, nearest.shade + edge * 0.15);
       const at = (y * size + x) * 4;
       for (let channel = 0; channel < 3; channel++)
         data[at + channel] = Math.round(255 * value * nearest.colour[channel]!);
@@ -115,7 +117,7 @@ export function createFacetShell(geometry: THREE.BufferGeometry, tint = 0xffffff
     uniforms: {
       facets: { value: facetTexture() },
       depth: { value: 0.18 },
-      intensity: { value: 0.3 },
+      intensity: { value: 0.8 },
       tint: { value: new THREE.Color(tint) },
     },
     side: THREE.BackSide,
@@ -127,6 +129,29 @@ export function createFacetShell(geometry: THREE.BufferGeometry, tint = 0xffffff
   shell.scale.setScalar(0.96);
   shell.renderOrder = 10;
   return shell;
+}
+
+/**
+ * Fill a crystal face's see-through pane (#524). The face art leaves the pane fully transparent,
+ * because the current look fills it by transmission; without transmission the pane showed nothing
+ * but the block's far edges, which read as a wireframe. The pane becomes a pale, mostly opaque
+ * fill tinted like the crystal; the frame and the print keep their own colour and opacity.
+ * Works on RGBA pixel data in place.
+ */
+export function fillPane(
+  pixels: Uint8ClampedArray,
+  tint: THREE.Color,
+  paneAlpha = 0.7,
+  clearBelow = 150,
+): void {
+  const [r, g, b] = [tint.r, tint.g, tint.b].map((channel) => Math.round(225 + 30 * channel));
+  for (let at = 0; at < pixels.length; at += 4) {
+    if (pixels[at + 3]! >= clearBelow) continue;
+    pixels[at] = r!;
+    pixels[at + 1] = g!;
+    pixels[at + 2] = b!;
+    pixels[at + 3] = Math.round(255 * paneAlpha);
+  }
 }
 
 /** The outer layer on the table: tinted and see-through, no transmission pass. */
@@ -148,7 +173,6 @@ export function approximateOuter(
     envMap: environment,
     envMapIntensity: environmentIntensity,
     transparent: true,
-    opacity: 0.78,
     depthWrite: false,
     ...iridescence,
   });
