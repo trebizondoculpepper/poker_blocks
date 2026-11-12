@@ -47,6 +47,7 @@ import {
   type StageContext,
 } from "./passives";
 import {
+  crossingCells,
   passiveActivations,
   withOperationCounter,
   scoreFieldWithPassives,
@@ -724,12 +725,24 @@ export class GameRun {
 
     // 1. Placement: the batch once, then each block in placement order.
     const batchId = `${context.actionId}:play`;
-    this.passiveEvents.emit({ type: "play.placed", blockId: action.cardId, cardIds: placed });
-    for (const blockId of placed) this.passiveEvents.emit({ type: "block.placed", blockId });
+    // Each fact carries the block snapshots registered selectors read (`event-blocks`, #682 review).
+    const placedBlocks = () =>
+      placed.flatMap(
+        (id) => this.currentState.field.find(({ block }) => block.id === id)?.block ?? [],
+      );
+    const blocksNow = placedBlocks();
+    this.passiveEvents.emit({
+      type: "play.placed",
+      blockId: action.cardId,
+      cardIds: placed,
+      blocks: blocksNow,
+    });
+    for (const block of blocksNow)
+      this.passiveEvents.emit({ type: "block.placed", blockId: block.id, blocks: [block] });
     this.drainPhase(context, "placement", batchId);
 
     // 2. Before score: its configured steps (countdown deductions record pending triggers).
-    this.passiveEvents.emit({ type: "play.beforeScore", cardIds: placed });
+    this.passiveEvents.emit({ type: "play.beforeScore", cardIds: placed, blocks: placedBlocks() });
     this.drainPhase(context, "beforeScore", batchId);
     this.runSteps(phases.beforeScore, steps, context, "beforeScore", batchId);
 
@@ -742,11 +755,14 @@ export class GameRun {
       this.random,
     );
     const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
-    for (const line of this.scoredLines)
+    // Each line with the score context the `scored-line` selector reads (#682 review).
+    const lines = this.scoredLines.map(({ line }) => line);
+    for (const scored of this.scoredLines)
       this.passiveEvents.emit({
         type: "score.lineFinalized",
-        amount: line.points,
-        cardIds: [...line.blockIds],
+        amount: scored.points,
+        cardIds: [...scored.blockIds],
+        score: { line: scored.line, intersections: crossingCells(scored.line, lines) },
       });
     this.passiveEvents.emit({ type: "score.allLinesFinalized", amount: gained });
     this.runStats = recordPlay(this.runStats, gained, placed.length);
@@ -758,7 +774,7 @@ export class GameRun {
     this.drainPhase(context, "score", batchId);
 
     // 4. After score: its configured steps (reactions, then pending detonations).
-    this.passiveEvents.emit({ type: "play.afterScore", cardIds: placed });
+    this.passiveEvents.emit({ type: "play.afterScore", cardIds: placed, blocks: placedBlocks() });
     this.drainPhase(context, "afterScore", batchId);
     this.runSteps(phases.afterScore, steps, context, "afterScore", batchId);
     this.lastReactions = steps.reactions;

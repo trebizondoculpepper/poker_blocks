@@ -193,3 +193,51 @@ describe("event rules run at the play's phase barriers (#682 review)", () => {
     expect(game.state.coins).toBe(coins + 3);
   });
 });
+
+describe("phase facts carry what registered selectors read (#682 review)", () => {
+  const withRule = async (rule: Record<string, unknown>) => {
+    const { createPassiveBlock } = await import("../passives");
+    const base = createPassiveBlock("scrapper", "ctx.1");
+    const listener = {
+      ...base,
+      traits: { ...base.traits, passive: { traitId: "passive.event-rules", eventRules: [rule] } },
+    } as unknown as typeof base;
+    const rules = sandboxRunRules(demoRunRules);
+    const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    opening.installPassive(listener);
+    const hand = [standardDeck[0]!, standardDeck[13]!];
+    return GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      { ...opening.snapshot(), state: { ...opening.state, hand } },
+      () => 0,
+    );
+  };
+
+  it("gives score.lineFinalized the line the scored-line selector reads", async () => {
+    const game = await withRule({
+      on: "score.lineFinalized",
+      select: { id: "scored-line", config: {} },
+      where: { id: "line-length", config: { minimum: 2 } },
+      effects: [{ id: "add-coins", config: { amount: 4 } }],
+    });
+    const [first, second] = game.state.hand;
+    expect(game.play({ cardId: first!.id })).not.toBeNull();
+    const coins = game.state.coins;
+    expect(game.play({ cardId: second!.id, targetId: first!.id, face: "east" })).not.toBeNull();
+    expect(game.state.coins).toBe(coins + 4);
+  });
+
+  it("gives block.placed the block the event-blocks selector reads", async () => {
+    const game = await withRule({
+      on: "block.placed",
+      select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+      where: { id: "count-at-least", config: { minimum: 1 } },
+      effects: [{ id: "add-coins", config: { amount: 2 } }],
+    });
+    const coins = game.state.coins;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(game.state.coins).toBe(coins + 2);
+  });
+});
