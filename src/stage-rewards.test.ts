@@ -4,6 +4,7 @@ import { dealerRegistry } from "./dealer";
 import { GameRun } from "./game-run";
 import { makeDevDeck, materialOf } from "./materials";
 import { createPassiveBlock } from "./passives";
+import { registerRuleCommand, ruleCommands } from "./rule-commands";
 import { fromSaveRecord, toSaveRecord } from "./save";
 import { demoRunRules } from "./run-rules";
 import {
@@ -236,5 +237,90 @@ describe("typed reward entries (#729)", () => {
     expect(read([{ source: "a", label: "A", coins: 1.5 }], 1.5)).toBeNull();
     // A balance that disagrees with the coin effects.
     expect(read([coinEntry("a", "A", 3)], 2)).toBeNull();
+  });
+});
+
+describe("object grants settle atomically and exactly once (#730)", () => {
+  /** A run whose randomness is a seeded, checkpointed stream, as the run controller attaches. */
+  const seededRun = async () => {
+    const { Randomizer } = await import("./random");
+    const randomizer = new Randomizer(42);
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => randomizer.next());
+    game.attachRandomCheckpoints(randomizer);
+    game.forceOutcome("won");
+    return { game, randomizer };
+  };
+  const grantPassive = {
+    source: "test.grant",
+    label: "A passive",
+    effects: [{ id: "grant", config: { command: { id: "grant-unowned-passive", config: {} } } }],
+    presentation: "coins",
+  };
+
+  it("pays the coins, commits the grant once, and records what it granted", async () => {
+    const { game } = await seededRun();
+    const before = { coins: game.state.coins, rack: game.state.passiveRack.length };
+    const reward = game.settleStageRewards([
+      coinEntry("stage.complete", "Bonus", 4),
+      grantPassive,
+    ])!;
+    expect(game.state.coins).toBe(before.coins + 4);
+    expect(reward.balance - reward.balanceBefore).toBe(4);
+    expect(game.state.passiveRack).toHaveLength(before.rack + 1);
+    const granted = (reward.entries[1]!.effects[0]!.config as { granted: string[] }).granted;
+    expect(granted).toEqual([game.state.passiveRack.at(-1)!.id]);
+    // Settling again, or claiming, returns the same receipt and grants nothing more.
+    expect(game.settleStageRewards([grantPassive])).toBe(reward);
+    expect(game.claimStageRewards()).toBe(reward);
+    expect(game.state.passiveRack).toHaveLength(before.rack + 1);
+    expect(game.state.coins).toBe(before.coins + 4);
+  });
+
+  it("keeps the receipt through save and Continue, and never grants again", async () => {
+    const { game } = await seededRun();
+    game.settleStageRewards([grantPassive]);
+    const rack = game.state.passiveRack.length;
+    const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
+    const snapshot = fromSaveRecord(record, standardDeck, dealerRegistry)!;
+    const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, snapshot);
+    const receipt = resumed.claimStageRewards()!;
+    expect((receipt.entries[0]!.effects[0]!.config as { granted: string[] }).granted).toHaveLength(
+      1,
+    );
+    expect(resumed.settleStageRewards([grantPassive])).toEqual(receipt);
+    expect(resumed.state.passiveRack).toHaveLength(rack);
+  });
+
+  it("rolls everything back when a grant fails: no coins, no object, no marker, no draws", async () => {
+    if (!ruleCommands.has("test-grant-then-fail"))
+      registerRuleCommand("test-grant-then-fail", (_config, target) => {
+        target.grantUnownedPassive();
+        throw new Error("grant failed");
+      });
+    const { game, randomizer } = await seededRun();
+    const before = { state: game.state, cursor: randomizer.cursor };
+    const failing = {
+      ...grantPassive,
+      effects: [{ id: "grant", config: { command: { id: "test-grant-then-fail", config: {} } } }],
+    };
+    expect(game.settleStageRewards([coinEntry("stage.complete", "Bonus", 4), failing])).toBeNull();
+    expect(game.state).toBe(before.state);
+    expect(randomizer.cursor).toBe(before.cursor);
+    expect(game.stageReward).toBeNull();
+    // Nothing was paid, so a later settlement can still pay.
+    expect(game.settleStageRewards([coinEntry("stage.complete", "Bonus", 4)])).not.toBeNull();
+  });
+
+  it("refuses a malformed grant receipt at load", async () => {
+    const { game } = await seededRun();
+    game.settleStageRewards([grantPassive]);
+    const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
+    const effect = record.rewarded.reward.entries[0].effects[0];
+    const read = () => fromSaveRecord(record, standardDeck, dealerRegistry);
+    expect(read()).not.toBeNull();
+    effect.config.granted = [42];
+    expect(read()).toBeNull();
+    effect.config = { command: { id: "no-such-command", config: {} } };
+    expect(read()).toBeNull();
   });
 });

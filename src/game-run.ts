@@ -33,6 +33,8 @@ import {
   materialHandRewardEntries,
   materialFieldRewardEntries,
   stageRewardLedger,
+  rewardEffects,
+  type RewardEntry,
   type StageReward,
 } from "./stage-rewards";
 import { emptyRunStats, recordPlay, recordRoundComplete, type RunStats } from "./run-stats";
@@ -489,14 +491,43 @@ export class GameRun {
             ...materialFieldRewardEntries(this.currentState),
           ];
     if (outcome === "lost" && entries.length === 0) return null;
-    const balanceBefore = this.currentState.coins;
-    const balance = balanceBefore + ledgerTotal(entries);
-    this.currentState = { ...this.currentState, coins: balance };
-    this.rewarded = { stage, reward: { entries, balanceBefore, balance } };
-    this.lifecycle("reward.finalized", {
-      reward: { coins: balance - balanceBefore, balanceBefore, balance },
+    return this.settleStageRewards(entries);
+  }
+
+  /**
+   * Settle a ledger once (#730; doc/presents.md, "Mixed reward ledger and sound"). Every
+   * entry's effects commit their commands through the shared command path, the coins are paid,
+   * and the paid-stage marker records the finalized receipt (with any granted object IDs), all
+   * in one transaction: a failure leaves state, events and the random stream as they were, and
+   * nothing is paid. Settling a paid stage again returns its receipt and changes nothing.
+   */
+  settleStageRewards(entries: readonly RewardEntry[]): StageReward | null {
+    const stage = this.stageKey;
+    if (this.rewarded?.stage === stage) return this.rewarded.reward;
+    return this.transact("reward", undefined, () => {
+      const balanceBefore = this.currentState.coins;
+      const finalized = entries.map((entry) => ({
+        ...entry,
+        effects: entry.effects.map((effect) => {
+          const handler = rewardEffects.get(effect.id);
+          const events = commitCommands(
+            handler.commands?.(effect.config) ?? [],
+            this.commandTarget,
+          );
+          return handler.receipt
+            ? { ...effect, config: handler.receipt(effect.config, events) }
+            : effect;
+        }),
+      }));
+      const paid = ledgerTotal(finalized);
+      const balance = balanceBefore + paid;
+      this.currentState = { ...this.currentState, coins: this.currentState.coins + paid };
+      this.rewarded = { stage, reward: { entries: finalized, balanceBefore, balance } };
+      this.lifecycle("reward.finalized", {
+        reward: { coins: paid, balanceBefore, balance },
+      });
+      return this.rewarded.reward;
     });
-    return this.rewarded.reward;
   }
 
   useDealer(name: string): void {
