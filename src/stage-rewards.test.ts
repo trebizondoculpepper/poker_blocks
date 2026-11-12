@@ -324,3 +324,37 @@ describe("object grants settle atomically and exactly once (#730)", () => {
     expect(read()).toBeNull();
   });
 });
+
+describe("settlement review fixes (#740 review)", () => {
+  it("settles only a decided stage, never mid-play", () => {
+    const game = newRun();
+    const coins = game.state.coins;
+    expect(game.settleStageRewards([coinEntry("stage.complete", "Bonus", 4)])).toBeNull();
+    expect(game.state.coins).toBe(coins);
+    expect(game.stageReward).toBeNull();
+    // The stage's normal rewards are still paid when it is won.
+    game.forceOutcome("won");
+    expect(game.claimStageRewards()!.entries[0]!.source).toBe("stage.complete");
+  });
+
+  it("delivers and records the facts a grant's command reports", async () => {
+    const { Randomizer } = await import("./random");
+    const randomizer = new Randomizer(42);
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => randomizer.next());
+    game.attachRandomCheckpoints(randomizer);
+    game.forceOutcome("won");
+    game.settleStageRewards([
+      {
+        source: "test.grant",
+        label: "A passive",
+        effects: [
+          { id: "grant", config: { command: { id: "grant-unowned-passive", config: {} } } },
+        ],
+        presentation: "coins",
+      },
+    ]);
+    const types = game.actionFacts.map(({ type }) => type);
+    expect(types).toContain("passive.installed");
+    expect(types.indexOf("passive.installed")).toBeLessThan(types.indexOf("reward.finalized"));
+  });
+});

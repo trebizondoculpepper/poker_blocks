@@ -502,6 +502,9 @@ export class GameRun {
    * nothing is paid. Settling a paid stage again returns its receipt and changes nothing.
    */
   settleStageRewards(entries: readonly RewardEntry[]): StageReward | null {
+    // Only a decided stage settles: never mid-play (it would spend the stage's marker) or in the
+    // shop (whose key isn't a stage), whoever calls (#740 review).
+    if (!this.inStage || roundOutcome(this.currentState) === "playing") return null;
     const stage = this.stageKey;
     if (this.rewarded?.stage === stage) return this.rewarded.reward;
     return this.transact("reward", undefined, () => {
@@ -514,6 +517,9 @@ export class GameRun {
             handler.commands?.(effect.config) ?? [],
             this.commandTarget,
           );
+          // The grant's own facts (passive.installed, ...) are delivered and recorded like any
+          // command's, inside this settlement (#740 review).
+          for (const event of events) this.passiveEvents.emit(event);
           return handler.receipt
             ? { ...effect, config: handler.receipt(effect.config, events) }
             : effect;
