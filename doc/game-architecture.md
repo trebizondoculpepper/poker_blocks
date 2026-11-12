@@ -1294,6 +1294,8 @@ Research is conditional, not a mandatory separate mission or external search. Ex
 
 ## Visual performance profiler (#527)
 
+**Composable automatic profiling (#669).** Extend the registered `devProfiler` trait: composing it into any dev room starts the configured sweep on entry and produces results through registered report sinks. It owns policy/configuration and cancellation/disposal; narrow services measure/format only. Dev 16 and the unattended command host the same trait, with no room-identity branches or parallel schedulers. See [trait ownership and lifecycle](automatic-profiling.md#composable-profiler-trait-669).
+
 **Automatic sweep target (#663).** The standard full run now discovers the composed visual catalogs and measures baseline plus **1, 10 and 50 instances** per case/phase, then generates an outlier report automatically. [Automatic full-catalog profiling](automatic-profiling.md) defines complete-provider validation, representative hosts, matrix scheduling, GPU/CPU/draw-count ranking, version-2 JSON/CSV/HTML and room/one-command entry points. It supersedes the single-N method/export below for that standard sweep; the existing manual runner is the migration starting point. Missing families and software rendering remain explicit limits, never a successful full-GPU report.
 
 A developer room, `?mode=dev16`, measures what each visual object costs to draw, so expensive looks (such as the current crystal optics) can be found and compared. It complements the crystal comparison room (#524) and changes nothing in production: it never lowers quality or swaps renderers by itself.
