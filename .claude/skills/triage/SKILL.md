@@ -20,13 +20,18 @@ The tool is a Git dependency that follows the `main` branch of `trebizondoculpep
 
 2. If they match, say the tool is current and go to step 2.
 3. If they differ:
-   - Check the working tree first (`git status`). Don't disturb another agent's uncommitted work.
+   - Check the working tree first (`git status`). Don't disturb another agent's uncommitted work. Note the branch you are on and the pinned commit, so a failed update can be undone (step 4).
    - Update it on a branch of its own, never on `main`: `git checkout -b chore/update-github-triage origin/main`, then `npm install github-triage@"git+https://git@github.com/trebizondoculpepper/github_triage.git#main"`.
    - Confirm that the lockfile's `resolved` now names the new commit, and that `npm run triage -- --help` still runs.
    - Commit only `package.json` and `package-lock.json`. Push, then open a small PR: "Update github-triage to <short sha>". Give the old and new commits, and the upstream log between them (`gh api repos/trebizondoculpepper/github_triage/compare/<old>...<new> -q '.commits[].commit.message'`).
    - Merge it under the normal rules: CI green, Codex clean on the current head, no open threads.
    - Return to the branch you were on. Use the updated tool for the briefing: it is installed locally even before the PR merges.
-4. If the update fails (the network, an install error, or a CLI that no longer starts), say so. Run the briefing with the pinned version, and say which version you used.
+4. If the update fails (the network, an install error, or a CLI that no longer starts), say so, and restore the pinned version before the briefing. `npm run triage` runs whatever is installed in `node_modules`, so a broken update would still be the one in use.
+   - Discard the update: `git checkout -- package.json package-lock.json`.
+   - Reinstall from the restored lockfile: `npm ci`.
+   - Return to the branch you started on, and delete the abandoned update branch.
+   - Confirm that the lockfile's `resolved` names the original commit again, and that `npm run triage -- --help` runs.
+   - Then run the briefing, saying which version you used.
 
 Updating the tool changes no game code. It is still a lockfile change, so it goes through a PR like any other.
 
