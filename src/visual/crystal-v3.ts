@@ -140,6 +140,7 @@ export function crystalV3Environment(): THREE.DataTexture {
   environment.wrapT = THREE.ClampToEdgeWrapping;
   environment.magFilter = environment.minFilter = THREE.LinearFilter;
   environment.needsUpdate = true;
+  environment.userData.shared = true;
   return environment;
 }
 

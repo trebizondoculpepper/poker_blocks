@@ -68,6 +68,7 @@ export function laserNoiseTexture(): THREE.DataTexture {
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.magFilter = texture.minFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
+  texture.userData.shared = true;
   sharedNoise = texture;
   return texture;
 }

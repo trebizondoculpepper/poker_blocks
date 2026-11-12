@@ -16,6 +16,7 @@
  * randomness only: never the session's seeded stream.
  */
 import * as THREE from "three";
+import { cosmeticRandom } from "./block-effects";
 import { containedContents, containedLayers } from "./contained";
 import { starBrightness, starTexture } from "./star-particles";
 import { keepWorldSize } from "./world-sized-points";
@@ -59,7 +60,7 @@ containedContents.register("stars", (boundary, raw) => {
   const velocity = new Float32Array(count * 3);
   const ages = new Float32Array(count);
   const ramp = config.ramp.map((hex) => new THREE.Color(hex));
-  const random = Math.random;
+  const random = cosmeticRandom;
   const spawn = (i: number) => {
     for (let axis = 0; axis < 3; axis++) {
       positions[i * 3 + axis] = (random() * 2 - 1) * limit;

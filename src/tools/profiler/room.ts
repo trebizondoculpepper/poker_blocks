@@ -10,9 +10,12 @@
  * Developer-only: production never imports it (src/main.ts).
  */
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { setReflectionEnvironment } from "../../visual/block-appearance";
 import { playSfx } from "../../audio/sfx";
 import { gameModeFor, modeLink } from "../../game-modes";
-import { profilingCases, uncoveredCases } from "./cases";
+import "./all-cases";
+import { profilingCases, uncoveredCases, type ProfiledObject } from "./cases";
 import { costMeasures, profilerExport, sortedByCost, type ProfilerEnvironmentInfo } from "./export";
 import { createGpuTimer } from "./gpu-timer";
 import { createProfilerRunner, type CaseResult, type RunOptions } from "./runner";
@@ -28,6 +31,9 @@ export function runSettings(countText: string, framesText: string) {
 }
 
 export type ProfilerRoom = { show(backTo: string): void; hide(): void; dispose(): void };
+
+/** Frames a preview advances before it is shown. */
+const previewFrames = 30;
 
 /** Render qualities offered: the pixel ratio each one uses. */
 const qualities = { low: 1, standard: 1.5, high: 2 };
@@ -84,6 +90,9 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: false });
   part("stage").append(renderer.domElement);
+  // Its own reflections: the game's environment belongs to another WebGL context, so metals and
+  // crystal would otherwise be measured reflecting nothing (#653 review).
+  const reflections = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
   const timer = createGpuTimer(renderer.getContext() as WebGL2RenderingContext);
   const runner = createProfilerRunner({
     renderer,
@@ -100,6 +109,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
   let controller: AbortController | null = null;
   /** Bumped by each preview and each run, so a preview that resolves late knows it is stale. */
   let previewToken = 0;
+  /** The preview on the stage now, if any: a run takes it off before measuring. */
+  let activePreview: ProfiledObject | null = null;
   let lastExport: string | null = null;
   let results: CaseResult[] = [];
 
@@ -190,10 +201,28 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       one.dispose();
       return;
     }
+    // A preview still running is replaced: taken off and freed first, never orphaned (#653 review).
+    if (activePreview) endPreview(activePreview);
     runner.scene.add(one.object);
+    activePreview = one;
     runner.camera.position.set(0, 0, 5);
     runner.camera.lookAt(0, 0, 0);
-    renderer.render(runner.scene, runner.camera);
+    // Run it for half a second of real frames before the last one stays on screen: ongoing
+    // effects advance through `update`, and contents animated from the render itself (rising
+    // bubbles) need real rendered frames (#653 review). A run or another preview cuts it short.
+    for (let step = 0; step < previewFrames; step++) {
+      if (mine !== previewToken || controller) break;
+      one.update?.(1 / 60);
+      renderer.render(runner.scene, runner.camera);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    endPreview(one);
+  }
+
+  /** Take a preview off the stage and free it, once, whoever gets there first. */
+  function endPreview(one: ProfiledObject): void {
+    if (activePreview !== one) return;
+    activePreview = null;
     one.object.removeFromParent();
     one.dispose();
   }
@@ -212,6 +241,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       ({ value: id }) => [id, profilingCases.get(id)] as const,
     );
     previewToken++;
+    // A preview still animating leaves the stage now, so it never shares a measured frame.
+    if (activePreview) endPreview(activePreview);
     applySize();
     // The settings a run uses are fixed and recorded as it starts: later changes to the controls
     // affect the next run, never this run's metadata (#640 review).
@@ -279,6 +310,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
         window.location.href,
       ).href;
       root.hidden = false;
+      // Blocks built here reflect the room's own environment, as in the object browser.
+      setReflectionEnvironment(reflections.texture);
       applySize();
       listCases();
     },
@@ -290,6 +323,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       controller?.abort();
       document.removeEventListener("visibilitychange", countVisibility);
       timer.dispose();
+      reflections.dispose();
       renderer.dispose();
       root.remove();
     },
