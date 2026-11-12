@@ -82,8 +82,10 @@ function repeatingExit(definition: MaterialDefinition, seed: number): ProfiledOb
       { blockId: `profile-${seed}-${generation++}`, material: definition.id },
       {
         root: mesh,
-        shell: [mesh],
-        contents: mesh.children.filter((child) => !(child instanceof THREE.LineSegments)),
+        // The composition's own split: what it marked as contents fades; everything else of the
+        // block (its faces and the shell's inner layers and gloss) is shell.
+        shell: [mesh, ...mesh.children.filter((child) => !child.userData.containedContents)],
+        contents: mesh.children.filter((child) => child.userData.containedContents),
         release: () => block.dispose(),
       },
       sequence,
