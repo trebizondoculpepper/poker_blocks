@@ -370,3 +370,60 @@ describe("aggregate ordering and dice (#682 review)", () => {
     expect(seen).toEqual([before]);
   });
 });
+
+describe("aggregate rules: one roll, committed commands (#682 review)", () => {
+  const aggregateRun = async (effects: unknown[]) => {
+    const { createPassiveBlock } = await import("../passives");
+    const base = createPassiveBlock("scrapper", "agg.1");
+    const listener = {
+      ...base,
+      traits: {
+        ...base.traits,
+        passive: {
+          traitId: "passive.event-rules",
+          eventRules: [
+            {
+              on: "score.beforeTotalApplied",
+              select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+              where: { id: "always", config: {} },
+              effects,
+            },
+          ],
+        },
+      },
+    } as unknown as typeof base;
+    return listener;
+  };
+
+  it("does not resolve an aggregate rule's random value during line scoring", async () => {
+    const { scoreFieldWithPassives } = await import("../passive-effects");
+    const listener = await aggregateRun([
+      { id: "add-line-score", config: { amount: { valueSource: "roll", sides: 6 } } },
+    ]);
+    const { game, hand } = runWith();
+    expect(game.play({ cardId: hand[0]!.id })).not.toBeNull();
+    const never = () => {
+      throw new Error("drew a random value");
+    };
+    expect(() =>
+      scoreFieldWithPassives(game.state.field, [listener], undefined, never),
+    ).not.toThrow();
+  });
+
+  it("commits the commands an aggregate rule returns", async () => {
+    const listener = await aggregateRun([{ id: "add-coins", config: { amount: 5 } }]);
+    const rules = sandboxRunRules(demoRunRules);
+    const opening = new GameRun(dealerRegistry, rules, standardDeck, () => 0);
+    opening.installPassive(listener);
+    const game = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      opening.snapshot(),
+      () => 0,
+    );
+    const coins = game.state.coins;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(game.state.coins).toBe(coins + 5);
+  });
+});

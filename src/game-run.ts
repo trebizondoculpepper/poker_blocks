@@ -779,6 +779,14 @@ export class GameRun {
     // finalized line; it is applied once (#682 review).
     const total = resolveTotalWithPassives(gained, this.currentState.passiveRack, this.random);
     this.lastTotalActivations = total.activations;
+    // Its rules' commands commit through the shared path; their follow-ups drain before the
+    // total is applied (#682 review).
+    for (const event of commitCommands(
+      total.activations.flatMap(({ commands }) => commands),
+      this.commandTarget,
+    ))
+      this.passiveEvents.emit(event);
+    this.drainPhase(context, "score", batchId);
     this.runStats = recordPlay(this.runStats, total.value, placed.length);
     this.currentState = {
       ...this.currentState,

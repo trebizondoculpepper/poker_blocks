@@ -133,11 +133,14 @@ function scoreLines(
   const lines = findScoringLines(field);
   // One resolution: each passive's value sources (a die's roll) resolve once, here, before any
   // candidate hand is evaluated, and the same values apply to every line (#97).
+  // The aggregate's rules resolve their own values, once, when it runs (#682 review).
   const passives = rack.map((passive) => {
     const source = passiveSource(passive);
     return {
       ...source,
-      rules: source.rules.map((rule) => ruleHandlers.resolveValues(rule, random)),
+      rules: source.rules
+        .filter((rule) => rule.on !== beforeTotalPhase)
+        .map((rule) => ruleHandlers.resolveValues(rule, random)),
     };
   });
   return lines.map((line) => {
