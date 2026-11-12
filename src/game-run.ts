@@ -49,6 +49,7 @@ import {
 import {
   crossingCells,
   passiveActivations,
+  resolveTotalWithPassives,
   withOperationCounter,
   scoreFieldWithPassives,
   type PassiveScoredLine,
@@ -688,6 +689,8 @@ export class GameRun {
 
   /** The reactions the last play set off, in field order, for presentation (#366). */
   lastReactions: readonly AppliedReaction[] = [];
+  /** The aggregate rules that changed the last play's total, for presentation. */
+  lastTotalActivations: readonly RuleActivation[] = [];
   /** The steps the composed playfield controllers attached, for the run's lifetime. */
   private readonly playPhases: PlayPhases;
 
@@ -780,12 +783,24 @@ export class GameRun {
       });
     this.passiveEvents.emit({ type: "score.allLinesFinalized", amount: gained });
     this.drainPhase(context, "score", batchId);
-    this.runStats = recordPlay(this.runStats, gained, placed.length);
+    // The working aggregate: score.beforeTotalApplied may change the play's delta, never a
+    // finalized line; it is applied once.
+    const total = resolveTotalWithPassives(gained, this.currentState.passiveRack, this.random);
+    this.lastTotalActivations = total.activations;
+    // Its rules' commands commit through the shared path; their follow-ups drain before the
+    // total is applied.
+    for (const event of commitCommands(
+      total.activations.flatMap(({ commands }) => commands),
+      this.commandTarget,
+    ))
+      this.passiveEvents.emit(event);
+    this.drainPhase(context, "score", batchId);
+    this.runStats = recordPlay(this.runStats, total.value, placed.length);
     this.currentState = {
       ...this.currentState,
-      round: { ...this.currentState.round, score: scoreBefore + gained },
+      round: { ...this.currentState.round, score: scoreBefore + total.value },
     };
-    this.passiveEvents.emit({ type: "score.totalApplied", amount: gained });
+    this.passiveEvents.emit({ type: "score.totalApplied", amount: total.value });
     this.drainPhase(context, "score", batchId);
 
     // 4. After score: its configured steps (reactions, then pending detonations).

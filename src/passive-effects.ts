@@ -239,6 +239,39 @@ function scoreLines(
   });
 }
 
+/** The aggregate phase: may change a play's total delta, never a finalized line (#682 review). */
+export const beforeTotalPhase = "score.beforeTotalApplied";
+
+/**
+ * The rack's `score.beforeTotalApplied` rules over the play's working aggregate, after every line
+ * is finalized (doc/game-events.md, "Resolution order for a play", step 4). Pure, like line
+ * scoring: it returns the delta to apply once, rounded and never below zero (the same floor a
+ * line has), and the rules that fired, for presentation.
+ */
+export function resolveTotalWithPassives(
+  total: number,
+  rack: readonly PassiveBlock[],
+  random: () => number = noRandomSource,
+): { value: number; activations: RuleActivation[] } {
+  // Only the aggregate's own rules resolve their values: every other phase's dice were rolled
+  // once by line scoring, and must not draw again (#682 review; doc/game.md, dice).
+  const sources = rack.map((passive) => {
+    const source = passiveSource(passive);
+    return {
+      ...source,
+      rules: source.rules
+        .filter((rule) => rule.on === beforeTotalPhase)
+        .map((rule) => ruleHandlers.resolveValues(rule, random)),
+    };
+  });
+  const resolved = evaluateRules(
+    subscribedRules(sources, beforeTotalPhase),
+    { type: beforeTotalPhase, amount: total },
+    total,
+  );
+  return { value: Math.max(0, Math.round(resolved.value)), activations: resolved.activations };
+}
+
 /** For callers without the run's random source: fine until a rule tries to draw from it. */
 function noRandomSource(): number {
   throw new Error("This rule draws a random value: pass the run's random source");

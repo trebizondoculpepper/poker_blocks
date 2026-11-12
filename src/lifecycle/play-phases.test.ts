@@ -426,3 +426,50 @@ describe("a finalized line's card IDs are frozen (#696 review)", () => {
     expect(line.subjectIds).not.toContain("intruder");
   });
 });
+
+describe("the working aggregate (#658, part 5)", () => {
+  const aggregate = (effects: unknown[]) => ({
+    traitId: "passive.event-rules",
+    eventRules: [
+      {
+        on: "score.beforeTotalApplied",
+        select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+        where: { id: "always", config: {} },
+        effects,
+      },
+    ],
+  });
+
+  it("lets a score.beforeTotalApplied rule change the play's total, applied once", async () => {
+    const game = await withListener(aggregate([{ id: "add-line-score", config: { amount: 10 } }]));
+    const before = game.state.round.score;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    const lines = game.lastScoredLines.reduce((sum, { points }) => sum + points, 0);
+    expect(game.state.round.score).toBe(before + lines + 10);
+    const applied = game.actionFacts.filter(({ type }) => type === "score.totalApplied");
+    expect(applied).toHaveLength(1);
+    expect((applied[0]!.payload as { amount: number }).amount).toBe(lines + 10);
+  });
+
+  it("commits the commands an aggregate rule returns", async () => {
+    const game = await withListener(aggregate([{ id: "add-coins", config: { amount: 5 } }]));
+    const coins = game.state.coins;
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(game.state.coins).toBe(coins + 5);
+  });
+
+  it("rolls dice once: the aggregate never redraws line dice, line scoring never draws its", async () => {
+    const { createPassiveBlock } = await import("../passives");
+    const { resolveTotalWithPassives, scoreFieldWithPassives } = await import("../passive-effects");
+    const never = () => {
+      throw new Error("drew a random value");
+    };
+    expect(resolveTotalWithPassives(7, [createPassiveBlock("d6", "die.1")], never).value).toBe(7);
+    const roll = { id: "add-line-score", config: { amount: { valueSource: "roll", sides: 6 } } };
+    const game = await withListener(aggregate([roll]));
+    expect(game.play({ cardId: game.state.hand[0]!.id })).not.toBeNull();
+    expect(() =>
+      scoreFieldWithPassives(game.state.field, game.state.passiveRack, undefined, never),
+    ).not.toThrow();
+  });
+});
