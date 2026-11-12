@@ -772,8 +772,47 @@ describe("failure isolation, timeouts and context loss (#722)", () => {
       quick,
     );
     expect(run.aborted).toBe("context-lost");
-    expect(run.results.map(({ id }) => id)).toEqual(["first"]);
+    // Lost while the first case ran: its measurements are not accepted (#726 review).
+    expect(run.results).toEqual([]);
+    expect(run.failures).toEqual([
+      {
+        id: "first",
+        kind: "context-lost",
+        reason: "the WebGL context was lost while this case ran",
+      },
+    ]);
     expect(run.notRun).toEqual(["second", "third"]);
+  });
+
+  it("stops a case still building the moment the context is lost, not at its timeout", async () => {
+    const { env, memory } = fakeEnvironment();
+    let lose: (() => void) | null = null;
+    env.onContextLost = (listener) => {
+      lose = listener;
+      return () => {
+        lose = null;
+      };
+    };
+    const pending: ProfilingCase = {
+      ...testCase(memory),
+      create: () => {
+        // The context goes while this factory is still building, and it never settles.
+        queueMicrotask(() => lose?.());
+        return new Promise(() => {});
+      },
+    };
+    const started = Date.now();
+    const run = await createProfilerRunner(env).run(
+      [
+        ["pending", pending],
+        ["after", testCase(memory)],
+      ],
+      { ...quick, timeoutMs: 60_000 },
+    );
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(run.aborted).toBe("context-lost");
+    expect(run.failures.map(({ id, kind }) => [id, kind])).toEqual([["pending", "context-lost"]]);
+    expect(run.notRun).toEqual(["after"]);
   });
 
   it("keeps the completed results and lists the rest when cancelled", async () => {

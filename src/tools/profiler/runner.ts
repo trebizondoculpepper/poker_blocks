@@ -73,6 +73,11 @@ export type ProfilerEnvironment = {
   reflections?(): THREE.Texture;
   /** Whether the renderer's WebGL context has been lost (#722); the run stops if so. */
   contextLost?(): boolean;
+  /**
+   * Hear the moment the context is lost, so the active case stops at once rather than measuring
+   * a renderer that no longer draws (#726 review). Returns how to stop listening.
+   */
+  onContextLost?(listener: () => void): () => void;
   /** Whether the page is hidden now (its timing is not trustworthy). */
   hidden(): boolean;
   /**
@@ -154,7 +159,7 @@ export type CaseResult = {
 export type CaseFailure = {
   id: string;
   phase?: string;
-  kind: "error" | "timeout";
+  kind: "error" | "timeout" | "context-lost";
   reason: string;
 };
 
@@ -542,12 +547,19 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
         // Each case or phase gets its own deadline, combined with the run's cancel.
         const deadline = new AbortController();
         const timer = setTimeout(() => deadline.abort(), options.timeoutMs ?? defaultCaseTimeout);
+        // Losing the context mid-case stops this case at once, and the run after it.
+        let lostDuring = false;
+        const stopListening = env.onContextLost?.(() => {
+          lostDuring = true;
+          deadline.abort();
+        });
+        const lost = () => lostDuring || (env.contextLost?.() ?? false);
         signal = options.signal
           ? AbortSignal.any([options.signal, deadline.signal])
           : deadline.signal;
         const caseSignal = signal;
         const check = () => {
-          if (caseSignal.aborted) throw new Cancelled();
+          if (caseSignal.aborted || lost()) throw new Cancelled();
         };
         // Cosmetic randomness (stars, bubbles, grass) repeats exactly for a seed (#653 review).
         const restore = useCosmeticRandom(seededStream(options.seed));
@@ -560,9 +572,18 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
             check,
             invalidated,
           );
+          // Measured on a lost context: not a result. Recorded, and the run stops here.
+          if (lost()) {
+            failures.push(contextLostFailure(entry));
+            return finish(index + 1, { cancelled: false, aborted: "context-lost" });
+          }
           results.push({ ...result, sampling: entry.sampling });
         } catch (error) {
           if (options.signal?.aborted) return finish(index, { cancelled: true, aborted: null });
+          if (lost()) {
+            failures.push(contextLostFailure(entry));
+            return finish(index + 1, { cancelled: false, aborted: "context-lost" });
+          }
           // The case's own resources were released by its cleanup; independent cases go on.
           failures.push({
             id: entry.id,
@@ -579,12 +600,22 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
           });
         } finally {
           clearTimeout(timer);
+          stopListening?.();
           restore();
         }
       }
       return finish(queue.length, { cancelled: false, aborted: null });
     },
   };
+
+  function contextLostFailure(entry: { id: string; phase?: string }): CaseFailure {
+    return {
+      id: entry.id,
+      ...(entry.phase ? { phase: entry.phase } : {}),
+      kind: "context-lost",
+      reason: "the WebGL context was lost while this case ran",
+    };
+  }
 
   function timing(): RunResult["gpuTiming"] {
     return env.timer.available ? "available" : "unavailable";

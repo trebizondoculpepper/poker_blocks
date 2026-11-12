@@ -142,6 +142,10 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     visibilityChanges: () => visibilityChanges,
     // A lost context stops the run with the reason recorded (#722).
     contextLost: () => contextLost,
+    onContextLost: (listener) => {
+      renderer.domElement.addEventListener("webglcontextlost", listener);
+      return () => renderer.domElement.removeEventListener("webglcontextlost", listener);
+    },
   });
 
   let contextLost = false;
