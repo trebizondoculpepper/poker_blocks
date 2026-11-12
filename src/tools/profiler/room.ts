@@ -217,7 +217,12 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
           cell(`${ms(largestSet(result)?.frame.median)} (${ms(largestSet(result)?.frame.p95)})`),
           cell(String(largestSet(result)?.counts.calls ?? "n/a")),
           cell(String(largestSet(result)?.counts.triangles ?? "n/a")),
-          cell(ms(result.creation.build + result.creation.firstFrame)),
+          // Creation per count, raw for the whole set (build plus compiling first frame).
+          cell(
+            result.counts
+              .map(({ creation }) => ms(creation.build + creation.firstFrame))
+              .join(" / "),
+          ),
           cell(
             result.leaked.geometries || result.leaked.textures
               ? `${result.leaked.geometries}g ${result.leaked.textures}t`

@@ -116,6 +116,8 @@ export type Framing = { gridSide: number; cameraDistance: number; fov: number };
 export type CountResult = {
   count: number;
   framing: Framing;
+  /** Milliseconds to build this count's objects and render their first (compiling) frame. */
+  creation: { build: number; firstFrame: number };
   set: SampleSet;
   relative: { gpu: number | null; cpu: number };
 };
@@ -134,8 +136,6 @@ export type CaseResult = {
   sampling: ProfilingPhase["sampling"];
   /** The registered host it was drawn in (#712). */
   host: string;
-  /** Milliseconds to build one object and to render its first (compiling) frame. */
-  creation: { build: number; firstFrame: number };
   baseline: SampleSet;
   /** One record per requested count, in the order run (#721): never fixed one/collection slots. */
   counts: CountResult[];
@@ -385,7 +385,6 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     const less = (a: number | undefined, b: number | undefined) =>
       a === undefined || b === undefined ? null : a - b;
     const measuredCounts: CountResult[] = [];
-    let creation: CaseResult["creation"] | null = null;
     let objects: ProfiledObject[] = [];
     try {
       for (const count of counts) {
@@ -398,8 +397,6 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
         const firstStart = env.now();
         frame(objects, 0);
         const firstFrame = env.now() - firstStart;
-        // Creation is reported for one object: the first count's build, divided out.
-        creation ??= { build: buildTime / count, firstFrame };
         await warm(objects, options, check);
         const set = await measured(`${label}/${count}`, objects, options, check, invalidated);
         remove(objects);
@@ -408,6 +405,9 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
         measuredCounts.push({
           count,
           framing,
+          // Raw, for the whole set: building all `count` objects and their compiling first
+          // frame. Shared setup and compilation make it non-additive, so it is never divided.
+          creation: { build: buildTime, firstFrame },
           set,
           // Baseline-relative estimates: not additive per-object costs.
           relative: {
@@ -434,7 +434,6 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
         unit: profile.unit ?? oneBlock,
         ...(profile.variant ? { variant: profile.variant } : {}),
         sampling: "steady" as ProfilingPhase["sampling"],
-        creation: creation ?? { build: 0, firstFrame: 0 },
         baseline,
         counts: measuredCounts,
         leaked: {

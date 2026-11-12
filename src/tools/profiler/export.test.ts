@@ -17,11 +17,11 @@ const result = (id: string, gpu: number | null, cpu: number): CaseResult => ({
   unit: { kind: "group", size: 4 },
   sampling: "steady",
   host: "board",
-  creation: { build: 1, firstFrame: 2 },
   baseline: set(gpu === null ? null : 0.1, 0.1),
   counts: [1, 10, 50].map((count) => ({
     count,
     framing: { gridSide: Math.ceil(Math.sqrt(count)), cameraDistance: 5, fov: 40 },
+    creation: { build: count, firstFrame: 2 },
     set: set(gpu === null ? null : gpu * count, cpu * count),
     relative: { gpu, cpu },
   })),

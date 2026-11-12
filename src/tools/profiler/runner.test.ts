@@ -658,3 +658,29 @@ describe("the count matrix (#721)", () => {
     expect(run.results[0]!.counts.map(({ count }) => count)).toEqual([2, 3, 7]);
   });
 });
+
+describe("creation timings per count (#723 review)", () => {
+  it("keeps each count's raw build and first-frame time, never divided or dropped", async () => {
+    const { env, memory } = fakeEnvironment();
+    // Building takes 2 ms per object in this case, so each count's build time scales with it.
+    const base = testCase(memory);
+    let clockShift = 0;
+    const now = env.now;
+    env.now = () => now() + clockShift;
+    const slow: ProfilingCase = {
+      ...base,
+      create: (context) => {
+        clockShift += 2;
+        return base.create(context);
+      },
+    };
+    const run = await createProfilerRunner(env).run([["slow", slow]], {
+      ...options,
+      counts: [1, 5],
+    });
+    const builds = run.results[0]!.counts.map(({ creation }) => creation.build);
+    expect(builds).toEqual([2, 10]);
+    for (const { creation } of run.results[0]!.counts)
+      expect(creation.firstFrame).toBeGreaterThanOrEqual(0);
+  });
+});
