@@ -172,11 +172,14 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     }
     // Collect the queries still in flight, a bounded number of frames.
     for (let i = 0; i < 30 && env.timer.pending > 0; i++) {
+      check();
       await env.nextFrame();
       gpu.push(...env.timer.poll());
     }
     // Any still unanswered after the bounded drain are dropped, not left for the next set.
     env.timer.discard();
+    // A cancel during the last set's drain still cancels (#625 review).
+    check();
     return {
       spoiled,
       set: {
@@ -251,7 +254,11 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     invalidated: string[],
   ): Promise<CaseResult> {
     const label = phase ? `${id}:${phase}` : id;
-    frameFor(1);
+    const count = options.count ?? profile.defaultCount ?? 25;
+    // One framing for every set of the case, chosen for its collection: baseline, one object and
+    // collection are all seen from the same place, so each object covers the same screen area
+    // in every set (#625 review).
+    frameFor(count);
     await warm([], options, check);
     const before = counts();
     const baseline = await measured(`${label}/baseline`, [], options, check, invalidated);
@@ -266,9 +273,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       await warm(objects, options, check);
       const one = await measured(`${label}/one`, objects, options, check, invalidated);
       remove(objects);
-      const count = options.count ?? profile.defaultCount ?? 25;
       objects = await build(profile, count, options, phase);
-      frameFor(count);
       await warm(objects, options, check);
       const collection = await measured(
         `${label}/collection`,

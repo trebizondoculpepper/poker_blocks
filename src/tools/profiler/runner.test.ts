@@ -301,3 +301,53 @@ describe("the GPU timer (#625 review)", () => {
     expect(timer.rejected).toBe(0);
   });
 });
+
+describe("the runner's fairness and cancellation (#625 review)", () => {
+  it("sees every set of a case from the same camera position", async () => {
+    const { env, memory } = fakeEnvironment();
+    const seen = new Set<string>();
+    const render = env.renderer.render.bind(env.renderer);
+    env.renderer.render = (scene, camera) => {
+      seen.add(camera.position.toArray().join(","));
+      render(scene, camera);
+    };
+    await createProfilerRunner(env).run([["cube", testCase(memory)]], options);
+    expect(seen.size).toBe(1);
+  });
+
+  it("honours a cancel that arrives while the last set's GPU queries drain", async () => {
+    const { env, memory, frameCount } = fakeEnvironment();
+    const controller = new AbortController();
+    let open = 0;
+    env.timer = {
+      available: true,
+      begin() {},
+      end() {
+        open++;
+      },
+      // Nothing is ever answered, so every set drains for its full bound.
+      poll: () => [],
+      discard() {
+        open = 0;
+      },
+      get pending() {
+        return open;
+      },
+      rejected: 0,
+      dispose() {},
+    };
+    const next = env.nextFrame.bind(env);
+    // Each set takes 3 warm-up frames, 10 sampled frames and a 30-frame drain: 129 in all. Frame
+    // 125 falls inside the last set's drain.
+    env.nextFrame = async () => {
+      await next();
+      if (frameCount() === 125) controller.abort();
+    };
+    const run = await createProfilerRunner(env).run([["cube", testCase(memory)]], {
+      ...options,
+      signal: controller.signal,
+    });
+    expect(run.cancelled).toBe(true);
+    expect(run.results).toEqual([]);
+  });
+});
