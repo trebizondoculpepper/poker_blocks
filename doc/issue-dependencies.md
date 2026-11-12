@@ -128,8 +128,9 @@ The plan is a JSON file (versioned schema) plus a printed summary grouped into `
 ### Apply
 
 - Rows with status `apply` only, in issue-number order, one at a time. It paces requests and stops on a secondary rate-limit response rather than retrying in a hurry.
-- Before changing a ticket, it re-reads it live. If its `updatedAt` differs from the plan's, it skips the ticket and reports that it changed since planning.
-- **Idempotent:** existing edges and labels that already match are skipped, so a partly failed run can be re-applied.
+- **Progress journal.** Apply keeps a journal file beside the plan (`<plan>.progress.json`). For each ticket it records each step as it completes (edges, then labels, then comment) and the ticket's `updatedAt` as GitHub reports it after the tool's own last write.
+- **Change guard.** Before changing a ticket, it re-reads it live. The expected `updatedAt` is the journal's value if the ticket has a journal entry, otherwise the plan's. If the live value differs, someone else edited the ticket: it skips the ticket and reports that it changed since planning, or since the last partial apply.
+- **Idempotent retry.** Re-applying the same plan resumes from the journal: completed steps are skipped, and existing edges and labels that already match are skipped. A run that changed labels but failed to post the comment therefore finishes by posting the comment, rather than tripping the change guard on its own edit.
 - For each ticket it changes, it adds the edges, swaps the labels, then posts **one** comment listing the recorded blockers and label changes and linking #703.
 - **It leaves issue bodies unchanged.** The old text stays as history, and `deps` reports any drift.
 - It ends with a summary: applied, skipped (with reasons) and failed. Exit 2 if anything was skipped or failed.
