@@ -97,6 +97,8 @@ export type SceneTraits = {
   devContainedProof: { backTo: string };
   /** Developer tool: the visual performance profiler (dev16, #527). */
   devProfiler: { backTo: string };
+  /** Developer tool: switch a fixed crystal collection between optics backends (dev17, #524). */
+  devCrystalComparison: DevCrystalComparisonConfig;
   /**
    * Developer tool: the menu block audition room (dev13, #303). Each item becomes a word cube
    * made by the real creator; activating one shows its action rather than running it.
@@ -286,6 +288,18 @@ export const blockMenuMotion = {
   spring: { stiffness: 70, damping: 5, restJitter: 0.04, tiltJitter: 2 },
   beat: { cycle: "beat", kick: 0.7, stagger: 0.08 },
 } satisfies Pick<DevDialogRoomConfig, "spring" | "beat">;
+
+export type DevCrystalComparisonConfig = {
+  backTo: string;
+  /** The material whose blocks are compared. */
+  material: string;
+  /** The registered optics backends offered, first shown first (src/visual/optics-backends.ts). */
+  backends: readonly string[];
+  /** Blocks in the collection to start with. */
+  count: number;
+  /** The collection's seed: the same cards and orientations whichever backend is shown. */
+  seed: number;
+};
 
 export type DevDialogRoomConfig = {
   backTo: string;
@@ -483,6 +497,7 @@ export const sceneDefinitions = [
         { name: "block-designer", traits: {} },
         { name: "contained-proof", traits: {} },
         { name: "profiler", traits: {} },
+        { name: "crystal-comparison", traits: {} },
         { name: "menu-blocks", traits: {} },
         { name: "dialogs", traits: {} },
         {
@@ -1085,6 +1100,34 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev16-run" },
             console: { name: "dev16" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // Crystal looks side by side (#524): the same collection, current or approximate optics.
+          id: "dev17",
+          scenes: composeScenes("dev17", [
+            {
+              scenes: ["crystal-comparison"],
+              traits: {
+                devCrystalComparison: {
+                  backTo: "game",
+                  material: "prismatic",
+                  backends: ["current", "approximation"],
+                  count: 9,
+                  seed: 524,
+                },
+              },
+            },
+          ]),
+          startScene: "crystal-comparison",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev17-run" },
+            console: { name: "dev17" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,

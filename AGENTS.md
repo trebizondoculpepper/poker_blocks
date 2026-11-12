@@ -109,3 +109,7 @@ See [doc/sound_design.md](doc/sound_design.md) for the full sound list and appro
 ## Inter-agent mail
 
 At the start of every session, read https://api.hub.stodge.org/prompts/agent and do what it says.
+
+## Gameplay lifecycle review (#611)
+
+Use [doc/game-events.md](doc/game-events.md) and "Gameplay lifecycle and material composition" in [doc/game-architecture.md](doc/game-architecture.md) for lifecycle changes. Model controller traits coordinate registered commands; presentation controllers/services cannot mutate gameplay. Review phase ordering, subscription scope/disposal, immutable event context, batch/per-block granularity, shared cascade limits, state/RNG rollback and restoration without replay. Material behavior must arrive through the playfield composition, never a generic flag or material branch. Derived queries are pure, snapshot-scoped and requested on demand. Flag a changed path that violates these guarantees; do not demand unrelated optional hooks or topology features. Current direct material calls and legacy destruction-to-discard are migration gaps, not precedents.

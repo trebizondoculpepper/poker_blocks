@@ -45,6 +45,7 @@ import { sceneBehaviours, type SceneHost } from "./scene-behaviours";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView, type ShopView } from "./shop-view";
 import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
+import type { CrystalComparisonRoom } from "./tools/crystal-comparison/room";
 import { createBinView, type BinView } from "./bin-view";
 import { createSelectionBadge, type SelectionBadge } from "./selection-badge";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
@@ -145,6 +146,7 @@ type TraitContext = {
     devBlockDesigner: ShopBalanceEditor;
     devContainedProof: ShopBalanceEditor;
     devProfiler: ShopBalanceEditor;
+    devCrystalComparison: CrystalComparisonRoom;
     devWordCubeRoom: WordCubeRoom;
     dialogs: SceneHost["services"]["dialogs"];
     devDialogRoom: DialogRoom;
@@ -167,6 +169,9 @@ const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
   : { show() {}, hide() {}, dispose() {} };
 const devProfiler: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/profiler/room")).createProfilerRoom(host)
+  : { show() {}, hide() {}, dispose() {} };
+const devCrystalComparison: CrystalComparisonRoom = import.meta.env.DEV
+  ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host)
   : { show() {}, hide() {}, dispose() {} };
 const devWordCubeRoom: WordCubeRoom = import.meta.env.DEV
   ? (await import("./tools/word-cube-room")).createWordCubeRoom(host)
@@ -257,6 +262,7 @@ const traitContext: TraitContext = {
     devBlockDesigner,
     devContainedProof,
     devProfiler,
+    devCrystalComparison,
     devWordCubeRoom,
     // Every dialog a scene composes goes to the game's presenter and, in development, to the
     // dialog room (dev14), which shows only while its own scene does.
@@ -464,6 +470,7 @@ if (import.meta.hot) {
     devBlockDesigner.dispose();
     devContainedProof.dispose();
     devProfiler.dispose();
+    devCrystalComparison.dispose();
     devWordCubeRoom.dispose();
     devDialogRoom.dispose();
     dialogPresenter.dispose();

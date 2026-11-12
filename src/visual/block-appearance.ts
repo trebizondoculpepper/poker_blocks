@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { approximateOuter, createFacetShell } from "./approximate-crystal";
+import { approximateOuter, createFacetShell, fillPane } from "./approximate-crystal";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
@@ -1264,6 +1264,22 @@ function refractiveCrystal(context: AssemblyContext): BlockAppearance {
   );
 }
 
+/** A copy of a face texture with its see-through pane filled (src/visual/approximate-crystal.ts). */
+function paneFilled(texture: THREE.CanvasTexture, tint: number): THREE.CanvasTexture {
+  const source = texture.image as HTMLCanvasElement;
+  const canvas = document.createElement("canvas");
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const g = canvas.getContext("2d")!;
+  g.drawImage(source, 0, 0);
+  const pixels = g.getImageData(0, 0, canvas.width, canvas.height);
+  fillPane(pixels.data, new THREE.Color(tint));
+  g.putImageData(pixels, 0, 0);
+  const filled = new THREE.CanvasTexture(canvas);
+  filled.colorSpace = texture.colorSpace;
+  return filled;
+}
+
 /**
  * Approximate crystal (#523): the same artwork, hand look and print, but on the table a tinted
  * see-through layer and a parallax facet shell instead of transmission and the crystal fire.
@@ -1276,8 +1292,9 @@ function approximateCrystal(context: AssemblyContext): BlockAppearance {
   const height = heightFor(texture, art, definition.appearance);
   const print = printSkin(art, definition.appearance, geometry);
   const inHand = surface(texture, definition.appearance, height);
+  const filled = paneFilled(texture, optics.tint);
   const onTable = approximateOuter(
-    texture,
+    filled,
     optics.tint,
     reflectionEnvironment,
     optics.tableEnvironment,
@@ -1285,7 +1302,7 @@ function approximateCrystal(context: AssemblyContext): BlockAppearance {
   );
   return appearanceBase(
     context,
-    [texture, ...[height].filter((value) => value !== undefined), print.texture],
+    [texture, filled, ...[height].filter((value) => value !== undefined), print.texture],
     Array.from({ length: 6 }, () => inHand),
     [createFacetShell(geometry, optics.tint), print.skin],
     Array.from({ length: 6 }, () => onTable),
