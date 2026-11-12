@@ -421,4 +421,65 @@ describe("the visual-event scheduler (#546)", () => {
     expect(scheduler.status(play1).state).toBe("finished");
     expect(scheduler.status(play2).state).toBe("finished");
   });
+
+  it("reports a cancelled parent as cancelled once, never finished first (#785 review)", () => {
+    const { scheduler } = harness();
+    const parent = scheduler.createScope(null);
+    const child = scheduler.createScope(parent);
+    scheduler.schedule(child, {
+      handler: "effect",
+      payload: { label: "x", ms: 1000 },
+      dueUnits: 0,
+    });
+    scheduler.seal(child);
+    scheduler.seal(parent);
+    scheduler.update(0, true);
+    const seen: ScopeStatus[] = [];
+    scheduler.observe(parent, (status) => seen.push(status));
+    scheduler.cancel(parent);
+    expect(seen).toEqual([{ state: "cancelled" }]);
+  });
+
+  it("releases an effect returned after its handler cancelled its own scope (#785 review)", () => {
+    const { scheduler, handlers } = harness();
+    const released: string[] = [];
+    handlers.register("self-cancel", (_payload, context) => {
+      context.cancel(context.scope);
+      return {
+        update: () => "running",
+        cancel: () => void released.push("cancel"),
+        dispose: () => void released.push("dispose"),
+      };
+    });
+    const scope = scheduler.createScope(null);
+    scheduler.schedule(scope, { handler: "self-cancel", dueUnits: 0 });
+    scheduler.update(0, true);
+    scheduler.disposeGeneration();
+    expect(released).toEqual(["cancel", "dispose"]);
+    expect(scheduler.counts).toMatchObject({ active: 0, entries: 0 });
+  });
+
+  it("gives a stale parent from a disposed generation a cancelled scope, not a new root (#785 review)", () => {
+    const { scheduler } = harness();
+    const oldScene = scheduler.createScope(null);
+    scheduler.disposeGeneration();
+    const late = scheduler.createScope(oldScene);
+    expect(scheduler.status(late).state).toBe("cancelled");
+    expect(
+      scheduler.schedule(late, { handler: "mark", payload: { label: "old" }, dueUnits: 0 })
+        .accepted,
+    ).toBe(false);
+  });
+
+  it("refuses scope overrides that would disable the bounds (#785 review)", () => {
+    const { scheduler } = harness();
+    for (const config of [
+      { maxEffectMs: Number.NaN },
+      { maxEffectMs: Infinity },
+      { maxEffectMs: 0 },
+      { maxPending: 1.5 },
+      { maxPending: 0 },
+    ])
+      expect(() => scheduler.createScope(null, config)).toThrow();
+  });
 });

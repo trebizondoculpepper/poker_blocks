@@ -118,6 +118,8 @@ type Scope = {
   active: number;
   failure: string | null;
   fallbackRan: boolean;
+  /** Being cancelled: its children's settling must not report it finished (#785 review). */
+  cancelling: boolean;
   listeners: Set<(status: ScopeStatus) => void>;
 };
 
@@ -231,7 +233,7 @@ export function createVisualScheduler(
 
   /** Settle a scope once everything it owns has settled, then its parent may settle. */
   const settleIfDone = (scope: Scope) => {
-    if (scope.state !== "pending" || !scope.sealed) return;
+    if (scope.state !== "pending" || scope.cancelling || !scope.sealed) return;
     if (scope.pending > 0 || scope.active > 0) return;
     for (const child of scope.children) if (child.state === "pending") return;
     scope.state = scope.failure ? "failed" : "finished";
@@ -266,7 +268,9 @@ export function createVisualScheduler(
   };
 
   const cancelScope = (scope: Scope) => {
-    if (scope.state !== "pending") return;
+    if (scope.state !== "pending" || scope.cancelling) return;
+    // Marked first, so the children cancelled below cannot settle this scope as finished.
+    scope.cancelling = true;
     for (const child of Array.from(scope.children)) cancelScope(child);
     const hadPending = [...scope.events].some(({ state }) => state === "pending");
     for (const entry of Array.from(scope.events)) {
@@ -374,6 +378,14 @@ export function createVisualScheduler(
       finishEntry(entry);
       return;
     }
+    // The handler cancelled its own scope (or event) before returning this effect: it was
+    // never mounted, so it is cancelled and released at once, exactly once (#785 review).
+    // Re-read: the handler may have settled this entry (TypeScript can't see that side effect).
+    if ((entry.state as Entry["state"]) === "settled") {
+      result.cancel();
+      result.dispose();
+      return;
+    }
     entry.effect = {
       update: (now) => result.update(now),
       cancel: () => {
@@ -394,9 +406,23 @@ export function createVisualScheduler(
     },
     /** A scope in the current generation; producer registration open until sealed. */
     createScope(parent: ScopeHandle | null, config: ScopeConfig = {}): ScopeHandle {
+      // A parent this generation doesn't know (a disposed run's scene, say) yields a cancelled
+      // scope, never a fresh root that could mount old feedback in the new run (#785 review).
       const parentScope = parent ? (scopes.get(parent) ?? null) : null;
+      const staleParent = parent !== null && parentScope === null;
       if (config.fallback && !fallbacks.has(config.fallback))
         throw new Error(`Unknown visual fallback "${config.fallback}"`);
+      // Overrides keep the bounds: positive whole counts, finite positive durations (#785 review).
+      if (
+        config.maxPending !== undefined &&
+        !(Number.isInteger(config.maxPending) && config.maxPending > 0)
+      )
+        throw new Error(`Invalid scope maxPending: ${config.maxPending}`);
+      if (
+        config.maxEffectMs !== undefined &&
+        !(Number.isFinite(config.maxEffectMs) && config.maxEffectMs > 0)
+      )
+        throw new Error(`Invalid scope maxEffectMs: ${config.maxEffectMs}`);
       const handle = { id: ++sequence } as unknown as ScopeHandle;
       const scope: Scope = {
         handle,
@@ -406,11 +432,13 @@ export function createVisualScheduler(
         events: new Set(),
         config,
         sealed: false,
-        state: parentScope && parentScope.state !== "pending" ? "cancelled" : "pending",
+        state:
+          staleParent || (parentScope && parentScope.state !== "pending") ? "cancelled" : "pending",
         pending: 0,
         active: 0,
         failure: null,
         fallbackRan: false,
+        cancelling: false,
         listeners: new Set(),
       };
       scopes.set(handle, scope);
