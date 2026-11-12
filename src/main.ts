@@ -170,7 +170,19 @@ const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
   : { show() {}, hide() {}, dispose() {} };
 const devProfiler: ProfilerRoom = import.meta.env.DEV
   ? (await import("./tools/profiler/room")).createProfilerRoom(host)
-  : { show() {}, hide() {}, dispose() {} };
+  : {
+      show() {},
+      hide() {},
+      dispose() {},
+      orchestration: () => ({
+        enter: async () => {},
+        rerun: async () => {},
+        exit: async () => {},
+        generation: 0,
+      }),
+      onRunAll: () => () => {},
+      showReport() {},
+    };
 const devCrystalComparison: CrystalComparisonRoom = import.meta.env.DEV
   ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host)
   : { show() {}, hide() {}, dispose() {} };

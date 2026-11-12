@@ -82,7 +82,17 @@ export type SceneHost = {
     devObjectBrowser: Pick<ShopBalanceEditor, "show" | "hide">;
     devBlockDesigner: Pick<ShopBalanceEditor, "show" | "hide">;
     devContainedProof: Pick<ShopBalanceEditor, "show" | "hide">;
-    devProfiler: { show(config: SceneTraits["devProfiler"]): void; hide(): void };
+    devProfiler: {
+      show(config: SceneTraits["devProfiler"]): void;
+      hide(): void;
+      /** A run scope over the room's narrow capabilities (#732): the trait drives it. */
+      orchestration(): {
+        enter(config: SceneTraits["devProfiler"]): Promise<void>;
+        rerun(): Promise<void>;
+        exit(): Promise<void>;
+      };
+      onRunAll(listener: () => void): () => void;
+    };
     devCrystalComparison: {
       show(config: SceneTraits["devCrystalComparison"]): void;
       hide(): void;
@@ -473,9 +483,25 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     enter: ({ services }, { backTo }) => services.devShopBalanceEditor.show(backTo),
     exit: ({ services }) => services.devShopBalanceEditor.hide(),
   });
+  // The profiler trait owns its run policy (#732; doc/automatic-profiling.md, "Composable
+  // profiler trait (#669)"): on entry it opens a run scope and, unless configured otherwise,
+  // starts the sweep; Run all reruns; exit cancels and delivers any partial result once. The
+  // room only measures what it is asked. One scene composes it at a time.
+  let profiling: { exit(): Promise<void>; stopRunAll(): void } | null = null;
   behaviours.register("devProfiler", {
-    enter: ({ services }, config) => services.devProfiler.show(config),
-    exit: ({ services }) => services.devProfiler.hide(),
+    enter: ({ services }, config) => {
+      services.devProfiler.show(config);
+      const scope = services.devProfiler.orchestration();
+      const stopRunAll = services.devProfiler.onRunAll(() => void scope.rerun());
+      profiling = { exit: () => scope.exit(), stopRunAll };
+      void scope.enter(config);
+    },
+    exit: ({ services }) => {
+      profiling?.stopRunAll();
+      void profiling?.exit();
+      profiling = null;
+      services.devProfiler.hide();
+    },
   });
   behaviours.register("devCrystalComparison", {
     enter: ({ services }, config) => services.devCrystalComparison.show(config),

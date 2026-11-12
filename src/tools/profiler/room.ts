@@ -19,7 +19,9 @@ import {
   defaultProfilingHost,
   describeCoverage,
   profilingCases,
+  profilingCoverage,
   type ProfiledObject,
+  type ProfilingCase,
 } from "./cases";
 import {
   costMeasures,
@@ -27,10 +29,23 @@ import {
   profilerExport,
   sortedByCost,
   type ProfilerEnvironmentInfo,
+  type ProfilerExport,
 } from "./export";
+import {
+  createDevProfilerScope,
+  profilerResultSinks,
+  type DevProfilerScope,
+  type SweepDelivery,
+} from "./autorun";
 import { createGpuTimer } from "./gpu-timer";
 import { createHostTracker } from "./host-tracker";
-import { createProfilerRunner, standardCounts, type CaseResult, type RunOptions } from "./runner";
+import {
+  createProfilerRunner,
+  standardCounts,
+  type CaseResult,
+  type RunOptions,
+  type RunResult,
+} from "./runner";
 import "./room.css";
 
 /**
@@ -64,7 +79,21 @@ export type ProfilerRoom = {
   show(config: ProfilerRoomConfig): void;
   hide(): void;
   dispose(): void;
+  /** A run scope for the composing `devProfiler` trait, over this room's capabilities (#732). */
+  orchestration(): DevProfilerScope<ProfilerExport>;
+  /** Hear the Run all button; returns how to stop listening. */
+  onRunAll(listener: () => void): () => void;
+  /** The on-screen result sink. */
+  showReport(delivery: SweepDelivery<ProfilerExport>): void;
 };
+
+// The room's on-screen sink, by name, for a trait's configuration to list.
+if (!profilerResultSinks.has("screen"))
+  profilerResultSinks.register(
+    "screen",
+    (host) => (delivery) =>
+      (host as ProfilerRoom).showReport(delivery as SweepDelivery<ProfilerExport>),
+  );
 
 /** Frames a preview advances before it is shown. */
 const previewFrames = 30;
@@ -103,6 +132,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
           .join("")}
       </select></label>
       <div class="profiler-room-buttons">
+        <button type="button" data-part="run-all">Run all (1 / 10 / 50)</button>
         <button type="button" data-part="run">Run selected</button>
         <button type="button" data-part="cancel" disabled>Cancel</button>
         <button type="button" data-part="export" disabled>Export JSON</button>
@@ -311,11 +341,37 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       control.disabled = !enabled;
   }
 
+  /** The manual path: the checked cases, with the controls' counts and frames. */
   async function run(): Promise<void> {
     playSfx("ui.click");
     const chosen = [...part("cases").querySelectorAll<HTMLInputElement>("input:checked")].map(
       ({ value: id }) => [id, profilingCases.get(id)] as const,
     );
+    const { counts, frames } = runSettings(value("counts"), value("frames"));
+    part<HTMLInputElement>("counts").value = counts.join(", ");
+    part<HTMLInputElement>("frames").value = String(frames);
+    await execute(chosen, { counts, frames, warmupFrames: 30, seed: 527 }, expectedCatalogs);
+  }
+
+  /** Every case the expected catalogs list that has a registered case, in catalog order. */
+  function catalogCases(catalogs: readonly string[]) {
+    return catalogs.flatMap((catalog) =>
+      (profilingCoverage.has(catalog) ? profilingCoverage.get(catalog)() : [])
+        .filter((id) => profilingCases.has(id))
+        .map((id) => [id, profilingCases.get(id)] as const),
+    );
+  }
+
+  /**
+   * Measure cases once, through the runner: shared by the manual path and the trait's automatic
+   * sweep. Resolves with the version-2 record; a cancel resolves with the partial record.
+   */
+  async function execute(
+    chosen: readonly (readonly [string, ProfilingCase])[],
+    settings: Omit<RunOptions, "signal">,
+    catalogs: readonly string[],
+    outer?: AbortSignal,
+  ): Promise<ProfilerExport> {
     previewToken++;
     // A preview still animating leaves the stage now, so it never shares a measured frame.
     if (activePreview) endPreview(activePreview);
@@ -324,19 +380,14 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     applySize();
     // The settings a run uses are fixed and recorded as it starts: later changes to the controls
     // affect the next run, never this run's metadata (#640 review).
-    const settings = environment();
-    const { counts, frames } = runSettings(value("counts"), value("frames"));
-    part<HTMLInputElement>("counts").value = counts.join(", ");
-    part<HTMLInputElement>("frames").value = String(frames);
+    const environmentInfo = environment();
     controller = new AbortController();
-    const options: RunOptions = {
-      counts,
-      frames,
-      warmupFrames: 30,
-      seed: 527,
-      signal: controller.signal,
-    };
+    const mine = controller;
+    outer?.addEventListener("abort", () => mine.abort(), { once: true });
+    if (outer?.aborted) mine.abort();
+    const options: RunOptions = { ...settings, signal: mine.signal };
     part<HTMLButtonElement>("run").disabled = true;
+    part<HTMLButtonElement>("run-all").disabled = true;
     part<HTMLButtonElement>("cancel").disabled = false;
     // Nothing in the room redraws while a run samples (#640 review).
     setSettingsEnabled(false);
@@ -344,39 +395,49 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       `Running ${chosen.length} case(s)… GPU timing ${timer.available ? "available" : "unavailable"}.`;
     try {
       const outcome = await runner.run(chosen, options);
+      const record = profilerExport(outcome, options, environmentInfo, catalogCoverage(catalogs));
       results = outcome.results;
-      lastExport = JSON.stringify(
-        profilerExport(outcome, options, settings, catalogCoverage(expectedCatalogs)),
-        null,
-        2,
-      );
-      const ending = outcome.aborted
-        ? `Stopped (${outcome.aborted})`
-        : outcome.cancelled
-          ? "Cancelled"
-          : "Done";
-      const notes = [
-        outcome.failures.length
-          ? `failed: ${outcome.failures.map(({ id, phase, kind, reason }) => `${phase ? `${id}:${phase}` : id} (${kind}: ${reason})`).join(", ")}`
-          : "",
-        outcome.notRun.length ? `not run: ${outcome.notRun.length}` : "",
-        outcome.invalidated.length
-          ? `invalidated (tab hidden): ${outcome.invalidated.join(", ")}`
-          : "",
-      ].filter(Boolean);
-      part("status").textContent =
-        `${ending}: ${outcome.results.length} result(s); GPU timing ${outcome.gpuTiming}${notes.length ? `; ${notes.join("; ")}` : ""}.`;
+      lastExport = JSON.stringify(record, null, 2);
+      part("status").textContent = describeOutcome(outcome);
       part<HTMLButtonElement>("export").disabled = false;
       showResults();
+      return record;
     } finally {
-      controller = null;
+      if (controller === mine) controller = null;
       setSettingsEnabled(true);
       part<HTMLButtonElement>("run").disabled = false;
+      part<HTMLButtonElement>("run-all").disabled = false;
       part<HTMLButtonElement>("cancel").disabled = true;
     }
   }
 
+  /** The status line for a finished, cancelled or stopped run. */
+  function describeOutcome(outcome: RunResult): string {
+    const ending = outcome.aborted
+      ? `Stopped (${outcome.aborted})`
+      : outcome.cancelled
+        ? "Cancelled"
+        : "Done";
+    const notes = [
+      outcome.failures.length
+        ? `failed: ${outcome.failures.map(({ id, phase, kind, reason }) => `${phase ? `${id}:${phase}` : id} (${kind}: ${reason})`).join(", ")}`
+        : "",
+      outcome.notRun.length ? `not run: ${outcome.notRun.length}` : "",
+      outcome.invalidated.length
+        ? `invalidated (tab hidden): ${outcome.invalidated.join(", ")}`
+        : "",
+    ].filter(Boolean);
+    return `${ending}: ${outcome.results.length} result(s); GPU timing ${outcome.gpuTiming}${notes.length ? `; ${notes.join("; ")}` : ""}.`;
+  }
+
+  /** Run-all requests from the button; the composing trait decides what they do. */
+  const runAllListeners = new Set<() => void>();
+
   part("run").addEventListener("click", () => void run());
+  part("run-all").addEventListener("click", () => {
+    playSfx("ui.click");
+    for (const listener of runAllListeners) listener();
+  });
   part("cancel").addEventListener("click", () => {
     playSfx("ui.back");
     controller?.abort();
@@ -395,7 +456,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     URL.revokeObjectURL(link.href);
   });
 
-  return {
+  const room: ProfilerRoom = {
     show({ backTo, catalogs }) {
       expectedCatalogs = [...catalogs];
       part<HTMLAnchorElement>("back").href = modeLink(
@@ -410,6 +471,45 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       controller?.abort();
       root.hidden = true;
     },
+    orchestration() {
+      // The trait's scope over this room's narrow capabilities: it measures what it is asked,
+      // and pauses its previews while it does; it never decides when a run starts.
+      return createDevProfilerScope<ProfilerExport>(
+        {
+          sweep: (request, signal) =>
+            execute(
+              catalogCases(request.catalogs),
+              {
+                counts: request.counts,
+                frames: request.frames,
+                warmupFrames: request.warmupFrames,
+                seed: request.seed,
+                timeoutMs: request.timeoutMs,
+              },
+              request.catalogs,
+              signal,
+            ),
+          // Cancelled in the room, stopped by a lost context, or cut short by the trait.
+          partial: (record) => record.cancelled || record.aborted !== null,
+          isolate: () => {
+            previewToken++;
+            if (activePreview) endPreview(activePreview);
+            previewHostTracker.releaseAll();
+            return () => {};
+          },
+        },
+        room,
+      );
+    },
+    onRunAll(listener) {
+      runAllListeners.add(listener);
+      return () => runAllListeners.delete(listener);
+    },
+    showReport(delivery) {
+      // The on-screen sink: the table and status are already this run's; mark a partial one.
+      if (delivery.partial) part("status").textContent += " (partial)";
+      if (!delivery.isolated) part("status").textContent += " Not isolated from other rendering.";
+    },
     dispose() {
       controller?.abort();
       document.removeEventListener("visibilitychange", countVisibility);
@@ -419,4 +519,5 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       root.remove();
     },
   };
+  return room;
 }
