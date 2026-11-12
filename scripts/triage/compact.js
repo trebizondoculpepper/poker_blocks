@@ -131,7 +131,9 @@ export function compactBriefing(snapshot, options, expanded) {
       updatedAt: item.updatedAt,
       source: sourceContext(item),
       findings: grouped.get(url) ?? [],
-      detailCommand: `npm run --silent triage -- --repo ${snapshot.repository} --issue ${item.number} --json`,
+      detailCommand: item.headRefOid
+        ? `gh pr view ${item.number} --repo ${snapshot.repository} --json headRefOid,statusCheckRollup,reviews`
+        : `npm run --silent triage -- --repo ${snapshot.repository} --issue ${item.number} --json`,
       ...Object.fromEntries(
         facts.pullRequests
           .filter((pr) => pr.url === url)
@@ -188,7 +190,7 @@ export function compactText(report, maxChars = 10000) {
       }
       shown.add(url);
       rows.push(
-        `- #${s.number} ${s.title} ${s.owners.join(", ")}\n  ${s.findings.map((f) => `[${f.uncertainty}] ${f.reason} Next: ${f.next}`).join(" ")}\n  ${url}\n  ${s.source.chronology}\n  ${s.detailCommand}`,
+        `- #${s.number} ${s.title} ${s.owners.join(", ")}\n  ${s.findings.map((f) => `[${f.uncertainty}] ${f.reason} Next: ${f.next}`).join(" ")}\n  ${url}${s.pullRequest ? `\n  Head ${s.pullRequest.head}; ${s.pullRequest.checks.map((c) => `${c.name}:${c.outcome}`).join(", ")}; ${s.pullRequest.unresolvedThreads} unresolved threads` : ""}\n  ${s.source.chronology}\n  ${s.detailCommand}`,
       );
     }
   };
