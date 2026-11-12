@@ -98,6 +98,8 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
   const countVisibility = () => visibilityChanges++;
   document.addEventListener("visibilitychange", countVisibility);
   let controller: AbortController | null = null;
+  /** Bumped by each preview and each run, so a preview that resolves late knows it is stale. */
+  let previewToken = 0;
   let lastExport: string | null = null;
   let results: CaseResult[] = [];
 
@@ -180,7 +182,14 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
   async function preview(id: string, phase?: string): Promise<void> {
     if (controller) return;
     playSfx("ui.click");
+    const mine = ++previewToken;
     const one = await profilingCases.get(id).create({ seed: 1, phase });
+    // A run started (or another preview) while this one was being built: free it unseen, and
+    // leave the run's scene and camera alone (#640 review).
+    if (mine !== previewToken || controller) {
+      one.dispose();
+      return;
+    }
     runner.scene.add(one.object);
     runner.camera.position.set(0, 0, 5);
     runner.camera.lookAt(0, 0, 0);
@@ -202,6 +211,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
     const chosen = [...part("cases").querySelectorAll<HTMLInputElement>("input:checked")].map(
       ({ value: id }) => [id, profilingCases.get(id)] as const,
     );
+    previewToken++;
     applySize();
     // The settings a run uses are fixed and recorded as it starts: later changes to the controls
     // affect the next run, never this run's metadata (#640 review).
