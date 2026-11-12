@@ -59,7 +59,7 @@ describe("the approximation shows filled, coloured facets, not a wireframe (#524
     // The pane is now a pale, mostly opaque fill instead of nothing.
     expect(pixels[3]).toBeGreaterThanOrEqual(150);
     expect(Math.min(pixels[0]!, pixels[1]!, pixels[2]!)).toBeGreaterThan(200);
-    expect(pixels.slice(4)).toEqual([160, 30, 50, 255]);
+    expect(Array.from(pixels.slice(4))).toEqual([160, 30, 50, 255]);
   });
 
   it("fills each facet with colour; seams are not what dominates", () => {
