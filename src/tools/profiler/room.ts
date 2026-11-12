@@ -18,6 +18,15 @@ import { createGpuTimer } from "./gpu-timer";
 import { createProfilerRunner, type CaseResult, type RunOptions } from "./runner";
 import "./room.css";
 
+/** Bounded positive whole numbers from the count and frames inputs; defaults when unreadable. */
+export function runSettings(countText: string, framesText: string) {
+  const whole = (text: string, fallback: number, min: number, max: number) => {
+    const number = Math.round(Number(text));
+    return Number.isFinite(number) && number >= min ? Math.min(max, number) : fallback;
+  };
+  return { count: whole(countText, 25, 1, 200), frames: whole(framesText, 120, 10, 2000) };
+}
+
 export type ProfilerRoom = { show(backTo: string): void; hide(): void; dispose(): void };
 
 /** Render qualities offered: the pixel ratio each one uses. */
@@ -186,10 +195,16 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       ({ value: id }) => [id, profilingCases.get(id)] as const,
     );
     applySize();
+    // The settings a run uses are fixed and recorded as it starts: later changes to the controls
+    // affect the next run, never this run's metadata (#640 review).
+    const settings = environment();
+    const { count, frames } = runSettings(value("count"), value("frames"));
+    part<HTMLInputElement>("count").value = String(count);
+    part<HTMLInputElement>("frames").value = String(frames);
     controller = new AbortController();
     const options: RunOptions = {
-      count: Number(value("count")) || 25,
-      frames: Number(value("frames")) || 120,
+      count,
+      frames,
       warmupFrames: 30,
       seed: 527,
       signal: controller.signal,
@@ -202,7 +217,7 @@ export function createProfilerRoom(host: HTMLElement): ProfilerRoom {
       const outcome = await runner.run(chosen, options);
       results = outcome.results;
       lastExport = JSON.stringify(
-        profilerExport(outcome, options, environment(), uncoveredCases()),
+        profilerExport(outcome, options, settings, uncoveredCases()),
         null,
         2,
       );
