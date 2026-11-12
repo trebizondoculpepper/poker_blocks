@@ -125,6 +125,25 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
   scene.add(sun);
   const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 200);
 
+  /** The running run's cancel signal, so frame waits can be abandoned when it fires. */
+  let signal: AbortSignal | undefined;
+
+  /**
+   * The next animation frame, or a cancel, whichever comes first: frames can stop while the tab
+   * is hidden, and a cancel must still reach cleanup (#625 review).
+   */
+  function waitFrame(): Promise<void> {
+    if (signal?.aborted) return Promise.reject(new Cancelled());
+    return new Promise<void>((resolve, reject) => {
+      const onAbort = () => reject(new Cancelled());
+      signal?.addEventListener("abort", onAbort, { once: true });
+      void env.nextFrame().then(() => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, reject);
+    });
+  }
+
   const counts = (): RendererCounts => ({
     calls: env.renderer.info.render.calls,
     triangles: env.renderer.info.render.triangles,
@@ -171,7 +190,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     let setCounts = counts();
     for (let i = 0; i < options.frames; i++) {
       check();
-      await env.nextFrame();
+      await waitFrame();
       const now = env.now();
       frames.push(now - last);
       last = now;
@@ -183,7 +202,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     // Collect the queries still in flight, a bounded number of frames.
     for (let i = 0; i < 30 && env.timer.pending > 0; i++) {
       check();
-      await env.nextFrame();
+      await waitFrame();
       gpu.push(...env.timer.poll());
     }
     // Any still unanswered after the bounded drain are dropped, not left for the next set.
@@ -257,7 +276,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
   async function warm(objects: readonly ProfiledObject[], options: RunOptions, check: () => void) {
     for (let i = 0; i < options.warmupFrames; i++) {
       check();
-      await env.nextFrame();
+      await waitFrame();
       frame(objects, 1 / 60);
     }
     env.timer.poll();
@@ -355,6 +374,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       const check = () => {
         if (options.signal?.aborted) throw new Cancelled();
       };
+      signal = options.signal;
       try {
         for (const [id, profile] of cases)
           for (const phase of profile.phases ?? [undefined])

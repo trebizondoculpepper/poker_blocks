@@ -489,3 +489,25 @@ describe("GPU queries stay balanced when rendering fails (#625 review)", () => {
     expect(calls).toEqual(["begin", "end", "delete"]);
   });
 });
+
+describe("a cancel while frames are suspended (#625 review)", () => {
+  it("reaches cleanup without waiting for another frame", async () => {
+    const { env, memory, frameCount } = fakeEnvironment();
+    const controller = new AbortController();
+    const next = env.nextFrame.bind(env);
+    env.nextFrame = async () => {
+      // Frames stop once the single object is built, as when the tab is hidden.
+      if (memory.geometries > 0 && frameCount() > 20) return new Promise<void>(() => {});
+      return next();
+    };
+    const running = createProfilerRunner(env).run([["cube", testCase(memory)]], {
+      ...options,
+      signal: controller.signal,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    controller.abort();
+    const run = await running;
+    expect(run.cancelled).toBe(true);
+    expect(memory.geometries).toBe(0);
+  });
+});
