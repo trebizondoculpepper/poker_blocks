@@ -145,6 +145,7 @@ type TraitContext = {
     devObjectBrowser: ShopBalanceEditor;
     devBlockDesigner: ShopBalanceEditor;
     devContainedProof: ShopBalanceEditor;
+    devProfiler: ShopBalanceEditor;
     devCrystalComparison: CrystalComparisonRoom;
     devWordCubeRoom: WordCubeRoom;
     dialogs: SceneHost["services"]["dialogs"];
@@ -165,6 +166,9 @@ const devBlockDesigner: ShopBalanceEditor = import.meta.env.DEV
   : { show() {}, hide() {}, dispose() {} };
 const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/contained-proof/room")).createContainedProofRoom(host)
+  : { show() {}, hide() {}, dispose() {} };
+const devProfiler: ShopBalanceEditor = import.meta.env.DEV
+  ? (await import("./tools/profiler/room")).createProfilerRoom(host)
   : { show() {}, hide() {}, dispose() {} };
 const devCrystalComparison: CrystalComparisonRoom = import.meta.env.DEV
   ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host)
@@ -257,6 +261,7 @@ const traitContext: TraitContext = {
     devObjectBrowser,
     devBlockDesigner,
     devContainedProof,
+    devProfiler,
     devCrystalComparison,
     devWordCubeRoom,
     // Every dialog a scene composes goes to the game's presenter and, in development, to the
@@ -464,6 +469,7 @@ if (import.meta.hot) {
     devObjectBrowser.dispose();
     devBlockDesigner.dispose();
     devContainedProof.dispose();
+    devProfiler.dispose();
     devCrystalComparison.dispose();
     devWordCubeRoom.dispose();
     devDialogRoom.dispose();

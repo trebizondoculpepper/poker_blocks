@@ -582,6 +582,12 @@ RunRules + the mode's run setup ── create ──> GameRun
 
 The pause menu is a scene pushed over gameplay or the title, and Settings is a scene pushed over either. Popping it resumes the underlying scene. Stage-won is pushed while rewards are presented; the shop is a scene between stages while the same run persists. Title and game-over currently replace the stack. A future victory ending should be represented by a scene as well.
 
+### Numbered stages and mixed completion rewards (#648)
+
+[The lifecycle contract](game-events.md#numbered-stage-lifecycle) supplies stage start/won/lost with round and ordinal (one/two/three). “Boss” is a label and dealer configuration, not a distinct lifecycle position. Registered subscription conditions can target stage two in any round; generic coordinators never branch on its identity. Preserve legacy serialized handles through boundary compatibility rather than a blanket runtime rename.
+
+[The Present contract](presents.md) makes stage-three victory grant one creation-fixed opaque playable-card container into the deck. Extend existing reward commands and the exactly-once settlement receipt to non-cash grants; entry definitions own presentation/sound, and the financial total counts only coin effects. Save the grant/payload/RNG/paid marker atomically. Neither ledger animation nor shop exit grants another object. Shop availability and selling are removed from the Present design. The documented source audit identifies coin-only ledger/save/UI and random-draw migration gaps; reuse ordered deck, rankless/container and replacement work rather than a separate Present pipeline.
+
 ### Gameplay lifecycle and material composition (#611)
 
 The [gameplay lifecycle contract](game-events.md) is the canonical target for hook schemas and timing: committed placement → stored opening/replacement → pre-score material steps/countdown deduction → pure scoring with registered working phases → post-score material steps/detonation → outcome settlement. A configured `materialEffectsController` model trait on the playfield subscribes to these generic phases and dispatches block-defined registered behavior. Without the composition there are no material subscriptions; the generic coordinator never tests a flag or a material identity.
