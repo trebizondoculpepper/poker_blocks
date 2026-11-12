@@ -1588,3 +1588,7 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 ## Concrete visual scheduling interface (#545)
 
 [Visual-event scheduler interface](visual-event-interface.md) finalizes the shared API, clock boundary, admission/active/depth/lifetime limits, overload summary path, cancellation and migration acceptance after #541. Its capacity probe is reproducible evidence for bounds, not a production performance benchmark. The earlier hidden-tab pause, scheduled-time late starts and committed-play narration order are adopted as reversible engineering defaults under the owner's instruction; no further owner decision blocks this implementation.
+
+## Rankless opaque active contract (#552)
+
+[Opaque rankless actives and replacement](opaque-actives.md) defines capability-based placement/value/inspection/discard, nested creation-fixed payload ownership, transactional opening/adoption, generation policy, validation and save/clone boundaries. Present composes these generic capabilities; it is not a branch in generic code. This supplements the acquisition/reward contract in `presents.md` and leaves runtime to #553–#555/#497.
