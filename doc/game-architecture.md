@@ -210,7 +210,7 @@ After each play, scoring calculates all line scores first, filters out zero-poin
 
 ## Passive registry and triggers (design)
 
-The proposed event order, reaction contract, and effect boundaries are specified in [game-events.md](game-events.md). The current game has only a general event emitter; it does not implement that gameplay contract yet.
+The target lifecycle, reaction/command contract and effect boundaries are specified in [game-events.md](game-events.md) (#611), supported by [source research](research/gameplay-lifecycle-opportunities.md) (#615). Registered event rules, commands and rack delivery exist; the complete phase contract and playfield composition are still implementation work (#612–#614).
 
 Passive definitions live in a named registry with a stable id, display name, visual design or icon, and a trait reference. The passive itself is a block instance in the ordered `GameState.passiveRack`. Behavior code belongs to reusable traits, not the block instance or an ad hoc function attached to one registry entry. A trait may listen for gameplay events such as block placement, apply a condition, produce a gameplay effect such as coins proportional to the placed card's rank, and request separate presentation effects.
 
@@ -218,7 +218,7 @@ The passive trait declares its event subscriptions; it need not respond to every
 
 Passives may react throughout the stage or session, not only during scoring. The engine should expose named lifecycle events with explicit timing and context: for example, before the first play in a stage, before/after a block is placed, before/after one line is scored, after all lines are scored, and when a stage is won or lost. These are examples, not an exhaustive event list. A passive's trait checks its configured condition against the event and returns gameplay effects; an event may also lead to separate sound or visual requests. This gives designers callback-like trigger points without storing arbitrary callback code on individual blocks.
 
-Timing matters: a trait that changes a block's base value or a line's points must run at a defined pre-score point, while a reaction to a finalized `lineScored` event sees the completed result. An `allLinesScored` reaction sees the aggregate after the line pass. Victory and loss reactions need an explicit place relative to the dealer's outcome check. The pure line scorer remains free of lifecycle dispatch; a coordinator invokes it within the larger event/effect sequence. The exact event vocabulary and resolution rules are still to be specified.
+Timing matters: a trait that changes a block's base value or a line's points must run at a defined pre-score point, while a reaction to a finalized `lineScored` event sees the completed result. An `allLinesScored` reaction sees the aggregate after the line pass. Victory and loss reactions need an explicit place relative to the dealer's outcome check. The pure line scorer remains free of lifecycle dispatch; a coordinator invokes it within the larger event/effect sequence. The canonical event vocabulary, phase barriers, listener ordering, transaction safety and on-demand context queries are defined in [game-events.md](game-events.md).
 
 Trigger usage is configurable per passive: unlimited, a fixed count, or one-shot. Remaining uses are instance state; exhausting them can destroy the passive. Passives are not discardable. A separate sell interaction can remove an installed passive at any time and award coins without using a stage discard. The rack size, sale values, and installation flow remain open.
 
@@ -582,12 +582,22 @@ RunRules + the mode's run setup ── create ──> GameRun
 
 The pause menu is a scene pushed over gameplay or the title, and Settings is a scene pushed over either. Popping it resumes the underlying scene. Stage-won is pushed while rewards are presented; the shop is a scene between stages while the same run persists. Title and game-over currently replace the stack. A future victory ending should be represented by a scene as well.
 
+### Gameplay lifecycle and material composition (#611)
+
+The [gameplay lifecycle contract](game-events.md) is the canonical target for hook schemas and timing: committed placement → stored opening/replacement → pre-score material steps/countdown deduction → pure scoring with registered working phases → post-score material steps/detonation → outcome settlement. A configured `materialEffectsController` model trait on the playfield subscribes to these generic phases and dispatches block-defined registered behavior. Without the composition there are no material subscriptions; the generic coordinator never tests a flag or a material identity.
+
+Extend the existing event-rule/command registries and indexed delivery rather than create a second gameplay bus. Capture immutable event context, explicit batch/per-block granularity and action ancestry. Snapshot subscription order; drain follow-up facts at phase barriers, preserve explicitly depth-first trigger traversal, and share action-wide limits. Stage state and RNG so failed resolution rolls back together. Restoration rebuilds subscriptions without replaying actions or rewards. These are target guarantees, not assertions that current direct `GameRun.play` material calls already comply.
+
+Context providers are pure registered queries requested only when needed against a captured snapshot/version and scope. Cache within that version; separate cheap count/bounds/neighbor queries from optional topology. Unavailable data has a deterministic explicit policy, never a machine-dependent reward. Density, hollows and tunnels inspire future modifiers but do not define payouts (#616). The [research](research/gameplay-lifecycle-opportunities.md) explains the source evidence, alternatives, cost estimates and bounded probe; it is not a runtime benchmark.
+
+Presentation controllers consume captured outcome records and schedule pre-score/scoring/post-score visuals through the visual queue. They cannot delay model resolution or valid input. `block.destroyed` means permanent run removal; discard, reset, collection and opening remain distinct. See the contract for ownership, cancellation, transaction and migration tests.
+
 ### Services and controller traits (#537)
 
 **Target architecture.** Two kinds of code meet the game world, and they have different jobs.
 
 - A **service** provides a **narrow capability** and owns the technical resources behind it: the audio context and music player, the renderer, a DOM layer, a tween group, a pool of particles. Its interface is mechanics ("play this sound", "fade the music to this filter", "flash a dazzle at this point", "interpolate this value over this time"). It never knows which scene, mode, material, item or block kind asked, never inspects game state to infer what happened, and never decides or delays a gameplay outcome.
-- A **controller trait** owns **policy**: when and why capabilities are used. It is composed onto a scene, mode, block or item with configuration, subscribes to committed game events (or lifecycle hooks), and asks services to act. One controller trait may coordinate several services. All its variation comes from its configuration and from handlers registered by trait or step name, never from identity checks.
+- A **controller trait** owns **policy**: when and why capabilities are used. Presentation controller traits coordinate services; model controller traits coordinate registered model commands under the lifecycle contract. It is composed onto a scene, mode, block or item with configuration, subscribes to committed game events (or lifecycle hooks), and asks services to act. One controller trait may coordinate several services. All its variation comes from its configuration and from handlers registered by trait or step name, never from identity checks.
 
 ```text
 GameRun / rules ── commit outcome ──> committed events (immutable)
@@ -600,7 +610,7 @@ controller traits (composed, configured) ─┤ subscribe; choose policy from co
 
 **Rules.**
 
-1. **Model first.** Rules commit the outcome first; controller traits present what was committed. A service or controller trait never awards points, rolls the run's RNG, buys, removes or transforms a card, and never holds input back while it presents.
+1. **Model first.** Presentation controller traits present committed outcomes; neither they nor services award points, roll gameplay RNG, buy, remove or transform cards, or hold input back while presenting. **Model controller traits** coordinate registered gameplay rules/commands within synchronous resolution phases, as defined in [game-events.md](game-events.md); command handlers own mutations. This explicit model role does not permit a rendering controller to mutate gameplay.
 2. **Events, not state diffs.** A controller trait reacts to an event that says what happened (for example `block.removed`, with its cause and configured sound). Nothing infers an outcome by comparing state before and after (`coins > coinsBefore`).
 3. **Data lives on the definition.** Which sound, look or effect a thing uses is configuration on that thing's definition or on the controller trait composed onto it, never a table in a service keyed by its identity.
 4. **Coordinate spaces are interfaces.** When a controller needs a position (where a block is on screen), a service exposes it through a narrow interface; nothing branches on which scene's coordinates are in use.
