@@ -71,23 +71,26 @@ const isText = (value: unknown): value is string => typeof value === "string";
 rewardEffects.register("grant", {
   coins: () => 0,
   commands: (config) => [(config as GrantConfig).command],
-  receipt: (config, events) => ({
-    ...(config as GrantConfig),
-    granted: events.flatMap(({ blockId }) => (blockId ? [blockId] : [])),
-  }),
+  receipt: (config, events) => {
+    const granted = events.flatMap(({ blockId }) => (blockId ? [blockId] : []));
+    // A grant that produced nothing (a full rack, say) is a failure, never a paid receipt: the
+    // settlement rolls back and the stage stays eligible to settle again (#740 review).
+    if (!granted.length) throw new Error("the grant produced no object");
+    return { ...(config as GrantConfig), granted };
+  },
   validate(config) {
     const { command, granted } = (config ?? {}) as Partial<GrantConfig>;
     if (!command || !isText(command.id) || !ruleCommands.has(command.id))
       throw new Error("bad grant reward");
+    // Saved effects are receipts: a grant's must record what it granted (#740 review). The IDs
+    // stay valid wherever those objects have since moved.
     if (
-      granted !== undefined &&
-      (!Array.isArray(granted) || granted.some((id) => typeof id !== "string" || !id))
+      !Array.isArray(granted) ||
+      !granted.length ||
+      granted.some((id) => typeof id !== "string" || !id)
     )
       throw new Error("bad grant receipt");
-    return {
-      command: { id: command.id, config: command.config },
-      ...(granted ? { granted: [...granted] } : {}),
-    };
+    return { command: { id: command.id, config: command.config }, granted: [...granted] };
   },
 });
 

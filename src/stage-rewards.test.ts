@@ -307,8 +307,21 @@ describe("object grants settle atomically and exactly once (#730)", () => {
     expect(game.state).toBe(before.state);
     expect(randomizer.cursor).toBe(before.cursor);
     expect(game.stageReward).toBeNull();
-    // Nothing was paid, so a later settlement can still pay.
-    expect(game.settleStageRewards([coinEntry("stage.complete", "Bonus", 4)])).not.toBeNull();
+    // Nothing was paid, so a later settlement can still pay: the same grant, now succeeding,
+    // picks the same passive a run that never failed would have, as the stream was restored.
+    const retried = game.settleStageRewards([
+      coinEntry("stage.complete", "Bonus", 4),
+      grantPassive,
+    ])!;
+    const clean = (await seededRun()).game;
+    const fresh = clean.settleStageRewards([
+      coinEntry("stage.complete", "Bonus", 4),
+      grantPassive,
+    ])!;
+    const definition = (run: GameRun) => run.state.passiveRack.at(-1)!.definitionId;
+    expect(retried.balance - retried.balanceBefore).toBe(4);
+    expect(definition(game)).toBe(definition(clean));
+    expect(fresh.entries[1]!.effects[0]!.config).toEqual(retried.entries[1]!.effects[0]!.config);
   });
 
   it("refuses a malformed grant receipt at load", async () => {
@@ -376,5 +389,85 @@ describe("a failed settlement holds the run on the stage (#740 review)", () => {
     const game = newRun();
     game.forceOutcome("lost");
     expect(game.advance()).toBe(true);
+  });
+});
+
+describe("grant receipts (#740 review)", () => {
+  it("rolls back a grant that produced nothing, leaving the stage to settle again", async () => {
+    if (!ruleCommands.has("test-grant-nothing"))
+      registerRuleCommand("test-grant-nothing", () => []);
+    const game = newRun();
+    game.forceOutcome("won");
+    const coins = game.state.coins;
+    const nothing = {
+      source: "test.grant",
+      label: "Nothing",
+      effects: [{ id: "grant", config: { command: { id: "test-grant-nothing", config: {} } } }],
+      presentation: "coins",
+    };
+    expect(game.settleStageRewards([coinEntry("stage.complete", "Bonus", 4), nothing])).toBeNull();
+    expect(game.state.coins).toBe(coins);
+    expect(game.stageRewardsPending).toBe(true);
+  });
+
+  it("commits a passive's rule on a grant's fact inside the settlement", async () => {
+    const { Randomizer } = await import("./random");
+    const { createPassiveBlock } = await import("./passives");
+    const randomizer = new Randomizer(42);
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => randomizer.next());
+    game.attachRandomCheckpoints(randomizer);
+    const base = createPassiveBlock("scrapper", "listener.1");
+    game.installPassive({
+      ...base,
+      traits: {
+        ...base.traits,
+        passive: {
+          traitId: "passive.event-rules",
+          eventRules: [
+            {
+              on: "passive.installed",
+              select: { id: "event-blocks", config: { where: { id: "always", config: {} } } },
+              where: { id: "always", config: {} },
+              effects: [{ id: "add-coins", config: { amount: 7 } }],
+            },
+          ],
+        },
+      },
+    } as unknown as typeof base);
+    game.forceOutcome("won");
+    const coins = game.state.coins;
+    game.settleStageRewards([
+      {
+        source: "test.grant",
+        label: "A passive",
+        effects: [
+          { id: "grant", config: { command: { id: "grant-unowned-passive", config: {} } } },
+        ],
+        presentation: "coins",
+      },
+    ]);
+    expect(game.state.coins).toBe(coins + 7);
+  });
+
+  it("refuses a saved grant receipt that records nothing granted", async () => {
+    const { Randomizer } = await import("./random");
+    const randomizer = new Randomizer(42);
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => randomizer.next());
+    game.attachRandomCheckpoints(randomizer);
+    game.forceOutcome("won");
+    game.settleStageRewards([
+      {
+        source: "test.grant",
+        label: "A passive",
+        effects: [
+          { id: "grant", config: { command: { id: "grant-unowned-passive", config: {} } } },
+        ],
+        presentation: "coins",
+      },
+    ]);
+    const record = JSON.parse(JSON.stringify(toSaveRecord(game.snapshot())));
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)).not.toBeNull();
+    delete record.rewarded.reward.entries[0].effects[0].config.granted;
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)).toBeNull();
   });
 });

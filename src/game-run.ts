@@ -508,7 +508,7 @@ export class GameRun {
     const stage = this.stageKey;
     if (this.rewarded?.stage === stage) return this.rewarded.reward;
     this.settlementFailed = false;
-    const settled = this.transact("reward", undefined, () => {
+    const settled = this.transact("reward", undefined, (context) => {
       const balanceBefore = this.currentState.coins;
       const finalized = entries.map((entry) => ({
         ...entry,
@@ -521,6 +521,9 @@ export class GameRun {
           // The grant's own facts (passive.installed, ...) are delivered and recorded like any
           // command's, inside this settlement (#740 review).
           for (const event of events) this.passiveEvents.emit(event);
+          // Delivered through the rule-committing path, so a passive's rules on these facts
+          // commit their commands too, inside this settlement (#740 review).
+          this.drainPhase(context, "reward", `${context.actionId}:reward`);
           return handler.receipt
             ? { ...effect, config: handler.receipt(effect.config, events) }
             : effect;
