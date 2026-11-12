@@ -56,6 +56,12 @@ export type ReactionState = { material: string; stateBonus?: string; doneness?: 
 
 export type GameEvent = {
   type: string;
+  /**
+   * A mutable phase's working value (doc/game-events.md, "registered working-value capability
+   * only during a mutable phase"): rules read it and write what they leave, listener by listener.
+   * Never part of a recorded fact.
+   */
+  working?: { read(): number; write(value: number): void };
   blockId?: string;
   cardIds?: readonly string[];
   /** On stage and shop lifecycle events: the stage they belong to. */

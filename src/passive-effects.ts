@@ -242,36 +242,6 @@ function scoreLines(
 /** The aggregate phase: may change a play's total delta, never a finalized line (#682 review). */
 export const beforeTotalPhase = "score.beforeTotalApplied";
 
-/**
- * The rack's `score.beforeTotalApplied` rules over the play's working aggregate, after every line
- * is finalized (doc/game-events.md, "Resolution order for a play", step 4). Pure, like line
- * scoring: it returns the delta to apply once, rounded and never below zero (the same floor a
- * line has), and the rules that fired, for presentation.
- */
-export function resolveTotalWithPassives(
-  total: number,
-  rack: readonly PassiveBlock[],
-  random: () => number = noRandomSource,
-): { value: number; activations: RuleActivation[] } {
-  // Only the aggregate's own rules resolve their values: every other phase's dice were rolled
-  // once by line scoring, and must not draw again (#682 review; doc/game.md, dice).
-  const sources = rack.map((passive) => {
-    const source = passiveSource(passive);
-    return {
-      ...source,
-      rules: source.rules
-        .filter((rule) => rule.on === beforeTotalPhase)
-        .map((rule) => ruleHandlers.resolveValues(rule, random)),
-    };
-  });
-  const resolved = evaluateRules(
-    subscribedRules(sources, beforeTotalPhase),
-    { type: beforeTotalPhase, amount: total },
-    total,
-  );
-  return { value: Math.max(0, Math.round(resolved.value)), activations: resolved.activations };
-}
-
 /** For callers without the run's random source: fine until a rule tries to draw from it. */
 function noRandomSource(): number {
   throw new Error("This rule draws a random value: pass the run's random source");
@@ -301,10 +271,22 @@ export function passiveActivations(
   event: Readonly<GameEvent>,
   random: () => number = noRandomSource,
 ): RuleActivation[] {
-  // A hook's rules resolve their value sources (a roll) once, as it is delivered (#682 review).
+  return resolvePassiveRules(passive, event, random, 0).activations;
+}
+
+/**
+ * One listener's rules for an event, over a working value: its value sources (a roll) resolve
+ * once, as it is delivered (#682 review), and it returns what the rules leave and what fired.
+ */
+export function resolvePassiveRules(
+  passive: PassiveBlock,
+  event: Readonly<GameEvent>,
+  random: () => number,
+  start: number,
+): { value: number; activations: RuleActivation[] } {
   const resolved = subscribedRules([passiveSource(passive)], event.type).map((entry) => ({
     ...entry,
     rule: ruleHandlers.resolveValues(entry.rule, random),
   }));
-  return evaluateRules(resolved, event, 0).activations;
+  return evaluateRules(resolved, event, start);
 }
