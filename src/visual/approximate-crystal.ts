@@ -115,7 +115,7 @@ export function createFacetShell(geometry: THREE.BufferGeometry, tint = 0xffffff
     uniforms: {
       facets: { value: facetTexture() },
       depth: { value: 0.18 },
-      intensity: { value: 0.45 },
+      intensity: { value: 0.3 },
       tint: { value: new THREE.Color(tint) },
     },
     side: THREE.BackSide,
@@ -135,6 +135,8 @@ export function approximateOuter(
   tint: number,
   environment: THREE.Texture | null,
   environmentIntensity: number,
+  /** Thin-film colour from the material's optics, which needs no transmission pass. */
+  iridescence: THREE.MeshPhysicalMaterialParameters = {},
 ): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
     map: texture,
@@ -146,7 +148,8 @@ export function approximateOuter(
     envMap: environment,
     envMapIntensity: environmentIntensity,
     transparent: true,
-    opacity: 0.62,
+    opacity: 0.78,
     depthWrite: false,
+    ...iridescence,
   });
 }

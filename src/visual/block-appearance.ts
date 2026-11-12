@@ -1281,6 +1281,7 @@ function approximateCrystal(context: AssemblyContext): BlockAppearance {
     optics.tint,
     reflectionEnvironment,
     optics.tableEnvironment,
+    optics.iridescence,
   );
   return appearanceBase(
     context,

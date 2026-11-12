@@ -47,6 +47,6 @@ describe("optics backends (#523)", () => {
   });
 
   it("states what the approximation cannot show", () => {
-    expect(opticsBackends.get("approximation").unsupported).toMatch(/Contained/);
+    expect(opticsBackends.get("approximation").unsupported).toMatch(/Contained blocks/);
   });
 });

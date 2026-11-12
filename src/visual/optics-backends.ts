@@ -22,7 +22,7 @@ opticsBackends.register("approximation", {
   label: "Approximation",
   assembly: "approximateCrystal",
   unsupported:
-    "Contained blocks, glass panes and iridescent thin-film colour are not approximated; it shows crystal blocks only.",
+    "Contained blocks and glass panes are not approximated, and nothing behind a block is bent or split into colours; it shows crystal blocks only.",
 });
 
 /** The same definition drawn through another backend: only its assembly changes. */
