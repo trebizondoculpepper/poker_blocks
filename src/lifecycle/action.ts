@@ -41,6 +41,11 @@ export type EventEnvelope<Payload = unknown> = Readonly<{
   subjectIds: readonly string[];
   /** Which version of the model the captured payload describes. */
   snapshotVersion: number;
+  /**
+   * The run and stage the action resolved in (round, ordinal, stage instance), captured when it
+   * started, so a consumer reading the fact later never needs the live state (#661 review).
+   */
+  context: unknown;
   payload: Payload;
 }>;
 
@@ -78,14 +83,22 @@ export class ActionContext {
   readonly actionId: string;
   readonly limits: ResolutionLimits;
   readonly snapshotVersion: number;
+  /** The run and stage context captured as the action began. */
+  readonly context: unknown;
   private readonly recorded: EventEnvelope[] = [];
   private delivered = 0;
   private operations = 0;
 
-  constructor(actionId: string, snapshotVersion: number, limits = defaultResolutionLimits) {
+  constructor(
+    actionId: string,
+    snapshotVersion: number,
+    limits = defaultResolutionLimits,
+    context: unknown = null,
+  ) {
     this.actionId = actionId;
     this.snapshotVersion = snapshotVersion;
     this.limits = limits;
+    this.context = deepFreeze(structuredCloneable(context));
   }
 
   /** Capture a fact: a deeply immutable payload in a correlated envelope. */
@@ -101,6 +114,7 @@ export class ActionContext {
       batchId: options.batchId ?? null,
       subjectIds: [...(options.subjectIds ?? [])],
       snapshotVersion: this.snapshotVersion,
+      context: this.context,
       payload: structuredCloneable(payload),
     });
     this.recorded.push(envelope);

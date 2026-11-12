@@ -503,3 +503,18 @@ describe("only canonical automatic IDs are automatic (#661 review)", () => {
     expect(ledger.has("auto:01")).toBe(true);
   });
 });
+
+describe("every action fact carries the stage it happened in (#661 review)", () => {
+  it("records the stage context captured at the action's start, unchanged by later play", () => {
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
+    expect(game.discard([game.state.hand[0]!.id])).not.toBeNull();
+    const facts = game.actionFacts;
+    expect(facts.length).toBeGreaterThan(0);
+    for (const fact of facts)
+      expect(fact.context).toMatchObject({ round: 1, stage: { round: 1, ordinal: 1 } });
+    // Advancing the run later does not change what an earlier fact says.
+    game.forceOutcome("won");
+    game.advance();
+    expect(facts[0]!.context).toMatchObject({ stage: { ordinal: 1 } });
+  });
+});

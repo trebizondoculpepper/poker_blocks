@@ -221,6 +221,8 @@ export class GameRun {
       id,
       this.version,
       this.config.resolutionLimits ?? defaultResolutionLimits,
+      // The stage the action resolves in, fixed now: every fact it records carries it.
+      { stage: this.stageContext, round: this.currentRound },
     );
     try {
       this.activeAction = { context: action, phase: kind };
