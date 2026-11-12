@@ -1405,3 +1405,7 @@ A small panel shows the backend's name and the renderer counts (draw calls, tria
 - #524: the room. Its control buttons use the existing `ui.click` sound.
 
 Visual acceptance is the owner's comparison in the room, reported on #524.
+
+## GitHub action briefing tool (#626)
+
+The [read-only triage CLI](github-triage-cli.md) collects paginated GitHub facts through authenticated `gh`, applies registered workflow analysis rules and emits a compact evidence-linked action briefing or versioned JSON. Full-ticket mode provides intake context; explicit since/checkpoint and offline-cache semantics prevent stale snapshots from looking current. Natural-language questions and apparently satisfied dependencies remain inspection candidates, never authoritative decisions. The tool does not mutate GitHub and stays outside production.
