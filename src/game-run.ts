@@ -1,5 +1,6 @@
 import { resetStageState } from "./stage-end";
 import { resetRoundState } from "./round-end";
+import { defaultPlayPhases, playSteps, type PlayStepContext } from "./lifecycle/play-phases";
 import { clearField } from "./card-ownership";
 // Registers the spawn-beyond-pair reaction result (#425).
 import "./pair-spawn";
@@ -9,8 +10,7 @@ import "./cooking";
 import "./triggers";
 // Registers the self-destruct and trigger-targets responses (#435).
 import "./trigger-responses";
-import { commitReactions, type AppliedReaction } from "./reactions";
-import { commitCountdowns } from "./trigger-countdown";
+import type { AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
 import { applyRackItem } from "./rack-item-effects";
 import type { BlockMaterial } from "./materials";
@@ -262,7 +262,12 @@ export class GameRun {
   }
 
   /** Record the events an action delivered as its facts, in delivery order. */
-  private recordDelivered(action: ActionContext, phase: string, delivered: readonly GameEvent[]) {
+  private recordDelivered(
+    action: ActionContext,
+    phase: string,
+    delivered: readonly GameEvent[],
+    batchId: string | null = null,
+  ) {
     // Each fact names the fact it answered, from the parent the queue kept as it queued it
     // (#661 review); a fact from an earlier drain of this action is found the same way.
     for (const event of delivered) {
@@ -270,6 +275,7 @@ export class GameRun {
       const envelope = action.record(event.type, event, {
         phase,
         parent: cause ? this.recordedFacts.get(cause) : null,
+        batchId,
         // Ordered subjects, each once: the event's cards, or its block when it names no cards.
         subjectIds: [
           ...new Set([
@@ -671,49 +677,97 @@ export class GameRun {
     return this.transact("play", actionId, (context) => this.resolvePlay(action, context));
   }
 
+  /**
+   * A play's model phases, in the documented order (#658; doc/game-events.md, "Resolution order
+   * for a play"): placement, before score (its configured steps), scoring, after score (its
+   * configured steps), then settlement, with play.completed last. Each phase's follow-ups are
+   * drained before the next begins. Nothing waits for presentation.
+   */
   private resolvePlay(action: PlayAction, context: ActionContext): GameState | null {
     const next = this.activeDealer.play(this.currentState, action);
-    if (next) {
-      this.scoredLines = scoreFieldWithPassives(
-        next.field,
-        next.passiveRack,
-        undefined,
-        this.random,
-      );
-      const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
-      this.runStats = recordPlay(this.runStats, gained, action.cardIds?.length || 1);
-      this.currentState = {
-        ...next,
-        round: { ...next.round, score: this.currentState.round.score + gained },
-      };
-      // Reactions (#366): resolved once, after scoring, so they never score this play; they
-      // change the state later plays score.
-      // Committed through the shared command path; only real changes are reported.
-      this.lastReactions = commitReactions(this.commandTarget);
-      // Countdowns (#434): only a committed play counts; a block reaching zero is triggered.
-      const counted = commitCountdowns(
-        this.commandTarget,
-        new Set([action.cardId, ...(action.cardIds ?? [])]),
-      );
-      // The current dealer scores in play(); this is a post-play event until
-      // placement and scoring are separated by the gameplay coordinator.
-      // Every card placed, in placement order, so the fact describes the whole group (#661 review).
+    if (!next) return null;
+    const placed = action.cardIds?.length ? [...action.cardIds] : [action.cardId];
+    const phases = this.config.playPhases ?? defaultPlayPhases;
+    const steps: PlayStepContext = {
+      target: this.commandTarget,
+      placed: new Set(placed),
+      pending: [],
+      reactions: [],
+    };
+    // The score before this play: the dealer's next state is not the base the play's points add to.
+    const scoreBefore = this.currentState.round.score;
+    this.currentState = next;
+
+    // 1. Placement: the batch once, then each block in placement order.
+    const batchId = `${context.actionId}:play`;
+    this.passiveEvents.emit({ type: "play.placed", blockId: action.cardId, cardIds: placed });
+    for (const blockId of placed) this.passiveEvents.emit({ type: "block.placed", blockId });
+    this.drainPhase(context, "placement", batchId);
+
+    // 2. Before score: its configured steps (countdown deductions record pending triggers).
+    this.passiveEvents.emit({ type: "play.beforeScore", cardIds: placed });
+    this.drainPhase(context, "beforeScore", batchId);
+    this.runSteps(phases.beforeScore, steps, context, "beforeScore", batchId);
+
+    // 3. Score the resolved field; the pure scorer is unchanged. Each line, then all, then the
+    //    total applied once.
+    this.scoredLines = scoreFieldWithPassives(
+      this.currentState.field,
+      this.currentState.passiveRack,
+      undefined,
+      this.random,
+    );
+    const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
+    for (const line of this.scoredLines)
       this.passiveEvents.emit({
-        type: "play.completed",
-        blockId: action.cardId,
-        cardIds: action.cardIds?.length ? [...action.cardIds] : [action.cardId],
+        type: "score.lineFinalized",
+        amount: line.points,
+        cardIds: [...line.blockIds],
       });
-      for (const { blockId, from, to } of this.lastReactions)
-        this.passiveEvents.emit({ type: "reaction.applied", blockId, reaction: { from, to } });
-      for (const event of counted) this.passiveEvents.emit(event);
-      this.recordDelivered(
-        context,
-        "play",
-        this.passiveEvents.drain(undefined, undefined, this.budgetFor(context, "play")),
-      );
-      this.announceOutcome();
+    this.passiveEvents.emit({ type: "score.allLinesFinalized", amount: gained });
+    this.runStats = recordPlay(this.runStats, gained, placed.length);
+    this.currentState = {
+      ...this.currentState,
+      round: { ...this.currentState.round, score: scoreBefore + gained },
+    };
+    this.passiveEvents.emit({ type: "score.totalApplied", amount: gained });
+    this.drainPhase(context, "score", batchId);
+
+    // 4. After score: its configured steps (reactions, then pending detonations).
+    this.passiveEvents.emit({ type: "play.afterScore", cardIds: placed });
+    this.drainPhase(context, "afterScore", batchId);
+    this.runSteps(phases.afterScore, steps, context, "afterScore", batchId);
+    this.lastReactions = steps.reactions;
+
+    // 5. Settle: the stage outcome, then play.completed last.
+    this.announceOutcome();
+    this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId, cardIds: placed });
+    this.drainPhase(context, "settle", batchId);
+    return this.currentState;
+  }
+
+  /** Run a phase's configured steps in order, draining each one's follow-ups before the next. */
+  private runSteps(
+    names: readonly string[],
+    steps: PlayStepContext,
+    context: ActionContext,
+    phase: string,
+    batchId: string,
+  ): void {
+    for (const name of names) {
+      for (const event of playSteps.get(name)(steps)) this.passiveEvents.emit(event);
+      this.drainPhase(context, phase, batchId);
     }
-    return next ? this.currentState : null;
+  }
+
+  /** Deliver and record what is queued, as this phase's facts, against the action's budget. */
+  private drainPhase(context: ActionContext, phase: string, batchId: string): void {
+    this.recordDelivered(
+      context,
+      phase,
+      this.passiveEvents.drain(undefined, undefined, this.budgetFor(context, phase)),
+      batchId,
+    );
   }
 
   /**

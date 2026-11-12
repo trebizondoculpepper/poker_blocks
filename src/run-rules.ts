@@ -26,6 +26,8 @@ export type RunRules = {
   stage(round: number, kind: StageKind): StageSetup;
   /** Cards still in hand when a stage ends. Open rule; only one option exists so far. */
   handAtStageEnd: "return-to-deck";
+  /** Which registered steps run before and after a play scores (#658); the documented default. */
+  playPhases?: import("./lifecycle/play-phases").PlayPhases;
   /** How much one action may resolve before it is rolled back (#657); the documented defaults. */
   resolutionLimits?: { events: number; operations: number };
   /** Whether the discard pile returns to the deck after the boss-stage shop. */
