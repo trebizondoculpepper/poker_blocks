@@ -22,9 +22,9 @@ import {
   setReflectionEnvironment,
   type BlockAppearance,
 } from "../../visual/block-appearance";
-import { wheelZoom } from "../../view-zoom";
 import { cardFaceArt } from "../../visual/face-art";
 import { opticsBackends, withOpticsBackend } from "../../visual/optics-backends";
+import { viewControls } from "./view-controls";
 import "./room.css";
 
 export type CrystalComparisonRoom = {
@@ -64,21 +64,6 @@ export function distribution(values: readonly number[]) {
   const rank = (p: number) =>
     sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1))] ?? 0;
   return { median: rank(0.5), p95: rank(0.95), samples: sorted.length };
-}
-
-/** Camera distance after a wheel step: the table's exponential zoom, applied to distance. */
-export function wheelDistance(distance: number, deltaY: number, deltaMode: number) {
-  return distance / wheelZoom(1, deltaY, deltaMode);
-}
-
-/** How far a two-finger twist turns the collection: the angle change since last event. */
-export function twistTurn(previousDegrees: number, degrees: number): number {
-  return THREE.MathUtils.degToRad(degrees - previousDegrees);
-}
-
-/** Camera distance for a pinch: the start distance scaled by start spacing over spacing now. */
-export function pinchDistance(startDistance: number, startSpacing: number, spacing: number) {
-  return (startDistance * startSpacing) / Math.max(1, spacing);
 }
 
 const warmupFrames = 60;
@@ -124,48 +109,20 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
   let config: DevCrystalComparisonConfig | null = null;
   let backend = "current";
   let slots: Slot[] = [];
-  let distance = 10;
   let frame = 0;
   let last: number | null = null;
   let warm = 0;
   let samples: number[] = [];
   let cpu: number[] = [];
 
+  const view = { distance: 10, turnX: 0, turnY: 0 };
   const gesture = new Gesture(
     renderer.domElement,
+    viewControls(view, () => playSfx("view.zoom")),
     {
-      onDrag: ({ delta: [dx, dy] }) => {
-        group.rotation.y += dx * 0.01;
-        group.rotation.x += dy * 0.01;
-      },
-      onWheel: ({ first, event }) => {
-        // The game's zoom sound, once as the gesture begins (#637 review).
-        if (first) playSfx("view.zoom");
-        // The game's exponential, normalised and capped wheel step (src/view-zoom.ts): moving
-        // the camera back by the factor the table would zoom in by.
-        distance = clampDistance(wheelDistance(distance, event.deltaY, event.deltaMode));
-      },
-      // Pinch zoom follows the ratio of finger spacing to where it started, as the table does
-      // (src/table-input.ts): equal gestures give equal zoom, however often events arrive.
-      // A two-finger twist turns the collection, as it turns the board (#637 review).
-      onPinch: ({ first, da: [spacing, angle], memo }) => {
-        const start = (memo ?? { distance, spacing, angle }) as {
-          distance: number;
-          spacing: number;
-          angle: number;
-        };
-        if (first) playSfx("view.zoom");
-        distance = clampDistance(pinchDistance(start.distance, start.spacing, spacing));
-        group.rotation.y += twistTurn(start.angle, angle);
-        return { ...start, angle };
-      },
+      drag: { pointer: { capture: true } },
     },
-    { drag: { pointer: { capture: true } } },
   );
-
-  function clampDistance(value: number): number {
-    return Math.min(80, Math.max(2, value));
-  }
 
   function material(): BlockMaterial {
     return config!.material as BlockMaterial;
@@ -233,13 +190,14 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     slots.forEach(release);
     slots = comparisonLayout(count, config!.seed);
     const columns = Math.ceil(Math.sqrt(count));
-    distance = Math.max(5, columns * 3.2);
+    view.distance = Math.max(5, columns * 3.2);
     build();
   }
 
   function tick(time: number): void {
     resize();
-    camera.position.set(0, 0, distance);
+    camera.position.set(0, 0, view.distance);
+    group.rotation.set(view.turnX, view.turnY, 0);
     camera.lookAt(0, 0, 0);
     const start = performance.now();
     renderer.render(scene, camera);

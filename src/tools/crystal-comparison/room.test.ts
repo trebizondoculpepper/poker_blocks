@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import { gameModeFor } from "../../game-modes";
 import { opticsBackends } from "../../visual/optics-backends";
-import { comparisonLayout, distribution, pinchDistance, twistTurn, wheelDistance } from "./room";
+import { comparisonLayout, distribution } from "./room";
+import { pinchDistance, twistTurn, viewControls, wheelDistance } from "./view-controls";
 
 describe("the crystal comparison room (#524)", () => {
   it("lays out the same cards, places and turns for a seed", () => {
@@ -60,5 +61,37 @@ describe("two-finger twist in the comparison room (#637 review)", () => {
       previous = angle;
     }
     expect(turned).toBeCloseTo(Math.PI / 2, 10);
+  });
+});
+
+describe("the comparison room's gesture lifecycle (#637 review)", () => {
+  const setup = () => {
+    const view = { distance: 10, turnX: 0, turnY: 0 };
+    const sounds: string[] = [];
+    return { view, sounds, controls: viewControls(view, () => void sounds.push("zoom")) };
+  };
+
+  it("does not turn the collection by drag while a straight pinch is active", () => {
+    const { view, controls } = setup();
+    const memo = controls.onPinch({ first: true, last: false, da: [100, 0] });
+    // The first finger's movement still arrives as a drag during the pinch.
+    controls.onDrag({ delta: [40, 25] });
+    controls.onPinch({ first: false, last: false, da: [200, 0], memo });
+    expect(view.turnX).toBe(0);
+    expect(view.turnY).toBe(0);
+    expect(view.distance).toBe(5);
+    controls.onPinch({ first: false, last: true, da: [200, 0], memo });
+    // Once the pinch ends, a drag turns it again.
+    controls.onDrag({ delta: [100, 0] });
+    expect(view.turnY).toBeCloseTo(1, 10);
+  });
+
+  it("applies one wheel tick once, ignoring the synthetic end callback", () => {
+    const { view, sounds, controls } = setup();
+    const event = { deltaY: 100, deltaMode: 0 };
+    controls.onWheel({ first: true, last: false, event });
+    controls.onWheel({ first: false, last: true, event });
+    expect(view.distance).toBeCloseTo(wheelDistance(10, 100, 0), 10);
+    expect(sounds).toEqual(["zoom"]);
   });
 });
