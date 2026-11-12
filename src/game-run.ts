@@ -312,6 +312,7 @@ export class GameRun {
             this.currentState,
             this.config.stageReward,
             this.currentPhase as StageKind,
+            this.stageContext ?? undefined,
           )
         : [
             ...materialHandRewardEntries(this.currentState),

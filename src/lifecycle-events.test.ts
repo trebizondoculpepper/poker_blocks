@@ -223,6 +223,29 @@ describe("numbered stage lifecycle (#660)", () => {
     expect(matched).toEqual(["2.2"]);
   });
 
+  it("pays a stage-won reward filtered by ordinal only for stage two, in every round", () => {
+    const session = makeSession();
+    session.installPassive(
+      passive("stage-two-bounty", "passive.event-rules", [
+        {
+          on: "stage.won",
+          select: { id: "event-stage", config: {} },
+          where: { id: "stage-ordinal-in", config: { ordinals: [2] } },
+          effects: [{ id: "add-coins", config: { amount: 50 } }],
+        },
+      ]),
+    );
+    const bounty: number[] = [];
+    for (let stage = 0; stage < 6; stage++) {
+      session.forceOutcome("won");
+      const entries = session.claimStageRewards()!.entries;
+      bounty.push(entries.find(({ coins }) => coins === 50) ? 1 : 0);
+      session.advance();
+      session.leaveShop();
+    }
+    expect(bounty).toEqual([0, 1, 0, 0, 1, 0]);
+  });
+
   it("does not replay a stage's start when a run is restored", () => {
     const session = recording();
     playThrough(session, 1);
