@@ -12,6 +12,7 @@
 import * as THREE from "three";
 import { playSfx } from "../../audio/sfx";
 import { gameModeFor, modeLink } from "../../game-modes";
+import "./all-cases";
 import { profilingCases, uncoveredCases } from "./cases";
 import { costMeasures, profilerExport, sortedByCost, type ProfilerEnvironmentInfo } from "./export";
 import { createGpuTimer } from "./gpu-timer";
