@@ -1651,6 +1651,10 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 
 [The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.
 
+## Configured optical ripple refinements
+
+[Calm Water refinement contract](calm-water-refinements.md) gives the preset ownership of period bounds, outline opacity and independent normal perturbation; common controls, codecs and clocks consume those capabilities uniformly.
+
 ## Current offer eligibility
 
 [Shop eligibility](shop-eligibility.md) uses definition-owned weight curves and registered eligibility providers for generation, restoration and purchase validation, while preserving compatible already owned objects.
