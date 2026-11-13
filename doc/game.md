@@ -398,6 +398,10 @@ This section is the agreed target design. It replaces the first-version placehol
 - When two comparable passives differ only in strength, the stronger costs more (×4 > ×2, Scrapper > Seeing Red).
 - Each round of the initial progression introduces at least one new item or material.
 
+#### Passive power progression
+
+[Passive power and balance rationale](passive-balance.md) guides new designs: early broadly useful boosts give way to stronger, more specialized material/deck synergies as targets rise. Acquisition rarity and difficulty of meeting a condition are separate; meaningful objectives generally deserve stronger payoffs than unconditional peers at comparable progression. Test provisional rules in the balance bench before numerical rebalance/certification. This does not automatically upgrade owned passives or change current prices/weights.
+
 #### Passive catalogue
 
 | Passive                                                                          | Base price | Earliest round |
