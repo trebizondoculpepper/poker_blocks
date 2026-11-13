@@ -9,6 +9,7 @@ import type { CardBlock } from "./cards";
 import type { GameState } from "./game-state";
 import { getMaterialDefinition, materialOf } from "./materials";
 import { aggregateMass, type MassAggregate } from "./physical-mass";
+import { contextQueries } from "./context-queries";
 
 const recipeOf = (card: CardBlock) => getMaterialDefinition(materialOf(card)).mass;
 
@@ -21,3 +22,33 @@ export function cardsMass(cards: readonly CardBlock[]): MassAggregate {
 export function fieldMass(state: GameState): MassAggregate {
   return cardsMass(state.field.map(({ block }) => block));
 }
+
+/** A mass aggregate as a query result: an empty scope is unavailable, never a zero mass. */
+const massResult = (cards: readonly CardBlock[]) => {
+  const mass = cardsMass(cards);
+  return mass.count
+    ? ({
+        available: true,
+        value: { totalKg: mass.totalKg, meanKg: mass.meanKg!, count: mass.count },
+      } as const)
+    : ({ available: false, reason: "no blocks in the mass scope" } as const);
+};
+
+// A row's scored subset (#818): `{ ids }`, the default scope for mass trials.
+contextQueries.register("scoredSubsetMass", {
+  cost: "O(n) in placed blocks",
+  limit: 1_000_000,
+  size: (snapshot) => snapshot.field.length,
+  run: (snapshot, raw) => {
+    const wanted = new Set(((raw ?? {}) as { ids?: readonly string[] }).ids ?? []);
+    return massResult(snapshot.field.map(({ block }) => block).filter(({ id }) => wanted.has(id)));
+  },
+});
+
+// The whole field: a separately labelled trial variant, still one factor per scored row.
+contextQueries.register("fieldMass", {
+  cost: "O(n) in placed blocks",
+  limit: 1_000_000,
+  size: (snapshot) => snapshot.field.length,
+  run: (snapshot) => massResult(snapshot.field.map(({ block }) => block)),
+});

@@ -3,7 +3,8 @@ import { standardDeck, type CardBlock } from "./cards";
 import type { PlacedBlock } from "./game-state";
 import { scoreFieldWithPassives } from "./passive-effects";
 import { createPassiveBlock, ordinaryPassives } from "./passives";
-import { packingTrials, scoreCurves, validateQueryFactor } from "./trial-modifiers";
+import { massTrials, packingTrials, scoreCurves, validateQueryFactor } from "./trial-modifiers";
+import { getMaterialDefinition, withMaterial } from "./materials";
 
 const placed = (block: CardBlock, x: number, y = 0): PlacedBlock => ({
   block,
@@ -75,5 +76,50 @@ describe("dense and sparse packing trials (#817)", () => {
     const ordinary = ordinaryPassives().map(({ id }) => id);
     expect(ordinary).not.toContain("trial-dense-packing");
     expect(ordinary).not.toContain("trial-sparse-packing");
+  });
+});
+
+describe("heavy and light mass trials (#818)", () => {
+  const heavy = (m: number) => scoreCurves.get("heavyLog").factor(m, massTrials.heavy);
+  const light = (m: number) => scoreCurves.get("lightInverse").factor(m, massTrials.light);
+
+  it("matches the documented samples, bounded with no singularity", () => {
+    expect(heavy(1)).toBeCloseTo(1 + 3 * Math.log(2), 12);
+    expect(heavy(1)).toBeCloseTo(3.079, 3);
+    expect(light(1)).toBeCloseTo(2.5, 12);
+    expect(heavy(1e9)).toBe(10);
+    expect(light(0)).toBe(10);
+    expect(light(1e9)).toBeCloseTo(1, 6);
+  });
+
+  it("rejects invalid mass parameters", () => {
+    const at = (curve: string, params: unknown) =>
+      validateQueryFactor("t", { query: "scoredSubsetMass", value: "meanKg", curve, params });
+    expect(at("heavyLog", { maximum: 10, coefficient: 3, referenceKg: 0 })).toHaveLength(1);
+    expect(at("lightInverse", { maximum: 0.5, referenceKg: 1 })).toHaveLength(1);
+    expect(at("heavyLog", massTrials.heavy)).toEqual([]);
+  });
+
+  it("scores a row by its scored subset's mean or total mass", () => {
+    const steel = getMaterialDefinition("steel");
+    const line = standardDeck.slice(0, 5).map((card, x) => placed(withMaterial(card, steel), x));
+    const base = scoreFieldWithPassives(line, [])[0]!;
+    const scoredKg = 7.85 * base.contributingIds.length;
+    const mean = scoreFieldWithPassives(line, [createPassiveBlock("trial-heavy-mean-mass", "h")]);
+    // Scores round once at the end, so compare ratios rather than rounded products.
+    expect(mean[0]!.points / base.points).toBeCloseTo(heavy(7.85), 2);
+    const total = scoreFieldWithPassives(line, [createPassiveBlock("trial-light-total-mass", "l")]);
+    expect(total[0]!.points / base.points).toBeCloseTo(light(scoredKg), 2);
+  });
+
+  it("is provisional", () => {
+    const ordinary = ordinaryPassives().map(({ id }) => id);
+    for (const id of [
+      "trial-heavy-mean-mass",
+      "trial-light-mean-mass",
+      "trial-heavy-total-mass",
+      "trial-light-total-mass",
+    ])
+      expect(ordinary).not.toContain(id);
   });
 });

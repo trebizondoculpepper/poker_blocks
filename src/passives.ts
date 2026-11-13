@@ -48,6 +48,8 @@ export type ScoreEventContext = {
   block?: CardBlock;
   /** The field this scoring pass reads (#817): the immutable snapshot its context queries use. */
   snapshot?: QuerySnapshot;
+  /** The row's actual scored subset, by card ID (#818): the default scope of a row's queries. */
+  scoredIds?: readonly string[];
 };
 
 /**

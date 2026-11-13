@@ -211,7 +211,10 @@ function scoreLines(
       (previous, phase) => {
         const next = evaluateRules(
           lineRules(sources, phase),
-          { type: phase, score: { line, intersections, snapshot } },
+          {
+            type: phase,
+            score: { line, intersections, snapshot, scoredIds: result.contributingIds },
+          },
           previous.value,
         );
         return { value: next.value, activations: [...previous.activations, ...next.activations] };
@@ -222,7 +225,10 @@ function scoreLines(
     const clamped = Math.max(0, phases.value);
     const after = evaluateRules(
       lineRules(sources, afterClampPhase),
-      { type: afterClampPhase, score: { line, intersections, snapshot } },
+      {
+        type: afterClampPhase,
+        score: { line, intersections, snapshot, scoredIds: result.contributingIds },
+      },
       clamped,
     );
     // Commit: the chosen hand's contributing blocks, then the line phases.
