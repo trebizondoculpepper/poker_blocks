@@ -10,10 +10,10 @@ import { cellKey, type Cell } from "./traits/attachable";
 
 const card = (rank: string, suit: string, material: string, id = `${rank}-${suit}`) => {
   const base = standardDeck.find(
-    (b) => b.traits.identity.rank === rank && b.traits.identity.suit.name === suit,
+    (b) => b.traits.identity!.rank === rank && b.traits.identity!.suit.name === suit,
   )!;
   return withMaterial(
-    createCard(base.traits.identity, id),
+    createCard(base.traits.identity!, id),
     getMaterialDefinition(material as BlockMaterial),
   );
 };
@@ -80,7 +80,7 @@ describe("air + boiling water makes a cloud (#425)", () => {
       at(card("10", "diamonds", "paper", "above"), -1, 1),
     );
     const made = clouds(applyReactions(state).state)[0]!;
-    expect(made.block.traits.identity.rank).toBe("10");
+    expect(made.block.traits.identity!.rank).toBe("10");
     expect(cellKey(made.cell)).toBe(cellKey({ x: -1, y: 0, z: 0 }));
   });
 

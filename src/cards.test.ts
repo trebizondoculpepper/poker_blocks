@@ -9,14 +9,14 @@ describe("standard deck", () => {
     expect(standardDeck).toHaveLength(52);
     expect(
       new Set(
-        standardDeck.map(({ traits: { identity } }) => `${identity.rank}-${identity.suit.name}`),
+        standardDeck.map(({ traits: { identity } }) => `${identity!.rank}-${identity!.suit.name}`),
       ).size,
     ).toBe(52);
     for (const suit of suits) {
       expect(
         standardDeck
-          .filter((block) => block.traits.identity.suit === suit)
-          .map((block) => block.traits.identity.rank),
+          .filter((block) => block.traits.identity!.suit === suit)
+          .map((block) => block.traits.identity!.rank),
       ).toEqual(ranks);
     }
   });
@@ -46,7 +46,7 @@ describe("standard deck", () => {
     expect(
       toggleBlockSelection(two, {
         ...featured,
-        traits: { identity: featured.traits.identity },
+        traits: { identity: featured.traits.identity! },
       }),
     ).toBe(two);
   });

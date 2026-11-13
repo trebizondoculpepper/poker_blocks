@@ -18,7 +18,7 @@ import { resetStageState } from "./stage-end";
 
 const card = (rank: string, suit: string): CardBlock =>
   standardDeck.find(
-    (block) => block.traits.identity.rank === rank && block.traits.identity.suit.name === suit,
+    (block) => block.traits.identity!.rank === rank && block.traits.identity!.suit.name === suit,
   )!;
 const row = (...blocks: CardBlock[]): PlacedBlock[] =>
   blocks.map((block, x) => ({ block, cell: { x, y: 0, z: 0 } }));

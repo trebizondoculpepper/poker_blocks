@@ -11,7 +11,7 @@
  * seed and configuration rebuild the same deck. Balanced assignment keeps `makeDevDeck`'s exact
  * semantics (cyclic, then a seeded shuffle of assignments); it is not weighted sampling.
  */
-import { createCard, standardDeck, type CardBlock } from "./cards";
+import { createCard, standardDeck, type CardBlock, pokerIdentity } from "./cards";
 import { rematerial } from "./card-material";
 import { Registry } from "./core/registry";
 import { shuffleCards } from "./deal";
@@ -78,7 +78,7 @@ deckBuilderOperations.register("standardTemplates", (context) => {
     let next = id;
     for (let copy = 2; taken.has(next); copy++) next = `${id}#${copy}`;
     taken.add(next);
-    return createCard(traits.identity, next);
+    return createCard(pokerIdentity({ id: next, traits }, "a standard template"), next);
   });
   return { ...context, cards: [...context.cards, ...fresh] };
 });

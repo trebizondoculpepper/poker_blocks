@@ -10,7 +10,7 @@ import { validateStateBonuses, withStateBonus } from "./state-bonuses";
 
 const card = (rank: string, suit: string): CardBlock =>
   standardDeck.find(
-    ({ traits }) => traits.identity.rank === rank && traits.identity.suit.name === suit,
+    ({ traits }) => traits.identity!.rank === rank && traits.identity!.suit.name === suit,
   )!;
 const row = (...blocks: CardBlock[]): PlacedBlock[] =>
   blocks.map((block, x) => ({ block, cell: { x, y: 0, z: 0 } }));
@@ -23,7 +23,7 @@ describe("state bonuses (#365)", () => {
 
   it("adds through the card's own scoring rules, leaving rank, suit and hand alone", () => {
     const melted = withStateBonus(card("7", "hearts"), "melted");
-    expect(melted.traits.identity).toEqual(card("7", "hearts").traits.identity);
+    expect(melted.traits.identity!).toEqual(card("7", "hearts").traits.identity!);
     // (7+1) + 7 = 15, x2 pair = 30.
     expect(points(row(melted, card("7", "clubs")))).toBe(30);
     expect(scoreFieldWithPassives(row(melted, card("7", "clubs")), [])[0]!.hand).toBe(

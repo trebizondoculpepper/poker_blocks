@@ -1,3 +1,4 @@
+import { pokerIdentity } from "../../cards";
 /**
  * A block as the game draws it on the table (#620): the production appearance assembly, its
  * table materials, edges and extras, and the look's ongoing effects (smoke and the like), built
@@ -14,7 +15,7 @@ import type { ProfiledObject } from "./cases";
 
 export function tableBlock(card: CardBlock, definition: MaterialDefinition): ProfiledObject {
   const appearance = createBlockAppearance(
-    cardFaceArt(card.traits.identity, { face: definition.cardFace }),
+    cardFaceArt(pokerIdentity(card), { face: definition.cardFace }),
     definition,
     1,
   );

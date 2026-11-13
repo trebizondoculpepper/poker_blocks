@@ -14,7 +14,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Gesture } from "@use-gesture/vanilla";
 import { playSfx } from "../../audio/sfx";
-import { standardDeck } from "../../cards";
+import { standardDeck, pokerIdentity } from "../../cards";
 import { gameModeFor, modeLink, type DevCrystalComparisonConfig } from "../../game-modes";
 import { getMaterialDefinition, type BlockMaterial } from "../../materials";
 import {
@@ -188,7 +188,7 @@ export function createCrystalComparisonRoom(
     for (const slot of slots) {
       release(slot);
       const appearance = createBlockAppearance(
-        cardFaceArt(slot.card.traits.identity, { face: definition.cardFace }),
+        cardFaceArt(pokerIdentity(slot.card), { face: definition.cardFace }),
         definition,
         1,
       );

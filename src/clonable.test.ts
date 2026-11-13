@@ -44,7 +44,7 @@ describe("exact cloning (#581)", () => {
   it("shares immutable definition data by reference", () => {
     const source = withMaterial(standardDeck[0]!, getMaterialDefinition("wood"));
     const { clone } = cloneCard(source, () => "c");
-    expect(clone.traits.identity).toBe(source.traits.identity);
+    expect(clone.traits.identity!).toBe(source.traits.identity!);
     expect(clone.traits.attachable).toBe(source.traits.attachable);
     expect(clone.traits.inspectable).toBe(source.traits.inspectable);
   });

@@ -6,7 +6,7 @@ import { cardFaceArt } from "./face-art";
 
 describe("shared face artwork", () => {
   it("a concealed card face (the Present, #568) prints nothing but keeps the card's seed", () => {
-    const { identity } = standardDeck[0]!.traits;
+    const identity = standardDeck[0]!.traits.identity!;
     const fillText = vi.fn();
     const art = cardFaceArt(identity, { face: "concealed" });
     art.paint({ fillText } as unknown as CanvasRenderingContext2D, (tone) => tone);
@@ -17,8 +17,9 @@ describe("shared face artwork", () => {
 
   it("preserves card seeds, fonts and ink, with rank and suit top-left, across the deck", () => {
     for (const {
-      traits: { identity },
+      traits: { identity: maybe },
     } of standardDeck) {
+      const identity = maybe!;
       const calls: unknown[] = [];
       const g = {
         fillText: vi.fn((text, x, y) => calls.push([text, x, y, g.font, g.fillStyle])),
