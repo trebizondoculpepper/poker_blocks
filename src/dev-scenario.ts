@@ -145,7 +145,7 @@ devScenarioCapabilities.register("devDeck", {
     // already placed in other zones beside fresh copies with the same IDs.
     if (draft.created.length)
       throw new ScenarioError("devDeck: the deck is built once, before any other zone");
-    const built = buildDeck((config as { steps: DeckBuilderStep[] }).steps, seed);
+    const built = buildDeck((config as { steps: DeckBuilderStep[] }).steps, seed, limits.deckCards);
     if (built.length > limits.deckCards)
       throw new ScenarioError(
         `devDeck: ${built.length} cards exceeds the ${limits.deckCards} limit`,

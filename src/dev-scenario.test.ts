@@ -316,3 +316,27 @@ describe("Dev scenario list shapes (#877 review)", () => {
     ]);
   });
 });
+
+describe("the deck budget (#877 review)", () => {
+  it("stops building as soon as the deck exceeds its card limit", () => {
+    const result = buildScenario(
+      {
+        version: scenarioVersion,
+        seed: 1,
+        steps: [
+          {
+            capability: "devDeck",
+            config: {
+              steps: Array.from({ length: 11 }, () => ({
+                operation: "standardTemplates",
+                config: {},
+              })),
+            },
+          },
+        ],
+      },
+      runtime,
+    );
+    expect(result).toEqual({ ok: false, diagnostics: [expect.stringMatching(/512-card budget/)] });
+  });
+});
