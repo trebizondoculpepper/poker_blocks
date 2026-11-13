@@ -96,6 +96,16 @@ describe("the activationLabel scheduler handler (#918)", () => {
     expect(shown[0]!.removed).toBe(true);
   });
 
+  it("shows nothing when it starts after its interval has already ended", () => {
+    source = { x: 10, y: 10 };
+    const { scheduler, scope, shown, payload } = harness();
+    scheduler.update(0, true);
+    scheduler.schedule(scope, { handler: "activationLabel", payload, dueUnits: 0 });
+    // The next frame comes a second later: the six-unit interval (400 ms) has passed.
+    scheduler.update(1000, true);
+    expect(shown).toHaveLength(0);
+  });
+
   it("removes the label when its scope is cancelled", () => {
     source = { x: 10, y: 10 };
     const { scheduler, scope, shown, payload } = harness();

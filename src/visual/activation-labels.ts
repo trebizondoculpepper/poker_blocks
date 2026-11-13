@@ -84,7 +84,7 @@ export type ActivationLabelLayer = {
 export function createActivationLabelLayer(host: HTMLElement): ActivationLabelLayer {
   const layer = document.createElement("div");
   layer.className = "activation-labels";
-  const live = document.createElement("p");
+  const live = document.createElement("div");
   live.className = "activation-labels-live";
   live.setAttribute("role", "status");
   live.setAttribute("aria-live", "polite");
@@ -119,7 +119,11 @@ export function createActivationLabelLayer(host: HTMLElement): ActivationLabelLa
       layer.append(element);
       const entry = { element, anchor };
       labels.push(entry);
-      live.textContent = text.replace(/\n/g, ", ");
+      // Its own announcement entry, so labels appearing together are each announced (#918
+      // review); it leaves with the label.
+      const announcement = document.createElement("p");
+      announcement.textContent = text.replace(/\n/g, ", ");
+      live.append(announcement);
       layout();
       return {
         refresh() {
@@ -132,6 +136,7 @@ export function createActivationLabelLayer(host: HTMLElement): ActivationLabelLa
           if (index < 0) return;
           labels.splice(index, 1);
           element.remove();
+          announcement.remove();
           layout();
         },
       };
@@ -165,6 +170,8 @@ visualHandlers.register("activationLabel", (raw, context): "done" | EffectHandle
   const point = labelAnchorSpaces.get(space)(anchor, context.services);
   if (!point()) return "done";
   const endsAt = context.scheduledAtMs + unitsToMs(durationUnits);
+  // Started late, after its interval already ended: nothing is shown or announced (#918 review).
+  if (context.nowMs >= endsAt) return "done";
   const label = layer.show(text, point);
   return {
     update: (nowMs) => (nowMs >= endsAt || !label.refresh() ? "finished" : "running"),
