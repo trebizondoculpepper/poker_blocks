@@ -340,3 +340,24 @@ describe("the deck budget (#877 review)", () => {
     expect(result).toEqual({ ok: false, diagnostics: [expect.stringMatching(/512-card budget/)] });
   });
 });
+
+describe("replay refills the hand (#877 review)", () => {
+  it("draws replacements after a replayed play, as ordinary play does", () => {
+    const first = buildScenario(
+      scenario({ capability: "devHand", config: { indices: [0, 1, 2, 3, 4] } }),
+      runtime,
+    );
+    if (!first.ok) throw new Error(first.diagnostics.join());
+    const size = first.trial.run.state.hand.length;
+    const cardId = first.trial.run.state.hand[0]!.id;
+    const result = buildScenario(
+      scenario(
+        { capability: "devHand", config: { indices: [0, 1, 2, 3, 4] } },
+        { capability: "devReplay", config: { commands: [{ command: "play", args: { cardId } }] } },
+      ),
+      runtime,
+    );
+    if (!result.ok) throw new Error(result.diagnostics.join());
+    expect(result.trial.run.state.hand.length).toBeGreaterThanOrEqual(size);
+  });
+});

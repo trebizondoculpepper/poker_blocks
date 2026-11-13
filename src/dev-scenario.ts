@@ -319,10 +319,17 @@ devScenarioCapabilities.register("devReplay", {
   }),
 });
 
-scenarioReplayCommands.register("play", (run, args) => run.play(args as PlayAction) !== null);
-scenarioReplayCommands.register(
-  "discard",
-  (run, args) => run.discard((args as { cardIds: readonly string[] }).cardIds) !== null,
+// Each replayed command completes as ordinary play does: the hand refills afterward
+// (doc/game.md, the after-action refill), so the next command can name a replacement card.
+const refilled = (resolved: boolean, run: GameRun) => {
+  if (resolved) run.refillHand();
+  return resolved;
+};
+scenarioReplayCommands.register("play", (run, args) =>
+  refilled(run.play(args as PlayAction) !== null, run),
+);
+scenarioReplayCommands.register("discard", (run, args) =>
+  refilled(run.discard((args as { cardIds: readonly string[] }).cardIds) !== null, run),
 );
 
 /** What building a scenario needs from the game: its dealers and run rules. */
