@@ -33,7 +33,7 @@ Persist a versioned parameter descriptor through the existing SavedRackItem.trai
 
 ## Selecting trials and changing settings
 
-Registered scenario setup installs the explicitly ordered passive descriptors with fresh IDs and effective settings before initial state publication. The Dev controller coordinates those setup steps; it does not push passives into a rack through ad hoc direct state writes. Use explicit experimental catalogue access and visible Certified/Provisional descriptors. Provisional definitions remain absent from ordinary shops.
+Registered scenario setup installs the explicitly ordered passive descriptors with fresh IDs and effective settings before initial state publication. The Dev controller coordinates those setup steps; it does not push passives into a rack through ad hoc direct state writes. Use explicit experimental catalogue access and the registered public contributions: provisional content is visibly marked, while certified content has no public certification notice. Provisional definitions remain absent from ordinary shops.
 
 Default parameter-change behavior is a full trial restart from the SAME initial scenario and seed, with the new effective parameter values. Clear previous scores/uses, recreate a fresh run, replay only the scenario's explicitly declared setup-command sequence, and begin a new trial ID. This supports clean A/B comparisons and avoids pretending previous accumulated scores used the new curve. Ordinary user moves are not automatically replayed unless a separate explicit replay request uses their recorded log. Cancel the old visual generation/scopes before binding new presenters. Reject invalid edits without destroying the old trial. Do not allow a half-applied slider value to mutate a committed action.
 
