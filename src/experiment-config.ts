@@ -16,6 +16,7 @@
  * where a bench places its button is #937.
  */
 import { buildScenario, type ScenarioDefinition, type ScenarioRuntime } from "./dev-scenario";
+import { effectiveSettings } from "./configurable-passive";
 import { stageKinds, type RunRules, type StageKind, type StageSetup } from "./run-rules";
 
 export const experimentConfigFormat = "poker-blocks.experiment-config";
@@ -55,11 +56,12 @@ export type ExperimentConfiguration = {
   revision: string;
   scenario: ScenarioDefinition;
   /**
-   * What the scenario's builders actually generated in this build: every created card's traits,
-   * in build order (doc/deck-builders.md, "Determinism and restoration"). A pool resolved from a
-   * later catalogue that would deal different cards from the same seed fails import.
+   * What the scenario actually builds in this build: every created card's traits, in build order
+   * (doc/deck-builders.md, "Determinism and restoration"), and each starting passive with its
+   * resolved settings, defaults included (doc/experiments/passive-test-bench.md, "Measurement,
+   * export and lifecycle"). A re-resolved pool or a changed passive default fails import.
    */
-  generated: unknown[];
+  generated: { cards: unknown[]; passives: unknown[] };
   rules: RulesRecord;
 };
 
@@ -70,7 +72,18 @@ export const maxRecordedHorizon = 256;
 function generatedCards(scenario: ScenarioDefinition, runtime: ScenarioRuntime) {
   const built = buildScenario(scenario, runtime);
   return built.ok
-    ? { ok: true as const, cards: plain(built.trial.session.cards.map(({ traits }) => traits)) }
+    ? {
+        ok: true as const,
+        generated: plain({
+          cards: built.trial.session.cards.map(({ traits }) => traits),
+          passives: built.trial.run.state.passiveRack.map((block) => ({
+            definitionId: block.definitionId,
+            settings: Object.fromEntries(
+              effectiveSettings(block).map(({ name, value }) => [name, value]),
+            ),
+          })),
+        }),
+      }
     : built;
 }
 
@@ -115,7 +128,7 @@ export function exportConfiguration(
     version: experimentConfigVersion,
     revision,
     scenario: plain(scenario),
-    generated: generated.cards,
+    generated: generated.generated,
     rules: recordRules(runtime.rules, rounds),
   };
 }
@@ -166,13 +179,13 @@ export function importConfiguration(text: string, runtime: ScenarioRuntime): Imp
     return { ok: false, diagnostics: ["a configuration needs its source revision"] };
   const built = generatedCards(config.scenario as ScenarioDefinition, runtime);
   if (!built.ok) return { ok: false, diagnostics: built.diagnostics };
-  if (!Array.isArray(config.generated))
-    return { ok: false, diagnostics: ["a configuration needs its generated cards"] };
-  const changed = difference(config.generated, built.cards, "generated");
+  if (typeof config.generated !== "object" || config.generated === null)
+    return { ok: false, diagnostics: ["a configuration needs what its scenario generated"] };
+  const changed = difference(config.generated, built.generated, "generated");
   if (changed)
     return {
       ok: false,
-      diagnostics: [`this build generates different cards from the scenario, at ${changed}`],
+      diagnostics: [`this build generates a different trial from the scenario, at ${changed}`],
     };
   const horizon = config.rules?.horizon;
   if (!Number.isSafeInteger(horizon) || horizon! < 1 || horizon! > maxRecordedHorizon)

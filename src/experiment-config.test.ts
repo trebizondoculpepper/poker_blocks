@@ -92,14 +92,35 @@ describe("experiment configuration export (#934)", () => {
       });
   });
 
-  it("refuses a configuration whose builders now generate different cards", () => {
+  it("records each passive's resolved settings, defaults included, and refuses a changed one", () => {
     const good = exportConfiguration(scenario, runtime, "1.2.3");
-    expect(good.generated.length).toBeGreaterThan(0);
+    const [dense] = good.generated.passives as {
+      definitionId: string;
+      settings: Record<string, unknown>;
+    }[];
+    expect(dense!.definitionId).toBe("trial-dense-packing");
+    expect(dense!.settings.maximum).toBe(6);
+    expect(Object.keys(dense!.settings).length).toBeGreaterThan(1);
     const changed = structuredClone(good);
-    (changed.generated[0] as { material?: unknown }).material = { id: "elsewhere" };
+    const [first] = changed.generated.passives as { settings: Record<string, unknown> }[];
+    const name = Object.keys(first!.settings).find((key) => key !== "maximum")!;
+    first!.settings[name] = "an older default";
     expect(importConfiguration(JSON.stringify(changed), runtime)).toMatchObject({
       ok: false,
-      diagnostics: [expect.stringMatching(/^this build generates different cards.*generated\.0/)],
+      diagnostics: [expect.stringMatching(/generated\.passives\.0\.settings/)],
+    });
+  });
+
+  it("refuses a configuration whose builders now generate different cards", () => {
+    const good = exportConfiguration(scenario, runtime, "1.2.3");
+    expect(good.generated.cards.length).toBeGreaterThan(0);
+    const changed = structuredClone(good);
+    (changed.generated.cards[0] as { material?: unknown }).material = { id: "elsewhere" };
+    expect(importConfiguration(JSON.stringify(changed), runtime)).toMatchObject({
+      ok: false,
+      diagnostics: [
+        expect.stringMatching(/^this build generates a different trial.*generated\.cards\.0/),
+      ],
     });
     expect(
       importConfiguration(JSON.stringify({ ...good, generated: undefined }), runtime),
