@@ -77,6 +77,8 @@ activeComponentCodecs.register("opaqueContainer", {
 activeDefinitions.register("playableCard", {
   // A playable card is nothing without its rank and suit.
   requires: ["pokerIdentity"],
+  // A revealed payload card: its own ordinary run policy, not its wrapper's.
+  lifecycle: { parent: "ordinaryCard" },
   create: (id) => ({
     id,
     traits: { active: { definition: "playableCard" }, selectable: {}, attachable: { faces } },
