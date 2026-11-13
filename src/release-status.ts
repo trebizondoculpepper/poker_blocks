@@ -15,6 +15,9 @@ import { Registry } from "./core/registry";
 /** What views show for a status: its label and what it means for normal play. */
 export type ReleaseStatusDescriptor = Readonly<{ label: string; explanation: string }>;
 
+/** A status's public presentation: an optional list badge and its inspection lines. */
+export type ReleaseStatusPresentation = Readonly<{ badge?: string; lines: readonly string[] }>;
+
 /** One definition offered to a catalogue: where it was in the list, and its status descriptor. */
 export type Contribution<T> = Readonly<{
   definition: T;
@@ -28,7 +31,13 @@ export type AdmissionContributions = {
 };
 
 export type ReleaseStatusMember = Readonly<{
+  /** Internal metadata: diagnostics and export, never shown to players by itself. */
   descriptor: ReleaseStatusDescriptor;
+  /**
+   * What players see of this status (#923): a short list badge, if any, and the lines it adds to
+   * inspection. Nothing for certified content; a visible warning for provisional content.
+   */
+  presentation: ReleaseStatusPresentation;
   /** Register this definition with the admission operation(s) this status takes part in. */
   contribute(contribution: Contribution<unknown>, contributions: AdmissionContributions): void;
 }>;
@@ -51,12 +60,20 @@ releaseStatuses.register("certified", {
     label: "Certified",
     explanation: "Approved for normal play, subject to the usual unlocks and weights.",
   }),
+  // Certification is internal admission metadata: players see no badge or status row (#923).
+  presentation: Object.freeze({ lines: Object.freeze([]) }),
   contribute: (contribution, contributions) => contributions.add("certified", contribution),
 });
 releaseStatuses.register("provisional", {
   descriptor: Object.freeze({
     label: "Provisional",
     explanation: "Only in explicitly experimental catalogues, never in normal play.",
+  }),
+  presentation: Object.freeze({
+    badge: "Provisional",
+    lines: Object.freeze([
+      "Status: Provisional — only in experimental catalogues, never in normal play",
+    ]),
   }),
   contribute: (contribution, contributions) => contributions.add("provisional", contribution),
 });
@@ -95,6 +112,22 @@ export function releaseStatusDescriptor(
   declaration: ReleaseStatusDeclaration | undefined,
 ): ReleaseStatusDescriptor {
   return releaseStatuses.get(resolveReleaseStatus(owner, declaration)).descriptor;
+}
+
+/** The public presentation a definition's declared status contributes (#923); may be empty. */
+export function releaseStatusPresentation(
+  owner: string,
+  declaration: ReleaseStatusDeclaration | undefined,
+): ReleaseStatusPresentation {
+  return releaseStatuses.get(resolveReleaseStatus(owner, declaration)).presentation;
+}
+
+/** The public inspection lines a definition's declared status contributes (#923); may be none. */
+export function releaseStatusInspection(
+  owner: string,
+  declaration: ReleaseStatusDeclaration | undefined,
+): readonly string[] {
+  return releaseStatusPresentation(owner, declaration).lines;
 }
 
 /** What a catalogue admits: the registered admission operations it composes, request-local. */
