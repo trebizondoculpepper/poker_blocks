@@ -57,6 +57,11 @@ export type MaterialDefinition = {
   cardFace?: string;
   traits: { transparent?: Record<string, never>; resistant?: ResistantTrait };
   /**
+   * Whether a generated hidden payload (a Present's card, doc/opaque-actives.md) may be made of
+   * this material. Omitted: it may. Read uniformly by the card generator's eligibility (#555).
+   */
+  payloadEligible?: boolean;
+  /**
    * How the material sounds when blocks meet (#232). The softer of two materials meeting
    * decides the attachment sound: `hardness` orders them (higher is harder), `attach` is the
    * sound, and `character` says in words how it sounds.
@@ -245,6 +250,8 @@ const grass = {
 export const materialDefinitions = [
   {
     id: "paper",
+    // Never inside a Present (doc/presents.md): it is excluded from generated payloads.
+    payloadEligible: false,
     lettering: { font: "Times New Roman", fallback: "Tinos, serif", weight: 400 },
     name: "Paper",
     acoustics: { character: "flimsy", hardness: 2, attach: "material.attach.paper" },
