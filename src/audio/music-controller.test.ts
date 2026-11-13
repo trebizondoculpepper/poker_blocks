@@ -253,6 +253,36 @@ describe("music controller", () => {
     expect(stage).not.toBe("solitaire-boss");
   });
 
+  it("winds back up to the cue's logical track, even if the player is still loading (#855 review)", () => {
+    const log: string[] = [];
+    // A player like the real one: \`current\` changes only after a (here, never finished) load.
+    const player = {
+      current: "a" as string | null,
+      play: () => new Promise<void>(() => void log.push("loading")),
+      stop: () => {},
+      windDown: () => void log.push("windDown"),
+      windUp: async (id: string) => void log.push(`windUp ${id}`),
+      unlock: () => {},
+      setLowPass: () => {},
+      clearLowPass: () => {},
+      setHighPass: () => {},
+      clearHighPass: () => {},
+    };
+    const music = createMusicController(
+      player,
+      ["a", "b"],
+      { pick: { tracks: ["b"], selector: "fixed" } },
+      () => 0,
+    );
+    music.unlock();
+    music.run([
+      { op: "selectTrack", config: { plan: "pick" } },
+      { op: "windDown" },
+      { op: "windUp" },
+    ]);
+    expect(log.at(-1)).toBe("windUp b");
+  });
+
   it("rejects an unknown operation at composition rather than falling back", () => {
     expect(validateMusicOperations("scene", [{ op: "selectTrack" }, { op: "shuffleAll" }])).toEqual(
       ['scene: unknown music operation "shuffleAll"'],

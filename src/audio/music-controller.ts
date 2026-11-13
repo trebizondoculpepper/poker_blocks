@@ -256,15 +256,23 @@ export function createMusicController(
           playback.push(() => start(remembered));
         } else if (fallbackPlan) playback.push(choose(fallbackPlan));
       },
+      // Each deferred step carries its logical target, captured now: the real player updates
+      // `current` only once a track has loaded, so playback must never read it back (#855 review).
       windDown: () => {
-        // As the deferred wind-down will: an already wound-down player keeps what it stopped.
         if (logicalCurrent !== null) logicalBeforeDown = logicalCurrent;
+        const stopped = logicalBeforeDown;
         logicalCurrent = null;
-        playback.push(windDown);
+        playback.push(() => {
+          if (woundDown) return;
+          beforeWindDown = stopped;
+          woundDown = true;
+          player.windDown();
+        });
       },
       windUp: () => {
-        logicalCurrent = logicalBeforeDown;
-        playback.push(() => start(beforeWindDown));
+        const restored = logicalBeforeDown;
+        logicalCurrent = restored;
+        playback.push(() => start(restored));
       },
       // Not playback: a filter applies to whatever plays, so it never replaces a request.
       filter: applyFilter,
