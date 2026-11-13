@@ -40,6 +40,10 @@ export type CardBlock = {
      * short symbol for compact lists. Never a hint about hidden contents.
      */
     label?: { name: string; symbol: string };
+    /**
+     * Its discard behaviour by registered name (#574; src/discardable.ts); ordinary when absent.
+     */
+    discardable?: { behaviour: string; config?: unknown };
     selectable?: Record<string, never>;
     attachable?: AttachableTrait;
     inspectable?: InspectableTrait;
