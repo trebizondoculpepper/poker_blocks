@@ -35,8 +35,14 @@ export function payloadProblems(containerId: string, payload: unknown): string[]
     return [`unknown payload definition "${String(definition)}"`];
   if (typeof components !== "object" || components === null || Array.isArray(components))
     return ["a payload needs its components"];
-  // The initial contract permits one level: a payload that is itself a container is refused.
-  if (Object.hasOwn(components, "opaqueContainer")) return ["a payload cannot be a container"];
+  // The initial contract permits one level: a payload whose components own nested instances
+  // (by their codecs' own account) is refused, whatever those components are.
+  const nested = Object.entries(components).flatMap(([name, value]) =>
+    activeComponentCodecs.has(name)
+      ? (activeComponentCodecs.get(name).ownedIds?.(value) ?? [])
+      : [],
+  );
+  if (nested.length) return ["a payload cannot own nested instances"];
   return [];
 }
 
