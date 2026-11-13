@@ -1642,3 +1642,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Inherited lifecycle declaration resolution (#915)
 
 [The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.
+
+## Shop stock motion composition
+
+[Shop stock motion](shop-stock-motion.md) defines the shared beat floor, independent transform ownership, pose-preserving handoffs and registered input-state feedback. Motion never decides purchases or gates input.
