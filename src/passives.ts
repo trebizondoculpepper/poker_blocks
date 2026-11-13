@@ -1,3 +1,8 @@
+import {
+  composeCatalogue,
+  ordinaryCatalogue,
+  type ReleaseStatusDeclaration,
+} from "./release-status";
 import type { ActivationConfig } from "./activation-pulse";
 import "./visual/chef-toque";
 import type { SoundEffectId } from "./audio/sfx-registry";
@@ -110,6 +115,8 @@ export type PassiveShopBalance = {
 
 export type PassiveDefinition = {
   id: string;
+  /** Its release status: `certified` or `provisional` (doc/release-status.md, #812). */
+  releaseStatus: ReleaseStatusDeclaration;
   name: string;
   symbol: string;
   description: string;
@@ -191,6 +198,7 @@ function die(options: {
 }): PassiveDefinition {
   const { id, name, sides, shape, unlockRound, basePrice, pips } = options;
   return {
+    releaseStatus: { certified: {} },
     id,
     shop: { basePrice, unlockRound, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
@@ -216,6 +224,7 @@ function die(options: {
 const definitions: PassiveDefinition[] = [
   {
     id: "do-nothing",
+    releaseStatus: { certified: {} },
     categoryTrait: { effectCategory: {} },
     name: "Do Nothing",
     symbol: "∅",
@@ -226,6 +235,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "double-line",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 4, unlockRound: 1, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "×2",
@@ -238,6 +248,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "quad-line",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 9, unlockRound: 2, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "×4",
@@ -250,6 +261,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "gold-standard",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 5, unlockRound: 6, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Gold Standard",
@@ -263,6 +275,7 @@ const definitions: PassiveDefinition[] = [
   {
     // Le Chef (#104, #373): steak on the table at settlement pays 3 coins each instead of 1.
     id: "le-chef",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 5, unlockRound: 3, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Le Chef",
@@ -277,6 +290,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "carnivore",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 3, unlockRound: 4, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "Carnivore",
@@ -292,6 +306,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "woodworker",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 4, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Woodworker",
@@ -307,6 +322,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "crossroads",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 2, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Crossroads",
@@ -323,6 +339,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "long-haul",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 4, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Long Haul",
@@ -343,6 +360,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "scrapper",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 8, unlockRound: 2, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Scrapper",
@@ -353,6 +371,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "seeing-red",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 6, unlockRound: 1, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Seeing Red",
@@ -369,6 +388,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "ace-exchange",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 5, unlockRound: 2, frequency: "even" },
     categoryTrait: { effectCategory: {} },
     name: "Ace Exchange",
@@ -550,15 +570,26 @@ export class PassiveEventQueue {
 }
 
 /** Pick distinct definitions without depending on registry insertion order after each draw. */
+/**
+ * The passives normal play may offer or grant: the registered definitions admitted by the ordinary
+ * (certified-only) catalogue, in registration order (doc/release-status.md, #812).
+ */
+export function ordinaryPassives(): PassiveDefinition[] {
+  return composeCatalogue(
+    passiveDefinitions.names().map((name) => passiveDefinitions.get(name)),
+    ({ id }) => id,
+    ({ releaseStatus }) => releaseStatus,
+    ordinaryCatalogue,
+  ).map(({ definition }) => definition);
+}
+
 export function randomPassiveDefinitions(
   count: number,
   random: () => number,
   excluded: readonly string[] = [],
 ): PassiveDefinition[] {
-  const available = passiveDefinitions
-    .names()
-    .filter((name) => !excluded.includes(name) && !passiveDefinitions.get(name).retired)
-    .map((name) => passiveDefinitions.get(name))
+  const available = ordinaryPassives()
+    .filter(({ id, retired }) => !excluded.includes(id) && !retired)
     // Only what the passive shop could ever offer: an item stocked by its own dedicated slots
     // (a transmogrifier, #388) is made complete there, never granted as a bare passive.
     .filter(({ shop }) =>

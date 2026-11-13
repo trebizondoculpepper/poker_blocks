@@ -1,4 +1,11 @@
 import {
+  composeCatalogue,
+  experimentalCatalogue,
+  ordinaryCatalogue,
+  type CatalogueAccess,
+  type ReleaseStatusDeclaration,
+} from "./release-status";
+import {
   airFanHousing,
   cloudFill,
   custardFill,
@@ -77,6 +84,8 @@ export type MaterialDefinition = {
    */
   cardFace?: string;
   traits: { transparent?: Record<string, never>; resistant?: ResistantTrait };
+  /** Its release status: `certified` or `provisional` (doc/release-status.md, #812). */
+  releaseStatus: ReleaseStatusDeclaration;
   /** Its authored physical mass recipe (doc/playfield-rocking.md, #816): required of every definition. */
   mass: PhysicalMass;
   /**
@@ -275,6 +284,8 @@ export const materialDefinitions = [
     id: "paper",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(paperShell),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     // Never inside a Present (doc/presents.md): it is excluded from generated payloads.
     payloadEligible: false,
     lettering: { font: "Times New Roman", fallback: "Tinos, serif", weight: 400 },
@@ -311,6 +322,8 @@ export const materialDefinitions = [
     id: "wood",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(solid("wood", 650)),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Wood",
     acoustics: { character: "knocking", hardness: 3, attach: "material.attach.wood" },
@@ -352,6 +365,8 @@ export const materialDefinitions = [
     id: "steel",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(solid("steel", 7850)),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Steel",
     acoustics: { character: "clanking", hardness: 8, attach: "material.attach.steel" },
@@ -383,6 +398,8 @@ export const materialDefinitions = [
     id: "prismatic",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(solid("glass-like crystal", 2500)),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     // Crystal celebrates with three whistles (#494, owner decision on #497).
     celebration: { whistles: 3 },
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
@@ -463,6 +480,8 @@ export const materialDefinitions = [
     id: "gold",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(solid("gold", 19320)),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Tinos", fallback: "serif", weight: 400 },
     name: "Gold",
     acoustics: { character: "dense", hardness: 7, attach: "material.attach.gold" },
@@ -497,6 +516,8 @@ export const materialDefinitions = [
     id: "earth",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(plasticShell, soilFill),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Earth",
     acoustics: { character: "dry", hardness: 3.5, attach: "material.attach.terracotta" },
@@ -562,6 +583,8 @@ export const materialDefinitions = [
     id: "terracotta",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(solid("fired clay", 1800)),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Terracotta",
     acoustics: { character: "dry", hardness: 6, attach: "material.attach.terracotta" },
@@ -599,6 +622,8 @@ export const materialDefinitions = [
     id: "ice",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(solid("ice", 917)),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
     name: "Ice",
     acoustics: { character: "clinking", hardness: 5, attach: "material.attach.ice" },
@@ -669,6 +694,8 @@ export const materialDefinitions = [
     id: "meat",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(solid("meat", 1050)),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Meat",
     acoustics: { character: "squishy", hardness: 1, attach: "material.attach.meat" },
@@ -752,6 +779,8 @@ export const materialDefinitions = [
     id: "fire",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(framedGlass, flameFill),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Fire",
     acoustics: { character: "rattling", hardness: 9, attach: "material.attach.fire" },
@@ -800,6 +829,8 @@ export const materialDefinitions = [
     id: "custard",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(plasticShell, custardFill),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Custard",
     // Plastic, between wood and ice (#232).
@@ -866,6 +897,8 @@ export const materialDefinitions = [
     id: "gelato",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(plasticShell, gelatoScoops),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Gelato",
     acoustics: { character: "muffled", hardness: 4.5, attach: "material.attach.custard" },
@@ -913,6 +946,8 @@ export const materialDefinitions = [
     id: "cloud",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(plasticShell, cloudFill),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Cloud",
     acoustics: { character: "soft", hardness: 0.5, attach: "material.attach.meat" },
@@ -943,6 +978,8 @@ export const materialDefinitions = [
     id: "water",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(plasticShell, waterFill),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Water",
     acoustics: { character: "splashy", hardness: 1.5, attach: "material.attach.custard" },
@@ -1001,6 +1038,8 @@ export const materialDefinitions = [
     id: "magic",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(plasticShell, magicStarsFill),
+    // Approved for normal play (doc/release-status.md, #812).
+    releaseStatus: { certified: {} },
     // Magic celebrates with three whistles (#494, owner decision on #497).
     celebration: { whistles: 3 },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -1164,6 +1203,7 @@ function plasticFluidExperiments(): MaterialDefinition[] {
   ): MaterialDefinition => ({
     id,
     mass: massOf(plasticShell, fill),
+    releaseStatus: { provisional: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name,
     acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
@@ -1215,6 +1255,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
   ) => ({
     id,
     mass: massOf(stainedLantern, fill),
+    releaseStatus: { provisional: {} },
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
     name,
     acoustics: { character: "ringing", hardness: 9, attach: "material.attach.prismatic" as const },
@@ -1249,6 +1290,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
       // Aggressive flame (#355): the fire block's own flame, slightly larger and brighter, in the
       // same iron frame. A visual variant only: configuration of the same flame.
       id: "aggressiveFlame",
+      releaseStatus: { provisional: {} },
       mass: massOf(framedGlass, flameFill),
       lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
       name: "Aggressive flame",
@@ -1281,6 +1323,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
     },
     {
       id: "custardFrame",
+      releaseStatus: { provisional: {} },
       mass: massOf(framedGlass, custardFill),
       lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
       name: "Custard in a frame",
@@ -1321,6 +1364,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     id: "giftWrap",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(giftWrapping),
+    // A prototype: experimental catalogues only (doc/release-status.md, #812).
+    releaseStatus: { provisional: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     // A Present's card never shows its rank or suit (#568); a letter block still shows its letter.
     cardFace: "concealed",
@@ -1346,6 +1391,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     id: "emptyVessel",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(plasticShell),
+    // A prototype: experimental catalogues only (doc/release-status.md, #812).
+    releaseStatus: { provisional: {} },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Empty vessel",
     acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
@@ -1369,6 +1416,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     id: "airVent",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(airFanHousing),
+    // A prototype: experimental catalogues only (doc/release-status.md, #812).
+    releaseStatus: { provisional: {} },
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Air",
     // A powder-coated housing: it sounds like steel until it has a sound of its own.
@@ -1518,8 +1567,19 @@ export function withMaterial(card: CardBlock, definition: MaterialDefinition): C
  * of them look and meet; dev0).
  */
 export const materialPools = new Registry<() => readonly MaterialDefinition[]>("material pool");
-materialPools.register("gameplay", () => materialDefinitions);
-materialPools.register("registered", () => [...materialRegistry.values()]);
+// The pools are catalogues (#812): normal play admits certified definitions only; the
+// registered pool is an explicitly experimental catalogue, admitting provisional ones too.
+const catalogueOf = (definitions: readonly MaterialDefinition[], access: CatalogueAccess) =>
+  composeCatalogue(
+    definitions,
+    ({ id }) => id,
+    ({ releaseStatus }) => releaseStatus,
+    access,
+  ).map(({ definition }) => definition);
+materialPools.register("gameplay", () => catalogueOf(materialDefinitions, ordinaryCatalogue));
+materialPools.register("registered", () =>
+  catalogueOf([...materialRegistry.values()], experimentalCatalogue),
+);
 
 /** Give every standard card one stable visual material for this dev run, from `pool`. */
 export function makeDevDeck(seed: number, pool = "gameplay"): readonly CardBlock[] {
