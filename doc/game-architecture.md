@@ -1678,3 +1678,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Verified experiment configuration imports
 
 [Exact-build configuration compatibility](experiments/configuration-compatibility.md) bounds the first import/export delivery: a trusted adapter supplies the current immutable build identity; a registered/pure import boundary rejects mismatches before scenario construction, then performs normal schema/configuration checks. Cross-build semantic verification is deferred. A display version, mode identity, imported claim or partial field list cannot substitute for that identity. This affects experimental artifacts, not production saves or game rules.
+
+## Passive multi-action lifecycle and instance state
+
+[Passive lifecycle actions and instance state](passive-lifecycle-state.md) defines multiple registered actions per passive, phase-local rack ordering, persistent instance state versus operation-scoped values, transactional state/RNG and restoration. [Could It Be Magic Now?](experiments/could-it-be-magic-now.md) provides the agreed experimental counter use case. Implementation follows this documentation separately.
