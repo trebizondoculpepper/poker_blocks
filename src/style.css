@@ -1671,3 +1671,13 @@ body,
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* The shop's paper Continue cube (#780): about a 64-72px cube with room for its spring. */
+.shop-exit.hud-word-cube {
+  width: 150px;
+  height: 150px;
+  min-height: 0;
+}
+.shop-exit.hud-word-cube .block-menu-caption {
+  display: none;
+}

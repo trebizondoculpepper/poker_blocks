@@ -15,7 +15,7 @@ export type WordCubeOptions = WritingOptions & {
   action: string;
   enabled?: boolean;
   /** The sound choosing it plays; omitted, a click. */
-  sfx?: SoundEffectId;
+  sfx?: SoundEffectId | null;
   description?: string;
   /** Why it is unavailable, when no live reason comes with `input.enabled` (#462). */
   disabledReason?: string;
@@ -44,7 +44,7 @@ export async function createWordCube(text: string, options: WordCubeOptions) {
   block.add(menuAction, {
     action: options.action,
     enabled: options.enabled ?? true,
-    ...(options.sfx ? { sfx: options.sfx } : {}),
+    ...(options.sfx !== undefined ? { sfx: options.sfx } : {}),
   });
   block.add(interactionFeedback, options.feedback);
   block.add(disabledAppearance);

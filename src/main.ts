@@ -31,6 +31,8 @@ import type { SoundEffectId } from "./audio/sfx-registry";
 import { createFieldView, type FieldView } from "./field-view";
 import { createHandView, type HandView } from "./hand-view";
 import { createHudPanels, type HudPanels } from "./hud-panels";
+// Registers the word-cube HUD action presenter (#780).
+import "./block-menu/hud-word-cube";
 import { createDeckView, type DeckView } from "./deck-view";
 import { createOverlays, type Overlays } from "./overlays";
 import { createDialogPresenter } from "./block-menu/block-menus";
@@ -67,7 +69,8 @@ const cubeSize = 2.4;
 
 // Background traits mount their canvases here while their scenes are on the stack (#189).
 const backgrounds = createBackgroundLayers(host);
-const hud: HudPanels = createHudPanels(host);
+// HUD actions can be word cubes (#780), moving as block menu cubes do.
+const hud: HudPanels = createHudPanels(host, blockMenuMotion);
 const discardArea = createDiscardTarget(host);
 const bin = createBinView(discardArea);
 const selectionBadge = createSelectionBadge(host);
