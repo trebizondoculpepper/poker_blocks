@@ -27,8 +27,11 @@ export type HandRefill = { state: GameState; drawn: CardBlock[] };
 export interface Dealer {
   readonly name: string;
   readonly handSize: number;
-  /** A new game: every card in the deck, then the first stage dealt with default rules. */
-  startGame(cards: readonly CardBlock[], random?: () => number): GameState;
+  /**
+   * A new game: every card in the deck, then the first stage dealt with `rules` (default rules
+   * when omitted). The stage start shuffles the deck exactly once (#551).
+   */
+  startGame(cards: readonly CardBlock[], random?: () => number, rules?: StageRules): GameState;
   /** Clear the field into the deck, shuffle it once, set the stage's counters and fill the hand. */
   startStage(state: GameState, rules: StageRules, random?: () => number): GameState;
   /** Fill the hand from the top of the deck, in order; never random (#551). */
@@ -53,7 +56,7 @@ export const baseDealer: Dealer = {
   name: "base",
   handSize: gameTuning.baseHandSize,
 
-  startGame(cards, random: () => number = Math.random) {
+  startGame(cards, random: () => number = Math.random, rules: StageRules = defaultStageRules) {
     const empty: GameState = {
       field: [],
       hand: [],
@@ -63,7 +66,7 @@ export const baseDealer: Dealer = {
       coins: 0,
       round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
     };
-    return this.startStage(empty, defaultStageRules, random);
+    return this.startStage(empty, rules, random);
   },
 
   startStage(state, rules, random: () => number = Math.random) {

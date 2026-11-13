@@ -158,8 +158,8 @@ export class GameRun {
     this.random = random;
     const setup = config.stage(1, "stage-1");
     this.activeDealer = dealers.get(setup.dealer);
-    const dealt = this.activeDealer.startGame(cards, random);
-    this.currentState = this.activeDealer.startStage(dealt, setup, random);
+    // One stage start, so the opening deck is shuffled once and the hand is its top (#551).
+    this.currentState = this.activeDealer.startGame(cards, random, setup);
     this.passiveEvents.syncRack(this.currentState.passiveRack);
     this.lifecycle("stage.started");
   }

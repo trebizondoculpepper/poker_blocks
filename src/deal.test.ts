@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { popCards, shuffleCards } from "./deal";
 import { baseDealer } from "./dealer";
+import { GameRun } from "./game-run";
+import { Registry } from "./core/registry";
+import type { Dealer } from "./dealer";
 import type { GameState } from "./game-state";
 
 const ids = (cards: readonly { id: string }[]) => cards.map(({ id }) => id);
@@ -61,5 +64,26 @@ describe("ordered deck (#551, #836)", () => {
     expect(ids(started.hand)).toEqual(ids(expected.slice(0, baseDealer.handSize)));
     expect(ids(started.deck)).toEqual(ids(expected.slice(baseDealer.handSize)));
     expect(random).toHaveBeenCalledTimes(standardDeck.length - 1);
+  });
+
+  it("a new run shuffles its opening deck once, and the hand is the top of that order (#837 review)", () => {
+    const dealers = new Registry<Dealer>("dealer");
+    dealers.register(baseDealer.name, baseDealer);
+    const random = vi.fn(() => 0.25);
+    const run = new GameRun(
+      dealers,
+      {
+        stage: () => ({ dealer: "base", targetScore: 100, plays: 3, discards: 2 }),
+        handAtStageEnd: "return-to-deck",
+        discardPileAfterShop: "keep-out",
+      },
+      standardDeck,
+      random,
+    );
+    expect(random).toHaveBeenCalledTimes(standardDeck.length - 1);
+    const expected = shuffleCards(standardDeck, () => 0.25);
+    expect(ids(run.state.hand)).toEqual(ids(expected.slice(0, baseDealer.handSize)));
+    expect(ids(run.state.deck)).toEqual(ids(expected.slice(baseDealer.handSize)));
+    expect(run.state.round.movesLeft).toBe(3);
   });
 });
