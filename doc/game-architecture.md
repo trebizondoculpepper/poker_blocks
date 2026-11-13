@@ -1638,3 +1638,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Prepared session adoption for experimental trials (#900)
 
 [Trial session adoption](experiments/trial-session-adoption.md) defines the generic injected run-host seam used by composed Dev scenario controllers. Policy selects configuration/seed; registered factories prepare; the host atomically adopts run/rules/identity universe/RNG/provenance and rebinds presentation. Invalid preparation leaves the current trial intact. The seam is not a mode identity branch or a parallel game controller.
+
+## Face-connected topology query (#884)
+
+[The hoop query contract](hoop-query.md) selects the owner-approved face-only topology for In the Loop, with exact bounded refinement/Betti calculation, explicit unavailable diagnostics and a declared modifier-specific neutral fallback. Queries are pure and snapshot-scoped; the renderer and scorer do not infer geometry or choose identity-specific rules. Runtime remains #885/#886 and certification is separate.
