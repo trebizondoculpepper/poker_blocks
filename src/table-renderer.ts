@@ -30,8 +30,9 @@ export type TableRenderer = {
   setDragLayer(cube: THREE.Object3D, dragging: boolean): void;
   render(boardCamera: THREE.Camera, handCamera: THREE.Camera): void;
   /**
-   * A scene composing `tableBackground` came to the front, or left (#147). The room and table
-   * are drawn while any such scene is on the stack, so the title shows none of it.
+   * A scene composing `tableBackground` came to the front, or left (#147). The room, the table
+   * and the blocks on it are drawn while any such scene is on the stack, so the title shows none
+   * of it (#789).
    */
   tableEntered(entered: boolean): void;
   /**
@@ -140,18 +141,23 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
       cube.traverse((object) => (dragging ? object.layers.set(dragLayer) : object.layers.set(0)));
     },
     render(boardCamera, handCamera) {
-      // Drawn only while the table's layer is in the page.
-      if (backLayer.mounted) renderBack(boardCamera);
-      // The front canvas: the board's blocks (the default layer only), then the hand over
-      // them, then dragged blocks on a fresh depth buffer, so nothing can clip into them.
       front.clear();
-      const layers = boardCamera.layers.mask;
-      boardCamera.layers.set(0);
-      const background = scene.background;
-      scene.background = null;
-      front.render(scene, boardCamera);
-      scene.background = background;
-      boardCamera.layers.mask = layers;
+      // The table, and the blocks standing on it, are drawn only while a scene composing
+      // `tableBackground` is on the stack (#789): a scene without the table, such as the title,
+      // never renders the field, so a finished run's blocks can't show through its attract
+      // sequence. The field itself is untouched; it shows again when the table does.
+      if (backLayer.mounted) {
+        renderBack(boardCamera);
+        // The front canvas: the board's blocks (the default layer only), then the hand over
+        // them, then dragged blocks on a fresh depth buffer, so nothing can clip into them.
+        const layers = boardCamera.layers.mask;
+        boardCamera.layers.set(0);
+        const background = scene.background;
+        scene.background = null;
+        front.render(scene, boardCamera);
+        scene.background = background;
+        boardCamera.layers.mask = layers;
+      }
       if (handScenes > 0) renderHand(handCamera);
     },
     tableEntered: (entered) => backLayer.entered(entered),
