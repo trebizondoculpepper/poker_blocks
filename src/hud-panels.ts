@@ -215,6 +215,8 @@ export function createHudPanels(
       (composed as Record<HudPanel, unknown>)[panel] = config;
       // A panel can arrive before its numbers do; reveal it now so it is not blank.
       elements[panel].hidden = false;
+      // A presenter mounts with the scene that composes it.
+      mountExit(composed.shopExit);
     },
     hide(panel) {
       composed[panel] = null;
