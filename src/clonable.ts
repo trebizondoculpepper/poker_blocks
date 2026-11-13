@@ -52,6 +52,8 @@ for (const name of [
   "resistant",
   // A definition handle (#894): the clone is another instance of the same definition.
   "active",
+  // A rankless block's public name and symbol (#893): definition data, shared.
+  "label",
 ])
   cloneCodecs.register(name, shared);
 for (const name of [

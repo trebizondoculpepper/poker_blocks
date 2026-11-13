@@ -35,6 +35,11 @@ export type CardBlock = {
      * record it under `activeObjects` and rebuild it through that definition.
      */
     active?: { definition: string };
+    /**
+     * A block without a rank/suit value provider names itself (#893): its public name and a
+     * short symbol for compact lists. Never a hint about hidden contents.
+     */
+    label?: { name: string; symbol: string };
     selectable?: Record<string, never>;
     attachable?: AttachableTrait;
     inspectable?: InspectableTrait;

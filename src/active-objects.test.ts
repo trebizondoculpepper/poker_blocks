@@ -122,3 +122,27 @@ describe("cloning an active instance (#894 review)", () => {
     });
   });
 });
+
+describe("an active instance in the starting deck (#894 review)", () => {
+  it("saves and continues without being rebuilt twice", () => {
+    const deck = [devRanklessActive("start-active"), ...standardDeck];
+    const run = new GameRun(dealerRegistry, demoRunRules, deck, () => 0);
+    const record = JSON.parse(JSON.stringify(toSaveRecord(run.snapshot())));
+    const restored = fromSaveRecord(record, deck, dealerRegistry);
+    expect(restored).not.toBeNull();
+    const all = [
+      ...restored!.state.hand,
+      ...restored!.state.deck,
+      ...restored!.state.discardPile,
+      ...restored!.state.field.map(({ block }) => block),
+    ];
+    expect(all.filter(({ id }) => id === "start-active")).toHaveLength(1);
+  });
+
+  it("still rejects an active record that clashes with an ordinary starting card", () => {
+    const record = JSON.parse(JSON.stringify(toSaveRecord(withRankless("hand"))));
+    const ordinary = record.state.deck[0];
+    record.state.activeObjects[ordinary] = { definition: "devRanklessActive", components: {} };
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)).toBeNull();
+  });
+});

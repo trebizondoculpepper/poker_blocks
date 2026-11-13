@@ -237,8 +237,17 @@ export function fromSaveRecord(
     );
     // Run-owned active instances (#894), rebuilt through their registered definitions.
     const activeObjects = restoreActiveObjects(record.state.activeObjects);
-    const runCards = [...cards, ...boughtCards, ...generatedCards, ...activeObjects].map((card) =>
-      applyCardStates(card, cardStates),
+    // One store per instance: a starting-deck card that is the same active instance (same ID and
+    // definition) is rebuilt from its record, not twice. Any other shared ID is still a conflict.
+    const sameActive = new Map(
+      activeObjects.map((active) => [active.id, active.traits.active?.definition]),
+    );
+    const startingCards = cards.filter(
+      (card) =>
+        !sameActive.has(card.id) || sameActive.get(card.id) !== card.traits.active?.definition,
+    );
+    const runCards = [...startingCards, ...boughtCards, ...generatedCards, ...activeObjects].map(
+      (card) => applyCardStates(card, cardStates),
     );
     const byId = new Map(runCards.map((card) => [card.id, card]));
     if (byId.size !== runCards.length) return null;
