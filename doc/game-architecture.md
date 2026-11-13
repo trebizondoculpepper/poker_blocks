@@ -1603,6 +1603,10 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 
 [Profiler render-pass capability](profiler-render-passes.md) extends the automatic-profiler host contract for multi-pass appearances. Recipes declare registered production pipeline requirements; hosts own scoped targets, timing and disposal. Generic measurement code never branches on an optics/material identity, and all contributing passes are measured.
 
+## Foreground menu host target (#627)
+
+[Foreground title and pause menus](foreground-menus.md) specifies configured panel-free menu cubes, visible running title scene, visible frozen pause scene, Settings' retained panel, scene-stack input isolation, focus and cleanup. It supersedes earlier instructions to preserve title/pause menu backdrops; it does not hide the underlying 3D scene. Runtime changes remain #628/#530.
+
 ## Release-status facet
 
 [Release status and catalogue access](release-status.md) defines certified/provisional admission and shared bench/inspection descriptors. Definitions bring registered availability behavior; generic code never checks a status trait as a flag. Lookup/restoration remains separate from new acquisition. This applies across object families and does not replace ordinary unlock or shop rules.
