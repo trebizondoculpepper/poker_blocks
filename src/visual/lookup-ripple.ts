@@ -22,6 +22,8 @@ export const rippleBounds = {
   amplitude: { min: 0, max: 0.03 },
   period: { min: 8, max: 12 },
   scale: { min: 0.5, max: 4 },
+  /** Surface-normal ripple strength, a dimensionless gradient (#797). */
+  surface: { min: 0, max: 0.08 },
 } as const;
 
 export type PeriodBounds = { min: number; max: number; step: number };
@@ -35,6 +37,11 @@ export type RippleSettings = {
   scale: number;
   /** This preset's own period bounds; `defaultPeriodBounds` when left out. */
   periodBounds?: PeriodBounds;
+  /**
+   * Surface-normal ripple strength (#797; doc/calm-water-refinements.md), where the preset owns
+   * one: the lighting ripples with the same phase, period and scale. Zero keeps flat facets.
+   */
+  surfaceStrength?: number;
 };
 
 export type LookupRipple = {
@@ -46,6 +53,8 @@ export type LookupRipple = {
   periodBounds: PeriodBounds;
   /** Waves across one block: higher is finer, still smooth. */
   scale: { value: number };
+  /** Surface-normal strength, where the preset owns one (#797). */
+  surface?: { value: number };
   /** Where in its loop the ripple is, from 0 up to 1: derived, never configured or saved. */
   phase: { value: number };
   /** Advance by `delta` seconds of presentation time; held still under reduced motion. */
@@ -59,6 +68,9 @@ export function createLookupRipple(settings: RippleSettings): LookupRipple {
     period: { value: settings.period },
     periodBounds,
     scale: { value: settings.scale },
+    ...(settings.surfaceStrength !== undefined
+      ? { surface: { value: settings.surfaceStrength } }
+      : {}),
     phase: { value: 0 },
     advance({ delta, reducedMotion }) {
       const step = reducedMotion ? 0 : Math.max(0, delta);
@@ -76,6 +88,8 @@ export function rippleUniforms(ripple: LookupRipple) {
     rippleAmplitude: ripple.amplitude,
     rippleScale: ripple.scale,
     ripplePhase: ripple.phase,
+    // A preset without one keeps the flat-facet baseline: strength zero.
+    rippleSurface: ripple.surface ?? { value: 0 },
   };
 }
 
@@ -87,6 +101,12 @@ const waves = [
   { direction: [2.1, -0.6, 1.2], seed: 4.2, cycles: 2, weight: 0.5 },
 ] as const;
 const weightPerAxis = 1.5;
+
+const glslGradient = ({ direction, seed, cycles, weight }: (typeof waves)[number]) => {
+  const d = `vec3(${direction.map((v) => v.toFixed(2)).join(", ")})`;
+  return `${weight.toFixed(2)} * cos(${cycles.toFixed(1)} * t + dot(q, ${d}) + ${seed.toFixed(2)}) * ${d}`;
+};
+const totalWeight = waves.reduce((sum, { weight }) => sum + weight, 0);
 
 const glslWave = ({ direction, seed, cycles, weight }: (typeof waves)[number]) =>
   `${weight.toFixed(2)} * sin(${cycles.toFixed(1)} * t + dot(q, vec3(${direction.map((d) => d.toFixed(2)).join(", ")})) + ${seed.toFixed(2)})`;
@@ -106,6 +126,15 @@ export const rippleShiftGlsl = /* glsl */ `
     float y = ${glslWave(waves[2])} + ${glslWave(waves[3])};
     return rippleAmplitude * vec2(x, y) / ${weightPerAxis.toFixed(1)};
   }
+  uniform float rippleSurface;
+  // The gradient, in the block's own space, of a smooth height field built from the same waves,
+  // phase and scale: analytic, so it needs no texture and no screen-space derivatives (#797).
+  vec3 rippleGradient(vec3 local) {
+    float t = 6.283185307179586 * ripplePhase;
+    vec3 q = local * rippleScale;
+    vec3 g = ${waves.map(glslGradient).join(" + ")};
+    return g * rippleScale / ${totalWeight.toFixed(1)};
+  }
 `;
 
 /** The same shift on the CPU, for tests and tools: matches `rippleShift` in the GLSL. */
@@ -123,4 +152,23 @@ export function rippleShift(
     );
   const scale = ripple.amplitude.value / weightPerAxis;
   return [(wave(waves[0]) + wave(waves[1])) * scale, (wave(waves[2]) + wave(waves[3])) * scale];
+}
+
+/** The same height gradient on the CPU, for tests: matches `rippleGradient` in the GLSL. */
+export function rippleGradient(
+  local: readonly [number, number, number],
+  ripple: Pick<LookupRipple, "scale" | "phase">,
+): [number, number, number] {
+  const t = 2 * Math.PI * ripple.phase.value;
+  const g: [number, number, number] = [0, 0, 0];
+  for (const { direction, seed, cycles, weight } of waves) {
+    const along = direction.reduce(
+      (sum, d, axis) => sum + d * local[axis]! * ripple.scale.value,
+      0,
+    );
+    const k = weight * Math.cos(cycles * t + along + seed);
+    for (let axis = 0; axis < 3; axis++)
+      g[axis] += (k * direction[axis]! * ripple.scale.value) / totalWeight;
+  }
+  return g;
 }

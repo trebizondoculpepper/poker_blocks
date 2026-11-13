@@ -149,6 +149,19 @@ const rippleControls = (ripple: LookupRipple): readonly OpticsControl[] => [
     0.1,
     ripple.scale,
   ),
+  // Surface-normal ripple (#797), where the preset owns one.
+  ...[ripple.surface ?? []]
+    .flat()
+    .map((surface) =>
+      slider(
+        "surfaceRippleStrength",
+        "Surface ripple",
+        rippleBounds.surface.min,
+        rippleBounds.surface.max,
+        0.001,
+        surface,
+      ),
+    ),
 ];
 
 export type OpticsBackend = {
