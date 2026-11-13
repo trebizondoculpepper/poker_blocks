@@ -8,7 +8,7 @@ import { validateScoringModifier } from "./scoring-modifier";
 
 const card = (rank: string, suit: string, material?: BlockMaterial): CardBlock => {
   const base = standardDeck.find(
-    (block) => block.traits.identity.rank === rank && block.traits.identity.suit.name === suit,
+    (block) => block.traits.identity!.rank === rank && block.traits.identity!.suit.name === suit,
   )!;
   return material ? { ...base, traits: { ...base.traits, material: { kind: material } } } : base;
 };

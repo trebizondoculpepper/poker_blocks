@@ -11,7 +11,7 @@ import type { GameState } from "./game-state";
 const cloud = (): CardBlock =>
   asGenerated(
     withMaterial(
-      createCard(standardDeck[5]!.traits.identity, "generated.cloud.1"),
+      createCard(standardDeck[5]!.traits.identity!, "generated.cloud.1"),
       getMaterialDefinition("cloud"),
     ),
   );

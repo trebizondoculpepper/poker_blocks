@@ -4,7 +4,7 @@
  * rule lives in GameRun.destroyBlock; what causes a destruction (a double-click in a
  * test mode, later melting or bombs) is a separate trait that names its cause.
  */
-import { cardName, type CardBlock } from "../cards";
+import { cardName, type CardBlock, pokerIdentity } from "../cards";
 import type { BlockTraitBehavior } from "../block-trait-behaviours";
 import { inspectable } from "./inspectable";
 
@@ -48,7 +48,7 @@ export function withDevDestructibleMix(
             ...chosen.traits,
             destructible: { by: mix.by },
             inspectable: inspectable(
-              `${chosen.traits.inspectable?.inspect() ?? cardName(chosen.traits.identity)} · Destructible`,
+              `${chosen.traits.inspectable?.inspect() ?? cardName(pokerIdentity(chosen))} · Destructible`,
             ),
           },
         }))

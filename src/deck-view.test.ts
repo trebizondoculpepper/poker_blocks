@@ -10,12 +10,12 @@ describe("deck view (#175)", () => {
     const groups = groupDeckByRank(deck);
     expect(groups.flatMap(({ blocks }) => blocks)).toHaveLength(deck.length);
     expect(groups.map(({ rank }) => rank)).toEqual(
-      deckRankOrder.filter((rank) => deck.some((b) => b.traits.identity.rank === rank)),
+      deckRankOrder.filter((rank) => deck.some((b) => b.traits.identity!.rank === rank)),
     );
     expect(deckRankOrder[0]).toBe("2");
     expect(deckRankOrder.at(-1)).toBe("A");
     for (const { rank, blocks } of groups)
-      for (const block of blocks) expect(block.traits.identity.rank).toBe(rank);
+      for (const block of blocks) expect(block.traits.identity!.rank).toBe(rank);
   });
 
   it("is read-only: it never changes the deck it is given", () => {

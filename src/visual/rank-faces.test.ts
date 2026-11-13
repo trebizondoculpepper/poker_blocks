@@ -11,7 +11,7 @@ function painted(art: ReturnType<typeof cardFaceArt>): string[] {
   return fillText.mock.calls.map(([text]) => String(text));
 }
 const card = (rank: string) =>
-  standardDeck.find(({ traits }) => traits.identity.rank === rank)!.traits.identity;
+  standardDeck.find(({ traits }) => traits.identity!.rank === rank)!.traits.identity!;
 
 describe("rank glyph styles on card faces (#489)", () => {
   it("defines every rank's display, plain glyph equal to the rank", () => {

@@ -15,7 +15,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { soundEffects } from "../audio/sfx-registry";
 import usage from "../audio/sfx-usage.json";
-import { standardDeck } from "../cards";
+import { standardDeck, pokerIdentity } from "../cards";
 import { gameModeFor, modeLink } from "../game-modes";
 import {
   experimentalMaterials,
@@ -70,7 +70,7 @@ function materialPage(
     properties: page.properties ?? definition,
     preview(size) {
       const appearance = createBlockAppearance(
-        cardFaceArt(card.traits.identity, { face: definition.cardFace, ...options }),
+        cardFaceArt(pokerIdentity(card), { face: definition.cardFace, ...options }),
         definition,
         size,
       );
@@ -106,7 +106,7 @@ function rankStylePages(): BrowsedObject[] {
   );
   return rankFaceDefinitions.flatMap(({ rank, styles }) =>
     Object.keys(styles ?? {}).flatMap((style) => {
-      const card = standardDeck.find(({ traits }) => traits.identity.rank === rank)!;
+      const card = standardDeck.find((card) => pokerIdentity(card).rank === rank)!;
       return auditioned.flatMap((definition) =>
         [undefined, style].map((rankStyle) =>
           materialPage(

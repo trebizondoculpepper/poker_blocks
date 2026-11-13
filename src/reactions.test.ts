@@ -55,7 +55,7 @@ describe("material reactions (#366)", () => {
     const melted = find(next, ice.id);
     expect(materialOf(melted)).toBe("wood");
     expect(melted.traits.stateBonus).toEqual({ id: "melted" });
-    expect(melted.traits.identity).toEqual(ice.traits.identity);
+    expect(melted.traits.identity!).toEqual(ice.traits.identity!);
     expect(applied).toEqual([
       {
         blockId: ice.id,
@@ -119,7 +119,7 @@ describe("material reactions (#366)", () => {
     ]) {
       expect(materialOf(melted)).toBe("water");
       expect(melted.traits.stateBonus).toEqual({ id: "melted" });
-      expect(melted.traits.identity).toEqual(ice.traits.identity);
+      expect(melted.traits.identity!).toEqual(ice.traits.identity!);
       expect(melted.id).toBe(ice.id);
     }
     // Plain (not hot) water, and a corner touch, leave ice alone.
@@ -138,7 +138,7 @@ describe("material reactions (#366)", () => {
     const hot = heat(melted);
     expect(materialOf(hot)).toBe("water");
     expect(hot.traits.stateBonus).toEqual({ id: "heated" });
-    expect(hot.traits.identity).toEqual(melted.traits.identity);
+    expect(hot.traits.identity!).toEqual(melted.traits.identity!);
     expect(heat(withStateBonus(made(0, "water"), "boiled")).traits.stateBonus).toEqual({
       id: "boiled",
     });
@@ -198,7 +198,7 @@ describe("earth beside flame in play (#371 review)", () => {
     const baked = field[0]!.block;
     expect(materialOf(baked)).toBe("terracotta");
     expect(baked.id).toBe(earth.id);
-    expect(baked.traits.identity).toEqual(earth.traits.identity);
+    expect(baked.traits.identity!).toEqual(earth.traits.identity!);
     expect(materialOf(field[1]!.block)).toBe("fire");
   });
 

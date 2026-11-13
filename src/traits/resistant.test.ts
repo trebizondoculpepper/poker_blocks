@@ -58,7 +58,7 @@ describe("explosion resistance (#437)", () => {
     expect(left).not.toContain(paper.id);
     expect(left).toEqual(expect.arrayContaining([bomb.id, steel.id, gold.id]));
     const survivor = after.field.find(({ block }) => block.id === steel.id)!.block;
-    expect(survivor.traits.identity).toEqual(steel.traits.identity);
+    expect(survivor.traits.identity!).toEqual(steel.traits.identity!);
     expect(survivor.traits.modifiers).toEqual({ run: { additive: 2 } });
     expect(
       events
