@@ -1651,6 +1651,10 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 
 [The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.
 
+## Terminal loss field presentation
+
+The [terminal field-burn contract](loss-field-burn.md) separates required deciding-action effects, a bounded 80%-completion exit gate and an independently owned cancellable tail. Visual ghosts cannot mutate gameplay or session RNG.
+
 ## Configured optical ripple refinements
 
 [Calm Water refinement contract](calm-water-refinements.md) gives the preset ownership of period bounds, outline opacity and independent normal perturbation; common controls, codecs and clocks consume those capabilities uniformly.
