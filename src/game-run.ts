@@ -59,7 +59,7 @@ import {
   type PassiveScoredLine,
   type RuleActivation,
 } from "./passive-effects";
-import { commitCommands, type CommandTarget } from "./rule-commands";
+import { commitCommands, commitCommandsWithOutcomes, type CommandTarget } from "./rule-commands";
 import type { RandomCursor } from "./random";
 import {
   ActionContext,
@@ -970,18 +970,22 @@ export class GameRun {
       event.working?.read() ?? 0,
     );
     event.working?.write(value);
-    // Each committed activation numbered within its action, repeats included (#483).
+    // Each activation's commands commit in order, and what they actually did joins its outcomes
+    // (a grant, or an explicit nothing); then each is numbered within its action (#483).
+    const events: GameEvent[] = [];
+    const committed = fired.map((activation) => {
+      const result = commitCommandsWithOutcomes(activation.commands, this.commandTarget);
+      events.push(...result.events);
+      return { ...activation, outcomes: [...activation.outcomes, ...result.outcomes] };
+    });
     activations.push(
       ...numberActivations(
-        fired,
+        committed,
         this.activeAction?.context.actionId ?? "action",
         activations.length,
       ),
     );
-    return commitCommands(
-      fired.flatMap(({ commands }) => commands),
-      this.commandTarget,
-    );
+    return events;
   }
 
   /**

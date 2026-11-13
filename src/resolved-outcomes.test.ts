@@ -114,3 +114,32 @@ describe("resolved activation outcomes (#483)", () => {
     for (const id of second) expect(first).not.toContain(id);
   });
 });
+
+describe("committed command outcomes (#858 review)", () => {
+  it("records what a command actually did, and an explicit nothing when it did nothing", async () => {
+    const { commitCommandsWithOutcomes } = await import("./rule-commands");
+    const target = (granted: boolean) => {
+      let state = { coins: 0 } as never;
+      return {
+        get state() {
+          return state;
+        },
+        update: (next: never) => void (state = next),
+        grantUnownedPassive: () => (granted ? [{ type: "passive.installed", blockId: "p9" }] : []),
+      };
+    };
+    const grant = [{ id: "grant-unowned-passive", config: {} }];
+    expect(commitCommandsWithOutcomes(grant, target(true) as never).outcomes).toEqual([
+      {
+        operation: "grant-unowned-passive.committed",
+        operand: 1,
+        unit: "facts",
+        targets: ["passive.installed:p9"],
+      },
+    ]);
+    // A full rack: the grant is refused, recorded as an explicit no-op.
+    expect(commitCommandsWithOutcomes(grant, target(false) as never).outcomes).toEqual([
+      { operation: "grant-unowned-passive.committed", operand: 0, unit: "facts", targets: [] },
+    ]);
+  });
+});
