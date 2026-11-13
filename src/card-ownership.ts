@@ -48,6 +48,24 @@ const leaveWithField = (state: GameState, card: CardBlock): GameState => {
 };
 cardOwners.register("field", { atTableClear: leaveWithField, atRemoval: leaveWithField });
 
+/**
+ * A run-owned active instance (#928; doc/opaque-actives.md): it returns to the deck like a deck
+ * card, and when removed for the run it is kept in full in `retiredActives` as well, so a save can
+ * still rebuild it for its removal accounting.
+ */
+cardOwners.register("runActive", {
+  atTableClear: (state, card) => ({ ...state, deck: [...state.deck, card] }),
+  atRemoval: (state, card) =>
+    forgetCardState(
+      {
+        ...state,
+        removedCards: [...(state.removedCards ?? []), card.id],
+        retiredActives: [...(state.retiredActives ?? []), card],
+      },
+      card,
+    ),
+});
+
 /** The owner a card names, `deck` unless it says otherwise. */
 export const ownerOf = (card: CardBlock): string => card.traits.owner?.id ?? "deck";
 

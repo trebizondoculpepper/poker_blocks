@@ -52,6 +52,18 @@ reviews:
           a save file, `typeof x === "string"`) and tests are not special cases.
           PASS otherwise. When failing, name each offending line and suggest the trait,
           registry entry or configuration that should own the behaviour instead.
+      - name: "Triage-first project workflow"
+        mode: warning
+        instructions: |
+          Follow doc/process.md "One-command GitHub briefing" and AGENTS.md:
+          triage is first for supported status, intake, ownership, dependency,
+          coordination and mutation operations. GH is a capability/evidence-gap
+          or concrete-failure fallback, with recorded reason and upstream feedback.
+          Inbox is optional, not a mandatory startup/ping/coordination service.
+          Flag contradictory changed guidance or a concrete recorded bypass of an
+          available capability. Do not demand shell transcripts, infer command use
+          from missing evidence, require missing triage features, or treat an
+          advisory report as ownership or merge approval.
       - name: "Recorded ticket scope and split handoff"
         mode: warning
         instructions: |

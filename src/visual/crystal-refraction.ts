@@ -70,12 +70,18 @@ export type RefractionPreset = {
   ripple: LookupRipple;
   /** The reflection map: shared and immutable, never disposed by a block. */
   environment: () => THREE.Texture;
+  /**
+   * The drawn outline's opacity, live, when the preset owns it (#796; 0 removes the outline,
+   * reflection is unaffected). Left out, a block keeps its material definition's own edge.
+   */
+  edgeOpacity?: { value: number };
 };
 
 export function createRefractionPreset(preset: {
   settings: RefractionSettings;
   ripple: RippleSettings;
   environment: () => THREE.Texture;
+  edgeOpacity?: number;
 }): RefractionPreset {
   return {
     tuning: Object.fromEntries(
@@ -83,6 +89,7 @@ export function createRefractionPreset(preset: {
     ) as RefractionTuning,
     ripple: createLookupRipple(preset.ripple),
     environment: preset.environment,
+    ...(preset.edgeOpacity !== undefined ? { edgeOpacity: { value: preset.edgeOpacity } } : {}),
   };
 }
 
@@ -184,8 +191,16 @@ refractionPresets.register(
   "calmWater",
   createRefractionPreset({
     settings: calmWaterSettings,
-    ripple: { amplitude: 0.006, period: 10, scale: 1.6 },
+    // One full loop in 0.5–8 s, 8 s by default (#795; doc/calm-water-refinements.md).
+    ripple: {
+      amplitude: 0.006,
+      period: 8,
+      scale: 1.6,
+      periodBounds: { min: 0.5, max: 8, step: 0.5 },
+    },
     environment: calmSkyEnvironment,
+    // Faint outlines by default (#796; doc/calm-water-refinements.md): 0 hides them.
+    edgeOpacity: 0.08,
   }),
 );
 
