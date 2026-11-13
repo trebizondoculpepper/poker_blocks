@@ -98,6 +98,16 @@ describe("the devScenario run-setup step (#901)", () => {
     expect(() => start(definition, "")).toThrow(ScenarioError);
   });
 
+  it("refuses a later start step that would be lost from the prepared session", () => {
+    expect(() =>
+      createRunSetupRegistry().start(
+        [{ step: "devScenario", scenario: scenario([]), trialId: "t" }, { step: "materialSample" }],
+        base(),
+        services,
+      ),
+    ).toThrow(/would be lost/);
+  });
+
   it("leaves ordinary start steps without a prepared session", () => {
     expect(createRunSetupRegistry().start([], base(), services).prepared).toBeUndefined();
   });

@@ -165,7 +165,17 @@ export class RunSetupRegistry {
     context: RunStartContext,
     services: RunSetupServices,
   ): RunStartContext {
-    return this.pass("start", steps, context, services);
+    const result = this.pass("start", steps, context, services);
+    // A prepared session is adopted whole (#901): a later start step that changed the snapshot
+    // would be silently lost, so that composition is a configuration error.
+    const prepared = [result.prepared ?? []].flat();
+    if (
+      prepared.some(({ run }) => JSON.stringify(result.snapshot) !== JSON.stringify(run.snapshot()))
+    )
+      throw new Error(
+        "a start step after a prepared session changed the run's start and would be lost",
+      );
+    return result;
   }
 
   /** Apply one pass over the declared steps, in declaration order. */
