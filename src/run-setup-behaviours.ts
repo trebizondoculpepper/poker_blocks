@@ -64,10 +64,8 @@ export function createRunSetupRegistry(
   registry.register("destructibleMix", {
     // Testing only: a deck decision, so it contributes in the deck pass rather than the
     // controller applying a mix to a deck behind the registry's back.
-    deck: (context, mix) => ({
-      deck: withDevDestructibleMix(context.deck, mix),
-      seed: context.seed,
-    }),
+    // A decorator: it changes the cards and keeps everything else, the seed and recipe included.
+    deck: (context, mix) => ({ ...context, deck: withDevDestructibleMix(context.deck, mix) }),
   });
 
   registry.register("materialSample", {

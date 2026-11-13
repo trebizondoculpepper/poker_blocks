@@ -108,6 +108,16 @@ describe("deck builders (#827)", () => {
       services,
     );
     expect(materials(resumed.deck)).toEqual(materials(dealt.deck));
+    // A later decorator step keeps the recipe for the run to save (#848 review).
+    const decorated = registry.deck(
+      [
+        { step: "deckBuilder", operations: original },
+        { step: "destructibleMix", share: 0.5, by: ["manual"] },
+      ],
+      { deck: [] },
+      services,
+    );
+    expect(decorated.recipe).toEqual(original);
   });
 
   it("shuffles the same instances, and order of operations matters", () => {
@@ -145,7 +155,7 @@ describe("deck builders (#827)", () => {
         1,
       );
     expect(() => weighted([{ material: "wood", weight: -1 }])).toThrow(/nonnegative/);
-    expect(() => weighted([{ material: "wood", weight: 0 }])).toThrow(/positive sum/);
+    expect(() => weighted([{ material: "wood", weight: 0 }])).toThrow(/positive, finite sum/);
     expect(() => weighted([{ material: "wood", weight: Number.NaN }])).toThrow(DeckBuilderError);
     // Finite weights whose sum overflows are rejected too (#848 review).
     expect(() =>
