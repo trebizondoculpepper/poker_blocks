@@ -1,6 +1,7 @@
 import {
   composeCatalogue,
   ordinaryCatalogue,
+  releaseStatusDescriptor,
   type ReleaseStatusDeclaration,
 } from "./release-status";
 import type { ActivationConfig } from "./activation-pulse";
@@ -453,7 +454,12 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
         traitId: definition.traitId,
         eventRules: definition.eventRules,
       },
-      inspectable: inspectable(`${definition.name} — ${definition.description}`),
+      inspectable: inspectable(
+        // Its release status from the shared descriptor, as card inspection shows (#813).
+        `${definition.name} — ${definition.description}\nStatus: ${
+          releaseStatusDescriptor(definition.id, definition.releaseStatus).label
+        }`,
+      ),
       ...(definition.shop ? { priced: { basePrice: definition.shop.basePrice } } : {}),
     },
   };

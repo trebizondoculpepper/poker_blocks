@@ -60,5 +60,9 @@ describe("release-status declarations (#812)", () => {
     const vent = withMaterial(standardDeck[0]!, getMaterialDefinition("airVent" as never));
     expect(inspectBlock(vent)).toContain("Status: Provisional");
     expect(releaseStatusDescriptor("wood", { certified: {} }).label).toBe("Certified");
+    // A passive's own inspection carries its status too (#851 review).
+    const { createPassiveBlock } = await import("./passives");
+    const passive = createPassiveBlock(passiveDefinitions.names()[0]!, "p1");
+    expect(passive.traits.inspectable.inspect()).toMatch(/\nStatus: Certified$/);
   });
 });
