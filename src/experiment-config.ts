@@ -17,7 +17,10 @@
  */
 import { buildScenario, type ScenarioDefinition, type ScenarioRuntime } from "./dev-scenario";
 import { effectiveSettings } from "./configurable-passive";
+import { gameTuning } from "./balance";
+import { defaultResolutionLimits } from "./lifecycle/action";
 import { handMultipliers } from "./scoring";
+import { stageCompleteBonus } from "./stage-rewards";
 import { stageKinds, type RunRules, type StageKind, type StageSetup } from "./run-rules";
 
 export const experimentConfigFormat = "poker-blocks.experiment-config";
@@ -37,9 +40,13 @@ export type RulesRecord = {
   stages: { round: number; kind: StageKind; setup: StageSetup }[];
   handAtStageEnd: RunRules["handAtStageEnd"];
   discardPileAfterShop: RunRules["discardPileAfterShop"];
-  stageReward?: number;
+  /** The effective stage reward: the rules' own, or the default bonus. */
+  stageReward: number;
   rackCapacity?: number;
-  resolutionLimits?: { events: number; operations: number };
+  /** The effective resolution limits: the rules' own, or the defaults. */
+  resolutionLimits: { events: number; operations: number };
+  /** The shared balance tuning the dealers and shop read (hand size and the rest). */
+  tuning: Record<string, unknown>;
   playfield?: readonly { id: string; config: unknown }[];
   /** The base scoring configuration: each hand's multiplier (src/scoring.ts). */
   handMultipliers: Record<string, number>;
@@ -106,10 +113,11 @@ export function recordRules(rules: RunRules, rounds = recordedRounds): RulesReco
     ).flat(),
     handAtStageEnd: rules.handAtStageEnd,
     discardPileAfterShop: rules.discardPileAfterShop,
-    stageReward: rules.stageReward,
+    stageReward: rules.stageReward ?? stageCompleteBonus,
     // An unlimited rack is recorded by leaving the capacity out.
     rackCapacity: Number.isFinite(rules.rackCapacity) ? rules.rackCapacity : undefined,
-    resolutionLimits: rules.resolutionLimits,
+    resolutionLimits: rules.resolutionLimits ?? defaultResolutionLimits,
+    tuning: gameTuning,
     playfield: rules.playfield,
     handMultipliers,
     policies: rules.policies,

@@ -127,6 +127,32 @@ describe("experiment configuration export (#934)", () => {
     ).toMatchObject({ ok: false });
   });
 
+  it("records resolved defaults and the shared tuning, and refuses a changed one", () => {
+    const good = exportConfiguration(scenario, runtime, "1.2.3");
+    expect(good.rules.stageReward).toBeTypeOf("number");
+    expect(good.rules.resolutionLimits).toMatchObject({ events: expect.any(Number) });
+    expect(good.rules.tuning.baseHandSize).toBeTypeOf("number");
+    for (const [path, change] of [
+      [
+        "rules.tuning.baseHandSize",
+        (c: typeof good) => void (c.rules.tuning = { ...c.rules.tuning, baseHandSize: 99 }),
+      ],
+      ["rules.stageReward", (c: typeof good) => void (c.rules.stageReward = 99)],
+      [
+        "rules.resolutionLimits.events",
+        (c: typeof good) =>
+          void (c.rules.resolutionLimits = { ...c.rules.resolutionLimits, events: 1 }),
+      ],
+    ] as const) {
+      const changed = structuredClone(good);
+      change(changed);
+      expect(importConfiguration(JSON.stringify(changed), runtime)).toEqual({
+        ok: false,
+        diagnostics: [`its rules differ from this mode's at ${path}`],
+      });
+    }
+  });
+
   it("refuses a configuration made under different base scoring", () => {
     const good = exportConfiguration(scenario, runtime, "1.2.3");
     const [hand] = Object.keys(good.rules.handMultipliers);
