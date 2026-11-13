@@ -7,12 +7,12 @@
 import type { ShopTrait } from "./game-modes";
 import type { GameState } from "./game-state";
 import { sampleMaterials } from "./material-sampler";
-import { makeDevDeck, makeUniformDeck } from "./materials";
 import { createPassiveBlock, randomPassiveDefinitions, type PassiveBlock } from "./passives";
 import { sandboxRunRules } from "./run-rules";
 import { RunSetupRegistry } from "./run-setup";
 import { shopPreviewState } from "./shop-stock";
 import { withDevDestructibleMix } from "./traits/destructible";
+import { buildDeck } from "./deck-builder";
 
 export function createRunSetupRegistry(
   shopOffers: () => ShopTrait | undefined = () => undefined,
@@ -29,12 +29,34 @@ export function createRunSetupRegistry(
     // so a resumed run gets the same mix.
     deck: (context, { pool }, services) => {
       const seed = context.seed ?? services.newSeed();
-      return { deck: makeDevDeck(seed, pool), seed };
+      // The balanced builder: the same deck `makeDevDeck` dealt for this seed (#827).
+      const deck = buildDeck(
+        [{ operation: "standardTemplates" }, { operation: "assignBalanced", config: { pool } }],
+        seed,
+      );
+      return { deck, seed };
     },
   });
 
   registry.register("uniformMaterialDeck", {
-    deck: (context, { material }) => ({ deck: makeUniformDeck(material), seed: context.seed }),
+    // No randomness: the seed only satisfies the builder's signature and is not recorded.
+    deck: (context, { material }) => ({
+      deck: buildDeck(
+        [{ operation: "standardTemplates" }, { operation: "assignUniform", config: { material } }],
+        0,
+      ),
+      seed: context.seed,
+    }),
+  });
+
+  registry.register("deckBuilder", {
+    requiresSavedSeed: true,
+    // A mode's own ordered builder operations, from a fresh recorded seed; Continue passes the
+    // seed back, so the same configuration rebuilds the same starting deck.
+    deck: (context, { operations }, services) => {
+      const seed = context.seed ?? services.newSeed();
+      return { deck: buildDeck(operations, seed), seed };
+    },
   });
 
   registry.register("destructibleMix", {

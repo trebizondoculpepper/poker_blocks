@@ -1,3 +1,4 @@
+import type { DeckBuilderStep } from "./deck-builder";
 /**
  * Run setup: the ordered steps a game mode applies when a game run is created.
  *
@@ -32,6 +33,8 @@ export type RunSetupStepConfigs = {
   };
   /** Every card is made of this one material: how a mode shows a visual experiment (#227). */
   uniformMaterialDeck: { material: BlockMaterial };
+  /** A mode's own starting deck: ordered deck-builder operations (doc/deck-builders.md, #827). */
+  deckBuilder: { operations: readonly DeckBuilderStep[] };
   /** The run begins on a structure holding one block of every material. */
   materialSample: Record<never, never>;
   /** Testing only: about `share` of the deck is destructible by the given causes. */
