@@ -12,8 +12,7 @@ import type { DevHudStyleAuditionConfig, HudStyleConfig } from "./scene-traits/h
 import { Registry } from "./core/registry";
 import type { RoundPanelConfig, ShopExitConfig } from "./hud-panels";
 import type { GameFlow } from "./game-flow";
-import type { MusicFilter } from "./audio/music-controller";
-import type { MusicCue, StageMusicPool } from "./audio-service";
+import type { MusicFilter, MusicOperation } from "./audio/music-controller";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { RunFlowOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
@@ -164,13 +163,21 @@ export type SceneTraits = {
    * button per item, each dispatching its id as a named action (#90).
    */
   gameOverScreen: { items: readonly MenuItem[] };
-  /** Entering this scene plays a music cue (src/audio-service.ts, `musicCues`). */
-  musicCue: { cue: MusicCue };
   /**
-   * Entering this play scene starts a fresh track from its pool: a random stage vibe or the
-   * boss loop (#92). Quiet modes keep their stages silent.
+   * Entering this scene runs a music cue: an ordered list of registered music operations naming
+   * plan entries and slots (#758; src/audio/music-controller.ts).
    */
-  musicTrack: { pool: StageMusicPool };
+  musicCue: { operations: readonly MusicOperation[] };
+  /**
+   * Entering this scene resumes the table's music through its configured operations, as the
+   * mode plays it (a quiet mode stays wound down).
+   */
+  musicResume: { operations: readonly MusicOperation[] };
+  /**
+   * Entering this play scene runs its music operations: the stage plan's fresh random vibe, or
+   * the boss plan's loop (#92, #758). Quiet modes keep their stages silent.
+   */
+  musicTrack: { operations: readonly MusicOperation[] };
   /** Entering this scene plays a sound: a stage's start, the shop opening (#93). */
   enterSound: { sfx: SoundEffectId };
   /** Leaving this scene plays a sound: the title or settings screen closing. */
@@ -244,6 +251,11 @@ const escapeOpensPause: Partial<SceneTraits> = {
 };
 
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
+/** The title's music: a title track, kept if one is already playing (#758). */
+const titleMusic: SceneTraits["musicCue"] = {
+  operations: [{ op: "selectTrack", config: { plan: "title" } }],
+};
+
 const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
   // The bin takes discards dropped on it; asked before the grid, since it sits over the table.
@@ -461,7 +473,7 @@ export const sceneDefinitions = [
       // After `titleScreen`, so the panel is already showing when the footer is added to it.
       panelFooter: { links: projectLinks },
       attractBackground: {},
-      musicCue: { cue: "title" },
+      musicCue: titleMusic,
       enterSound: { sfx: "ui.title.enter" },
       exitSound: { sfx: "ui.title.exit" },
       ...escapeOpensPause,
@@ -529,7 +541,7 @@ export const sceneDefinitions = [
           traits: {
             attractBackground: {},
             blockTitle: { text: "Poker Blocks", scale: 1 },
-            musicCue: { cue: "title" },
+            musicCue: titleMusic,
           },
         },
       ] as const)
@@ -539,7 +551,7 @@ export const sceneDefinitions = [
     traits: {
       ...playSceneTraits,
       roundPanel: { stage: "STAGE 1", actions: stageActions },
-      musicTrack: { pool: "stage" },
+      musicTrack: { operations: [{ op: "selectTrack", config: { plan: "stage" } }] },
       enterSound: { sfx: "round.start" },
     },
   },
@@ -548,7 +560,7 @@ export const sceneDefinitions = [
     traits: {
       ...playSceneTraits,
       roundPanel: { stage: "STAGE 2", actions: stageActions },
-      musicTrack: { pool: "stage" },
+      musicTrack: { operations: [{ op: "selectTrack", config: { plan: "stage" } }] },
       enterSound: { sfx: "round.start" },
     },
   },
@@ -557,7 +569,7 @@ export const sceneDefinitions = [
     traits: {
       ...playSceneTraits,
       roundPanel: { stage: "BOSS STAGE", actions: stageActions },
-      musicTrack: { pool: "boss" },
+      musicTrack: { operations: [{ op: "selectTrack", config: { plan: "boss" } }] },
       enterSound: { sfx: "round.start" },
     },
   },
@@ -576,7 +588,10 @@ export const sceneDefinitions = [
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},
       // A shop entered from the title (Continue) brings the table's music back.
-      musicCue: { cue: "resumeTable" },
+      // The table's remembered track, or a fresh one from the stage plan if none is remembered.
+      musicResume: {
+        operations: [{ op: "resumeTrack", config: { slot: "tableMusic", plan: "stage" } }],
+      },
       ...escapeOpensPause,
     },
   },
@@ -598,7 +613,7 @@ export const sceneDefinitions = [
           { id: "quitToTitle", label: "Main menu", sfx: "ui.back" },
         ],
       },
-      musicCue: { cue: "windDown" },
+      musicCue: { operations: [{ op: "windDown" }] },
     },
   },
 ] as const satisfies readonly SceneDefinition[];
@@ -1076,7 +1091,7 @@ const gameModes: GameMode[] = [
                 pauseDialog: gameDialogs.pause,
                 stageWonDialog: gameDialogs.stageWon,
                 gameOverDialog: gameDialogs.gameOver,
-                musicCue: { cue: "title" },
+                musicCue: titleMusic,
               },
             },
           ]),

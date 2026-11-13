@@ -65,7 +65,7 @@ describe("game modes composed from traits", () => {
     expect(scene?.traits).toMatchObject({
       attractBackground: {},
       blockTitle: { text: "Poker Blocks", scale: 1 },
-      musicCue: { cue: "title" },
+      musicCue: { operations: [{ op: "selectTrack", config: { plan: "title" } }] },
     });
     expect(scene?.traits).not.toHaveProperty("titleScreen");
   });
@@ -227,14 +227,16 @@ describe("game modes composed from traits", () => {
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},
-      musicCue: { cue: "resumeTable" },
+      musicResume: {
+        operations: [{ op: "resumeTrack", config: { slot: "tableMusic", plan: "stage" } }],
+      },
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
     });
     // The title scene owns its own panel, with Continue gated on a save existing.
     expect(traitsOf("game", "title")).toEqual({
       screen: { kind: "title" },
       attractBackground: {},
-      musicCue: { cue: "title" },
+      musicCue: { operations: [{ op: "selectTrack", config: { plan: "title" } }] },
       enterSound: { sfx: "ui.title.enter" },
       exitSound: { sfx: "ui.title.exit" },
       panelFooter: {
@@ -279,7 +281,7 @@ describe("game modes composed from traits", () => {
           { id: "quitToTitle", label: "Main menu", sfx: "ui.back" },
         ],
       },
-      musicCue: { cue: "windDown" },
+      musicCue: { operations: [{ op: "windDown" }] },
     });
   });
 
@@ -342,7 +344,7 @@ describe("game modes composed from traits", () => {
       deckPanel: { opens: "openDeck" },
       runInPlay: {},
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
-      musicTrack: { pool: "stage" },
+      musicTrack: { operations: [{ op: "selectTrack", config: { plan: "stage" } }] },
       enterSound: { sfx: "round.start" },
       devManualBlockDestroyer: { cause: "manual" },
     });
@@ -371,13 +373,13 @@ describe("mode music lifecycle", () => {
     const calls: string[] = [];
     const behaviours = createModeMusicBehaviours({
       windDown: () => calls.push("windDown"),
-      resumeStage: () => calls.push("resumeStage"),
+      run: () => calls.push("resumeStage"),
     });
 
     behaviours.quiet.settle();
-    behaviours.quiet.resume();
+    behaviours.quiet.resume([]);
     behaviours.ordinary.settle();
-    behaviours.ordinary.resume();
+    behaviours.ordinary.resume([]);
 
     expect(calls).toEqual(["windDown", "windDown", "resumeStage"]);
     // Ordinary modes let a stage choose its music; quiet modes keep it wound down.
