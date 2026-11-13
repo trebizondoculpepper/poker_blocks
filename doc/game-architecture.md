@@ -1608,3 +1608,7 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 ## Experimental design records
 
 Reproducible experiment briefs and measured outcomes live in [experiments](experiments/README.md). Their provisional parameters are not production rules. The [spatial-modifier brief](experiments/spatial-modifiers.md) separates packing, material mass and topology, and records the planned bench and evidence limits. Promote decisions into canonical rules and architecture before implementation.
+
+## Composable starting-deck builders
+
+[Deck builders](deck-builders.md) defines mode-composed builder definitions invoked through registered run setup. Ordered registered operations own template construction, material assignment, special-card creation and shuffle. Generation and restoration remain distinct; preserve existing generator semantics for old saves. The pivot experiment uses configuration of this shared capability, not a room-specific deck factory.
