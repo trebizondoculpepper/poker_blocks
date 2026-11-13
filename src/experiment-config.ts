@@ -17,6 +17,7 @@
  */
 import { buildScenario, type ScenarioDefinition, type ScenarioRuntime } from "./dev-scenario";
 import { effectiveSettings } from "./configurable-passive";
+import { handMultipliers } from "./scoring";
 import { stageKinds, type RunRules, type StageKind, type StageSetup } from "./run-rules";
 
 export const experimentConfigFormat = "poker-blocks.experiment-config";
@@ -40,6 +41,8 @@ export type RulesRecord = {
   rackCapacity?: number;
   resolutionLimits?: { events: number; operations: number };
   playfield?: readonly { id: string; config: unknown }[];
+  /** The base scoring configuration: each hand's multiplier (src/scoring.ts). */
+  handMultipliers: Record<string, number>;
   /** The function-valued policies' plain descriptors (`RunRules.policies`). */
   policies?: Record<string, unknown>;
   /** Function-valued policies present with no descriptor: their behaviour can't be compared. */
@@ -108,6 +111,7 @@ export function recordRules(rules: RunRules, rounds = recordedRounds): RulesReco
     rackCapacity: Number.isFinite(rules.rackCapacity) ? rules.rackCapacity : undefined,
     resolutionLimits: rules.resolutionLimits,
     playfield: rules.playfield,
+    handMultipliers,
     policies: rules.policies,
     ...(unverifiable.length ? { unverifiable } : {}),
   });

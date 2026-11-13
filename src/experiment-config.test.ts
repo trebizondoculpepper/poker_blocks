@@ -127,6 +127,17 @@ describe("experiment configuration export (#934)", () => {
     ).toMatchObject({ ok: false });
   });
 
+  it("refuses a configuration made under different base scoring", () => {
+    const good = exportConfiguration(scenario, runtime, "1.2.3");
+    const [hand] = Object.keys(good.rules.handMultipliers);
+    const changed = structuredClone(good);
+    changed.rules.handMultipliers[hand!] = 999;
+    expect(importConfiguration(JSON.stringify(changed), runtime)).toEqual({
+      ok: false,
+      diagnostics: [`its rules differ from this mode's at rules.handMultipliers.${hand}`],
+    });
+  });
+
   it("refuses a configuration made under different rules", () => {
     const other: RunRules = { ...rules, rackCapacity: 5 };
     const text = serializeConfiguration(
