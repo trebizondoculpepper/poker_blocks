@@ -125,6 +125,11 @@ export type GameRunController = {
   showSelection(): void;
   /** The hand has room again: draw replacements. */
   refillHand(): void;
+  /**
+   * Draw replacements into the model's hand now, without showing them (#775): the caller reveals
+   * them later with the hand view. Returns the cards drawn.
+   */
+  drawReplacements(): readonly CardBlock[];
   /** The passive rack may have changed (a discard can grant passives). */
   rackChanged(): void;
   autosave(): void;
@@ -354,6 +359,12 @@ export function createGameRunController<Context>(options: {
   function autosave(): void {
     game.setRandomCursor({ seed: randomizer.seed, position: randomizer.cursor });
     saveRun(storage, game.snapshot(), runSaveKey, currentMode.flow);
+  }
+
+  function drawReplacements(): readonly CardBlock[] {
+    const drawn = game.refillHand();
+    updateHud();
+    return drawn;
   }
 
   function refillHand(): void {
@@ -806,6 +817,7 @@ export function createGameRunController<Context>(options: {
     updateHud,
     showSelection,
     refillHand,
+    drawReplacements,
     rackChanged: () => services.rack.render(game.state.passiveRack),
     autosave,
     decided(outcome, now) {

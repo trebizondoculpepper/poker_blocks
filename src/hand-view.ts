@@ -88,6 +88,8 @@ export function createHandView(options: {
     sound?: boolean;
   }[] = [];
 
+  /** How many cards the model's hand holds, shown or not yet shown (#830 review). */
+  let modelSize = 0;
   const create = (block: CardBlock) => views.create(block, cubeSize / 3, "hand");
   const slotX = (slot: number, visibleSlots: number) =>
     (slot - (visibleSlots - 1) / 2) * slotSpacing;
@@ -118,7 +120,11 @@ export function createHandView(options: {
     const slots = visibleSlots();
     const drag = options.drag();
     const preview = drag && drag.reorderSlot !== null ? drag : null;
-    const order = [...blocks].sort((a, b) => a.handSlot! - b.handSlot!);
+    // Laid out by model slot, with a gap for any card the model holds but doesn't show yet (a
+    // discard's replacements, drawn before they are revealed, #775), so the reorder preview
+    // makes the same move `reorderHand` will.
+    const order: (RenderedBlock | null)[] = Array.from({ length: slots }, () => null);
+    for (const rendered of blocks) order[rendered.handSlot!] = rendered;
     if (preview) {
       order.splice(order.indexOf(preview.source), 1);
       order.splice(preview.reorderSlot!, 0, preview.source);
@@ -138,6 +144,7 @@ export function createHandView(options: {
   }
 
   function sync(hand: readonly CardBlock[]): void {
+    modelSize = hand.length;
     blocks.forEach((rendered) => (rendered.handSlot = hand.indexOf(rendered.block)));
     layout();
   }
@@ -161,6 +168,7 @@ export function createHandView(options: {
     sync,
     layout,
     deal(hand) {
+      modelSize = hand.length;
       hand.forEach((block, slot) => {
         const rendered = create(block);
         rendered.handSlot = slot;
@@ -199,7 +207,9 @@ export function createHandView(options: {
     },
     slotAt(x) {
       const slot = Math.round(x / slotSpacing + (visibleSlots() - 1) / 2);
-      return Math.max(0, Math.min(blocks.length - 1, slot));
+      // A model slot: hidden replacements count too (#830 review).
+      const slots = Math.max(modelSize, ...blocks.map(({ handSlot }) => (handSlot ?? -1) + 1));
+      return Math.max(0, Math.min(slots - 1, slot));
     },
     updateDrawIns(delta) {
       for (let index = appearing.length - 1; index >= 0; index--) {
@@ -248,6 +258,7 @@ export function createHandView(options: {
       }
     },
     clear() {
+      modelSize = 0;
       blocks.length = 0;
       appearing.length = 0;
     },
