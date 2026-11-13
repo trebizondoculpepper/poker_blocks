@@ -1,3 +1,4 @@
+import { discardRefusal } from "./discardable";
 import type { CardBlock } from "./cards";
 import { gameTuning } from "./balance";
 import { blockAttachmentCell } from "./block-trait-behaviours";
@@ -162,6 +163,9 @@ export const baseDealer: Dealer = {
     // In hand order, so the discard pile reads left to right.
     const blocks = state.hand.filter(({ id }) => ids.has(id));
     if (blocks.length !== ids.size) return null;
+    // Every chosen card's own discard behaviour must accept it; one refusal refuses the group,
+    // changing nothing (#574).
+    if (blocks.some((block) => discardRefusal(block) !== null)) return null;
     return {
       ...state,
       hand: state.hand.filter(({ id }) => !ids.has(id)),

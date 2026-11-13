@@ -54,6 +54,8 @@ for (const name of [
   "active",
   // A rankless block's public name and symbol (#893): definition data, shared.
   "label",
+  // A discard behaviour reference (#574): definition data.
+  "discardable",
 ])
   cloneCodecs.register(name, shared);
 for (const name of [

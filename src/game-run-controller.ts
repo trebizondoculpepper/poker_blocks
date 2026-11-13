@@ -1,3 +1,4 @@
+import { discardRefusal } from "./discardable";
 import type { GameState } from "./game-state";
 import type { PreparedSession } from "./run-setup";
 import {
@@ -698,7 +699,8 @@ export function createGameRunController<Context>(options: {
     busy: () => services.presenter.busy,
     inStage: () => game.inStage,
     canPlay: () => game.dealer.canPlay(game.state),
-    canDiscard: () => game.dealer.canDiscard(game.state),
+    canDiscard: (blocks = []) =>
+      game.dealer.canDiscard(game.state) && blocks.every((block) => discardRefusal(block) === null),
     linePlacement: (count, targetId, face) =>
       game.dealer.linePlacementFor(game.state, count, targetId, face),
     hand: () => game.state.hand,

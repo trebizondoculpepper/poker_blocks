@@ -53,7 +53,8 @@ export type TableRules = {
   busy(): boolean;
   inStage(): boolean;
   canPlay(): boolean;
-  canDiscard(): boolean;
+  /** Whether a discard is allowed now and, given blocks, whether each one accepts (#574). */
+  canDiscard(blocks?: readonly CardBlock[]): boolean;
   /** The cells a line of `count` blocks would fill: from a face, or the empty field's centre. */
   linePlacement(count: number, targetId?: string, face?: Face): Cell[] | null;
   /** The hand, in order. */
@@ -241,8 +242,12 @@ export function createTableInput(options: {
    */
   let discardHover: DropVerdict | null = null;
   dropTargetKinds.register("discard", {
-    canDrop: (_carried, clientX, clientY) =>
-      overDiscardArea(clientX, clientY) ? (rules.canDiscard() ? "accept" : "reject") : null,
+    canDrop: (carried, clientX, clientY) =>
+      overDiscardArea(clientX, clientY)
+        ? rules.canDiscard(carried.map(({ block }) => block))
+          ? "accept"
+          : "reject"
+        : null,
     hover(verdict) {
       if (verdict === "accept" && discardHover !== "accept") playSfx("discard.hover");
       discardHover = verdict;
@@ -936,7 +941,7 @@ export function createTableInput(options: {
     }
     const chosen = hand.selected(selected);
     if (!chosen.length) return;
-    if (!rules.canDiscard() || !rules.discard(chosen)) {
+    if (!rules.canDiscard(chosen.map(({ block }) => block)) || !rules.discard(chosen)) {
       options.overlays().flashRefused(discardArea);
       playSfx("action.denied");
     }
