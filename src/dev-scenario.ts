@@ -339,8 +339,22 @@ export type ScenarioRuntime = {
   limits?: ScenarioLimits;
 };
 
+/**
+ * The candidate's own session (doc/experiments/trial-session-adoption.md, "Policy, preparation
+ * and adoption"): the rules it was built under, every instance it created, and the SAME random
+ * stream its run draws from (next, checkpoint, restore, seed, cursor), with any replay's draws
+ * already consumed. An adopter installs these together; it never attaches another stream.
+ */
+export type ScenarioSession = {
+  rules: RunRules;
+  /** Every card instance the scenario created: its whole identity universe, not just the deck. */
+  cards: readonly CardBlock[];
+  random: Randomizer;
+};
+
 /** A built trial: the run, its hydrated starting snapshot, and the commands replayed after it. */
 export type ScenarioTrial = {
+  session: ScenarioSession;
   run: GameRun;
   /** The state as hydrated, before any replay: configured fixture state. */
   initialSnapshot: RunSnapshot;
@@ -451,7 +465,15 @@ export function buildScenario(
             }`,
           ],
         };
-    return { ok: true, trial: { run, initialSnapshot, actionLog: draft.replay } };
+    return {
+      ok: true,
+      trial: {
+        session: { rules: runtime.rules, cards: draft.created, random: randomizer },
+        run,
+        initialSnapshot,
+        actionLog: draft.replay,
+      },
+    };
   } catch (error) {
     return { ok: false, diagnostics: [(error as Error).message] };
   }

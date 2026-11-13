@@ -1,3 +1,5 @@
+import { buildScenario, ScenarioError } from "./dev-scenario";
+import { dealerRegistry } from "./dealer";
 /**
  * The behaviour of each run setup step (see src/run-setup.ts and doc/game-architecture.md,
  * "Run setup"). Modes declare steps as data; this is the only place a step's meaning lives, so
@@ -117,6 +119,34 @@ export function createRunSetupRegistry(
               ...state.passiveRack,
               ...openingPassives(Math.min(count, room), state, services),
             ],
+          },
+        },
+      };
+    },
+  });
+
+  // A Dev scenario trial (#901; doc/experiments/trial-session-adoption.md): built and validated
+  // off to the side, then handed on whole, with its own stream and provenance, for adoption. An
+  // invalid scenario throws its diagnostics; nothing is adopted.
+  registry.register("devScenario", {
+    start: (context, { scenario, trialId }) => {
+      if (typeof trialId !== "string" || !trialId)
+        throw new ScenarioError("devScenario needs a fresh trial ID from its controller");
+      const result = buildScenario(scenario, { dealers: dealerRegistry, rules: context.rules });
+      if (!result.ok) throw new ScenarioError(result.diagnostics.join("\n"));
+      const { session, run, initialSnapshot, actionLog } = result.trial;
+      return {
+        ...context,
+        snapshot: run.snapshot(),
+        prepared: {
+          ...session,
+          run,
+          provenance: {
+            trialId,
+            scenarioVersion: scenario.version,
+            seed: scenario.seed,
+            initialSnapshot,
+            actionLog,
           },
         },
       };
