@@ -1,3 +1,4 @@
+import type { ResolvedOutcome } from "./event-rules";
 import type { PlacedBlock } from "./game-state";
 import { withOperationCounter } from "./lifecycle/operations";
 import type { EventRule, RuleCommand } from "./event-rules";
@@ -27,7 +28,31 @@ export type RuleActivation = {
   blockId?: string;
   /** Commands the rule's effects collected, for the game run to commit. */
   commands: readonly RuleCommand[];
+  /**
+   * What each of its effects did, as resolved when they applied (#483): presentation reads
+   * these and never re-evaluates a rule, rolls again or infers an operation from a change.
+   */
+  outcomes: readonly ResolvedOutcome[];
+  /**
+   * Distinct for each committed activation, repeated triggers included, and its place in the
+   * committed order. Set where activations are committed (a scored line, an action).
+   */
+  activationId?: string;
+  order?: number;
 };
+
+/** Number a committed list of activations: each its own ID under `prefix`, in order (#483). */
+export function numberActivations(
+  activations: readonly RuleActivation[],
+  prefix: string,
+  start = 0,
+): RuleActivation[] {
+  return activations.map((activation, index) => ({
+    ...activation,
+    activationId: `${prefix}#${start + index}`,
+    order: start + index,
+  }));
+}
 
 export type PassiveScoredLine = ScoredLine & { activations: readonly RuleActivation[] };
 
@@ -99,6 +124,7 @@ function evaluateRules(
         on: rule.on,
         blockId: event.score?.block?.id,
         commands: frame.commands,
+        outcomes: frame.outcomes ?? [],
       });
   }
   return { value, activations };
@@ -243,7 +269,11 @@ function scoreLines(
       blockIds: line.blocks.map(({ id }) => id),
       ...result,
       points: Math.max(0, Math.round(after.value)),
-      activations,
+      // The chosen hand's activations only (candidates never publish), each numbered in this line.
+      activations: numberActivations(
+        activations,
+        `line:${line.blocks.map(({ id }) => id).join(",")}`,
+      ),
     };
   });
 }

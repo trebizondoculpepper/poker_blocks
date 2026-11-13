@@ -75,6 +75,8 @@ describe("discard and stage-won passives run as event rules and commands (#170)"
         on: "discard.completed",
         blockId: undefined,
         commands: [{ id: "add-coins", config: { amount: 2 } }],
+        // What it did, resolved as it applied (#483): two red cards at 1 coin each.
+        outcomes: [{ operation: "add-coins-per-selected", operand: 2, unit: "coins" }],
       },
     ]);
     expect(passiveActivations(passive("ace-exchange", 2), event)[0]!.commands).toEqual([

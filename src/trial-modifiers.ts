@@ -127,7 +127,24 @@ ruleHandlers.registerEffect<QueryFactorConfig, unknown>(
       result?.available === true
         ? scoreCurves.get(config.curve).factor(result.value[config.value]!, config.params)
         : 1;
-    return { ...frame, workingValue: (frame.workingValue ?? 0) * factor };
+    const before = frame.workingValue ?? 0;
+    const after = before * factor;
+    // The factor it actually applied, reported as it applies (#483).
+    return {
+      ...frame,
+      workingValue: after,
+      outcomes: [
+        ...(frame.outcomes ?? []),
+        {
+          operation: "multiply-line-score-by-query",
+          operand: factor,
+          before,
+          after,
+          unit: "score",
+          scope: "line",
+        },
+      ],
+    };
   },
 );
 

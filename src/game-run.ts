@@ -52,6 +52,7 @@ import {
 import {
   crossingCells,
   beforeTotalPhase,
+  numberActivations,
   resolvePassiveRules,
   withOperationCounter,
   scoreFieldWithPassives,
@@ -961,7 +962,14 @@ export class GameRun {
       event.working?.read() ?? 0,
     );
     event.working?.write(value);
-    activations.push(...fired);
+    // Each committed activation numbered within its action, repeats included (#483).
+    activations.push(
+      ...numberActivations(
+        fired,
+        this.activeAction?.context.actionId ?? "action",
+        activations.length,
+      ),
+    );
     return commitCommands(
       fired.flatMap(({ commands }) => commands),
       this.commandTarget,
