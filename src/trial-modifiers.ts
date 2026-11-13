@@ -276,6 +276,7 @@ function queryTrial(
     id,
     // A trial: experimental catalogues only, never normal shops (doc/release-status.md).
     releaseStatus: { provisional: {} },
+    lifecycle: { parent: "rackItem" },
     name,
     symbol,
     description,
