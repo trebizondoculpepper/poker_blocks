@@ -5,6 +5,7 @@
  */
 import type * as THREE from "three";
 import { Registry } from "../../core/registry";
+import type { PassReference } from "./pipelines";
 
 /** One built object in the profiler's scene. */
 export type ProfiledObject = {
@@ -49,6 +50,12 @@ export type ProfilingCase = {
   /** Phases of a transient effect (idle, active, pulse, exit), each with its sampling; one steady
    *  phase when omitted. */
   phases?: readonly ProfilingPhase[];
+  /**
+   * The production passes its look needs before the main render, in order, as registered
+   * `profilingPasses` references (#764; doc/profiler-render-passes.md); main render only when
+   * omitted.
+   */
+  pipeline?: readonly PassReference[];
   /** Build one object through the production factory, with a fixed seed. */
   create(context: { seed: number; phase?: string }): ProfiledObject | Promise<ProfiledObject>;
 };

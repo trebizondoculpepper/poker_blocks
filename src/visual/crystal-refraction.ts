@@ -3,7 +3,7 @@
  * Crystal v3, #645). Not yet a merged design: it goes to the designer with these results before any
  * production or dev-room merge.
  *
- * Per frame, shared by every block:
+ * Per frame, by one capture pass per renderer (`createRefractionCapture`), for every block it draws:
  * 1. **Background capture.** The scene is drawn with the crystals hidden into one half-resolution
  *    target: what lies behind them.
  * 2. **Rear pass: the bend, once per rear facet.** Only the blocks' back faces are drawn, on their
@@ -32,6 +32,7 @@ import {
   type LookupRipple,
   type RippleSettings,
 } from "./lookup-ripple";
+import { preservingRenderState, type RenderPass } from "./render-pass";
 
 /** The camera layer the rear (offset) pass draws: never the main view. */
 export const refractionOffsetLayer = 7;
@@ -99,67 +100,66 @@ refractionPresets.register(
   }),
 );
 
-const shared = {
-  background: null as THREE.WebGLRenderTarget | null,
-  offsets: null as THREE.WebGLRenderTarget | null,
-  uniforms: {
-    backgroundMap: { value: null as THREE.Texture | null },
-    offsetMap: { value: null as THREE.Texture | null },
-    screenSize: { value: new THREE.Vector2(1, 1) },
-  },
+/**
+ * The uniform slots every refraction material reads its captures from. Each capture pass binds its
+ * own targets to them as it renders, so the main render that follows samples that renderer's
+ * capture of this frame, never another renderer's or a stale one.
+ */
+const captureSlots = {
+  backgroundMap: { value: null as THREE.Texture | null },
+  offsetMap: { value: null as THREE.Texture | null },
+  screenSize: { value: new THREE.Vector2(1, 1) },
 };
 
 const size = new THREE.Vector2();
-const clearColour = new THREE.Color();
 
 /**
- * The per-frame passes, run before the main render by whoever draws these blocks (the dev17 room,
- * through the backend's `frame` hook). `hide` is the group holding the crystals. The passes are
- * shared by every preset; `refractionFrameFor` also moves one preset's ripple on.
+ * The per-frame passes for one preset, run before the main render by whoever draws these blocks
+ * (the dev17 room, a profiler recipe), as one instance per renderer: it moves the preset's ripple
+ * on, then fills its own two targets (doc/profiler-render-passes.md). `hide` is the group holding
+ * the blocks.
  */
-export function refractionFrame(context: {
-  renderer: THREE.WebGLRenderer;
-  scene: THREE.Scene;
-  camera: THREE.Camera;
-  hide: THREE.Object3D;
-}): void {
-  const { renderer, scene, camera, hide } = context;
-  renderer.getDrawingBufferSize(size);
-  const width = Math.max(1, Math.floor(size.x));
-  const height = Math.max(1, Math.floor(size.y));
-  shared.background ??= new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
-  shared.offsets ??= new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
-  shared.background.setSize(Math.max(1, width >> 1), Math.max(1, height >> 1));
-  shared.offsets.setSize(width, height);
-  shared.uniforms.backgroundMap.value = shared.background.texture;
-  shared.uniforms.offsetMap.value = shared.offsets.texture;
-  shared.uniforms.screenSize.value.set(width, height);
-
-  const previous = renderer.getRenderTarget();
-  const alpha = renderer.getClearAlpha();
-  renderer.getClearColor(clearColour);
-
-  // 1. What lies behind the crystals.
-  const shown = hide.visible;
-  hide.visible = false;
-  renderer.setRenderTarget(shared.background);
-  renderer.render(scene, camera);
-  hide.visible = shown;
-
-  // 2. The rear facets' shifts, alone, on a cleared target (zero shift where there is none).
-  const mask = camera.layers.mask;
-  const background = scene.background;
-  scene.background = null;
-  camera.layers.set(refractionOffsetLayer);
-  renderer.setRenderTarget(shared.offsets);
-  renderer.setClearColor(0x000000, 0);
-  renderer.clear();
-  renderer.render(scene, camera);
-  camera.layers.mask = mask;
-  scene.background = background;
-
-  renderer.setClearColor(clearColour, alpha);
-  renderer.setRenderTarget(previous);
+export function createRefractionCapture(preset: string): RenderPass {
+  const background = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  const offsets = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  return {
+    render(frame) {
+      refractionPresets.get(preset).ripple.advance(frame);
+      const { renderer, scene, camera, hide } = frame;
+      renderer.getDrawingBufferSize(size);
+      const width = Math.max(1, Math.floor(size.x));
+      const height = Math.max(1, Math.floor(size.y));
+      background.setSize(Math.max(1, width >> 1), Math.max(1, height >> 1));
+      offsets.setSize(width, height);
+      captureSlots.backgroundMap.value = background.texture;
+      captureSlots.offsetMap.value = offsets.texture;
+      captureSlots.screenSize.value.set(width, height);
+      preservingRenderState(frame, () => {
+        // 1. What lies behind the blocks.
+        const shown = hide.visible;
+        hide.visible = false;
+        try {
+          renderer.setRenderTarget(background);
+          renderer.render(scene, camera);
+        } finally {
+          hide.visible = shown;
+        }
+        // 2. The rear facets' shifts, alone, on a cleared target (zero shift where there is none).
+        scene.background = null;
+        camera.layers.set(refractionOffsetLayer);
+        renderer.setRenderTarget(offsets);
+        renderer.setClearColor(0x000000, 0);
+        renderer.clear();
+        renderer.render(scene, camera);
+      });
+    },
+    dispose() {
+      for (const slot of [captureSlots.backgroundMap, captureSlots.offsetMap])
+        if (slot.value === background.texture || slot.value === offsets.texture) slot.value = null;
+      background.dispose();
+      offsets.dispose();
+    },
+  };
 }
 
 /**
@@ -227,24 +227,6 @@ export function calmSkyEnvironment(): THREE.DataTexture {
   calmSky.needsUpdate = true;
   calmSky.userData.shared = true;
   return calmSky;
-}
-
-/** A backend's frame hook for one preset: its ripple's clock, then the shared passes. */
-export function refractionFrameFor(preset: string) {
-  return (context: Parameters<typeof refractionFrame>[0] & FrameTime): void => {
-    refractionPresets.get(preset).ripple.advance(context);
-    refractionFrame(context);
-  };
-}
-
-/** The presentation time a tool passes each frame. */
-export type FrameTime = { delta: number; reducedMotion: boolean };
-
-/** Free the shared targets (the room's dispose). */
-export function disposeRefraction(): void {
-  shared.background?.dispose();
-  shared.offsets?.dispose();
-  shared.background = shared.offsets = null;
 }
 
 const vertexShader = /* glsl */ `
@@ -348,7 +330,7 @@ export function createRefractionRear(
   const material = new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader: rearFragment,
-    uniforms: { ...shared.uniforms, ...preset.tuning },
+    uniforms: { ...captureSlots, ...preset.tuning },
     side: THREE.BackSide,
   });
   const rear = new THREE.Mesh(geometry, material);
@@ -362,7 +344,7 @@ export function createRefractionFront(preset: RefractionPreset): THREE.ShaderMat
     vertexShader,
     fragmentShader: frontFragment,
     uniforms: {
-      ...shared.uniforms,
+      ...captureSlots,
       ...preset.tuning,
       ...rippleUniforms(preset.ripple),
       environment: { value: preset.environment() },

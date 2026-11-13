@@ -18,14 +18,17 @@ export type ProfilerEnvironmentInfo = {
 };
 
 export const profilerMethod = {
-  version: 2,
+  version: 3,
   sets: [
-    "baseline (empty scene, once per case in its host)",
+    "baseline (empty collection, once per case in its host, through the case's own pipeline)",
     "each requested count on a fixed square grid, framed for that count (a fixed-viewport collection test)",
   ],
   warmup: "frames rendered before each set to compile shaders; creation timed separately",
   gpu: "EXT_disjoint_timer_query_webgl2, polled asynchronously; disjoint or invalid results dropped",
-  relative: "set median minus baseline median: an estimate, not an additive per-object cost",
+  relative:
+    "set median minus baseline median: an estimate, not an additive per-object cost; withheld when a pass can't render an empty collection",
+  pipeline:
+    "each frame times the objects' updates, every declared pass and the main render, inside the CPU time and the GPU query; draw counts add up across the passes (#764)",
   hiddenTab: "a set sampled while the tab was hidden is retaken, then listed as invalidated",
 };
 
@@ -101,9 +104,10 @@ export const costMeasures = {
 };
 
 /**
- * Read an exported file (#721): version 2 is today's matrix; version 1 (fixed one/collection
- * slots) is recognised as an old result and never read as a count-50 sample; anything else is
- * refused, clearly.
+ * Read an exported file (#721): version 3 is today's matrix; version 2 is the same matrix from
+ * before declared pipelines (#764), every case then drawn by the main render alone, and is read as
+ * that; version 1 (fixed one/collection slots) is recognised as an old result and never read as a
+ * count-50 sample; anything else is refused, clearly.
  */
 export function readProfilerExport(
   text: string,
@@ -112,6 +116,17 @@ export function readProfilerExport(
   const version = parsed.method?.version;
   if (version === profilerMethod.version)
     return { kind: "current", record: parsed as ProfilerExport };
+  if (version === 2) {
+    const record = parsed as ProfilerExport;
+    const mainOnly = { passes: [], passCount: 0, setup: null };
+    return {
+      kind: "current",
+      record: {
+        ...record,
+        results: record.results.map((result) => ({ ...result, pipeline: mainOnly })),
+      },
+    };
+  }
   if (version === 1) return { kind: "legacy", version: 1 };
   throw new Error(`Unsupported profiler export version: ${String(version)}`);
 }

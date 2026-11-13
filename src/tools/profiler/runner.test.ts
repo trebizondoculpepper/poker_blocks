@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
 import { Registry } from "../../core/registry";
 import { uncoveredCases, type ProfilingCase } from "./cases";
+import { passRenderer } from "./fake-pass-renderer";
 import { createGpuTimer, unavailableTimer, type GpuTimer } from "./gpu-timer";
 import {
   createProfilerRunner,
@@ -11,6 +12,15 @@ import {
   type RunOptions,
 } from "./runner";
 
+/** How many objects under `root` carry this user-data mark. */
+function under(root: THREE.Object3D, mark: string): number {
+  let found = 0;
+  root.traverse((child) => {
+    if (child.userData[mark]) found++;
+  });
+  return found;
+}
+
 /** A fake browser: each frame advances the clock by 16 ms; rendering costs 1 ms per object. */
 function fakeEnvironment(timer: GpuTimer = unavailableTimer(), hiddenFrames = new Set<number>()) {
   let clock = 0;
@@ -19,11 +29,17 @@ function fakeEnvironment(timer: GpuTimer = unavailableTimer(), hiddenFrames = ne
   const memory = { geometries: 0, textures: 0 };
   const env: ProfilerEnvironment = {
     renderer: {
+      ...passRenderer(),
       render(scene) {
-        objects = scene.children.filter((child) => child.userData.profiled).length;
+        objects = 0;
+        scene.traverseVisible((child) => {
+          if (child.userData.profiled) objects++;
+        });
         clock += objects;
       },
       info: {
+        autoReset: true,
+        reset() {},
         get render() {
           return { calls: objects, triangles: objects * 12 };
         },
@@ -98,7 +114,7 @@ describe("the profiler runner (#618)", () => {
     expect(result!.counts[1]!.set.cpu.median).toBeGreaterThan(result!.counts[0]!.set.cpu.median);
     expect(result!.counts[0]!.relative.cpu).toBe(1);
     expect(result!.leaked.geometries).toBe(0);
-    expect(runner.scene.children.some((child) => child.userData.profiled)).toBe(false);
+    expect(under(runner.scene, "profiled")).toBe(0);
   });
 
   it("reports a leak when a case does not free what it made", async () => {
@@ -270,7 +286,7 @@ describe("GPU results stay with their own set (#625 review)", () => {
     const { env, memory, frameCount } = fakeEnvironment();
     const render = env.renderer.render.bind(env.renderer);
     env.renderer.render = (scene, camera) => {
-      drawn = scene.children.filter((child) => child.userData.profiled).length;
+      drawn = under(scene, "profiled");
       render(scene, camera);
     };
     env.timer = delayedTimer({ objectsDrawn: () => drawn, frame: frameCount });
@@ -485,7 +501,7 @@ describe("a case that fails on its first frame (#625 review)", () => {
     // Recorded as a failure, not thrown: later cases still run (#722).
     const run = await runner.run([["broken", failing]], options);
     expect(run.failures).toEqual([{ id: "broken", kind: "error", reason: "broken case" }]);
-    expect(runner.scene.children.some((child) => child.userData.profiled)).toBe(false);
+    expect(under(runner.scene, "profiled")).toBe(0);
     expect(memory.geometries).toBe(0);
   });
 });
@@ -499,8 +515,7 @@ describe("GPU queries stay balanced when rendering fails (#625 review)", () => {
     const render = env.renderer.render.bind(env.renderer);
     env.renderer.render = (scene, camera) => {
       // The first frame with an object in it fails.
-      if (scene.children.some((child) => child.userData.profiled) && ++renders === 1)
-        throw new Error("render failed");
+      if (under(scene, "profiled") > 0 && ++renders === 1) throw new Error("render failed");
       render(scene, camera);
     };
     // Recorded as the case's failure, not thrown (#722); the query is still closed.
@@ -712,7 +727,7 @@ describe("failure isolation, timeouts and context loss (#722)", () => {
     expect(run.results.map(({ id }) => id)).toEqual(["good"]);
     expect(run.cancelled).toBe(false);
     expect(run.aborted).toBeNull();
-    expect(runner.scene.children.some((child) => child.userData.profiled)).toBe(false);
+    expect(under(runner.scene, "profiled")).toBe(0);
   });
 
   it("times out a case that never finishes building, disposes what it makes late, and goes on", async () => {
@@ -858,7 +873,7 @@ describe("the leak probe cleans up after itself (#726 review)", () => {
     };
     const render = env.renderer.render.bind(env.renderer);
     env.renderer.render = (scene, camera) => {
-      if (scene.children.some((child) => child.userData.explodes)) throw new Error("probe failed");
+      if (under(scene, "explodes") > 0) throw new Error("probe failed");
       render(scene, camera);
     };
     const run = await runner.run(
@@ -869,7 +884,7 @@ describe("the leak probe cleans up after itself (#726 review)", () => {
       { ...options, counts: [1] },
     );
     expect(run.failures.map(({ id }) => id)).toEqual(["probe"]);
-    expect(runner.scene.children.some((child) => child.userData.profiled)).toBe(false);
+    expect(under(runner.scene, "profiled")).toBe(0);
     // The next case's baseline drew nothing left over.
     expect(run.results[0]!.baseline.counts.calls).toBe(0);
   });
