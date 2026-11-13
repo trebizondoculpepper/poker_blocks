@@ -225,6 +225,7 @@ describe("game modes composed from traits", () => {
       coinsPanel: {},
       shopExit: { label: "Continue" },
       shopStock: { source: "shop" },
+      deckPanel: { opens: "openDeck" },
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},

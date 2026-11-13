@@ -586,6 +586,8 @@ export const sceneDefinitions = [
       coinsPanel: {},
       shopExit: { label: "Continue" },
       shopStock: { source: "shop" },
+      // The deck counter opens the run's card inventory from the shop too (#472).
+      deckPanel: { opens: "openDeck" },
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},

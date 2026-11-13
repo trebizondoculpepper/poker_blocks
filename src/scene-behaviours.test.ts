@@ -171,6 +171,7 @@ function recordingHost() {
         seed: () => 4242,
         shopStock: () => [{ kind: "card", block: {} as never }],
         deckBlocks: () => [],
+        inventory: () => [],
         dispatch: (action) => void calls.push(`action:${action}`),
         onCommitted: () => () => undefined,
         reducedMotion: false,
