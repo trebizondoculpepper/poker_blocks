@@ -4,12 +4,17 @@
  * from the shared frame, so the contents never know it exists and it can be omitted without
  * changing their motion. Earth composes it; nothing names earth.
  *
- * Lifecycle:
- * - **Turning clears it.** When the block's world rotation moves by more than `turnDegrees`
- *   from where the grass started, every blade vanishes at once and the stillness timer resets.
- *   Camera movement doesn't change the block's rotation. The tolerance sits above the board's
- *   automatic presentation wobble (8–12°) and far below a deliberate quarter turn (90°), so
- *   only a real turn counts (#419 review).
+ * Lifecycle (doc/presentation-contracts.md, "Grass survives until fully buried", #765):
+ * - **A blade stays where it grew.** Its root, lean and height are fixed in the block's own
+ *   space when it is born; the moving soil never drags it along.
+ * - **Turning restarts the clock for new growth only.** When the block's world rotation moves by
+ *   more than `turnDegrees` from where the stillness started, the timer resets, so no new blade
+ *   is born until it is still again; existing blades stay. Camera movement doesn't change the
+ *   block's rotation. The tolerance sits above the board's presentation wobble (8–12°).
+ * - **Only complete burial removes a blade.** Each frame, a blade whose every vertex (both base
+ *   corners and the tip) is on the soil side of the published surface, within a small
+ *   tolerance, is retired and its slot reused. Partly buried blades keep their visible part
+ *   (depth hides the rest). Being hidden by the shell or offscreen is not burial.
  * - **Only on a settled top.** The timer counts stillness from the end of the last turn, but no
  *   blade is born until the surface's normal is within `settledDegrees` of world up (seen from
  *   the block), so grass never grows on an obsolete, still-moving top. With slow contents the
@@ -41,7 +46,7 @@ export type GrowingGrassConfig = {
   /** Its colours, base to tip (hex). */
   base: number;
   tip: number;
-  /** Rotation (degrees) that counts as turning the block. */
+  /** Rotation (degrees) that counts as turning the block: it restarts the stillness timer. */
   turnDegrees: number;
   /** How near world up (degrees) the surface must be to count as settled. */
   settledDegrees: number;
@@ -64,6 +69,10 @@ export const growingGrass: InclusionHandler = {
     const across = new Float32Array(count * 3);
     const births = new Float32Array(count);
     const tall = new Float32Array(count);
+    /** The surface normal each blade was born on: it grows along it, whatever the soil does. */
+    const normals = new Float32Array(count * 3);
+    /** Which slots hold a blade; a retired slot is reused by the next birth. */
+    const alive = new Uint8Array(count);
     const base = new THREE.Color(config.base);
     const tip = new THREE.Color(config.tip);
     for (let i = 0; i < count; i++) {
@@ -92,15 +101,16 @@ export const growingGrass: InclusionHandler = {
     const turn = THREE.MathUtils.degToRad(config.turnDegrees);
     const settled = Math.cos(THREE.MathUtils.degToRad(config.settledDegrees));
     let still = 0;
-    let born = 0;
+    /** Seconds since the grass was made: each blade's age is measured on this clock. */
+    let clock = 0;
     let nextBirth = 0;
     let started = false;
+    /** How far below the surface (block-local units) a vertex must be to count as buried. */
+    const tolerance = 1e-4 * width;
 
-    const clear = () => {
-      positions.fill(0);
-      born = 0;
-      still = 0;
-      nextBirth = 0;
+    const retire = (i: number) => {
+      alive[i] = 0;
+      positions.fill(0, i * 9, i * 9 + 9);
     };
     /** A place on the current top, inside the walls; false if none was found. */
     const place = (i: number): boolean => {
@@ -136,6 +146,7 @@ export const growingGrass: InclusionHandler = {
           .normalize();
         point.toArray(across, i * 3);
         tall[i] = config.height * width * (0.6 + 0.4 * random());
+        n.toArray(normals, i * 3);
         return true;
       }
       return false;
@@ -143,60 +154,70 @@ export const growingGrass: InclusionHandler = {
     const root = new THREE.Vector3();
     const side = new THREE.Vector3();
     const rise = new THREE.Vector3();
+    const own = new THREE.Vector3();
+    const corner = new THREE.Vector3();
     const flat = (array: Float32Array, i: number, out: THREE.Vector3, n: THREE.Vector3) =>
       out.fromArray(array, i * 3).addScaledVector(n, -out.dot(n));
-    /**
-     * Draw a blade rooted on the live surface: while the soil is still settling its base slides
-     * onto the current top, and it leans from the current normal, so no blade floats or sinks
-     * (#419 review).
-     */
+    /** Draw a blade from its own root, along the normal it was born on, `grown` of its height. */
     const draw = (i: number, grown: number) => {
-      const n = surface.normal;
-      const level = surface.height / scale;
+      own.fromArray(normals, i * 3);
       root.fromArray(bases, i * 3);
-      root.addScaledVector(n, level - root.dot(n));
-      flat(across, i, side, n)
+      flat(across, i, side, own)
         .normalize()
         .multiplyScalar((config.width * width) / 2);
-      flat(leans, i, rise, n)
-        .add(n)
+      flat(leans, i, rise, own)
+        .add(own)
         .normalize()
         .multiplyScalar(tall[i]! * grown);
       const o = i * 9;
-      root.clone().sub(side).toArray(positions, o);
-      root
-        .clone()
+      corner.copy(root).sub(side).toArray(positions, o);
+      corner
+        .copy(root)
         .add(side)
         .toArray(positions, o + 3);
       // The tip rises from the base: a blade draws itself up rather than popping in.
-      root
-        .clone()
+      corner
+        .copy(root)
         .add(rise)
         .toArray(positions, o + 6);
+    };
+    /** Every vertex of blade `i`, as drawn now, on the soil side of the current surface. */
+    const buried = (i: number): boolean => {
+      const n = surface.normal;
+      const level = surface.height / scale;
+      for (let vertex = 0; vertex < 3; vertex++)
+        if (corner.fromArray(positions, i * 9 + vertex * 3).dot(n) > level - tolerance)
+          return false;
+      return true;
     };
 
     return {
       meshes: [mesh],
       update({ delta, rotation, reducedMotion }) {
+        clock += delta;
         if (!started || anchor.angleTo(rotation) > turn) {
-          // Turned (or first frame): the grass is destroyed and stillness starts again.
+          // Turned (or first frame): stillness starts again, for new growth only.
           anchor.copy(rotation);
           started = true;
-          clear();
+          still = 0;
+          nextBirth = 0;
         } else still += delta;
         up.set(0, 1, 0).applyQuaternion(inverse.copy(rotation).invert());
         const ready = still >= config.delay && surface.normal.dot(up) >= settled;
-        if (ready && born < count && still >= nextBirth) {
-          if (place(born)) {
-            births[born] = still;
-            born++;
+        const free = alive.indexOf(0);
+        if (ready && free >= 0 && still >= nextBirth) {
+          if (place(free)) {
+            births[free] = clock;
+            alive[free] = 1;
           }
           nextBirth = Math.max(still, config.delay) + config.interval * (0.5 + random());
         }
-        for (let i = 0; i < born; i++) {
-          const age = still - births[i]!;
+        for (let i = 0; i < count; i++) {
+          if (!alive[i]) continue;
+          const age = clock - births[i]!;
           const t = reducedMotion ? 1 : Math.min(age / config.growSeconds, 1);
           draw(i, t * t * (3 - 2 * t));
+          if (buried(i)) retire(i);
         }
         geometry.attributes.position!.needsUpdate = true;
       },
