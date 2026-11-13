@@ -222,7 +222,8 @@ export function createMusicController(
    * Choose from a plan entry now (so its slot is set at once), returning the playback to do: a
    * selector that keeps the current track while it plays only spins it back up from a wind-down.
    */
-  const choose = (name: string): (() => void) => {
+  /** The start to queue, or null when the selector keeps the logically playing track. */
+  const choose = (name: string): (() => void) | null => {
     if (!Object.hasOwn(plans, name)) throw new Error(`no music plan "${name}"`);
     const entry = plans[name]!;
     const previous = entry.slot ? (slots.get(entry.slot) ?? null) : null;
@@ -235,7 +236,7 @@ export function createMusicController(
     if (chosen && entry.slot) slots.set(entry.slot, chosen);
     // A keeping selector leaves the logically playing track as it is.
     if (chosen) logicalCurrent = chosen;
-    return chosen === undefined ? () => {} : () => start(chosen);
+    return chosen === undefined ? null : () => start(chosen);
   };
 
   const run = (operations: readonly MusicOperation[]) => {
@@ -251,7 +252,11 @@ export function createMusicController(
     logicalCurrent = woundDown ? null : player.current;
     logicalBeforeDown = beforeWindDown;
     const api: MusicOperationApi = {
-      select: (plan) => queue(true, choose(plan)),
+      // A keep queues nothing, so it never displaces a start already queued (#855 review).
+      select: (plan) => {
+        const step = choose(plan);
+        if (step) queue(true, step);
+      },
       remember: (slot) => {
         // What the cue has logically made current, not what is still audibly playing.
         if (logicalCurrent) slots.set(slot, logicalCurrent);
@@ -261,7 +266,10 @@ export function createMusicController(
         if (remembered) {
           logicalCurrent = remembered;
           queue(true, () => start(remembered));
-        } else if (fallbackPlan) queue(true, choose(fallbackPlan));
+        } else if (fallbackPlan) {
+          const step = choose(fallbackPlan);
+          if (step) queue(true, step);
+        }
       },
       // Each deferred step carries its logical target, captured now: the real player updates
       // `current` only once a track has loaded, so playback must never read it back (#855 review).

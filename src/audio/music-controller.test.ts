@@ -297,6 +297,17 @@ describe("music controller", () => {
     expect(log.filter(isStart)).toHaveLength(1);
   });
 
+  it("a keeping selection never cancels a start queued before it (#855 review)", () => {
+    const { music, log } = setup();
+    // From silence, selecting the title twice still plays a title track.
+    music.run([
+      { op: "selectTrack", config: { plan: "title" } },
+      { op: "selectTrack", config: { plan: "title" } },
+    ]);
+    music.unlock();
+    expect(log.filter(isStart)).toHaveLength(1);
+  });
+
   it("rejects an unknown operation at composition rather than falling back", () => {
     expect(validateMusicOperations("scene", [{ op: "selectTrack" }, { op: "shuffleAll" }])).toEqual(
       ['scene: unknown music operation "shuffleAll"'],
