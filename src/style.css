@@ -1678,6 +1678,15 @@ body,
   height: 150px;
   min-height: 0;
 }
+/* Its inspection explanation reads above the cube, inside the screen (#780 review). */
 .shop-exit.hud-word-cube .block-menu-caption {
-  display: none;
+  inset: auto 0 100%;
+  width: max-content;
+  max-width: 16em;
+  margin-left: auto;
+  font-family: var(--hud-font, system-ui, sans-serif);
+  color: #f3efe4;
+  text-align: right;
+  text-shadow: 0 1px 3px #000c;
+  opacity: 1;
 }

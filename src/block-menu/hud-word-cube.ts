@@ -15,6 +15,9 @@ export type WordCubeActionConfig = { material?: BlockMaterial; description?: str
 hudActionPresenters.register("wordCube", (host, { label, config, activate, services }) => {
   const { material, description } = (config ?? {}) as WordCubeActionConfig;
   host.classList.add("block-menu-host", "hud-word-cube");
+  // Its own small bounds take pointer input in the otherwise pass-through HUD (#780 review); the
+  // HUD around it still lets drags through.
+  host.dataset.interactive = "";
   const menus = createBlockMenus(host, (services ?? { spring: {} }) as BlockMenuOptions);
   let shown: ReturnType<typeof menus.show> | null = null;
   const show = (text: string) => {
@@ -49,6 +52,7 @@ hudActionPresenters.register("wordCube", (host, { label, config, activate, servi
       shown?.hide();
       menus.dispose();
       host.classList.remove("block-menu-host", "hud-word-cube");
+      delete host.dataset.interactive;
     },
   };
 });
