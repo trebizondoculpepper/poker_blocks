@@ -1,15 +1,26 @@
 import { inspectBlock } from "./traits/inspectable";
 /**
- * The in-run deck view (#175): a read-only overlay listing every block in the run's deck,
- * in rank order from 2 to Ace, with each rank's suit and material variants grouped under it.
- * Hover, focus or tap on a block shows its details. It never changes the deck.
+ * The in-run card view (#175, #472): a read-only overlay listing the run's cards in rank order
+ * from 2 to Ace, each rank's suit and material variants grouped under it, each with a marker
+ * saying where it is (deck, hand, table or discard). Hover, focus or tap on a block shows its
+ * details and location. It never changes the run.
  */
 import { ranks, type CardBlock } from "./cards";
 import { getMaterialDefinition, materialOf } from "./materials";
 
+/** Where a listed card is: its marker and its description. */
+export type CardLocation = { icon: string; label: string };
+
 export type DeckView = {
-  /** Show these blocks; `close` is called by the Back button. */
-  show(blocks: readonly CardBlock[], close: () => void): void;
+  /**
+   * Show these blocks, each with where it is if `locationOf` says; `close` is called by the
+   * Back button.
+   */
+  show(
+    blocks: readonly CardBlock[],
+    close: () => void,
+    locationOf?: (block: CardBlock) => CardLocation | undefined,
+  ): void;
   hide(): void;
   /** Showing: a stage's outcome waits until it closes (#175). */
   readonly isOpen: boolean;
@@ -43,15 +54,15 @@ export function createDeckView(host: HTMLElement): DeckView {
   root.className = "deck-view";
   root.setAttribute("role", "dialog");
   root.setAttribute("aria-modal", "true");
-  root.setAttribute("aria-label", "Your deck");
+  root.setAttribute("aria-label", "Your cards");
   root.hidden = true;
   host.append(root);
 
   return {
-    show(blocks, close) {
+    show(blocks, close, locationOf = () => undefined) {
       const heading = document.createElement("h2");
       heading.className = "deck-view-heading";
-      heading.textContent = `YOUR DECK · ${blocks.length}`;
+      heading.textContent = `YOUR CARDS · ${blocks.length}`;
       const details = document.createElement("p");
       details.className = "deck-view-details";
       details.setAttribute("aria-live", "polite");
@@ -71,9 +82,19 @@ export function createDeckView(host: HTMLElement): DeckView {
           chip.className = "deck-view-block";
           const { rank, suit } = block.traits.identity;
           chip.textContent = `${rank}${suit.symbol}`;
+          const location = locationOf(block);
+          if (location) {
+            const marker = document.createElement("span");
+            marker.className = "deck-view-location";
+            marker.textContent = location.icon;
+            marker.setAttribute("aria-hidden", "true");
+            chip.append(marker);
+          }
           chip.style.color = suit.color;
           chip.dataset.material = materialOf(block);
-          const text = deckBlockDetails(block);
+          const text = location
+            ? `${deckBlockDetails(block)}\n${location.label[0]!.toUpperCase()}${location.label.slice(1)}`
+            : deckBlockDetails(block);
           chip.setAttribute("aria-label", text);
           const reveal = () => (details.textContent = text);
           chip.addEventListener("pointerenter", reveal);

@@ -1,3 +1,4 @@
+import { runInventory, type InventoryRecord } from "./run-inventory";
 import type { DeckBuilderStep } from "./deck-builder";
 import type { EventEnvelope } from "./lifecycle/action";
 /**
@@ -146,6 +147,8 @@ export type GameRunController = {
   shopStock(): readonly ShopOffer[];
   /** The run's deck, for the read-only deck view (#175). */
   deckBlocks(): readonly CardBlock[];
+  /** Every live card in the run and where it is (#472): a query, never a second catalogue. */
+  inventory(): readonly InventoryRecord[];
   /** The won stage's paid rewards, which the stage-won pop-up shows; null before payment. */
   stageReward(): StageReward | null;
   /** The run's totals so far, which the game over screen shows. */
@@ -847,6 +850,7 @@ export function createGameRunController<Context>(options: {
     offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),
     shopStock: () => game.state.shopStock ?? [],
     deckBlocks: () => game.state.deck,
+    inventory: () => runInventory(game.state),
     runStats: () => game.stats,
     // A run with no rack limit shows exactly the passives it holds.
     rackCapacity: () =>

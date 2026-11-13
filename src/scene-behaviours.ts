@@ -118,6 +118,7 @@ export type SceneHost = {
       | "rackCapacity"
       | "shopStock"
       | "deckBlocks"
+      | "inventory"
       | "dispatch"
       | "onCommitted"
       | "hasSave"
@@ -327,12 +328,20 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.bin.sellBinEntered(false),
   });
   behaviours.register("deckView", {
-    // Read-only: it shows the deck and its Back button goes back; it never changes the deck.
-    enter: ({ services }) =>
-      services.deckView.show(services.run.deckBlocks(), () => {
-        services.sound("ui.back");
-        services.run.dispatch("back");
-      }),
+    // Read-only: the run's inventory (#472), every live card marked with where it is; its Back
+    // button goes back. It never changes the run.
+    enter({ services }) {
+      const records = services.run.inventory();
+      const where = new Map(records.map(({ card, icon, label }) => [card, { icon, label }]));
+      services.deckView.show(
+        records.map(({ card }) => card),
+        () => {
+          services.sound("ui.back");
+          services.run.dispatch("back");
+        },
+        (card) => where.get(card),
+      );
+    },
     exit: ({ services }) => services.deckView.hide(),
   });
   behaviours.register("devAttractTuning", {
