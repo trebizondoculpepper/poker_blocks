@@ -72,6 +72,8 @@ export type ScenarioDraft = {
   field: readonly PlacedBlock[];
   passives: readonly PassiveBlock[];
   replay: readonly ReplayCommand[];
+  /** Whether a field step explicitly declared the disconnected-fixture permission. */
+  allowDisconnected: boolean;
 };
 
 export type ScenarioContext = { seed: number; limits: ScenarioLimits; rackCapacity: number };
@@ -106,6 +108,9 @@ const list = (config: unknown, field: string): unknown[] => {
 
 /** Take the instances at these build indices out of the deck, in the order given. */
 function take(draft: ScenarioDraft, indices: readonly number[], zone: string): CardBlock[] {
+  // One instance, one owner: the same index twice in one transfer is refused too.
+  if (new Set(indices).size !== indices.length)
+    throw new ScenarioError(`${zone}: the same card index is given more than once`);
   return indices.map((index) => {
     const card = draft.created[index];
     if (!card) throw new ScenarioError(`${zone}: no created card at index ${index}`);
@@ -125,6 +130,10 @@ devScenarioCapabilities.register("devDeck", {
       ? []
       : [`devDeck: needs a list of at most ${limits.steps} deck builder steps`],
   apply: (draft, config, { seed, limits }) => {
+    // The deck is built once, before anything is moved out of it: a rebuild would leave cards
+    // already placed in other zones beside fresh copies with the same IDs.
+    if (draft.created.length)
+      throw new ScenarioError("devDeck: the deck is built once, before any other zone");
     const built = buildDeck((config as { steps: DeckBuilderStep[] }).steps, seed);
     if (built.length > limits.deckCards)
       throw new ScenarioError(
@@ -213,7 +222,11 @@ function faceConnected(cells: readonly Cell[]): boolean {
 // The initial field pattern: created instances placed directly at their cells (hydration).
 devScenarioCapabilities.register("devFieldPattern", {
   validate: (config, { limits }) => {
-    const { placements = [] } = (config ?? {}) as Partial<FieldConfig>;
+    if (!Array.isArray((config as { placements?: unknown } | null)?.placements))
+      return ["devFieldPattern: needs a list of placements"];
+    const placements = list(config, "placements") as FieldConfig["placements"];
+    if (placements.some((placement) => typeof placement !== "object" || placement === null))
+      return ["devFieldPattern: each placement needs an index and a cell"];
     const coordinate = (value: unknown) =>
       Number.isSafeInteger(value) && Math.abs(value as number) <= limits.coordinate;
     const problems = [
@@ -233,11 +246,9 @@ devScenarioCapabilities.register("devFieldPattern", {
     ];
     if (problems.length) return problems;
     const cells = placements.map(({ cell }) => cell);
-    if (new Set(cells.map(cellKey)).size !== cells.length)
-      return ["devFieldPattern: two placements share a cell"];
-    return (config as FieldConfig).allowDisconnected || faceConnected(cells)
+    return new Set(cells.map(cellKey)).size === cells.length
       ? []
-      : ["devFieldPattern: cells must join face to face unless allowDisconnected is declared"];
+      : ["devFieldPattern: two placements share a cell"];
   },
   apply: (draft, config) => {
     const { placements } = config as FieldConfig;
@@ -249,14 +260,19 @@ devScenarioCapabilities.register("devFieldPattern", {
     const occupied = new Set(draft.field.map(({ cell }) => cellKey(cell)));
     if (placements.some(({ cell }) => occupied.has(cellKey(cell))))
       throw new ScenarioError("devFieldPattern: a placement's cell is already occupied");
-    return {
-      ...draft,
-      field: [
-        ...draft.field,
-        ...placements.map(({ cell }, i) => ({ block: cards[i]!, cell: { ...cell } })),
-      ],
-      deck: withoutCards(draft.deck, cards),
-    };
+    const field = [
+      ...draft.field,
+      ...placements.map(({ cell }, i) => ({ block: cards[i]!, cell: { ...cell } })),
+    ];
+    // The ordinary spatial constraint holds for the whole field so far, across every step,
+    // unless a step explicitly declares the fixture permission.
+    const allowDisconnected =
+      draft.allowDisconnected || (config as FieldConfig).allowDisconnected === true;
+    if (!allowDisconnected && !faceConnected(field.map(({ cell }) => cell)))
+      throw new ScenarioError(
+        "devFieldPattern: cells must join face to face unless allowDisconnected is declared",
+      );
+    return { ...draft, field, allowDisconnected, deck: withoutCards(draft.deck, cards) };
   },
 });
 
@@ -312,6 +328,8 @@ function definitionProblems(definition: ScenarioDefinition, context: ScenarioCon
   if (!Number.isSafeInteger(definition.seed)) return ["the seed must be a whole number"];
   if (!Array.isArray(definition.steps) || definition.steps.length > context.limits.steps)
     return [`a scenario needs at most ${context.limits.steps} steps`];
+  if (definition.steps.some((step) => typeof step !== "object" || step === null))
+    return ["each scenario step needs a capability and its configuration"];
   return definition.steps.flatMap(({ capability, config }) =>
     devScenarioCapabilities.has(capability)
       ? devScenarioCapabilities.get(capability).validate(config, context)
@@ -334,9 +352,10 @@ export function buildScenario(
     limits,
     rackCapacity: runtime.rules.rackCapacity ?? Infinity,
   };
-  const problems = definitionProblems(definition, context);
-  if (problems.length) return { ok: false, diagnostics: problems };
   try {
+    // Validation is inside the boundary too: a malformed configuration is a diagnostic.
+    const problems = definitionProblems(definition, context);
+    if (problems.length) return { ok: false, diagnostics: problems };
     const empty: ScenarioDraft = {
       created: [],
       deck: [],
@@ -344,6 +363,7 @@ export function buildScenario(
       field: [],
       passives: [],
       replay: [],
+      allowDisconnected: false,
     };
     const draft = definition.steps.reduce(
       (current, { capability, config }) =>

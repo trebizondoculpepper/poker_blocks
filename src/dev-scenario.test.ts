@@ -203,3 +203,66 @@ describe("Dev scenario setup (#877)", () => {
     ).toEqual([]);
   });
 });
+
+describe("Dev scenario ownership and shape checks (#877 review)", () => {
+  const problems = (definition: ScenarioDefinition) => {
+    const result = buildScenario(definition, runtime);
+    return result.ok ? [] : result.diagnostics;
+  };
+
+  it("refuses the same index twice in one transfer", () => {
+    expect(problems(scenario({ capability: "devHand", config: { indices: [0, 0] } }))).toEqual([
+      expect.stringMatching(/more than once/),
+    ]);
+    expect(
+      problems(
+        scenario(
+          field([
+            { index: 0, cell: { x: 0, y: 0, z: 0 } },
+            { index: 0, cell: { x: 1, y: 0, z: 0 } },
+          ]),
+        ),
+      ),
+    ).toEqual([expect.stringMatching(/more than once/)]);
+  });
+
+  it("refuses rebuilding the deck once it exists", () => {
+    expect(problems(scenario({ capability: "devHand", config: { indices: [0] } }, deck))).toEqual([
+      expect.stringMatching(/built once/),
+    ]);
+  });
+
+  it("returns malformed configuration as diagnostics, not exceptions", () => {
+    expect(
+      problems(scenario({ capability: "devFieldPattern", config: { placements: {} } })),
+    ).toEqual(["devFieldPattern: needs a list of placements"]);
+    expect(
+      problems(scenario({ capability: "devFieldPattern", config: { placements: [null] } })),
+    ).toEqual([expect.stringMatching(/index and a cell/)]);
+    expect(problems({ version: scenarioVersion, seed: 1, steps: [null as never] })).toEqual([
+      expect.stringMatching(/capability and its configuration/),
+    ]);
+  });
+
+  it("checks connectivity across every field step", () => {
+    expect(
+      problems(
+        scenario(
+          field([{ index: 0, cell: { x: 0, y: 0, z: 0 } }]),
+          field([{ index: 1, cell: { x: 10, y: 0, z: 0 } }]),
+        ),
+      ),
+    ).toEqual([expect.stringMatching(/face to face/)]);
+    expect(
+      problems(
+        scenario(field([{ index: 0, cell: { x: 0, y: 0, z: 0 } }]), {
+          capability: "devFieldPattern",
+          config: {
+            placements: [{ index: 1, cell: { x: 10, y: 0, z: 0 } }],
+            allowDisconnected: true,
+          },
+        }),
+      ),
+    ).toEqual([]);
+  });
+});
