@@ -30,7 +30,11 @@ export { standardGameFlow };
 
 export type SceneTraits = {
   screen: { kind: string };
-  pausesBelow: { input: boolean; update: boolean };
+  /**
+   * Stop the scenes below taking input or updates; `presentation` also holds the playfield's
+   * presentation clock, so the covered board shows a frozen pose (#530).
+   */
+  pausesBelow: { input: boolean; update: boolean; presentation?: boolean };
   /**
    * A HUD panel this scene shows while it is in front, with its config (see
    * src/hud-panels.ts): the round panel names the stage and its next-action labels; the shop
@@ -535,7 +539,7 @@ export const sceneDefinitions = [
       pauseDialog: gameDialogs.pause,
       blockTitle: titleBlocks,
       panelFooter: { links: projectLinks },
-      pausesBelow: { input: true, update: true },
+      pausesBelow: { input: true, update: true, presentation: true },
       musicFilter: { kind: "lowpass" },
       keyAction: { key: "Escape", action: "resume", sfx: "ui.back" },
     },

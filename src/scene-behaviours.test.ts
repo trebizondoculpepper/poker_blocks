@@ -195,6 +195,12 @@ function recordingHost() {
           balance: 5,
         }),
       },
+      presentationClock: {
+        hold: () => {
+          calls.push("presentation:hold");
+          return () => void calls.push("presentation:release");
+        },
+      },
       overlays: {
         showMenu: (label) => void calls.push(`menu:${label}`),
         hideMenu: () => void calls.push("menu:hide"),
@@ -635,12 +641,15 @@ describe("the pause menu's scene traits (#87)", () => {
       "choices:resume,openSettings,quitToTitle",
       "footer:1.2.3:Get source code,Report a bug",
       "gestures:cancel",
+      // The board under the menu shows a frozen pose while it is open (#530).
+      "presentation:hold",
       "filter:lowpass",
     ]);
     calls.length = 0;
     scenes.pop();
     expect(calls).toEqual([
       "filter:null",
+      "presentation:release",
       "footer:hide",
       "dialog:remove:Paused",
       "menu:hide",
@@ -662,6 +671,8 @@ describe("the pause menu's scene traits (#87)", () => {
     calls.length = 0;
     scenes.push(settings.id);
     expect(calls).toEqual([
+      // Covered by Settings, the pause choices leave until it is in front again (#530).
+      "dialog:remove:Paused",
       "table:true",
       "settings:show",
       "dialog:add:Settings",
@@ -683,7 +694,6 @@ describe("the pause menu's scene traits (#87)", () => {
       "table:false",
       "menu:Paused",
       // Back in front, the pause choices are drawn again.
-      "dialog:remove:Paused",
       "dialog:add:Paused",
       "choices:resume,openSettings,quitToTitle",
       // The pause panel's footer comes back with the panel it belongs to.

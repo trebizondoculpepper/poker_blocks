@@ -25,6 +25,7 @@ import type { ActionLog } from "./action-log";
 import { firstPlayPrompt, type FirstPlayTable } from "./scene-traits/first-play-prompt";
 import type { MenuCondition, SceneTraits } from "./game-modes";
 import type { DialogHandlers } from "./block-menu/block-menus";
+import type { PresentationClock } from "./presentation-clock";
 import type { AudioService } from "./audio-service";
 import type { CameraViewService } from "./camera-view";
 import type { Overlays } from "./overlays";
@@ -63,6 +64,8 @@ export type SceneHost = {
     };
     /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
     renderer: Pick<TableRenderer, "tableEntered" | "handEntered">;
+    /** The playfield's presentation clock, held while a pausing scene covers it (#530). */
+    presentationClock: Pick<PresentationClock, "hold">;
     hud: Pick<HudPanels, "show" | "hide">;
     /** The bin: shown while a scene composing `discardBin` or `sellBin` is on the stack (#278). */
     bin: Pick<BinView, "discardBinEntered" | "sellBinEntered">;
@@ -576,6 +579,12 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
         shown.get(config)?.();
         shown.delete(config);
       },
+      // Covered by another scene (pause over the title): its choices leave until it is in front
+      // again, so they never show through a panel-free menu over it (#530 review).
+      cover: (_context, config) => {
+        shown.get(config)?.();
+        shown.delete(config);
+      },
     });
   }
   behaviours.register("devDialogRoom", {
@@ -688,11 +697,19 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       return true;
     },
   });
+  /** Each pausing scene's hold on the presentation clock, by its trait config. */
+  const presentationHolds = new WeakMap<object, () => void>();
   behaviours.register("pausesBelow", {
     // A scene that stops input below it also ends any gesture already under way there, so a
     // drag begun before Escape can't play a card behind the menu (#124).
-    enter(context, { input }) {
-      if (input) context.services.input.cancelGestures();
+    enter(context, config) {
+      if (config.input) context.services.input.cancelGestures();
+      if (config.presentation)
+        presentationHolds.set(config, context.services.presentationClock.hold());
+    },
+    exit(_context, config) {
+      presentationHolds.get(config)?.();
+      presentationHolds.delete(config);
     },
     blocksBelow(_context, config, operation) {
       return config[operation];

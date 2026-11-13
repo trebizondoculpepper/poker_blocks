@@ -34,6 +34,7 @@ import { createHudPanels, type HudPanels } from "./hud-panels";
 import { createDeckView, type DeckView } from "./deck-view";
 import { createOverlays, type Overlays } from "./overlays";
 import { createDialogPresenter } from "./block-menu/block-menus";
+import { createPresentationClock, type PresentationClock } from "./presentation-clock";
 import { createPassiveRack } from "./passive-rack";
 import { createPlayPresenter, type PlayPresenter } from "./play-presenter";
 import { createBlockViews, type BlockViews } from "./rendered-blocks";
@@ -117,6 +118,7 @@ const audio: AudioService = createAudioService({
 type TraitContext = {
   host: HTMLElement;
   services: {
+    presentationClock: PresentationClock;
     bin: BinView;
     selectionBadge: SelectionBadge;
     renderer: TableRenderer;
@@ -212,9 +214,11 @@ const devDialogRoom: DialogRoom = import.meta.env.DEV
 const devObjectBrowser: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/object-browser")).createObjectBrowser(host)
   : { show() {}, hide() {}, dispose() {} };
+const presentationClock = createPresentationClock();
 const traitContext: TraitContext = {
   host,
   services: {
+    presentationClock,
     bin,
     selectionBadge,
     renderer: view,
@@ -452,21 +456,23 @@ let lastTime = 0;
 const step = (time: number) => {
   const delta = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
   lastTime = time;
+  // The playfield draws on the presentation clock, which a pausing scene holds still (#530).
+  const playfield = presentationClock.advance(time, delta);
   actionLog.tick();
   beat.update(delta);
   danceFloor.update();
-  cameraView.update(time, delta);
+  cameraView.update(playfield.time, playfield.delta);
   presenter.update(time, delta);
   presenter.updateScore(time);
   run.followOutcomes(time);
-  field.update(time, run.reducedMotion);
+  field.update(playfield.time, run.reducedMotion);
   sceneManager.update(delta);
   attract.frame(delta);
   blockTitles.frame();
-  hand.animate(time, delta, input.selection);
-  view.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
+  hand.animate(playfield.time, playfield.delta, input.selection);
+  view.frame(cameraView.pivot.position, cameraView.structureRadius(), playfield.delta);
   input.frame();
-  passiveRackView.frame(time, run.reducedMotion);
+  passiveRackView.frame(playfield.time, run.reducedMotion);
   shopView.frame();
   render();
 };
