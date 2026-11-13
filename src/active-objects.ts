@@ -12,7 +12,11 @@ import type { CardBlock } from "./cards";
 import { Registry } from "./core/registry";
 
 /** A registered active definition: how a fresh instance with this ID is created. */
-export type ActiveDefinition = { create(id: string): CardBlock };
+export type ActiveDefinition = {
+  create(id: string): CardBlock;
+  /** Components an instance of this definition cannot work without: a record lacking one is corrupt. */
+  requires?: readonly string[];
+};
 export const activeDefinitions = new Registry<ActiveDefinition>("active definition");
 
 /**
@@ -68,6 +72,10 @@ export function restoreActiveObjects(
       throw new Error(`unknown active definition for ${id}`);
     if (typeof components !== "object" || components === null || Array.isArray(components))
       throw new Error(`bad active components for ${id}`);
+    const missing = (activeDefinitions.get(definition).requires ?? []).filter(
+      (name) => !Object.hasOwn(components, name),
+    );
+    if (missing.length) throw new Error(`${id} is missing component(s) ${missing.join(", ")}`);
     const created =
       startingInstance(id, definition) ?? activeDefinitions.get(definition).create(id);
     return Object.entries(components).reduce((block, [name, value]) => {

@@ -252,3 +252,12 @@ describe("cloning a container (#554 review)", () => {
     expect(ids.get("revealed-1")).toBe("fresh-2");
   });
 });
+
+describe("required payload components (#554 review)", () => {
+  it("rejects a saved payload missing a component its definition requires", () => {
+    const run = runWithHand([devOpaqueContainer("box-1", kingOfHearts("revealed-1"))]);
+    const record = JSON.parse(JSON.stringify(toSaveRecord(run.snapshot())));
+    record.state.activeObjects["box-1"].components.opaqueContainer.components = {};
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)).toBeNull();
+  });
+});

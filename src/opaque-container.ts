@@ -84,6 +84,8 @@ cloneCodecs.register("opaqueContainer", (value, { allocate, ids }) => {
  * from its `pokerIdentity` and `material` components rather than the standard deck.
  */
 activeDefinitions.register("playableCard", {
+  // A playable card is nothing without its rank and suit.
+  requires: ["pokerIdentity"],
   create: (id) => ({
     id,
     traits: {
