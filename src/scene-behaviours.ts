@@ -204,7 +204,15 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("roundPanel", panel<Context, "round">("round"));
   behaviours.register("deckPanel", panel<Context, "deck">("deck"));
   behaviours.register("coinsPanel", panel<Context, "coins">("coins"));
-  behaviours.register("shopExit", panel<Context, "shopExit">("shopExit"));
+  // The shop exit's presenter (a live cube, #780) leaves while another scene covers the shop and
+  // a fresh one mounts when it resumes, so nothing of it runs or activates underneath (#780 review).
+  const shopExit = panel<Context, "shopExit">("shopExit");
+  behaviours.register("shopExit", {
+    ...shopExit,
+    cover: (context: Context) => shopExit.exit(context),
+    resume: (context: Context, config: HudPanelConfigs["shopExit"]) =>
+      shopExit.enter(context, config),
+  });
   // The shop's stock is shown, and its offers can be dragged to BUY (#277), while it's in front.
   const stockSources = new WeakMap<object, () => void>();
   behaviours.register("shopStock", {

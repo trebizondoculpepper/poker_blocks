@@ -19,6 +19,7 @@ export const nothingifierId = "nothingifier";
 passiveDefinitions.register(nothingifierId, {
   id: nothingifierId,
   releaseStatus: { certified: {} },
+  lifecycle: { parent: "limitedUseItem" },
   name: "Nothingifier",
   symbol: "∅",
   description:

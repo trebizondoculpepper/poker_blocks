@@ -22,7 +22,10 @@ export function devRanklessActive(id: string): CardBlock {
 }
 
 // Its registered definition, so a save can rebuild it (#894).
-activeDefinitions.register("devRanklessActive", { create: devRanklessActive });
+activeDefinitions.register("devRanklessActive", {
+  create: devRanklessActive,
+  lifecycle: { parent: "ordinaryCard" },
+});
 
 /** A test-only opaque container (#927): a rankless active holding one stored payload descriptor. */
 export function devOpaqueContainer(
@@ -44,6 +47,7 @@ export function devOpaqueContainer(
 activeDefinitions.register("devOpaqueContainer", {
   // A container is nothing without its payload: a record lacking it is corrupt.
   requires: ["opaqueContainer"],
+  lifecycle: { parent: "opaqueWrapper" },
   create: (id) => {
     const base = devRanklessActive(id);
     return {
