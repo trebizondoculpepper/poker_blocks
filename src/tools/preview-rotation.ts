@@ -32,23 +32,36 @@ export const previewRotationDefaults: PreviewRotationConfig = {
 export const threeQuarterPose = (): THREE.Quaternion =>
   new THREE.Quaternion().setFromEuler(new THREE.Euler(0.35, -Math.PI / 4, 0, "YXZ"));
 
-const up = new THREE.Vector3(0, 1, 0);
-const right = new THREE.Vector3(1, 0, 0);
+const worldUp = new THREE.Vector3(0, 1, 0);
 
 export function createPreviewRotation(
   config: Partial<PreviewRotationConfig> = {},
   sounds: { turn?: () => void; click?: () => void } = {},
+  /** The camera viewing the preview: a drag turns about its own up and right (#838 review). */
+  camera: THREE.Camera = new THREE.Camera(),
 ) {
   const { sensitivity, turntable, keyStep } = { ...previewRotationDefaults, ...config };
   const pose = threeQuarterPose();
   let auto = true;
   const turn = new THREE.Quaternion();
 
-  /** Turn about the camera's axes: yaw about its up, pitch about its right. */
+  const up = new THREE.Vector3();
+  const right = new THREE.Vector3();
+  const facing = new THREE.Quaternion();
+
+  /** Turn about the camera's own axes: yaw about its up, pitch about its right. */
   function rotateBy(yaw: number, pitch: number): void {
+    camera.getWorldQuaternion(facing);
+    up.set(0, 1, 0).applyQuaternion(facing);
+    right.set(1, 0, 0).applyQuaternion(facing);
     pose.premultiply(turn.setFromAxisAngle(up, yaw));
     pose.premultiply(turn.setFromAxisAngle(right, pitch));
     pose.normalize();
+  }
+
+  /** The turntable spins about the vertical, as a turntable does. */
+  function spinBy(angle: number): void {
+    pose.premultiply(turn.setFromAxisAngle(worldUp, angle)).normalize();
   }
 
   return {
@@ -58,7 +71,7 @@ export function createPreviewRotation(
     },
     /** Each frame: advance the turntable if it runs, then give `object` the pose. */
     update(seconds: number, object: THREE.Object3D | null): void {
-      if (auto) rotateBy(turntable * seconds, 0);
+      if (auto) spinBy(turntable * seconds);
       object?.quaternion.copy(pose);
     },
     onDrag({ first, delta: [dx, dy] }: { first?: boolean; delta: [number, number] }): void {

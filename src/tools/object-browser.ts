@@ -220,6 +220,7 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
   const rotation = createPreviewRotation(
     {},
     { turn: () => playSfx("view.rotate"), click: () => playSfx("ui.click") },
+    camera,
   );
   part("auto").addEventListener("click", () => rotation.autoRotate());
   part("reset").addEventListener("click", () => rotation.reset());
@@ -245,6 +246,11 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     if (!object.preview) return;
     shown = object.preview(2.2);
     scene.add(shown.object);
+    // A new entry: any drag in progress ends (its handlers are replaced), the pose stays.
+    if (unmountRotation) {
+      unmountRotation();
+      unmountRotation = rotation.mount(part("preview"));
+    }
   }
 
   /** The properties as rows: nested objects flatten to dotted paths. */

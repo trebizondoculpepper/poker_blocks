@@ -54,4 +54,28 @@ describe("devPreviewRotation (#746)", () => {
     expect(angle(rotation.pose, start)).toBeGreaterThan(0);
     expect(rotation.onKey("a")).toBe(false);
   });
+
+  it("drags about the viewing camera's own axes, and spins the turntable about the vertical", () => {
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(0, 1.6, 6.2);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    const rotation = createPreviewRotation({}, {}, camera);
+    const axisOf = (before: THREE.Quaternion) => {
+      const change = rotation.pose.clone().multiply(before.clone().invert());
+      return new THREE.Vector3(change.x, change.y, change.z).normalize();
+    };
+    let before = rotation.pose.clone();
+    rotation.onDrag({ first: true, delta: [20, 0] });
+    const cameraUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+    expect(axisOf(before).distanceTo(cameraUp)).toBeLessThan(1e-6);
+    before = rotation.pose.clone();
+    rotation.onDrag({ delta: [0, 20] });
+    const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    expect(axisOf(before).distanceTo(cameraRight)).toBeLessThan(1e-6);
+    rotation.autoRotate();
+    before = rotation.pose.clone();
+    rotation.update(0.5, null);
+    expect(axisOf(before).distanceTo(new THREE.Vector3(0, 1, 0))).toBeLessThan(1e-6);
+  });
 });
