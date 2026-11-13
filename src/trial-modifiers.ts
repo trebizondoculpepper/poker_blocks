@@ -351,3 +351,6 @@ for (const definition of [
   }),
 ])
   passiveDefinitions.register(definition.id, definition);
+
+// In the Loop (#886): a provisional exponent trial on the face hoop query.
+import "./in-the-loop";
