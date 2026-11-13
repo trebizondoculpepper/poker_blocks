@@ -1,3 +1,4 @@
+import { blockName } from "./block-presentation";
 import { runInventory, type InventoryRecord } from "./run-inventory";
 import type { DeckBuilderStep } from "./deck-builder";
 import type { EventEnvelope } from "./lifecycle/action";
@@ -19,7 +20,7 @@ import { menuScreenScenes } from "./overlays";
 import { refusalSound } from "./purchase-refusals";
 import { playSfx } from "./audio/sfx";
 import type { CameraViewService } from "./camera-view";
-import { cardName, standardDeck, type CardBlock, pokerIdentity } from "./cards";
+import { standardDeck, type CardBlock } from "./cards";
 import type { ConsoleApp } from "./console-host";
 import { dealerRegistry, roundOutcome, type RoundOutcome } from "./dealer";
 import type { FieldView } from "./field-view";
@@ -356,14 +357,14 @@ export function createGameRunController<Context>(options: {
     views.highlight(selected);
     const selectedNames = views.all
       .filter(({ block }) => selected.has(block.id))
-      .map(({ block }) => cardName(pokerIdentity(block)));
+      .map(({ block }) => blockName(block));
     // With two or more hand blocks selected, a badge over the hand says how many (#305), so a
     // drag that will carry the whole selection is never a surprise.
     const inHand = game.state.hand.filter((block) => selected.has(block.id)).length;
     services.selectionBadge.count(inHand);
     host.setAttribute(
       "aria-label",
-      `${game.state.field.length} blocks in play. Hand: ${game.state.hand.map((block) => cardName(pokerIdentity(block))).join(", ")}. ${game.state.deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,
+      `${game.state.field.length} blocks in play. Hand: ${game.state.hand.map((block) => blockName(block)).join(", ")}. ${game.state.deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,
     );
   }
 

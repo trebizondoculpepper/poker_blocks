@@ -11,6 +11,7 @@ export function devRanklessActive(id: string): CardBlock {
   return {
     id,
     traits: {
+      label: { name: "Dev rankless active", symbol: "◇" },
       selectable: {},
       attachable: { faces },
       inspectable: inspectable("Dev rankless active"),
