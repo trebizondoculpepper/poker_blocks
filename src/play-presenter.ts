@@ -234,18 +234,28 @@ export function createPlayPresenter(options: {
       playSfx(id);
     announceScore(now, action.lines);
     cameraView.scheduleCameraMove();
-    options.refill();
+    refillWhenNoDiscardShows();
     options.save();
   }
 
-  function updateDiscard(action: Discarding, now: number, delta: number): void {
-    const elapsed = (now - action.startedAt) / 1000;
-    action.effects.forEach((effect) => effect.update(delta));
-    if (elapsed < 1) return;
+  function updateDiscard(action: Discarding, _now: number, delta: number): void {
+    // Finished when its own dissolves have (#775): their clock, not a wall-clock second, so
+    // reduced motion's short fade doesn't wait and a slow frame can't reveal replacements early.
+    const running = action.effects.map((effect) => effect.update(delta));
+    if (running.some(Boolean)) return;
     discarding = discarding.filter((other) => other !== action);
     action.sources.forEach((source) => views.dispose(source));
-    options.refill();
+    refillWhenNoDiscardShows();
     options.save();
+  }
+
+  /**
+   * Refill the hand, unless a discard is still dissolving (#775): drawing now would bring that
+   * discard's replacements in before its cards have gone. The last discard to finish refills.
+   */
+  function refillWhenNoDiscardShows(): void {
+    if (discarding.length > 0) return;
+    options.refill();
   }
 
   return {
