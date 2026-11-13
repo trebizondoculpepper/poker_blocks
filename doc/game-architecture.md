@@ -1674,3 +1674,7 @@ Configured result-menu controllers mount accessible block actions after bounded 
 ## Shop Continue presentation
 
 The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD word-cube host, semantic action and fixed material configuration; its canvas does not intercept input outside registered action bounds.
+
+## Verified experiment configuration imports
+
+[Exact-build configuration compatibility](experiments/configuration-compatibility.md) bounds the first import/export delivery: a trusted adapter supplies the current immutable build identity; a registered/pure import boundary rejects mismatches before scenario construction, then performs normal schema/configuration checks. Cross-build semantic verification is deferred. A display version, mode identity, imported claim or partial field list cannot substitute for that identity. This affects experimental artifacts, not production saves or game rules.
