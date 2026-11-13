@@ -13,6 +13,7 @@ import * as THREE from "three";
 import { setReflectionEnvironment } from "../visual/block-appearance";
 import { gameModeFor, modeLink, type SceneTraits } from "../game-modes";
 import { createCubeStage } from "../block-menu/cube-stage";
+import { cubeSpacing as spacing } from "../block-menu/menu-sizing";
 import "./word-cube-room.css";
 
 export type WordCubeRoomConfig = SceneTraits["devWordCubeRoom"];
@@ -25,7 +26,6 @@ export type WordCubeRoom = {
 
 /** Cubes per row, and the distance between neighbouring cube centres. */
 const perRow = 4;
-const spacing = 1.7;
 
 /** Where each of `count` cubes sits: rows of `perRow`, centred on the origin. */
 export function gridPositions(count: number): THREE.Vector3[] {

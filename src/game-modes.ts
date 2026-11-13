@@ -14,6 +14,7 @@ import type { DevHudStyleAuditionConfig, HudStyleConfig } from "./scene-traits/h
  * `?mode=...` selects a developer mode; `?room=...` remains a backwards-compatible alias.
  */
 import { Registry } from "./core/registry";
+import { auditionSizingProfile, type ReferenceSizingProfile } from "./block-menu/menu-sizing";
 import type { RoundPanelConfig, ShopExitConfig } from "./hud-panels";
 import type { GameFlow } from "./game-flow";
 import type { MusicFilter, MusicOperation } from "./audio/music-controller";
@@ -326,6 +327,24 @@ export type DialogConfig = {
   message?: string;
   /** The choice keyboard focus starts on; otherwise the first available one. */
   focus?: string;
+  /** How the dialog is presented (doc/foreground-menus.md); omitted, a readable panel. */
+  presentation?: DialogPresentation;
+};
+
+/**
+ * A dialog's presentation (#628): `panel: "none"` floats its cubes in the foreground over the
+ * visible scene with no rectangle behind them; `sizing` draws them at a reference profile's
+ * apparent size rather than fitting the camera to however many choices there are.
+ */
+export type DialogPresentation = {
+  panel: "none" | "readable";
+  sizing?: ReferenceSizingProfile;
+};
+
+/** Title and confirmation choices: panel-free, at the menu-block audition room's cube size. */
+const foregroundPresentation: DialogPresentation = {
+  panel: "none",
+  sizing: auditionSizingProfile,
 };
 
 /** How the game's block menus move: their springs and beat kick (#529), shared with dev14. */
@@ -360,6 +379,7 @@ export type DevDialogRoomConfig = {
 export const gameDialogs = {
   titleMenu: {
     title: "Poker Blocks",
+    presentation: foregroundPresentation,
     items: [
       {
         label: "Continue",
@@ -378,6 +398,7 @@ export const gameDialogs = {
   },
   newGame: {
     title: "Start a new game? The game in progress will be lost.",
+    presentation: foregroundPresentation,
     message: "Start a new game? The game in progress will be lost.",
     // Focus starts on the non-destructive choice, so a held or repeated Enter cannot overwrite
     // the save (#10).

@@ -689,6 +689,23 @@ body,
   height: 150px;
 }
 
+/*
+ * A dialog presented with no panel (doc/foreground-menus.md, #628): its cubes float in the
+ * foreground over the visible scene. The panel keeps its layout but loses its rectangle, and the
+ * cube stage gets room for cubes drawn at the audition room's size.
+ */
+.menu-panel:has(> .block-menu-host[data-panel="none"]) {
+  width: 100%;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  text-shadow: 0 1px 3px #000c;
+}
+
+.block-menu-host[data-panel="none"] {
+  height: clamp(150px, 32dvh, 290px);
+}
+
 .block-menu-host canvas {
   display: block;
   width: 100%;

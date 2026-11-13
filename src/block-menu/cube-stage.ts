@@ -18,6 +18,14 @@ import {
   sparkleEnvironment,
 } from "../visual/attract-look";
 import { createWordCube, type WordCubeOptions } from "../word-cube";
+import {
+  clampedEdge,
+  distanceForEdge,
+  fitDistance,
+  fitMargin,
+  referenceEdge,
+  type ReferenceSizingProfile,
+} from "./menu-sizing";
 
 export type StageCube = Awaited<ReturnType<typeof createWordCube>> & { index: number };
 
@@ -30,6 +38,11 @@ export type CubeStage = {
     options?: (item: MenuBlockItem, index: number) => Partial<WordCubeOptions>,
   ): Promise<StageCube[]>;
   clear(): void;
+  /**
+   * Draw cubes at a reference profile's apparent size (doc/foreground-menus.md) instead of
+   * fitting the camera to whatever is shown; `undefined` returns to fitting.
+   */
+  setSizing(profile: ReferenceSizingProfile | undefined): void;
   /** Start drawing; `frame` runs for each cube every frame, before its traits update. */
   start(frame?: (cube: StageCube, seconds: number, dt: number) => void): void;
   stop(): void;
@@ -64,6 +77,7 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
   let frame = 0;
   let last = performance.now();
   let perFrame: (cube: StageCube, seconds: number, dt: number) => void = () => {};
+  let sizing: ReferenceSizingProfile | undefined;
 
   function clear(): void {
     generation++;
@@ -74,13 +88,31 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
     renderer.clear();
   }
 
-  /** Back the camera off until every position fits, with a cube's margin around them. */
+  /**
+   * Back the camera off until every position fits, with a cube's margin around them; or, with a
+   * sizing profile, to the distance that draws cubes at the reference's apparent size.
+   */
   function fit(): void {
-    const margin = 1.8;
-    const width = Math.max(0, ...shown.map(({ x }) => Math.abs(x))) * 2 + margin;
-    const height = Math.max(0, ...shown.map(({ y }) => Math.abs(y))) * 2 + margin;
-    const tan = Math.tan(THREE.MathUtils.degToRad(attractFieldOfView / 2));
-    camera.position.set(0, 0, Math.max(height / (2 * tan), width / (2 * tan * camera.aspect)) + 1);
+    const width = Math.max(0, ...shown.map(({ x }) => Math.abs(x))) * 2;
+    const height = Math.max(0, ...shown.map(({ y }) => Math.abs(y))) * 2;
+    const canvasWidth = Math.max(1, host.clientWidth);
+    const canvasHeight = Math.max(1, host.clientHeight);
+    const distance = sizing
+      ? distanceForEdge(
+          clampedEdge(
+            referenceEdge(sizing, { width: window.innerWidth, height: window.innerHeight }),
+            { width: canvasWidth, height: canvasHeight },
+            { width, height },
+          ),
+          canvasHeight,
+          attractFieldOfView,
+        )
+      : fitDistance(
+          { width: width + fitMargin, height: height + fitMargin },
+          camera.aspect,
+          attractFieldOfView,
+        );
+    camera.position.set(0, 0, distance);
     camera.lookAt(0, 0, 0);
   }
 
@@ -167,6 +199,10 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
       return cubes;
     },
     clear,
+    setSizing(profile) {
+      sizing = profile;
+      resize();
+    },
     start(frameHook) {
       perFrame = frameHook ?? (() => {});
       resize();
