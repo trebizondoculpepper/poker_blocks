@@ -541,6 +541,10 @@ Certified definitions are approved for normal play subject to ordinary unlock an
 
 Gameplay definitions resolve retention and reset explicitly, with declared inheritance. [The definition matrix](block-lifecycle-declarations.md) records run-retained ordinary cards, stage-retained Cloud, stage-reset Meat, round-reverting Gelato and separate generated/rack/opaque behavior. Lifetimes do not choose ownership, reset recipes do not reroll contents or refill uses, and scene disposal is not gameplay destruction.
 
+## Result-screen actions
+
+Stage-won Visit shop appears below the reward ledger only after all reward rows finish. Game over shows New run and Main menu below the run stats, never a shop. See [result-screen block menus](result-menus.md).
+
 ## Shop Continue presentation
 
 The shop Continue action is a fixed Paper word cube in the existing bottom-right exit area, not purchasable stock. See [Continue presentation](shop-continue-block.md).
