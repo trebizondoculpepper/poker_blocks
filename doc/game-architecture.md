@@ -1651,6 +1651,10 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 
 [The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.
 
+## Current offer eligibility
+
+[Shop eligibility](shop-eligibility.md) uses definition-owned weight curves and registered eligibility providers for generation, restoration and purchase validation, while preserving compatible already owned objects.
+
 ## Shop stock motion composition
 
 [Shop stock motion](shop-stock-motion.md) defines the shared beat floor, independent transform ownership, pose-preserving handoffs and registered input-state feedback. Motion never decides purchases or gates input.
