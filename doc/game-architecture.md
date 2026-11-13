@@ -89,7 +89,7 @@ When dragging a hand block starts, the structure's wobble slows to one-tenth of 
 
 The hand is rendered as a fixed overlay with its own camera. Only the structure uses the perspective board camera. After a block attaches, the board camera waits one second, then eases over two seconds to a distance calculated from the grid's bounding box, so the growing structure stays visible. The hand's size and position do not follow that camera move.
 
-All standard cubes currently have equal mass. The structure keeps a running sum of block grid positions and divides by the block count to find its true center of gravity after each attachment. The rotation pivot moves to that center while preserving the existing block positions. The structure gently oscillates on two axes around the pivot instead of spinning continuously. Dragging any placed block rotates the structure on horizontal and vertical axes; the oscillation continues around the new orientation. A click without dragging still toggles selection.
+The production rotation pivot is the geometric centroid: the structure keeps a running sum of block grid positions and divides by block count. This arithmetic center is not a physical center of mass when materials have different authored masses. [Physical mass and rocking](playfield-rocking.md) defines the shared mass capability and the target mass-dependent speed; a weighted pivot remains a separate experiment. The rotation pivot moves to that center while preserving the existing block positions. The structure gently oscillates on two axes around the pivot instead of spinning continuously. Dragging any placed block rotates the structure on horizontal and vertical axes; the oscillation continues around the new orientation. A click without dragging still toggles selection.
 
 ## Stage overlay and discard area
 
@@ -1601,6 +1601,10 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 
 [Profiler render-pass capability](profiler-render-passes.md) extends the automatic-profiler host contract for multi-pass appearances. Recipes declare registered production pipeline requirements; hosts own scoped targets, timing and disposal. Generic measurement code never branches on an optics/material identity, and all contributing passes are measured.
 
+## Release-status facet
+
+[Release status and catalogue access](release-status.md) defines certified/provisional admission and shared bench/inspection descriptors. Definitions bring registered availability behavior; generic code never checks a status trait as a flag. Lookup/restoration remains separate from new acquisition. This applies across object families and does not replace ordinary unlock or shop rules.
+
 ## Experimental design records
 
 Reproducible experiment briefs and measured outcomes live in [experiments](experiments/README.md). Their provisional parameters are not production rules. The [spatial-modifier brief](experiments/spatial-modifiers.md) separates packing, material mass and topology, and records the planned bench and evidence limits. Promote decisions into canonical rules and architecture before implementation.
@@ -1608,3 +1612,11 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Experimental pivot policies
 
 [The pivot-comparison experiment](experiments/pivot-comparison.md) specifies registered centroid and mass-weighted queries plus a Dev controller for switching on the same layout. This does not change the production centroid or couple pivot selection to rocking speed. Query data, configured policy and numeric presentation mechanics have separate owners.
+
+## Physical mass and rocking controller
+
+[Physical mass and rocking](playfield-rocking.md) defines authored density/volume recipes, pure snapshot-scoped mass queries, and controller-owned quiet/ramp/mass-rate envelopes. Real-material reference values and composite/fantasy assumptions are distinguished. Normal pivot selection remains the geometric centroid; #823 explores a separate weighted pivot.
+
+## Composable starting-deck builders
+
+[Deck builders](deck-builders.md) defines mode-composed builder definitions invoked through registered run setup. Ordered registered operations own template construction, material assignment, special-card creation and shuffle. Generation and restoration remain distinct; preserve existing generator semantics for old saves. The pivot experiment uses configuration of this shared capability, not a room-specific deck factory.
