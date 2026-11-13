@@ -1609,6 +1609,10 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 
 Reproducible experiment briefs and measured outcomes live in [experiments](experiments/README.md). Their provisional parameters are not production rules. The [spatial-modifier brief](experiments/spatial-modifiers.md) separates packing, material mass and topology, and records the planned bench and evidence limits. Promote decisions into canonical rules and architecture before implementation.
 
+## Experimental pivot policies
+
+[The pivot-comparison experiment](experiments/pivot-comparison.md) specifies registered centroid and mass-weighted queries plus a Dev controller for switching on the same layout. This does not change the production centroid or couple pivot selection to rocking speed. Query data, configured policy and numeric presentation mechanics have separate owners.
+
 ## Physical mass and rocking controller
 
 [Physical mass and rocking](playfield-rocking.md) defines authored density/volume recipes, pure snapshot-scoped mass queries, and controller-owned quiet/ramp/mass-rate envelopes. Real-material reference values and composite/fantasy assumptions are distinguished. Normal pivot selection remains the geometric centroid; #823 explores a separate weighted pivot.
@@ -1616,3 +1620,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Composable starting-deck builders
 
 [Deck builders](deck-builders.md) defines mode-composed builder definitions invoked through registered run setup. Ordered registered operations own template construction, material assignment, special-card creation and shuffle. Generation and restoration remain distinct; preserve existing generator semantics for old saves. The pivot experiment uses configuration of this shared capability, not a room-specific deck factory.
+
+## Provisional spatial-modifier trials
+
+[The experimental trial contract](experiments/spatial-modifiers.md#provisional-modifier-implementation-contract-814) defines registered snapshot queries, row contribution scope, provisional density/mass/diversity curves, dev controls and reproducibility. These are experiment-only targets, not certified normal-game modifiers. Implementations follow the release-status, physical-mass and deck-builder prerequisites.
