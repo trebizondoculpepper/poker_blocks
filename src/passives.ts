@@ -3,7 +3,7 @@ import type { QuerySnapshot } from "./context-queries";
 import {
   composeCatalogue,
   ordinaryCatalogue,
-  releaseStatusDescriptor,
+  releaseStatusInspection,
   type ReleaseStatusDeclaration,
 } from "./release-status";
 import type { ActivationConfig } from "./activation-pulse";
@@ -487,10 +487,11 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
         eventRules: definition.eventRules,
       },
       inspectable: inspectable(
-        // Its release status from the shared descriptor, as card inspection shows (#813).
-        `${definition.name} — ${definition.description}\nStatus: ${
-          releaseStatusDescriptor(definition.id, definition.releaseStatus).label
-        }`,
+        // Its public release-status lines, as card inspection shows (#813, #923).
+        [
+          `${definition.name} — ${definition.description}`,
+          ...releaseStatusInspection(definition.id, definition.releaseStatus),
+        ].join("\n"),
       ),
       ...(definition.shop ? { priced: { basePrice: definition.shop.basePrice } } : {}),
     },
