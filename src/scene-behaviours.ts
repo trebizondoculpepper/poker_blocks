@@ -7,8 +7,8 @@ import { blockTitle, type BlockTitles } from "./scene-traits/block-title";
  * `screen` marks the host with the scene in front, for styling and tests; `pausesBelow`
  * stops the scenes underneath a pop-up or menu taking input or updates; the HUD panel traits
  * show and hide one panel each; `dropTarget` and `dragSource` allow drops and pick-ups;
- * `shopStock` shows and hides the shop's stock; `gameOverScreen` shows the run's totals and
- * choices; `musicCue` plays a music cue on entering; `devManualBlockDestroyer` (testing only)
+ * `shopStock` shows and hides the shop's stock; `resultMenu` shows a result's information and,
+ * once its presentation has settled, its choices; `musicCue` plays a music cue on entering; `devManualBlockDestroyer` (testing only)
  * destroys a double-clicked table block.
  *
  * Each trait brings its own behaviour, so a scene composes the panels and permissions it
@@ -23,7 +23,7 @@ import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
 import { committedEventSounds } from "./scene-traits/committed-event-sounds";
 import type { ActionLog } from "./action-log";
 import { firstPlayPrompt, type FirstPlayTable } from "./scene-traits/first-play-prompt";
-import type { MenuCondition, SceneTraits } from "./game-modes";
+import type { DialogConfig, MenuCondition, SceneTraits } from "./game-modes";
 import type { DialogHandlers } from "./block-menu/block-menus";
 import type { PresentationClock } from "./presentation-clock";
 import type { AudioService } from "./audio-service";
@@ -39,6 +39,7 @@ import {
   type BlockDestroyerBoard,
 } from "./scene-traits/dev-manual-block-destroyer";
 import { SceneTraitRegistry } from "./scenes";
+import { Registry } from "./core/registry";
 import type { DeckView } from "./deck-view";
 import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
 import { devHudStyleAudition, hudStyle } from "./scene-traits/hud-style";
@@ -541,6 +542,82 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     enter: ({ services }, { backTo }) => services.devBlockDesigner.show(backTo),
     exit: ({ services }) => services.devBlockDesigner.hide(),
   });
+  /** Show a dialog's choices through the dialogs service; returns its removal. */
+  const mountDialog = (context: Context, config: DialogConfig): (() => void) =>
+    context.services.dialogs.add(
+      {
+        ...config,
+        // Choices whose `when` fails are left out altogether, as the text menus did.
+        items: config.items.filter(({ when }) => !when || menuConditions[when](context)),
+      },
+      {
+        onAction: (action) => context.services.overlays.choose(action),
+        availability: (item) =>
+          item.enabledWhen ? menuConditions[item.enabledWhen](context) : true,
+      },
+    );
+
+  /**
+   * Result screens' information, by provider name (doc/result-menus.md, "Reusable controllers
+   * and completion"): what a result menu shows above its choices.
+   */
+  const resultInformation = new Registry<{
+    show(context: Context): void;
+    hide(context: Context): void;
+  }>("result information");
+  resultInformation.register("runStats", {
+    show: ({ services }) =>
+      services.overlays.showGameOver(services.run.runStats(), services.run.seed()),
+    hide: ({ services }) => services.overlays.hideGameOver(),
+  });
+  /**
+   * When a result menu's choices may appear, by completion name: each calls `ready` once its
+   * presentation has settled and returns a cancel, so a scene that leaves first never mounts them.
+   */
+  const resultCompletions = new Registry<(context: Context, ready: () => void) => () => void>(
+    "result completion",
+  );
+  // The run's stats are written as the screen shows: they are ready at once.
+  resultCompletions.register("statsReady", (_context, ready) => {
+    ready();
+    return () => {};
+  });
+  /** Each result menu's live state, by its trait config. */
+  const resultMenus = new WeakMap<
+    object,
+    { ready: boolean; cancel: () => void; remove: (() => void) | null }
+  >();
+  const unmountResult = (config: object) => {
+    const state = resultMenus.get(config);
+    state?.remove?.();
+    if (state) state.remove = null;
+  };
+  behaviours.register("resultMenu", {
+    enter(context, config) {
+      resultInformation.get(config.information).show(context);
+      const state = { ready: false, cancel: () => {}, remove: null as (() => void) | null };
+      resultMenus.set(config, state);
+      state.cancel = resultCompletions.get(config.showAfter)(context, () => {
+        // Exactly once, and only while this entry is still the live one.
+        if (state.ready || resultMenus.get(config) !== state) return;
+        state.ready = true;
+        state.remove = mountDialog(context, config.dialog);
+      });
+    },
+    cover: (_context, config) => unmountResult(config),
+    resume(context, config) {
+      const state = resultMenus.get(config);
+      if (state?.ready && !state.remove) state.remove = mountDialog(context, config.dialog);
+    },
+    exit(context, config) {
+      const state = resultMenus.get(config);
+      state?.cancel();
+      unmountResult(config);
+      resultMenus.delete(config);
+      resultInformation.get(config.information).hide(context);
+    },
+  });
+
   // Each dialog is its own trait with its own data; all of them hand that data to the dialogs
   // service while their scene is on the stack, so none needs code of its own.
   for (const name of [
@@ -554,22 +631,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     const shown = new WeakMap<object, () => void>();
     const show = (context: Context, config: SceneTraits[typeof name]) => {
       shown.get(config)?.();
-      const { services } = context;
-      shown.set(
-        config,
-        // Choices whose `when` fails are left out altogether, as the text menus did.
-        services.dialogs.add(
-          {
-            ...config,
-            items: config.items.filter(({ when }) => !when || menuConditions[when](context)),
-          },
-          {
-            onAction: (action) => services.overlays.choose(action),
-            availability: (item) =>
-              item.enabledWhen ? menuConditions[item.enabledWhen](context) : true,
-          },
-        ),
-      );
+      shown.set(config, mountDialog(context, config));
     };
     behaviours.register(name, {
       enter: show,
@@ -617,12 +679,6 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit(context) {
       context.services.overlays.hideMenu();
     },
-  });
-  behaviours.register("gameOverScreen", {
-    enter({ services }, { items }) {
-      services.overlays.showGameOver(services.run.runStats(), items, services.run.seed());
-    },
-    exit: ({ services }) => services.overlays.hideGameOver(),
   });
   behaviours.register("stageWonScreen", {
     enter({ services }, { next }) {

@@ -180,7 +180,11 @@ export type SceneTraits = {
    * The game over screen is shown while this scene is in front: the run's totals, and one
    * button per item, each dispatching its id as a named action (#90).
    */
-  gameOverScreen: { items: readonly MenuItem[] };
+  /**
+   * A result screen (doc/result-menus.md): a registered information provider, and the dialog of
+   * choices shown below it once the named completion has settled (#949).
+   */
+  resultMenu: { information: string; showAfter: string; dialog: DialogConfig };
   /**
    * Entering this scene runs a music cue: an ordered list of registered music operations naming
    * plan entries and slots (#758; src/audio/music-controller.ts).
@@ -326,6 +330,8 @@ export type MenuBlockItem = {
   enabledWhen?: MenuCondition;
   /** Shown only while this registered condition holds, checked as the menu shows (#530). */
   when?: MenuCondition;
+  /** The sound choosing it plays; omitted, a click (#949). */
+  sfx?: SoundEffectId;
 };
 
 /** A dialog: its heading and its buttons, shown side by side. */
@@ -457,9 +463,17 @@ export const gameDialogs = {
   },
   gameOver: {
     title: "Game over",
+    // Below the run's stats on the result screen's readable panel (doc/result-menus.md).
+    presentation: { panel: "readable" },
+    focus: "newRun",
     items: [
       { label: "New run", action: "newRun", description: "Start a new run from the first stage." },
-      { label: "Main menu", action: "quitToTitle", description: "Go to the title screen." },
+      {
+        label: "Main menu",
+        action: "quitToTitle",
+        sfx: "ui.back",
+        description: "Go to the title screen.",
+      },
     ],
   },
 } satisfies Record<string, DialogConfig>;
@@ -654,11 +668,11 @@ export const sceneDefinitions = [
     name: "game-over",
     traits: {
       tableBackground: {},
-      gameOverScreen: {
-        items: [
-          { id: "newRun", label: "New Run" },
-          { id: "quitToTitle", label: "Main menu", sfx: "ui.back" },
-        ],
+      // The run's stats, then New run and Main menu below them once they are written (#949).
+      resultMenu: {
+        information: "runStats",
+        showAfter: "statsReady",
+        dialog: gameDialogs.gameOver,
       },
       musicCue: { operations: [{ op: "windDown" }] },
     },

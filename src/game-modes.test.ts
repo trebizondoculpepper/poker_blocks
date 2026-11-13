@@ -278,11 +278,10 @@ describe("game modes composed from traits", () => {
     expect(traitsOf("game", "game-over")).toEqual({
       screen: { kind: "game-over" },
       tableBackground: {},
-      gameOverScreen: {
-        items: [
-          { id: "newRun", label: "New Run" },
-          { id: "quitToTitle", label: "Main menu", sfx: "ui.back" },
-        ],
+      resultMenu: {
+        information: "runStats",
+        showAfter: "statsReady",
+        dialog: gameDialogs.gameOver,
       },
       musicCue: { operations: [{ op: "windDown" }] },
     });

@@ -58,7 +58,7 @@ export type Menus = {
   /** Close the title and settings screens, back to the game. */
   closeAll(): void;
   /** The run is lost: show how it went, with a button for each choice (#90). */
-  showGameOver(stats: RunStats, choices: readonly MenuChoice[], seed: number | null): void;
+  showGameOver(stats: RunStats, seed: number | null): void;
   hideGameOver(): void;
   /**
    * A stage is won: show "Stage Won" and count the reward rows in one by one, then offer
@@ -102,7 +102,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
        <div><dt>Highest scoring round</dt><dd data-run="bestRoundScore"></dd></div>
        <div><dt>Blocks played</dt><dd data-run="blocksPlayed"></dd></div>
      </dl>
-     <div class="menu-buttons" data-menu="game-over-choices"></div>
+     <div class="block-menu-host" data-menu="items"></div>
      <div class="menu-seed" data-menu="game-over-seed" hidden></div>`,
   );
 
@@ -271,35 +271,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     uncover(settingsScreen.root);
   }
 
-  /** A menu button: choosing it plays its sound and dispatches its id as an action. */
-  function choiceButton(choice: MenuChoice): HTMLButtonElement {
-    const { id, label, sfx, disabled } = choice;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.menu = id;
-    button.textContent = label;
-    disableWithHint(button, choice);
-    button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
-    button.addEventListener("click", () => {
-      if (disabled) return playSfx("action.denied");
-      playSfx(sfx ?? "ui.click");
-      callbacks.onAction(id);
-    });
-    return button;
-  }
-
-  /**
-   * A disabled item stays visible and focusable, greyed out, with its hint on hover and for
-   * screen readers (`aria-disabled`, not `disabled`, so the hint still shows).
-   */
-  function disableWithHint(
-    button: HTMLButtonElement,
-    { disabled, disabledHint }: Pick<MenuChoice, "disabled" | "disabledHint">,
-  ): void {
-    button.setAttribute("aria-disabled", String(Boolean(disabled)));
-    button.title = disabled ? (disabledHint ?? "") : "";
-  }
-
   /** The pause menu: one button per choice, each dispatching its id as an action. */
   function showMenu(label: string): void {
     pauseMenu.root.setAttribute("aria-label", label);
@@ -322,7 +293,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   for (const button of host.querySelectorAll<HTMLButtonElement>(".menu-panel button")) {
     button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
   }
-  const gameOverChoices = find<HTMLDivElement>(gameOver.panel, "game-over-choices");
   const gameOverSeed = find<HTMLDivElement>(gameOver.panel, "game-over-seed");
 
   /** The game over screen: the run's totals, and one button per choice. */
@@ -349,15 +319,11 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     into.append(label, copy);
   }
 
-  function showGameOver(
-    stats: RunStats,
-    gameOverItems: readonly MenuChoice[],
-    seed: number | null,
-  ): void {
+  /** The game over screen: the run's totals and seed; its choices are a block menu (#949). */
+  function showGameOver(stats: RunStats, seed: number | null): void {
     for (const cell of gameOver.panel.querySelectorAll<HTMLElement>("[data-run]")) {
       cell.textContent = String(stats[cell.dataset.run as keyof RunStats]);
     }
-    gameOverChoices.replaceChildren(...gameOverItems.map(choiceButton));
     showSeed(gameOverSeed, seed);
     open(gameOver.root);
   }

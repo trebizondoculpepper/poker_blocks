@@ -1,3 +1,4 @@
+import type { SoundEffectId } from "./audio/sfx-registry";
 import * as THREE from "three";
 import { Block } from "./core/block";
 import { writingMaterial, type WritingOptions } from "./letter-block";
@@ -13,6 +14,8 @@ export type WordCubeOptions = WritingOptions & {
   id: string;
   action: string;
   enabled?: boolean;
+  /** The sound choosing it plays; omitted, a click. */
+  sfx?: SoundEffectId;
   description?: string;
   /** Why it is unavailable, when no live reason comes with `input.enabled` (#462). */
   disabledReason?: string;
@@ -38,7 +41,11 @@ export async function createWordCube(text: string, options: WordCubeOptions) {
   const object = new THREE.Group();
   object.add(visual.object);
   const block = new Block(options.id);
-  block.add(menuAction, { action: options.action, enabled: options.enabled ?? true });
+  block.add(menuAction, {
+    action: options.action,
+    enabled: options.enabled ?? true,
+    ...(options.sfx ? { sfx: options.sfx } : {}),
+  });
   block.add(interactionFeedback, options.feedback);
   block.add(disabledAppearance);
   block.add(inspectableTrait, {

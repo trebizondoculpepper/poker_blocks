@@ -48,7 +48,7 @@ export type Overlays = {
   showSettings(): void;
   hideSettings(): void;
   /** The game over screen, shown by the game over scene's `gameOverScreen` trait. */
-  showGameOver(stats: RunStats, choices: readonly MenuChoice[], seed: number | null): void;
+  showGameOver(stats: RunStats, seed: number | null): void;
   hideGameOver(): void;
   /**
    * The stage-won pop-up, shown by the stage-won scene's `stageWonScreen` trait (#91). It
@@ -155,7 +155,7 @@ export function createOverlays(
     hideMenu: () => menus.hideMenu(),
     showSettings: () => menus.showSettings(),
     hideSettings: () => menus.hideSettings(),
-    showGameOver: (stats, choices, seed) => menus.showGameOver(stats, choices, seed),
+    showGameOver: (stats, seed) => menus.showGameOver(stats, seed),
     hideGameOver: () => menus.hideGameOver(),
     showStageWon: (reward, next) => menus.showStageWon(reward, next),
     hideStageWon: () => menus.hideStageWon(),

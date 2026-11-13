@@ -702,6 +702,11 @@ body,
   text-shadow: 0 1px 3px #000c;
 }
 
+/* On a readable panel, leave room for the inspection caption under the cubes (#949). */
+.block-menu-host[data-panel="readable"] {
+  margin-bottom: 1.8em;
+}
+
 /* Its height comes from the cube stage's sizing profile (src/block-menu/cube-stage.ts). */
 /* Nor a full-screen wash: the scene underneath stays in view (frozen, under pause). */
 .menu-overlay:has(.block-menu-host[data-panel="none"])::before {
