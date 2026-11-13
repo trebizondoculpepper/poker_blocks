@@ -39,6 +39,7 @@ import {
 } from "./autorun";
 import { createGpuTimer } from "./gpu-timer";
 import { createHostTracker } from "./host-tracker";
+import { describePipeline, type ProfilingPipeline } from "./pipelines";
 import { profilerReport, type ProfilerReport } from "./report";
 import {
   createProfilerRunner,
@@ -162,7 +163,7 @@ export function createProfilerRoom(
       <div class="profiler-room-stage" data-part="stage"></div>
       <section class="profiler-room-report" data-part="report" aria-live="polite"></section>
       <table class="profiler-room-results">
-        <thead><tr><th>Case</th><th>Family</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Frame ms (p95), largest</th><th>Calls</th><th>Triangles</th><th>Create ms</th><th>Leak</th></tr></thead>
+        <thead><tr><th>Case</th><th>Family</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Frame ms (p95), largest</th><th>Calls</th><th>Triangles</th><th>Create ms</th><th>Passes</th><th>Leak</th></tr></thead>
         <tbody data-part="results"></tbody>
       </table>
     </div>`;
@@ -286,6 +287,13 @@ export function createProfilerRoom(
               .map(({ creation }) => ms(creation.build + creation.firstFrame))
               .join(" / "),
           ),
+          // The passes every frame rendered through (#764), and why no relative values if none.
+          cell(
+            [
+              describePipeline(result.pipeline.passes),
+              ...(result.baselineUnavailable ? [`no baseline: ${result.baselineUnavailable}`] : []),
+            ].join("; "),
+          ),
           cell(
             result.leaked.geometries || result.leaked.textures
               ? `${result.leaked.geometries}g ${result.leaked.textures}t`
@@ -306,11 +314,24 @@ export function createProfilerRoom(
     // The case's own host, as a run would draw it (#712), undone when the preview ends.
     // Undone exactly once: by this preview ending, or by a run starting while its factory is
     // still building, whichever comes first (#720 review).
-    const undoHost = previewHostTracker.track(
-      runner.prepareHost(profilingCases.get(id).host ?? defaultProfilingHost),
-    );
+    const undoLights = runner.prepareHost(profilingCases.get(id).host ?? defaultProfilingHost);
+    // Its own pipeline too, so a capture look shows current capture data (#764); disposed with
+    // the host, whichever way the preview ends.
+    let pipeline: ProfilingPipeline | null = null;
+    const undoHost = previewHostTracker.track(() => {
+      pipeline?.dispose();
+      pipeline = null;
+      undoLights();
+    });
     let one: ProfiledObject;
     try {
+      const built = await runner.preparePipeline(profilingCases.get(id));
+      if (mine !== previewToken || controller) {
+        built.dispose();
+        undoHost();
+        return;
+      }
+      pipeline = built;
       one = await profilingCases.get(id).create({ seed: 1, phase });
     } catch (error) {
       undoHost();
@@ -327,7 +348,7 @@ export function createProfilerRoom(
     }
     // A preview still running is replaced: taken off and freed first, never orphaned (#653 review).
     if (activePreview) endPreview(activePreview);
-    runner.scene.add(one.object);
+    runner.collection.add(one.object);
     activePreview = one;
     runner.camera.position.set(0, 0, 5);
     runner.camera.lookAt(0, 0, 0);
@@ -337,7 +358,7 @@ export function createProfilerRoom(
     for (let step = 0; step < previewFrames; step++) {
       if (mine !== previewToken || controller) break;
       one.update?.(1 / 60);
-      renderer.render(runner.scene, runner.camera);
+      pipeline?.render({ delta: 1 / 60, reducedMotion: false });
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
     endPreview(one);
@@ -384,7 +405,7 @@ export function createProfilerRoom(
 
   /**
    * Measure cases once, through the runner: shared by the manual path and the trait's automatic
-   * sweep. Resolves with the version-2 record; a cancel resolves with the partial record.
+   * sweep. Resolves with the version-3 record; a cancel resolves with the partial record.
    */
   async function execute(
     chosen: readonly (readonly [string, ProfilingCase])[],

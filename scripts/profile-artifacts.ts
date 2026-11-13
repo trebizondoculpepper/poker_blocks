@@ -1,7 +1,7 @@
 /**
  * The one-command profiler run's artifacts (#734; doc/automatic-profiling.md, "Automatic report
  * and entry points"): a presentation CSV and a self-contained HTML summary, both built from the
- * same version-2 record and the shared report the room shows. Pure, so it is tested here.
+ * same version-3 record and the shared report the room shows. Pure, so it is tested here.
  */
 import type { ProfilerExport } from "../src/tools/profiler/export.ts";
 import { profilerReport, type ProfilerReport } from "../src/tools/profiler/report.ts";
@@ -23,6 +23,7 @@ export function reportCsv(record: ProfilerExport): string {
     "phase",
     "family",
     "host",
+    "pipeline",
     "unit",
     "unit_size",
     "count",
@@ -42,6 +43,7 @@ export function reportCsv(record: ProfilerExport): string {
         row.phase ?? "",
         row.family,
         row.host,
+        row.pipeline,
         row.unit.kind,
         row.unit.size,
         count,
@@ -83,7 +85,7 @@ export function reportHtml(record: ProfilerExport, provenance: RunProvenance): s
   const rows = report.rows
     .map(
       (row) =>
-        `<tr><td>${escape(row.phase ? `${row.label} (${row.phase})` : row.label)}</td><td>${escape(row.family)}</td><td>${escape(row.host)}</td><td>${escape(`${row.unit.kind} ×${row.unit.size}`)}</td><td>${row.counts.join(" / ")}</td><td>${row.gpu.map(ms).join(" / ")}</td><td>${row.cpu.map(ms).join(" / ")}</td><td>${row.calls.join(" / ")}</td><td>${row.triangles.join(" / ")}</td><td>${caseNotes(row)}</td></tr>`,
+        `<tr><td>${escape(row.phase ? `${row.label} (${row.phase})` : row.label)}</td><td>${escape(row.family)}</td><td>${escape(row.host)}</td><td>${escape(row.pipeline)}</td><td>${escape(`${row.unit.kind} ×${row.unit.size}`)}</td><td>${row.counts.join(" / ")}</td><td>${row.gpu.map(ms).join(" / ")}</td><td>${row.cpu.map(ms).join(" / ")}</td><td>${row.calls.join(" / ")}</td><td>${row.triangles.join(" / ")}</td><td>${caseNotes(row)}</td></tr>`,
     )
     .join("");
   return `<!doctype html>
@@ -103,7 +105,7 @@ table{border-collapse:collapse;width:100%;font-size:12px}th,td{border-bottom:1px
 ${rankings}
 <h2>Growth by case</h2><ul>${report.rows.map(({ growthText }) => `<li>${escape(growthText)}</li>`).join("")}</ul>
 <h2>Every case</h2>
-<table><thead><tr><th>Case</th><th>Family</th><th>Host</th><th>Unit</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Calls</th><th>Triangles</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table>
+<table><thead><tr><th>Case</th><th>Family</th><th>Host</th><th>Pipeline</th><th>Unit</th><th>Counts</th><th>GPU ms</th><th>CPU ms</th><th>Calls</th><th>Triangles</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table>
 </body></html>
 `;
 }
@@ -113,6 +115,7 @@ function caseNotes(row: ProfilerReport["rows"][number]): string {
   return [
     ...(row.invalid.some(Boolean) ? ["invalid set"] : []),
     ...(row.leaked ? ["resources left after disposal"] : []),
+    ...(row.baselineUnavailable ? [`no matched baseline: ${row.baselineUnavailable}`] : []),
   ].join("; ");
 }
 
