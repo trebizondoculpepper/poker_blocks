@@ -49,4 +49,16 @@ describe("release-status declarations (#812)", () => {
     });
     expect(ids(ordinaryPassives())).not.toContain("test.trial-passive");
   });
+
+  it("names a card's release status in its inspection, from the shared descriptor (#813)", async () => {
+    const { inspectBlock } = await import("./traits/inspectable");
+    const { standardDeck } = await import("./cards");
+    const { getMaterialDefinition, withMaterial } = await import("./materials");
+    const { releaseStatusDescriptor } = await import("./release-status");
+    const wood = withMaterial(standardDeck[0]!, getMaterialDefinition("wood"));
+    expect(inspectBlock(wood)!.split("\n")[1]).toBe("Status: Certified");
+    const vent = withMaterial(standardDeck[0]!, getMaterialDefinition("airVent" as never));
+    expect(inspectBlock(vent)).toContain("Status: Provisional");
+    expect(releaseStatusDescriptor("wood", { certified: {} }).label).toBe("Certified");
+  });
 });

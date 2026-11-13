@@ -149,3 +149,18 @@
     border-right: 0;
   }
 }
+.object-browser-status {
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+.object-browser-status-line {
+  margin: 0 0 10px;
+  color: #a8d8c9;
+}
+.object-browser-status-line[hidden] {
+  display: none;
+}
