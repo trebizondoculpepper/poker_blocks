@@ -15,6 +15,7 @@ import type { HandlerConfig } from "./event-rules";
 import { passiveDefinitions, type PassiveDefinition } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
 import "./packing-density";
+import "./field-mass";
 
 /** A registered trial curve: its factor for a value, and what's wrong with its parameters. */
 export type ScoreCurve = {
@@ -27,6 +28,7 @@ const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const finite = (...values: unknown[]) => values.every((value) => Number.isFinite(value));
 
 type RampParams = { maximum: number; start: number };
+
 const rampProblems = ({ maximum, start }: RampParams) =>
   !finite(maximum, start) || maximum < 1 || !(start > 0 && start < 1)
     ? ["needs a finite maximum ≥ 1 and a start strictly between 0 and 1"]
@@ -49,6 +51,39 @@ scoreCurves.register("sparseRamp", {
   validate: (raw) => rampProblems(raw as RampParams),
 });
 
+type HeavyParams = { maximum: number; coefficient: number; referenceKg: number };
+type LightParams = { maximum: number; referenceKg: number };
+
+// Heavy: min(K, 1 + c·ln(1 + m/m0)), logarithmic so more mass gives diminishing gains.
+scoreCurves.register("heavyLog", {
+  factor: (m, raw) => {
+    const { maximum, coefficient, referenceKg } = raw as HeavyParams;
+    return Math.min(maximum, 1 + coefficient * Math.log(1 + m / referenceKg));
+  },
+  validate: (raw) => {
+    const { maximum, coefficient, referenceKg } = raw as HeavyParams;
+    return finite(maximum, coefficient, referenceKg) &&
+      maximum >= 1 &&
+      coefficient > 0 &&
+      referenceKg > 0
+      ? []
+      : ["needs a finite maximum ≥ 1, a positive coefficient and a positive reference mass"];
+  },
+});
+// Light: 1 + (K−1)/(1 + m/m0), bounded, approaching ×1 for large mass, no singularity.
+scoreCurves.register("lightInverse", {
+  factor: (m, raw) => {
+    const { maximum, referenceKg } = raw as LightParams;
+    return 1 + (maximum - 1) / (1 + m / referenceKg);
+  },
+  validate: (raw) => {
+    const { maximum, referenceKg } = raw as LightParams;
+    return finite(maximum, referenceKg) && maximum >= 1 && referenceKg > 0
+      ? []
+      : ["needs a finite maximum ≥ 1 and a positive reference mass"];
+  },
+});
+
 /** A query-driven row multiplier's configuration. */
 export type QueryFactorConfig = {
   query: string;
@@ -63,7 +98,10 @@ ruleHandlers.registerEffect<QueryFactorConfig, unknown>(
   "multiply-line-score-by-query",
   (config, _selected, frame) => {
     const snapshot = frame.event.score?.snapshot;
-    const result = snapshot ? query<Record<string, number>>(config.query, snapshot) : null;
+    // Every query gets the row's scored subset as its scope; one that measures the whole field
+    // ignores it (doc/experiments/spatial-modifiers.md, "Scoring scope and frequency").
+    const scope = { ids: frame.event.score?.scoredIds ?? [] };
+    const result = snapshot ? query<Record<string, number>>(config.query, snapshot, scope) : null;
     const factor =
       result?.available === true
         ? scoreCurves.get(config.curve).factor(result.value[config.value]!, config.params)
@@ -87,16 +125,20 @@ export const packingTrials = {
   sparse: { maximum: 10, start: 0.2 },
 } as const;
 
-/** A provisional row-multiplier passive driven by the packing query, validated as composed. */
-function packingTrial(
+/** The exported initial mass trial parameters (designer suggestions, not balance). */
+export const massTrials = {
+  heavy: { maximum: 10, coefficient: 3, referenceKg: 1 },
+  light: { maximum: 10, referenceKg: 0.2 },
+} as const;
+
+/** A provisional row-multiplier passive driven by a context query, validated as composed. */
+function queryTrial(
   id: string,
   name: string,
   symbol: string,
   description: string,
-  curve: string,
-  params: RampParams,
+  factor: QueryFactorConfig,
 ): PassiveDefinition {
-  const factor: QueryFactorConfig = { query: "packingDensity", value: "density", curve, params };
   const problems = validateQueryFactor(id, factor);
   if (problems.length) throw new Error(problems.join("\n"));
   const effect: HandlerConfig = { id: "multiply-line-score-by-query", config: factor };
@@ -121,21 +163,48 @@ function packingTrial(
 }
 
 for (const definition of [
-  packingTrial(
+  queryTrial(
     "trial-dense-packing",
     "Dense (trial)",
     "▣",
     "Multiplies each scored row by up to ×10 as the field's packing density rises past 70%. Provisional trial.",
-    "denseRamp",
-    packingTrials.dense,
+    { query: "packingDensity", value: "density", curve: "denseRamp", params: packingTrials.dense },
   ),
-  packingTrial(
+  queryTrial(
     "trial-sparse-packing",
     "Sparse (trial)",
     "⬚",
     "Multiplies each scored row by up to ×10 as the field's packing density falls below 20%. Provisional trial.",
-    "sparseRamp",
-    packingTrials.sparse,
+    {
+      query: "packingDensity",
+      value: "density",
+      curve: "sparseRamp",
+      params: packingTrials.sparse,
+    },
   ),
+  // Heavy and light (#818), each on the row's scored subset, by mean and by total mass.
+  ...(
+    [
+      { value: "meanKg", label: "mean" },
+      { value: "totalKg", label: "total" },
+    ] as const
+  ).flatMap(({ value, label }) => {
+    return [
+      queryTrial(
+        `trial-heavy-${label}-mass`,
+        `Heavy, ${label} mass (trial)`,
+        "⬇",
+        `Multiplies each scored row by up to ×10, more for a heavier ${label} mass of its scored blocks. Provisional trial.`,
+        { query: "scoredSubsetMass", value, curve: "heavyLog", params: massTrials.heavy },
+      ),
+      queryTrial(
+        `trial-light-${label}-mass`,
+        `Light, ${label} mass (trial)`,
+        "⬆",
+        `Multiplies each scored row by up to ×10, more for a lighter ${label} mass of its scored blocks. Provisional trial.`,
+        { query: "scoredSubsetMass", value, curve: "lightInverse", params: massTrials.light },
+      ),
+    ];
+  }),
 ])
   passiveDefinitions.register(definition.id, definition);
