@@ -20,6 +20,7 @@ import {
   type SavedActiveObject,
 } from "./active-objects";
 import { createCard, ranks, suits, type CardBlock } from "./cards";
+import { cloneCodecs } from "./clonable";
 import { faces } from "./traits/attachable";
 import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
 
@@ -72,6 +73,18 @@ activeComponentCodecs.register("opaqueContainer", {
       },
     };
   },
+});
+
+// An exact clone holds its own copy of the payload under a fresh ID (#929; doc/clone-reset.md,
+// "Exact cloning"): the same hidden content and state, never an alias and never a reroll. An
+// invalid payload refuses the clone before any ID is allocated.
+cloneCodecs.register("opaqueContainer", (value, { allocate, ids }) => {
+  const { payload } = value as { payload: StoredPayload };
+  // Validated as on load, against no particular wrapper (the clone's ID is not yet allocated).
+  materializePayload("", payload);
+  const id = allocate();
+  ids.set(payload.id, id);
+  return { payload: { ...structuredClone(payload), id } };
 });
 
 activeDefinitions.register("playableCard", {
