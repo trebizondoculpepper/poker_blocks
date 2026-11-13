@@ -540,3 +540,7 @@ Certified definitions are approved for normal play subject to ordinary unlock an
 ## Explicit gameplay lifecycle declarations (#915)
 
 Gameplay definitions resolve retention and reset explicitly, with declared inheritance. [The definition matrix](block-lifecycle-declarations.md) records run-retained ordinary cards, stage-retained Cloud, stage-reset Meat, round-reverting Gelato and separate generated/rack/opaque behavior. Lifetimes do not choose ownership, reset recipes do not reroll contents or refill uses, and scene disposal is not gameplay destruction.
+
+## Shop Continue presentation
+
+The shop Continue action is a fixed Paper word cube in the existing bottom-right exit area, not purchasable stock. See [Continue presentation](shop-continue-block.md).
