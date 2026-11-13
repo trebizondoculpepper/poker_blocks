@@ -14,6 +14,8 @@
 import type { IdentityTrait } from "../cards";
 import { Registry } from "../core/registry";
 import { rankGlyph } from "./rank-faces";
+import type { AcquiredBonusDescriptor } from "../modifier-registers";
+import { paintAcquiredBonus } from "./acquired-bonus-label";
 
 /** The ink tones artwork can ask for; each material's appearance gives each one a colour. */
 export type InkTone = "red" | "black";
@@ -39,6 +41,11 @@ export type CardFaceOptions = {
    * it (`MaterialDefinition.cardFace`). Omitted: `rankAndSuit`.
    */
   face?: string;
+  /**
+   * The card's acquired bonus (#432), from `acquiredBonusDescriptor`: printed bottom-right over
+   * whatever the card face paints, in its suit's tone. Omitted or null: no label.
+   */
+  bonus?: AcquiredBonusDescriptor | null;
 };
 
 /** Paints a card's identity on a face; registered by name in `cardFaces`. */
@@ -69,8 +76,15 @@ cardFaces.register("concealed", () => () => {});
 
 /** A card's face art, painted by its card face (rank above suit unless the options say otherwise). */
 export function cardFaceArt(identity: IdentityTrait, options: CardFaceOptions = {}): FaceArt {
+  const paint = cardFaces.get(options.face ?? "rankAndSuit")(identity, options);
+  const bonus = options.bonus;
   return {
     seed: `${identity.rank}-${identity.suit.name}`,
-    paint: cardFaces.get(options.face ?? "rankAndSuit")(identity, options),
+    paint: bonus
+      ? (g, pen) => {
+          paint(g, pen);
+          paintAcquiredBonus(g, pen, identity.suit.tone, bonus);
+        }
+      : paint,
   };
 }

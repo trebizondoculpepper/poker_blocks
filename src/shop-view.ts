@@ -1,3 +1,4 @@
+import { acquiredBonusDescriptor } from "./modifier-registers";
 import { cardFaceArt } from "./visual/face-art";
 import { cardLook } from "./card-look";
 import { createScatterPlacer } from "./shop-scatter";
@@ -105,7 +106,10 @@ function passiveCube(block: PassiveBlock): OfferCube {
 function cardCube(block: CardBlock): OfferCube {
   const look = cardLook(block);
   const appearance = createBlockAppearance(
-    cardFaceArt(block.traits.identity, { face: look.cardFace }),
+    cardFaceArt(block.traits.identity, {
+      face: look.cardFace,
+      bonus: acquiredBonusDescriptor(block),
+    }),
     look,
     1.35,
   );
