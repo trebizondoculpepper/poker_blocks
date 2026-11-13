@@ -53,6 +53,26 @@ describe("cloning a container's nested payload (#929)", () => {
     expect(ids.count()).toBe(0);
   });
 
+  it("refuses a payload that shares its wrapper's ID", () => {
+    const ids = counter();
+    expect(() => cloneCard(devOpaqueContainer("box", king("box")), ids.allocate)).toThrow(
+      /container's ID/,
+    );
+    expect(ids.count()).toBe(0);
+  });
+
+  it("allocates nothing when a later trait cannot be cloned", () => {
+    const source = devOpaqueContainer("box", king("inside"));
+    const odd = {
+      ...source,
+      // A copied component holding a non-plain object: refused by its codec.
+      traits: { ...source.traits, modifiers: new Map() },
+    } as unknown as typeof source;
+    const ids = counter();
+    expect(() => cloneCard(odd, ids.allocate)).toThrow();
+    expect(ids.count()).toBe(0);
+  });
+
   it("reset-clones through the reset facet, keeping the fixed payload", () => {
     const source = devOpaqueContainer("box", king("inside"));
     const state = { hand: [source], deck: [], discardPile: [], field: [] } as unknown as GameState;

@@ -26,7 +26,12 @@ import { Registry } from "./core/registry";
  */
 export type CloneCodec = (
   value: unknown,
-  context: { allocate: () => string; ids: Map<string, string> },
+  context: {
+    allocate: () => string;
+    ids: Map<string, string>;
+    /** The source card's own ID, so a nested instance can be checked against it. */
+    sourceId: string;
+  },
 ) => unknown;
 
 export const cloneCodecs = new Registry<CloneCodec>("clone codec");
@@ -100,10 +105,20 @@ export function cloneCard(card: CardBlock, allocate: () => string): CloneResult 
     if (!cloneCodecs.has(name)) throw new UnsupportedCloneComponent(`trait "${name}"`);
     return [name, cloneCodecs.get(name), value] as const;
   });
-  const ids = new Map<string, string>();
-  const traits = Object.fromEntries(
-    plan.map(([name, codec, value]) => [name, codec(value, { allocate, ids })]),
-  );
+  const run = (use: () => string) => {
+    const ids = new Map<string, string>();
+    const traits = Object.fromEntries(
+      plan.map(([name, codec, value]) => [
+        name,
+        codec(value, { allocate: use, ids, sourceId: card.id }),
+      ]),
+    );
+    return { ids, traits };
+  };
+  // Every codec runs once against a probe first, so any that would throw does so before a real
+  // ID is allocated, whatever order the traits come in (#929 review). Codecs are pure.
+  run(() => "clone-probe");
+  const { ids, traits } = run(allocate);
   const id = allocate();
   ids.set(card.id, id);
   return { clone: { id, traits: traits as CardBlock["traits"] }, ids };
