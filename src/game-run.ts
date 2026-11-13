@@ -128,6 +128,8 @@ export class GameRun {
   private runStats: RunStats = emptyRunStats;
   private readonly passiveEvents = new PassiveEventQueue();
   private scoredLines: PassiveScoredLine[] = [];
+  /** The field as the last play scored it, before any after-score step changed it (#904). */
+  private scoringField: GameState["field"] = [];
   /** The rules that fired during the last discard, in the order they resolved (#81). */
   private discardActivations: RuleActivation[] = [];
   private discardEvents: readonly GameEvent[] = [];
@@ -409,6 +411,11 @@ export class GameRun {
   }
 
   /** Final results from the last play, shared by the stage total and presentation. */
+  /** The field the last play scored, captured before its after-score steps (#904). */
+  get lastScoringField(): GameState["field"] {
+    return this.scoringField;
+  }
+
   get lastScoredLines(): readonly PassiveScoredLine[] {
     return this.scoredLines;
   }
@@ -853,6 +860,7 @@ export class GameRun {
     //    total applied once.
     // Each committed line's activations numbered under this action, so a line scored again by
     // a later play gets new IDs (#858 review).
+    this.scoringField = this.currentState.field;
     this.scoredLines = scoreFieldWithPassives(
       this.currentState.field,
       this.currentState.passiveRack,

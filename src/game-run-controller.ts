@@ -1,3 +1,5 @@
+import type { GameState } from "./game-state";
+import type { PassiveScoredLine } from "./passive-effects";
 import { blockName } from "./block-presentation";
 import { runInventory, type InventoryRecord } from "./run-inventory";
 import type { DeckBuilderStep } from "./deck-builder";
@@ -148,6 +150,16 @@ export type GameRunController = {
   shopStock(): readonly ShopOffer[];
   /** The run's deck, for the read-only deck view (#175). */
   deckBlocks(): readonly CardBlock[];
+  /**
+   * The committed field and round, read-only, for snapshot-scoped measurement (#904). The state is
+   * immutable: a reader holds the version it read, never a live reference into a later action.
+   */
+  committedState(): Pick<GameState, "field" | "round">;
+  /**
+   * What the last committed play scored (#904): the field as it was scored, before after-score
+   * steps changed it, and its lines with the activations actually applied.
+   */
+  lastScoring(): { field: GameState["field"]; lines: readonly PassiveScoredLine[] };
   /** Every live card in the run and where it is (#472): a query, never a second catalogue. */
   inventory(): readonly InventoryRecord[];
   /** The won stage's paid rewards, which the stage-won pop-up shows; null before payment. */
@@ -851,6 +863,8 @@ export function createGameRunController<Context>(options: {
     offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),
     shopStock: () => game.state.shopStock ?? [],
     deckBlocks: () => game.state.deck,
+    committedState: () => game.state,
+    lastScoring: () => ({ field: game.lastScoringField, lines: game.lastScoredLines }),
     inventory: () => runInventory(game.state),
     runStats: () => game.stats,
     // A run with no rack limit shows exactly the passives it holds.

@@ -166,6 +166,11 @@ function recordingHost() {
         dispose: () => undefined,
       },
       run: {
+        committedState: () => ({
+          field: [],
+          round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
+        }),
+        lastScoring: () => ({ field: [], lines: [] }),
         hasSave: () => false,
         rackCapacity: () => 5,
         seed: () => 4242,

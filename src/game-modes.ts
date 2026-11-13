@@ -2,6 +2,7 @@ import type { BlockTitleConfig } from "./scene-traits/block-title";
 import type { SpringAnchorSettings } from "./traits/spring-anchor";
 import type { DragSourceConfig, DropTargetConfig } from "./drag-drop";
 import type { DevDropInspectorConfig } from "./scene-traits/dev-drop-inspector";
+import type { DevTrialReadoutsConfig } from "./scene-traits/dev-trial-readouts";
 import type { ActionHistoryConfig } from "./scene-traits/action-history";
 import type { FirstPlayPromptConfig } from "./scene-traits/first-play-prompt";
 import type { DevHudStyleAuditionConfig, HudStyleConfig } from "./scene-traits/hud-style";
@@ -144,6 +145,8 @@ export type SceneTraits = {
   devDialogRoom: DevDialogRoomConfig;
   /** Developer tool: a live panel of drag-and-drop state and input decisions (dev10). */
   devDropInspector: DevDropInspectorConfig;
+  /** Developer tool: live trial measurements (#904); composed by the trial room (#905). */
+  devTrialReadouts: DevTrialReadoutsConfig;
   /**
    * Record interaction events and the game's callbacks while the scene shows, with a button that
    * copies the last 30 seconds of them with timestamps (dev10 for now; any mode can compose it).
