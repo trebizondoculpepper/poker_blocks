@@ -1,3 +1,5 @@
+import { playSfx } from "../audio/sfx";
+import { createPreviewRotation } from "./preview-rotation";
 import { cardFaceArt, type CardFaceOptions } from "../visual/face-art";
 import { rankFaceDefinitions } from "../visual/rank-faces";
 /**
@@ -186,6 +188,10 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       <p class="object-browser-id" data-browser="id"></p>
       <p class="object-browser-note" data-browser="note"></p>
       <div class="object-browser-preview" data-browser="preview"></div>
+      <div class="object-browser-view" data-browser="view">
+        <button type="button" data-browser="auto">Auto rotate</button>
+        <button type="button" data-browser="reset">Reset view</button>
+      </div>
       <table class="object-browser-properties"><tbody data-browser="properties"></tbody></table>
     </article>`;
   host.append(root);
@@ -209,11 +215,21 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
   let shown: { object: THREE.Object3D; dispose(): void } | null = null;
   let frame = 0;
 
+  // The preview's pose (#746): turntable until dragged, then wherever the drag leaves it. It
+  // belongs to the browser, not the entry, so switching entries keeps the view.
+  const rotation = createPreviewRotation(
+    {},
+    { turn: () => playSfx("view.rotate"), click: () => playSfx("ui.click") },
+  );
+  part("auto").addEventListener("click", () => rotation.autoRotate());
+  part("reset").addEventListener("click", () => rotation.reset());
+  let unmountRotation: (() => void) | null = null;
+  let lastTime: number | null = null;
+
   function spin(time: number): void {
-    if (shown) {
-      shown.object.rotation.y = time / 1600;
-      shown.object.rotation.x = -0.35 + Math.sin(time / 2300) * 0.15;
-    }
+    const seconds = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
+    rotation.update(seconds, shown?.object ?? null);
     renderer.render(scene, camera);
     frame = requestAnimationFrame(spin);
   }
@@ -225,6 +241,7 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       shown = null;
     }
     part("preview").hidden = !object.preview;
+    part("view").hidden = !object.preview;
     if (!object.preview) return;
     shown = object.preview(2.2);
     scene.add(shown.object);
@@ -302,15 +319,22 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       root.hidden = false;
       window.addEventListener("hashchange", route);
       route();
+      unmountRotation?.();
+      unmountRotation = rotation.mount(part("preview"));
+      lastTime = null;
       frame = requestAnimationFrame(spin);
     },
     hide() {
       root.hidden = true;
       window.removeEventListener("hashchange", route);
       cancelAnimationFrame(frame);
+      unmountRotation?.();
+      unmountRotation = null;
     },
     dispose() {
       cancelAnimationFrame(frame);
+      unmountRotation?.();
+      unmountRotation = null;
       window.removeEventListener("hashchange", route);
       shown?.dispose();
       environment.dispose();
