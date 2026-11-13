@@ -50,19 +50,26 @@ describe("release-status declarations (#812)", () => {
     expect(ids(ordinaryPassives())).not.toContain("test.trial-passive");
   });
 
-  it("names a card's release status in its inspection, from the shared descriptor (#813)", async () => {
+  it("shows provisional status in inspection and never a certification notice (#813, #923)", async () => {
     const { inspectBlock } = await import("./traits/inspectable");
     const { standardDeck } = await import("./cards");
     const { getMaterialDefinition, withMaterial } = await import("./materials");
-    const { releaseStatusDescriptor } = await import("./release-status");
+    const { releaseStatusDescriptor, releaseStatusPresentation } = await import("./release-status");
     const wood = withMaterial(standardDeck[0]!, getMaterialDefinition("wood"));
-    expect(inspectBlock(wood)!.split("\n")[1]).toBe("Status: Certified");
+    expect(inspectBlock(wood)).not.toMatch(/certif/i);
     const vent = withMaterial(standardDeck[0]!, getMaterialDefinition("airVent" as never));
-    expect(inspectBlock(vent)).toContain("Status: Provisional");
+    expect(inspectBlock(vent)!.split("\n")[1]).toMatch(/^Status: Provisional/);
+    expect(releaseStatusPresentation("wood", { certified: {} })).toEqual({ lines: [] });
+    expect(releaseStatusPresentation("x", { provisional: {} }).badge).toBe("Provisional");
+    // The internal metadata is still there for diagnostics and export.
     expect(releaseStatusDescriptor("wood", { certified: {} }).label).toBe("Certified");
-    // A passive's own inspection carries its status too (#851 review).
-    const { createPassiveBlock } = await import("./passives");
-    const passive = createPassiveBlock(passiveDefinitions.names()[0]!, "p1");
-    expect(passive.traits.inspectable.inspect()).toMatch(/\nStatus: Certified$/);
+    // A passive's own inspection: its ordinary description, and no certification notice.
+    const { createPassiveBlock, passiveDefinitions: definitions } = await import("./passives");
+    const name = definitions.names()[0]!;
+    const passive = createPassiveBlock(name, "p1");
+    const definition = definitions.get(name);
+    expect(passive.traits.inspectable.inspect()).toBe(
+      `${definition.name} — ${definition.description}`,
+    );
   });
 });
