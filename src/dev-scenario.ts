@@ -22,7 +22,8 @@ import { buildDeck, type DeckBuilderStep } from "./deck-builder";
 import type { Dealer } from "./dealer";
 import { GameRun, type RunSnapshot } from "./game-run";
 import type { GameState, PlacedBlock, PlayAction } from "./game-state";
-import { seededRandom } from "./materials";
+import { Randomizer } from "./random";
+import { withoutSelectable } from "./traits/selectable";
 import { createPassiveBlock, passiveDefinitions, type PassiveBlock } from "./passives";
 import type { RunRules } from "./run-rules";
 import { cellKey, type Cell } from "./traits/attachable";
@@ -82,6 +83,11 @@ export type ScenarioContext = { seed: number; limits: ScenarioLimits; rackCapaci
 export type ScenarioCapability = {
   /** Problems with the configuration itself, before any allocation (empty when valid). */
   validate(config: unknown, context: ScenarioContext): string[];
+  /**
+   * How much of each limited resource this step uses, so the whole scenario's totals are checked
+   * against the limits before anything is built, however many steps repeat a capability.
+   */
+  uses?(config: unknown): Partial<Record<keyof ScenarioLimits, number>>;
   /** The draft with this capability applied; throws ScenarioError when it can't be. */
   apply(draft: ScenarioDraft, config: unknown, context: ScenarioContext): ScenarioDraft;
 };
@@ -170,6 +176,7 @@ devScenarioCapabilities.register("devPassives", {
         .map((passive) => `devPassives: unknown passive "${String(passive?.definitionId)}"`),
     ];
   },
+  uses: (config) => ({ passives: list(config, "passives").length }),
   apply: (draft, config, { rackCapacity }) => {
     const passives = (list(config, "passives") as PassiveDescriptor[]).map(
       ({ definitionId, overrides = {} }, index) => {
@@ -250,6 +257,7 @@ devScenarioCapabilities.register("devFieldPattern", {
       ? []
       : ["devFieldPattern: two placements share a cell"];
   },
+  uses: (config) => ({ fieldCells: list(config, "placements").length }),
   apply: (draft, config) => {
     const { placements } = config as FieldConfig;
     const cards = take(
@@ -262,7 +270,11 @@ devScenarioCapabilities.register("devFieldPattern", {
       throw new ScenarioError("devFieldPattern: a placement's cell is already occupied");
     const field = [
       ...draft.field,
-      ...placements.map(({ cell }, i) => ({ block: cards[i]!, cell: { ...cell } })),
+      // A field card is not a hand card: the same normalization as an ordinary placement.
+      ...placements.map(({ cell }, i) => ({
+        block: withoutSelectable(cards[i]!),
+        cell: { ...cell },
+      })),
     ];
     // The ordinary spatial constraint holds for the whole field so far, across every step,
     // unless a step explicitly declares the fixture permission.
@@ -289,6 +301,7 @@ devScenarioCapabilities.register("devReplay", {
         .map((command) => `devReplay: unknown command "${String(command?.command)}"`),
     ];
   },
+  uses: (config) => ({ replayCommands: list(config, "commands").length }),
   apply: (draft, config) => ({
     ...draft,
     replay: [...draft.replay, ...(list(config, "commands") as ReplayCommand[])],
@@ -330,10 +343,26 @@ function definitionProblems(definition: ScenarioDefinition, context: ScenarioCon
     return [`a scenario needs at most ${context.limits.steps} steps`];
   if (definition.steps.some((step) => typeof step !== "object" || step === null))
     return ["each scenario step needs a capability and its configuration"];
-  return definition.steps.flatMap(({ capability, config }) =>
+  const problems = definition.steps.flatMap(({ capability, config }) =>
     devScenarioCapabilities.has(capability)
       ? devScenarioCapabilities.get(capability).validate(config, context)
       : [`unknown scenario capability "${String(capability)}"`],
+  );
+  if (problems.length) return problems;
+  // The totals across every step, against the declared limits.
+  const totals = new Map<keyof ScenarioLimits, number>();
+  for (const { capability, config } of definition.steps)
+    for (const [resource, amount] of Object.entries(
+      devScenarioCapabilities.get(capability).uses?.(config) ?? {},
+    ))
+      totals.set(
+        resource as keyof ScenarioLimits,
+        (totals.get(resource as keyof ScenarioLimits) ?? 0) + amount,
+      );
+  return [...totals].flatMap(([resource, total]) =>
+    total > context.limits[resource]
+      ? [`the scenario uses ${total} ${resource}, over its limit of ${context.limits[resource]}`]
+      : [],
   );
 }
 
@@ -380,13 +409,19 @@ export function buildScenario(
       discardPile: [],
       passiveRack: draft.passives,
     };
+    // A checkpointable stream, so a failed action rewinds its draws like the normal run.
+    const randomizer = new Randomizer(definition.seed);
     const run = GameRun.fromSnapshot(
       runtime.dealers,
       runtime.rules,
       draft.created,
       { ...opening.snapshot(), state: hydrated },
-      seededRandom(definition.seed),
+      () => randomizer.next(),
     );
+    run.attachRandomCheckpoints({
+      checkpoint: () => randomizer.checkpoint(),
+      restore: (mark) => randomizer.restore(mark),
+    });
     const initialSnapshot = run.snapshot();
     for (const [index, { command, args }] of draft.replay.entries())
       if (!scenarioReplayCommands.get(command)(run, args))

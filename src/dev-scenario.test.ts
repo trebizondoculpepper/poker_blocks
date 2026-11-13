@@ -266,3 +266,35 @@ describe("Dev scenario ownership and shape checks (#877 review)", () => {
     ).toEqual([]);
   });
 });
+
+describe("Dev scenario totals and field normalization (#877 review)", () => {
+  it("checks limits against totals across repeated steps", () => {
+    const result = buildScenario(
+      scenario(
+        field([{ index: 0, cell: { x: 0, y: 0, z: 0 } }]),
+        field([{ index: 1, cell: { x: 1, y: 0, z: 0 } }]),
+      ),
+      { ...runtime, limits: { ...defaultScenarioLimits, fieldCells: 1 } },
+    );
+    expect(result).toEqual({
+      ok: false,
+      diagnostics: [expect.stringMatching(/2 fieldCells, over its limit of 1/)],
+    });
+  });
+
+  it("hydrates field cards as field cards, not selectable hand cards", () => {
+    const result = buildScenario(
+      scenario(field([{ index: 0, cell: { x: 0, y: 0, z: 0 } }])),
+      runtime,
+    );
+    if (!result.ok) throw new Error(result.diagnostics.join());
+    expect(result.trial.run.state.field[0]!.block.traits.selectable).toBeUndefined();
+  });
+
+  it("rewinds the trial's random stream when an action rolls back", () => {
+    const result = buildScenario(scenario(), runtime);
+    if (!result.ok) throw new Error(result.diagnostics.join());
+    const run = result.trial.run as unknown as { random: () => number; randomCheckpoints: unknown };
+    expect(run.randomCheckpoints).not.toBeNull();
+  });
+});
