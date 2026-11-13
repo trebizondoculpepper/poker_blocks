@@ -2,7 +2,7 @@ import type { CardBlock } from "./cards";
 import { gameTuning } from "./balance";
 import { blockAttachmentCell } from "./block-trait-behaviours";
 import { Registry } from "./core/registry";
-import { drawCards } from "./deal";
+import { popCards, shuffleCards } from "./deal";
 import type { GameState, PlayAction, StageRules } from "./game-state";
 import { scoreField } from "./scoring";
 import { cellKey, faceNormal, type Cell, type Face } from "./traits/attachable";
@@ -29,9 +29,10 @@ export interface Dealer {
   readonly handSize: number;
   /** A new game: every card in the deck, then the first stage dealt with default rules. */
   startGame(cards: readonly CardBlock[], random?: () => number): GameState;
-  /** Clear the field into the deck, set the stage's counters and fill the hand. */
+  /** Clear the field into the deck, shuffle it once, set the stage's counters and fill the hand. */
   startStage(state: GameState, rules: StageRules, random?: () => number): GameState;
-  refillHand(state: GameState, random?: () => number): HandRefill;
+  /** Fill the hand from the top of the deck, in order; never random (#551). */
+  refillHand(state: GameState): HandRefill;
   canPlay(state: GameState): boolean;
   placementFor(state: GameState, targetId?: string, face?: Face): Cell | null;
   /**
@@ -69,7 +70,9 @@ export const baseDealer: Dealer = {
     const cleared: GameState = {
       ...state,
       field: [],
-      deck: [...state.deck, ...state.field.map(({ block }) => block)],
+      // The field's cards go back into the deck and the deck is shuffled once, as the stage
+      // begins: every draw after this pops the top card (#551).
+      deck: shuffleCards([...state.deck, ...state.field.map(({ block }) => block)], random),
       round: {
         score: 0,
         targetScore: rules.targetScore,
@@ -77,12 +80,13 @@ export const baseDealer: Dealer = {
         discardsLeft: rules.discards,
       },
     };
-    return this.refillHand(cleared, random).state;
+    return this.refillHand(cleared).state;
   },
 
-  refillHand(state, random: () => number = Math.random) {
+  refillHand(state) {
     const missing = Math.max(0, this.handSize - state.hand.length);
-    const draw = drawCards(state.deck, Math.min(missing, state.deck.length), random);
+    // The top cards, in order: drawing never uses the random stream (#551, #836).
+    const draw = popCards(state.deck, Math.min(missing, state.deck.length));
     const drawn = draw.cards.map(withSelectable);
     return {
       state: { ...state, deck: draw.deck, hand: [...state.hand, ...drawn] },

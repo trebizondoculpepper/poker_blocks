@@ -1034,7 +1034,7 @@ export class GameRun {
   /** Refill up to the dealer's hand size, appending new cards after the survivors. */
   refillHand(): CardBlock[] {
     if (!this.inStage) return [];
-    const result = this.activeDealer.refillHand(this.currentState, this.random);
+    const result = this.activeDealer.refillHand(this.currentState);
     this.currentState = result.state;
     return result.drawn;
   }
