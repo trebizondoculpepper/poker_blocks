@@ -10,16 +10,17 @@ import {
 /** A renderer that records burns and finishes each after its duration. */
 function recorder(fail = false) {
   const log: { id: string; started: number; finished?: number; cancelled?: boolean }[] = [];
-  let now = 0;
+  const summaries: string[] = [];
   const renderer: TerminalBurnRenderer = {
-    burn(id, durationMs) {
+    summary: (id) => void summaries.push(id),
+    burn(id, { startMs, durationMs }) {
       if (fail) throw new Error("no artwork");
-      const entry: (typeof log)[number] = { id, started: now };
+      const entry: (typeof log)[number] = { id, started: startMs };
       log.push(entry);
-      const ends = now + durationMs;
+      // Timed from the scheduled start, not from when it was dispatched.
+      const ends = startMs + durationMs;
       return {
         update(nowMs) {
-          now = nowMs;
           if (nowMs < ends) return "running";
           entry.finished = nowMs;
           return "finished";
@@ -29,7 +30,7 @@ function recorder(fail = false) {
       } satisfies EffectHandle;
     },
   };
-  return { log, renderer, setNow: (ms: number) => void (now = ms) };
+  return { log, summaries, renderer };
 }
 
 const ids = (n: number) => Array.from({ length: n }, (_, index) => `g${index}`);
@@ -47,10 +48,9 @@ function harness(n: number, options: { reducedMotion?: boolean; fail?: boolean }
   const gate: string[] = [];
   burn.onGate(({ state }) => gate.push(state));
   const step = (ms: number) => {
-    record.setNow(ms);
     scheduler.update(ms, true);
   };
-  return { scheduler, burn, gate, step, log: record.log };
+  return { scheduler, burn, gate, step, log: record.log, summaries: record.summaries };
 }
 
 describe("the burn plan (#945)", () => {
@@ -111,17 +111,44 @@ describe("burning the terminal field (#945)", () => {
     expect(gate).toEqual(["cancelled"]);
   });
 
-  it("settles promptly with reduced motion, drawing nothing", () => {
-    const { gate, step, log } = harness(10, { reducedMotion: true });
+  it("shows each summary promptly with reduced motion, drawing no burn", () => {
+    const { gate, step, log, summaries } = harness(10, { reducedMotion: true });
     step(13 * unitMs);
     expect(log).toEqual([]);
+    expect([...summaries].sort()).toEqual([...ids(10)].sort());
     expect(gate).toEqual(["finished"]);
   });
 
-  it("never leaves the gate pending when rendering fails", () => {
-    const { gate, step } = harness(3, { fail: true });
+  it("times a late-dispatched burn from its scheduled start", () => {
+    const { step, log } = harness(5);
+    // One late frame dispatches every start at once.
+    step(10 * unitMs);
+    expect(log.map(({ started }) => Math.round(started / unitMs)).sort((a, b) => a - b)).toEqual([
+      0, 1, 2, 3, 4,
+    ]);
+  });
+
+  it("summarizes and reports burns the scheduler refuses", () => {
+    const record = recorder();
+    const scheduler = createVisualScheduler({
+      services: { terminalFieldBurn: record.renderer },
+      limits: { pendingPerScope: 2 },
+    });
+    scheduler.update(0, true);
+    const burn = startTerminalFieldBurn(scheduler, {
+      ghostIds: ids(5),
+      random: fixed,
+      reducedMotion: false,
+      renderer: record.renderer,
+    });
+    expect(burn.summarized.length).toBeGreaterThan(0);
+    expect(record.summaries).toEqual(burn.summarized);
+  });
+
+  it("never leaves the gate pending when rendering fails, summarizing instead", () => {
+    const { gate, step, summaries } = harness(3, { fail: true });
     for (let ms = 1; ms < 10 * unitMs; ms += unitMs) step(ms);
-    expect(gate).toHaveLength(1);
-    expect(gate[0]).not.toBe("pending");
+    expect(gate).toEqual(["finished"]);
+    expect(summaries).toHaveLength(3);
   });
 });

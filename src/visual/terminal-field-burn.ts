@@ -11,9 +11,11 @@
  *   ceil(share · N) burns in order, the **tail** the rest. The gate settles when its burns have
  *   finished (completions, not starts); the tail never holds it up. Cancelling the root (a new
  *   run, the main menu, teardown) cancels every scheduled and running burn, once.
- * - **Rendering** is the renderer service's: `burn(ghostId, ms)` returns the running effect. A
- *   reduced-motion burn settles at once (the captured summary). A burn that throws fails its scope
- *   through the scheduler, which settles it, so the gate is never left pending.
+ * - **Rendering** is the renderer service's: `burn(ghostId, { startMs, durationMs })` returns the
+ *   running effect, timed from its *scheduled* start so late or batched starts keep their stagger.
+ *   `summary(ghostId)` shows a ghost's captured end state at once: used under reduced motion, for
+ *   a burn that fails to start, and for one the scheduler refused to admit. A running effect's own
+ *   cancellation is the renderer's to summarize.
  *
  * It reads no model, changes nothing, draws no session randomness and plays no sound.
  */
@@ -72,9 +74,12 @@ export function burnPlan(
   };
 }
 
-/** What draws one ghost's burn: its running effect, lasting about `durationMs`. */
+/** What draws the ghosts' burns. */
 export type TerminalBurnRenderer = {
-  burn(ghostId: string, durationMs: number): EffectHandle;
+  /** One ghost's running burn, from its scheduled start, lasting `durationMs`. */
+  burn(ghostId: string, timing: { startMs: number; durationMs: number }): EffectHandle;
+  /** Show one ghost's captured end state at once (bounded summary completion). */
+  summary(ghostId: string): void;
 };
 
 /** The services the burn handler reads. */
@@ -85,9 +90,22 @@ type BurnPayload = { ghostId: string; durationUnits: number; reducedMotion: bool
 visualHandlers.register("terminalFieldBurn", (raw, context) => {
   const { ghostId, durationUnits, reducedMotion } = raw as BurnPayload;
   const renderer = (context.services as TerminalBurnServices | undefined)?.terminalFieldBurn;
-  // Reduced motion, or nothing to draw with: the captured summary, settled at once.
-  if (reducedMotion || !renderer) return "done";
-  return renderer.burn(ghostId, unitsToMs(durationUnits));
+  if (!renderer) return "done";
+  // Reduced motion: the captured summary, settled at once.
+  if (reducedMotion) {
+    renderer.summary(ghostId);
+    return "done";
+  }
+  try {
+    return renderer.burn(ghostId, {
+      startMs: context.scheduledAtMs,
+      durationMs: unitsToMs(durationUnits),
+    });
+  } catch {
+    // A burn that can't start: its summary instead, never a gate left waiting (#945 review).
+    renderer.summary(ghostId);
+    return "done";
+  }
 });
 
 // A failed burn scope settles as failed with nothing more to show: never left pending.
@@ -95,6 +113,8 @@ visualFallbacks.register("terminalFieldBurnSummary", () => {});
 
 export type TerminalBurn = {
   plan: BurnPlan;
+  /** Ghosts the scheduler refused to admit: each was shown as its summary at once. */
+  summarized: string[];
   /** The outgoing root: cancel it to cancel everything. */
   root: ScopeHandle;
   /** Settles once the required burns have finished (or failed, or been cancelled). */
@@ -115,6 +135,8 @@ export function startTerminalFieldBurn(
     reducedMotion: boolean;
     config?: TerminalBurnConfig;
     parent?: ScopeHandle | null;
+    /** The renderer, for summarizing burns the scheduler refuses. */
+    renderer?: TerminalBurnRenderer;
   },
 ): TerminalBurn {
   const config = options.config ?? defaultTerminalBurn;
@@ -123,8 +145,9 @@ export function startTerminalFieldBurn(
   const gate = scheduler.createScope(root, { fallback: "terminalFieldBurnSummary" });
   const tail = scheduler.createScope(root, { fallback: "terminalFieldBurnSummary" });
   const begin = scheduler.nowMs / unitMs;
-  plan.order.forEach((ghostId, index) =>
-    scheduler.schedule(index < plan.required ? gate : tail, {
+  const summarized: string[] = [];
+  plan.order.forEach((ghostId, index) => {
+    const admission = scheduler.schedule(index < plan.required ? gate : tail, {
       handler: "terminalFieldBurn",
       payload: {
         ghostId,
@@ -133,11 +156,18 @@ export function startTerminalFieldBurn(
       },
       dueUnits: begin + plan.starts[index]!,
       originUnits: begin,
-    }),
-  );
+    });
+    // Refused (a full queue): shown as its summary now, and reported, rather than silently
+    // missing from the gate's count (#945 review).
+    if (!admission.accepted) {
+      options.renderer?.summary(ghostId);
+      summarized.push(ghostId);
+    }
+  });
   for (const scope of [gate, tail, root]) scheduler.seal(scope);
   return {
     plan,
+    summarized,
     root,
     gate,
     tail,
