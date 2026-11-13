@@ -11,7 +11,7 @@
  * are configuration errors, never a guess or a hidden default.
  */
 import { Registry } from "./core/registry";
-import { blockMaterials } from "./materials";
+import { getMaterialDefinition, type BlockMaterial } from "./materials";
 import {
   resetStateHandlers,
   resolveResetFacet,
@@ -59,8 +59,15 @@ export const resetStepValidators = new Registry<(config: unknown) => void>("rese
 // A material reversion needs a registered target material.
 resetStepValidators.register("material", (config) => {
   const { to } = (config ?? {}) as { to?: unknown };
-  if (!blockMaterials.includes(to as never))
-    throw new Error(`material reset needs a registered target, not "${String(to)}"`);
+  // Any installed material, ordinary or experimental, through the same lookup the reset uses.
+  const installed = (() => {
+    try {
+      return typeof to === "string" && !!getMaterialDefinition(to as BlockMaterial);
+    } catch {
+      return false;
+    }
+  })();
+  if (!installed) throw new Error(`material reset needs a registered target, not "${String(to)}"`);
 });
 
 // A resettable reset needs a non-empty recipe of registered handlers and a scheduled boundary.
