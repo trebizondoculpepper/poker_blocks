@@ -7,12 +7,12 @@
 import type { ShopTrait } from "./game-modes";
 import type { GameState } from "./game-state";
 import { sampleMaterials } from "./material-sampler";
-import { makeDevDeck, makeUniformDeck } from "./materials";
 import { createPassiveBlock, randomPassiveDefinitions, type PassiveBlock } from "./passives";
 import { sandboxRunRules } from "./run-rules";
 import { RunSetupRegistry } from "./run-setup";
 import { shopPreviewState } from "./shop-stock";
 import { withDevDestructibleMix } from "./traits/destructible";
+import { buildDeck } from "./deck-builder";
 
 export function createRunSetupRegistry(
   shopOffers: () => ShopTrait | undefined = () => undefined,
@@ -29,21 +29,44 @@ export function createRunSetupRegistry(
     // so a resumed run gets the same mix.
     deck: (context, { pool }, services) => {
       const seed = context.seed ?? services.newSeed();
-      return { deck: makeDevDeck(seed, pool), seed };
+      // The balanced builder: the same deck `makeDevDeck` dealt for this seed (#827).
+      const deck = buildDeck(
+        [{ operation: "standardTemplates" }, { operation: "assignBalanced", config: { pool } }],
+        seed,
+      );
+      return { deck, seed };
     },
   });
 
   registry.register("uniformMaterialDeck", {
-    deck: (context, { material }) => ({ deck: makeUniformDeck(material), seed: context.seed }),
+    // No randomness: the seed only satisfies the builder's signature and is not recorded.
+    deck: (context, { material }) => ({
+      deck: buildDeck(
+        [{ operation: "standardTemplates" }, { operation: "assignUniform", config: { material } }],
+        0,
+      ),
+      seed: context.seed,
+    }),
+  });
+
+  registry.register("deckBuilder", {
+    requiresSavedSeed: true,
+    // A mode's own ordered builder operations, from a fresh recorded seed. Continue passes back
+    // the saved seed and recipe, so an edit to the mode can't change a saved run's cards. One
+    // builder per setup: a second would silently replace the first's cards (#848 review).
+    deck: (context, { operations }, services) => {
+      if (context.recipe) throw new Error("a run setup composes at most one deckBuilder step");
+      const seed = context.seed ?? services.newSeed();
+      const recipe = context.savedRecipe ?? operations;
+      return { ...context, deck: buildDeck(recipe, seed), seed, recipe };
+    },
   });
 
   registry.register("destructibleMix", {
     // Testing only: a deck decision, so it contributes in the deck pass rather than the
     // controller applying a mix to a deck behind the registry's back.
-    deck: (context, mix) => ({
-      deck: withDevDestructibleMix(context.deck, mix),
-      seed: context.seed,
-    }),
+    // A decorator: it changes the cards and keeps everything else, the seed and recipe included.
+    deck: (context, mix) => ({ ...context, deck: withDevDestructibleMix(context.deck, mix) }),
   });
 
   registry.register("materialSample", {

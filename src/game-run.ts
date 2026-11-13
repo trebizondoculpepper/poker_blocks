@@ -1,3 +1,4 @@
+import type { DeckBuilderStep } from "./deck-builder";
 import {
   attachPlayfield,
   playSteps,
@@ -99,6 +100,8 @@ export type RunSnapshot = {
   rewarded?: { stage: string; reward: StageReward };
   /** The seed a run setup step dealt this run's deck from, so Continue rebuilds the same deck. */
   seed?: number;
+  /** The deck-builder recipe the deck was dealt from, if a `deckBuilder` step dealt it (#827). */
+  deckRecipe?: readonly DeckBuilderStep[];
   /**
    * The session's random seed and how far its sequence had reached, so Continue resumes the
    * same sequence rather than replaying it (#134).
@@ -130,6 +133,7 @@ export class GameRun {
   private rewarded: { stage: string; reward: StageReward } | null = null;
   private randomCursor: RandomCursor | undefined;
   private runSeed: number | undefined;
+  private deckRecipe: readonly DeckBuilderStep[] | undefined;
   /** The stage (round:phase) whose final stage.won or stage.lost has been emitted. */
   private decidedStage: string | null = null;
   /** Rewinds the session's random stream when an action rolls back (#657); none in tests. */
@@ -187,6 +191,7 @@ export class GameRun {
     session.runStats = snapshot.stats ?? emptyRunStats;
     session.rewarded = snapshot.rewarded ?? null;
     session.runSeed = snapshot.seed;
+    session.deckRecipe = snapshot.deckRecipe;
     session.randomCursor = snapshot.random;
     session.actions = ActionLedger.restore(snapshot.actions);
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
@@ -488,6 +493,7 @@ export class GameRun {
       stats: this.runStats,
       ...(this.rewarded ? { rewarded: this.rewarded } : {}),
       ...(this.runSeed === undefined ? {} : { seed: this.runSeed }),
+      ...(this.deckRecipe === undefined ? {} : { deckRecipe: this.deckRecipe }),
       ...(this.randomCursor === undefined ? {} : { random: this.randomCursor }),
       actions: this.actions.state,
     };

@@ -1482,7 +1482,7 @@ export function cardScoringRules(block: CardBlock): EventRule[] {
   ];
 }
 
-function seededRandom(seed: number): () => number {
+export function seededRandom(seed: number): () => number {
   let value = seed >>> 0;
   return () => {
     value = (value + 0x6d2b79f5) | 0;

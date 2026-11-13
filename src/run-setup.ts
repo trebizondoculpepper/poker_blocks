@@ -1,3 +1,4 @@
+import type { DeckBuilderStep } from "./deck-builder";
 /**
  * Run setup: the ordered steps a game mode applies when a game run is created.
  *
@@ -32,6 +33,8 @@ export type RunSetupStepConfigs = {
   };
   /** Every card is made of this one material: how a mode shows a visual experiment (#227). */
   uniformMaterialDeck: { material: BlockMaterial };
+  /** A mode's own starting deck: ordered deck-builder operations (doc/deck-builders.md, #827). */
+  deckBuilder: { operations: readonly DeckBuilderStep[] };
   /** The run begins on a structure holding one block of every material. */
   materialSample: Record<never, never>;
   /** Testing only: about `share` of the deck is destructible by the given causes. */
@@ -54,6 +57,13 @@ export type RunSetupStep = {
 export type RunDeck = {
   deck: readonly CardBlock[];
   seed?: number;
+  /**
+   * The deck-builder operations a `deckBuilder` step dealt from (#827). Saved with the run, so
+   * Continue rebuilds from these rather than from a mode configuration edited since.
+   */
+  recipe?: readonly DeckBuilderStep[];
+  /** A saved run's recipe, passed back on Continue: restoration input, never another step's output. */
+  savedRecipe?: readonly DeckBuilderStep[];
 };
 
 /** What a `start` pass hands to the next step: the run's rules, its deck and its snapshot. */
