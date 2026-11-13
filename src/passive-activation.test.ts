@@ -108,7 +108,7 @@ describe("passive activation feedback (#81)", () => {
 
 describe("committed sounds (#566 review)", () => {
   it("plays each named sound once per discard, in first-named order", async () => {
-    const { committedSounds } = await import("./play-presenter");
+    const { committedSounds } = await import("./scene-traits/committed-event-sounds");
     expect(
       committedSounds([
         { type: "coins.gained", amount: 1, sound: "passive.coins" },
