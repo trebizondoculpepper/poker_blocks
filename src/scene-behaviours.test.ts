@@ -211,8 +211,13 @@ function recordingHost() {
       cameraView: { beginShopEntrance: () => void calls.push("camera:shopEntrance") },
       audio: {
         setMusicFilter: (kind) => void calls.push(`filter:${kind}`),
-        playStageMusic: (pool) => void calls.push(`stageMusic:${pool}`),
-        playCue: (cue) => void calls.push(`cue:${cue}`),
+        // The plan each operation selects from: what a play scene's music chose.
+        playStageMusic: (operations) =>
+          void calls.push(
+            `stageMusic:${operations.map(({ config }) => (config as { plan?: string } | undefined)?.plan ?? "").join(",")}`,
+          ),
+        playCue: (operations) => void calls.push(`cue:${operations.map(({ op }) => op).join(",")}`),
+        resumeTable: () => void calls.push("musicResume"),
       },
       version: "1.2.3",
       sound: (id) => void calls.push(`sound:${id}`),
@@ -480,7 +485,9 @@ describe("scene traits own their behaviour", () => {
       { id: "again", label: "Again" },
       { id: "leave", label: "Leave" },
     ];
-    scenes.register(scene("lost", { gameOverScreen: { items }, musicCue: { cue: "windDown" } }));
+    scenes.register(
+      scene("lost", { gameOverScreen: { items }, musicCue: { operations: [{ op: "windDown" }] } }),
+    );
     scenes.register(scene("next", {}));
 
     scenes.switchTo("lost");

@@ -20,7 +20,7 @@ export type ModeMusicBehaviour = {
 /** Music actions a mode uses after a run starts, when its game screen resumes, and per stage. */
 export function createModeMusicBehaviours(actions: {
   windDown(): void;
-  resumeStage(): void;
+  resumeTable(): void;
 }): Record<ModeMusicStyle, ModeMusicBehaviour> {
   return {
     quiet: {
@@ -30,7 +30,7 @@ export function createModeMusicBehaviours(actions: {
     },
     ordinary: {
       settle() {},
-      resume: () => actions.resumeStage(),
+      resume: () => actions.resumeTable(),
       playsStages: () => true,
     },
   };
