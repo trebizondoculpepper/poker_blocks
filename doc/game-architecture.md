@@ -1642,3 +1642,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Prepared session adoption for experimental trials (#900)
 
 [Trial session adoption](experiments/trial-session-adoption.md) defines the generic injected run-host seam used by composed Dev scenario controllers. Policy selects configuration/seed; registered factories prepare; the host atomically adopts run/rules/identity universe/RNG/provenance and rebinds presentation. Invalid preparation leaves the current trial intact. The seam is not a mode identity branch or a parallel game controller.
+
+## Inherited lifecycle declaration resolution (#915)
+
+[The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.

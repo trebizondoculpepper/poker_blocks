@@ -536,3 +536,7 @@ Title and pause menu blocks float over the visible 3D scene with no menu panel/b
 ## Certified and provisional content
 
 Certified definitions are approved for normal play subject to ordinary unlock and acquisition rules. Provisional definitions are available only through explicitly composed experimental catalogues. Bench listings and inspection identify the same status. New packing, mass and material-diversity modifiers remain provisional until an explicit documented certification decision. See [release status](release-status.md); registration or successful experimentation alone is not approval.
+
+## Explicit gameplay lifecycle declarations (#915)
+
+Gameplay definitions resolve retention and reset explicitly, with declared inheritance. [The definition matrix](block-lifecycle-declarations.md) records run-retained ordinary cards, stage-retained Cloud, stage-reset Meat, round-reverting Gelato and separate generated/rack/opaque behavior. Lifetimes do not choose ownership, reset recipes do not reroll contents or refill uses, and scene disposal is not gameplay destruction.
