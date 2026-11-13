@@ -15,7 +15,14 @@ import "./transmogrifiers";
 import "./nothingifier";
 import { restoreModifierRegisters } from "./modifier-registers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
-import { restoreActiveObjects, saveActiveObjects, type SavedActiveObject } from "./active-objects";
+// Registers the nested payload and playable card codecs a save may need (#927).
+import "./playable-payload";
+import {
+  ownedIdentities,
+  restoreActiveObjects,
+  saveActiveObjects,
+  type SavedActiveObject,
+} from "./active-objects";
 // Registers how a passive's instance configuration is saved and restored (#876).
 import "./configurable-passive";
 import { asGenerated } from "./card-ownership";
@@ -255,6 +262,15 @@ export function fromSaveRecord(
     );
     const byId = new Map(runCards.map((card) => [card.id, card]));
     if (byId.size !== runCards.length) return null;
+    // Identities owned by saved components (a stored payload's) are their own (#927): not a
+    // run card's, a removed card's, or another component's.
+    const reserved = new Set(record.state.removedCards ?? []);
+    const owned = ownedIdentities(record.state.activeObjects, reserved);
+    if (
+      new Set(owned).size !== owned.length ||
+      owned.some((id) => byId.has(id) || reserved.has(id))
+    )
+      return null;
     if (Object.keys(cardStates ?? {}).some((id) => !byId.has(id))) return null;
     const seen = new Set<string>();
     const resolve = (id: unknown): CardBlock => {
