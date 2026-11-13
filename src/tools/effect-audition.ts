@@ -4,6 +4,8 @@
  * stack and hidden when it leaves. It only explains the room; the looks themselves come from the
  * mode's deck (experimental definitions with smoke and dust effects), rendered like any card.
  */
+import "./effect-audition.css";
+
 export type EffectAuditionNote = {
   show(config: { hint: string }): void;
   hide(): void;
