@@ -1539,7 +1539,9 @@ body,
   font:
     12px ui-monospace,
     monospace;
-  pointer-events: none;
+  /* Scrollable when many rows score: the panel takes its own wheel, touch and scrollbar. */
+  pointer-events: auto;
+  overscroll-behavior: contain;
 }
 .dev-trial-readouts h2,
 .dev-trial-readouts h3 {
