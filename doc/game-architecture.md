@@ -1627,6 +1627,10 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 
 [The experimental trial contract](experiments/spatial-modifiers.md#provisional-modifier-implementation-contract-814) defines registered snapshot queries, row contribution scope, provisional density/mass/diversity curves, dev controls and reproducibility. These are experiment-only targets, not certified normal-game modifiers. Implementations follow the release-status, physical-mass and deck-builder prerequisites.
 
+## Passive scenario bench and instance settings (#867)
+
+[Passive scenario testing](experiments/passive-test-bench.md) defines a Dev controller composing registered setup for deck/hand/passives/field and optional replay. Reusable configurablePassive behavior validates per-instance overrides and constructs ordinary instance rules; shared definitions stay immutable. Use existing rack trait codecs and schema-driven controls; no test-room identity or passive-name branches.
+
 ## Outcome presentation contract (#866)
 
 [Outcome facts and audio](outcome-presentation.md) separates transactional outcome/progression facts, required-sequence completion cues and independently composed result-scene enterSound responses. The model resolves rescue opportunities before final defeat; presentation never revises it. Burn/destruction audio follows captured effect starts through the shared scheduler. This target supersedes direct controller sound calls and awaited pre-commit burn behavior.
