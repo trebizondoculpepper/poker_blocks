@@ -30,6 +30,11 @@ export type CardBlock = {
      * never rank zero or a fake suit. Read it through `pokerIdentity`.
      */
     identity?: IdentityTrait;
+    /**
+     * A run-owned active instance's registered definition (#894; src/active-objects.ts): saves
+     * record it under `activeObjects` and rebuild it through that definition.
+     */
+    active?: { definition: string };
     selectable?: Record<string, never>;
     attachable?: AttachableTrait;
     inspectable?: InspectableTrait;

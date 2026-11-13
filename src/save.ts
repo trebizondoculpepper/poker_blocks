@@ -15,6 +15,7 @@ import "./transmogrifiers";
 import "./nothingifier";
 import { restoreModifierRegisters } from "./modifier-registers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
+import { restoreActiveObjects, saveActiveObjects, type SavedActiveObject } from "./active-objects";
 // Registers how a passive's instance configuration is saved and restored (#876).
 import "./configurable-passive";
 import { asGenerated } from "./card-ownership";
@@ -80,6 +81,11 @@ export type SaveRecord = {
     boughtCards?: SavedCard[];
     /** Cards made on the field during play (#424), saved in full; absent when there are none. */
     generatedCards?: SavedCard[];
+    /**
+     * Run-owned active instances (#894; src/active-objects.ts), by ID: rebuilt through their
+     * registered definitions and component codecs. Additive and optional; absent when none.
+     */
+    activeObjects?: Record<string, SavedActiveObject>;
     /** Cards removed for the rest of the run (#156), by id; absent when none. */
     removedCards?: string[];
     /** Cards whose material changed this run, by id (#387); absent in older saves. */
@@ -148,6 +154,12 @@ function savedScene(record: SaveRecord): SceneName | null {
     : null;
 }
 
+/** The save's `activeObjects` field: present only when the run holds active instances. */
+function activeObjectsField(blocks: readonly CardBlock[]) {
+  const activeObjects = saveActiveObjects(blocks);
+  return Object.keys(activeObjects).length ? { activeObjects } : {};
+}
+
 export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGameFlow): SaveRecord {
   const ids = (blocks: readonly CardBlock[]) => blocks.map(({ id }) => id);
   const { state } = snapshot;
@@ -172,6 +184,12 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
       ...(state.generatedCards?.length
         ? { generatedCards: state.generatedCards.map(saveCard) }
         : {}),
+      ...activeObjectsField([
+        ...state.field.map(({ block }) => block),
+        ...state.hand,
+        ...state.deck,
+        ...state.discardPile,
+      ]),
       ...(state.cardStates && Object.keys(state.cardStates).length
         ? { cardStates: structuredClone(state.cardStates) }
         : {}),
@@ -217,7 +235,9 @@ export function fromSaveRecord(
     const generatedCards = (record.state.generatedCards ?? []).map((saved) =>
       asGenerated(restoreCard(saved)),
     );
-    const runCards = [...cards, ...boughtCards, ...generatedCards].map((card) =>
+    // Run-owned active instances (#894), rebuilt through their registered definitions.
+    const activeObjects = restoreActiveObjects(record.state.activeObjects);
+    const runCards = [...cards, ...boughtCards, ...generatedCards, ...activeObjects].map((card) =>
       applyCardStates(card, cardStates),
     );
     const byId = new Map(runCards.map((card) => [card.id, card]));
