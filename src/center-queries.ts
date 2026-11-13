@@ -10,8 +10,7 @@
  * non-positive or non-finite total mass is unavailable too, not a quiet fall back to the centroid.
  * Neither changes the production pivot, which keeps its centroid policy.
  */
-import { contextQueries, type QueryResult } from "./context-queries";
-import type { GameState } from "./game-state";
+import { contextQueries, type QueryResult, type QuerySnapshot } from "./context-queries";
 import { getMaterialDefinition, materialOf } from "./materials";
 import { massKg } from "./physical-mass";
 
@@ -19,7 +18,7 @@ export type Point = { x: number; y: number; z: number };
 export type Centroid = { centre: Point; count: number };
 export type MassCentre = { centre: Point; count: number; totalKg: number };
 
-export function fieldCentroid(state: GameState): QueryResult<Centroid> {
+export function fieldCentroid(state: QuerySnapshot): QueryResult<Centroid> {
   const count = state.field.length;
   if (!count) return { available: false, reason: "the field is empty" };
   const sum = { x: 0, y: 0, z: 0 };
@@ -34,7 +33,7 @@ export function fieldCentroid(state: GameState): QueryResult<Centroid> {
   };
 }
 
-export function fieldMassCentre(state: GameState): QueryResult<MassCentre> {
+export function fieldMassCentre(state: QuerySnapshot): QueryResult<MassCentre> {
   const count = state.field.length;
   if (!count) return { available: false, reason: "the field is empty" };
   const sum = { x: 0, y: 0, z: 0 };

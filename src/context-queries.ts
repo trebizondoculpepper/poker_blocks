@@ -8,6 +8,9 @@
 import { Registry } from "./core/registry";
 import type { GameState } from "./game-state";
 
+/** What a query reads: the committed field, from a run's state or a scoring pass's snapshot. */
+export type QuerySnapshot = Pick<GameState, "field">;
+
 export type QueryResult<T> = { available: true; value: T } | { available: false; reason: string };
 
 export type ContextQuery<T = unknown> = {
@@ -16,16 +19,16 @@ export type ContextQuery<T = unknown> = {
   /** The largest input it accepts, in its own units: beyond it, the result is unavailable. */
   limit: number;
   /** How big this snapshot's input is, in the same units as `limit`; cheap to compute. */
-  size(snapshot: GameState): number;
-  run(snapshot: GameState, config: unknown): QueryResult<T>;
+  size(snapshot: QuerySnapshot): number;
+  run(snapshot: QuerySnapshot, config: unknown): QueryResult<T>;
 };
 
 export const contextQueries = new Registry<ContextQuery>("context query");
 
-const cache = new WeakMap<GameState, Map<string, QueryResult<unknown>>>();
+const cache = new WeakMap<QuerySnapshot, Map<string, QueryResult<unknown>>>();
 
 /** Run a registered query on a snapshot, reusing its result for that same snapshot. */
-export function query<T>(name: string, snapshot: GameState, config?: unknown): QueryResult<T> {
+export function query<T>(name: string, snapshot: QuerySnapshot, config?: unknown): QueryResult<T> {
   // Omitted and null configuration are different keys: a provider may treat them differently.
   const key = `${name}:${config === undefined ? "default" : JSON.stringify(config)}`;
   let results = cache.get(snapshot);

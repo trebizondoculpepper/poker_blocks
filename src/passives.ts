@@ -1,3 +1,4 @@
+import type { QuerySnapshot } from "./context-queries";
 import {
   composeCatalogue,
   ordinaryCatalogue,
@@ -41,7 +42,13 @@ export type PassiveBlock = {
 };
 
 /** What a `score.*` event carries for its rules' selectors. */
-export type ScoreEventContext = { line: Line; intersections: number; block?: CardBlock };
+export type ScoreEventContext = {
+  line: Line;
+  intersections: number;
+  block?: CardBlock;
+  /** The field this scoring pass reads (#817): the immutable snapshot its context queries use. */
+  snapshot?: QuerySnapshot;
+};
 
 /**
  * Which stage a lifecycle event belongs to, so a trait can match a moment by condition (#660;
