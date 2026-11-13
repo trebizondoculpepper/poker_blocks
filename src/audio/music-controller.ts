@@ -174,16 +174,13 @@ export function createMusicController(
    */
   const slots = new Map<string, string>();
   /**
-   * The track the latest cue chose, logically, before its playback has happened (it may wait for
-   * the first gesture): `rememberTrack` records this, not what is still audibly playing.
-   */
-  let selected: string | null = null;
-  /**
    * The track playing as the cue being run sees it: each operation updates it at once, before its
    * deferred playback, so later operations in the same cue observe earlier ones (#855 review).
    * Null while wound down.
    */
   let logicalCurrent: string | null = null;
+  /** What a logical wind-down in the cue stopped, for a later logical wind-up. */
+  let logicalBeforeDown: string | null = null;
   /** The last request, replayed on unlock. */
   let wanted: () => void = () => {};
   let woundDown = false;
@@ -236,8 +233,7 @@ export function createMusicController(
       random,
     });
     if (chosen && entry.slot) slots.set(entry.slot, chosen);
-    // A keeping selector leaves the logically playing track as the selection.
-    selected = chosen === undefined ? logicalCurrent : chosen;
+    // A keeping selector leaves the logically playing track as it is.
     if (chosen) logicalCurrent = chosen;
     return chosen === undefined ? () => {} : () => start(chosen);
   };
@@ -246,26 +242,28 @@ export function createMusicController(
     const playback: (() => void)[] = [];
     // Wound down, nothing counts as playing; otherwise the player's track.
     logicalCurrent = woundDown ? null : player.current;
+    logicalBeforeDown = beforeWindDown;
     const api: MusicOperationApi = {
       select: (plan) => playback.push(choose(plan)),
       remember: (slot) => {
-        const track = selected ?? player.current;
-        if (track) slots.set(slot, track);
+        // What the cue has logically made current, not what is still audibly playing.
+        if (logicalCurrent) slots.set(slot, logicalCurrent);
       },
       resume: (slot, fallbackPlan) => {
         const remembered = slots.get(slot);
         if (remembered) {
-          selected = remembered;
           logicalCurrent = remembered;
           playback.push(() => start(remembered));
         } else if (fallbackPlan) playback.push(choose(fallbackPlan));
       },
       windDown: () => {
+        // As the deferred wind-down will: an already wound-down player keeps what it stopped.
+        if (logicalCurrent !== null) logicalBeforeDown = logicalCurrent;
         logicalCurrent = null;
         playback.push(windDown);
       },
       windUp: () => {
-        logicalCurrent = beforeWindDown ?? selected;
+        logicalCurrent = logicalBeforeDown;
         playback.push(() => start(beforeWindDown));
       },
       // Not playback: a filter applies to whatever plays, so it never replaces a request.

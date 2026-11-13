@@ -232,6 +232,27 @@ describe("music controller", () => {
     expect(log.filter(isStart).map(started).at(-1)).toBe(title);
   });
 
+  it("remembers the track a wind-up restores (#855 review)", () => {
+    const { music, ...cue } = setup();
+    music.unlock();
+    cue.stage();
+    const stage = music.current!;
+    music.run([{ op: "windDown" }]);
+    music.run([
+      { op: "selectTrack", config: { plan: "boss" } },
+      { op: "windDown" },
+      { op: "windUp" },
+      { op: "rememberTrack", config: { slot: "saved" } },
+    ]);
+    // The cue's own wind-down stopped the boss loop, so its wind-up restores the boss loop:
+    // what plays and what is remembered agree.
+    expect(music.current).toBe("solitaire-boss");
+    cue.stage();
+    music.run([{ op: "resumeTrack", config: { slot: "saved" } }]);
+    expect(music.current).toBe("solitaire-boss");
+    expect(stage).not.toBe("solitaire-boss");
+  });
+
   it("rejects an unknown operation at composition rather than falling back", () => {
     expect(validateMusicOperations("scene", [{ op: "selectTrack" }, { op: "shuffleAll" }])).toEqual(
       ['scene: unknown music operation "shuffleAll"'],
