@@ -17,6 +17,7 @@ import { blockTitle, type BlockTitles } from "./scene-traits/block-title";
 import type { SelectionBadge } from "./selection-badge";
 import type { BinView } from "./bin-view";
 import { devDropInspector } from "./scene-traits/dev-drop-inspector";
+import { devTrialReadouts } from "./scene-traits/dev-trial-readouts";
 import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
 import { committedEventSounds } from "./scene-traits/committed-event-sounds";
 import type { ActionLog } from "./action-log";
@@ -118,6 +119,8 @@ export type SceneHost = {
       | "rackCapacity"
       | "shopStock"
       | "deckBlocks"
+      | "committedState"
+      | "lastScoredLines"
       | "inventory"
       | "dispatch"
       | "onCommitted"
@@ -591,6 +594,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.devObjectBrowser.hide(),
   });
   behaviours.register("devDropInspector", devDropInspector<Context>());
+  behaviours.register("devTrialReadouts", devTrialReadouts<Context>());
   behaviours.register("actionHistory", actionHistory<Context>());
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
   behaviours.register("hudStyle", hudStyle<Context>());

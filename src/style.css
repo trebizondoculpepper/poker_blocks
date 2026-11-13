@@ -1521,3 +1521,43 @@ body,
 .selection-badge[hidden] {
   display: none;
 }
+
+/* The trial readouts (src/scene-traits/dev-trial-readouts.ts, #904). Never in the normal game. */
+.dev-trial-readouts {
+  position: absolute;
+  z-index: 50;
+  top: 230px;
+  right: 16px;
+  width: 280px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid #65f4dd;
+  border-radius: 8px;
+  background: #101a24ee;
+  color: #f4f0e8;
+  font:
+    12px ui-monospace,
+    monospace;
+  pointer-events: none;
+}
+.dev-trial-readouts h2,
+.dev-trial-readouts h3 {
+  margin: 6px 0 4px;
+  font-size: 13px;
+  color: #65f4dd;
+}
+.dev-trial-readouts dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  margin: 0;
+}
+.dev-trial-readouts dd {
+  margin: 0;
+  text-align: right;
+}
+.dev-trial-readouts .unavailable {
+  color: #9aa5b1;
+  font-style: italic;
+}
