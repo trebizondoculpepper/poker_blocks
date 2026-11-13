@@ -45,6 +45,8 @@ export type SceneTraits = {
   selectable: { sources: readonly { source: string }[] };
   /** The discard bin (also the passives' sell target) is shown while this scene is on the stack. */
   discardBin: Record<never, never>;
+  /** Plays the sound each committed fact names, for plays and discards (#755). */
+  committedEventSounds: Record<never, never>;
   /** The shared lower-left target presents Sell, and accepts installed passives only. */
   sellBin: Record<never, never>;
   /** The pulsing outline inviting a stage's first play is shown while this scene is on the stack. */
@@ -272,6 +274,7 @@ const playSceneTraits: Partial<SceneTraits> = {
   // A click selects a hand block, or else a table block.
   selectable: { sources: [{ source: "hand" }, { source: "field" }] },
   discardBin: {},
+  committedEventSounds: {},
   deckPanel: { opens: "openDeck" },
   runInPlay: {},
   ...escapeOpensPause,
