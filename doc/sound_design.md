@@ -263,3 +263,7 @@ The owner changed the policy: most sounds stay **pre-generated samples**, and a 
 ## Material-change response (#539)
 
 [The committed transition contract](presentation-contracts.md#committed-transition-fact-and-independent-responses-479-539) assigns one target-definition transition SFX response per committed material change to an independent controller trait. Use registered target transition IDs with existing attach sounds as placeholders. No playback on rejected/same-material/restore/preview paths; remove duplicate change playback during migration. Audio does not depend on the dissolve callback and does not determine game state.
+
+## Material/state transition cues (#864)
+
+A transformation uses one brief cue from the resolved target material/state, regardless of its cause. Water is watery; Hot Water bubbles; Boiling Water bubbles more intensely. Do not layer the old reaction cue for the same change. [The transition response contract](presentation-contracts.md#target-transition-audio-clarification-864--539) defines captured selection, target-state variants, scheduler alignment, de-duplication and stand-ins. Distinct input actions and result-scene cues remain separately configured. Samples and registered short synthesis recipes are both allowed; the game performs no runtime remote generation.
