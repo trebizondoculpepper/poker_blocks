@@ -13,6 +13,7 @@ import { cardOwners, ownerOf } from "./card-ownership";
 import type { CardBlock } from "./cards";
 import type { GameState } from "./game-state";
 import { materializePayload } from "./playable-payload";
+import { withoutSelectable } from "./traits/selectable";
 
 export type AdoptionResult =
   | { ok: true; state: GameState; wrapper: CardBlock; payload: CardBlock }
@@ -37,11 +38,12 @@ export function takenIdentities(state: GameState): Set<string> {
 function replaceInPlace(state: GameState, id: string, next: CardBlock): GameState | null {
   const swap = (cards: readonly CardBlock[]) => cards.map((card) => (card.id === id ? next : card));
   const holds = (cards: readonly CardBlock[]) => cards.some((card) => card.id === id);
+  // A block placed on the field can't be selected, as with any placement (#928 review).
   if (state.field.some(({ block }) => block.id === id))
     return {
       ...state,
       field: state.field.map((entry) =>
-        entry.block.id === id ? { ...entry, block: next } : entry,
+        entry.block.id === id ? { ...entry, block: withoutSelectable(next) } : entry,
       ),
     };
   if (holds(state.hand)) return { ...state, hand: swap(state.hand) };
@@ -62,7 +64,9 @@ export function adoptStoredPayload(state: GameState, wrapperId: string): Adoptio
   if (!wrapper || !stored) return { ok: false, reason: `${wrapperId} holds no stored payload` };
   let payload: CardBlock;
   try {
-    payload = materializePayload(wrapperId, stored.payload);
+    const rebuilt = materializePayload(wrapperId, stored.payload);
+    // Adoption is what makes it the run's for good, whatever its definition (#928 review).
+    payload = { ...rebuilt, traits: { ...rebuilt.traits, owner: { id: "runActive" } } };
   } catch (error) {
     return { ok: false, reason: (error as Error).message };
   }
@@ -70,10 +74,17 @@ export function adoptStoredPayload(state: GameState, wrapperId: string): Adoptio
     return { ok: false, reason: `payload ID ${payload.id} is already in use` };
   const placed = replaceInPlace(state, wrapperId, payload);
   if (!placed) return { ok: false, reason: `${wrapperId} is in no zone` };
+  // The payload as it now stands in its place (on the field, without selection).
+  const adopted = [
+    ...placed.field.map(({ block }) => block),
+    ...placed.hand,
+    ...placed.deck,
+    ...placed.discardPile,
+  ].find(({ id }) => id === payload.id)!;
   return {
     ok: true,
     state: cardOwners.get(ownerOf(wrapper)).atRemoval(placed, wrapper),
     wrapper,
-    payload,
+    payload: adopted,
   };
 }

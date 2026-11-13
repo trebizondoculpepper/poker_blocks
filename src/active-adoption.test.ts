@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { adoptStoredPayload, takenIdentities } from "./active-adoption";
-import { clearField } from "./card-ownership";
+import { clearField, removeCardForRun } from "./card-ownership";
 import { standardDeck, type CardBlock } from "./cards";
 import { dealerRegistry } from "./dealer";
 import { devOpaqueContainer } from "./dev-rankless-active";
@@ -49,6 +49,8 @@ describe("adopting a stored payload into the run (#928)", () => {
     expect(adopted.state.field).toEqual([{ block: adopted.payload, cell: { x: 0, y: 0, z: 0 } }]);
     expect(adopted.payload.traits.identity?.rank).toBe("K");
     expect(adopted.payload.traits.owner).toEqual({ id: "runActive" });
+    // Placed: not selectable, like any block on the field.
+    expect(adopted.state.field[0]!.block.traits.selectable).toBeUndefined();
     expect(adopted.state.removedCards).toEqual(["box"]);
     expect(adopted.state.retiredActives?.map(({ id }) => id)).toEqual(["box"]);
   });
@@ -67,6 +69,16 @@ describe("adopting a stored payload into the run (#928)", () => {
       reason: `payload ID ${standardDeck[0]!.id} is already in use`,
     });
     expect(adoptStoredPayload(run.state, "nope")).toMatchObject({ ok: false });
+  });
+
+  it("gives any adopted payload run ownership, so its removal is retired and saved", () => {
+    const rankless = { id: "inside", definition: "devRanklessActive", components: {} };
+    const run = runWith(devOpaqueContainer("box", rankless));
+    const adopted = adoptStoredPayload(run.state, "box");
+    if (!adopted.ok) throw new Error(adopted.reason);
+    expect(adopted.payload.traits.owner).toEqual({ id: "runActive" });
+    const removed = removeCardForRun(adopted.state, "inside")!;
+    expect(removed.retiredActives?.map(({ id }) => id)).toEqual(["box", "inside"]);
   });
 
   it("returns an adopted card to the deck at table clear, never the wrapper", () => {
