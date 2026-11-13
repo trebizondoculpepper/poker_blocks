@@ -129,9 +129,9 @@ const fragmentShader = /* glsl */ `
     // flattening into one plateau. Premultiplied: the transparent front canvas (#116, #190) holds a
     // valid colour wherever the flame is, and nothing where it isn't.
     vec3 light = (vec3(1.0) - exp(-colour * intensity * exposure)) * opacity;
-    float coverage = max(1.0 - transmittance, max(light.r, max(light.g, light.b)));
-    gl_FragColor = vec4(light, coverage * opacity);
-    gl_FragColor = vec4(light, max(light.r, max(light.g, light.b)));
+    // Coverage is what the flame absorbs, never less than its own light (a valid premultiplied pixel).
+    float coverage = max((1.0 - transmittance) * opacity, max(light.r, max(light.g, light.b)));
+    gl_FragColor = vec4(light, coverage);
   }
 `;
 

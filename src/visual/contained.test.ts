@@ -411,6 +411,9 @@ describe("flame configuration (#355)", () => {
     expect(material({ extinction: 2 }).uniforms.extinction!.value).toBe(2);
     expect(material({ extinction: -1 }).uniforms.extinction!.value).toBe(0);
     expect(material({}).lights).toBe(false);
+    // Its alpha is the absorption coverage, written once (#804 review).
+    expect(material({}).fragmentShader.match(/gl_FragColor\s*=/g)).toHaveLength(1);
+    expect(material({}).fragmentShader).toContain("1.0 - transmittance");
     // Never taller than the interior allows.
     expect(material({ height: 5 }).uniforms.heightScale!.value).toBeCloseTo(1.6 / 1.35);
   });
