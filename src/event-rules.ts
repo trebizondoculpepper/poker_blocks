@@ -15,6 +15,23 @@ export type EventRule = {
 
 /** Working values can change during evaluation. Commands are committed only after selection. */
 export type RuleCommand = { id: string; config: unknown };
+/**
+ * What one applied effect did (#483; doc/presentation-contracts.md, "Resolved activation
+ * results"): a snapshot for presentation, reported by the effect at the moment it applied, never
+ * recomputed. `operation` is the effect's registered name; `operand` its resolved amount (a die's
+ * actual roll, not its recipe); `before`/`after` the working value around it; `unit` what it
+ * changes (score, coins…); `scope` what it applied to (a block, a line…).
+ */
+export type ResolvedOutcome = Readonly<{
+  operation: string;
+  operand?: number;
+  before?: number;
+  after?: number;
+  unit?: string;
+  scope?: string;
+  targets?: readonly string[];
+}>;
+
 export type RuleFrame = {
   event: Readonly<GameEvent>;
   /** The game state, where the event has one; pure scoring evaluates without it. */
@@ -29,6 +46,8 @@ export type RuleFrame = {
   /** The working value as the power phase began: each power raises it to the new total. */
   powerBase?: number;
   commands: readonly RuleCommand[];
+  /** What each effect of the rule being evaluated did, in effect order (#483). */
+  outcomes?: readonly ResolvedOutcome[];
   /** Set by `evaluate`: whether the rule's condition matched and its effects ran. */
   fired?: boolean;
 };
@@ -123,10 +142,28 @@ export class EventRuleRegistry {
       selected,
       frame,
     );
-    if (!matched) return { ...frame, fired: false };
+    if (!matched) return { ...frame, outcomes: [], fired: false };
+    // Each effect reports its own resolved outcome as it applies; one that reports none gets an
+    // explicit record of its operation and the working value around it, never an inferred operand.
     const result = rule.effects.reduce<RuleFrame>(
-      (working, effect) => get(this.effects, effect.id, "effect")(effect.config, selected, working),
-      { ...frame },
+      (working, effect) => {
+        const applied = get(this.effects, effect.id, "effect")(effect.config, selected, working);
+        const reported = (applied.outcomes?.length ?? 0) > (working.outcomes?.length ?? 0);
+        return reported
+          ? applied
+          : {
+              ...applied,
+              outcomes: [
+                ...(working.outcomes ?? []),
+                {
+                  operation: effect.id,
+                  ...(working.workingValue === undefined ? {} : { before: working.workingValue }),
+                  ...(applied.workingValue === undefined ? {} : { after: applied.workingValue }),
+                },
+              ],
+            };
+      },
+      { ...frame, outcomes: [] },
     );
     return { ...result, fired: true };
   }

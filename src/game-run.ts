@@ -52,13 +52,14 @@ import {
 import {
   crossingCells,
   beforeTotalPhase,
+  numberActivations,
   resolvePassiveRules,
   withOperationCounter,
   scoreFieldWithPassives,
   type PassiveScoredLine,
   type RuleActivation,
 } from "./passive-effects";
-import { commitCommands, type CommandTarget } from "./rule-commands";
+import { commitCommands, commitCommandsWithOutcomes, type CommandTarget } from "./rule-commands";
 import type { RandomCursor } from "./random";
 import {
   ActionContext,
@@ -850,12 +851,20 @@ export class GameRun {
 
     // 3. Score the resolved field; the pure scorer is unchanged. Each line, then all, then the
     //    total applied once.
+    // Each committed line's activations numbered under this action, so a line scored again by
+    // a later play gets new IDs (#858 review).
     this.scoredLines = scoreFieldWithPassives(
       this.currentState.field,
       this.currentState.passiveRack,
       undefined,
       this.random,
-    );
+    ).map((scored) => ({
+      ...scored,
+      activations: numberActivations(
+        scored.activations,
+        `${context.actionId}:line:${scored.blockIds.join(",")}`,
+      ),
+    }));
     const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
     // Each line with the score context the `scored-line` selector reads, then all lines; their
     // hooks and follow-ups resolve before the total is applied.
@@ -961,11 +970,22 @@ export class GameRun {
       event.working?.read() ?? 0,
     );
     event.working?.write(value);
-    activations.push(...fired);
-    return commitCommands(
-      fired.flatMap(({ commands }) => commands),
-      this.commandTarget,
+    // Each activation's commands commit in order, and what they actually did joins its outcomes
+    // (a grant, or an explicit nothing); then each is numbered within its action (#483).
+    const events: GameEvent[] = [];
+    const committed = fired.map((activation) => {
+      const result = commitCommandsWithOutcomes(activation.commands, this.commandTarget);
+      events.push(...result.events);
+      return { ...activation, outcomes: [...activation.outcomes, ...result.outcomes] };
+    });
+    activations.push(
+      ...numberActivations(
+        committed,
+        this.activeAction?.context.actionId ?? "action",
+        activations.length,
+      ),
     );
+    return events;
   }
 
   /**
