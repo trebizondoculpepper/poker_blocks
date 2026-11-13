@@ -15,6 +15,7 @@ describe("composed material appearance", () => {
       id: "test-amber",
       mass: { effective: 1, rationale: "test definition" },
       releaseStatus: { provisional: {} },
+      materialFamily: "test",
       name: "Test Amber",
       traits: {},
       acoustics: { character: "test", hardness: 1, attach: "material.attach.paper" },

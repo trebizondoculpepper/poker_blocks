@@ -3,7 +3,13 @@ import { standardDeck, type CardBlock } from "./cards";
 import type { PlacedBlock } from "./game-state";
 import { scoreFieldWithPassives } from "./passive-effects";
 import { createPassiveBlock, ordinaryPassives } from "./passives";
-import { massTrials, packingTrials, scoreCurves, validateQueryFactor } from "./trial-modifiers";
+import {
+  diversityTrial,
+  massTrials,
+  packingTrials,
+  scoreCurves,
+  validateQueryFactor,
+} from "./trial-modifiers";
 import { getMaterialDefinition, withMaterial } from "./materials";
 
 const placed = (block: CardBlock, x: number, y = 0): PlacedBlock => ({
@@ -121,5 +127,66 @@ describe("heavy and light mass trials (#818)", () => {
       "trial-light-total-mass",
     ])
       expect(ordinary).not.toContain(id);
+  });
+});
+
+describe("material diversity trial (#819)", () => {
+  const tiers = (n: number) => scoreCurves.get("thresholdTiers").factor(n, diversityTrial);
+  const made = (index: number, material: string, x: number) =>
+    placed(withMaterial(standardDeck[index]!, getMaterialDefinition(material as never)), x);
+
+  it("takes the greatest attained tier, not a product of tiers", () => {
+    expect([1, 2, 3, 4, 7].map(tiers)).toEqual([1, 2, 4, 4, 4]);
+    const bad = { query: "materialDiversity", value: "families", curve: "thresholdTiers" };
+    expect(validateQueryFactor("t", { ...bad, params: { tiers: [] } })).toHaveLength(1);
+    expect(
+      validateQueryFactor("t", {
+        ...bad,
+        params: {
+          tiers: [
+            { at: 3, factor: 4 },
+            { at: 2, factor: 2 },
+          ],
+        },
+      }),
+    ).toHaveLength(1);
+    expect(validateQueryFactor("t", { ...bad, params: diversityTrial })).toEqual([]);
+  });
+
+  it("counts families among the scored subset only", () => {
+    // A pair of aces (both wood) scores; the other three cards don't, whatever they are.
+    const field = [
+      made(0, "wood", 0),
+      made(13, "wood", 1),
+      made(28, "gold", 2),
+      made(45, "steel", 3),
+      made(8, "ice", 4),
+    ];
+    const base = scoreFieldWithPassives(field, [])[0]!;
+    expect(base.contributingIds).toHaveLength(2);
+    const scored = scoreFieldWithPassives(field, [
+      createPassiveBlock("trial-material-diversity", "v"),
+    ]);
+    expect(scored[0]!.points).toBe(base.points);
+  });
+
+  it("treats a container variant as its base substance, and rewards three families ×4", () => {
+    const flush = (materials: string[]) => materials.map((material, x) => made(x, material, x));
+    const same = flush(["water", "waterInPlastic", "hotWaterInPlastic", "water", "waterInLantern"]);
+    const baseSame = scoreFieldWithPassives(same, [])[0]!.points;
+    expect(
+      scoreFieldWithPassives(same, [createPassiveBlock("trial-material-diversity", "v")])[0]!
+        .points,
+    ).toBe(baseSame);
+    const three = flush(["wood", "steel", "gold", "wood", "steel"]);
+    const baseThree = scoreFieldWithPassives(three, [])[0]!.points;
+    const withThree = scoreFieldWithPassives(three, [
+      createPassiveBlock("trial-material-diversity", "v"),
+    ]);
+    expect(withThree[0]!.points / baseThree).toBeCloseTo(4, 1);
+  });
+
+  it("is provisional", () => {
+    expect(ordinaryPassives().map(({ id }) => id)).not.toContain("trial-material-diversity");
   });
 });

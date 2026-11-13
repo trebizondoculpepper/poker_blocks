@@ -16,6 +16,7 @@ import { passiveDefinitions, type PassiveDefinition } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
 import "./packing-density";
 import "./field-mass";
+import "./material-diversity";
 
 /** A registered trial curve: its factor for a value, and what's wrong with its parameters. */
 export type ScoreCurve = {
@@ -84,6 +85,26 @@ scoreCurves.register("lightInverse", {
   },
 });
 
+type TierParams = { tiers: readonly { at: number; factor: number }[] };
+
+// The greatest attained tier's factor, ×1 below the first: tiers don't multiply together.
+scoreCurves.register("thresholdTiers", {
+  factor: (value, raw) =>
+    (raw as TierParams).tiers.reduce(
+      (factor, tier) => (value >= tier.at ? tier.factor : factor),
+      1,
+    ),
+  validate: (raw) => {
+    const { tiers = [] } = (raw ?? {}) as Partial<TierParams>;
+    const ordered = tiers.every((tier, index) => index === 0 || tier.at > tiers[index - 1]!.at);
+    return tiers.length &&
+      ordered &&
+      tiers.every(({ at, factor }) => finite(at, factor) && factor >= 1)
+      ? []
+      : ["needs tiers in rising order, each with a finite factor ≥ 1"];
+  },
+});
+
 /** A query-driven row multiplier's configuration. */
 export type QueryFactorConfig = {
   query: string;
@@ -123,6 +144,14 @@ export function validateQueryFactor(owner: string, config: QueryFactorConfig): s
 export const packingTrials = {
   dense: { maximum: 10, start: 0.7 },
   sparse: { maximum: 10, start: 0.2 },
+} as const;
+
+/** The exported initial diversity tiers: two families ×2, three or more ×4. */
+export const diversityTrial = {
+  tiers: [
+    { at: 2, factor: 2 },
+    { at: 3, factor: 4 },
+  ],
 } as const;
 
 /** The exported initial mass trial parameters (designer suggestions, not balance). */
@@ -180,6 +209,18 @@ for (const definition of [
       value: "density",
       curve: "sparseRamp",
       params: packingTrials.sparse,
+    },
+  ),
+  queryTrial(
+    "trial-material-diversity",
+    "Diversity (trial)",
+    "◈",
+    "Multiplies each scored row by ×2 for two material families among its scored blocks, ×4 for three or more. Provisional trial.",
+    {
+      query: "materialDiversity",
+      value: "families",
+      curve: "thresholdTiers",
+      params: diversityTrial,
     },
   ),
   // Heavy and light (#818), each on the row's scored subset, by mean and by total mass.
