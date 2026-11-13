@@ -34,6 +34,11 @@ export type OpticsControl =
       fallback: number;
       value(): number;
       set(value: number): void;
+      /**
+       * Bring a well-formed imported value within bounds, with a notice saying so (#795): an old
+       * preset's value from before the bounds changed. Omitted, out-of-range values are refused.
+       */
+      normalize?(value: number): { value: number; notice?: string } | null;
     }
   | {
       key: string;
@@ -113,14 +118,25 @@ const rippleControls = (ripple: LookupRipple): readonly OpticsControl[] => [
     0.001,
     ripple.amplitude,
   ),
-  slider(
-    "ripplePeriod",
-    "Ripple period (s)",
-    rippleBounds.period.min,
-    rippleBounds.period.max,
-    0.5,
-    ripple.period,
-  ),
+  {
+    // This ripple's own period bounds (#795): the same ones its clock runs within.
+    ...slider(
+      "ripplePeriod",
+      "Ripple period (s)",
+      ripple.periodBounds.min,
+      ripple.periodBounds.max,
+      ripple.periodBounds.step,
+      ripple.period,
+    ),
+    normalize: (value: number) => {
+      if (!Number.isFinite(value) || value <= 0) return null;
+      const { min, max } = ripple.periodBounds;
+      const clamped = Math.min(max, Math.max(min, value));
+      return clamped === value
+        ? { value }
+        : { value: clamped, notice: `ripplePeriod ${value} s adjusted to ${clamped} s` };
+    },
+  },
   slider(
     "rippleScale",
     "Ripple scale",
@@ -270,13 +286,25 @@ function refusal(control: OpticsControl, value: unknown): string | null {
  * value, or its default when the preset omits it. Unknown backends or fields, a wrong schema
  * version, or an invalid value are refused before anything changes.
  */
-export function applyOptics(preset: unknown): void {
+export function applyOptics(preset: unknown): string[] {
   const { schemaVersion, backend, config } = (preset ?? {}) as Partial<OpticsPreset>;
   if (schemaVersion !== 1) throw new Error("Unsupported optics preset version");
   if (typeof backend !== "string" || !opticsBackends.has(backend))
     throw new Error("Unknown optics backend");
   const controls = opticsBackends.get(backend).controls ?? [];
-  const values = (config ?? {}) as Record<string, unknown>;
+  // Well-formed values a control normalizes come within its bounds, each with a notice (#795).
+  const notices: string[] = [];
+  const values = Object.fromEntries(
+    Object.entries((config ?? {}) as Record<string, unknown>).map(([key, value]) => {
+      const control = controls.find((candidate) => candidate.key === key);
+      const normalized =
+        control && "normalize" in control && control.normalize && typeof value === "number"
+          ? control.normalize(value)
+          : null;
+      if (normalized?.notice) notices.push(normalized.notice);
+      return [key, normalized ? normalized.value : value];
+    }),
+  );
   const known = new Set(controls.map(({ key }) => key));
   const unknown = Object.keys(values).filter((key) => !known.has(key));
   if (unknown.length) throw new Error(`Unknown optics settings: ${unknown.join(", ")}`);
@@ -289,4 +317,5 @@ export function applyOptics(preset: unknown): void {
     const value = control.key in values ? values[control.key] : control.fallback;
     (control.set as (value: number | string) => void)(value as number | string);
   }
+  return notices;
 }
