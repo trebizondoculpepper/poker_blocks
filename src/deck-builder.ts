@@ -41,14 +41,24 @@ export class DeckBuilderError extends Error {
 }
 
 /** Build a deck: every operation in order, from an empty list and a stream seeded with `seed`. */
-export function buildDeck(steps: readonly DeckBuilderStep[], seed: number): readonly CardBlock[] {
+export function buildDeck(
+  steps: readonly DeckBuilderStep[],
+  seed: number,
+  /** An optional card budget, checked after every operation so construction stops at once. */
+  maxCards = Infinity,
+): readonly CardBlock[] {
   const unknown = steps.filter(({ operation }) => !deckBuilderOperations.has(operation));
   if (unknown.length)
     throw new DeckBuilderError(
       `unknown deck builder operation(s): ${unknown.map((s) => s.operation).join(", ")}`,
     );
   const built = steps.reduce(
-    (context, { operation, config }) => deckBuilderOperations.get(operation)(context, config),
+    (context, { operation, config }) => {
+      const next = deckBuilderOperations.get(operation)(context, config);
+      if (next.cards.length > maxCards)
+        throw new DeckBuilderError(`the deck exceeds its ${maxCards}-card budget at ${operation}`);
+      return next;
+    },
     { cards: [] as readonly CardBlock[], random: seededRandom(seed) },
   ).cards;
   if (new Set(built.map(({ id }) => id)).size !== built.length)
