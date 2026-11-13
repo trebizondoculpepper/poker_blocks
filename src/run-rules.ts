@@ -50,6 +50,12 @@ export type RunRules = {
    * shop has no stock.
    */
   stockShop?: (state: GameState, random: () => number, round: number) => GameState;
+  /**
+   * Plain-data descriptors of the function-valued policies above, by field name (#934): the
+   * configuration each was built from, so an export can record and compare it. A policy with no
+   * descriptor cannot be verified.
+   */
+  policies?: Readonly<Partial<Record<"stockShop" | "resaleModifiers", unknown>>>;
 };
 
 /** A stage in the round, in order, with the data that is its own. */
