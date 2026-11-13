@@ -1,3 +1,4 @@
+import type { MusicOperation } from "./audio/music-controller";
 /**
  * The music each game mode plays. A mode composes its style through the `music` mode trait;
  * this module turns that style into the behaviour the audio service drives, so nothing has to
@@ -8,8 +9,8 @@ import type { ModeMusicStyle } from "./game-modes";
 export type ModeMusicBehaviour = {
   /** A run has just started. */
   settle(): void;
-  /** The game screen came back to the front. */
-  resume(): void;
+  /** The game screen came back to the front: run its configured resume cue, as the style allows. */
+  resume(operations: readonly MusicOperation[]): void;
   /**
    * Whether this style lets a stage choose its own music. A quiet mode keeps the music wound
    * down instead, so the audio service's stage tracks are never started.
@@ -20,7 +21,7 @@ export type ModeMusicBehaviour = {
 /** Music actions a mode uses after a run starts, when its game screen resumes, and per stage. */
 export function createModeMusicBehaviours(actions: {
   windDown(): void;
-  resumeTable(): void;
+  run(operations: readonly MusicOperation[]): void;
 }): Record<ModeMusicStyle, ModeMusicBehaviour> {
   return {
     quiet: {
@@ -30,7 +31,7 @@ export function createModeMusicBehaviours(actions: {
     },
     ordinary: {
       settle() {},
-      resume: () => actions.resumeTable(),
+      resume: (operations) => actions.run(operations),
       playsStages: () => true,
     },
   };

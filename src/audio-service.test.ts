@@ -36,6 +36,9 @@ function setup() {
   return { audio, calls, gestures, tick: (ms: number) => (clock += ms) };
 }
 
+/** The table scene's configured resume cue (src/game-modes.ts). */
+const resumeCue = [{ op: "resumeTrack", config: { slot: "tableMusic", plan: "stage" } }];
+
 describe("audio service", () => {
   it("runs a play scene's configured music operations (#92, #758)", () => {
     const { audio, calls } = setup();
@@ -46,7 +49,7 @@ describe("audio service", () => {
   it("runs each scene's music cue, and leaves filtering to the menu scenes (#179)", () => {
     const { audio, calls } = setup();
     audio.playCue([{ op: "windDown" }]);
-    audio.resumeTable();
+    audio.resumeTable(resumeCue);
     expect(calls).toEqual(["run windDown", 'run resumeTrack{"slot":"tableMusic","plan":"stage"}']);
     calls.length = 0;
     audio.setMusicFilter("lowpass");
@@ -58,14 +61,14 @@ describe("audio service", () => {
     const { audio, calls } = setup();
     audio.enterMode("quiet");
     audio.runStarted();
-    audio.resumeTable();
+    audio.resumeTable(resumeCue);
     audio.playStageMusic([{ op: "selectTrack", config: { plan: "stage" } }]);
     expect(calls).toEqual(["windDown", "windDown"]);
 
     calls.length = 0;
     audio.enterMode("ordinary");
     audio.runStarted();
-    audio.resumeTable();
+    audio.resumeTable(resumeCue);
     expect(calls).toEqual(['run resumeTrack{"slot":"tableMusic","plan":"stage"}']);
   });
 

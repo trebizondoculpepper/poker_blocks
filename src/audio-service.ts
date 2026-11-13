@@ -40,8 +40,11 @@ export type AudioService = {
   runStarted(): void;
   /** Run a scene's music cue: its configured operations (its `musicCue` trait). */
   playCue(operations: readonly MusicOperation[]): void;
-  /** Back to the table's music, as the mode plays it (a quiet mode stays wound down). */
-  resumeTable(): void;
+  /**
+   * Back to the table's music, as the mode plays it: the scene's configured resume cue (its
+   * `musicResume` trait), or a wind-down in a quiet mode.
+   */
+  resumeTable(operations: readonly MusicOperation[]): void;
   /**
    * Filter the music for the scene in front (its `musicFilter` trait), or clear it: low-pass
    * for the pause menu, high-pass for Settings. The track does not change.
@@ -70,9 +73,7 @@ export function createAudioService(options: {
   const now = options.now ?? (() => performance.now());
   const modeMusicBehaviours = createModeMusicBehaviours({
     windDown: () => music.windDown(),
-    // The table's remembered track, or a fresh one from the stage plan if none is remembered.
-    resumeTable: () =>
-      music.run([{ op: "resumeTrack", config: { slot: "tableMusic", plan: "stage" } }]),
+    run: (operations) => music.run(operations),
   });
   let modeMusic: ModeMusicBehaviour = modeMusicBehaviours.ordinary;
   let lastZoomSoundAt = -Infinity;
@@ -102,8 +103,8 @@ export function createAudioService(options: {
     playCue(operations) {
       music.run(operations);
     },
-    resumeTable() {
-      modeMusic.resume();
+    resumeTable(operations) {
+      modeMusic.resume(operations);
     },
     setMusicFilter(kind) {
       music.filter(kind);

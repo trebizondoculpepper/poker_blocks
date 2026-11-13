@@ -227,7 +227,9 @@ describe("game modes composed from traits", () => {
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},
-      musicResume: {},
+      musicResume: {
+        operations: [{ op: "resumeTrack", config: { slot: "tableMusic", plan: "stage" } }],
+      },
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
     });
     // The title scene owns its own panel, with Continue gated on a save existing.
@@ -371,13 +373,13 @@ describe("mode music lifecycle", () => {
     const calls: string[] = [];
     const behaviours = createModeMusicBehaviours({
       windDown: () => calls.push("windDown"),
-      resumeTable: () => calls.push("resumeStage"),
+      run: () => calls.push("resumeStage"),
     });
 
     behaviours.quiet.settle();
-    behaviours.quiet.resume();
+    behaviours.quiet.resume([]);
     behaviours.ordinary.settle();
-    behaviours.ordinary.resume();
+    behaviours.ordinary.resume([]);
 
     expect(calls).toEqual(["windDown", "windDown", "resumeStage"]);
     // Ordinary modes let a stage choose its music; quiet modes keep it wound down.

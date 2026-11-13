@@ -168,8 +168,11 @@ export type SceneTraits = {
    * plan entries and slots (#758; src/audio/music-controller.ts).
    */
   musicCue: { operations: readonly MusicOperation[] };
-  /** Entering this scene resumes the table's music, as the mode plays it (quiet stays down). */
-  musicResume: Record<never, never>;
+  /**
+   * Entering this scene resumes the table's music through its configured operations, as the
+   * mode plays it (a quiet mode stays wound down).
+   */
+  musicResume: { operations: readonly MusicOperation[] };
   /**
    * Entering this play scene runs its music operations: the stage plan's fresh random vibe, or
    * the boss plan's loop (#92, #758). Quiet modes keep their stages silent.
@@ -585,7 +588,10 @@ export const sceneDefinitions = [
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},
       // A shop entered from the title (Continue) brings the table's music back.
-      musicResume: {},
+      // The table's remembered track, or a fresh one from the stage plan if none is remembered.
+      musicResume: {
+        operations: [{ op: "resumeTrack", config: { slot: "tableMusic", plan: "stage" } }],
+      },
       ...escapeOpensPause,
     },
   },

@@ -173,6 +173,11 @@ export function createMusicController(
    * Continue begins with them empty and uses the configured resume path.
    */
   const slots = new Map<string, string>();
+  /**
+   * The track the latest cue chose, logically, before its playback has happened (it may wait for
+   * the first gesture): `rememberTrack` records this, not what is still audibly playing.
+   */
+  let selected: string | null = null;
   /** The last request, replayed on unlock. */
   let wanted: () => void = () => {};
   let woundDown = false;
@@ -225,6 +230,8 @@ export function createMusicController(
       random,
     });
     if (chosen && entry.slot) slots.set(entry.slot, chosen);
+    // A keeping selector leaves the playing track as the selection.
+    selected = chosen === undefined ? player.current : chosen;
     return chosen === undefined ? () => {} : () => start(chosen);
   };
 
@@ -233,12 +240,15 @@ export function createMusicController(
     const api: MusicOperationApi = {
       select: (plan) => playback.push(choose(plan)),
       remember: (slot) => {
-        if (player.current) slots.set(slot, player.current);
+        const track = selected ?? player.current;
+        if (track) slots.set(slot, track);
       },
       resume: (slot, fallbackPlan) => {
         const remembered = slots.get(slot);
-        if (remembered) playback.push(() => start(remembered));
-        else if (fallbackPlan) playback.push(choose(fallbackPlan));
+        if (remembered) {
+          selected = remembered;
+          playback.push(() => start(remembered));
+        } else if (fallbackPlan) playback.push(choose(fallbackPlan));
       },
       windDown: () => playback.push(windDown),
       windUp: () => playback.push(() => start(beforeWindDown)),

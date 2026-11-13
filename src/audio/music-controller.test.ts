@@ -193,6 +193,20 @@ describe("music controller", () => {
     expect(log).toEqual(["windUp b", "play b"]);
   });
 
+  it("remembers the cue's selection, not what is still audibly playing (#855 review)", () => {
+    const { music, log, ...cue } = setup();
+    cue.stage();
+    // Not yet unlocked: nothing has played, but the memory follows the selection.
+    music.run([
+      { op: "selectTrack", config: { plan: "boss" } },
+      { op: "rememberTrack", config: { slot: "saved" } },
+    ]);
+    music.unlock();
+    log.length = 0;
+    music.run([{ op: "resumeTrack", config: { slot: "saved" } }]);
+    expect(log.map(started)).toEqual(["solitaire-boss"]);
+  });
+
   it("rejects an unknown operation at composition rather than falling back", () => {
     expect(validateMusicOperations("scene", [{ op: "selectTrack" }, { op: "shuffleAll" }])).toEqual(
       ['scene: unknown music operation "shuffleAll"'],
@@ -209,7 +223,7 @@ describe("configured music cues (#758)", () => {
         id: string;
         traits: Record<string, { operations?: readonly { op: string; config?: unknown }[] }>;
       }[])
-        for (const trait of ["musicCue", "musicTrack"]) {
+        for (const trait of ["musicCue", "musicTrack", "musicResume"]) {
           const operations = scene.traits[trait]?.operations ?? [];
           expect(validateMusicOperations(`${name}/${scene.id}`, operations)).toEqual([]);
           for (const { config } of operations) {

@@ -609,7 +609,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     enter: ({ services }, { operations }) => services.audio.playCue(operations),
   });
   behaviours.register("musicResume", {
-    enter: ({ services }) => services.audio.resumeTable(),
+    enter: ({ services }, { operations }) => services.audio.resumeTable(operations),
   });
   // A play scene starts its own music as it comes in front; covering and uncovering it (the
   // pause menu) neither restarts nor changes it.
