@@ -30,7 +30,11 @@ export { standardGameFlow };
 
 export type SceneTraits = {
   screen: { kind: string };
-  pausesBelow: { input: boolean; update: boolean };
+  /**
+   * Stop the scenes below taking input or updates; `presentation` also holds the playfield's
+   * presentation clock, so the covered board shows a frozen pose (#530).
+   */
+  pausesBelow: { input: boolean; update: boolean; presentation?: boolean };
   /**
    * A HUD panel this scene shows while it is in front, with its config (see
    * src/hud-panels.ts): the round panel names the stage and its next-action labels; the shop
@@ -140,6 +144,8 @@ export type SceneTraits = {
   titleMenuDialog: DialogConfig;
   newGameDialog: DialogConfig;
   pauseDialog: DialogConfig;
+  /** Settings' Back, a block menu on its readable panel (#530). */
+  settingsDialog: DialogConfig;
   stageWonDialog: DialogConfig;
   gameOverDialog: DialogConfig;
   /**
@@ -168,7 +174,8 @@ export type SceneTraits = {
    * A menu of items shown while this scene is in front. Choosing one dispatches its `id` as a
    * named action; `when` names a menu condition (src/scene-behaviours.ts) the item needs.
    */
-  menu: { label: string; items: readonly MenuItem[] };
+  /** A menu screen's overlay and heading; its choices come from a dialog trait (#530). */
+  menu: { label: string };
   /**
    * The game over screen is shown while this scene is in front: the run's totals, and one
    * button per item, each dispatching its id as a named action (#90).
@@ -317,6 +324,8 @@ export type MenuBlockItem = {
   disabledReason?: string;
   /** Available only while this registered condition holds, checked as the menu shows (#529). */
   enabledWhen?: MenuCondition;
+  /** Shown only while this registered condition holds, checked as the menu shows (#530). */
+  when?: MenuCondition;
 };
 
 /** A dialog: its heading and its buttons, shown side by side. */
@@ -414,6 +423,8 @@ export const gameDialogs = {
   },
   pause: {
     title: "Paused",
+    // Floating over the frozen game with no panel, at the title's readable cube size.
+    presentation: foregroundPresentation,
     items: [
       { label: "Resume", action: "resume", description: "Go back to the game." },
       {
@@ -424,9 +435,15 @@ export const gameDialogs = {
       {
         label: "Quit",
         action: "quitToTitle",
+        when: "inRun",
         description: "Go to the title screen. Your game is saved.",
       },
     ],
+  },
+  settings: {
+    title: "Settings",
+    presentation: { panel: "readable" },
+    items: [{ label: "Back", action: "back", description: "Close Settings." }],
   },
   stageWon: {
     title: "Stage won",
@@ -448,14 +465,7 @@ export const gameDialogs = {
 } satisfies Record<string, DialogConfig>;
 
 /** The pause menu: the same menu from the title and from play (#87). */
-const pauseMenu: SceneTraits["menu"] = {
-  label: "Paused",
-  items: [
-    { id: "resume", label: "Resume" },
-    { id: "openSettings", label: "Settings" },
-    { id: "quitToTitle", label: "Quit to title", when: "inRun" },
-  ],
-};
+const pauseMenu: SceneTraits["menu"] = { label: "Paused" };
 
 /** Where the project lives. Links to it come from here, so the URL is configured once. */
 export const projectHome = "https://github.com/trebizondoculpepper/poker_blocks";
@@ -525,9 +535,11 @@ export const sceneDefinitions = [
     traits: {
       tableBackground: {},
       menu: pauseMenu,
+      // After `menu`, so its screen is showing when the choices are drawn into it.
+      pauseDialog: gameDialogs.pause,
       blockTitle: titleBlocks,
       panelFooter: { links: projectLinks },
-      pausesBelow: { input: true, update: true },
+      pausesBelow: { input: true, update: true, presentation: true },
       musicFilter: { kind: "lowpass" },
       keyAction: { key: "Escape", action: "resume", sfx: "ui.back" },
     },
@@ -548,6 +560,8 @@ export const sceneDefinitions = [
     traits: {
       tableBackground: {},
       settingsPanel: {},
+      // After `settingsPanel`, so Back is drawn on the panel that is showing.
+      settingsDialog: gameDialogs.settings,
       pausesBelow: { input: true, update: true },
       musicFilter: { kind: "highpass" },
       enterSound: { sfx: "ui.settings.enter" },
