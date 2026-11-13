@@ -49,7 +49,14 @@ export function saveActiveObjects(blocks: readonly CardBlock[]): Record<string, 
 }
 
 /** Rebuild saved active instances; throws on an unknown definition or codec or a bad record. */
-export function restoreActiveObjects(saved: unknown): CardBlock[] {
+export function restoreActiveObjects(
+  saved: unknown,
+  /**
+   * The same instance as configured in the run's starting deck, when it is there: its record's
+   * components are restored onto it rather than onto a fresh one, keeping its configuration.
+   */
+  startingInstance: (id: string, definition: string) => CardBlock | undefined = () => undefined,
+): CardBlock[] {
   if (saved === undefined) return [];
   if (typeof saved !== "object" || saved === null || Array.isArray(saved))
     throw new Error("bad active objects");
@@ -59,7 +66,8 @@ export function restoreActiveObjects(saved: unknown): CardBlock[] {
       throw new Error(`unknown active definition for ${id}`);
     if (typeof components !== "object" || components === null || Array.isArray(components))
       throw new Error(`bad active components for ${id}`);
-    const created = activeDefinitions.get(definition).create(id);
+    const created =
+      startingInstance(id, definition) ?? activeDefinitions.get(definition).create(id);
     return Object.entries(components).reduce((block, [name, value]) => {
       if (!activeComponentCodecs.has(name)) throw new Error(`unknown active component "${name}"`);
       return activeComponentCodecs.get(name).restore(block, value);

@@ -146,3 +146,21 @@ describe("an active instance in the starting deck (#894 review)", () => {
     expect(fromSaveRecord(record, standardDeck, dealerRegistry)).toBeNull();
   });
 });
+
+describe("a configured active in the starting deck (#894 review)", () => {
+  it("keeps its starting configuration through save and Continue", async () => {
+    const { getMaterialDefinition, materialOf, withMaterial } = await import("./materials");
+    const steel = withMaterial(devRanklessActive("steel-active"), getMaterialDefinition("steel"));
+    const deck = [steel, ...standardDeck];
+    const run = new GameRun(dealerRegistry, demoRunRules, deck, () => 0);
+    const restored = fromSaveRecord(
+      JSON.parse(JSON.stringify(toSaveRecord(run.snapshot()))),
+      deck,
+      dealerRegistry,
+    )!;
+    const all = [...restored.state.hand, ...restored.state.deck];
+    const found = all.filter(({ id }) => id === "steel-active");
+    expect(found).toHaveLength(1);
+    expect(materialOf(found[0]!)).toBe("steel");
+  });
+});
