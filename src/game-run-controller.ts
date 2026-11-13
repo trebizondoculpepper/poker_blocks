@@ -1,4 +1,10 @@
 import type { GameState } from "./game-state";
+import {
+  createSessionRequester,
+  type SessionFactoryHost,
+  type SessionRequest,
+  type SessionResult,
+} from "./session-host";
 import type { PassiveScoredLine } from "./passive-effects";
 import { blockName } from "./block-presentation";
 import { runInventory, type InventoryRecord } from "./run-inventory";
@@ -150,6 +156,13 @@ export type GameRunController = {
   shopStock(): readonly ShopOffer[];
   /** The run's deck, for the read-only deck view (#175). */
   deckBlocks(): readonly CardBlock[];
+  /**
+   * Prepare a session through a registered factory and, if it succeeds, adopt it atomically as
+   * the current run (#902; doc/experiments/trial-session-adoption.md): its run, rules, card
+   * universe, random stream and provenance together. A stale request (an ID not newer than the
+   * last) or a failed preparation changes nothing.
+   */
+  requestSession(request: SessionRequest): SessionResult;
   /**
    * The committed field and round, read-only, for snapshot-scoped measurement (#904). The state is
    * immutable: a reader holds the version it read, never a live reference into a later action.
@@ -530,6 +543,35 @@ export function createGameRunController<Context>(options: {
     }
   }
 
+  /** Preparation runs the mode's policy and the given start steps off to the side. */
+  const sessionHost: SessionFactoryHost = {
+    prepare(steps) {
+      // Preparing must not touch the active run's stream (doc/experiments/trial-session-adoption.md).
+      const isolated: RunSetupServices = {
+        standardDeck,
+        newSeed: () => {
+          throw new Error("session preparation may not draw from the active stream");
+        },
+        random: () => {
+          throw new Error("session preparation may not draw from the active stream");
+        },
+      };
+      const rules = runSetup.policy(currentMode.runSetup, baseRunRules(currentMode), isolated);
+      const snapshot = new GameRun(dealerRegistry, rules, standardDeck, () => 0).snapshot();
+      return runSetup.start(steps, { rules, deck: { deck: standardDeck }, snapshot }, isolated);
+    },
+  };
+
+  // One synchronous adoption: stream, rules and card universe first, then the run itself, whose
+  // checkpoints now refer to the adopted stream. Old gestures and presentation are cancelled.
+  const requestSession = createSessionRequester(sessionHost, (prepared) => {
+    services.input.cancelGestures();
+    randomizer = prepared.random;
+    runRules = prepared.rules;
+    cards = prepared.cards;
+    startRun(prepared.run);
+  });
+
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
   function startRun(session: GameRun): void {
     const { rack, cameraView, audio } = services;
@@ -863,6 +905,7 @@ export function createGameRunController<Context>(options: {
     offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),
     shopStock: () => game.state.shopStock ?? [],
     deckBlocks: () => game.state.deck,
+    requestSession,
     committedState: () => game.state,
     lastScoring: () => ({ field: game.lastScoringField, lines: game.lastScoredLines }),
     inventory: () => runInventory(game.state),
