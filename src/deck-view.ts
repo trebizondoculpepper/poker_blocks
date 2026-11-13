@@ -5,7 +5,7 @@ import { inspectBlock } from "./traits/inspectable";
  * saying where it is (deck, hand, table or discard). Hover, focus or tap on a block shows its
  * details and location. It never changes the run.
  */
-import { ranks, type CardBlock } from "./cards";
+import { ranks, type CardBlock, pokerIdentity } from "./cards";
 import { getMaterialDefinition, materialOf } from "./materials";
 
 /** Where a listed card is: its marker and its description. */
@@ -36,7 +36,7 @@ export function groupDeckByRank(
   return deckRankOrder
     .map((rank) => ({
       rank,
-      blocks: blocks.filter((block) => block.traits.identity.rank === rank),
+      blocks: blocks.filter((block) => pokerIdentity(block).rank === rank),
     }))
     .filter(({ blocks: group }) => group.length > 0);
 }
@@ -45,7 +45,7 @@ export function groupDeckByRank(
 export function deckBlockDetails(block: CardBlock): string {
   return (
     inspectBlock(block) ??
-    `${block.traits.identity.rank}${block.traits.identity.suit.symbol} · ${getMaterialDefinition(materialOf(block)).name}`
+    `${pokerIdentity(block).rank}${pokerIdentity(block).suit.symbol} · ${getMaterialDefinition(materialOf(block)).name}`
   );
 }
 
@@ -80,7 +80,7 @@ export function createDeckView(host: HTMLElement): DeckView {
           const chip = document.createElement("button");
           chip.type = "button";
           chip.className = "deck-view-block";
-          const { rank, suit } = block.traits.identity;
+          const { rank, suit } = pokerIdentity(block);
           chip.textContent = `${rank}${suit.symbol}`;
           const location = locationOf(block);
           if (location) {

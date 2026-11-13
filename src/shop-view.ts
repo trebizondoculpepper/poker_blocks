@@ -7,7 +7,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { clamp01, easeInOutCubic, lerp } from "./easing";
 import { playSfx } from "./audio/sfx";
-import { cardName } from "./cards";
+import { cardName, pokerIdentity } from "./cards";
 import { addExtras, createPassiveVisual } from "./passive-visual";
 import { passiveAppearance, passiveDefinitions } from "./passives";
 import type { ShopOffer } from "./shop-stock";
@@ -107,7 +107,7 @@ function passiveCube(block: PassiveBlock): OfferCube {
 function cardCube(block: CardBlock): OfferCube {
   const look = cardLook(block);
   const appearance = createBlockAppearance(
-    cardFaceArt(block.traits.identity, {
+    cardFaceArt(pokerIdentity(block), {
       face: look.cardFace,
       bonus: acquiredBonusDescriptor(block),
     }),
@@ -147,8 +147,8 @@ function cardCube(block: CardBlock): OfferCube {
 
 registerOfferView<CardBlock>("card", {
   cube: cardCube,
-  name: (block) => cardName(block.traits.identity),
-  describe: (block) => inspectBlock(block) ?? cardName(block.traits.identity),
+  name: (block) => cardName(pokerIdentity(block)),
+  describe: (block) => inspectBlock(block) ?? cardName(pokerIdentity(block)),
   className: "is-card",
   purchaseDescription: "BUY to add to the deck",
   flightTarget: "deck",

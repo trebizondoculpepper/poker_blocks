@@ -325,8 +325,8 @@ describe("Continue never re-applies run setup", () => {
     const load = () => loadRun(storage, deck, dealerRegistry, "run", mode.flow, true);
     const identity = (card: (typeof original.state.hand)[number]) => [
       card.id,
-      card.traits.identity.rank,
-      card.traits.identity.suit.name,
+      card.traits.identity!.rank,
+      card.traits.identity!.suit.name,
       materialOf(card),
     ];
     const zones = (state: GameState) => [

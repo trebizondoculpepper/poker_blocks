@@ -19,7 +19,7 @@ import { menuScreenScenes } from "./overlays";
 import { refusalSound } from "./purchase-refusals";
 import { playSfx } from "./audio/sfx";
 import type { CameraViewService } from "./camera-view";
-import { cardName, standardDeck, type CardBlock } from "./cards";
+import { cardName, standardDeck, type CardBlock, pokerIdentity } from "./cards";
 import type { ConsoleApp } from "./console-host";
 import { dealerRegistry, roundOutcome, type RoundOutcome } from "./dealer";
 import type { FieldView } from "./field-view";
@@ -356,14 +356,14 @@ export function createGameRunController<Context>(options: {
     views.highlight(selected);
     const selectedNames = views.all
       .filter(({ block }) => selected.has(block.id))
-      .map(({ block }) => cardName(block.traits.identity));
+      .map(({ block }) => cardName(pokerIdentity(block)));
     // With two or more hand blocks selected, a badge over the hand says how many (#305), so a
     // drag that will carry the whole selection is never a surprise.
     const inHand = game.state.hand.filter((block) => selected.has(block.id)).length;
     services.selectionBadge.count(inHand);
     host.setAttribute(
       "aria-label",
-      `${game.state.field.length} blocks in play. Hand: ${game.state.hand.map((block) => cardName(block.traits.identity)).join(", ")}. ${game.state.deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,
+      `${game.state.field.length} blocks in play. Hand: ${game.state.hand.map((block) => cardName(pokerIdentity(block))).join(", ")}. ${game.state.deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,
     );
   }
 

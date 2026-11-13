@@ -5,7 +5,7 @@
  * The app is reached only through `ConsoleHost`, so this module is pure but for what the
  * host does.
  */
-import { cardName, type CardBlock } from "../cards";
+import { cardName, type CardBlock, pokerIdentity } from "../cards";
 import type { GameRun } from "../game-run";
 import { splitStatements, tokenise } from "./command-line";
 
@@ -60,7 +60,7 @@ const fail = (text: string): never => {
 };
 
 const cards = (blocks: readonly CardBlock[]): string =>
-  blocks.length ? blocks.map((b) => cardName(b.traits.identity)).join(", ") : "(none)";
+  blocks.length ? blocks.map((b) => cardName(pokerIdentity(b))).join(", ") : "(none)";
 
 export const COMMANDS: readonly ConsoleCommand[] = [
   {
@@ -130,7 +130,7 @@ export const COMMANDS: readonly ConsoleCommand[] = [
       if (!field.length) return "(empty)";
       return field.map(
         ({ block, cell }) =>
-          `  ${cardName(block.traits.identity)}  (${cell.x}, ${cell.y}, ${cell.z})`,
+          `  ${cardName(pokerIdentity(block))}  (${cell.x}, ${cell.y}, ${cell.z})`,
       );
     },
   },

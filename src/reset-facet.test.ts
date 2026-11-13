@@ -43,7 +43,7 @@ describe("resettable (#582)", () => {
     expect(result.ok).toBe(true);
     const reset = result.state.hand[0]!;
     expect(reset.id).toBe(card.id);
-    expect(reset.traits.identity).toBe(card.traits.identity);
+    expect(reset.traits.identity!).toBe(card.traits.identity!);
     expect(reset.traits.owner).toEqual({ id: "shop" });
     expect(reset.traits.modifiers).toEqual({ run: { additive: 3 } });
     expect(reset.traits.doneness).toBeUndefined();

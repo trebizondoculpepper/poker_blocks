@@ -92,11 +92,11 @@ ruleHandlers.registerCondition<Record<never, never>, ScoreEventContext | undefin
 
 ruleHandlers.registerCondition<{ suits: readonly string[] }, CardBlock | undefined>(
   "suit-in",
-  ({ suits }, block) => !!block && suits.includes(block.traits.identity.suit.name),
+  ({ suits }, block) => !!block && suits.includes(block.traits.identity?.suit.name ?? ""),
 );
 ruleHandlers.registerCondition<{ rank: string }, CardBlock | undefined>(
   "rank-is",
-  ({ rank }, block) => block?.traits.identity.rank === rank,
+  ({ rank }, block) => block?.traits.identity?.rank === rank,
 );
 /** At least `minimum` selected things (blocks, say). */
 ruleHandlers.registerCondition<{ minimum: number }, readonly unknown[]>(

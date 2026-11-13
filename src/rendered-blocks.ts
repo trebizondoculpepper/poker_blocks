@@ -1,3 +1,4 @@
+import { pokerIdentity } from "./cards";
 import { acquiredBonusDescriptor } from "./modifier-registers";
 import { cardFaceArt } from "./visual/face-art";
 /**
@@ -84,7 +85,7 @@ export function createBlockViews(parents: {
     create(block, size, location) {
       const look = cardLook(block);
       const appearance = createBlockAppearance(
-        cardFaceArt(block.traits.identity, {
+        cardFaceArt(pokerIdentity(block), {
           face: look.cardFace,
           bonus: acquiredBonusDescriptor(block),
         }),

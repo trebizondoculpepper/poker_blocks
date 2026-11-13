@@ -38,7 +38,7 @@ describe("shared card generator (#555)", () => {
     expect(card.id).toBe("present-1");
     // The same seed makes the same card: a saved stream position reproduces it.
     const again = generateCard(present, 1, seeded(11), () => "x");
-    expect(again.traits.identity).toEqual(card.traits.identity);
+    expect(again.traits.identity!).toEqual(card.traits.identity!);
     expect(materialOf(again)).toBe(materialOf(card));
   });
 
@@ -63,7 +63,7 @@ describe("shared card generator (#555)", () => {
     const random = seeded(5);
     const seen = new Map<string, number>();
     for (let n = 0; n < 5200; n++) {
-      const { rank, suit } = generateCard(present, 1, random, () => "c").traits.identity;
+      const { rank, suit } = generateCard(present, 1, random, () => "c").traits.identity!;
       seen.set(`${rank}${suit.name}`, (seen.get(`${rank}${suit.name}`) ?? 0) + 1);
     }
     expect(seen.size).toBe(ranks.length * suits.length);

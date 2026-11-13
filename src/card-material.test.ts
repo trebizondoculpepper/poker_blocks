@@ -29,7 +29,7 @@ describe("permanent per-card material change (#387)", () => {
     expect(run.changeCardMaterial(card.id, "steel")).not.toBeNull();
     const changed = find(run, card.id);
     expect(materialOf(changed)).toBe("steel");
-    expect(changed.traits.identity).toEqual(card.traits.identity);
+    expect(changed.traits.identity!).toEqual(card.traits.identity!);
     expect(everyCard(run).filter(({ id }) => id === card.id)).toHaveLength(1);
   });
 
@@ -69,7 +69,7 @@ describe("permanent per-card material change (#387)", () => {
     const restored = fromSaveRecord(record, standardDeck, dealerRegistry)!;
     // Rebuilt cards carry fresh trait functions, so compare what a card is, not object identity.
     const summary = (cards: ReturnType<typeof everyCard>) =>
-      cards.map(({ id, traits }) => [id, traits.identity.rank, materialOf({ id, traits })]);
+      cards.map(({ id, traits }) => [id, traits.identity!.rank, materialOf({ id, traits })]);
     expect(restored.state.cardStates).toEqual(run.state.cardStates);
     const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, restored);
     expect(materialOf(find(resumed, card.id))).toBe("terracotta");
