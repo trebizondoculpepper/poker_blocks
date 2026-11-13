@@ -1643,9 +1643,33 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 
 [Trial session adoption](experiments/trial-session-adoption.md) defines the generic injected run-host seam used by composed Dev scenario controllers. Policy selects configuration/seed; registered factories prepare; the host atomically adopts run/rules/identity universe/RNG/provenance and rebinds presentation. Invalid preparation leaves the current trial intact. The seam is not a mode identity branch or a parallel game controller.
 
+## Face-connected topology query (#884)
+
+[The hoop query contract](hoop-query.md) selects the owner-approved face-only topology for In the Loop, with exact bounded refinement/Betti calculation, explicit unavailable diagnostics and a declared modifier-specific neutral fallback. Queries are pure and snapshot-scoped; the renderer and scorer do not infer geometry or choose identity-specific rules. Runtime remains #885/#886 and certification is separate.
+
 ## Inherited lifecycle declaration resolution (#915)
 
 [The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.
+
+## Terminal loss field presentation
+
+The [terminal field-burn contract](loss-field-burn.md) separates required deciding-action effects, a bounded 80%-completion exit gate and an independently owned cancellable tail. Visual ghosts cannot mutate gameplay or session RNG.
+
+## Configured optical ripple refinements
+
+[Calm Water refinement contract](calm-water-refinements.md) gives the preset ownership of period bounds, outline opacity and independent normal perturbation; common controls, codecs and clocks consume those capabilities uniformly.
+
+## Current offer eligibility
+
+[Shop eligibility](shop-eligibility.md) uses definition-owned weight curves and registered eligibility providers for generation, restoration and purchase validation, while preserving compatible already owned objects.
+
+## Shop stock motion composition
+
+[Shop stock motion](shop-stock-motion.md) defines the shared beat floor, independent transform ownership, pose-preserving handoffs and registered input-state feedback. Motion never decides purchases or gates input.
+
+## Result-menu completion contract
+
+Configured result-menu controllers mount accessible block actions after bounded information-presentation completion, without awarding rewards or deciding outcomes in visual callbacks. See [result-menu contract and source audit](result-menus.md).
 
 ## Shop Continue presentation
 
