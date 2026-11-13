@@ -407,3 +407,92 @@ describe("GameRun progression", () => {
     expect(new Set(allCards(stocked.state).map(({ id }) => id)).size).toBe(53);
   });
 });
+
+describe("progression facts (#878; doc/outcome-presentation.md)", () => {
+  const types = (facts: readonly { payload: unknown }[]) =>
+    facts.map(({ payload }) => (payload as { type: string }).type);
+
+  it("leaving the shop commits once and publishes shop.left with the stock that left", () => {
+    const session = makeSession();
+    decide(session, "won");
+    session.advance();
+    const stock = session.state.shopStock ?? [];
+    const published: (readonly { payload: unknown }[])[] = [];
+    session.onCommitted((facts) => published.push(facts));
+    expect(session.leaveShop()).toBe(true);
+    expect(published).toHaveLength(1);
+    const left = published[0]!
+      .map(({ payload }) => payload as import("./passives").GameEvent)
+      .filter(({ type }) => type === "shop.left");
+    expect(left).toHaveLength(1);
+    expect(left[0]!.outgoingStock).toEqual(
+      stock.map(({ kind, block }) => ({ kind, blockId: block.id })),
+    );
+    expect(left[0]!.destination).toEqual({ round: 1, stage: "stage-2" });
+    // Leaving again is refused: nothing more is published.
+    expect(session.leaveShop()).toBe(false);
+    expect(published).toHaveLength(1);
+  });
+
+  it("a failed leave rolls back and publishes nothing", () => {
+    let failing = false;
+    const session = makeSession({
+      stage: (round, kind) => {
+        if (failing) throw new Error("the next stage cannot be set up");
+        return { dealer: "base", targetScore: targets[kind] * round, plays: 3, discards: 2 };
+      },
+    });
+    decide(session, "won");
+    session.advance();
+    const before = session.state;
+    const published: unknown[] = [];
+    session.onCommitted((facts) => published.push(facts));
+    failing = true;
+    expect(session.leaveShop()).toBe(false);
+    expect(published).toEqual([]);
+    expect(session.state).toBe(before);
+    expect(session.phase).toBe("shop");
+    // Once it can, it leaves, and publishes then.
+    failing = false;
+    expect(session.leaveShop()).toBe(true);
+    expect(published).toHaveLength(1);
+  });
+
+  it("a lost stage ends the run once with run.ended, separate from stage.lost", () => {
+    const session = makeSession();
+    decide(session, "lost");
+    const published: (readonly { payload: unknown }[])[] = [];
+    session.onCommitted((facts) => published.push(facts));
+    expect(session.advance()).toBe(true);
+    const all = published.flatMap(types);
+    expect(all.filter((type) => type === "run.ended")).toHaveLength(1);
+    const ended = published
+      .flat()
+      .map(({ payload }) => payload as import("./passives").GameEvent)
+      .find(({ type }) => type === "run.ended");
+    expect(ended).toMatchObject({ result: "lost", stage: { kind: "stage-1" } });
+    expect(session.advance()).toBe(false);
+  });
+
+  it("restoring a saved run replays no progression facts", () => {
+    const session = makeSession();
+    decide(session, "won");
+    session.advance();
+    session.leaveShop();
+    const dealers = new Registry<Dealer>("dealer");
+    dealers.register(baseDealer.name, baseDealer);
+    dealers.register(bossDealer.name, bossDealer);
+    const rules: RunRules = {
+      stage: (round, kind) => ({
+        dealer: "base",
+        targetScore: targets[kind] * round,
+        plays: 3,
+        discards: 2,
+      }),
+      handAtStageEnd: "return-to-deck",
+      discardPileAfterShop: "keep-out",
+    };
+    const restored = GameRun.fromSnapshot(dealers, rules, standardDeck, session.snapshot());
+    expect(restored.actionFacts).toEqual([]);
+  });
+});
