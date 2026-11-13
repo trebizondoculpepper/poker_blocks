@@ -97,6 +97,8 @@ export type SceneTraits = {
   devObjectBrowser: { backTo: string };
   /** Developer tool: the block design room, auditioning letter-block materials and fonts (dev12). */
   devBlockDesigner: { backTo: string };
+  /** Developer tool: the smoke and dust audition room's note (dev19, #466). */
+  devEffectAudition: { hint: string };
   /** Developer tool: the contained-components rendering proof (dev15, #346). */
   devContainedProof: { backTo: string };
   /** Developer tool: the visual performance profiler (dev16, #527). */
@@ -1227,6 +1229,50 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev18-run" },
             console: { name: "dev18" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // The smoke and dust audition (#466): an endless table dealt only fire-with-smoke and
+          // Earth-with-dust audition cards, equally weighted, from their experimental definitions.
+          // Normal play's decks and frequencies are untouched.
+          id: "dev19",
+          scenes: composeScenes("dev19", [
+            {
+              scenes: playScenes,
+              traits: {
+                devEffectAudition: {
+                  hint: "Smoke & dust audition: smoke rises from fire; turn the board quickly to shake dust from Earth.",
+                },
+              },
+            },
+          ]),
+          startScene: "stage-1",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [
+            { step: "sandbox" },
+            {
+              step: "deckBuilder",
+              operations: [
+                { operation: "standardTemplates" },
+                {
+                  operation: "assignWeighted",
+                  config: {
+                    weights: [
+                      { material: "fireSmokeAudition", weight: 1 },
+                      { material: "earthDustAudition", weight: 1 },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+          traits: {
+            onLoad: "newRun",
+            save: { key: "poker-blocks.dev19-run" },
+            console: { name: "dev19" },
+            restartable: { param: "restart" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,

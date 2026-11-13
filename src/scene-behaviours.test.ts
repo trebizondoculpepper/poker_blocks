@@ -130,6 +130,7 @@ function recordingHost() {
         show: ({ backends }) => void calls.push(`crystal:show:${backends.join(",")}`),
         hide: () => void calls.push("crystal:hide"),
       },
+      devEffectAudition: { show: () => undefined, hide: () => undefined },
       devWordCubeRoom: {
         show: ({ items }) => void calls.push(`cubes:show:${items.length}`),
         hide: () => void calls.push("cubes:hide"),

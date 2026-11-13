@@ -98,6 +98,7 @@ export type SceneHost = {
       show(config: SceneTraits["devCrystalComparison"]): void;
       hide(): void;
     };
+    devEffectAudition: { show(config: SceneTraits["devEffectAudition"]): void; hide(): void };
     devWordCubeRoom: {
       show(config: SceneTraits["devWordCubeRoom"]): void;
       hide(): void;
@@ -522,6 +523,11 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("devCrystalComparison", {
     enter: ({ services }, config) => services.devCrystalComparison.show(config),
     exit: ({ services }) => services.devCrystalComparison.hide(),
+  });
+  // The smoke/dust audition room's note (#466), a development-only service.
+  behaviours.register("devEffectAudition", {
+    enter: ({ services }, config) => services.devEffectAudition.show(config),
+    exit: ({ services }) => services.devEffectAudition.hide(),
   });
   behaviours.register("devContainedProof", {
     enter: ({ services }, { backTo }) => services.devContainedProof.show(backTo),
