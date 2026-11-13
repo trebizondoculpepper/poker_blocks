@@ -1,12 +1,13 @@
 import { createCard, ranks, suits } from "./cards";
 import type { GameState } from "./game-state";
-import { materialDefinitions, withMaterial, type MaterialDefinition } from "./materials";
+import { withMaterial } from "./materials";
 import { createPassiveBlock, passiveDefinitions, type PassiveDefinition } from "./passives";
 import { defaultShop, type ShopTrait } from "./game-modes";
 import { drawWeighted, passiveFrequencies, weightAt } from "./offer-weights";
 import { passiveUnlockRound } from "./offer-eligibility";
 import type { ShopOffer } from "./offer-kinds";
 import { validateShopStock } from "./shop-stock-config";
+import { cardDistributions } from "./card-generator";
 import { itemOfferPools } from "./item-offers";
 // Registers the transmogrifiers' item offers (#388).
 import "./transmogrifiers";
@@ -64,9 +65,11 @@ export function shopPreviewState(
         block: createPassiveBlock(definition.id, nextOfferId("shop.passive")),
       }),
     }));
-  const cards: Candidate[] = (materialDefinitions as readonly MaterialDefinition[]).map(
-    (material) => ({
-      weight: material.shop ? weightAt(material.shop.weights, round) : 0,
+  // The same playable-card table the shared generator samples (#555).
+  const cards: Candidate[] = cardDistributions
+    .get("shopPlayableCards")(round)
+    .map(({ material, weight }) => ({
+      weight,
       once: false,
       shelf: 1,
       offer: () => ({
@@ -76,8 +79,7 @@ export function shopPreviewState(
           material,
         ),
       }),
-    }),
-  );
+    }));
 
   // Dedicated item offers (transmogrifiers #388, the Nothingifier #156) come on top; the shop holds at most nine.
   const slots = stock.itemSlots ?? 1;
