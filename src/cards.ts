@@ -31,6 +31,11 @@ export type CardBlock = {
      */
     identity?: IdentityTrait;
     /**
+     * A run-owned active instance's registered definition (#894; src/active-objects.ts): saves
+     * record it under `activeObjects` and rebuild it through that definition.
+     */
+    active?: { definition: string };
+    /**
      * A block without a rank/suit value provider names itself (#893): its public name and a
      * short symbol for compact lists. Never a hint about hidden contents.
      */

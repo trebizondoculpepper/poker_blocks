@@ -6,11 +6,13 @@
 import type { CardBlock } from "./cards";
 import { faces } from "./traits/attachable";
 import { inspectable } from "./traits/inspectable";
+import { activeDefinitions } from "./active-objects";
 
 export function devRanklessActive(id: string): CardBlock {
   return {
     id,
     traits: {
+      active: { definition: "devRanklessActive" },
       label: { name: "Dev rankless active", symbol: "◇" },
       selectable: {},
       attachable: { faces },
@@ -18,3 +20,6 @@ export function devRanklessActive(id: string): CardBlock {
     },
   };
 }
+
+// Its registered definition, so a save can rebuild it (#894).
+activeDefinitions.register("devRanklessActive", { create: devRanklessActive });
