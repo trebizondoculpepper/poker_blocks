@@ -108,3 +108,27 @@ describe("dealer", () => {
     expect(game.state.hand).toHaveLength(6);
   });
 });
+
+describe("placing without scoring (#925)", () => {
+  it("places and uses a move but scores nothing; play adds the field's points", () => {
+    const state = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0).state;
+    const ids = state.hand.slice(0, 2).map(({ id }) => id);
+    const action = { cardId: ids[0]!, cardIds: ids };
+    const placed = baseDealer.place(state, action)!;
+    expect(placed.field.map(({ block }) => block.id)).toEqual(ids);
+    expect(placed.hand.map(({ id }) => id)).not.toContain(ids[0]);
+    expect(placed.round.movesLeft).toBe(state.round.movesLeft - 1);
+    expect(placed.round.score).toBe(state.round.score);
+    const played = baseDealer.play(state, action)!;
+    expect(played.field).toEqual(placed.field);
+    expect(played.round.movesLeft).toBe(placed.round.movesLeft);
+    expect(played.round.score).toBeGreaterThanOrEqual(placed.round.score);
+  });
+
+  it("refuses the same plays as before", () => {
+    const state = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0).state;
+    const id = state.hand[0]!.id;
+    expect(baseDealer.place(state, { cardId: id, cardIds: [id, id] })).toBeNull();
+    expect(baseDealer.place(state, { cardId: "nope" })).toBeNull();
+  });
+});
