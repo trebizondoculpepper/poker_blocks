@@ -13,6 +13,7 @@ describe("composed material appearance", () => {
     });
     const definition: MaterialDefinition = {
       id: "test-amber",
+      mass: { effective: 1, rationale: "test definition" },
       name: "Test Amber",
       traits: {},
       acoustics: { character: "test", hardness: 1, attach: "material.attach.paper" },
