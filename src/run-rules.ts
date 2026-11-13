@@ -90,10 +90,12 @@ export const demoRunRules: RunRules = {
   // and countdown deductions before scoring; the other reactions, then the pending detonations,
   // after it.
   playfield: [
+    // Placed containers open first, before play.beforeScore (#554).
+    { id: "openingController", config: {} },
     {
       id: "materialEffectsController",
       config: {
-        beforeScore: ["openings", "placement-reactions", "countdown-deductions"],
+        beforeScore: ["placement-reactions", "countdown-deductions"],
         afterScore: ["reactions", "countdown-detonations"],
       },
     },

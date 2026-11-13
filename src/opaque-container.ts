@@ -19,7 +19,7 @@ import {
   type SavedActiveObject,
 } from "./active-objects";
 import { createCard, ranks, suits, type CardBlock } from "./cards";
-import { playSteps } from "./lifecycle/play-phases";
+import { playfieldControllers, playSteps } from "./lifecycle/play-phases";
 import { registerRuleCommand, commitCommands } from "./rule-commands";
 import { faces } from "./traits/attachable";
 import { withoutSelectable } from "./traits/selectable";
@@ -112,14 +112,17 @@ registerRuleCommand<{ blockId: string }>("open-container", ({ blockId }, target)
   const container = [placed?.block.traits.opaqueContainer ?? []].flat()[0];
   if (!placed || !container) return [];
   const payload = withoutSelectable(materializePayload(blockId, container.payload));
-  const taken = new Set(
-    [
+  // Every identity the run holds or has retired: a payload may not reuse any of them.
+  const taken = new Set([
+    ...[
       ...state.field.map(({ block }) => block),
       ...state.hand,
       ...state.deck,
       ...state.discardPile,
     ].map(({ id }) => id),
-  );
+    ...(state.removedCards ?? []),
+    ...(state.retiredActives ?? []).map(({ id }) => id),
+  ]);
   if (taken.has(payload.id)) throw new Error(`payload ID ${payload.id} is already in play`);
   target.update({
     ...state,
@@ -143,10 +146,22 @@ registerRuleCommand<{ blockId: string }>("open-container", ({ blockId }, target)
   ];
 });
 
-// Openings resolve first, in placement order, before any material phase.
-playSteps.register("openings", (context) =>
-  commitCommands(
+// Openings resolve first, in placement order, before any material phase; each replacement is
+// recorded so later phases' facts name the revealed card.
+playSteps.register("openings", (context) => {
+  const events = commitCommands(
     [...context.placed].map((blockId) => ({ id: "open-container", config: { blockId } })),
     context.target,
-  ),
-);
+  );
+  for (const { opened } of events)
+    for (const { wrapperId, payloadId } of [opened ?? []].flat())
+      context.replacements.set(wrapperId, payloadId);
+  return events;
+});
+
+/** The opening controller: composed onto a playfield, it opens placed containers (#554). */
+playfieldControllers.register("openingController", () => ({
+  opening: ["openings"],
+  beforeScore: [],
+  afterScore: [],
+}));

@@ -190,3 +190,50 @@ describe("opening review cases (#554 review)", () => {
     expect(opened.blocks?.map(({ id }) => id)).toEqual(["box-1", "revealed-1"]);
   });
 });
+
+describe("opening lifecycle and identity (#554 review 2)", () => {
+  const openedRun = () => {
+    const king = standardDeck[12]!;
+    const run = runWithHand([king, devOpaqueContainer("box-1", kingOfHearts("revealed-1"))]);
+    run.play({ cardId: king.id });
+    run.play({ cardId: "box-1", targetId: king.id, face: "east" });
+    return run;
+  };
+
+  it("opens before play.beforeScore, whose blocks are the revealed cards", () => {
+    const run = openedRun();
+    const types = facts(run).map(({ type }) => type);
+    expect(types.indexOf("block.opened")).toBeLessThan(types.indexOf("play.beforeScore"));
+    const before = facts(run).find(({ type }) => type === "play.beforeScore")!;
+    const after = facts(run).find(({ type }) => type === "play.afterScore")!;
+    expect(before.blocks?.map(({ id }) => id)).toEqual(["revealed-1"]);
+    expect(after.blocks?.map(({ id }) => id)).toEqual(["revealed-1"]);
+  });
+
+  it("refuses a payload reusing a retired identity, at opening and on load", () => {
+    const run = openedRun();
+    const reuse = devOpaqueContainer("box-2", kingOfHearts("box-1"));
+    const record = JSON.parse(JSON.stringify(toSaveRecord(run.snapshot())));
+    record.state.hand.push("box-2");
+    record.state.activeObjects["box-2"] = {
+      definition: "devOpaqueContainer",
+      components: { opaqueContainer: reuse.traits.opaqueContainer!.payload },
+    };
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)).toBeNull();
+  });
+
+  it("keeps a removed revealed card restorable", async () => {
+    const { removeCardForRun } = await import("./card-ownership");
+    const run = openedRun();
+    const removed = removeCardForRun(run.state, "revealed-1")!;
+    expect(removed.retiredActives?.map(({ id }) => id)).toContain("revealed-1");
+    const snapshot = { ...run.snapshot(), state: removed };
+    expect(
+      fromSaveRecord(
+        JSON.parse(JSON.stringify(toSaveRecord(snapshot))),
+        standardDeck,
+        dealerRegistry,
+      ),
+    ).not.toBeNull();
+  });
+});

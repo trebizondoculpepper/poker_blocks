@@ -30,6 +30,11 @@ export type PlayStepContext = {
   pending: string[];
   /** Reactions applied this play, for presentation. */
   reactions: AppliedReaction[];
+  /**
+   * Placed blocks replaced by another instance in their cell this play (an opened container,
+   * #554): original ID to replacement ID, so later phases' facts name what is actually there.
+   */
+  replacements: Map<string, string>;
 };
 
 /** A step runs against the working state and returns the gameplay events it caused. */
@@ -67,8 +72,15 @@ playSteps.register("countdown-detonations", (context) =>
   detonateCountdowns(context.target, context.pending),
 );
 
-/** Which steps run in each mutable phase, in order. */
-export type PlayPhases = { beforeScore: readonly string[]; afterScore: readonly string[] };
+/**
+ * Which steps run in each mutable phase, in order. `opening` (#554) runs right after placement,
+ * before `play.beforeScore` is emitted, so pre-score subscribers see resolved placements.
+ */
+export type PlayPhases = {
+  opening?: readonly string[];
+  beforeScore: readonly string[];
+  afterScore: readonly string[];
+};
 
 /** A model controller composed onto the playfield, by registered name, with its configuration. */
 export type PlayfieldController = { id: string; config: unknown };
@@ -85,7 +97,7 @@ export const playfieldControllers = new Registry<(config: unknown) => PlayPhases
 /** Block-defined material behaviour, dispatched uniformly: its configuration names the steps. */
 playfieldControllers.register("materialEffectsController", (config) => config as PlayPhases);
 
-const none: PlayPhases = { beforeScore: [], afterScore: [] };
+const none: PlayPhases = { opening: [], beforeScore: [], afterScore: [] };
 
 /**
  * Attach the composed controllers, in composition order, and validate what they subscribe:
@@ -99,6 +111,7 @@ export function attachPlayfield(controllers: readonly PlayfieldController[] = []
   const phases = controllers.reduce<PlayPhases>((all, { id, config }) => {
     const own = playfieldControllers.get(id)(config);
     return {
+      opening: [...(all.opening ?? []), ...(own.opening ?? [])],
       beforeScore: [...all.beforeScore, ...own.beforeScore],
       afterScore: [...all.afterScore, ...own.afterScore],
     };
@@ -113,7 +126,7 @@ export function attachPlayfield(controllers: readonly PlayfieldController[] = []
  * must be deterministic and complete). Empty when it is valid.
  */
 export function validatePlayPhases(phases: PlayPhases): string[] {
-  const listed = [...phases.beforeScore, ...phases.afterScore];
+  const listed = [...(phases.opening ?? []), ...phases.beforeScore, ...phases.afterScore];
   const problems = listed
     .filter((name) => !playSteps.has(name))
     .map((name) => `unknown play step "${name}"`);

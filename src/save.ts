@@ -271,6 +271,20 @@ export function fromSaveRecord(
     );
     const byId = new Map(runCards.map((card) => [card.id, card]));
     if (byId.size !== runCards.length) return null;
+    // A container's stored payload must have an identity of its own (#554): not a run card's, a
+    // removed card's, or another payload's.
+    const reserved = new Set(record.state.removedCards ?? []);
+    // A retired container (already opened) keeps its old payload record; only live ones count.
+    const payloadIds = runCards
+      .filter(({ id }) => !reserved.has(id))
+      .flatMap((card) =>
+        [card.traits.opaqueContainer ?? []].flat().map(({ payload }) => payload.id),
+      );
+    if (
+      new Set(payloadIds).size !== payloadIds.length ||
+      payloadIds.some((id) => byId.has(id) || reserved.has(id))
+    )
+      return null;
     if (Object.keys(cardStates ?? {}).some((id) => !byId.has(id))) return null;
     const seen = new Set<string>();
     const resolve = (id: unknown): CardBlock => {

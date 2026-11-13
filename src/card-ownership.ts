@@ -34,7 +34,17 @@ cardOwners.register("deck", {
   atTableClear: (state, card) => ({ ...state, deck: [...state.deck, card] }),
   // Out of the run for good: recorded, so a save accounts for it without dealing it again.
   atRemoval: (state, card) =>
-    forgetCardState({ ...state, removedCards: [...(state.removedCards ?? []), card.id] }, card),
+    forgetCardState(
+      {
+        ...state,
+        removedCards: [...(state.removedCards ?? []), card.id],
+        // A run-owned active instance (#554) is kept in full, so a save can still account for it.
+        ...[card.traits.active ?? []].flat().map(() => ({
+          retiredActives: [...(state.retiredActives ?? []), card],
+        }))[0],
+      },
+      card,
+    ),
 });
 /** A field-made card leaves play entirely: its record and saved state go with it. */
 const leaveWithField = (state: GameState, card: CardBlock): GameState => {

@@ -814,6 +814,7 @@ export class GameRun {
       placed: new Set(placed),
       pending: [],
       reactions: [],
+      replacements: new Map(),
     };
     // The score before this play: the dealer's next state is not the base the play's points add to.
     const scoreBefore = this.currentState.round.score;
@@ -828,9 +829,11 @@ export class GameRun {
     // them, and a rollback can't be undone by a shared nested object (#682 review).
     const placedBlocks = () =>
       captured(
-        placed.flatMap(
-          (id) => this.currentState.field.find(({ block }) => block.id === id)?.block ?? [],
-        ),
+        placed.flatMap((placedId) => {
+          // A placed block replaced in its cell (an opened container) is now its replacement.
+          const id = steps.replacements.get(placedId) ?? placedId;
+          return this.currentState.field.find(({ block }) => block.id === id)?.block ?? [];
+        }),
       );
     const blocksNow = placedBlocks();
     this.passiveEvents.emit({
@@ -848,6 +851,9 @@ export class GameRun {
     this.drainPhase(context, "placement", batchId);
 
     // 2. Before score: its configured steps (countdown deductions record pending triggers).
+    // 2. Opening/replacement (#554): resolved before the pre-score event, so its subscribers see
+    // the revealed placements.
+    this.runSteps(phases.opening ?? [], steps, context, "opening", batchId);
     this.passiveEvents.emit({ type: "play.beforeScore", cardIds: placed, blocks: placedBlocks() });
     this.drainPhase(context, "beforeScore", batchId);
     this.runSteps(phases.beforeScore, steps, context, "beforeScore", batchId);
