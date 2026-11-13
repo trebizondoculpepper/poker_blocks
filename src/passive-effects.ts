@@ -23,6 +23,11 @@ import { scorableValue } from "./traits/scorable";
 export type RuleActivation = {
   /** Who brought the rule: a passive's instance id, or a card's id for its own (material) rules. */
   sourceId: string;
+  /**
+   * The source's description as it was when the rule fired (#483), so delayed presentation
+   * never describes a card or passive that has changed or gone since.
+   */
+  sourceDescription: string;
   on: string;
   /** On `score.beforeBlockValue`: the contributing block the rule changed. */
   blockId?: string;
@@ -57,9 +62,11 @@ export function numberActivations(
 export type PassiveScoredLine = ScoredLine & { activations: readonly RuleActivation[] };
 
 /** Something that brings event rules: an installed passive, or a card with its own rules. */
-type RuleSource = { id: string; rules: readonly EventRule[] };
+/** A rule's source, with its description captured as it is now (#858 review). */
+type RuleSource = { id: string; description: string; rules: readonly EventRule[] };
 const passiveSource = (passive: PassiveBlock): RuleSource => ({
   id: passive.id,
+  description: passive.traits.inspectable.inspect(),
   rules: passive.traits.passive.eventRules ?? [],
 });
 const cardSource = (
@@ -67,6 +74,7 @@ const cardSource = (
   rulesForCard: (block: CardBlock) => EventRule[],
 ): RuleSource => ({
   id: block.id,
+  description: block.traits.inspectable?.inspect() ?? block.id,
   rules: rulesForCard(block),
 });
 
@@ -121,6 +129,7 @@ function evaluateRules(
     if (frame.fired)
       activations.push({
         sourceId: source.id,
+        sourceDescription: source.description,
         on: rule.on,
         blockId: event.score?.block?.id,
         commands: frame.commands,

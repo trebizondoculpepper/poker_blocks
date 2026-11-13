@@ -88,4 +88,29 @@ describe("resolved activation outcomes (#483)", () => {
     );
     expect(frame.outcomes).toEqual([{ operation: "test.silent-halve", before: 10, after: 5 }]);
   });
+
+  it("captures each source's description as it was when the rule fired (#858 review)", () => {
+    const rack = [passive("double-line")];
+    const lines = scoreFieldWithPassives(field, rack);
+    const activation = lines[0]!.activations.find(({ sourceId }) => sourceId === "passive.1")!;
+    expect(activation.sourceDescription).toBe(rack[0]!.traits.inspectable.inspect());
+  });
+
+  it("numbers a play's activations under its action, so a re-scored line gets new IDs", async () => {
+    const { GameRun } = await import("./game-run");
+    const { dealerRegistry } = await import("./dealer");
+    const { sandboxRunRules, demoRunRules } = await import("./run-rules");
+    const run = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), standardDeck, () => 0);
+    run.installPassive(passive("double-line"));
+    run.play({ cardId: run.state.hand[0]!.id });
+    const first = run.lastScoredLines.flatMap(({ activations }) =>
+      activations.map(({ activationId }) => activationId),
+    );
+    const placed = run.state.field[0]!.block.id;
+    run.play({ cardId: run.state.hand[0]!.id, targetId: placed, face: "east" });
+    const second = run.lastScoredLines.flatMap(({ activations }) =>
+      activations.map(({ activationId }) => activationId),
+    );
+    for (const id of second) expect(first).not.toContain(id);
+  });
 });

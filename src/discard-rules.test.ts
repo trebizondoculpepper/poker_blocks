@@ -72,6 +72,7 @@ describe("discard and stage-won passives run as event rules and commands (#170)"
     expect(passiveActivations(passive("seeing-red", 1), event)).toEqual([
       {
         sourceId: "passive.1",
+        sourceDescription: passive("seeing-red", 1).traits.inspectable.inspect(),
         on: "discard.completed",
         blockId: undefined,
         commands: [{ id: "add-coins", config: { amount: 2 } }],

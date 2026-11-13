@@ -851,12 +851,20 @@ export class GameRun {
 
     // 3. Score the resolved field; the pure scorer is unchanged. Each line, then all, then the
     //    total applied once.
+    // Each committed line's activations numbered under this action, so a line scored again by
+    // a later play gets new IDs (#858 review).
     this.scoredLines = scoreFieldWithPassives(
       this.currentState.field,
       this.currentState.passiveRack,
       undefined,
       this.random,
-    );
+    ).map((scored) => ({
+      ...scored,
+      activations: numberActivations(
+        scored.activations,
+        `${context.actionId}:line:${scored.blockIds.join(",")}`,
+      ),
+    }));
     const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
     // Each line with the score context the `scored-line` selector reads, then all lines; their
     // hooks and follow-ups resolve before the total is applied.
