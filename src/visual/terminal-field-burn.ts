@@ -90,7 +90,8 @@ type BurnPayload = { ghostId: string; durationUnits: number; reducedMotion: bool
 visualHandlers.register("terminalFieldBurn", (raw, context) => {
   const { ghostId, durationUnits, reducedMotion } = raw as BurnPayload;
   const renderer = (context.services as TerminalBurnServices | undefined)?.terminalFieldBurn;
-  if (!renderer) return "done";
+  // Never a silent success: with no renderer the burn fails, and its gate settles as failed.
+  if (!renderer) throw new Error("terminalFieldBurn: no renderer service");
   // Reduced motion: the captured summary, settled at once.
   if (reducedMotion) {
     renderer.summary(ghostId);

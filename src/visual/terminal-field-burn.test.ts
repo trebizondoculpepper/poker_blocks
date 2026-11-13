@@ -146,6 +146,22 @@ describe("burning the terminal field (#945)", () => {
     expect(record.summaries).toEqual(burn.summarized);
   });
 
+  it("fails its gate, never finishing it, when the scheduler has no renderer service", () => {
+    const record = recorder();
+    const scheduler = createVisualScheduler({});
+    scheduler.update(0, true);
+    const burn = startTerminalFieldBurn(scheduler, {
+      ghostIds: ids(3),
+      random: fixed,
+      reducedMotion: false,
+      renderer: record.renderer,
+    });
+    const gate: string[] = [];
+    burn.onGate(({ state }) => gate.push(state));
+    for (let ms = 1; ms < 20 * unitMs; ms += unitMs) scheduler.update(ms, true);
+    expect(gate).toEqual(["failed"]);
+  });
+
   it("summarizes nothing under a cancelled parent", () => {
     const record = recorder();
     const scheduler = createVisualScheduler({ services: { terminalFieldBurn: record.renderer } });
