@@ -54,8 +54,25 @@ export type ExperimentConfiguration = {
   /** The source revision that exported it (the build's version). */
   revision: string;
   scenario: ScenarioDefinition;
+  /**
+   * What the scenario's builders actually generated in this build: every created card's traits,
+   * in build order (doc/deck-builders.md, "Determinism and restoration"). A pool resolved from a
+   * later catalogue that would deal different cards from the same seed fails import.
+   */
+  generated: unknown[];
   rules: RulesRecord;
 };
+
+/** The longest rules horizon an import will record and compare. */
+export const maxRecordedHorizon = 256;
+
+/** The created cards' traits, in build order, as plain data. */
+function generatedCards(scenario: ScenarioDefinition, runtime: ScenarioRuntime) {
+  const built = buildScenario(scenario, runtime);
+  return built.ok
+    ? { ok: true as const, cards: plain(built.trial.session.cards.map(({ traits }) => traits)) }
+    : built;
+}
 
 /** Plain JSON only: functions and undefined are dropped, as they would be on export. */
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -86,17 +103,20 @@ export function recordRules(rules: RunRules, rounds = recordedRounds): RulesReco
 /** The configuration of a scenario under these rules, from this build. */
 export function exportConfiguration(
   scenario: ScenarioDefinition,
-  rules: RunRules,
+  runtime: ScenarioRuntime,
   revision: string,
   /** The rounds the rules are recorded, and verified, for. */
   rounds = recordedRounds,
 ): ExperimentConfiguration {
+  const generated = generatedCards(scenario, runtime);
+  if (!generated.ok) throw new Error(generated.diagnostics.join("; "));
   return {
     format: experimentConfigFormat,
     version: experimentConfigVersion,
     revision,
     scenario: plain(scenario),
-    rules: recordRules(rules, rounds),
+    generated: generated.cards,
+    rules: recordRules(runtime.rules, rounds),
   };
 }
 
@@ -144,16 +164,27 @@ export function importConfiguration(text: string, runtime: ScenarioRuntime): Imp
     };
   if (typeof config.revision !== "string")
     return { ok: false, diagnostics: ["a configuration needs its source revision"] };
-  const built = buildScenario(config.scenario as ScenarioDefinition, runtime);
+  const built = generatedCards(config.scenario as ScenarioDefinition, runtime);
   if (!built.ok) return { ok: false, diagnostics: built.diagnostics };
+  if (!Array.isArray(config.generated))
+    return { ok: false, diagnostics: ["a configuration needs its generated cards"] };
+  const changed = difference(config.generated, built.cards, "generated");
+  if (changed)
+    return {
+      ok: false,
+      diagnostics: [`this build generates different cards from the scenario, at ${changed}`],
+    };
   const horizon = config.rules?.horizon;
-  if (!Number.isSafeInteger(horizon) || horizon! < 1)
-    return { ok: false, diagnostics: ["a configuration needs a positive round horizon"] };
+  if (!Number.isSafeInteger(horizon) || horizon! < 1 || horizon! > maxRecordedHorizon)
+    return {
+      ok: false,
+      diagnostics: [`a configuration needs a round horizon from 1 to ${maxRecordedHorizon}`],
+    };
+  const recorded: unknown = config.rules?.unverifiable ?? [];
+  if (!Array.isArray(recorded) || !recorded.every((field) => typeof field === "string"))
+    return { ok: false, diagnostics: ["rules.unverifiable must be a list of rule names"] };
   const runtimeRules = recordRules(runtime.rules, horizon);
-  const unverifiable = [
-    ...(config.rules?.unverifiable ?? []),
-    ...(runtimeRules.unverifiable ?? []),
-  ];
+  const unverifiable = [...(recorded as string[]), ...(runtimeRules.unverifiable ?? [])];
   if (unverifiable.length)
     return {
       ok: false,

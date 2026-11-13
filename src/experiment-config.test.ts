@@ -47,7 +47,7 @@ const scenario: ScenarioDefinition = {
 
 describe("experiment configuration export (#934)", () => {
   it("round-trips to an equivalent configuration that builds the same trial", () => {
-    const config = exportConfiguration(scenario, rules, "1.2.3");
+    const config = exportConfiguration(scenario, runtime, "1.2.3");
     const text = serializeConfiguration(config);
     const imported = importConfiguration(text, runtime);
     expect(imported).toEqual({ ok: true, config });
@@ -61,7 +61,7 @@ describe("experiment configuration export (#934)", () => {
   });
 
   it("records the effective rules as plain data, without functions or secrets", () => {
-    const config = exportConfiguration(scenario, rules, "1.2.3");
+    const config = exportConfiguration(scenario, runtime, "1.2.3");
     expect(config.rules.stages[0]).toMatchObject({ round: 1, setup: { targetScore: 100 } });
     expect(config.rules.rackCapacity).toBe(4);
     expect(config.rules).not.toHaveProperty("stockShop");
@@ -70,7 +70,7 @@ describe("experiment configuration export (#934)", () => {
   });
 
   it("rejects bad input without building anything", () => {
-    const good = exportConfiguration(scenario, rules, "1.2.3");
+    const good = exportConfiguration(scenario, runtime, "1.2.3");
     const as = (value: unknown) => importConfiguration(JSON.stringify(value), runtime);
     expect(importConfiguration("{", runtime)).toMatchObject({ ok: false });
     expect(as({ ...good, format: "other" })).toMatchObject({ ok: false });
@@ -81,11 +81,36 @@ describe("experiment configuration export (#934)", () => {
     expect(
       as({ ...good, scenario: { ...scenario, steps: [{ capability: "nope", config: {} }] } }),
     ).toMatchObject({ ok: false, diagnostics: ['unknown scenario capability "nope"'] });
+    expect(as({ ...good, rules: { ...good.rules, horizon: 4294967296 } })).toMatchObject({
+      ok: false,
+      diagnostics: [expect.stringMatching(/round horizon from 1/)],
+    });
+    for (const unverifiable of [{}, 3, [1]])
+      expect(as({ ...good, rules: { ...good.rules, unverifiable } })).toEqual({
+        ok: false,
+        diagnostics: ["rules.unverifiable must be a list of rule names"],
+      });
+  });
+
+  it("refuses a configuration whose builders now generate different cards", () => {
+    const good = exportConfiguration(scenario, runtime, "1.2.3");
+    expect(good.generated.length).toBeGreaterThan(0);
+    const changed = structuredClone(good);
+    (changed.generated[0] as { material?: unknown }).material = { id: "elsewhere" };
+    expect(importConfiguration(JSON.stringify(changed), runtime)).toMatchObject({
+      ok: false,
+      diagnostics: [expect.stringMatching(/^this build generates different cards.*generated\.0/)],
+    });
+    expect(
+      importConfiguration(JSON.stringify({ ...good, generated: undefined }), runtime),
+    ).toMatchObject({ ok: false });
   });
 
   it("refuses a configuration made under different rules", () => {
     const other: RunRules = { ...rules, rackCapacity: 5 };
-    const text = serializeConfiguration(exportConfiguration(scenario, other, "1.2.3"));
+    const text = serializeConfiguration(
+      exportConfiguration(scenario, { dealers, rules: other }, "1.2.3"),
+    );
     expect(importConfiguration(text, runtime)).toEqual({
       ok: false,
       diagnostics: ["its rules differ from this mode's at rules.rackCapacity"],
@@ -94,7 +119,7 @@ describe("experiment configuration export (#934)", () => {
 
   it("compares function-valued policies through their descriptors, and refuses unverifiable ones", () => {
     const text = (other: RunRules) =>
-      serializeConfiguration(exportConfiguration(scenario, other, "1.2.3"));
+      serializeConfiguration(exportConfiguration(scenario, { dealers, rules: other }, "1.2.3"));
     expect(
       importConfiguration(
         text({ ...rules, policies: { stockShop: { shop: { offers: 9 } } } }),
@@ -117,15 +142,19 @@ describe("experiment configuration export (#934)", () => {
       ...rules,
       stage: (round, kind) => ({ ...rules.stage(round, kind), plays: round > 8 ? 9 : 3 }),
     };
-    const short = serializeConfiguration(exportConfiguration(scenario, later, "1.2.3"));
+    const short = serializeConfiguration(
+      exportConfiguration(scenario, { dealers, rules: later }, "1.2.3"),
+    );
     expect(importConfiguration(short, runtime)).toMatchObject({ ok: true });
-    const long = serializeConfiguration(exportConfiguration(scenario, later, "1.2.3", 12));
+    const long = serializeConfiguration(
+      exportConfiguration(scenario, { dealers, rules: later }, "1.2.3", 12),
+    );
     expect(importConfiguration(long, runtime)).toMatchObject({ ok: false });
     expect(JSON.parse(long).rules.horizon).toBe(12);
   });
 
   it("copies the serialized configuration", async () => {
-    const config = exportConfiguration(scenario, rules, "1.2.3");
+    const config = exportConfiguration(scenario, runtime, "1.2.3");
     let copied = "";
     await copyConfiguration(config, { writeText: async (text) => void (copied = text) });
     expect(copied).toBe(serializeConfiguration(config));
