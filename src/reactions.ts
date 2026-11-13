@@ -28,7 +28,19 @@ import { cellKey, faceNormal, faces } from "./traits/attachable";
 export type HandlerRef = { id: string; config: unknown };
 
 /** One reaction on a material's definition. */
-export type Reaction = { when: HandlerRef; results: readonly HandlerRef[] };
+export type Reaction = {
+  when: HandlerRef;
+  results: readonly HandlerRef[];
+  /**
+   * When in a play it resolves (doc/material-phases.md, "Authored phases and shared ownership"):
+   * `placement` for an explicitly placement-timed interaction, resolved before scoring (the
+   * approved Air/flame upgrade); omitted, `afterScore`, with the other reactions.
+   */
+  timing?: string;
+};
+
+/** A reaction's timing: its own, or after scoring. */
+export const reactionTiming = (reaction: Reaction) => reaction.timing ?? "afterScore";
 
 /** Whether a block's face neighbours (from the snapshot) set off a reaction. */
 export type ReactionMatcher = (
