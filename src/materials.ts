@@ -3,7 +3,7 @@ import {
   composeCatalogue,
   experimentalCatalogue,
   ordinaryCatalogue,
-  releaseStatusDescriptor,
+  releaseStatusInspection,
   type CatalogueAccess,
   type ReleaseStatusDeclaration,
 } from "./release-status";
@@ -1637,11 +1637,12 @@ export function scoringEligibilityOf(block: CardBlock): string {
   return materialRegistry.get(materialOf(block))?.scoringEligibility ?? "contributing";
 }
 
-// Inspection names the card material's release status, from the same descriptor catalogues use
-// (doc/release-status.md, #813). Registered first, so it reads right after the card's name.
+// Inspection carries the card material's public release-status lines, from the same facet
+// catalogues use (doc/release-status.md, #813, #923): none for certified content. Registered
+// first, so a provisional warning reads right after the card's name.
 inspectionProviders.register("releaseStatus", (block) => {
   const definition = getMaterialDefinition(materialOf(block));
-  return [`Status: ${releaseStatusDescriptor(definition.id, definition.releaseStatus).label}`];
+  return [...releaseStatusInspection(definition.id, definition.releaseStatus)];
 });
 
 // Inspection lists a card's base and acquired bonuses after its name (#751).
