@@ -52,6 +52,21 @@ reviews:
           a save file, `typeof x === "string"`) and tests are not special cases.
           PASS otherwise. When failing, name each offending line and suggest the trait,
           registry entry or configuration that should own the behaviour instead.
+      - name: "Recorded ticket scope and split handoff"
+        mode: warning
+        instructions: |
+          Follow doc/process.md, "Oversized tickets: reject the scope and return it for a split",
+          and AGENTS.md. At intake, an implementer who considers a ticket too complicated for
+          one focused delivery rejects its scope with concrete reasons on the issue and returns
+          it to design. The designer proposes smaller tickets; implementers may suggest a split
+          and have final choice on workable delivery boundaries. This does not transfer game-rule
+          or architecture ownership. Partial work is preserved and the implementer takes other work.
+          Report a finding only when linked issue/PR evidence shows an unresolved recorded sizing
+          rejection being bypassed by implementation, or an explicit ownership/handoff violation.
+          Cite the objection and missing resolution. Do not infer oversized scope from line count,
+          demand a split-approval comment on every ordinary PR, or block a documentation/process
+          PR that is itself resolving the objection. If issue context is unavailable, state that
+          limitation rather than inventing a violation. Tracking epics are not omnibus code tasks.
       - name: "Architecturally correct"
         mode: error
         instructions: |

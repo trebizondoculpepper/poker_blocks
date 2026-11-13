@@ -7,6 +7,7 @@
 <!-- Link the relevant issue and the design sections this PR satisfies. Documentation first: a rule or design change is its own documentation PR, merged before implementation. -->
 
 - [ ] This is a documentation PR, **or** every behaviour it implements is already described in the merged doc/game.md / doc/game-architecture.md (cite the sections).
+- [ ] This is one focused delivery; any recorded oversized-scope rejection is resolved under [the split process](../doc/process.md#oversized-tickets-reject-the-scope-and-return-it-for-a-split), or this PR is the process/design response rather than implementation of that rejected scope.
 - [ ] Services stay narrow (no scene, mode, material or item identity; no outcome decisions or state diffing); policy lives in a configured controller trait (see "Services and controller traits").
 
 ## Composition check (required, see AGENTS.md "No special cases")
