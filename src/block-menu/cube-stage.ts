@@ -162,6 +162,9 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
   }
   const observer = new ResizeObserver(resize);
   observer.observe(host);
+  // A sized host has an explicit height, so a viewport-only change would not resize it: the
+  // reference depends on the viewport, so follow that too (#628 review).
+  window.addEventListener("resize", resize);
 
   function tick(now: number): void {
     const dt = Math.min(0.1, (now - last) / 1000);
@@ -226,6 +229,7 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
     dispose() {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      window.removeEventListener("resize", resize);
       clear();
       environment.dispose();
       renderer.dispose();
