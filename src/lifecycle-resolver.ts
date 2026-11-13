@@ -11,7 +11,13 @@
  * are configuration errors, never a guess or a hidden default.
  */
 import { Registry } from "./core/registry";
-import { resetStateHandlers, resolveResetFacet, type ResetRequest } from "./reset-facet";
+import { blockMaterials } from "./materials";
+import {
+  resetStateHandlers,
+  resolveResetFacet,
+  type ResetRequest,
+  type ResetStep,
+} from "./reset-facet";
 
 export const retentions = ["stage", "round", "run"] as const;
 export type Retention = (typeof retentions)[number];
@@ -44,6 +50,19 @@ export const resetFacetValidators = new Registry<(config: unknown) => void>(
   "reset facet validator",
 );
 
+/**
+ * How one reset step's configuration is validated, registered under its handler's name; it throws
+ * a message on a bad configuration (a missing or unknown target). A handler with none takes any.
+ */
+export const resetStepValidators = new Registry<(config: unknown) => void>("reset step validator");
+
+// A material reversion needs a registered target material.
+resetStepValidators.register("material", (config) => {
+  const { to } = (config ?? {}) as { to?: unknown };
+  if (!blockMaterials.includes(to as never))
+    throw new Error(`material reset needs a registered target, not "${String(to)}"`);
+});
+
 // A resettable reset needs a non-empty recipe of registered handlers and a scheduled boundary.
 resetFacetValidators.register("resettable", (config) => {
   const { recipe, boundary } = (config ?? {}) as { recipe?: unknown; boundary?: unknown };
@@ -53,6 +72,8 @@ resetFacetValidators.register("resettable", (config) => {
     .map((step) => (step as { handler?: unknown })?.handler)
     .filter((handler) => typeof handler !== "string" || !resetStateHandlers.has(handler));
   if (unknown.length) throw new Error(`unknown reset handler(s) ${unknown.map(String).join(", ")}`);
+  for (const { handler, config: stepConfig } of recipe as ResetStep[])
+    if (resetStepValidators.has(handler)) resetStepValidators.get(handler)(stepConfig);
   if (typeof boundary !== "string" || !boundaries.includes(boundary))
     throw new Error(`bad reset boundary "${String(boundary)}"`);
 });

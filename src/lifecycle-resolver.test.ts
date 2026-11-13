@@ -136,6 +136,19 @@ describe("inherited lifecycle resolution (#916)", () => {
     );
   });
 
+  it("rejects a reset step with a missing or unknown target", () => {
+    const material = (config: unknown) => ({
+      retention: "run" as const,
+      reset: { resettable: { recipe: [{ handler: "material", config }], boundary: "round" } },
+    });
+    fails("noTarget", { noTarget: material({}) }, /registered target/);
+    fails(
+      "badTarget",
+      { badTarget: material({ to: "nonexistent" }) },
+      /registered target, not "nonexistent"/,
+    );
+  });
+
   it("resolves every declaration at once, or throws the first error", () => {
     expect(Object.keys(resolveLifecycles(fixtures))).toEqual(Object.keys(fixtures));
     expect(() => resolveLifecycles({ ...fixtures, broken: { parent: "missing" } })).toThrow(
