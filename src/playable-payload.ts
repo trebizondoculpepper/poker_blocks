@@ -79,7 +79,13 @@ activeDefinitions.register("playableCard", {
   requires: ["pokerIdentity"],
   create: (id) => ({
     id,
-    traits: { active: { definition: "playableCard" }, selectable: {}, attachable: { faces } },
+    traits: {
+      active: { definition: "playableCard" },
+      // Adopted into the run for good (#928): a run-owned active, not the field's.
+      owner: { id: "runActive" },
+      selectable: {},
+      attachable: { faces },
+    },
   }),
 });
 

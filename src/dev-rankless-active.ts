@@ -35,6 +35,8 @@ export function devOpaqueContainer(
     traits: {
       ...base.traits,
       active: { definition: "devOpaqueContainer" },
+      // A run-owned active (#928): retired in full when it is consumed.
+      owner: { id: "runActive" },
       opaqueContainer: { payload },
     },
   };
@@ -44,6 +46,13 @@ activeDefinitions.register("devOpaqueContainer", {
   requires: ["opaqueContainer"],
   create: (id) => {
     const base = devRanklessActive(id);
-    return { ...base, traits: { ...base.traits, active: { definition: "devOpaqueContainer" } } };
+    return {
+      ...base,
+      traits: {
+        ...base.traits,
+        active: { definition: "devOpaqueContainer" },
+        owner: { id: "runActive" },
+      },
+    };
   },
 });
