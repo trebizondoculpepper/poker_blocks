@@ -20,6 +20,8 @@ export const activeDefinitions = new Registry<ActiveDefinition>("active definiti
  * saved value is restored onto a freshly created instance; `restore` throws on a bad value.
  */
 export type ActiveComponentCodec = {
+  /** Identities the saved component owns (a stored payload's), reserved against every other. */
+  ownedIds?(saved: unknown): readonly string[];
   save(block: CardBlock): unknown;
   restore(block: CardBlock, saved: unknown): CardBlock;
 };
@@ -73,4 +75,18 @@ export function restoreActiveObjects(
       return activeComponentCodecs.get(name).restore(block, value);
     }, created);
   });
+}
+
+/**
+ * The identities live saved components own (#554), from their codecs: the instances under
+ * `retired` (removed for the run) own nothing any more.
+ */
+export function ownedIdentities(saved: unknown, retired: ReadonlySet<string>): string[] {
+  return Object.entries((saved ?? {}) as Record<string, Partial<SavedActiveObject>>)
+    .filter(([id]) => !retired.has(id))
+    .flatMap(([, { components = {} }]) =>
+      Object.entries(components).flatMap(
+        ([name, value]) => activeComponentCodecs.get(name).ownedIds?.(value) ?? [],
+      ),
+    );
 }

@@ -43,7 +43,9 @@ export type PlayStep = (context: PlayStepContext) => readonly GameEvent[];
 export const playSteps = new Registry<PlayStep>("play step");
 
 playSteps.register("countdown-deductions", (context) => {
-  context.pending.push(...deductCountdowns(context.target, context.placed));
+  // A placed block replaced in its cell this play (an opened container) counts as placed.
+  const placed = new Set([...context.placed].map((id) => context.replacements.get(id) ?? id));
+  context.pending.push(...deductCountdowns(context.target, placed));
   return [];
 });
 /**

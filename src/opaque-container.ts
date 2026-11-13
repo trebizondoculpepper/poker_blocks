@@ -54,6 +54,8 @@ export function materializePayload(containerId: string, payload: StoredPayload):
 
 // A container's stored payload, saved nested inside it: never also a top-level record.
 activeComponentCodecs.register("opaqueContainer", {
+  // The payload is an identity this component owns: no other instance may use it.
+  ownedIds: (saved) => [(saved as StoredPayload).id],
   save: (block) =>
     [block.traits.opaqueContainer ?? []].flat().map(({ payload }) => structuredClone(payload))[0],
   restore: (block, saved) => {
@@ -74,7 +76,12 @@ activeComponentCodecs.register("opaqueContainer", {
 activeDefinitions.register("playableCard", {
   create: (id) => ({
     id,
-    traits: { active: { definition: "playableCard" }, selectable: {}, attachable: { faces } },
+    traits: {
+      active: { definition: "playableCard" },
+      owner: { id: "runActive" },
+      selectable: {},
+      attachable: { faces },
+    },
   }),
 });
 activeComponentCodecs.register("pokerIdentity", {

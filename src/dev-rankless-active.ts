@@ -13,6 +13,7 @@ export function devRanklessActive(id: string): CardBlock {
     id,
     traits: {
       active: { definition: "devRanklessActive" },
+      owner: { id: "runActive" },
       label: { name: "Dev rankless active", symbol: "◇" },
       selectable: {},
       attachable: { faces },

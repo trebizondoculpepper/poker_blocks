@@ -17,7 +17,12 @@ import { restoreModifierRegisters } from "./modifier-registers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
 // Registers the container and run-owned card codecs a save may need (#554).
 import "./opaque-container";
-import { restoreActiveObjects, saveActiveObjects, type SavedActiveObject } from "./active-objects";
+import {
+  ownedIdentities,
+  restoreActiveObjects,
+  saveActiveObjects,
+  type SavedActiveObject,
+} from "./active-objects";
 // Registers how a passive's instance configuration is saved and restored (#876).
 import "./configurable-passive";
 import { asGenerated } from "./card-ownership";
@@ -271,18 +276,13 @@ export function fromSaveRecord(
     );
     const byId = new Map(runCards.map((card) => [card.id, card]));
     if (byId.size !== runCards.length) return null;
-    // A container's stored payload must have an identity of its own (#554): not a run card's, a
-    // removed card's, or another payload's.
+    // Identities owned by saved components (a stored payload's) are their own (#554): not a
+    // run card's, a removed card's, or another component's.
     const reserved = new Set(record.state.removedCards ?? []);
-    // A retired container (already opened) keeps its old payload record; only live ones count.
-    const payloadIds = runCards
-      .filter(({ id }) => !reserved.has(id))
-      .flatMap((card) =>
-        [card.traits.opaqueContainer ?? []].flat().map(({ payload }) => payload.id),
-      );
+    const owned = ownedIdentities(record.state.activeObjects, reserved);
     if (
-      new Set(payloadIds).size !== payloadIds.length ||
-      payloadIds.some((id) => byId.has(id) || reserved.has(id))
+      new Set(owned).size !== owned.length ||
+      owned.some((id) => byId.has(id) || reserved.has(id))
     )
       return null;
     if (Object.keys(cardStates ?? {}).some((id) => !byId.has(id))) return null;
