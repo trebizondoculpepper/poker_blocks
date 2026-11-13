@@ -32,6 +32,7 @@ import {
 import type { RenderPass } from "../../visual/render-pass";
 import { viewControls } from "./view-controls";
 import "./room.css";
+import { blockOutline } from "../../visual/block-outline";
 
 export type CrystalComparisonRoom = {
   show(config: DevCrystalComparisonConfig): void;
@@ -197,14 +198,7 @@ export function createCrystalComparisonRoom(
         appearance.boardMaterials ?? appearance.materials,
       );
       mesh.renderOrder = appearance.faceLayer ?? 0;
-      const edges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(appearance.geometry),
-        new THREE.LineBasicMaterial({
-          color: appearance.edgeColor,
-          transparent: appearance.edgeOpacity < 1,
-          opacity: appearance.edgeOpacity,
-        }),
-      );
+      const edges = blockOutline(appearance);
       mesh.add(edges, ...(appearance.extras ?? []));
       mesh.position.copy(slot.position);
       mesh.rotation.copy(slot.rotation);

@@ -161,6 +161,19 @@ function savedScene(record: SaveRecord): SceneName | null {
     : null;
 }
 
+/** Restored retired actives: active records whose instances were removed for the run (#928). */
+function retiredField(
+  activeObjects: readonly CardBlock[],
+  removedCards: readonly string[],
+  byId: ReadonlyMap<string, CardBlock>,
+) {
+  const removed = new Set(removedCards);
+  const retiredActives = activeObjects
+    .filter(({ id }) => removed.has(id))
+    .map(({ id }) => byId.get(id)!);
+  return retiredActives.length ? { retiredActives } : {};
+}
+
 /** The save's `activeObjects` field: present only when the run holds active instances. */
 function activeObjectsField(blocks: readonly CardBlock[]) {
   const activeObjects = saveActiveObjects(blocks);
@@ -196,6 +209,8 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
         ...state.hand,
         ...state.deck,
         ...state.discardPile,
+        // Retired actives (#928): removed for the run, still recorded so removal accounts for them.
+        ...(state.retiredActives ?? []),
       ]),
       ...(state.cardStates && Object.keys(state.cardStates).length
         ? { cardStates: structuredClone(state.cardStates) }
@@ -332,6 +347,8 @@ export function fromSaveRecord(
         : {}),
       ...(cardStates ? { cardStates } : {}),
       ...(removedCards.length ? { removedCards } : {}),
+      // Retired active instances (#928): the removed ones the save rebuilt from activeObjects.
+      ...retiredField(activeObjects, removedCards, byId),
       coins: nonnegativeInteger(state.coins ?? 0),
       round: {
         score: number(state.round.score),

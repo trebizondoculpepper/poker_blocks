@@ -12,6 +12,7 @@ import { createBlockAppearance } from "../../visual/block-appearance";
 import { cardFaceArt } from "../../visual/face-art";
 import { cosmeticRandom, createBlockEffects } from "../../visual/block-effects";
 import type { ProfiledObject } from "./cases";
+import { blockOutline } from "../../visual/block-outline";
 
 export function tableBlock(card: CardBlock, definition: MaterialDefinition): ProfiledObject {
   const appearance = createBlockAppearance(
@@ -24,14 +25,7 @@ export function tableBlock(card: CardBlock, definition: MaterialDefinition): Pro
     appearance.boardMaterials ?? appearance.materials,
   );
   mesh.renderOrder = appearance.faceLayer ?? 0;
-  const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(appearance.geometry),
-    new THREE.LineBasicMaterial({
-      color: appearance.edgeColor,
-      transparent: appearance.edgeOpacity < 1,
-      opacity: appearance.edgeOpacity,
-    }),
-  );
+  const edges = blockOutline(appearance);
   mesh.add(edges, ...(appearance.extras ?? []));
   // A fixed three-quarter turn, so three faces show, as on the table.
   mesh.rotation.set(0.45, 0.6, 0);
@@ -67,7 +61,7 @@ export function tableBlock(card: CardBlock, definition: MaterialDefinition): Pro
           material.dispose();
         }
       edges.geometry.dispose();
-      edges.material.dispose();
+      (edges.material as THREE.LineBasicMaterial).dispose();
     },
   };
 }

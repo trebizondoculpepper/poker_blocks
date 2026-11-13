@@ -43,6 +43,8 @@ export type BlockAppearance = {
   boardMaterials?: THREE.MeshStandardMaterial[];
   edgeColor: number;
   edgeOpacity: number;
+  /** A live outline opacity the outline reads each frame, overriding `edgeOpacity` (#796). */
+  liveEdgeOpacity?: { value: number };
   /**
    * The render order of the block's own faces, where it must sit among its extras (a contained
    * block's front shell, #330); the default order when absent.
@@ -1355,13 +1357,17 @@ function crystalRefraction(context: AssemblyContext): BlockAppearance {
   const print = printSkin(art, definition.appearance, geometry);
   const inHand = surface(texture, definition.appearance, height);
   const front = createRefractionFront(preset) as unknown as THREE.MeshStandardMaterial;
-  return appearanceBase(
-    context,
-    [texture, ...[height].filter((value) => value !== undefined), print.texture],
-    Array.from({ length: 6 }, () => inHand),
-    [createRefractionRear(geometry, preset), print.skin],
-    Array.from({ length: 6 }, () => front),
-  );
+  return {
+    ...appearanceBase(
+      context,
+      [texture, ...[height].filter((value) => value !== undefined), print.texture],
+      Array.from({ length: 6 }, () => inHand),
+      [createRefractionRear(geometry, preset), print.skin],
+      Array.from({ length: 6 }, () => front),
+    ),
+    // The preset's own live outline opacity, where it owns one (#796).
+    ...(preset.edgeOpacity ? { liveEdgeOpacity: preset.edgeOpacity } : {}),
+  };
 }
 
 /** Internal reflections, ignoring the background (prototype, src/visual/crystal-internal.ts). */
