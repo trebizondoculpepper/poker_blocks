@@ -11,7 +11,8 @@
  */
 import { Registry } from "./core/registry";
 import { query } from "./context-queries";
-import type { HandlerConfig } from "./event-rules";
+import type { EventRule } from "./event-rules";
+import { passiveRuleBuilders, type ParameterSchema } from "./configurable-passive";
 import { passiveDefinitions, type PassiveDefinition } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
 import "./packing-density";
@@ -22,6 +23,26 @@ import "./material-diversity";
 export type ScoreCurve = {
   factor(value: number, params: unknown): number;
   validate(params: unknown): string[];
+  /**
+   * Its adjustable parameters (#876): each one's location in its params and permitted range.
+   * A configurable trial offers these to an instance; the curve's `validate` still judges the
+   * combination.
+   */
+  parameters: Readonly<Record<string, CurveParameter>>;
+};
+
+/** One adjustable curve parameter. */
+export type CurveParameter = {
+  label: string;
+  path: readonly (string | number)[];
+  min: number;
+  max: number;
+  step?: number;
+};
+
+const rampParameters = {
+  maximum: { label: "Maximum factor", path: ["maximum"], min: 1, max: 20, step: 0.5 },
+  start: { label: "Start", path: ["start"], min: 0.01, max: 0.99, step: 0.01 },
 };
 export const scoreCurves = new Registry<ScoreCurve>("score curve");
 
@@ -42,6 +63,7 @@ scoreCurves.register("denseRamp", {
     return 1 + (maximum - 1) * clamp01((d - start) / (1 - start));
   },
   validate: (raw) => rampProblems(raw as RampParams),
+  parameters: rampParameters,
 });
 // Sparse: 1 + (K−1)·clamp((b − d)/b).
 scoreCurves.register("sparseRamp", {
@@ -50,6 +72,7 @@ scoreCurves.register("sparseRamp", {
     return 1 + (maximum - 1) * clamp01((start - d) / start);
   },
   validate: (raw) => rampProblems(raw as RampParams),
+  parameters: rampParameters,
 });
 
 type HeavyParams = { maximum: number; coefficient: number; referenceKg: number };
@@ -70,6 +93,11 @@ scoreCurves.register("heavyLog", {
       ? []
       : ["needs a finite maximum ≥ 1, a positive coefficient and a positive reference mass"];
   },
+  parameters: {
+    maximum: rampParameters.maximum,
+    coefficient: { label: "Coefficient", path: ["coefficient"], min: 0.1, max: 10, step: 0.1 },
+    referenceKg: { label: "Reference mass (kg)", path: ["referenceKg"], min: 0.01, max: 100 },
+  },
 });
 // Light: 1 + (K−1)/(1 + m/m0), bounded, approaching ×1 for large mass, no singularity.
 scoreCurves.register("lightInverse", {
@@ -82,6 +110,10 @@ scoreCurves.register("lightInverse", {
     return finite(maximum, referenceKg) && maximum >= 1 && referenceKg > 0
       ? []
       : ["needs a finite maximum ≥ 1 and a positive reference mass"];
+  },
+  parameters: {
+    maximum: rampParameters.maximum,
+    referenceKg: { label: "Reference mass (kg)", path: ["referenceKg"], min: 0.01, max: 100 },
   },
 });
 
@@ -102,6 +134,16 @@ scoreCurves.register("thresholdTiers", {
       tiers.every(({ at, factor }) => finite(at, factor) && factor >= 1)
       ? []
       : ["needs tiers in rising order, each with a finite factor ≥ 1"];
+  },
+  // The configured tiers' factors; their thresholds stay as the definition sets them.
+  parameters: {
+    firstTierFactor: { label: "First tier factor", path: ["tiers", 0, "factor"], min: 1, max: 20 },
+    secondTierFactor: {
+      label: "Second tier factor",
+      path: ["tiers", 1, "factor"],
+      min: 1,
+      max: 20,
+    },
   },
 });
 
@@ -157,6 +199,48 @@ export function validateQueryFactor(owner: string, config: QueryFactorConfig): s
     .map((problem) => `${owner}: ${problem}`);
 }
 
+/** A trial's rules: one row multiplier on each scored line, from its query factor. */
+const queryFactorRules = (factor: QueryFactorConfig): EventRule[] => [
+  {
+    on: "score.beforeLineFinalized",
+    select: { id: "scored-line", config: {} },
+    where: { id: "always", config: {} },
+    effects: [{ id: "multiply-line-score-by-query", config: factor }],
+  },
+];
+
+// Instance configuration for a query trial (#876): validated through the same curve validators.
+passiveRuleBuilders.register("queryFactor", {
+  validate: (owner, config) => validateQueryFactor(owner, config as QueryFactorConfig),
+  build: (config) => queryFactorRules(config as QueryFactorConfig),
+});
+
+/**
+ * A query trial's adjustable parameters: its curve's, located under `params`, plus which value
+ * (aggregate) of the query it reads when the trial offers a choice.
+ */
+const queryFactorParameters = (
+  factor: QueryFactorConfig,
+  values: readonly string[],
+): Record<string, ParameterSchema> => ({
+  ...Object.fromEntries(
+    Object.entries(scoreCurves.get(factor.curve).parameters).map(([name, parameter]) => [
+      name,
+      { ...parameter, kind: "number" as const, path: ["params", ...parameter.path] },
+    ]),
+  ),
+  ...(values.length > 1
+    ? {
+        aggregate: {
+          label: "Aggregate",
+          kind: "choice" as const,
+          path: ["value"],
+          options: values,
+        },
+      }
+    : {}),
+});
+
 /** The exported initial trial parameters (designer suggestions, not balance). */
 export const packingTrials = {
   dense: { maximum: 10, start: 0.7 },
@@ -184,10 +268,10 @@ function queryTrial(
   symbol: string,
   description: string,
   factor: QueryFactorConfig,
+  values: readonly string[] = [factor.value],
 ): PassiveDefinition {
   const problems = validateQueryFactor(id, factor);
   if (problems.length) throw new Error(problems.join("\n"));
-  const effect: HandlerConfig = { id: "multiply-line-score-by-query", config: factor };
   return {
     id,
     // A trial: experimental catalogues only, never normal shops (doc/release-status.md).
@@ -197,14 +281,13 @@ function queryTrial(
     description,
     traitId: "passive.event-rules",
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
-    eventRules: [
-      {
-        on: "score.beforeLineFinalized",
-        select: { id: "scored-line", config: {} },
-        where: { id: "always", config: {} },
-        effects: [effect],
-      },
-    ],
+    eventRules: queryFactorRules(factor),
+    // Its curve's parameters may be adjusted per instance (#876).
+    configurable: {
+      builder: "queryFactor",
+      config: factor,
+      parameters: queryFactorParameters(factor, values),
+    },
   };
 }
 
@@ -254,6 +337,7 @@ for (const definition of [
         "⬇",
         `Multiplies each scored row by up to ×10, more for a heavier ${label} mass of its scored blocks. Provisional trial.`,
         { query: "scoredSubsetMass", value, curve: "heavyLog", params: massTrials.heavy },
+        ["meanKg", "totalKg"],
       ),
       queryTrial(
         `trial-light-${label}-mass`,
@@ -261,6 +345,7 @@ for (const definition of [
         "⬆",
         `Multiplies each scored row by up to ×10, more for a lighter ${label} mass of its scored blocks. Provisional trial.`,
         { query: "scoredSubsetMass", value, curve: "lightInverse", params: massTrials.light },
+        ["meanKg", "totalKg"],
       ),
     ];
   }),

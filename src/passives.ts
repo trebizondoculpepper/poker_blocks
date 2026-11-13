@@ -20,12 +20,15 @@ import type { PassiveFaceDesign, PassiveTokenAppearance } from "./passive-visual
 import type { StageKind } from "./run-rules";
 import type { TriggerContext } from "./triggers";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
+import type { ConfigurableCapability, PassiveConfiguration } from "./configurable-passive";
 
 export type PassiveBlock = {
   id: string;
   definitionId: string;
   traits: Partial<PassiveCategoryTraits> & {
     rackResident?: { zone: "passive-rack" };
+    /** This instance's own configuration overrides (#876; src/configurable-passive.ts). */
+    configurablePassive?: PassiveConfiguration;
     appearance?: PassiveTokenAppearance;
     passive: { traitId: string; eventRules?: readonly EventRule[] };
     inspectable: InspectableTrait;
@@ -160,6 +163,12 @@ export type PassiveDefinition = {
   visual?: { builder: string; config: unknown };
   /** Its event rules: named, configured handlers from `src/rule-handlers.ts` (#139, #170). */
   eventRules: readonly EventRule[];
+  /**
+   * Instance configuration (#876; doc/experiments/passive-test-bench.md): a registered rule
+   * builder, its base configuration and the named parameters an instance may override. Absent,
+   * the passive has no adjustable settings.
+   */
+  configurable?: ConfigurableCapability;
   /**
    * Its shop balance (doc/game.md, "Shop rules"): base purchase price in coins and the first
    * round it can be stocked. Absent only on a retired passive.

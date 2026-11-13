@@ -15,6 +15,8 @@ import "./transmogrifiers";
 import "./nothingifier";
 import { restoreModifierRegisters } from "./modifier-registers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
+// Registers how a passive's instance configuration is saved and restored (#876).
+import "./configurable-passive";
 import { asGenerated } from "./card-ownership";
 import { type CardState } from "./card-material";
 import { applyCardStates } from "./card-states";
@@ -587,13 +589,22 @@ function saveRackItem(block: PassiveBlock): SavedRackItem {
   };
 }
 
+/** Joins a restored trait to an item by setting it. */
+const setTrait =
+  (name: string) =>
+  (block: PassiveBlock, restored: unknown): PassiveBlock => ({
+    ...block,
+    traits: { ...block.traits, [name]: restored },
+  });
+
 function restoreRackItem(saved: SavedRackItem): PassiveBlock {
-  const block = createPassiveBlock(saved.definitionId, saved.id);
-  const traits = Object.fromEntries(
-    Object.entries(saved.traits ?? {}).map(([name, value]) => [
-      name,
-      rackTraitPersistence.get(name).restore(value),
-    ]),
+  // Each saved trait is restored, then joins the item as its persistence says (#876).
+  return Object.entries(saved.traits ?? {}).reduce(
+    (block, [name, value]) => {
+      const persistence = rackTraitPersistence.get(name);
+      const restored = persistence.restore(value);
+      return (persistence.attach ?? setTrait(name))(block, restored);
+    },
+    createPassiveBlock(saved.definitionId, saved.id),
   );
-  return { ...block, traits: { ...block.traits, ...traits } };
 }
