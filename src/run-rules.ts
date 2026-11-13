@@ -86,14 +86,14 @@ export function targetForStage<Kind extends string>(
  * the base dealer until boss rules exist.
  */
 export const demoRunRules: RunRules = {
-  // Material effects in the documented order: placement-timed reactions (the Air/flame upgrade)
+  // Openings first (#554), then material effects in the documented order: placement-timed reactions (the Air/flame upgrade)
   // and countdown deductions before scoring; the other reactions, then the pending detonations,
   // after it.
   playfield: [
     {
       id: "materialEffectsController",
       config: {
-        beforeScore: ["placement-reactions", "countdown-deductions"],
+        beforeScore: ["openings", "placement-reactions", "countdown-deductions"],
         afterScore: ["reactions", "countdown-detonations"],
       },
     },

@@ -76,6 +76,8 @@ export type RandomCheckpoints = {
   restore(mark: { state: number; draws: number }): void;
 };
 import { offerKind, type OfferDestination, type OfferRun, type ShopOffer } from "./offer-kinds";
+// Registers the openings play step and the container codecs the playfield composes (#554).
+import "./opaque-container";
 
 /** Where a run is: one of a round's three stages, the shop, or finished after a loss. */
 export type RunPhase = StageKind | "shop" | "over";
@@ -801,7 +803,8 @@ export class GameRun {
     // A group names its primary card first; one that doesn't is refused, so every fact names
     // what was actually placed (#695 review).
     if (action.cardIds?.length && action.cardIds[0] !== action.cardId) return null;
-    const next = this.activeDealer.play(this.currentState, action);
+    // Placed, not scored: openings and material phases resolve first, then scoring (#554).
+    const next = this.activeDealer.place(this.currentState, action);
     if (!next) return null;
     // Captured: listeners receive these IDs, and must not change the play (#682 review).
     const placed = captured(action.cardIds?.length ? [...action.cardIds] : [action.cardId]);

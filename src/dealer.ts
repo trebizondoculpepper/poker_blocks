@@ -43,6 +43,12 @@ export interface Dealer {
    * along the face's direction (east on an empty field). Null if any cell is taken.
    */
   linePlacementFor(state: GameState, count: number, targetId?: string, face?: Face): Cell[] | null;
+  /**
+   * Place the hand cards on the field and use a move, without scoring (#554): the run resolves
+   * openings and material phases, then scores the field once itself.
+   */
+  place(state: GameState, action: PlayAction): GameState | null;
+  /** `place`, plus the field's points: a standalone play outside a run's phases. */
   play(state: GameState, action: PlayAction): GameState | null;
   canDiscard(state: GameState): boolean;
   /**
@@ -127,7 +133,7 @@ export const baseDealer: Dealer = {
     return cells.some((cell) => taken.has(cellKey(cell))) ? null : cells;
   },
 
-  play(state, action) {
+  place(state, action) {
     if (!this.canPlay(state)) return null;
     const ids = action.cardIds?.length ? action.cardIds : [action.cardId];
     if (new Set(ids).size !== ids.length) return null;
@@ -136,21 +142,22 @@ export const baseDealer: Dealer = {
     const cells = this.linePlacementFor(state, ids.length, action.targetId, action.face);
     if (!cells) return null;
     const placedIds = new Set(ids);
-    const field = [
-      ...state.field,
-      ...blocks.map((block, index) => ({ block: withoutSelectable(block!), cell: cells[index] })),
-    ];
-    const gained = scoreField(field).reduce((total, { points }) => total + points, 0);
     return {
       ...state,
-      field,
+      field: [
+        ...state.field,
+        ...blocks.map((block, index) => ({ block: withoutSelectable(block!), cell: cells[index] })),
+      ],
       hand: state.hand.filter(({ id }) => !placedIds.has(id)),
-      round: {
-        ...state.round,
-        score: state.round.score + gained,
-        movesLeft: state.round.movesLeft - 1,
-      },
+      round: { ...state.round, movesLeft: state.round.movesLeft - 1 },
     };
+  },
+
+  play(state, action) {
+    const placed = this.place(state, action);
+    if (!placed) return null;
+    const gained = scoreField(placed.field).reduce((total, { points }) => total + points, 0);
+    return { ...placed, round: { ...placed.round, score: placed.round.score + gained } };
   },
 
   canDiscard: (state) => roundOutcome(state) === "playing" && state.round.discardsLeft > 0,

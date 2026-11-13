@@ -15,6 +15,8 @@ import "./transmogrifiers";
 import "./nothingifier";
 import { restoreModifierRegisters } from "./modifier-registers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
+// Registers the container and run-owned card codecs a save may need (#554).
+import "./opaque-container";
 import { restoreActiveObjects, saveActiveObjects, type SavedActiveObject } from "./active-objects";
 // Registers how a passive's instance configuration is saved and restored (#876).
 import "./configurable-passive";

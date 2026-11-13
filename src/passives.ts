@@ -115,6 +115,8 @@ export type GameEvent = {
    */
   outgoingStock?: readonly { kind: string; blockId: string }[];
   destination?: { round: number; stage: StageKind };
+  /** On `block.opened` (#554): the container that opened and the instance that took its cell. */
+  opened?: { wrapperId: string; payloadId: string };
   /** On `run.ended` (#878): the run's terminal result. */
   result?: "lost";
 };
