@@ -14,20 +14,36 @@
  * it holds its phase. Zero amplitude adds nothing: the static baseline.
  */
 
-/** The bounds a ripple's settings are kept within (and that controls offer). */
+/**
+ * The bounds a ripple's settings are kept within (and that controls offer). The period bounds
+ * here are the default; a preset may own its own (#795; doc/calm-water-refinements.md).
+ */
 export const rippleBounds = {
   amplitude: { min: 0, max: 0.03 },
   period: { min: 8, max: 12 },
   scale: { min: 0.5, max: 4 },
 } as const;
 
-export type RippleSettings = { amplitude: number; period: number; scale: number };
+export type PeriodBounds = { min: number; max: number; step: number };
+
+/** The default period bounds, for a preset that declares none. */
+export const defaultPeriodBounds: PeriodBounds = { ...rippleBounds.period, step: 0.5 };
+
+export type RippleSettings = {
+  amplitude: number;
+  period: number;
+  scale: number;
+  /** This preset's own period bounds; `defaultPeriodBounds` when left out. */
+  periodBounds?: PeriodBounds;
+};
 
 export type LookupRipple = {
   /** Shift size, as a share of the screen: bounded by `rippleBounds.amplitude.max`. */
   amplitude: { value: number };
   /** Seconds for one seamless loop. */
   period: { value: number };
+  /** The period bounds this ripple owns: its controls, import and clock all read these. */
+  periodBounds: PeriodBounds;
   /** Waves across one block: higher is finer, still smooth. */
   scale: { value: number };
   /** Where in its loop the ripple is, from 0 up to 1: derived, never configured or saved. */
@@ -37,14 +53,17 @@ export type LookupRipple = {
 };
 
 export function createLookupRipple(settings: RippleSettings): LookupRipple {
+  const periodBounds = settings.periodBounds ?? defaultPeriodBounds;
   const ripple: LookupRipple = {
     amplitude: { value: settings.amplitude },
     period: { value: settings.period },
+    periodBounds,
     scale: { value: settings.scale },
     phase: { value: 0 },
     advance({ delta, reducedMotion }) {
       const step = reducedMotion ? 0 : Math.max(0, delta);
-      const period = Math.max(rippleBounds.period.min, ripple.period.value);
+      // The clock runs at the period the controls show: within this ripple's own bounds.
+      const period = Math.min(periodBounds.max, Math.max(periodBounds.min, ripple.period.value));
       ripple.phase.value = (ripple.phase.value + step / period) % 1;
     },
   };

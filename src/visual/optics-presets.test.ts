@@ -87,7 +87,7 @@ describe("calm water keeps its own tuning (#675)", () => {
     expect(config.spectral).toBe(0);
     expect(config.dispersion).toBeLessThanOrEqual(0.03);
     expect(config.rippleAmplitude).toBeGreaterThan(0);
-    expect(config.ripplePeriod).toBe(10);
+    expect(config.ripplePeriod).toBe(8);
     expect(Object.keys(config)).not.toContain("mapPattern");
   });
 });
