@@ -50,6 +50,8 @@ for (const name of [
   "transparent",
   "destructible",
   "resistant",
+  // A definition handle (#894): the clone is another instance of the same definition.
+  "active",
 ])
   cloneCodecs.register(name, shared);
 for (const name of [

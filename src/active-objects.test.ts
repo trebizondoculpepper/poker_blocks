@@ -112,3 +112,13 @@ describe("active objects in saves (#894)", () => {
     expect(load(missing)).toBeNull();
   });
 });
+
+describe("cloning an active instance (#894 review)", () => {
+  it("exact-clones a rankless active with a fresh ID and the same definition", async () => {
+    const { cloneCard } = await import("./clonable");
+    const result = cloneCard(devRanklessActive("source"), () => "copy");
+    expect(result).toMatchObject({
+      clone: { id: "copy", traits: { active: { definition: "devRanklessActive" } } },
+    });
+  });
+});
