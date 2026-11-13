@@ -522,3 +522,7 @@ The deck is an ordered pile: draw removes the first card without rerolling; shuf
 ## Retention and reset declarations (#580)
 
 Each block resolves one stage/round/run retention and an explicit reset policy, directly or through its declared parent. Ordinary run cards persist through the run; cooked meat reverts to raw after a stage, Cloud expires after a stage without joining the deck, and Gelato reverts to Custard after a round. Settlement reads outgoing state before cleanup. Reset/reversion and acquired-modifier expiry remain separate; run bonuses are not erased by ordinary state reset. See [clone/reset and boundary contracts](clone-reset.md). These engineering clone capabilities do not introduce a new player cloning item.
+
+## Certified and provisional content
+
+Certified definitions are approved for normal play subject to ordinary unlock and acquisition rules. Provisional definitions are available only through explicitly composed experimental catalogues. Bench listings and inspection identify the same status. New packing, mass and material-diversity modifiers remain provisional until an explicit documented certification decision. See [release status](release-status.md); registration or successful experimentation alone is not approval.
