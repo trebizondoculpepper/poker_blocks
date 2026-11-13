@@ -179,10 +179,11 @@ export function createMusicController(
    */
   let selected: string | null = null;
   /**
-   * Whether the music is wound down as the cue being run sees it: a `windDown` earlier in the
-   * same cue counts at once, before its deferred playback (#855 review).
+   * The track playing as the cue being run sees it: each operation updates it at once, before its
+   * deferred playback, so later operations in the same cue observe earlier ones (#855 review).
+   * Null while wound down.
    */
-  let logicallyDown = false;
+  let logicalCurrent: string | null = null;
   /** The last request, replayed on unlock. */
   let wanted: () => void = () => {};
   let woundDown = false;
@@ -230,20 +231,21 @@ export function createMusicController(
     const previous = entry.slot ? (slots.get(entry.slot) ?? null) : null;
     // Wound down, nothing counts as playing: a keeping selector chooses afresh.
     const chosen = musicSelectors.get(entry.selector)(entry.tracks, {
-      current: woundDown || logicallyDown ? null : player.current,
+      current: logicalCurrent,
       previous,
       random,
     });
     if (chosen && entry.slot) slots.set(entry.slot, chosen);
-    if (chosen) logicallyDown = false;
-    // A keeping selector leaves the playing track as the selection.
-    selected = chosen === undefined ? player.current : chosen;
+    // A keeping selector leaves the logically playing track as the selection.
+    selected = chosen === undefined ? logicalCurrent : chosen;
+    if (chosen) logicalCurrent = chosen;
     return chosen === undefined ? () => {} : () => start(chosen);
   };
 
   const run = (operations: readonly MusicOperation[]) => {
     const playback: (() => void)[] = [];
-    logicallyDown = woundDown;
+    // Wound down, nothing counts as playing; otherwise the player's track.
+    logicalCurrent = woundDown ? null : player.current;
     const api: MusicOperationApi = {
       select: (plan) => playback.push(choose(plan)),
       remember: (slot) => {
@@ -254,16 +256,16 @@ export function createMusicController(
         const remembered = slots.get(slot);
         if (remembered) {
           selected = remembered;
-          logicallyDown = false;
+          logicalCurrent = remembered;
           playback.push(() => start(remembered));
         } else if (fallbackPlan) playback.push(choose(fallbackPlan));
       },
       windDown: () => {
-        logicallyDown = true;
+        logicalCurrent = null;
         playback.push(windDown);
       },
       windUp: () => {
-        logicallyDown = false;
+        logicalCurrent = beforeWindDown ?? selected;
         playback.push(() => start(beforeWindDown));
       },
       // Not playback: a filter applies to whatever plays, so it never replaces a request.

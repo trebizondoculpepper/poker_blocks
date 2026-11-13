@@ -217,6 +217,21 @@ describe("music controller", () => {
     expect(music.woundDown).toBe(false);
   });
 
+  it("lets a later selection see an earlier one in the same cue (#855 review)", () => {
+    const { music, log, ...cue } = setup();
+    music.unlock();
+    cue.title();
+    const title = music.current!;
+    log.length = 0;
+    // Boss first, then a keep-if-playing title plan: the title is no longer what plays, so it
+    // must choose a title track rather than "keep" the boss loop.
+    music.run([
+      { op: "selectTrack", config: { plan: "boss" } },
+      { op: "selectTrack", config: { plan: "title" } },
+    ]);
+    expect(log.filter(isStart).map(started).at(-1)).toBe(title);
+  });
+
   it("rejects an unknown operation at composition rather than falling back", () => {
     expect(validateMusicOperations("scene", [{ op: "selectTrack" }, { op: "shuffleAll" }])).toEqual(
       ['scene: unknown music operation "shuffleAll"'],
