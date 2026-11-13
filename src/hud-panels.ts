@@ -5,6 +5,12 @@
  */
 import type { RoundOutcome } from "./dealer";
 import { unlimited } from "./run-rules";
+import {
+  buttonPresentation,
+  hudActionPresenters,
+  type HudActionPresentation,
+  type MountedHudAction,
+} from "./hud-actions";
 
 /** The independent panels a scene may show. */
 export type HudPanel = "round" | "deck" | "coins" | "shopExit";
@@ -17,8 +23,11 @@ export type RoundPanelConfig = {
   stage: string;
   actions?: Readonly<Partial<Record<RoundOutcome, string>>>;
 };
-/** The shop exit button's config: its label. */
-export type ShopExitConfig = { label: string };
+/**
+ * The shop exit's config: its label and how it is presented (#780): a registered HUD action
+ * presenter, an HTML button unless the scene composes another.
+ */
+export type ShopExitConfig = { label: string; presentation?: HudActionPresentation };
 
 /** What each panel is configured with by the scene showing it. */
 export type HudPanelConfigs = {
@@ -113,7 +122,11 @@ export function hudDisplay(view: HudView, composed: Readonly<ComposedPanels>): H
   };
 }
 
-export function createHudPanels(host: HTMLElement): HudPanels {
+export function createHudPanels(
+  host: HTMLElement,
+  /** What HUD action presenters are handed (the block menus' motion, for a word cube). */
+  presenterServices?: unknown,
+): HudPanels {
   const roundHud = document.createElement("aside");
   roundHud.className = "round-hud";
   roundHud.setAttribute("aria-label", "Round status");
@@ -145,11 +158,12 @@ export function createHudPanels(host: HTMLElement): HudPanels {
   coinHud.innerHTML = '<span>COINS</span><strong data-stat="shop-coins"></strong>';
   coinHud.hidden = true;
   host.append(coinHud);
-  const shopExitButton = document.createElement("button");
-  shopExitButton.className = "hud-action shop-exit";
-  shopExitButton.type = "button";
+  // The shop exit's place: its configured presenter is mounted here while a scene composes it.
+  const shopExitButton = document.createElement("div");
+  shopExitButton.className = "shop-exit";
   shopExitButton.hidden = true;
   host.append(shopExitButton);
+  let exitMount: { config: ShopExitConfig; mounted: MountedHudAction } | null = null;
 
   const panels = [roundHud, deckHud, coinHud];
   /** Which panels the scene in front composes; `render` applies it to the DOM. */
@@ -168,7 +182,23 @@ export function createHudPanels(host: HTMLElement): HudPanels {
   const handlers: (() => void)[] = [];
   const runAction = () => handlers.forEach((handler) => handler());
   actionButton.addEventListener("click", runAction);
-  shopExitButton.addEventListener("click", runAction);
+  /** Mount the composed exit's presenter, replacing one mounted for a different config. */
+  const mountExit = (config: ShopExitConfig | null) => {
+    if (exitMount?.config === config) return;
+    exitMount?.mounted.dispose();
+    exitMount = null;
+    if (!config) return;
+    const { presenter, config: presenterConfig } = config.presentation ?? buttonPresentation;
+    exitMount = {
+      config,
+      mounted: hudActionPresenters.get(presenter)(shopExitButton, {
+        label: config.label,
+        config: presenterConfig,
+        activate: runAction,
+        services: presenterServices,
+      }),
+    };
+  };
   const openers: ((action: string) => void)[] = [];
   const openDeck = (event: Event) => {
     if (event instanceof KeyboardEvent && event.key !== "Enter" && event.key !== " ") return;
@@ -185,10 +215,14 @@ export function createHudPanels(host: HTMLElement): HudPanels {
       (composed as Record<HudPanel, unknown>)[panel] = config;
       // A panel can arrive before its numbers do; reveal it now so it is not blank.
       elements[panel].hidden = false;
+      // A presenter mounts with the scene that composes it.
+      mountExit(composed.shopExit);
     },
     hide(panel) {
       composed[panel] = null;
       elements[panel].hidden = true;
+      // A presenter leaves with the scene that composed it.
+      mountExit(composed.shopExit);
     },
     render(view) {
       const display = hudDisplay(view, composed);
@@ -198,7 +232,8 @@ export function createHudPanels(host: HTMLElement): HudPanels {
       actionButton.hidden = display.action === null;
       actionButton.textContent = display.action ?? "";
       shopExitButton.hidden = !display.visible.shopExit;
-      shopExitButton.textContent = display.exit ?? "";
+      mountExit(composed.shopExit);
+      if (display.exit !== null) exitMount?.mounted.setLabel(display.exit);
       for (const [name, text] of Object.entries(display.stats)) stat(name).textContent = text;
     },
     onAction(handler) {
@@ -209,7 +244,7 @@ export function createHudPanels(host: HTMLElement): HudPanels {
     },
     dispose() {
       actionButton.removeEventListener("click", runAction);
-      shopExitButton.removeEventListener("click", runAction);
+      mountExit(null);
       for (const element of [...panels, shopExitButton]) element.remove();
     },
   };
