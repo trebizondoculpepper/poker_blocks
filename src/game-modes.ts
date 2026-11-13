@@ -19,6 +19,7 @@ import type { RoundPanelConfig, ShopExitConfig } from "./hud-panels";
 import type { GameFlow } from "./game-flow";
 import type { MusicFilter, MusicOperation } from "./audio/music-controller";
 import type { SoundEffectId } from "./audio/sfx-registry";
+import type { BlockMaterial } from "./materials";
 import type { RunFlowOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
 import { saveKey } from "./save";
@@ -330,8 +331,13 @@ export type MenuBlockItem = {
   enabledWhen?: MenuCondition;
   /** Shown only while this registered condition holds, checked as the menu shows (#530). */
   when?: MenuCondition;
-  /** The sound choosing it plays; omitted, a click (#949). */
-  sfx?: SoundEffectId;
+  /**
+   * The sound choosing it plays; omitted, a click (#949). Null when the action it forwards
+   * already plays its own (#780).
+   */
+  sfx?: SoundEffectId | null;
+  /** The material its cube is written in; omitted, one is chosen (#780). */
+  material?: BlockMaterial;
 };
 
 /** A dialog: its heading and its buttons, shown side by side. */
@@ -641,7 +647,15 @@ export const sceneDefinitions = [
       selectable: { sources: [{ source: "hand" }, { source: "field" }] },
       sellBin: {},
       coinsPanel: {},
-      shopExit: { label: "Continue" },
+      // A fixed paper word cube in the bottom-right exit place, not stock (#780;
+      // doc/shop-continue-block.md).
+      shopExit: {
+        label: "Continue",
+        presentation: {
+          presenter: "wordCube",
+          config: { material: "paper", description: "Leave the shop for the next stage." },
+        },
+      },
       shopStock: { source: "shop" },
       // The deck counter opens the run's card inventory from the shop too (#472).
       deckPanel: { opens: "openDeck" },
@@ -860,6 +874,7 @@ const trialBenchScenarios: readonly BenchScenario[] = [
   trialScenario("Heavy (mean mass)", ["trial-heavy-mean-mass"]),
   trialScenario("Light (mean mass)", ["trial-light-mean-mass"]),
   trialScenario("Material diversity", ["trial-material-diversity"]),
+  trialScenario("In the Loop", ["trial-in-the-loop"]),
 ];
 
 const gameModes: GameMode[] = [

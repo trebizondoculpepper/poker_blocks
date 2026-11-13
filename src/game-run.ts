@@ -808,7 +808,8 @@ export class GameRun {
     // A group names its primary card first; one that doesn't is refused, so every fact names
     // what was actually placed (#695 review).
     if (action.cardIds?.length && action.cardIds[0] !== action.cardId) return null;
-    const next = this.activeDealer.play(this.currentState, action);
+    // Placed, not scored (#925): the phases below resolve first, then the run scores once.
+    const next = this.activeDealer.place(this.currentState, action);
     if (!next) return null;
     // Captured: listeners receive these IDs, and must not change the play (#682 review).
     const placed = captured(action.cardIds?.length ? [...action.cardIds] : [action.cardId]);
@@ -819,11 +820,10 @@ export class GameRun {
       pending: [],
       reactions: [],
     };
-    // The score before this play: the dealer's next state is not the base the play's points add to.
+    // The score before this play, which the scoring phase adds the play's points to. Placement
+    // scores nothing, so placement and pre-score steps see the score as it was (#682, #925).
     const scoreBefore = this.currentState.round.score;
-    // The dealer's result already holds a provisional score; until the scoring phase applies the
-    // committed one, placement and pre-score steps see the score as it was (#682 review).
-    this.currentState = { ...next, round: { ...next.round, score: scoreBefore } };
+    this.currentState = next;
 
     // 1. Placement: the batch once, then each block in placement order.
     const batchId = `${context.actionId}:play`;
