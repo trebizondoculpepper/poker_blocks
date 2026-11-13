@@ -53,9 +53,11 @@ export function createRunSetupRegistry(
     requiresSavedSeed: true,
     // A mode's own ordered builder operations, from a fresh recorded seed; Continue passes the
     // seed back, so the same configuration rebuilds the same starting deck.
+    // A saved run brings back its own recipe: an edit to the mode can't change its cards.
     deck: (context, { operations }, services) => {
       const seed = context.seed ?? services.newSeed();
-      return { deck: buildDeck(operations, seed), seed };
+      const recipe = context.recipe ?? operations;
+      return { deck: buildDeck(recipe, seed), seed, recipe };
     },
   });
 

@@ -1,3 +1,4 @@
+import type { DeckBuilderStep } from "./deck-builder";
 import type { EventEnvelope } from "./lifecycle/action";
 /**
  * Run controller: the run being played and the game mode it is played in. It owns the
@@ -252,12 +253,20 @@ export function createGameRunController<Context>(options: {
    * steps rebuild the same deck; a new run passes none and the steps that deal a deck choose a
    * fresh seed. Only card ids are saved, so this is also how the testing-only mix returns.
    */
-  function deckForRun(seed: number | undefined): readonly CardBlock[] {
-    return runSetup.deck(currentMode.runSetup, { deck: standardDeck, seed }, setupServices()).deck;
+  function deckForRun(
+    seed: number | undefined,
+    recipe?: readonly DeckBuilderStep[],
+  ): readonly CardBlock[] {
+    return runSetup.deck(
+      currentMode.runSetup,
+      { deck: standardDeck, seed, ...(recipe ? { recipe } : {}) },
+      setupServices(),
+    ).deck;
   }
 
-  /** The cards a saved run's deck is rebuilt from. */
-  const cardsForSavedRun = (seed: number | undefined) => deckForRun(seed);
+  /** The cards a saved run's deck is rebuilt from: its own seed and, if it has one, its recipe. */
+  const cardsForSavedRun = (seed: number | undefined, recipe?: readonly DeckBuilderStep[]) =>
+    deckForRun(seed, recipe);
 
   function switchScene(name: SceneName): void {
     const id = modeSceneId(currentMode.id, name);
@@ -469,7 +478,11 @@ export function createGameRunController<Context>(options: {
       randomizer.next(),
     ).snapshot();
     // The run records the seed of the deck it was dealt, so Continue rebuilds the same one.
-    const snapshot = { ...opening, ...(dealt.seed === undefined ? {} : { seed: dealt.seed }) };
+    const snapshot = {
+      ...opening,
+      ...(dealt.seed === undefined ? {} : { seed: dealt.seed }),
+      ...(dealt.recipe === undefined ? {} : { deckRecipe: dealt.recipe }),
+    };
     const started = runSetup.start(steps, { rules: runRules, deck: dealt, snapshot }, services);
     return GameRun.fromSnapshot(dealerRegistry, runRules, cards, started.snapshot, () =>
       randomizer.next(),
@@ -544,7 +557,7 @@ export function createGameRunController<Context>(options: {
       runSetup.requiresSavedSeed(currentMode.runSetup),
     );
   const resume = (snapshot: NonNullable<ReturnType<typeof loadSaved>>) => {
-    cards = cardsForSavedRun(snapshot.seed);
+    cards = cardsForSavedRun(snapshot.seed, snapshot.deckRecipe);
     // Continue resumes the session's random sequence where it left off, so the run replays
     // rather than drawing fresh (#134). A save without a cursor keeps the seeded default.
     if (snapshot.random)

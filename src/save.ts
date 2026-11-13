@@ -1,3 +1,4 @@
+import type { DeckBuilderStep } from "./deck-builder";
 import { rewardPresentations } from "./reward-presentation";
 import { coinEntry, ledgerTotal, rewardEffects, type RewardEntry } from "./stage-rewards";
 import type { CardBlock } from "./cards";
@@ -94,6 +95,8 @@ export type SaveRecord = {
    * setup existed, and in runs whose deck does not depend on one.
    */
   seed?: number;
+  /** The deck-builder recipe a `deckBuilder` step dealt from (#827); additive, absent before it. */
+  deckRecipe?: readonly DeckBuilderStep[];
   /** The session's random seed and its sequence position, so Continue resumes it (#134). */
   random?: { seed: number; position: number };
   /** Resolved actions, so a duplicate submission is still rejected after Continue (#661). */
@@ -177,6 +180,9 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
     ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
     ...(snapshot.rewarded ? { rewarded: snapshot.rewarded } : {}),
     ...(snapshot.seed === undefined ? {} : { seed: snapshot.seed }),
+    ...(snapshot.deckRecipe === undefined
+      ? {}
+      : { deckRecipe: structuredClone(snapshot.deckRecipe) as DeckBuilderStep[] }),
     ...(snapshot.random === undefined ? {} : { random: snapshot.random }),
     ...(snapshot.actions
       ? { actions: { counter: snapshot.actions.counter, explicit: [...snapshot.actions.explicit] } }
@@ -195,6 +201,7 @@ export function fromSaveRecord(
     const record = value as SaveRecord;
     if (record?.version !== saveVersion) return null;
     if (record.seed !== undefined && parseSeed(record.seed).seed === undefined) return null;
+    if (record.deckRecipe !== undefined && !parseDeckRecipe(record.deckRecipe)) return null;
     if (!Number.isInteger(record.round) || record.round < 1) return null;
     const phase = phaseForScene(flow, savedScene(record));
     if (!phase) return null;
@@ -293,6 +300,9 @@ export function fromSaveRecord(
       stats: parseRunStats(record.stats),
       ...parseRewarded(record.rewarded),
       ...parseSeed(record.seed),
+      ...(record.deckRecipe === undefined
+        ? {}
+        : { deckRecipe: parseDeckRecipe(record.deckRecipe)! }),
       ...parseRandom(record.random),
       ...parseActions(record.actions),
     };
@@ -330,6 +340,18 @@ function parseRandom(value: unknown): { random: RandomCursor } | Record<string, 
   )
     return {};
   return { random: { seed, position } };
+}
+
+/** A saved deck-builder recipe: a list of named operations, or null when it isn't one. */
+function parseDeckRecipe(value: unknown): DeckBuilderStep[] | null {
+  if (!Array.isArray(value)) return null;
+  const valid = value.every(
+    (step) =>
+      step !== null &&
+      typeof step === "object" &&
+      typeof (step as DeckBuilderStep).operation === "string",
+  );
+  return valid ? (structuredClone(value) as DeckBuilderStep[]) : null;
 }
 
 /** A saved deck seed; nothing when the run was dealt no seeded deck. */
@@ -449,7 +471,9 @@ export function loadRun(
    * The deck to resolve a saved run's cards against. A function when the deck depends on the
    * run (a material mix rebuilt from its own seed); `fromSaveRecord` parses that seed first.
    */
-  cards: readonly CardBlock[] | ((seed: number | undefined) => readonly CardBlock[]),
+  cards:
+    | readonly CardBlock[]
+    | ((seed: number | undefined, recipe?: readonly DeckBuilderStep[]) => readonly CardBlock[]),
   dealers: Registry<Dealer>,
   key = saveKey,
   flow: SaveFlow = standardGameFlow,
@@ -468,7 +492,10 @@ export function loadRun(
     // Validate before resolving card IDs: a fresh material deck would silently change them.
     const seed = parseSeed(record.seed).seed;
     if (seed === undefined && (requiresSeed || record.seed !== undefined)) return null;
-    const selected = typeof cards === "function" ? cards(seed) : cards;
+    if (record.deckRecipe !== undefined && !parseDeckRecipe(record.deckRecipe)) return null;
+    const recipe =
+      record.deckRecipe === undefined ? undefined : parseDeckRecipe(record.deckRecipe)!;
+    const selected = typeof cards === "function" ? cards(seed, recipe) : cards;
     return fromSaveRecord(record, selected, dealers, flow);
   } catch {
     return null;

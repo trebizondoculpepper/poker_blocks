@@ -210,6 +210,25 @@ describe("GameRun progression", () => {
     }
   });
 
+  it("saves and restores a deck-builder recipe, and rejects a corrupt one (#827)", () => {
+    const dealers = new Registry<Dealer>("dealer");
+    dealers.register(baseDealer.name, baseDealer);
+    dealers.register(bossDealer.name, bossDealer);
+    const deckRecipe = [
+      { operation: "standardTemplates" },
+      { operation: "assignUniform", config: { material: "wood" } },
+    ];
+    const record = toSaveRecord({ ...makeSession().snapshot(), seed: 5, deckRecipe });
+    expect(record.deckRecipe).toEqual(deckRecipe);
+    expect(fromSaveRecord(record, standardDeck, dealers)?.deckRecipe).toEqual(deckRecipe);
+    // An older save has none, and still loads.
+    const { deckRecipe: _none, ...older } = record;
+    expect(fromSaveRecord(older, standardDeck, dealers)?.deckRecipe).toBeUndefined();
+    expect(
+      fromSaveRecord({ ...record, deckRecipe: [{ nope: 1 }] }, standardDeck, dealers),
+    ).toBeNull();
+  });
+
   it("keeps a stage-1 discard out of stages 2 and 3", () => {
     const session = makeSession();
     const discarded = session.state.hand[0];

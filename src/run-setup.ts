@@ -57,6 +57,11 @@ export type RunSetupStep = {
 export type RunDeck = {
   deck: readonly CardBlock[];
   seed?: number;
+  /**
+   * The deck-builder operations a `deckBuilder` step dealt from (#827). Saved with the run, so
+   * Continue rebuilds from these rather than from a mode configuration edited since.
+   */
+  recipe?: readonly DeckBuilderStep[];
 };
 
 /** What a `start` pass hands to the next step: the run's rules, its deck and its snapshot. */

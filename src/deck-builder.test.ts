@@ -47,8 +47,10 @@ describe("deck builders (#827)", () => {
         },
       },
     ];
-    // Four template passes give duplicate IDs: rejected, never published.
-    expect(() => buildDeck(steps, 7)).toThrow(/duplicate/);
+    // Four template passes: duplicate content, never duplicate IDs (#848 review).
+    const big = buildDeck(steps, 7);
+    expect(big).toHaveLength(208);
+    expect(new Set(ids(big)).size).toBe(208);
     const one = [steps[0]!, steps[4]!];
     const deck = buildDeck(one, 7);
     expect(materials(deck)).toEqual(materials(buildDeck(one, 7)));
@@ -66,9 +68,52 @@ describe("deck builders (#827)", () => {
     ]);
   });
 
+  it("makes fresh instances, and a reassigned material drops the old one's traits (#848 review)", () => {
+    const built = buildDeck([{ operation: "standardTemplates" }], 1);
+    expect(ids(built)).toEqual(ids(standardDeck));
+    expect(built[0]).not.toBe(standardDeck[0]);
+    const iceThenWood = buildDeck(
+      [
+        { operation: "standardTemplates" },
+        { operation: "assignUniform", config: { material: "ice" } },
+        { operation: "assignUniform", config: { material: "wood" } },
+      ],
+      1,
+    );
+    expect(iceThenWood[0]!.traits.transparent).toBeUndefined();
+    expect(materialOf(iceThenWood[0]!)).toBe("wood");
+  });
+
+  it("rebuilds a saved run from its own recipe, not an edited mode (#848 review)", async () => {
+    const { createRunSetupRegistry } = await import("./run-setup-behaviours");
+    const registry = createRunSetupRegistry();
+    const services = { newSeed: () => 99 } as never;
+    const original = [
+      { operation: "standardTemplates" },
+      { operation: "assignUniform", config: { material: "steel" } },
+    ];
+    const edited = [
+      { operation: "standardTemplates" },
+      { operation: "assignUniform", config: { material: "gold" } },
+    ];
+    const dealt = registry.deck(
+      [{ step: "deckBuilder", operations: original }],
+      { deck: [] },
+      services,
+    );
+    expect(dealt.recipe).toEqual(original);
+    const resumed = registry.deck(
+      [{ step: "deckBuilder", operations: edited }],
+      { deck: [], seed: dealt.seed, recipe: dealt.recipe },
+      services,
+    );
+    expect(materials(resumed.deck)).toEqual(materials(dealt.deck));
+  });
+
   it("shuffles the same instances, and order of operations matters", () => {
+    const unshuffled = buildDeck([{ operation: "standardTemplates" }], 5);
     const shuffled = buildDeck([{ operation: "standardTemplates" }, { operation: "shuffle" }], 5);
-    expect(new Set(shuffled)).toEqual(new Set(standardDeck));
+    expect(new Set(ids(shuffled))).toEqual(new Set(ids(unshuffled)));
     expect(ids(shuffled)).not.toEqual(ids(standardDeck));
     const assignThenShuffle = buildDeck(
       [

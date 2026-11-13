@@ -11,14 +11,14 @@
  * seed and configuration rebuild the same deck. Balanced assignment keeps `makeDevDeck`'s exact
  * semantics (cyclic, then a seeded shuffle of assignments); it is not weighted sampling.
  */
-import { standardDeck, type CardBlock } from "./cards";
+import { createCard, standardDeck, type CardBlock } from "./cards";
+import { rematerial } from "./card-material";
 import { Registry } from "./core/registry";
 import { shuffleCards } from "./deal";
 import {
   getMaterialDefinition,
   materialPools,
   seededRandom,
-  withMaterial,
   type BlockMaterial,
   type MaterialDefinition,
 } from "./materials";
@@ -60,22 +60,34 @@ const requireCards = (context: DeckBuilderContext, operation: string) => {
   if (!context.cards.length) throw new DeckBuilderError(`${operation} needs cards to work on`);
 };
 
+/** A card made of `definition`, with any earlier material's traits removed first (#848 review). */
+const assign = (card: CardBlock, definition: MaterialDefinition): CardBlock =>
+  rematerial(card, definition.id as BlockMaterial);
+
 const definitionOf = (material: unknown): MaterialDefinition => {
   if (typeof material !== "string") throw new DeckBuilderError("a material reference is required");
   return getMaterialDefinition(material as BlockMaterial);
 };
 
-// The 52 standard rank/suit templates, appended in their usual order.
-deckBuilderOperations.register("standardTemplates", (context) => ({
-  ...context,
-  cards: [...context.cards, ...standardDeck],
-}));
+// The 52 standard rank/suit templates, appended in their usual order as fresh instances. The
+// first copy of each keeps its standard ID (saved runs resolve cards by it); a later copy of the
+// same template gets a numbered one, so duplicate content never means a duplicate ID.
+deckBuilderOperations.register("standardTemplates", (context) => {
+  const taken = new Set(context.cards.map(({ id }) => id));
+  const fresh = standardDeck.map(({ id, traits }) => {
+    let next = id;
+    for (let copy = 2; taken.has(next); copy++) next = `${id}#${copy}`;
+    taken.add(next);
+    return createCard(traits.identity, next);
+  });
+  return { ...context, cards: [...context.cards, ...fresh] };
+});
 
 // Every card made of one configured material.
 deckBuilderOperations.register("assignUniform", (context, raw) => {
   requireCards(context, "assignUniform");
   const definition = definitionOf((raw as { material?: unknown } | undefined)?.material);
-  return { ...context, cards: context.cards.map((card) => withMaterial(card, definition)) };
+  return { ...context, cards: context.cards.map((card) => assign(card, definition)) };
 });
 
 // A pool's materials dealt cyclically across the cards, then the assignments shuffled with the
@@ -92,7 +104,7 @@ deckBuilderOperations.register("assignBalanced", (context, raw) => {
   }
   return {
     ...context,
-    cards: context.cards.map((card, index) => withMaterial(card, assignments[index]!)),
+    cards: context.cards.map((card, index) => assign(card, assignments[index]!)),
   };
 });
 
@@ -113,10 +125,7 @@ deckBuilderOperations.register("assignWeighted", (context, raw) => {
   return {
     ...context,
     cards: context.cards.map((card) =>
-      withMaterial(
-        card,
-        drawWeighted(candidates, ({ weight }) => weight, context.random)!.definition,
-      ),
+      assign(card, drawWeighted(candidates, ({ weight }) => weight, context.random)!.definition),
     ),
   };
 });
