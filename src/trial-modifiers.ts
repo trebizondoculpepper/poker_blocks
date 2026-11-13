@@ -276,6 +276,7 @@ function queryTrial(
     id,
     // A trial: experimental catalogues only, never normal shops (doc/release-status.md).
     releaseStatus: { provisional: {} },
+    lifecycle: { parent: "rackItem" },
     name,
     symbol,
     description,
@@ -351,3 +352,6 @@ for (const definition of [
   }),
 ])
   passiveDefinitions.register(definition.id, definition);
+
+// In the Loop (#886): a provisional exponent trial on the face hoop query.
+import "./in-the-loop";

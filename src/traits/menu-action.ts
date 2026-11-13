@@ -7,8 +7,9 @@ export type InteractionState = { enabled: boolean; hovered: boolean; pressed: bo
 /** Actions are opaque data. The scene receives menu.action and dispatches through its own flow. */
 export const menuAction = defineTrait({
   name: "menuAction",
-  // `sfx` is the sound choosing it plays (#949): a click, or Back's sound for a leaving choice.
-  defaults: { action: "", enabled: true, sfx: "ui.click" as SoundEffectId },
+  // `sfx` is the sound choosing it plays (#949): a click, or Back's sound for a leaving choice;
+  // null when the action it forwards already owns its sound (#780), so it never plays twice.
+  defaults: { action: "", enabled: true, sfx: "ui.click" as SoundEffectId | null },
   setup({ block, settings }) {
     let hovered = false;
     let pressed = false;
@@ -47,7 +48,7 @@ export const menuAction = defineTrait({
           playSfx("action.denied");
           return;
         }
-        playSfx(settings.sfx);
+        if (settings.sfx) playSfx(settings.sfx);
         block.emit("menu.action", settings.action);
       }),
       block.on("input.enabled", (value) => {

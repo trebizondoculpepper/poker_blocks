@@ -574,6 +574,22 @@ describe("scene traits own their behaviour", () => {
     ]);
   });
 
+  it("takes the shop exit away while the shop is covered and restores it once (#780)", () => {
+    const { host, calls, shown } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("shop", { coinsPanel: {}, shopExit: { label: "Leave" } }));
+    scenes.register(scene("pause", {}));
+    scenes.switchTo("shop");
+    calls.length = 0;
+    scenes.push("pause");
+    expect(calls).toEqual(["hide:shopExit"]);
+    // Other panels stay on show behind the cover.
+    expect([...shown]).toEqual(["coins"]);
+    calls.length = 0;
+    scenes.pop();
+    expect(calls).toEqual(["show:shopExit"]);
+  });
+
   it("composes any subset of panels, leaving the others unchanged", () => {
     const { host, shown } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);

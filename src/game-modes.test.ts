@@ -224,7 +224,13 @@ describe("game modes composed from traits", () => {
       sellBin: {},
       passiveRackView: { source: "rack" },
       coinsPanel: {},
-      shopExit: { label: "Continue" },
+      shopExit: {
+        label: "Continue",
+        presentation: {
+          presenter: "wordCube",
+          config: { material: "paper", description: "Leave the shop for the next stage." },
+        },
+      },
       shopStock: { source: "shop" },
       deckPanel: { opens: "openDeck" },
       runInPlay: {},

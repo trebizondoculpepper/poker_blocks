@@ -1,9 +1,10 @@
+import type { LifecycleDeclaration } from "./lifecycle-resolver";
 import { blockName } from "./block-presentation";
 import {
   composeCatalogue,
   experimentalCatalogue,
   ordinaryCatalogue,
-  releaseStatusDescriptor,
+  releaseStatusInspection,
   type CatalogueAccess,
   type ReleaseStatusDeclaration,
 } from "./release-status";
@@ -137,6 +138,8 @@ export type MaterialDefinition = {
   scoringEligibility?: string;
   /** The material its cards become when a round ends, e.g. gelato back to custard (#383). */
   roundEndMaterial?: string;
+  /** Its lifecycle declaration (#917): retention and reset, resolved through its parents. */
+  lifecycle?: LifecycleDeclaration;
   /**
    * Doneness steps, first (raw) to last, for a material that cooks (#372), and optionally the
    * face tint each step shows (#376), in the same order; a missing or null entry keeps the
@@ -286,6 +289,9 @@ const grass = {
 };
 
 /** A material with inclusions suspended in its contents (#353). */
+/** Cloud's lifecycle, shared by its container appearances: it lasts the stage only. */
+const cloudLifecycle: LifecycleDeclaration = { parent: "ordinaryCard", retention: "stage" };
+
 export const materialDefinitions = [
   {
     id: "paper",
@@ -293,6 +299,8 @@ export const materialDefinitions = [
     mass: massOf(paperShell),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "paper",
     // Never inside a Present (doc/presents.md): it is excluded from generated payloads.
@@ -333,6 +341,8 @@ export const materialDefinitions = [
     mass: massOf(solid("wood", 650)),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "wood",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -378,6 +388,8 @@ export const materialDefinitions = [
     mass: massOf(solid("steel", 7850)),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "steel",
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
@@ -413,6 +425,8 @@ export const materialDefinitions = [
     mass: massOf(solid("glass-like crystal", 2500)),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "prismatic",
     // Crystal celebrates with three whistles (#494, owner decision on #497).
@@ -497,6 +511,8 @@ export const materialDefinitions = [
     mass: massOf(solid("gold", 19320)),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "gold",
     lettering: { font: "Tinos", fallback: "serif", weight: 400 },
@@ -535,6 +551,8 @@ export const materialDefinitions = [
     mass: massOf(plasticShell, soilFill),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "earth",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -604,6 +622,8 @@ export const materialDefinitions = [
     mass: massOf(solid("fired clay", 1800)),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "terracotta",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -645,6 +665,8 @@ export const materialDefinitions = [
     mass: massOf(solid("ice", 917)),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "ice",
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
@@ -719,6 +741,11 @@ export const materialDefinitions = [
     mass: massOf(solid("meat", 1050)),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Cooked meat goes back to raw at stage end, after rewards (doc/block-lifecycle-declarations.md).
+    lifecycle: {
+      parent: "ordinaryCard",
+      reset: { resettable: { recipe: [{ handler: "doneness" }], boundary: "stage" } },
+    },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "meat",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -806,6 +833,8 @@ export const materialDefinitions = [
     mass: massOf(framedGlass, flameFill),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "fire",
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
@@ -860,6 +889,8 @@ export const materialDefinitions = [
     mass: massOf(plasticShell, custardFill),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "custard",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -930,6 +961,16 @@ export const materialDefinitions = [
     mass: massOf(plasticShell, gelatoScoops),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Gelato reverts to custard at round end, after rewards.
+    lifecycle: {
+      parent: "ordinaryCard",
+      reset: {
+        resettable: {
+          recipe: [{ handler: "material", config: { to: "custard" } }],
+          boundary: "round",
+        },
+      },
+    },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "gelato",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -981,6 +1022,8 @@ export const materialDefinitions = [
     mass: massOf(plasticShell, cloudFill),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Cloud lasts the stage only; expiry removes it, with no reset.
+    lifecycle: cloudLifecycle,
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "cloud",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -1015,6 +1058,8 @@ export const materialDefinitions = [
     mass: massOf(plasticShell, waterFill),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "water",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -1077,6 +1122,8 @@ export const materialDefinitions = [
     mass: massOf(plasticShell, magicStarsFill),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "magic",
     // Magic celebrates with three whistles (#494, owner decision on #497).
@@ -1252,6 +1299,8 @@ function effectAuditionExperiments(): MaterialDefinition[] {
       id,
       name,
       releaseStatus: { provisional: {} },
+      // Appearance variant: inherits the ordinary card policy (#917).
+      lifecycle: { parent: "ordinaryCard" },
       appearance: { ...base.appearance, effects: [...(base.appearance.effects ?? []), effect] },
     };
   };
@@ -1296,11 +1345,14 @@ function plasticFluidExperiments(): MaterialDefinition[] {
     contents: MaterialDefinition["appearance"]["contents"],
     fill: MassComponent[],
     family: string,
+    // Its gameplay parent's full lifecycle (#917 review): an ordinary run card unless given.
+    lifecycle: LifecycleDeclaration = { parent: "ordinaryCard" },
   ): MaterialDefinition => ({
     id,
     materialFamily: family,
     mass: massOf(plasticShell, fill),
     releaseStatus: { provisional: {} },
+    lifecycle,
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name,
     acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
@@ -1336,7 +1388,8 @@ function plasticFluidExperiments(): MaterialDefinition[] {
       [fastBubbles],
     ),
     plastic("darkFluid", "Dark fluid", darkFluid, darkOilFill, "darkFluid"),
-    plastic("cloudInPlastic", "Cloud in plastic", softCloud, cloudFill, "cloud"),
+    // Cloud's container appearances keep Cloud's own stage retention (#917 review).
+    plastic("cloudInPlastic", "Cloud in plastic", softCloud, cloudFill, "cloud", cloudLifecycle),
     plastic("magicLock", "Magic Lock", magicStars, magicStarsFill, "magic"),
   ];
 }
@@ -1353,11 +1406,14 @@ function glassContainerExperiments(): MaterialDefinition[] {
     family: string,
     contents?: MaterialDefinition["appearance"]["contents"],
     residue?: MaterialDefinition["appearance"]["residue"],
+    // Its gameplay parent's full lifecycle (#917 review): an ordinary run card unless given.
+    lifecycle: LifecycleDeclaration = { parent: "ordinaryCard" },
   ) => ({
     id,
     materialFamily: family,
     mass: massOf(stainedLantern, fill),
     releaseStatus: { provisional: {} },
+    lifecycle,
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
     name,
     acoustics: { character: "ringing", hardness: 9, attach: "material.attach.prismatic" as const },
@@ -1394,7 +1450,15 @@ function glassContainerExperiments(): MaterialDefinition[] {
     // Fluid looks (#333): the same levelling fluid, other optics, in either container.
     lantern("waterInLantern", "Water in a lantern", waterFill, "water", clearWater),
     // A contained cloud (#336): the same contents in either container.
-    lantern("cloudInLantern", "Cloud in a lantern", cloudFill, "cloud", softCloud),
+    lantern(
+      "cloudInLantern",
+      "Cloud in a lantern",
+      cloudFill,
+      "cloud",
+      softCloud,
+      undefined,
+      cloudLifecycle,
+    ),
     withInclusions(lantern("earthInLantern", "Earth in a lantern", soilFill, "earth", slowEarth), [
       grass,
     ]),
@@ -1406,6 +1470,8 @@ function glassContainerExperiments(): MaterialDefinition[] {
       id: "aggressiveFlame",
       materialFamily: "fire",
       releaseStatus: { provisional: {} },
+      // Appearance variant: inherits the ordinary card policy (#917).
+      lifecycle: { parent: "ordinaryCard" },
       mass: massOf(framedGlass, flameFill),
       lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
       name: "Aggressive flame",
@@ -1440,6 +1506,8 @@ function glassContainerExperiments(): MaterialDefinition[] {
       id: "custardFrame",
       materialFamily: "custard",
       releaseStatus: { provisional: {} },
+      // Appearance variant: inherits the ordinary card policy (#917).
+      lifecycle: { parent: "ordinaryCard" },
       mass: massOf(framedGlass, custardFill),
       lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
       name: "Custard in a frame",
@@ -1483,6 +1551,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     mass: massOf(giftWrapping),
     // A prototype: experimental catalogues only (doc/release-status.md, #812).
     releaseStatus: { provisional: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     // A Present's card never shows its rank or suit (#568); a letter block still shows its letter.
     cardFace: "concealed",
@@ -1511,6 +1581,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     mass: massOf(plasticShell),
     // A prototype: experimental catalogues only (doc/release-status.md, #812).
     releaseStatus: { provisional: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Empty vessel",
     acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
@@ -1537,6 +1609,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     mass: massOf(airFanHousing),
     // A prototype: experimental catalogues only (doc/release-status.md, #812).
     releaseStatus: { provisional: {} },
+    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
+    lifecycle: { parent: "ordinaryCard" },
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Air",
     // A powder-coated housing: it sounds like steel until it has a sound of its own.
@@ -1637,11 +1711,12 @@ export function scoringEligibilityOf(block: CardBlock): string {
   return materialRegistry.get(materialOf(block))?.scoringEligibility ?? "contributing";
 }
 
-// Inspection names the card material's release status, from the same descriptor catalogues use
-// (doc/release-status.md, #813). Registered first, so it reads right after the card's name.
+// Inspection carries the card material's public release-status lines, from the same facet
+// catalogues use (doc/release-status.md, #813, #923): none for certified content. Registered
+// first, so a provisional warning reads right after the card's name.
 inspectionProviders.register("releaseStatus", (block) => {
   const definition = getMaterialDefinition(materialOf(block));
-  return [`Status: ${releaseStatusDescriptor(definition.id, definition.releaseStatus).label}`];
+  return [...releaseStatusInspection(definition.id, definition.releaseStatus)];
 });
 
 // Inspection lists a card's base and acquired bonuses after its name (#751).
