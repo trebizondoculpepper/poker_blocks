@@ -26,9 +26,7 @@ import { springAnchor, type SpringAnchorSettings } from "../traits/spring-anchor
 import type { Availability } from "../traits/availability";
 import { createCubeStage, type StageCube, type StageOptions } from "./cube-stage";
 import { choiceActions, focusAfter, isBackKey } from "./choice-keys";
-
-/** The distance between neighbouring buttons' fixed points. */
-const spacing = 1.7;
+import { cubeSpacing as spacing } from "./menu-sizing";
 
 /** Each button's fixed point: a single centred row. */
 export function rowPositions(count: number): THREE.Vector3[] {
@@ -96,6 +94,9 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
     let cubes: StageCube[] = [];
     list.replaceChildren();
     list.setAttribute("aria-label", dialog.title);
+    // The dialog's own presentation: its panel treatment, read by the stylesheet, and its sizing.
+    host.dataset.panel = dialog.presentation?.panel ?? "readable";
+    stage.setSizing(dialog.presentation?.sizing);
     caption.textContent = "";
     const byAction = new Map<
       string,
