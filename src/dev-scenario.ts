@@ -111,6 +111,11 @@ const list = (config: unknown, field: string): unknown[] => {
   const value = (config as Record<string, unknown> | null)?.[field];
   return Array.isArray(value) ? value : [];
 };
+/** A required list that is missing or not a list: a diagnostic, never an empty setup. */
+const notAList = (config: unknown, field: string, owner: string): string[] =>
+  Array.isArray((config as Record<string, unknown> | null)?.[field])
+    ? []
+    : [`${owner}: needs a list of ${field}`];
 
 /** Take the instances at these build indices out of the deck, in the order given. */
 function take(draft: ScenarioDraft, indices: readonly number[], zone: string): CardBlock[] {
@@ -152,9 +157,11 @@ devScenarioCapabilities.register("devDeck", {
 // The starting hand: created instances by build index, in order.
 devScenarioCapabilities.register("devHand", {
   validate: (config, { limits }) =>
-    list(config, "indices").every((index) => isWhole(index, limits.deckCards))
-      ? []
-      : ["devHand: indices must be whole numbers within the deck limit"],
+    notAList(config, "indices", "devHand").length
+      ? notAList(config, "indices", "devHand")
+      : list(config, "indices").every((index) => isWhole(index, limits.deckCards))
+        ? []
+        : ["devHand: indices must be whole numbers within the deck limit"],
   apply: (draft, config) => {
     const hand = take(draft, list(config, "indices") as number[], "devHand");
     return { ...draft, hand: [...draft.hand, ...hand], deck: withoutCards(draft.deck, hand) };
@@ -166,6 +173,8 @@ type PassiveDescriptor = { definitionId: string; overrides?: Record<string, numb
 // Installed passives in order, each a fresh instance with its validated settings (#876).
 devScenarioCapabilities.register("devPassives", {
   validate: (config, { limits }) => {
+    if (notAList(config, "passives", "devPassives").length)
+      return notAList(config, "passives", "devPassives");
     const passives = list(config, "passives") as PassiveDescriptor[];
     return [
       ...(passives.length > limits.passives
@@ -291,6 +300,8 @@ devScenarioCapabilities.register("devFieldPattern", {
 // Declared ordinary commands, run after the initial snapshot: not part of hydration.
 devScenarioCapabilities.register("devReplay", {
   validate: (config, { limits }) => {
+    if (notAList(config, "commands", "devReplay").length)
+      return notAList(config, "commands", "devReplay");
     const commands = list(config, "commands") as ReplayCommand[];
     return [
       ...(commands.length > limits.replayCommands

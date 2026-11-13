@@ -298,3 +298,21 @@ describe("Dev scenario totals and field normalization (#877 review)", () => {
     expect(run.randomCheckpoints).not.toBeNull();
   });
 });
+
+describe("Dev scenario list shapes (#877 review)", () => {
+  it("rejects a required list given as something else, rather than setting up nothing", () => {
+    const problems = (step: ScenarioStep) => {
+      const result = buildScenario(scenario(step), runtime);
+      return result.ok ? [] : result.diagnostics;
+    };
+    expect(problems({ capability: "devHand", config: { indices: {} } })).toEqual([
+      "devHand: needs a list of indices",
+    ]);
+    expect(problems({ capability: "devPassives", config: { passives: {} } })).toEqual([
+      "devPassives: needs a list of passives",
+    ]);
+    expect(problems({ capability: "devReplay", config: { commands: {} } })).toEqual([
+      "devReplay: needs a list of commands",
+    ]);
+  });
+});
