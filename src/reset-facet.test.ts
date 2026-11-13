@@ -151,3 +151,56 @@ describe("nonResettable (#583)", () => {
     );
   });
 });
+
+describe("reset-clone (#584)", () => {
+  it("clones, then resets only the clone: source untouched, state independent", async () => {
+    const { resetClone } = await import("./reset-facet");
+    const card = cookedMeat();
+    const state = stateWith(card);
+    const result = resetClone(
+      state,
+      card.id,
+      {
+        facet: "resettable",
+        config: { recipe: [{ handler: "doneness" }, { handler: "countdown" }] },
+      },
+      () => "clone-1",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.clone.id).toBe("clone-1");
+    expect(result.ids.get(card.id)).toBe("clone-1");
+    expect(result.clone.traits.doneness).toBeUndefined();
+    expect(result.clone.traits.countdown).toBeUndefined();
+    // Run bonuses and owner survive the reset; the clone's state isn't shared with the source.
+    expect(result.clone.traits.modifiers).toEqual({ run: { additive: 3 } });
+    expect(result.clone.traits.modifiers).not.toBe(card.traits.modifiers);
+    expect(result.clone.traits.owner).toEqual({ id: "shop" });
+    // The source and the run are exactly as they were: the clone is unplaced.
+    expect(card.traits.doneness).toEqual({ step: 2 });
+    expect(state.deck).toHaveLength(1);
+    expect(state.hand).toEqual([card]);
+  });
+
+  it("fails as a whole when the reset is refused: no clone, never a plain-clone fallback", async () => {
+    const { resetClone } = await import("./reset-facet");
+    const card = cookedMeat();
+    const refused = resetClone(
+      stateWith(card),
+      card.id,
+      { facet: "nonResettable", config: { reason: "a keepsake" } },
+      () => "clone-1",
+    );
+    expect(refused).toEqual({ ok: false, reason: "a keepsake" });
+    const failing = resetClone(
+      stateWith(card),
+      card.id,
+      { facet: "resettable", config: { recipe: [{ handler: "no.such.handler" }] } },
+      () => "clone-2",
+    );
+    expect(failing.ok).toBe(false);
+    expect(resetClone(stateWith(card), "missing", { facet: "resettable" }, () => "x").ok).toBe(
+      false,
+    );
+  });
+});
