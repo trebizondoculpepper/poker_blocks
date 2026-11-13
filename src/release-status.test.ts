@@ -50,6 +50,27 @@ describe("release-status facet (#811)", () => {
     expect(() => compose([approved, { id: "bare" }])).toThrow(/bare/);
   });
 
+  it("dispatches each composed operation over its own contributions (#847 review)", async () => {
+    const { admissionOperations } = await import("./release-status");
+    let seen: string[] = [];
+    admissionOperations.register("test.recording", (contributions) => {
+      seen = contributions.map(({ definition }) => (definition as Definition).id);
+      return [];
+    });
+    // An operation nothing contributes to admits nothing, and is still dispatched.
+    expect(
+      composeCatalogue(
+        [approved, trial],
+        ({ id }) => id,
+        ({ releaseStatus }) => releaseStatus,
+        {
+          operations: ["test.recording"],
+        },
+      ),
+    ).toEqual([]);
+    expect(seen).toEqual([]);
+  });
+
   it("shares immutable descriptors", () => {
     const [{ status }] = compose([approved]);
     expect(Object.isFrozen(status)).toBe(true);
