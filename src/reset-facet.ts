@@ -11,7 +11,11 @@
  * failing step returns the original state unchanged.
  *
  * Resolving which facet a definition has (and inheritance) is #504; scheduling resets at stage
- * and round boundaries is #506; `nonResettable` is #583.
+ * and round boundaries is #506.
+ *
+ * `nonResettable` (#583) answers through the same interface with an explicit refusal and its
+ * reason, changing nothing. It is not "immutable": other operations may still change the card.
+ * A request naming no registered facet is a configuration error, not a silent no-op.
  */
 import type { BlockMaterial } from "./materials";
 import type { CardBlock } from "./cards";
@@ -40,9 +44,38 @@ export type ResetStateHandler = (
 ) => GameState | null;
 export const resetStateHandlers = new Registry<ResetStateHandler>("reset state handler");
 
+/** A reset request that names no registered facet: the definition's configuration is wrong. */
+export class ResetConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ResetConfigurationError";
+  }
+}
+
 /** Ask the card's configured facet to reset it. */
 export function requestReset(state: GameState, cardId: string, request: ResetRequest): ResetResult {
+  if (!request.facet || !resetFacets.has(request.facet))
+    throw new ResetConfigurationError(`no reset facet "${request.facet ?? ""}" is registered`);
   return resetFacets.get(request.facet)(state, cardId, request.config);
+}
+
+/**
+ * A definition's reset declarations resolved to exactly one facet request (#583). Declaring none,
+ * or more than one, is a configuration error: never a guess.
+ */
+export function resolveResetFacet(declarations: Readonly<Record<string, unknown>>): ResetRequest {
+  const declared = Object.keys(declarations).filter((name) => resetFacets.has(name));
+  const unknown = Object.keys(declarations).filter((name) => !resetFacets.has(name));
+  if (unknown.length)
+    throw new ResetConfigurationError(`unknown reset facet(s): ${unknown.join(", ")}`);
+  if (declared.length !== 1)
+    throw new ResetConfigurationError(
+      declared.length
+        ? `conflicting reset facets: ${declared.join(", ")}`
+        : "no reset facet declared",
+    );
+  const [facet] = declared;
+  return { facet: facet!, config: declarations[facet!] };
 }
 
 /** Every card the run holds now, wherever it is. */
@@ -96,6 +129,12 @@ resetFacets.register("resettable", (state, cardId, raw) => {
     next = after;
   }
   return { ok: true, state: next };
+});
+
+// An explicit refusal with its reason (#583): the state, IDs, owner, modifiers and RNG are untouched.
+resetFacets.register("nonResettable", (state, _cardId, raw) => {
+  const { reason = "this card can't be reset" } = (raw ?? {}) as { reason?: string };
+  return { ok: false, reason, state };
 });
 
 // Cooking goes back to raw: the doneness step and its saved entry go (#372).
