@@ -11,6 +11,6 @@ describe("inspectable trait", () => {
 
   it("does not inspect a block without the trait", () => {
     const block = standardDeck[0];
-    expect(inspectBlock({ ...block, traits: { identity: block.traits.identity } })).toBeNull();
+    expect(inspectBlock({ ...block, traits: { identity: block.traits.identity! } })).toBeNull();
   });
 });

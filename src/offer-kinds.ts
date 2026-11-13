@@ -9,7 +9,7 @@ import { createNothingifier } from "./nothingifier";
  * Prices come from the run's rules and the balance config; a kind only says which to use.
  */
 import { cardOfferPrice } from "./balance";
-import { createCard, ranks, suits, type CardBlock } from "./cards";
+import { createCard, ranks, suits, type CardBlock, pokerIdentity } from "./cards";
 import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
 import { Registry } from "./core/registry";
 import type { GameState } from "./game-state";
@@ -83,7 +83,7 @@ export const isOfferKind = (name: unknown): boolean =>
 export type SavedCard = { id: string; rank: string; suit: string; material: string };
 
 export function saveCard(card: CardBlock): SavedCard {
-  const { rank, suit } = card.traits.identity;
+  const { rank, suit } = pokerIdentity(card);
   return { id: card.id, rank, suit: suit.name, material: materialOf(card) };
 }
 
@@ -130,7 +130,7 @@ const rackBound = (refusal: RackCheck) => ({
 registerOfferKind<CardBlock>("card", {
   destination: "hand",
   price: (block) =>
-    cardOfferPrice(block.traits.identity.rank, getMaterialDefinition(materialOf(block))),
+    cardOfferPrice(pokerIdentity(block).rank, getMaterialDefinition(materialOf(block))),
   receive: (state, block) => ({
     ...state,
     deck: [...state.deck, block],

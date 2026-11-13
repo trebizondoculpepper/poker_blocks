@@ -33,7 +33,7 @@ describe("composed material appearance", () => {
     };
     try {
       const appearance = createBlockAppearance(
-        cardFaceArt(standardDeck[0].traits.identity),
+        cardFaceArt(standardDeck[0].traits.identity!),
         definition,
         2.4,
       );

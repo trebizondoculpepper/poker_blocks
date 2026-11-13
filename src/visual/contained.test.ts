@@ -136,7 +136,7 @@ describe("the assembled contained block (#330 review)", () => {
         .get("registered")()
         .find(({ id }) => id === "custard")!;
       const appearance = createBlockAppearance(
-        cardFaceArt(standardDeck[0]!.traits.identity),
+        cardFaceArt(standardDeck[0]!.traits.identity!),
         custard,
         1,
       );
@@ -197,7 +197,7 @@ describe("a shell's generated textures are the block's to dispose (#399 review)"
         .get("registered")()
         .find(({ id }) => id === "custardFrame")!;
       const appearance = createBlockAppearance(
-        cardFaceArt(standardDeck[0]!.traits.identity),
+        cardFaceArt(standardDeck[0]!.traits.identity!),
         frame,
         1,
       );
