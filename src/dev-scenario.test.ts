@@ -1,0 +1,205 @@
+import { describe, expect, it } from "vite-plus/test";
+import { Registry } from "./core/registry";
+import { baseDealer, type Dealer } from "./dealer";
+import {
+  buildScenario,
+  defaultScenarioLimits,
+  scenarioVersion,
+  type ScenarioDefinition,
+  type ScenarioStep,
+} from "./dev-scenario";
+import type { RunRules } from "./run-rules";
+import "./trial-modifiers";
+
+const dealers = new Registry<Dealer>("dealer");
+dealers.register(baseDealer.name, baseDealer);
+const rules: RunRules = {
+  stage: () => ({ dealer: "base", targetScore: 1000, plays: 3, discards: 2 }),
+  handAtStageEnd: "return-to-deck",
+  discardPileAfterShop: "keep-out",
+  rackCapacity: 4,
+};
+const runtime = { dealers, rules };
+
+const deck: ScenarioStep = {
+  capability: "devDeck",
+  config: { steps: [{ operation: "standardTemplates", config: {} }] },
+};
+const scenario = (...steps: ScenarioStep[]): ScenarioDefinition => ({
+  version: scenarioVersion,
+  seed: 7,
+  steps: [deck, ...steps],
+});
+const field = (placements: { index: number; cell: { x: number; y: number; z: number } }[]) => ({
+  capability: "devFieldPattern",
+  config: { placements },
+});
+
+describe("Dev scenario setup (#877)", () => {
+  it("hydrates hand, field and configured passives without consuming plays or scoring", () => {
+    const result = buildScenario(
+      scenario(
+        { capability: "devHand", config: { indices: [0, 1, 2] } },
+        field([
+          { index: 10, cell: { x: 0, y: 0, z: 0 } },
+          { index: 11, cell: { x: 1, y: 0, z: 0 } },
+        ]),
+        {
+          capability: "devPassives",
+          config: {
+            passives: [{ definitionId: "trial-dense-packing", overrides: { maximum: 4 } }],
+          },
+        },
+      ),
+      runtime,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const { run, initialSnapshot, actionLog } = result.trial;
+    const { state } = initialSnapshot;
+    expect(state.hand.map(({ id }) => id)).toHaveLength(3);
+    expect(state.field).toHaveLength(2);
+    expect(state.passiveRack[0]!.traits.configurablePassive?.overrides).toEqual({ maximum: 4 });
+    expect(state.round.score).toBe(0);
+    expect(state.round.movesLeft).toBe(3);
+    expect(run.actionFacts).toEqual([]);
+    expect(actionLog).toEqual([]);
+    // Every created instance is in exactly one zone.
+    const ids = [...state.deck, ...state.hand, ...state.field.map(({ block }) => block)].map(
+      ({ id }) => id,
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toHaveLength(52);
+  });
+
+  it("builds the same trial from the same definition", () => {
+    const definition = scenario(
+      { capability: "devHand", config: { indices: [3, 4] } },
+      {
+        capability: "devReplay",
+        config: { commands: [{ command: "discard", args: { cardIds: [] } }] },
+      },
+    );
+    const strip = (definition: ScenarioDefinition) => {
+      const result = buildScenario(definition, runtime);
+      return result.ok ? JSON.stringify(result.trial.initialSnapshot.state) : result.diagnostics;
+    };
+    expect(strip(definition)).toEqual(strip(definition));
+  });
+
+  it("replays declared commands through the ordinary run, after the initial snapshot", () => {
+    const first = buildScenario(
+      scenario({ capability: "devHand", config: { indices: [0, 1, 2, 3, 4] } }),
+      runtime,
+    );
+    if (!first.ok) throw new Error(first.diagnostics.join());
+    const cardId = first.trial.initialSnapshot.state.hand[0]!.id;
+    const result = buildScenario(
+      scenario(
+        { capability: "devHand", config: { indices: [0, 1, 2, 3, 4] } },
+        { capability: "devReplay", config: { commands: [{ command: "play", args: { cardId } }] } },
+      ),
+      runtime,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const { run, initialSnapshot, actionLog } = result.trial;
+    expect(initialSnapshot.state.field).toEqual([]);
+    expect(run.state.field.map(({ block }) => block.id)).toEqual([cardId]);
+    expect(run.state.round.movesLeft).toBe(2);
+    expect(actionLog).toEqual([{ command: "play", args: { cardId } }]);
+  });
+
+  it("rejects a refused replay command atomically, with a diagnostic", () => {
+    const result = buildScenario(
+      scenario({
+        capability: "devReplay",
+        config: { commands: [{ command: "play", args: { cardId: "not-in-hand" } }] },
+      }),
+      runtime,
+    );
+    expect(result).toEqual({
+      ok: false,
+      diagnostics: [expect.stringMatching(/replay command 1 \(play\) was refused/)],
+    });
+  });
+
+  it("rejects invalid definitions before building anything", () => {
+    const problems = (definition: ScenarioDefinition) => {
+      const result = buildScenario(definition, runtime);
+      return result.ok ? [] : result.diagnostics;
+    };
+    expect(problems({ ...scenario(), version: 99 })).toEqual(["unsupported scenario version 99"]);
+    expect(problems(scenario({ capability: "devTeleport", config: {} }))).toEqual([
+      'unknown scenario capability "devTeleport"',
+    ]);
+    expect(
+      problems(
+        scenario({ capability: "devPassives", config: { passives: [{ definitionId: "nope" }] } }),
+      ),
+    ).toEqual(['devPassives: unknown passive "nope"']);
+    expect(
+      problems(
+        scenario(
+          field([{ index: 0, cell: { x: defaultScenarioLimits.coordinate + 1, y: 0, z: 0 } }]),
+        ),
+      ),
+    ).toHaveLength(1);
+    expect(
+      problems(
+        scenario(
+          field([
+            { index: 0, cell: { x: 0, y: 0, z: 0 } },
+            { index: 1, cell: { x: 0, y: 0, z: 0 } },
+          ]),
+        ),
+      ),
+    ).toEqual(["devFieldPattern: two placements share a cell"]);
+    expect(
+      problems(
+        scenario({
+          capability: "devReplay",
+          config: { commands: [{ command: "teleport", args: {} }] },
+        }),
+      ),
+    ).toEqual(['devReplay: unknown command "teleport"']);
+  });
+
+  it("refuses a card in two zones, invalid settings, a full rack and disconnected fields", () => {
+    const problems = (...steps: ScenarioStep[]) => {
+      const result = buildScenario(scenario(...steps), runtime);
+      return result.ok ? [] : result.diagnostics;
+    };
+    expect(
+      problems(
+        { capability: "devHand", config: { indices: [0] } },
+        field([{ index: 0, cell: { x: 0, y: 0, z: 0 } }]),
+      ),
+    ).toEqual([expect.stringMatching(/already in another zone/)]);
+    expect(
+      problems({
+        capability: "devPassives",
+        config: { passives: [{ definitionId: "trial-dense-packing", overrides: { maximum: 99 } }] },
+      }),
+    ).toEqual([expect.stringMatching(/maximum/)]);
+    expect(
+      problems({
+        capability: "devPassives",
+        config: {
+          passives: Array.from({ length: 5 }, () => ({ definitionId: "trial-dense-packing" })),
+        },
+      }),
+    ).toEqual([expect.stringMatching(/capacity/)]);
+    const apart = [
+      { index: 0, cell: { x: 0, y: 0, z: 0 } },
+      { index: 1, cell: { x: 3, y: 0, z: 0 } },
+    ];
+    expect(problems(field(apart))).toEqual([expect.stringMatching(/face to face/)]);
+    expect(
+      problems({
+        capability: "devFieldPattern",
+        config: { placements: apart, allowDisconnected: true },
+      }),
+    ).toEqual([]);
+  });
+});
