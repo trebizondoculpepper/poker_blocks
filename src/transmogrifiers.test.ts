@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
-import { standardDeck } from "./cards";
+import { standardDeck, type CardBlock } from "./cards";
 import { dealerRegistry } from "./dealer";
 import { GameRun } from "./game-run";
-import { getMaterialDefinition } from "./materials";
+import { getMaterialDefinition, materialOf } from "./materials";
 import { passiveDefinitions, type PassiveBlock } from "./passives";
 import { demoRunRules } from "./run-rules";
 import { fromSaveRecord, toSaveRecord } from "./save";
@@ -13,6 +13,7 @@ import {
   defaultTransmogrifierUses,
   transmogrifierId,
   transmogrifierMaterials,
+  transmogrifierWeights,
 } from "./transmogrifiers";
 
 const priceOf = (id: string) =>
@@ -64,11 +65,34 @@ describe("transmogrifier items (#388)", () => {
             .map(({ block }) => (block as PassiveBlock).traits.transmogrifier?.material);
         }).flat(),
       );
-    expect([...unlocked(1)].toSorted((a, b) => String(a).localeCompare(String(b)))).toEqual([
-      "paper",
-      "wood",
-    ]);
+    expect([...unlocked(1)]).toEqual(["wood"]);
     expect(unlocked(2).has("gold")).toBe(false);
+  });
+
+  it("never stocks paper, as a card or as its transmogrifier, in any round (#792)", () => {
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.5);
+    for (let round = 1; round <= 8; round++) {
+      expect(
+        transmogrifierWeights(round).find(({ material }) => material === "paper")?.weight,
+      ).toBe(0);
+      for (let seed = 0; seed < 30; seed++) {
+        const stock = shopPreviewState(
+          game.state,
+          99,
+          mulberry(seed + 1),
+          defaultShop,
+          round,
+        ).shopStock!;
+        const materials = stock.map(
+          ({ block }) =>
+            (block as PassiveBlock).traits.transmogrifier?.material ??
+            ((block as CardBlock).traits.identity ? materialOf(block as CardBlock) : undefined),
+        );
+        expect(materials).not.toContain("paper");
+        // Other materials are still obtainable.
+        expect(stock.length).toBeGreaterThan(0);
+      }
+    }
   });
 
   it("buys into the Items rack with all its uses and keeps its price and uses through a save", () => {
