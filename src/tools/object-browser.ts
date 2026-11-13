@@ -1,4 +1,4 @@
-import { releaseStatusDescriptor, type ReleaseStatusDescriptor } from "../release-status";
+import { releaseStatusPresentation, type ReleaseStatusPresentation } from "../release-status";
 import { playSfx } from "../audio/sfx";
 import { createPreviewRotation } from "./preview-rotation";
 import { cardFaceArt, type CardFaceOptions } from "../visual/face-art";
@@ -37,8 +37,8 @@ type BrowsedObject = {
   name: string;
   /** A note under the name (an experiment, a retired passive). */
   note?: string;
-  /** Its release status, as catalogues describe it (#813): shown in the list and on its page. */
-  status?: ReleaseStatusDescriptor;
+  /** Its release status's public presentation (#813, #923): a list badge and page lines, if any. */
+  status?: ReleaseStatusPresentation;
   properties: unknown;
   /** A model to turn in the preview, or nothing for objects without one (a sound). */
   preview?: (size: number) => { object: THREE.Object3D; dispose(): void };
@@ -65,7 +65,7 @@ function materialPage(
     id,
     name,
     note,
-    status: releaseStatusDescriptor(definition.id, definition.releaseStatus),
+    status: releaseStatusPresentation(definition.id, definition.releaseStatus),
     // The caller says what the page shows: the material's definition unless told otherwise.
     properties: page.properties ?? definition,
     preview(size) {
@@ -148,7 +148,7 @@ const categories: readonly Category[] = [
           id,
           name: definition.name,
           note: definition.retired ? "Retired: never offered" : undefined,
-          status: releaseStatusDescriptor(definition.id, definition.releaseStatus),
+          status: releaseStatusPresentation(definition.id, definition.releaseStatus),
           properties: definition,
           preview(size) {
             const visual = createPassiveVisual(
@@ -307,10 +307,10 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
         const link = document.createElement("a");
         link.href = `#${category.id}/${id}`;
         link.textContent = name;
-        if (status) {
+        if (status?.badge) {
           const badge = document.createElement("span");
           badge.className = "object-browser-status";
-          badge.textContent = status.label;
+          badge.textContent = status.badge;
           link.append(" ", badge);
         }
         link.classList.toggle("is-current", id === object.id);
@@ -322,10 +322,8 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     part("id").textContent = `${category.id}/${object.id}`;
     part("note").textContent = object.note ?? "";
     part("note").hidden = !object.note;
-    part("status").textContent = object.status
-      ? `${object.status.label}: ${object.status.explanation}`
-      : "";
-    part("status").hidden = !object.status;
+    part("status").textContent = (object.status?.lines ?? []).join("\n");
+    part("status").hidden = !object.status?.lines.length;
     showPreview(object);
     showProperties(object.properties);
   }
