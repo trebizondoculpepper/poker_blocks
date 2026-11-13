@@ -193,6 +193,7 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
             description: item.description,
             disabledReason: item.disabledReason,
             sfx: item.sfx,
+            ...(item.material ? { material: item.material } : {}),
             feedback: { reducedMotion },
             ...options(item, index),
           });
