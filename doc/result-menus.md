@@ -1,0 +1,23 @@
+# Result-screen block menus (#629)
+
+Owner-approved target for #531. Evidence: `menus.ts:showStageWon` renders reward ledger rows/count-up; `block-menu/block-menus.ts` supplies reusable cube actions; `game-run-controller.ts` owns authoritative outcome navigation. Existing [mixed rewards](presents.md#mixed-reward-ledger-and-sound) commit model effects once before presentation. The [scheduler architecture](game-architecture.md#visual-event-scheduler-and-game-time-units-541) defines bounded completion and stale-generation suppression; reuse these rather than inventing a result-specific timer bus.
+
+## Outcome information then actions
+
+For a won stage, present the existing ledger in its normal order (cash rows and the configured non-cash Present row where awarded). **Visit shop appears only after every ledger row/count-up has finished presenting.** Put its cube below the ledger as a reversible initial layout assumption consistent with the owner’s below-information preference. It is not merely disabled-but-clickable underneath the animation; it is not yet offered as a visible/focusable action. This is specific result-choice ordering, not a generic input busy lock.
+
+For game over, show the existing run stats and information, followed by **New run** and **Main menu** cubes below them, in that logical order. Game over offers no shop. Preserve existing seed/copy details, ledger labels/totals, save behavior, sounds, confirmation and navigation semantics. This task does not authorize a new background design; reuse the existing result host’s configured readable information treatment. Title/pause panel removal does not silently remove reward/stat presentation.
+
+## Reusable controllers and completion
+
+Compose a result-menu controller trait with explicit information provider, action definitions/layout and a `showAfter` completion-scope reference. A stage-won definition references its bounded reward-presentation scope; a game-over definition references its stats-ready presentation. Generic renderer/navigation code dispatches those providers/actions and never branches on result/scene kind. Sources supply action data; they are not a side table keyed by scene identity.
+
+Authoritative coins/cards/payment receipt/outcome are already committed. Row callbacks display captured entries and play their configured sound; they cannot award, generate or pay. When completion settles successfully or by configured reduced-motion/summary fallback, reveal/mount the choice stage exactly once for that generation. Cancellation on scene exit never reveals it later. A stale play outcome cannot replace a newer authoritative result. Required scopes are finite; ambient smoke/music never hold these choices forever. A failed visual sequence uses its captured final summary and exposes actions through the same bounded fallback contract, not an endless spinner.
+
+The source audit found that `showStageWon` currently owns `rowTimers` and reveals its legacy button in the final timeout. These are migration gaps, not an existing public completion capability. The implementation must expose bounded completion through the shared scheduler and preserve that completion/mount contract; it must not copy those private timers into a second presenter or introduce a global busy flag. Scope any necessary ledger scheduling migration as a focused prerequisite if it cannot fit the menu PR.
+
+## Focus, access and verification
+
+Once available, use the configured initial focus; the result defaults are Visit shop for won-stage results and New run for game over. Do not override an explicit confirmation-safe focus setting. Before completion, focus remains on the information/allowed existing actions without an invisible active menu target. Preserve normal tab/Escape behavior and copy-seed access. Cube actions compose inspectable, availability and standard spring/hover/tap effects and use the existing accessible semantic controls; keyboard and touch invoke the same registered command once. Covered gameplay input remains isolated by the scene stack.
+
+Responsive layout keeps actions below their information rather than covering numbers; wrap through shared layout configuration on small screens. Exit disposes listeners/effect scopes/mounts; re-entry presents the saved receipt without awarding again. Reduced motion completes rows promptly and reveals actions using the same signal, not a skipped callback. Verify mixed/coin-only ledgers, row order and total consistency, count-up completion timing, no shop at loss, New run/Main menu below stats, focus/touch/keyboard, copy information, rapid exit/re-entry and no duplicate payments/sounds. Supply screenshots at wide/narrow sizes and a count-up clip with revision and settings.
