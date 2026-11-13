@@ -104,7 +104,7 @@ describe("deck builders (#827)", () => {
     expect(dealt.recipe).toEqual(original);
     const resumed = registry.deck(
       [{ step: "deckBuilder", operations: edited }],
-      { deck: [], seed: dealt.seed, recipe: dealt.recipe },
+      { deck: [], seed: dealt.seed, savedRecipe: dealt.recipe },
       services,
     );
     expect(materials(resumed.deck)).toEqual(materials(dealt.deck));
@@ -118,6 +118,17 @@ describe("deck builders (#827)", () => {
       services,
     );
     expect(decorated.recipe).toEqual(original);
+    // Two builders in one setup are refused rather than one silently ignored.
+    expect(() =>
+      registry.deck(
+        [
+          { step: "deckBuilder", operations: original },
+          { step: "deckBuilder", operations: edited },
+        ],
+        { deck: [] },
+        services,
+      ),
+    ).toThrow(/at most one/);
   });
 
   it("shuffles the same instances, and order of operations matters", () => {

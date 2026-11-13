@@ -259,7 +259,7 @@ export function createGameRunController<Context>(options: {
   ): readonly CardBlock[] {
     return runSetup.deck(
       currentMode.runSetup,
-      { deck: standardDeck, seed, ...(recipe ? { recipe } : {}) },
+      { deck: standardDeck, seed, ...(recipe ? { savedRecipe: recipe } : {}) },
       setupServices(),
     ).deck;
   }

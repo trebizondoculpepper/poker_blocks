@@ -62,6 +62,8 @@ export type RunDeck = {
    * Continue rebuilds from these rather than from a mode configuration edited since.
    */
   recipe?: readonly DeckBuilderStep[];
+  /** A saved run's recipe, passed back on Continue: restoration input, never another step's output. */
+  savedRecipe?: readonly DeckBuilderStep[];
 };
 
 /** What a `start` pass hands to the next step: the run's rules, its deck and its snapshot. */

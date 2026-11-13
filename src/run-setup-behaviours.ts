@@ -51,13 +51,14 @@ export function createRunSetupRegistry(
 
   registry.register("deckBuilder", {
     requiresSavedSeed: true,
-    // A mode's own ordered builder operations, from a fresh recorded seed; Continue passes the
-    // seed back, so the same configuration rebuilds the same starting deck.
-    // A saved run brings back its own recipe: an edit to the mode can't change its cards.
+    // A mode's own ordered builder operations, from a fresh recorded seed. Continue passes back
+    // the saved seed and recipe, so an edit to the mode can't change a saved run's cards. One
+    // builder per setup: a second would silently replace the first's cards (#848 review).
     deck: (context, { operations }, services) => {
+      if (context.recipe) throw new Error("a run setup composes at most one deckBuilder step");
       const seed = context.seed ?? services.newSeed();
-      const recipe = context.recipe ?? operations;
-      return { deck: buildDeck(recipe, seed), seed, recipe };
+      const recipe = context.savedRecipe ?? operations;
+      return { ...context, deck: buildDeck(recipe, seed), seed, recipe };
     },
   });
 
