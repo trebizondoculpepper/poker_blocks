@@ -17,7 +17,12 @@ export const acquiredBonusLayout: AcquiredBonusLayout = { inset: 0.08, height: 0
  * non-neutral value to neutral, as many significant digits as it takes to tell them apart.
  */
 export function formatBonusValue(value: number, neutralValue: number): string {
-  const trim = (text: string) => (text.includes(".") ? text.replace(/\.?0+$/, "") : text);
+  // Trim trailing zeros from the mantissa only, never from a scientific exponent (#807 review).
+  const trim = (text: string) => {
+    const [mantissa = text, exponent] = text.split("e");
+    const trimmed = mantissa.includes(".") ? mantissa.replace(/\.?0+$/, "") : mantissa;
+    return exponent === undefined ? trimmed : `${trimmed}e${exponent}`;
+  };
   const short = trim(value.toFixed(3));
   if (Number(short) !== neutralValue || value === neutralValue) return short;
   for (let digits = 4; digits <= 17; digits++) {

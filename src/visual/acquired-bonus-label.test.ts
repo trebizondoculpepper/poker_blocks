@@ -49,6 +49,9 @@ describe("acquired bonus label (#432)", () => {
     expect(formatBonusValue(2.5, 1)).toBe("2.5");
     expect(formatBonusValue(1.00004, 1)).toBe("1.00004");
     expect(formatBonusValue(0.0002, 0)).toBe("0.0002");
+    // A scientific exponent keeps every digit (#807 review).
+    expect(formatBonusValue(1e-10, 0)).toBe("1e-10");
+    expect(Number(formatBonusValue(1.5e-20, 0))).toBe(1.5e-20);
   });
 
   it("paints bottom-right over the card's own face, and nothing extra without a bonus", () => {

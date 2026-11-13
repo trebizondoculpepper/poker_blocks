@@ -58,18 +58,28 @@ export type CardFace = (identity: IdentityTrait, options: CardFaceOptions) => Fa
  */
 export const cardFaces = new Registry<CardFace>("card face");
 
-/** A card's rank above its suit, centred, in its suit's tone. */
+/**
+ * Where rank and suit sit (doc/presentation-contracts.md, "Acquired bonus artwork and inspection"):
+ * top-left, at the same inset as the acquired-bonus label, which takes the bottom-right.
+ */
+export const rankAndSuitLayout = { inset: 0.08, rank: 0.3, suit: 0.36 };
+
+/** A card's rank above its suit, top-left, in its suit's tone. */
 cardFaces.register("rankAndSuit", (identity, options) => {
   const rank = rankGlyph(identity.rank, options.rankStyle);
   const tone: InkTone = identity.suit.tone;
   return (g, pen) => {
+    const size = 256;
+    const { inset, rank: rankHeight, suit: suitHeight } = rankAndSuitLayout;
+    // Centred on one column, so a wide rank (10) and its suit stay aligned.
+    const column = size * inset + (size * suitHeight) / 2;
     g.fillStyle = pen(tone);
     g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.font = "bold 80px system-ui, sans-serif";
-    g.fillText(rank, 128, 100);
-    g.font = "94px Georgia, serif";
-    g.fillText(identity.suit.symbol, 128, 180);
+    g.textBaseline = "top";
+    g.font = `bold ${Math.round(size * rankHeight)}px system-ui, sans-serif`;
+    g.fillText(rank, column, size * inset);
+    g.font = `${Math.round(size * suitHeight)}px Georgia, serif`;
+    g.fillText(identity.suit.symbol, column, size * (inset + rankHeight));
   };
 });
 cardFaces.register("concealed", () => () => {});
