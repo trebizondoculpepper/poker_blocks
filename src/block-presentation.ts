@@ -28,8 +28,6 @@ blockFaceArtProviders.register(
   "rankAndSuit",
   (block, options) => identityOf(block).map((identity) => cardFaceArt(identity, options))[0],
 );
-// No value to print: a plain face, seeded by the block's own ID so its material's noise is stable.
-blockFaceArtProviders.register("blank", (block) => ({ seed: block.id, paint: () => {} }));
 
 /** A short chip label: its text and colour (the deck view). */
 export type BlockChip = { text: string; color?: string };
@@ -67,7 +65,13 @@ export const blockName = (block: CardBlock): string =>
 
 /** The block's face art. */
 export const blockFaceArt = (block: CardBlock, options: CardFaceOptions = {}): FaceArt =>
-  firstAnswer(blockFaceArtProviders, block, options)!;
+  firstAnswer(blockFaceArtProviders, block, options) ?? blankFace(block);
+
+/**
+ * No provider answers: a plain face, seeded by the block's own ID so its material's noise is
+ * stable. A fallback after every registered provider, so a later provider can still answer.
+ */
+const blankFace = (block: CardBlock): FaceArt => ({ seed: block.id, paint: () => {} });
 
 /** The block's short chip label. */
 export const blockChip = (block: CardBlock): BlockChip =>

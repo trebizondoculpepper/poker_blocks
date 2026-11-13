@@ -39,3 +39,14 @@ describe("rankless presentation providers (#893)", () => {
     expect(deckBlockDetails(rankless)).toMatch(/Dev rankless active/);
   });
 });
+
+describe("face-art providers registered later (#893 review)", () => {
+  it("answer before the blank fallback", async () => {
+    const { blockFaceArtProviders } = await import("./block-presentation");
+    blockFaceArtProviders.register("test-rankless-art", (block) =>
+      block.id === "art-test" ? { seed: "custom", paint: () => {} } : undefined,
+    );
+    expect(blockFaceArt(devRanklessActive("art-test")).seed).toBe("custom");
+    expect(blockFaceArt(devRanklessActive("other")).seed).toBe("other");
+  });
+});
