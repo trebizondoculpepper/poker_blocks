@@ -28,6 +28,12 @@ import type { PassiveScoredLine } from "./passive-effects";
 import type { Cell } from "./traits/attachable";
 import { needsLandingHandover } from "./block-trait-behaviours";
 import { createMaterialise } from "./visual/materialise";
+import {
+  createScoreNarration,
+  type NarratedLine,
+  type ScoreNarrationSink,
+} from "./score-narration";
+import type { VisualScheduler } from "./visual-events/scheduler";
 
 type Materialise = ReturnType<typeof createMaterialise>;
 
@@ -66,9 +72,6 @@ type Discarding = {
   effects: Materialise[];
 };
 
-/** One scoring line waiting to be shown: tint its row, play its sound, add its points. */
-type ScoreStep = { at: number; line: PassiveScoredLine };
-
 export type PlayPresenter = {
   /** A play or discard is still animating. */
   readonly busy: boolean;
@@ -82,14 +85,18 @@ export type PlayPresenter = {
   discard(sources: readonly RenderedBlock[]): boolean;
   /** Advance the flights and dissolves by one frame. */
   update(now: number, delta: number): void;
-  /** Present due scoring lines and, after the last, the stage's outcome. */
-  updateScore(now: number): void;
+  /**
+   * Where the shared visual-event scheduler shows score narration (#547): its handlers reach it
+   * as the `scoreNarration` service.
+   */
+  readonly narration: ScoreNarrationSink;
   /** Stop presenting: the score shown jumps to the run's (a new run, a forced outcome). */
   reset(): void;
   dispose(): void;
 };
 
-const lineStepMs = 320;
+/** Score narration timing, in game-time units: 4.8 units is the 320 ms between lines. */
+const narrationTiming = { lineStep: 4.8, settle: tintSeconds * 15 };
 /** Seconds between the blocks of a line setting off. */
 const lineStagger = 0.12;
 /** Seconds into a play when the flight has reached its cell and the handover starts. */
@@ -131,6 +138,8 @@ export function createPlayPresenter(options: {
   save(): void;
   /** The stage's outcome has been announced. */
   decided(outcome: RoundOutcome, now: number): void;
+  /** The shared visual-event scheduler score narration is queued on (#547). */
+  visualEvents: VisualScheduler;
 }): PlayPresenter {
   const { views, hand, field, cameraView } = options;
   const game = () => options.game();
@@ -140,24 +149,41 @@ export function createPlayPresenter(options: {
    */
   let playing: Playing[] = [];
   let discarding: Discarding[] = [];
-  let scoreSteps: ScoreStep[] = [];
-  let outcomeAt: number | null = null;
   let shownScore = game().state.round.score;
+  /** The latest frame's time, which tints and pulses started by narration are timed from. */
+  let frameNow = 0;
   const placementTarget = new THREE.Vector3();
   const placementRotation = new THREE.Quaternion();
 
-  /** Present the lines from the play that just landed, lowest score first. */
+  /** What narration shows through, each line as it was captured when its play committed. */
+  const sink: ScoreNarrationSink = {
+    line({ blockIds, sourceIds, points }) {
+      field.tint(blockIds, frameNow);
+      options.activated(sourceIds);
+      field.activate(sourceIds, frameNow);
+      const sound = magnitudeSfxFor(points);
+      if (sound) playSfx(sound, { jitter: 0 });
+      shownScore += points;
+      options.changed();
+    },
+    summarise() {
+      shownScore = game().state.round.score;
+      options.changed();
+    },
+    decide() {
+      shownScore = game().state.round.score;
+      options.decided(roundOutcome(game().state), frameNow);
+      options.changed();
+    },
+  };
+  const narration = createScoreNarration(options.visualEvents, sink, narrationTiming);
+
   /**
-   * Queue a play's scoring lines behind any still being shown, so plays that landed close
-   * together score one after the other rather than over each other.
+   * Narrate the lines from the play that just landed, lowest score first, after any play still
+   * being narrated: captured now, as plain data, so a later play can't change them.
    */
-  function announceScore(now: number, scored: readonly PassiveScoredLine[]): void {
-    const queued = queueScoreSteps(scoreSteps, outcomeAt, presentationOrder(scored), now, {
-      lineStepMs,
-      settleMs: tintSeconds * 1000,
-    });
-    scoreSteps = queued.steps;
-    outcomeAt = queued.outcomeAt;
+  function announceScore(scored: readonly PassiveScoredLine[]): void {
+    narration.narrate(presentationOrder(scored).map(capturedLine));
   }
 
   function updatePlay(action: Playing, now: number, delta: number): void {
@@ -234,7 +260,7 @@ export function createPlayPresenter(options: {
       getMaterialDefinition(materialOf(block)),
     ))
       playSfx(id);
-    announceScore(now, action.lines);
+    announceScore(action.lines);
     cameraView.scheduleCameraMove();
     options.refill();
     options.save();
@@ -255,7 +281,7 @@ export function createPlayPresenter(options: {
       return playing.length > 0 || discarding.length > 0;
     },
     get presenting() {
-      return playing.length > 0 || scoreSteps.length > 0 || outcomeAt !== null;
+      return playing.length > 0 || narration.presenting;
     },
     get shownScore() {
       return shownScore;
@@ -372,35 +398,18 @@ export function createPlayPresenter(options: {
       options.changed();
       return true;
     },
+    narration: sink,
     update(now, delta) {
+      frameNow = now;
       hand.updateDrawIns(delta);
       // Finishing reassigns the lists (filter), so iterating the current ones is safe.
       for (const action of playing) updatePlay(action, now, delta);
       for (const action of discarding) updateDiscard(action, now, delta);
     },
-    updateScore(now) {
-      while (scoreSteps.length > 0 && scoreSteps[0].at <= now) {
-        const { line } = scoreSteps.shift()!;
-        field.tint(line.line.blocks, now);
-        const sourceIds = [...new Set(line.activations.map(({ sourceId }) => sourceId))];
-        options.activated(sourceIds);
-        field.activate(sourceIds, now);
-        const sound = magnitudeSfxFor(line.points);
-        if (sound) playSfx(sound, { jitter: 0 });
-        shownScore += line.points;
-        options.changed();
-      }
-      if (outcomeAt === null || outcomeAt > now) return;
-      outcomeAt = null;
-      shownScore = game().state.round.score;
-      options.decided(roundOutcome(game().state), now);
-      options.changed();
-    },
     reset() {
       playing = [];
       discarding = [];
-      scoreSteps = [];
-      outcomeAt = null;
+      narration.reset();
       shownScore = game().state.round.score;
     },
     dispose() {
@@ -409,28 +418,13 @@ export function createPlayPresenter(options: {
   };
 }
 
-/**
- * Queue a play's scoring lines (#272, model first): they start once any lines still waiting
- * have been shown, one step apart, so plays that land close together score one after another.
- * The stage outcome waits until the last queued line's tint has settled.
- */
-export function queueScoreSteps<Line>(
-  waiting: readonly { at: number; line: Line }[],
-  outcomeAt: number | null,
-  lines: readonly Line[],
-  now: number,
-  timing: { lineStepMs: number; settleMs: number },
-): { steps: { at: number; line: Line }[]; outcomeAt: number } {
-  const queuedUntil =
-    waiting.length > 0 ? waiting[waiting.length - 1]!.at + timing.lineStepMs : now;
-  const start = Math.max(now, queuedUntil);
-  const steps = [
-    ...waiting,
-    ...lines.map((line, index) => ({ at: start + index * timing.lineStepMs, line })),
-  ];
-  const settled =
-    lines.length > 0 ? start + (lines.length - 1) * timing.lineStepMs + timing.settleMs : start;
-  return { steps, outcomeAt: Math.max(outcomeAt ?? settled, settled) };
+/** A scored line as plain data: its blocks and sources by id, and its points. */
+export function capturedLine(line: PassiveScoredLine): NarratedLine {
+  return {
+    blockIds: line.line.blocks.map(({ id }) => id),
+    sourceIds: [...new Set(line.activations.map(({ sourceId }) => sourceId))],
+    points: line.points,
+  };
 }
 
 /**

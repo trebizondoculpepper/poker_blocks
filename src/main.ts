@@ -55,6 +55,8 @@ import { createTableRenderer, type TableRenderer } from "./table-renderer";
 import { createHudFrame } from "./hud-frame";
 import { gameplayHudZones, type HudElement } from "./hud-layout";
 import { appVersion } from "./version";
+import { createVisualScheduler } from "./visual-events/scheduler";
+import type { ScoreNarrationServices } from "./score-narration";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -364,6 +366,14 @@ const shopView = createShopView(
   (id, destination) => run.game.purchaseVerdict(id, destination),
 );
 shopView.render([], false);
+// The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
+// these services; the frame loop below advances its clock.
+const visualServices: ScoreNarrationServices = {
+  get scoreNarration() {
+    return presenter.narration;
+  },
+};
+const visualEvents = createVisualScheduler({ services: visualServices });
 const presenter: PlayPresenter = createPlayPresenter({
   game: () => run.game,
   views: blockViews,
@@ -381,6 +391,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   refill: () => run.refillHand(),
   save: () => run.autosave(),
   decided: (outcome, now) => run.decided(outcome, now),
+  visualEvents,
 });
 const input: TableInput = createTableInput({
   host,
@@ -451,7 +462,7 @@ const step = (time: number) => {
   danceFloor.update();
   cameraView.update(time, delta);
   presenter.update(time, delta);
-  presenter.updateScore(time);
+  visualEvents.update(time, document.visibilityState === "visible");
   run.followOutcomes(time);
   field.update(time, run.reducedMotion);
   sceneManager.update(delta);

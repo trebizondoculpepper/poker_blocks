@@ -92,8 +92,10 @@
     }
   },
   "score.line": {
-    "uses": 0,
-    "files": {}
+    "uses": 2,
+    "files": {
+      "score-narration.ts": 2
+    }
   },
   "score.big": {
     "uses": 0,

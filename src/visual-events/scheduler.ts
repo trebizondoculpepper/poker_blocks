@@ -19,7 +19,8 @@
  *   event is. A handler gets the clock, its scope and scheduling capabilities, and the services it
  *   was given; never the run, mutation or the session's random stream.
  *
- * Nothing in the game uses it yet: migrations (#547 onward) move presentation onto it one at a time.
+ * Migrations move presentation onto it one at a time: score narration first (#547,
+ * `src/score-narration.ts`); flights, exits and staggers follow (#548 onward).
  */
 import TinyQueue from "tinyqueue";
 import { Registry } from "../core/registry";
