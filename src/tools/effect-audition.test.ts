@@ -47,22 +47,51 @@ describe("smoke and dust audition (#466)", () => {
   });
 
   it("shows its note while the scene is up and removes it on exit", async () => {
-    const { devEffectAudition } = await import("./effect-audition");
-    const appended: { remove(): void; removed?: boolean }[] = [];
+    const { createEffectAuditionNote } = await import("./effect-audition");
+    const appended: { removed?: boolean }[] = [];
     const host = {
-      append: (node: { remove(): void }) => appended.push(node),
+      append: (node: { removed?: boolean }) => appended.push(node),
     } as unknown as HTMLElement;
-    const element = {
+    const make = () => ({
+      removed: false,
       remove() {
         this.removed = true;
       },
-      removed: false,
-    } as { remove(): void; removed: boolean; className?: string; textContent?: string };
-    (globalThis as { document?: unknown }).document ??= { createElement: () => element };
-    const trait = devEffectAudition<{ host: HTMLElement }>();
-    trait.enter!({ host }, { hint: "note" });
+    });
+    (globalThis as { document?: unknown }).document ??= { createElement: make };
+    const note = createEffectAuditionNote(host);
+    note.show({ hint: "note" });
     expect(appended).toHaveLength(1);
-    trait.exit!({ host }, { hint: "note" });
-    expect((appended[0] as { removed?: boolean }).removed).toBe(true);
+    note.hide();
+    expect(appended[0]!.removed).toBe(true);
+  });
+
+  it("reacts as its parent substance: Earth audition beside fire audition bakes (#856 review)", async () => {
+    const { applyReactions } = await import("../reactions");
+    const { standardDeck } = await import("../cards");
+    const { withMaterial } = await import("../materials");
+    const earth = withMaterial(
+      standardDeck[0]!,
+      getMaterialDefinition("earthDustAudition" as never),
+    );
+    const fire = withMaterial(
+      standardDeck[1]!,
+      getMaterialDefinition("fireSmokeAudition" as never),
+    );
+    const state = {
+      field: [
+        { block: earth, cell: { x: 0, y: 0, z: 0 } },
+        { block: fire, cell: { x: 1, y: 0, z: 0 } },
+      ],
+      hand: [],
+      deck: [],
+      discardPile: [],
+      passiveRack: [],
+      coins: 0,
+      round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
+    };
+    const reacted = applyReactions(state as never).state;
+    const baked = reacted.field.find(({ block }) => block.id === earth.id)!.block;
+    expect(materialOf(baked)).toBe("terracotta");
   });
 });

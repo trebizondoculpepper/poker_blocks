@@ -1,30 +1,30 @@
 /**
- * devEffectAudition (#466): a developer scene trait for the smoke and dust audition mode. It only
- * explains the room: a small note over the table, shown while its scene is on the stack and
- * removed when it leaves. The looks themselves come from the mode's deck (experimental
- * definitions with smoke and dust appearance effects), so the host renders them as it would any
- * card; nothing here names a material or a mode.
+ * The smoke and dust audition room's note (#466): a developer tool, loaded only in development
+ * builds (src/main.ts), shown by the `devEffectAudition` scene trait while its scene is on the
+ * stack and hidden when it leaves. It only explains the room; the looks themselves come from the
+ * mode's deck (experimental definitions with smoke and dust effects), rendered like any card.
  */
-import type { SceneTraitBehaviour } from "../scenes";
+export type EffectAuditionNote = {
+  show(config: { hint: string }): void;
+  hide(): void;
+  dispose(): void;
+};
 
-export type DevEffectAuditionConfig = { hint: string };
-
-export function devEffectAudition<Context extends { host: HTMLElement }>(): SceneTraitBehaviour<
-  Context,
-  DevEffectAuditionConfig
-> {
+export function createEffectAuditionNote(host: HTMLElement): EffectAuditionNote {
   let note: HTMLElement | null = null;
+  const hide = () => {
+    note?.remove();
+    note = null;
+  };
   return {
-    enter({ host }, { hint }) {
-      note?.remove();
+    show({ hint }) {
+      hide();
       note = document.createElement("p");
       note.className = "dev-effect-audition";
       note.textContent = hint;
       host.append(note);
     },
-    exit() {
-      note?.remove();
-      note = null;
-    },
+    hide,
+    dispose: hide,
   };
 }
