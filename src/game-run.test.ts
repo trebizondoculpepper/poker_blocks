@@ -180,6 +180,36 @@ describe("GameRun progression", () => {
     expect(errors).toHaveLength(1);
   });
 
+  it("draws the same cards after save and Continue as an uninterrupted run (#551)", () => {
+    const dealers = new Registry<Dealer>("dealer");
+    dealers.register(baseDealer.name, baseDealer);
+    dealers.register(bossDealer.name, bossDealer);
+    const session = makeSession();
+    session.discard(session.state.hand[0]!.id);
+    session.refillHand();
+    const restored = fromSaveRecord(toSaveRecord(session.snapshot()), standardDeck, dealers)!;
+    // A different random stream: draws must not depend on it, only on the saved deck order.
+    const rules: RunRules = {
+      stage: (round, kind) => ({
+        dealer: kind === "boss" ? "boss" : "base",
+        targetScore: targets[kind] * round,
+        plays: 3,
+        discards: 2,
+      }),
+      handAtStageEnd: "return-to-deck",
+      discardPileAfterShop: "keep-out",
+    };
+    const resumed = GameRun.fromSnapshot(dealers, rules, standardDeck, restored, () => 0.7);
+    expect(resumed.state.deck.map(({ id }) => id)).toEqual(session.state.deck.map(({ id }) => id));
+    for (let turn = 0; turn < 2; turn++) {
+      session.discard(session.state.hand[0]!.id);
+      resumed.discard(resumed.state.hand[0]!.id);
+      expect(resumed.refillHand().map(({ id }) => id)).toEqual(
+        session.refillHand().map(({ id }) => id),
+      );
+    }
+  });
+
   it("keeps a stage-1 discard out of stages 2 and 3", () => {
     const session = makeSession();
     const discarded = session.state.hand[0];

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { cardName, ranks, standardDeck, suits } from "./cards";
-import { drawCards } from "./deal";
+import { popCards } from "./deal";
 import { baseDealer } from "./dealer";
 import { toggleBlockSelection } from "./block-trait-behaviours";
 
@@ -27,8 +27,8 @@ describe("standard deck", () => {
   });
 
   it("draws a featured block and a distinct six-block hand", () => {
-    const firstDraw = drawCards(standardDeck, 1, () => 0);
-    const secondDraw = drawCards(firstDraw.deck, baseDealer.handSize, () => 0);
+    const firstDraw = popCards(standardDeck, 1);
+    const secondDraw = popCards(firstDraw.deck, baseDealer.handSize);
     expect(firstDraw.cards).toHaveLength(1);
     expect(secondDraw.cards).toHaveLength(6);
     expect(secondDraw.deck).toHaveLength(45);

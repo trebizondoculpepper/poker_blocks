@@ -1583,7 +1583,7 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 
 ## Ordered card ownership target (#550)
 
-[Ordered cards and authoritative ownership](ordered-card-ownership.md) specifies index-zero pop, seeded shuffle, atomic zone transfers, run-level inventory, discardable composition, stage/round collection order and compatible save boundaries. It supersedes random-index drawing as the target; legacy reconstruction receipts are not live cards. Runtime migration remains #551/#574/#472 and the linked lifecycle work.
+[Ordered cards and authoritative ownership](ordered-card-ownership.md) specifies index-zero pop, seeded shuffle, atomic zone transfers, run-level inventory, discardable composition, stage/round collection order and compatible save boundaries. Ordered pop and the once-per-stage seeded shuffle are built (#551, `src/deal.ts`): drawing never uses the random stream. Legacy reconstruction receipts are not live cards. Runtime migration of zone transfers, discardable and inventory remains #574/#472 and the linked lifecycle work.
 
 ## Concrete visual scheduling interface (#545)
 
