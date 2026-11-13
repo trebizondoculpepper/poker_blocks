@@ -19,8 +19,9 @@ const rules: RunRules = {
   handAtStageEnd: "return-to-deck",
   discardPileAfterShop: "keep-out",
   rackCapacity: 4,
-  // A function on the rules never reaches the export.
+  // A function on the rules never reaches the export: its plain descriptor does.
   stockShop: (state) => state,
+  policies: { stockShop: { shop: { offers: 6 } } },
 };
 const runtime = { dealers, rules };
 
@@ -89,6 +90,38 @@ describe("experiment configuration export (#934)", () => {
       ok: false,
       diagnostics: ["its rules differ from this mode's at rules.rackCapacity"],
     });
+  });
+
+  it("compares function-valued policies through their descriptors, and refuses unverifiable ones", () => {
+    const text = (other: RunRules) =>
+      serializeConfiguration(exportConfiguration(scenario, other, "1.2.3"));
+    expect(
+      importConfiguration(
+        text({ ...rules, policies: { stockShop: { shop: { offers: 9 } } } }),
+        runtime,
+      ),
+    ).toMatchObject({ ok: false, diagnostics: [expect.stringMatching(/policies\.stockShop/)] });
+    expect(importConfiguration(text({ ...rules, policies: undefined }), runtime)).toEqual({
+      ok: false,
+      diagnostics: ["these rules can't be verified: stockShop"],
+    });
+    const resale: RunRules = { ...rules, resaleModifiers: [(value) => value] };
+    expect(importConfiguration(text(resale), { dealers, rules: resale })).toEqual({
+      ok: false,
+      diagnostics: ["these rules can't be verified: resaleModifiers"],
+    });
+  });
+
+  it("verifies rules up to its recorded horizon, past the default eight rounds", () => {
+    const later: RunRules = {
+      ...rules,
+      stage: (round, kind) => ({ ...rules.stage(round, kind), plays: round > 8 ? 9 : 3 }),
+    };
+    const short = serializeConfiguration(exportConfiguration(scenario, later, "1.2.3"));
+    expect(importConfiguration(short, runtime)).toMatchObject({ ok: true });
+    const long = serializeConfiguration(exportConfiguration(scenario, later, "1.2.3", 12));
+    expect(importConfiguration(long, runtime)).toMatchObject({ ok: false });
+    expect(JSON.parse(long).rules.horizon).toBe(12);
   });
 
   it("copies the serialized configuration", async () => {

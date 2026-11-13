@@ -21,11 +21,17 @@ import { stageKinds, type RunRules, type StageKind, type StageSetup } from "./ru
 export const experimentConfigFormat = "poker-blocks.experiment-config";
 export const experimentConfigVersion = 1;
 
-/** How many rounds of stage setup a rules record captures. */
+/**
+ * How many rounds of stage setup a rules record captures by default. Progression is endless, so a
+ * record verifies its rules only up to its `horizon`: a reproduced trial is bounded by it, and a
+ * replay (#936) must not run past it.
+ */
 export const recordedRounds = 8;
 
 /** The run rules as plain data: what the rule functions actually give, round by round. */
 export type RulesRecord = {
+  /** The last round these rules are recorded, and so verified, for. */
+  horizon: number;
   stages: { round: number; kind: StageKind; setup: StageSetup }[];
   handAtStageEnd: RunRules["handAtStageEnd"];
   discardPileAfterShop: RunRules["discardPileAfterShop"];
@@ -33,7 +39,14 @@ export type RulesRecord = {
   rackCapacity?: number;
   resolutionLimits?: { events: number; operations: number };
   playfield?: readonly { id: string; config: unknown }[];
+  /** The function-valued policies' plain descriptors (`RunRules.policies`). */
+  policies?: Record<string, unknown>;
+  /** Function-valued policies present with no descriptor: their behaviour can't be compared. */
+  unverifiable?: string[];
 };
+
+/** The function-valued rules a record can only compare through their descriptors. */
+const policyFields = ["stockShop", "resaleModifiers"] as const;
 
 export type ExperimentConfiguration = {
   format: typeof experimentConfigFormat;
@@ -49,7 +62,12 @@ const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 /** The effective rules as a record, from the rule functions' own answers. */
 export function recordRules(rules: RunRules, rounds = recordedRounds): RulesRecord {
+  const present = (field: (typeof policyFields)[number]) => [rules[field] ?? []].flat().length > 0;
+  const unverifiable = policyFields.filter(
+    (field) => present(field) && rules.policies?.[field] === undefined,
+  );
   return plain({
+    horizon: rounds,
     stages: Array.from({ length: rounds }, (_, index) =>
       stageKinds.map((kind) => ({ round: index + 1, kind, setup: rules.stage(index + 1, kind) })),
     ).flat(),
@@ -60,6 +78,8 @@ export function recordRules(rules: RunRules, rounds = recordedRounds): RulesReco
     rackCapacity: Number.isFinite(rules.rackCapacity) ? rules.rackCapacity : undefined,
     resolutionLimits: rules.resolutionLimits,
     playfield: rules.playfield,
+    policies: rules.policies,
+    ...(unverifiable.length ? { unverifiable } : {}),
   });
 }
 
@@ -68,13 +88,15 @@ export function exportConfiguration(
   scenario: ScenarioDefinition,
   rules: RunRules,
   revision: string,
+  /** The rounds the rules are recorded, and verified, for. */
+  rounds = recordedRounds,
 ): ExperimentConfiguration {
   return {
     format: experimentConfigFormat,
     version: experimentConfigVersion,
     revision,
     scenario: plain(scenario),
-    rules: recordRules(rules),
+    rules: recordRules(rules, rounds),
   };
 }
 
@@ -124,7 +146,20 @@ export function importConfiguration(text: string, runtime: ScenarioRuntime): Imp
     return { ok: false, diagnostics: ["a configuration needs its source revision"] };
   const built = buildScenario(config.scenario as ScenarioDefinition, runtime);
   if (!built.ok) return { ok: false, diagnostics: built.diagnostics };
-  const differs = difference(config.rules, recordRules(runtime.rules));
+  const horizon = config.rules?.horizon;
+  if (!Number.isSafeInteger(horizon) || horizon! < 1)
+    return { ok: false, diagnostics: ["a configuration needs a positive round horizon"] };
+  const runtimeRules = recordRules(runtime.rules, horizon);
+  const unverifiable = [
+    ...(config.rules?.unverifiable ?? []),
+    ...(runtimeRules.unverifiable ?? []),
+  ];
+  if (unverifiable.length)
+    return {
+      ok: false,
+      diagnostics: [`these rules can't be verified: ${[...new Set(unverifiable)].join(", ")}`],
+    };
+  const differs = difference(config.rules, runtimeRules);
   if (differs)
     return {
       ok: false,
