@@ -2,14 +2,15 @@ import { describe, expect, it } from "vite-plus/test";
 import { createPresentationClock } from "./presentation-clock";
 
 describe("the presentation clock (#530)", () => {
-  it("follows frame time until held, stands still while held, and resumes without a jump", () => {
+  it("follows frame time until held, stands still while held, and rejoins frame time", () => {
     const clock = createPresentationClock();
     expect(clock.advance(1000, 0.016)).toEqual({ time: 1000, delta: 0.016 });
     const release = clock.hold();
-    expect(clock.advance(1100, 0.016)).toEqual({ time: 1000, delta: 0 });
-    expect(clock.advance(1500, 0.016)).toEqual({ time: 1000, delta: 0 });
+    expect(clock.advance(1100, 0.016)).toEqual({ time: 1100, delta: 0 });
+    expect(clock.advance(1500, 0.016)).toEqual({ time: 1100, delta: 0 });
     release();
-    expect(clock.advance(1516, 0.016)).toEqual({ time: 1016, delta: 0.016 });
+    // Never lagging: starts stamped with frame time (performance.now()) still line up.
+    expect(clock.advance(1516, 0.016)).toEqual({ time: 1516, delta: 0.016 });
   });
 
   it("nests holds, and a release called twice counts once", () => {

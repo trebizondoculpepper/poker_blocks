@@ -1,10 +1,11 @@
 /**
  * A held presentation clock (#530; doc/foreground-menus.md, "Composition and layer ownership"):
  * the time the playfield's presentation (camera, board, hand, rack) is drawn at. While any scene
- * holds it, that time stands still and its frame delta is zero, so the covered playfield shows
- * an exact frozen pose. Releasing it carries on from that pose: the held span is skipped rather
- * than caught up. Only the playfield reads it; the shared frame clock, the music and the
- * foreground menus keep running.
+ * holds it, that time stands still at the moment of the first hold and its frame delta is zero,
+ * so the covered playfield shows an exact frozen pose. Released, it is frame time again: it never
+ * lags behind, because animation producers stamp their starts with frame time (`performance.now()`),
+ * so anything still in flight simply catches up on resume. Only the playfield reads it; the shared
+ * frame clock, the music and the foreground menus keep running.
  */
 export type PresentationClock = {
   /** Freeze the presentation until the returned release is called (holds nest). */
@@ -15,9 +16,8 @@ export type PresentationClock = {
 
 export function createPresentationClock(): PresentationClock {
   let holds = 0;
-  /** How far presentation time lags frame time: every held span so far. */
-  let lag = 0;
-  let lastFrame: number | null = null;
+  /** The time the presentation stands at while held, from its first held frame. */
+  let frozenAt: number | null = null;
   return {
     hold() {
       holds++;
@@ -26,15 +26,13 @@ export function createPresentationClock(): PresentationClock {
         if (released) return;
         released = true;
         holds--;
+        if (holds === 0) frozenAt = null;
       };
     },
     advance(time, delta) {
-      // A held frame adds its whole span to the lag, so presentation time stays put.
-      const step = lastFrame === null ? 0 : time - lastFrame;
-      lastFrame = time;
-      const held = Math.min(holds, 1);
-      lag += step * held;
-      return { time: time - lag, delta: delta * (1 - held) };
+      if (holds === 0) return { time, delta };
+      frozenAt ??= time;
+      return { time: frozenAt, delta: 0 };
     },
   };
 }
