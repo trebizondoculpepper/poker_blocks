@@ -55,3 +55,7 @@ Provide profiler recipes for both appearances, including capture/interior passes
 ## Later owner promotion (#749)
 
 The earlier restriction on promoting Internal is superseded by the owner’s selection of **Total Internal Reflection Crystal** for Prismatic Crystal and its transmogrifier. Follow [the promotion contract](presentation-contracts.md#prismatic-crystal-promotion-749). The water prototypes remain experiments; their production rollout is not authorized by this crystal decision. Copy settings is useful later tuning, not a prerequisite for the selected crystal appearance.
+
+## Calm Water refinement experiment
+
+[Calm Water refinements](calm-water-refinements.md) supersedes this preset's earlier 8–12-second period with 0.5–8 seconds and specifies independent outline opacity and animated surface-normal perturbation. Other presets retain their existing contracts.
