@@ -68,7 +68,11 @@ describe("Calm Water's ripple period (#795)", () => {
   it("round-trips the owner's fixture through Copy settings unchanged", () => {
     const before = snapshotOptics("calmWater");
     expect(applyOptics(ownerFixture)).toEqual([]);
-    expect(snapshotOptics("calmWater")).toEqual(ownerFixture);
+    // Missing new values (#796's edgeOpacity) take Calm Water's documented defaults.
+    expect(snapshotOptics("calmWater")).toEqual({
+      ...ownerFixture,
+      config: { ...ownerFixture.config, edgeOpacity: 0.08 },
+    });
     applyOptics(before);
   });
 
