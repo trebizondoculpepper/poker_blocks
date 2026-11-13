@@ -77,7 +77,8 @@ body,
     600 14px system-ui,
     sans-serif;
   pointer-events: none;
-  white-space: nowrap;
+  /* One line per part of the description (#751: base and acquired bonuses), never wrapped. */
+  white-space: pre;
 }
 
 .inspect-tooltip[hidden] {

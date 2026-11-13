@@ -8,7 +8,8 @@ import type {
   InclusionConfig,
 } from "./visual/contained";
 import { cardName, standardDeck, type CardBlock } from "./cards";
-import { inspectable } from "./traits/inspectable";
+import { inspectable, inspectionProviders } from "./traits/inspectable";
+import { acquiredBonusLines } from "./acquired-bonus-inspection";
 import type { WeightCurve } from "./offer-weights";
 import type { EventRule, RuleCommand } from "./event-rules";
 import type { ResistantTrait } from "./traits/resistant";
@@ -1372,6 +1373,11 @@ export function scoringEligibilityOf(block: CardBlock): string {
   // A material that isn't registered (a test's own) names none, so it takes the default.
   return materialRegistry.get(materialOf(block))?.scoringEligibility ?? "contributing";
 }
+
+// Inspection lists a card's base and acquired bonuses after its name (#751).
+inspectionProviders.register("acquiredBonuses", (block) =>
+  acquiredBonusLines(block, getMaterialDefinition(materialOf(block)).scoringModifier),
+);
 
 export function cardScoringRules(block: CardBlock): EventRule[] {
   // Its material's rules, then its state bonus's (#365), then its acquired modifiers' (#431):

@@ -1,3 +1,4 @@
+import { inspectBlock } from "./traits/inspectable";
 /**
  * The in-run deck view (#175): a read-only overlay listing every block in the run's deck,
  * in rank order from 2 to Ace, with each rank's suit and material variants grouped under it.
@@ -32,7 +33,7 @@ export function groupDeckByRank(
 /** What a block shows when inspected: the same details as hovering it in play. */
 export function deckBlockDetails(block: CardBlock): string {
   return (
-    block.traits.inspectable?.inspect() ??
+    inspectBlock(block) ??
     `${block.traits.identity.rank}${block.traits.identity.suit.symbol} · ${getMaterialDefinition(materialOf(block)).name}`
   );
 }
