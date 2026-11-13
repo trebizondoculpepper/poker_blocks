@@ -18,6 +18,7 @@ import type { SelectionBadge } from "./selection-badge";
 import type { BinView } from "./bin-view";
 import { devDropInspector } from "./scene-traits/dev-drop-inspector";
 import { devTrialReadouts } from "./scene-traits/dev-trial-readouts";
+import { devBenchPanel } from "./scene-traits/dev-bench-panel";
 import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
 import { committedEventSounds } from "./scene-traits/committed-event-sounds";
 import type { ActionLog } from "./action-log";
@@ -597,6 +598,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   behaviours.register("devDropInspector", devDropInspector<Context>());
   behaviours.register("devTrialReadouts", devTrialReadouts<Context>());
+  behaviours.register("devBenchPanel", devBenchPanel<Context>());
   behaviours.register("actionHistory", actionHistory<Context>());
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
   behaviours.register("hudStyle", hudStyle<Context>());
