@@ -14,7 +14,7 @@
  *   report asking what any kind is.
  */
 import type { ProfilerExport } from "./export";
-import { describePipeline } from "./pipelines";
+import { describePipeline } from "./pipeline-description.ts";
 import type { CaseResult, CountResult } from "./runner";
 
 export type RendererKind = "hardware" | "software" | "unknown";

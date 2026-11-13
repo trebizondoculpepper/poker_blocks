@@ -355,13 +355,17 @@ export function createProfilerRoom(
     // Run it for half a second of real frames before the last one stays on screen: ongoing
     // effects advance through `update`, and contents animated from the render itself (rising
     // bubbles) need real rendered frames (#653 review). A run or another preview cuts it short.
-    for (let step = 0; step < previewFrames; step++) {
-      if (mine !== previewToken || controller) break;
-      one.update?.(1 / 60);
-      pipeline?.render({ delta: 1 / 60, reducedMotion: false });
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+    // Ended however the loop stops, a throwing capture render included.
+    try {
+      for (let step = 0; step < previewFrames; step++) {
+        if (mine !== previewToken || controller) break;
+        one.update?.(1 / 60);
+        pipeline?.render({ delta: 1 / 60, reducedMotion: false });
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    } finally {
+      endPreview(one);
     }
-    endPreview(one);
   }
 
   /** Take a preview off the stage and free it, once, whoever gets there first. */

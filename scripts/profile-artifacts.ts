@@ -85,7 +85,7 @@ export function reportHtml(record: ProfilerExport, provenance: RunProvenance): s
   const rows = report.rows
     .map(
       (row) =>
-        `<tr><td>${escape(row.phase ? `${row.label} (${row.phase})` : row.label)}</td><td>${escape(row.family)}</td><td>${escape(row.host)}</td><td>${escape(row.pipeline)}</td><td>${escape(`${row.unit.kind} ×${row.unit.size}`)}</td><td>${row.counts.join(" / ")}</td><td>${row.gpu.map(ms).join(" / ")}</td><td>${row.cpu.map(ms).join(" / ")}</td><td>${row.calls.join(" / ")}</td><td>${row.triangles.join(" / ")}</td><td>${caseNotes(row)}</td></tr>`,
+        `<tr><td>${escape(row.phase ? `${row.label} (${row.phase})` : row.label)}</td><td>${escape(row.family)}</td><td>${escape(row.host)}</td><td>${escape(row.pipeline)}</td><td>${escape(`${row.unit.kind} ×${row.unit.size}`)}</td><td>${row.counts.join(" / ")}</td><td>${row.gpu.map(ms).join(" / ")}</td><td>${row.cpu.map(ms).join(" / ")}</td><td>${row.calls.join(" / ")}</td><td>${row.triangles.join(" / ")}</td><td>${escape(caseNotes(row))}</td></tr>`,
     )
     .join("");
   return `<!doctype html>

@@ -14,8 +14,8 @@ import {
   type RenderPass,
 } from "../../visual/render-pass";
 
-/** One declared pass: a registered handler's name and its configuration, as plain data. */
-export type PassReference = { handler: string; config?: Record<string, string | number | boolean> };
+import type { PassReference } from "./pipeline-description";
+export { describePipeline, type PassReference } from "./pipeline-description";
 
 /** What a pass handler is given to build its pass, once per case. */
 export type PassSetup = {
@@ -121,18 +121,4 @@ export async function createPipeline(
     },
     dispose,
   };
-}
-
-/** A pipeline as a person reads it: each pass with its configuration, then the main render. */
-export function describePipeline(passes: readonly PassReference[]): string {
-  const config = (values: PassReference["config"]) =>
-    Object.entries(values ?? {})
-      .map(([key, value]) => `${key}=${String(value)}`)
-      .join(", ");
-  return [
-    ...passes.map(({ handler, config: values }) =>
-      Object.keys(values ?? {}).length ? `${handler}(${config(values)})` : handler,
-    ),
-    "main render",
-  ].join(" → ");
 }

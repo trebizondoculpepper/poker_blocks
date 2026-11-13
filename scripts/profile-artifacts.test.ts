@@ -112,3 +112,22 @@ describe("resource residuals in the artifacts (#750 review)", () => {
     ).toBe(true);
   });
 });
+
+describe("pipelines in the artifacts (#764 review)", () => {
+  it("escapes a baseline reason in the HTML notes", () => {
+    const unmatched = { ...result("a"), baselineUnavailable: "needs <b>a backdrop</b>" };
+    const html = reportHtml(record([unmatched]), provenance);
+    expect(html).toContain("no matched baseline: needs &lt;b&gt;a backdrop&lt;/b&gt;");
+    expect(html).not.toContain("<b>a backdrop</b>");
+  });
+
+  it("loads in native Node, as `npm run profile` does", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const output = execFileSync(
+      process.execPath,
+      ["-e", 'import("./scripts/profile-artifacts.ts").then(() => console.log("loaded"))'],
+      { encoding: "utf8" },
+    );
+    expect(output.trim()).toBe("loaded");
+  });
+});
