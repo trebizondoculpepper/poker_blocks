@@ -239,12 +239,19 @@ export function createMusicController(
   };
 
   const run = (operations: readonly MusicOperation[]) => {
-    const playback: (() => void)[] = [];
+    // Playback steps, each marked as a track start or not. Consecutive starts collapse to the
+    // last: a superseded selection is never requested, so it can't finish loading over the
+    // final one (#855 review).
+    const playback: { starts: boolean; run: () => void }[] = [];
+    const queue = (starts: boolean, run: () => void) => {
+      if (starts && playback.at(-1)?.starts) playback.pop();
+      playback.push({ starts, run });
+    };
     // Wound down, nothing counts as playing; otherwise the player's track.
     logicalCurrent = woundDown ? null : player.current;
     logicalBeforeDown = beforeWindDown;
     const api: MusicOperationApi = {
-      select: (plan) => playback.push(choose(plan)),
+      select: (plan) => queue(true, choose(plan)),
       remember: (slot) => {
         // What the cue has logically made current, not what is still audibly playing.
         if (logicalCurrent) slots.set(slot, logicalCurrent);
@@ -253,8 +260,8 @@ export function createMusicController(
         const remembered = slots.get(slot);
         if (remembered) {
           logicalCurrent = remembered;
-          playback.push(() => start(remembered));
-        } else if (fallbackPlan) playback.push(choose(fallbackPlan));
+          queue(true, () => start(remembered));
+        } else if (fallbackPlan) queue(true, choose(fallbackPlan));
       },
       // Each deferred step carries its logical target, captured now: the real player updates
       // `current` only once a track has loaded, so playback must never read it back (#855 review).
@@ -262,7 +269,7 @@ export function createMusicController(
         if (logicalCurrent !== null) logicalBeforeDown = logicalCurrent;
         const stopped = logicalBeforeDown;
         logicalCurrent = null;
-        playback.push(() => {
+        queue(false, () => {
           if (woundDown) return;
           beforeWindDown = stopped;
           woundDown = true;
@@ -272,13 +279,13 @@ export function createMusicController(
       windUp: () => {
         const restored = logicalBeforeDown;
         logicalCurrent = restored;
-        playback.push(() => start(restored));
+        queue(true, () => start(restored));
       },
       // Not playback: a filter applies to whatever plays, so it never replaces a request.
       filter: applyFilter,
     };
     for (const { op, config } of operations) musicOperations.get(op)(api, config);
-    if (playback.length) request(() => playback.forEach((step) => step()));
+    if (playback.length) request(() => playback.forEach(({ run }) => run()));
   };
 
   return {

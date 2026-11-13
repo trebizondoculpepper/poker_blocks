@@ -283,6 +283,20 @@ describe("music controller", () => {
     expect(log.at(-1)).toBe("windUp b");
   });
 
+  it("requests only the last of consecutive selections in a cue (#855 review)", () => {
+    const { music, log, ...cue } = setup();
+    music.unlock();
+    cue.stage();
+    log.length = 0;
+    music.run([
+      { op: "selectTrack", config: { plan: "boss" } },
+      { op: "selectTrack", config: { plan: "title" } },
+    ]);
+    // The boss loop, superseded at once, is never requested.
+    expect(log.filter(isStart).map(started)).not.toContain("solitaire-boss");
+    expect(log.filter(isStart)).toHaveLength(1);
+  });
+
   it("rejects an unknown operation at composition rather than falling back", () => {
     expect(validateMusicOperations("scene", [{ op: "selectTrack" }, { op: "shuffleAll" }])).toEqual(
       ['scene: unknown music operation "shuffleAll"'],
