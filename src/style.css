@@ -1690,3 +1690,12 @@ body,
   text-shadow: 0 1px 3px #000c;
   opacity: 1;
 }
+
+/* The HUD effect overlay (#921, src/visual/hud-overlay.ts): over its host, never under input. */
+.hud-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
