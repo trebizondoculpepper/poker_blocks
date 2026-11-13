@@ -237,3 +237,18 @@ describe("opening lifecycle and identity (#554 review 2)", () => {
     ).not.toBeNull();
   });
 });
+
+describe("cloning a container (#554 review)", () => {
+  it("gives the clone its own payload copy under a fresh ID", async () => {
+    const { cloneCard } = await import("./clonable");
+    const source = devOpaqueContainer("box-1", kingOfHearts("revealed-1"));
+    let next = 0;
+    const { clone, ids } = cloneCard(source, () => `fresh-${++next}`);
+    const payload = clone.traits.opaqueContainer!.payload;
+    expect(clone.id).toBe("fresh-1");
+    expect(payload.id).toBe("fresh-2");
+    expect(payload.components).toEqual(kingOfHearts("x").components);
+    expect(payload).not.toBe(source.traits.opaqueContainer!.payload);
+    expect(ids.get("revealed-1")).toBe("fresh-2");
+  });
+});

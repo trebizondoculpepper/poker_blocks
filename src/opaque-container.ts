@@ -18,6 +18,7 @@ import {
   restoreActiveObjects,
   type SavedActiveObject,
 } from "./active-objects";
+import { cloneCodecs } from "./clonable";
 import { createCard, ranks, suits, type CardBlock } from "./cards";
 import { playfieldControllers, playSteps } from "./lifecycle/play-phases";
 import { registerRuleCommand, commitCommands } from "./rule-commands";
@@ -67,6 +68,15 @@ activeComponentCodecs.register("opaqueContainer", {
       traits: { ...block.traits, opaqueContainer: { payload: saved as StoredPayload } },
     };
   },
+});
+
+// An exact clone holds its own copy of the payload under a fresh ID: never an alias, never a
+// reroll (doc/opaque-actives.md, "Persistence and clone compatibility").
+cloneCodecs.register("opaqueContainer", (value, { allocate, ids }) => {
+  const { payload } = value as { payload: StoredPayload };
+  const id = allocate();
+  ids.set(payload.id, id);
+  return { payload: { ...structuredClone(payload), id } };
 });
 
 /**
