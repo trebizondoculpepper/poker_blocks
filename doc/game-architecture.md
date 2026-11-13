@@ -1634,3 +1634,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Outcome presentation contract (#866)
 
 [Outcome facts and audio](outcome-presentation.md) separates transactional outcome/progression facts, required-sequence completion cues and independently composed result-scene enterSound responses. The model resolves rescue opportunities before final defeat; presentation never revises it. Burn/destruction audio follows captured effect starts through the shared scheduler. This target supersedes direct controller sound calls and awaited pre-commit burn behavior.
+
+## Prepared session adoption for experimental trials (#900)
+
+[Trial session adoption](experiments/trial-session-adoption.md) defines the generic injected run-host seam used by composed Dev scenario controllers. Policy selects configuration/seed; registered factories prepare; the host atomically adopts run/rules/identity universe/RNG/provenance and rebinds presentation. Invalid preparation leaves the current trial intact. The seam is not a mode identity branch or a parallel game controller.
