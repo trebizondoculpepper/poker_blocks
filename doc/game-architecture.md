@@ -1603,6 +1603,10 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 
 [Profiler render-pass capability](profiler-render-passes.md) extends the automatic-profiler host contract for multi-pass appearances. Recipes declare registered production pipeline requirements; hosts own scoped targets, timing and disposal. Generic measurement code never branches on an optics/material identity, and all contributing passes are measured.
 
+## Foreground menu host target (#627)
+
+[Foreground title and pause menus](foreground-menus.md) specifies configured panel-free menu cubes, visible running title scene, visible frozen pause scene, Settings' retained panel, scene-stack input isolation, focus and cleanup. It supersedes earlier instructions to preserve title/pause menu backdrops; it does not hide the underlying 3D scene. Runtime changes remain #628/#530.
+
 ## Release-status facet
 
 [Release status and catalogue access](release-status.md) defines certified/provisional admission and shared bench/inspection descriptors. Definitions bring registered availability behavior; generic code never checks a status trait as a flag. Lookup/restoration remains separate from new acquisition. This applies across object families and does not replace ordinary unlock or shop rules.
@@ -1642,3 +1646,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Face-connected topology query (#884)
 
 [The hoop query contract](hoop-query.md) selects the owner-approved face-only topology for In the Loop, with exact bounded refinement/Betti calculation, explicit unavailable diagnostics and a declared modifier-specific neutral fallback. Queries are pure and snapshot-scoped; the renderer and scorer do not infer geometry or choose identity-specific rules. Runtime remains #885/#886 and certification is separate.
+
+## Inherited lifecycle declaration resolution (#915)
+
+[The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.

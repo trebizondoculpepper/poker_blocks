@@ -529,6 +529,14 @@ The deck is an ordered pile: draw removes the first card without rerolling; shuf
 
 Each block resolves one stage/round/run retention and an explicit reset policy, directly or through its declared parent. Ordinary run cards persist through the run; cooked meat reverts to raw after a stage, Cloud expires after a stage without joining the deck, and Gelato reverts to Custard after a round. Settlement reads outgoing state before cleanup. Reset/reversion and acquired-modifier expiry remain separate; run bonuses are not erased by ordinary state reset. See [clone/reset and boundary contracts](clone-reset.md). These engineering clone capabilities do not introduce a new player cloning item.
 
+## Foreground menu presentation (#627)
+
+Title and pause menu blocks float over the visible 3D scene with no menu panel/backdrop behind them. The title background keeps running; pause freezes the playfield while foreground menu feedback remains active. Pause choices are Resume, Settings and Quit to title in a horizontal row, with responsive wrapping where needed. Settings keeps its readable panel and real text controls. Title menu cubes approximately match the user-approved Dev13 menu-block on-screen size at a matched viewport; the old 1.1× title-letter rule is superseded. This does not alter pause/Settings sizes. See [the host contract](foreground-menus.md) for shared projected sizing, input, focus and lifecycle behavior.
+
 ## Certified and provisional content
 
 Certified definitions are approved for normal play subject to ordinary unlock and acquisition rules. Provisional definitions are available only through explicitly composed experimental catalogues. Bench listings and inspection identify the same status. New packing, mass and material-diversity modifiers remain provisional until an explicit documented certification decision. See [release status](release-status.md); registration or successful experimentation alone is not approval.
+
+## Explicit gameplay lifecycle declarations (#915)
+
+Gameplay definitions resolve retention and reset explicitly, with declared inheritance. [The definition matrix](block-lifecycle-declarations.md) records run-retained ordinary cards, stage-retained Cloud, stage-reset Meat, round-reverting Gelato and separate generated/rack/opaque behavior. Lifetimes do not choose ownership, reset recipes do not reroll contents or refill uses, and scene disposal is not gameplay destruction.
