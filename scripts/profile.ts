@@ -5,7 +5,7 @@
 //
 // It starts its own dev server (or uses --url), opens an isolated headless Chrome on the dev18
 // mode, which composes the same devProfiler trait as dev16 plus the command sink, waits for the
-// automatic sweep's record, and writes report.json (the version-2 record), report.csv and
+// automatic sweep's record, and writes report.json (the version-3 record), report.csv and
 // report.html, with the tested revision and command recorded. Exit 0 only for a complete run
 // (every supported case measured, nothing failed or invalid); 2 for a partial one, whose report
 // is still saved; 1 when it could not run. It cleans up only the server and browser it started.

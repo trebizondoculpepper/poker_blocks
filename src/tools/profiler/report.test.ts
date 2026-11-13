@@ -25,6 +25,7 @@ const result = (
   unit: { kind, size: 1 },
   sampling: "steady",
   host: "board",
+  pipeline: { passes: [], passCount: 0, setup: 0 },
   baseline: set(0, perObject === null ? null : 0.1, 0.1, 0),
   counts: [1, 10, 50].map((count) => ({
     count,
@@ -41,7 +42,7 @@ const record = (
   overrides: Partial<ProfilerExport> = {},
 ): ProfilerExport => ({
   exportedAt: "2026-11-12T00:00:00.000Z",
-  method: { version: 2 } as ProfilerExport["method"],
+  method: { version: 3 } as ProfilerExport["method"],
   environment: {
     userAgent: "test",
     gpu: "Apple M3 Max",
@@ -224,5 +225,33 @@ describe("hosts and geometry (#741 review)", () => {
     const [row] = profilerReport(record([result("a", 0.1, 0.1)])).rows;
     expect(row!.calls).toEqual([1, 10, 50]);
     expect(row!.triangles).toEqual([12, 120, 600]);
+  });
+});
+
+describe("pipelines (#764)", () => {
+  it("names each entry's passes when cases rendered through different pipelines", () => {
+    const water = {
+      ...result("water", 0.3, 0.1),
+      pipeline: {
+        passes: [{ handler: "opticsCapture", config: { backend: "calmWater" } }],
+        passCount: 1,
+        setup: 2,
+      },
+    };
+    const report = profilerReport(record([result("plain", 0.1, 0.1), water]));
+    expect(report.rows.map(({ pipeline }) => pipeline)).toEqual([
+      "main render",
+      "opticsCapture(backend=calmWater) → main render",
+    ]);
+    expect(report.rankings[0]!.entries[0]!.text).toMatch(
+      /\[pipeline: opticsCapture\(backend=calmWater\) → main render\]$/,
+    );
+    expect(report.banner.notes.join(" ")).toMatch(/2 different pipelines/);
+  });
+
+  it("says when a case's baseline couldn't be matched", () => {
+    const unmatched = { ...result("a", 0.1, 0.1), baselineUnavailable: "needs a backdrop" };
+    const report = profilerReport(record([unmatched]));
+    expect(report.banner.notes).toContain("a: no matched baseline (needs a backdrop)");
   });
 });

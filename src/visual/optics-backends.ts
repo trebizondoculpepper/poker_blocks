@@ -14,10 +14,10 @@
 import { Registry } from "../core/registry";
 import type { MaterialDefinition } from "../materials";
 import { crystalV3Tuning, setSpectralShape, spectralPatterns, spectralShape } from "./crystal-v3";
-import { refractionFrameFor, refractionPresets, type FrameTime } from "./crystal-refraction";
+import { createRefractionCapture, refractionPresets } from "./crystal-refraction";
+import type { RenderPass } from "./render-pass";
 import { rippleBounds, type LookupRipple } from "./lookup-ripple";
-import { internalFrame, internalTuning } from "./crystal-internal";
-import type * as THREE from "three";
+import { createInternalCapture, internalTuning } from "./crystal-internal";
 
 /**
  * A live tuning control a comparison tool may show for a backend. Its `key` is the stable field
@@ -146,19 +146,11 @@ export type OpticsBackend = {
   /** Live tuning this look offers, as data: a tool shows whichever controls a backend lists. */
   controls?: readonly OpticsControl[];
   /**
-   * Passes this look needs each frame before the main render (a background capture), run by the
-   * tool that draws it; `hide` holds the blocks drawn with this look. `delta` is the presentation
-   * time since the last frame in seconds (zero on the first), for a look that animates (#674).
+   * Make the passes this look needs each frame before the main render (a background capture).
+   * Whoever draws the look creates one per renderer, runs it each frame with the presentation
+   * time since the last frame, and disposes it when done (doc/profiler-render-passes.md).
    */
-  frame?: (context: OpticsFrame) => void;
-};
-
-/** What a tool passes a backend's `frame` hook each frame. */
-export type OpticsFrame = FrameTime & {
-  renderer: THREE.WebGLRenderer;
-  scene: THREE.Scene;
-  camera: THREE.Camera;
-  hide: THREE.Object3D;
+  capture?: () => RenderPass;
 };
 
 export const opticsBackends = new Registry<OpticsBackend>("optics backend");
@@ -195,7 +187,7 @@ opticsBackends.register("refraction", {
   unsupported:
     "Prototype: background bent per facet from a shared capture. Crystals do not refract each other, overlapping blocks take the nearest rear facet's bend, and the hand has nothing captured behind it.",
   appearance: { refraction: "crystal" },
-  frame: refractionFrameFor("crystal"),
+  capture: () => createRefractionCapture("crystal"),
   controls: [...mapControls, ...refractionControls("crystal")],
 });
 
@@ -209,7 +201,7 @@ opticsBackends.register("calmWater", {
   unsupported:
     "Prototype: the Refraction look, gentler, with a slow ripple in what is seen through it. Blocks do not refract each other, overlapping blocks take the nearest rear facet's bend, and the hand has nothing captured behind it.",
   appearance: { refraction: "calmWater" },
-  frame: refractionFrameFor("calmWater"),
+  capture: () => createRefractionCapture("calmWater"),
   controls: refractionControls("calmWater"),
 });
 
@@ -218,7 +210,7 @@ opticsBackends.register("internal", {
   assembly: "crystalInternal",
   unsupported:
     "Prototype: ignores the background. Back facets show the rainbow map reflected inside the crystal; front facets distort that by how far their outer and inner rays part. Overlapping blocks share one inner image, nearest facet first.",
-  frame: internalFrame,
+  capture: createInternalCapture,
   controls: [
     ...mapControls,
     slider("distortion", "Distortion", 0, 0.4, 0.01, internalTuning.distortion),

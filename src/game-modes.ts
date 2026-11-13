@@ -1115,7 +1115,14 @@ const gameModes: GameMode[] = [
               traits: {
                 devProfiler: {
                   backTo: "game",
-                  catalogs: ["material", "rack item", "letter block", "menu cube", "exit effect"],
+                  catalogs: [
+                    "material",
+                    "rack item",
+                    "letter block",
+                    "menu cube",
+                    "exit effect",
+                    "optics",
+                  ],
                   // The standard sweep runs on entry, its result shown in the room.
                   autoRun: true,
                   sinks: ["screen"],
@@ -1180,7 +1187,14 @@ const gameModes: GameMode[] = [
               traits: {
                 devProfiler: {
                   backTo: "game",
-                  catalogs: ["material", "rack item", "letter block", "menu cube", "exit effect"],
+                  catalogs: [
+                    "material",
+                    "rack item",
+                    "letter block",
+                    "menu cube",
+                    "exit effect",
+                    "optics",
+                  ],
                   autoRun: true,
                   sinks: ["screen", "command"],
                 },
