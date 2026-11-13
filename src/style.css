@@ -1672,6 +1672,35 @@ body,
   white-space: nowrap;
 }
 
+/* The shop's paper Continue cube (#780): about a 64-72px cube with room for its spring. */
+.shop-exit.hud-word-cube {
+  width: 150px;
+  height: 150px;
+  min-height: 0;
+}
+/* The bounded action region over the cube: at least the cube, never under 44px (#780 review). */
+.hud-word-cube-hit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 96px;
+  height: 96px;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+}
+/* Its inspection explanation reads above the cube, inside the screen (#780 review). */
+.shop-exit.hud-word-cube .block-menu-caption {
+  inset: auto 0 100%;
+  width: max-content;
+  max-width: 16em;
+  margin-left: auto;
+  font-family: var(--hud-font, system-ui, sans-serif);
+  color: #f3efe4;
+  text-align: right;
+  text-shadow: 0 1px 3px #000c;
+  opacity: 1;
+}
+
 /* The HUD effect overlay (#921, src/visual/hud-overlay.ts): over its host, never under input. */
 .hud-overlay {
   position: absolute;
