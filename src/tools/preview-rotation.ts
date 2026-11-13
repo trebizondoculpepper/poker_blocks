@@ -113,7 +113,8 @@ export function createPreviewRotation(
         element,
         { onDrag: (state) => this.onDrag(state) },
         {
-          drag: { pointer: { capture: true } },
+          // Arrow keys belong to `onKey` alone, not use-gesture's built-in keyboard drag.
+          drag: { pointer: { capture: true, keys: false } },
         },
       );
       const keys = (event: KeyboardEvent) => {
