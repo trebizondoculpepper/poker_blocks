@@ -18,6 +18,7 @@ import type { SelectionBadge } from "./selection-badge";
 import type { BinView } from "./bin-view";
 import { devDropInspector } from "./scene-traits/dev-drop-inspector";
 import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
+import { committedEventSounds } from "./scene-traits/committed-event-sounds";
 import type { ActionLog } from "./action-log";
 import { firstPlayPrompt, type FirstPlayTable } from "./scene-traits/first-play-prompt";
 import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
@@ -117,6 +118,7 @@ export type SceneHost = {
       | "shopStock"
       | "deckBlocks"
       | "dispatch"
+      | "onCommitted"
       | "hasSave"
       | "runStats"
       | "seed"
@@ -608,6 +610,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   // A play scene starts its own music as it comes in front; covering and uncovering it (the
   // pause menu) neither restarts nor changes it.
+  // Each committed fact's configured sound, for plays and discards alike (#755).
+  behaviours.register("committedEventSounds", committedEventSounds<Context>());
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });

@@ -139,6 +139,7 @@ export class GameRun {
   /** Bumped by every committed action: the version a captured fact describes. */
   private version = 0;
   private lastFacts: readonly EventEnvelope[] = [];
+  private readonly committedListeners = new Set<(facts: readonly EventEnvelope[]) => void>();
   /** The action resolving now, if any: every drain and command inside it shares its budget. */
   private activeAction: { context: ActionContext; phase: string; batchId: string | null } | null =
     null;
@@ -201,6 +202,28 @@ export class GameRun {
     this.randomCheckpoints = checkpoints;
   }
 
+  /**
+   * Hear every committed action's facts, in order, once it has committed (#755). A rolled-back or
+   * invalid action publishes nothing. Returns a function that stops listening.
+   */
+  onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void {
+    this.committedListeners.add(listener);
+    return () => this.committedListeners.delete(listener);
+  }
+
+  /** One listener's error never stops another hearing the facts, nor reaches the action. */
+  private publish(facts: readonly EventEnvelope[]): void {
+    for (const listener of Array.from(this.committedListeners)) {
+      try {
+        listener(facts);
+      } catch (error) {
+        queueMicrotask(() => {
+          throw error;
+        });
+      }
+    }
+  }
+
   /** The facts the last committed action recorded, in order, each in its envelope (#657). */
   get actionFacts(): readonly EventEnvelope[] {
     return this.lastFacts;
@@ -237,6 +260,9 @@ export class GameRun {
       // The stage the action resolves in, fixed now: every fact it records carries it.
       { stage: this.stageContext, round: this.currentRound },
     );
+    // Facts are published only once the action has committed, outside the transaction, so no
+    // presentation listener can run inside it or roll it back (doc/game-events.md, #755).
+    let published: readonly EventEnvelope[] | null = null;
     try {
       this.activeAction = { context: action, phase: kind, batchId: null };
       // Everything evaluated inside the action is charged to its budget (#661 review).
@@ -251,6 +277,7 @@ export class GameRun {
       this.version++;
       this.lastFacts = action.facts;
       this.lastFailure = null;
+      published = action.facts;
       return result;
     } catch (error) {
       // Everything back as it was: the run's own fields, the queued events and the stream.
@@ -261,6 +288,8 @@ export class GameRun {
       this.lastFailure = error instanceof Error ? error : new Error(String(error));
       this.activeAction = null;
       return null;
+    } finally {
+      if (published) this.publish(published);
     }
   }
 
