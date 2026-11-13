@@ -44,6 +44,7 @@ function harness(n: number, options: { reducedMotion?: boolean; fail?: boolean }
     ghostIds: ids(n),
     random: fixed,
     reducedMotion: options.reducedMotion ?? false,
+    renderer: record.renderer,
   });
   const gate: string[] = [];
   burn.onGate(({ state }) => gate.push(state));
@@ -143,6 +144,50 @@ describe("burning the terminal field (#945)", () => {
     });
     expect(burn.summarized.length).toBeGreaterThan(0);
     expect(record.summaries).toEqual(burn.summarized);
+  });
+
+  it("summarizes nothing under a cancelled parent", () => {
+    const record = recorder();
+    const scheduler = createVisualScheduler({ services: { terminalFieldBurn: record.renderer } });
+    scheduler.update(0, true);
+    const parent = scheduler.createScope(null);
+    scheduler.cancel(parent);
+    const burn = startTerminalFieldBurn(scheduler, {
+      ghostIds: ids(3),
+      random: fixed,
+      reducedMotion: false,
+      parent,
+      renderer: record.renderer,
+    });
+    expect(burn.summarized).toEqual([]);
+    expect(record.summaries).toEqual([]);
+  });
+
+  it("cancels its scopes when a refusal summary throws", () => {
+    const record = recorder();
+    const scheduler = createVisualScheduler({
+      services: { terminalFieldBurn: record.renderer },
+      limits: { pendingPerScope: 1 },
+    });
+    scheduler.update(0, true);
+    const parent = scheduler.createScope(null);
+    const renderer = {
+      ...record.renderer,
+      summary: () => {
+        throw new Error("sink");
+      },
+    };
+    expect(() =>
+      startTerminalFieldBurn(scheduler, {
+        ghostIds: ids(4),
+        random: fixed,
+        reducedMotion: false,
+        parent,
+        renderer,
+      }),
+    ).toThrow("sink");
+    scheduler.seal(parent);
+    expect(scheduler.status(parent).state).not.toBe("pending");
   });
 
   it("never leaves the gate pending when rendering fails, summarizing instead", () => {

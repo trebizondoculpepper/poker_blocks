@@ -135,8 +135,8 @@ export function startTerminalFieldBurn(
     reducedMotion: boolean;
     config?: TerminalBurnConfig;
     parent?: ScopeHandle | null;
-    /** The renderer, for summarizing burns the scheduler refuses. */
-    renderer?: TerminalBurnRenderer;
+    /** The renderer, for summarizing burns the scheduler refuses for capacity. */
+    renderer: TerminalBurnRenderer;
   },
 ): TerminalBurn {
   const config = options.config ?? defaultTerminalBurn;
@@ -159,8 +159,15 @@ export function startTerminalFieldBurn(
     });
     // Refused (a full queue): shown as its summary now, and reported, rather than silently
     // missing from the gate's count (#945 review).
-    if (!admission.accepted) {
-      options.renderer?.summary(ghostId);
+    // A cancelled or stale root emits nothing more, so only a live root summarizes.
+    if (!admission.accepted && scheduler.status(root).state === "pending") {
+      try {
+        options.renderer.summary(ghostId);
+      } catch (error) {
+        // The scopes must still reach a terminal state, and the caller gets no handle.
+        scheduler.cancel(root);
+        throw error;
+      }
       summarized.push(ghostId);
     }
   });
