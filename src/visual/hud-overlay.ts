@@ -14,13 +14,23 @@ import * as THREE from "three";
 
 export type CssRect = { left: number; top: number; width: number; height: number };
 
-/** A viewport rectangle (from `getBoundingClientRect`) in the host's own CSS pixels. */
-export function toOverlayRect(viewport: CssRect, host: Pick<CssRect, "left" | "top">): CssRect {
+/**
+ * A viewport rectangle (from `getBoundingClientRect`) in the overlay camera's CSS pixels: relative
+ * to the canvas's own displayed box (not its host's border box, which a border or scrolled host
+ * offsets), scaled when the canvas is displayed at a size other than the camera's.
+ */
+export function toOverlayRect(
+  viewport: CssRect,
+  canvas: CssRect,
+  camera: { width: number; height: number } = canvas,
+): CssRect {
+  const sx = canvas.width > 0 ? camera.width / canvas.width : 1;
+  const sy = canvas.height > 0 ? camera.height / canvas.height : 1;
   return {
-    left: viewport.left - host.left,
-    top: viewport.top - host.top,
-    width: viewport.width,
-    height: viewport.height,
+    left: (viewport.left - canvas.left) * sx,
+    top: (viewport.top - canvas.top) * sy,
+    width: viewport.width * sx,
+    height: viewport.height * sy,
   };
 }
 
@@ -58,10 +68,13 @@ export function createHudOverlay(host: HTMLElement) {
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(0, 1, 0, -1, -100, 100);
   const listeners = new Set<() => void>();
+  /** The camera's size, in CSS pixels, as of the last layout. */
+  const size = { width: 1, height: 1 };
 
   function layout(): void {
     const width = Math.max(1, host.clientWidth);
     const height = Math.max(1, host.clientHeight);
+    Object.assign(size, { width, height });
     const buffer = bufferSize(width, height, window.devicePixelRatio);
     renderer.setPixelRatio(buffer.ratio);
     renderer.setSize(width, height, false);
@@ -82,7 +95,7 @@ export function createHudOverlay(host: HTMLElement) {
     camera,
     /** An element's live rectangle in this overlay's CSS pixels. */
     rectOf(element: Element): CssRect {
-      return toOverlayRect(element.getBoundingClientRect(), host.getBoundingClientRect());
+      return toOverlayRect(element.getBoundingClientRect(), canvas.getBoundingClientRect(), size);
     },
     /** Re-run layout listeners when this element's size changes; returns how to stop. */
     observe(element: Element): () => void {

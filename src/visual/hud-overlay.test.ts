@@ -3,10 +3,24 @@ import { describe, expect, it } from "vite-plus/test";
 import { bufferSize, overlayCentre, overlayFrustum, toOverlayRect } from "./hud-overlay";
 
 describe("HUD overlay coordinates (#921)", () => {
-  it("converts a viewport rectangle into host-local CSS pixels", () => {
+  it("converts a viewport rectangle into the canvas's own CSS pixels", () => {
+    const canvas = { left: 100, top: 30, width: 400, height: 300 };
+    expect(toOverlayRect({ left: 130, top: 80, width: 50, height: 20 }, canvas)).toEqual({
+      left: 30,
+      top: 50,
+      width: 50,
+      height: 20,
+    });
+  });
+
+  it("scales when the canvas is displayed at another size than its camera", () => {
+    const canvas = { left: 0, top: 0, width: 200, height: 150 };
     expect(
-      toOverlayRect({ left: 130, top: 80, width: 50, height: 20 }, { left: 100, top: 30 }),
-    ).toEqual({ left: 30, top: 50, width: 50, height: 20 });
+      toOverlayRect({ left: 20, top: 30, width: 10, height: 10 }, canvas, {
+        width: 400,
+        height: 300,
+      }),
+    ).toEqual({ left: 40, top: 60, width: 20, height: 20 });
   });
 
   it("projects a placed rectangle onto the same CSS pixels of the canvas", () => {
