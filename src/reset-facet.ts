@@ -23,6 +23,7 @@ import { changeCardMaterial } from "./card-material";
 import { materialOf } from "./materials";
 import { withoutDoneness } from "./cooking";
 import { Registry } from "./core/registry";
+import { cloneCard } from "./clonable";
 import type { GameState } from "./game-state";
 
 export type ResetStep = { handler: string; config?: unknown };
@@ -163,3 +164,35 @@ resetStateHandlers.register("material", (state, cardId, raw) => {
   if (card && materialOf(card) === to) return state;
   return changeCardMaterial(state, cardId, to);
 });
+
+/** A reset-clone's outcome: the unplaced, reset clone, or why there is none. */
+export type ResetCloneResult =
+  | { ok: true; clone: CardBlock; ids: ReadonlyMap<string, string> }
+  | { ok: false; reason: string };
+
+/**
+ * Reset-clone (#584; doc/clone-reset.md): an exact clone of the card (`cloneCard`), then its
+ * configured reset facet, as one operation. The source is never reset. If the reset is refused
+ * (`nonResettable`) or a step fails, the whole operation fails and no clone is returned: there is
+ * never a fallback to a plain clone. The clone stays unplaced; adopting it, and its saved
+ * card-state entry, is the caller's command.
+ *
+ * The reset runs on a scratch copy of the run with the clone in it, because reset handlers act on
+ * a card in the run's state; only the clone is taken from it, so nothing else the scratch state
+ * holds can leak into the run.
+ */
+export function resetClone(
+  state: GameState,
+  cardId: string,
+  request: ResetRequest,
+  allocate: () => string,
+): ResetCloneResult {
+  const source = cardsOf(state).find(({ id }) => id === cardId);
+  if (!source) return { ok: false, reason: `no card ${cardId} in the run` };
+  const { clone, ids } = cloneCard(source, allocate);
+  const scratch: GameState = { ...state, deck: [...state.deck, clone] };
+  const reset = requestReset(scratch, clone.id, request);
+  if (!reset.ok) return { ok: false, reason: reset.reason };
+  const resetClone = cardsOf(reset.state).find(({ id }) => id === clone.id)!;
+  return { ok: true, clone: resetClone, ids };
+}
