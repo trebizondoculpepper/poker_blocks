@@ -338,6 +338,7 @@ describe("game modes composed from traits", () => {
       handView: {},
       selectable: { sources: [{ source: "hand" }, { source: "field" }] },
       discardBin: {},
+      committedEventSounds: {},
       deckPanel: { opens: "openDeck" },
       runInPlay: {},
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
