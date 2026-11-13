@@ -305,16 +305,11 @@ reactions?: readonly {
 - **Neighbours** are the six face offsets already defined in `src/traits/attachable.ts` (`faceNormal`), looked up in a cell map of the field. Edge and corner cells are never consulted.
 - **Results** are a registry keyed by handler name, like matchers. `transform` turns its config into a `transform-block { blockId, material?, stateBonus? }` command. `advance-cooking` turns its config into an `advance-cooking { blockId, steps }` command, so meat asks to cook through data on its own definition (`when` a heat source, `results: [{ id: "advance-cooking", config: { steps: 1 } }]`) with no branch on meat. A new kind of outcome is a new registered result handler. Commands are committed through the existing `commitCommands` path, as discard rules are. A reaction never edits state directly.
 
-**Reactions never score (owner, 2026-11-11).** A reaction does not add to the score of the play that caused it, or of any play. The play is scored on the field as placed, and its reactions are resolved and committed afterwards. What a reaction changes is the state of the game (a material, a state bonus), and that raises what later plays can score. A later modifier may subscribe to `reaction.applied` and award points for the reaction itself, but that would be an ordinary rule on that event, not part of the reaction.
+**Phased consequences (owner, 2026-11-13).** [Material phases](material-phases.md) supersedes the older blanket one-step-per-play rule. Reactions declare their timing. Resolve opening, pre-score changes and countdowns, then score once, then post-score reactions and pending detonations. Pre-score changes are visible to later phases in the same play; Air can strengthen Flame before scoring and that Flame can boil Water afterward. Phase assignment expresses immediate-versus-slower perceived processes, not wall-clock model waits.
 
-**One step per play, with no cascades.** The resolver works on a **snapshot** of the field taken once, after placement:
+Each configured reaction step reads its own entry snapshot and selects the first matching applicable reaction per block in stable field order. There is no automatic fixed-point rescan within that step. Follow-up registered commands/facts drain under the one action-wide transaction and limits. New post-score state does not retroactively alter finalized scores. Cooking still advances once per play. See the linked contract for ownership, determinism, failure/rollback, scope and source evidence.
 
-1. Every block on the field is checked against its own material's reactions, with its neighbours read **from the snapshot**. Every block is checked, not only the one just placed, so meat keeps cooking on each later play while it stays beside heat.
-2. Each block takes **at most one** reaction per play (all of that reaction's results): the **first** of its material's reactions whose matcher accepts, in the order listed on the definition. That listed order is the conflict rule, and it is deterministic. A block next to both flame and aggressive flame takes whichever reaction its material lists first.
-3. All transformations are committed together, after resolution. Because everything read the snapshot, a block changed this play cannot trigger its neighbours until the **next** play. Air makes flame aggressive on one play, and that aggressive flame boils water on a later play, never both at once. That is what "one step per play" means here, and it also rules out repeated rewards from one play.
-4. Blocks are visited in a fixed order (field order, which is placement order), so the commands, events and presentation are reproducible. Which reactions are selected does not depend on that order, because of the snapshot. Anything that subscribes to the resulting `reaction.applied` events (a passive with limited uses, say) sees them in that field order, and its own outcome may depend on it.
-
-**Events and presentation.** Each committed transformation emits a `reaction.applied { blockId, from, to }` event after `play.completed`. The play presenter uses it to restyle the block and to play the reaction's registered sound, which is configured on the reaction and has a placeholder until its audio exists. Presentation never decides whether a reaction happened (model first).
+**Events and presentation.** Committed reaction and material/state-transition facts capture before/after snapshots, source, phase and action/sequence identity. They are published only after the action commits, not as mutable afterthoughts following play.completed. The shared scheduler presents phase-ordered consequences and target-defined transition sounds; reaction presentation does not duplicate that audio. Presentation cannot decide reactions, rescore or consume model RNG.
 
 **Persistence.** A transformed card is a new object with the same id, so it follows the card through deck and stages, as in "State bonuses (proposal)". The save's optional `cardStates` record from that section carries `material` as well as `stateBonus`, and a cooking step for meat, so both are restored on Continue.
 
@@ -322,7 +317,7 @@ reactions?: readonly {
 
 **Out of scope here:** creating new blocks (cloud from air and boiling water, #374) is identity creation, not a transformation, and gets its own contract. So do container visuals (#328): a reaction changes the model, and the material's appearance follows.
 
-**Guardrails for #366:** a test that edge or corner contact never reacts; that a block changes at most once per play; that a two-step chain (air → aggressive flame → boiling water) takes two plays; that discards, refills and stage advance never react; that candidate-hand scoring is unchanged by pending reactions; that the same reactions are selected whatever order the blocks are visited in (events are still dispatched in field order); that a transformation survives save and Continue; and the guardrail scan, so that no generic code names a material.
+**Verification for the phased migration (#614):** six-face contact only; first match per block per reaction-step snapshot; pre-score state visible to scoring/post-score; same-play cross-phase chain; no automatic within-step rescan or post-score rescore; stable ordering and action-wide budget/RNG rollback; restore without replay; persistence and no generic material branches. The old two-play Air→Flame→Water test is superseded by the explicitly authored phase test.
 
 ### State bonuses (#364, built in #365, epic #362)
 
@@ -1631,3 +1626,11 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Provisional spatial-modifier trials
 
 [The experimental trial contract](experiments/spatial-modifiers.md#provisional-modifier-implementation-contract-814) defines registered snapshot queries, row contribution scope, provisional density/mass/diversity curves, dev controls and reproducibility. These are experiment-only targets, not certified normal-game modifiers. Implementations follow the release-status, physical-mass and deck-builder prerequisites.
+
+## Passive scenario bench and instance settings (#867)
+
+[Passive scenario testing](experiments/passive-test-bench.md) defines a Dev controller composing registered setup for deck/hand/passives/field and optional replay. Reusable configurablePassive behavior validates per-instance overrides and constructs ordinary instance rules; shared definitions stay immutable. Use existing rack trait codecs and schema-driven controls; no test-room identity or passive-name branches.
+
+## Outcome presentation contract (#866)
+
+[Outcome facts and audio](outcome-presentation.md) separates transactional outcome/progression facts, required-sequence completion cues and independently composed result-scene enterSound responses. The model resolves rescue opportunities before final defeat; presentation never revises it. Burn/destruction audio follows captured effect starts through the shared scheduler. This target supersedes direct controller sound calls and awaited pre-commit burn behavior.

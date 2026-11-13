@@ -10,6 +10,8 @@ This area records reproducible gameplay and presentation experiments. Experiment
 
 - [In the Loop](in-the-loop.md): agreed provisional hoop/tunnel objective and exponent reward; detector research/architecture still required.
 
+- [Passive scenario test bench](passive-test-bench.md): planned selectable deck, passive settings and initial-pattern bench for interactive balance experiments.
+
 ## Recording an experiment
 
 Each brief states its question, agreed semantics, provisional assumptions, evidence, reproducible setup, measurements, limitations and next decision. Record configuration/schema version, source revision, random seed, initial state and ordered actions with results. A seed alone cannot reproduce player choices. Keep observations separate from interpretations, include failed trials, and report unsupported measurements explicitly rather than as zero.
@@ -18,4 +20,4 @@ Results belong beside the brief or in linked versioned artifacts, with hardware/
 
 ## Balance rationale
 
-[Passive power progression](../passive-balance.md) explains why the bench exists: try abstract reproducible situations, observe how provisional rules feel and behave, then use evidence to inform wider testing and later balance/certification decisions.
+[Passive power progression](../passive-balance.md) explains the purpose of the planned bench: try abstract reproducible situations, observe how provisional rules feel and behave, then use evidence to inform wider testing and later balance/certification decisions.
