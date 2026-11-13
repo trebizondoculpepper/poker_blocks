@@ -121,6 +121,7 @@ export type SceneHost = {
       | "deckBlocks"
       | "committedState"
       | "requestSession"
+      | "sessionProvenance"
       | "lastScoring"
       | "inventory"
       | "dispatch"

@@ -1,4 +1,5 @@
 import type { GameState } from "./game-state";
+import type { PreparedSession } from "./run-setup";
 import {
   createSessionRequester,
   type SessionFactoryHost,
@@ -163,6 +164,8 @@ export type GameRunController = {
    * last) or a failed preparation changes nothing.
    */
   requestSession(request: SessionRequest): SessionResult;
+  /** The active session's provenance when it is an adopted trial; null for an ordinary run. */
+  sessionProvenance(): PreparedSession["provenance"] | null;
   /**
    * The committed field and round, read-only, for snapshot-scoped measurement (#904). The state is
    * immutable: a reader holds the version it read, never a live reference into a later action.
@@ -394,9 +397,26 @@ export function createGameRunController<Context>(options: {
   }
 
   /** Save at a safe point: never while a placement, discard or score presentation is running. */
+  /**
+   * The active session's origin (#902): how it saves and where it came from. An ordinary run saves
+   * to the mode's slot; an adopted trial carries its provenance and stays out of the mode's
+   * ordinary save (doc/experiments/trial-session-adoption.md: save namespaces stay isolated).
+   */
+  type SessionOrigin = {
+    save(): void;
+    provenance: PreparedSession["provenance"] | null;
+  };
+  const ordinarySession: SessionOrigin = {
+    save() {
+      game.setRandomCursor({ seed: randomizer.seed, position: randomizer.cursor });
+      saveRun(storage, game.snapshot(), runSaveKey, currentMode.flow);
+    },
+    provenance: null,
+  };
+  let activeSession: SessionOrigin = ordinarySession;
+
   function autosave(): void {
-    game.setRandomCursor({ seed: randomizer.seed, position: randomizer.cursor });
-    saveRun(storage, game.snapshot(), runSaveKey, currentMode.flow);
+    activeSession.save();
   }
 
   function drawReplacements(): readonly CardBlock[] {
@@ -569,11 +589,14 @@ export function createGameRunController<Context>(options: {
     randomizer = prepared.random;
     runRules = prepared.rules;
     cards = prepared.cards;
-    startRun(prepared.run);
+    // A trial is not resumable through the mode's setup: it keeps its provenance and saves
+    // nothing over the mode's ordinary save (export is a separate product, #821).
+    startRun(prepared.run, { save: () => {}, provenance: prepared.provenance });
   });
 
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
-  function startRun(session: GameRun): void {
+  function startRun(session: GameRun, origin: SessionOrigin = ordinarySession): void {
+    activeSession = origin;
     const { rack, cameraView, audio } = services;
     game = adopt(session);
     game.attachRandomCheckpoints(randomCheckpoints);
@@ -906,6 +929,7 @@ export function createGameRunController<Context>(options: {
     shopStock: () => game.state.shopStock ?? [],
     deckBlocks: () => game.state.deck,
     requestSession,
+    sessionProvenance: () => activeSession.provenance,
     committedState: () => game.state,
     lastScoring: () => ({ field: game.lastScoringField, lines: game.lastScoredLines }),
     inventory: () => runInventory(game.state),

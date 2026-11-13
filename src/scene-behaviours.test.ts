@@ -171,6 +171,7 @@ function recordingHost() {
           round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
         }),
         lastScoring: () => ({ field: [], lines: [] }),
+        sessionProvenance: () => null,
         requestSession: (request) => ({ ok: false, requestId: request.requestId, diagnostics: [] }),
         hasSave: () => false,
         rackCapacity: () => 5,
