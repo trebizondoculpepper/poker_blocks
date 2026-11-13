@@ -15,9 +15,17 @@ export type WordCubeActionConfig = { material?: BlockMaterial; description?: str
 hudActionPresenters.register("wordCube", (host, { label, config, activate, services }) => {
   const { material, description } = (config ?? {}) as WordCubeActionConfig;
   host.classList.add("block-menu-host", "hud-word-cube");
-  // Its own small bounds take pointer input in the otherwise pass-through HUD (#780 review); the
-  // HUD around it still lets drags through.
-  host.dataset.interactive = "";
+  // Only a bounded action region over the cube takes pointer input (#780 review): the rest of the
+  // transparent stage passes input through to the table beneath, so hand blocks under its margin
+  // can still be picked. The region forwards its pointer events to the cube stage's canvas.
+  const region = document.createElement("div");
+  region.className = "hud-word-cube-hit";
+  region.dataset.interactive = "";
+  const forward = (event: PointerEvent) => {
+    host.querySelector("canvas")?.dispatchEvent(new PointerEvent(event.type, event));
+  };
+  const forwarded = ["pointermove", "pointerdown", "pointerup", "pointerleave"] as const;
+  for (const type of forwarded) region.addEventListener(type, forward);
   const menus = createBlockMenus(host, (services ?? { spring: {} }) as BlockMenuOptions);
   let shown: ReturnType<typeof menus.show> | null = null;
   const show = (text: string) => {
@@ -42,6 +50,7 @@ hudActionPresenters.register("wordCube", (host, { label, config, activate, servi
   };
   let current = label;
   show(label);
+  host.append(region);
   return {
     setLabel(text) {
       if (text === current) return;
@@ -51,8 +60,9 @@ hudActionPresenters.register("wordCube", (host, { label, config, activate, servi
     dispose() {
       shown?.hide();
       menus.dispose();
+      for (const type of forwarded) region.removeEventListener(type, forward);
+      region.remove();
       host.classList.remove("block-menu-host", "hud-word-cube");
-      delete host.dataset.interactive;
     },
   };
 });

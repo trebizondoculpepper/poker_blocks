@@ -1678,6 +1678,16 @@ body,
   height: 150px;
   min-height: 0;
 }
+/* The bounded action region over the cube: at least the cube, never under 44px (#780 review). */
+.hud-word-cube-hit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 96px;
+  height: 96px;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+}
 /* Its inspection explanation reads above the cube, inside the screen (#780 review). */
 .shop-exit.hud-word-cube .block-menu-caption {
   inset: auto 0 100%;
