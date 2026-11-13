@@ -100,6 +100,10 @@ const refractionControls = (preset: string): readonly OpticsControl[] => {
     slider("reflection", "Reflection", 0, 1.5, 0.05, tuning.reflection),
     slider("clarity", "Clarity", 0.5, 1, 0.02, tuning.clarity),
     ...rippleControls(refractionPresets.get(preset).ripple),
+    // The preset's outline opacity, where it owns one (#796).
+    ...[refractionPresets.get(preset).edgeOpacity ?? []]
+      .flat()
+      .map((edge) => slider("edgeOpacity", "Edge opacity", 0, 1, 0.01, edge)),
   ];
 };
 

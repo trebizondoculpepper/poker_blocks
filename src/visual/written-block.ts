@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { createBlockAppearance, type BlockAppearance } from "./block-appearance";
 import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
+import { blockOutline } from "./block-outline";
 
 /**
  * Which of an appearance's materials a written block wears: the hand's (the default), or, for
@@ -41,13 +42,12 @@ export function writtenBlock(
       .filter((material) => material.userData.reflective === true),
   ];
   for (const extra of appearance.extras ?? []) object.add(extra);
-  const edges = new THREE.EdgesGeometry(appearance.geometry);
-  const edgeMaterial = new THREE.LineBasicMaterial({
-    color: appearance.edgeColor,
-    transparent: true,
-    opacity: appearance.edgeOpacity,
-  });
-  object.add(new THREE.LineSegments(edges, edgeMaterial));
+  const outline = blockOutline({ ...appearance, edgeOpacity: appearance.edgeOpacity });
+  // Always blended here, as before: a letter block's outline is drawn over its faces.
+  const edgeMaterial = outline.material as THREE.LineBasicMaterial;
+  edgeMaterial.transparent = true;
+  const edges = outline.geometry;
+  object.add(outline);
   let disposed = false;
   return {
     object,

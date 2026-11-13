@@ -19,6 +19,7 @@ import { createMaterialise } from "./visual/materialise";
 import type { DragSource, Point } from "./drag-drop";
 import { returnToSource, stop as stopReturn, take } from "./return-to-source";
 import "./shop-view.css";
+import { blockOutline } from "./visual/block-outline";
 
 type DisplayedOffer = {
   offer: ShopOffer;
@@ -114,13 +115,10 @@ function cardCube(block: CardBlock): OfferCube {
     1.35,
   );
   const mesh = new THREE.Mesh(appearance.geometry, appearance.materials);
-  const edgeGeometry = new THREE.EdgesGeometry(appearance.geometry);
-  const edgeMaterial = new THREE.LineBasicMaterial({
-    color: appearance.edgeColor,
-    transparent: appearance.edgeOpacity < 1,
-    opacity: appearance.edgeOpacity,
-  });
-  mesh.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
+  const outline = blockOutline(appearance);
+  const edgeGeometry = outline.geometry;
+  const edgeMaterial = outline.material as THREE.LineBasicMaterial;
+  mesh.add(outline);
   for (const extra of appearance.extras ?? []) mesh.add(extra);
   return {
     cube: mesh,
