@@ -1601,6 +1601,10 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 
 [Profiler render-pass capability](profiler-render-passes.md) extends the automatic-profiler host contract for multi-pass appearances. Recipes declare registered production pipeline requirements; hosts own scoped targets, timing and disposal. Generic measurement code never branches on an optics/material identity, and all contributing passes are measured.
 
+## Release-status facet
+
+[Release status and catalogue access](release-status.md) defines certified/provisional admission and shared bench/inspection descriptors. Definitions bring registered availability behavior; generic code never checks a status trait as a flag. Lookup/restoration remains separate from new acquisition. This applies across object families and does not replace ordinary unlock or shop rules.
+
 ## Experimental design records
 
 Reproducible experiment briefs and measured outcomes live in [experiments](experiments/README.md). Their provisional parameters are not production rules. The [spatial-modifier brief](experiments/spatial-modifiers.md) separates packing, material mass and topology, and records the planned bench and evidence limits. Promote decisions into canonical rules and architecture before implementation.
@@ -1608,3 +1612,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Physical mass and rocking controller
 
 [Physical mass and rocking](playfield-rocking.md) defines authored density/volume recipes, pure snapshot-scoped mass queries, and controller-owned quiet/ramp/mass-rate envelopes. Real-material reference values and composite/fantasy assumptions are distinguished. Normal pivot selection remains the geometric centroid; #823 explores a separate weighted pivot.
+
+## Composable starting-deck builders
+
+[Deck builders](deck-builders.md) defines mode-composed builder definitions invoked through registered run setup. Ordered registered operations own template construction, material assignment, special-card creation and shuffle. Generation and restoration remain distinct; preserve existing generator semantics for old saves. The pivot experiment uses configuration of this shared capability, not a room-specific deck factory.
