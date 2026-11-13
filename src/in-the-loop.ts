@@ -47,6 +47,7 @@ export const inTheLoop: PassiveDefinition = {
   id: "trial-in-the-loop",
   // Experimental catalogues only, never normal shops (doc/release-status.md).
   releaseStatus: { provisional: {} },
+  lifecycle: { parent: "rackItem" },
   name: "In the Loop",
   symbol: "◎",
   description:

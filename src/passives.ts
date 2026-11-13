@@ -1,3 +1,4 @@
+import type { LifecycleDeclaration } from "./lifecycle-resolver";
 import type { ActivationDescriptorConfig } from "./activation-descriptor";
 import type { QuerySnapshot } from "./context-queries";
 import {
@@ -139,6 +140,8 @@ export type PassiveDefinition = {
   id: string;
   /** Its release status: `certified` or `provisional` (doc/release-status.md, #812). */
   releaseStatus: ReleaseStatusDeclaration;
+  /** Its lifecycle declaration (#917): retention and reset, resolved through its parents. */
+  lifecycle?: LifecycleDeclaration;
   /**
    * How its activations are described (#484): a registered descriptor and its configuration.
    * Omitted, the shared `resolvedOutcomes` descriptor.
@@ -232,6 +235,7 @@ function die(options: {
   const { id, name, sides, shape, unlockRound, basePrice, pips } = options;
   return {
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     id,
     shop: { basePrice, unlockRound, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
@@ -258,6 +262,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "do-nothing",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     categoryTrait: { effectCategory: {} },
     name: "Do Nothing",
     symbol: "∅",
@@ -269,6 +274,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "double-line",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 4, unlockRound: 1, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "×2",
@@ -282,6 +288,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "quad-line",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 9, unlockRound: 2, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "×4",
@@ -295,6 +302,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "gold-standard",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 5, unlockRound: 6, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Gold Standard",
@@ -309,6 +317,7 @@ const definitions: PassiveDefinition[] = [
     // Le Chef (#104, #373): steak on the table at settlement pays 3 coins each instead of 1.
     id: "le-chef",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 5, unlockRound: 3, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Le Chef",
@@ -324,6 +333,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "carnivore",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 3, unlockRound: 4, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "Carnivore",
@@ -340,6 +350,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "woodworker",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 4, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Woodworker",
@@ -356,6 +367,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "crossroads",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 2, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Crossroads",
@@ -373,6 +385,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "long-haul",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 4, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Long Haul",
@@ -394,6 +407,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "scrapper",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 8, unlockRound: 2, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Scrapper",
@@ -405,6 +419,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "seeing-red",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 6, unlockRound: 1, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Seeing Red",
@@ -422,6 +437,7 @@ const definitions: PassiveDefinition[] = [
   {
     id: "ace-exchange",
     releaseStatus: { certified: {} },
+    lifecycle: { parent: "rackItem" },
     shop: { basePrice: 5, unlockRound: 2, frequency: "even" },
     categoryTrait: { effectCategory: {} },
     name: "Ace Exchange",

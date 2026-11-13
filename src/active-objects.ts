@@ -9,6 +9,7 @@
  * inferred from an ID's spelling or forced through the standard deck.
  */
 import type { CardBlock } from "./cards";
+import type { LifecycleDeclaration } from "./lifecycle-resolver";
 import { Registry } from "./core/registry";
 
 /** A registered active definition: how a fresh instance with this ID is created. */
@@ -16,6 +17,8 @@ export type ActiveDefinition = {
   create(id: string): CardBlock;
   /** Components an instance of this definition cannot work without: a record lacking one is corrupt. */
   requires?: readonly string[];
+  /** Its lifecycle declaration (#917): retention and reset, resolved through its parents. */
+  lifecycle?: LifecycleDeclaration;
 };
 export const activeDefinitions = new Registry<ActiveDefinition>("active definition");
 
