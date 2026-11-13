@@ -1642,3 +1642,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Inherited lifecycle declaration resolution (#915)
 
 [The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.
+
+## Result-menu completion contract
+
+Configured result-menu controllers mount accessible block actions after bounded information-presentation completion, without awarding rewards or deciding outcomes in visual callbacks. See [result-menu contract and source audit](result-menus.md).
