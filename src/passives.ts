@@ -1,3 +1,4 @@
+import type { ActivationDescriptorConfig } from "./activation-descriptor";
 import type { QuerySnapshot } from "./context-queries";
 import {
   composeCatalogue,
@@ -127,6 +128,11 @@ export type PassiveDefinition = {
   id: string;
   /** Its release status: `certified` or `provisional` (doc/release-status.md, #812). */
   releaseStatus: ReleaseStatusDeclaration;
+  /**
+   * How its activations are described (#484): a registered descriptor and its configuration.
+   * Omitted, the shared `resolvedOutcomes` descriptor.
+   */
+  activationDescriptor?: ActivationDescriptorConfig;
   name: string;
   symbol: string;
   description: string;
