@@ -24,6 +24,7 @@ import {
   fitDistance,
   fitMargin,
   referenceEdge,
+  rowClearance,
   type ReferenceSizingProfile,
 } from "./menu-sizing";
 
@@ -143,6 +144,15 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
   canvas.addEventListener("pointerleave", () => router.leave());
 
   function resize(): void {
+    // A sized stage is as tall as its reference cubes need (a cube plus its spring travel), never
+    // more than the viewport allows; the host otherwise keeps the height its stylesheet gives it.
+    host.style.height = sizing
+      ? `${Math.min(
+          referenceEdge(sizing, { width: window.innerWidth, height: window.innerHeight }) *
+            rowClearance,
+          window.innerHeight * 0.45,
+        )}px`
+      : "";
     const width = Math.max(1, host.clientWidth);
     const height = Math.max(1, host.clientHeight);
     renderer.setSize(width, height, false);

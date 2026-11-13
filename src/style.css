@@ -702,8 +702,9 @@ body,
   text-shadow: 0 1px 3px #000c;
 }
 
+/* Its height comes from the cube stage's sizing profile (src/block-menu/cube-stage.ts). */
 .block-menu-host[data-panel="none"] {
-  height: clamp(150px, 32dvh, 290px);
+  min-height: 150px;
 }
 
 .block-menu-host canvas {
