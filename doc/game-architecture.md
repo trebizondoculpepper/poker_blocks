@@ -1646,3 +1646,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Inherited lifecycle declaration resolution (#915)
 
 [The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.
+
+## Current offer eligibility
+
+[Shop eligibility](shop-eligibility.md) uses definition-owned weight curves and registered eligibility providers for generation, restoration and purchase validation, while preserving compatible already owned objects.
