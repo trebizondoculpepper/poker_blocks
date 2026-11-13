@@ -109,4 +109,42 @@ describe("adopting a stored payload into the run (#928)", () => {
     expect(restored!.state.retiredActives?.map(({ id }) => id)).toEqual(["box"]);
     expect(restored!.state.removedCards).toEqual(["box"]);
   });
+
+  it("keeps an adopted payload's run ownership through Continue, so removal still saves", () => {
+    const rankless = { id: "inside", definition: "devRanklessActive", components: {} };
+    const run = runWith(devOpaqueContainer("box", rankless));
+    const adopted = adoptStoredPayload(run.state, "box");
+    if (!adopted.ok) throw new Error(adopted.reason);
+    const rules = sandboxRunRules(demoRunRules);
+    const after = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      { ...run.snapshot(), state: adopted.state },
+      () => 0,
+    );
+    const continued = fromSaveRecord(
+      JSON.parse(JSON.stringify(toSaveRecord(after.snapshot()))),
+      standardDeck,
+      dealerRegistry,
+    )!;
+    const inside = continued.state.field.find(({ block }) => block.id === "inside")!.block;
+    expect(inside.traits.owner).toEqual({ id: "runActive" });
+    const removed = removeCardForRun(continued.state, "inside")!;
+    expect(removed.retiredActives?.map(({ id }) => id)).toEqual(["box", "inside"]);
+    const resaved = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      standardDeck,
+      { ...continued, state: removed },
+      () => 0,
+    );
+    expect(
+      fromSaveRecord(
+        JSON.parse(JSON.stringify(toSaveRecord(resaved.snapshot()))),
+        standardDeck,
+        dealerRegistry,
+      ),
+    ).not.toBeNull();
+  });
 });
