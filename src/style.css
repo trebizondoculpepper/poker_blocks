@@ -1516,3 +1516,21 @@ body,
 .selection-badge[hidden] {
   display: none;
 }
+
+/* The smoke/dust audition room's note (dev19, #466). */
+.dev-effect-audition {
+  position: absolute;
+  bottom: 140px;
+  left: 50%;
+  z-index: 7;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: #0b0f16cc;
+  color: #e6edf3;
+  font:
+    600 13px system-ui,
+    sans-serif;
+  pointer-events: none;
+}

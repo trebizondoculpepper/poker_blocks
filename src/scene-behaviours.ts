@@ -1,3 +1,4 @@
+import { devEffectAudition } from "./tools/effect-audition";
 import { beatShapes } from "./dance/beat-shapes";
 import { danceCycles } from "./dance/dance-floor";
 import type { TuningControl } from "./attract-tuning-panel";
@@ -523,6 +524,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     enter: ({ services }, config) => services.devCrystalComparison.show(config),
     exit: ({ services }) => services.devCrystalComparison.hide(),
   });
+  // The smoke/dust audition room's note (#466).
+  behaviours.register("devEffectAudition", devEffectAudition<Context>());
   behaviours.register("devContainedProof", {
     enter: ({ services }, { backTo }) => services.devContainedProof.show(backTo),
     exit: ({ services }) => services.devContainedProof.hide(),

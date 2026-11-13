@@ -1229,6 +1229,62 @@ const darkFluid = {
 /** The retired glass block's six pane tints (f99d307), in BoxGeometry face order. */
 const lanternTints = [0xff9aa8, 0xffd27a, 0xf4fbff, 0x8fe3b0, 0x8fb4ff, 0xc9a6ff];
 
+/**
+ * Smoke and dust audition looks (#466; doc/presentation-contracts.md, "Smoke/dust audition
+ * composition"): fire and Earth exactly as the game defines them (traits, reactions, scoring,
+ * mass, family), with an appearance effect added. Provisional, for the dev audition mode only;
+ * the production fire and Earth are untouched.
+ */
+function effectAuditionExperiments(): MaterialDefinition[] {
+  const audition = (
+    base: MaterialDefinition,
+    id: string,
+    name: string,
+    effect: AppearanceEffect,
+  ): MaterialDefinition => {
+    // Never stocked or rewarded: an audition look has no shop entry of its own.
+    const { shop: _shop, ...gameplay } = base;
+    return {
+      ...gameplay,
+      id,
+      name,
+      releaseStatus: { provisional: {} },
+      appearance: { ...base.appearance, effects: [...(base.appearance.effects ?? []), effect] },
+    };
+  };
+  const base = (id: string) =>
+    (materialDefinitions as readonly MaterialDefinition[]).find(
+      (definition) => definition.id === id,
+    )!;
+  return [
+    audition(base("fire"), "fireSmokeAudition", "Fire with smoke (audition)", {
+      effect: "smoke",
+      colour: 0x6f6a66,
+      size: 0.28,
+      frequency: 8,
+      rise: 0.9,
+      lifetime: 2.4,
+      turbulence: 0.18,
+      opacity: 0.45,
+    }),
+    audition(base("earth"), "earthDustAudition", "Earth with dust (audition)", {
+      effect: "dust",
+      colour: 0x8a6a48,
+      size: 0.05,
+      opacity: 0.8,
+      lifetime: 3,
+      turbulence: 0.05,
+      threshold: 1,
+      proportionality: 20,
+      launch: 2,
+      drag: 4,
+      terminal: 0.3,
+      samples: 12,
+      max: 64,
+    }),
+  ];
+}
+
 /** Water and a dark fluid in custard's plastic vessel (#333). */
 function plasticFluidExperiments(): MaterialDefinition[] {
   const plastic = (
@@ -1533,6 +1589,7 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
   },
   ...glassContainerExperiments(),
   ...plasticFluidExperiments(),
+  ...effectAuditionExperiments(),
 ];
 
 export type BlockMaterial = (typeof materialDefinitions)[number]["id"];
