@@ -5,13 +5,19 @@
  * configuration and dispatched uniformly: the coordinator never asks what a step is.
  *
  * The game composes a materialEffectsController whose configuration gives the documented order:
- * countdown deductions before scoring (a block reaching zero is pending, not detonated), then
- * after scoring reactions, then the pending detonations.
+ * placement-timed reactions (the Air/flame upgrade) and countdown deductions before scoring (a
+ * block reaching zero is pending, not detonated), then after scoring the other reactions, then
+ * the pending detonations.
  * Each step's follow-up events are drained before the next step runs.
  */
 import { Registry } from "../core/registry";
 import type { GameEvent } from "../passives";
-import { commitReactions, type AppliedReaction } from "../reactions";
+import {
+  commitReactions,
+  materialReactions,
+  reactionTiming,
+  type AppliedReaction,
+} from "../reactions";
 import type { CommandTarget } from "../rule-commands";
 import { deductCountdowns, detonateCountdowns } from "../trigger-countdown";
 
@@ -35,15 +41,28 @@ playSteps.register("countdown-deductions", (context) => {
   context.pending.push(...deductCountdowns(context.target, context.placed));
   return [];
 });
-playSteps.register("reactions", (context) => {
-  const applied = commitReactions(context.target);
-  context.reactions.push(...applied);
-  return applied.map(({ blockId, from, to }) => ({
-    type: "reaction.applied",
-    blockId,
-    reaction: { from, to },
-  }));
-});
+/**
+ * A reaction step: commits only the reactions whose definitions declare this timing (#614), so
+ * each resolves once, in its documented phase. The step reads the timing as data; it never asks
+ * which material reacts.
+ */
+const reactionStep =
+  (timing: string): PlayStep =>
+  (context) => {
+    const applied = commitReactions(context.target, (block) =>
+      materialReactions(block).filter((reaction) => reactionTiming(reaction) === timing),
+    );
+    context.reactions.push(...applied);
+    return applied.map(({ blockId, from, to }) => ({
+      type: "reaction.applied",
+      blockId,
+      reaction: { from, to },
+    }));
+  };
+// Explicitly placement-timed interactions, before scoring (the approved Air/flame upgrade).
+playSteps.register("placement-reactions", reactionStep("placement"));
+// Every other reaction, after scoring.
+playSteps.register("reactions", reactionStep("afterScore"));
 playSteps.register("countdown-detonations", (context) =>
   detonateCountdowns(context.target, context.pending),
 );

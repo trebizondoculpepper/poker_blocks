@@ -617,3 +617,45 @@ describe("composed playfields are independent (#613)", () => {
     expect(firstCount).toBeGreaterThan(0);
   });
 });
+
+describe("placement-timed reactions (#614)", () => {
+  it("stokes fire before scoring, so the after-score reactions see aggressive flame", async () => {
+    const { playSteps } = await import("./play-phases");
+    const { standardDeck } = await import("../cards");
+    const { getMaterialDefinition, withMaterial } = await import("../materials");
+    const made = (index: number, material: string, x: number) => ({
+      block: withMaterial(standardDeck[index]!, getMaterialDefinition(material as never)),
+      cell: { x, y: 0, z: 0 },
+    });
+    const field = [made(0, "airVent", 0), made(1, "fire", 1), made(2, "water", 2)];
+    const run = (steps: string[]) => {
+      let state = {
+        field,
+        hand: [],
+        deck: [],
+        discardPile: [],
+        passiveRack: [],
+        coins: 0,
+        round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
+      } as never as import("../game-state").GameState;
+      const context = {
+        target: {
+          get state() {
+            return state;
+          },
+          update: (next: typeof state) => void (state = next),
+          grantUnownedPassive: () => [],
+        },
+        placed: new Set([field[0]!.block.id]),
+        pending: [],
+        reactions: [],
+      };
+      for (const step of steps) playSteps.get(step)(context as never);
+      return state.field.map(({ block }) => block.traits.stateBonus?.id);
+    };
+    // The documented order: the upgrade first, then the water reacts to aggressive flame.
+    expect(run(["placement-reactions", "reactions"])).toEqual([undefined, "aggressive", "boiled"]);
+    // Reactions only after scoring, from one snapshot: the water sees ordinary flame.
+    expect(run(["reactions"])).toEqual([undefined, undefined, "heated"]);
+  });
+});
