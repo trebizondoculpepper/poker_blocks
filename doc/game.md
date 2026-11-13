@@ -184,6 +184,8 @@ The shop's material pool expands by **round number**, through configured unlocks
 
 Only blocks that **contribute to the selected scoring hand** activate these material scoring effects. A block present in a longer line but excluded from its best scoring hand has no scoring effect, unless a separate modifier explicitly extends eligibility. Gold's held-card coin reward is separate and does not require the card to score. Material behavior belongs in configured traits; the line scorer supplies contributor IDs and the effect runner applies each eligible operation at its defined scoring phase. Steel strength and prismatic balance are first tuning values. **Implemented in [#141](https://github.com/trebizondoculpepper/poker_blocks/issues/141)** for wood, steel and prismatic crystal (see "Agreed model" below). Meat, fire and ice bring no scoring modifier until their design tickets decide one (#104–#106); Gold's modifier is specified below but not yet implemented. [Material design issue #8](https://github.com/trebizondoculpepper/poker_blocks/issues/8) tracks the rest.
 
+**Reaction phase timing.** A move can have immediate pre-score effects, then scoring, then slower-feeling post-score consequences. Air stokes Flame before scoring; the stronger Flame can boil neighboring Water in the same play's post-score phase. Each phase reads its own snapshot; there is no automatic same-phase rescan or rescore. Post-score material bonuses affect later plays. The phase is declared by the reaction definition, not inferred from identity. [Material phase contract](material-phases.md).
+
 **Ice melts (#367).** When a play settles, ice sharing a face with flame or with hot water (water holding the `heated` bonus) melts into **water** with the **melted** state bonus (+1 to its value when it contributes). Rank, suit and identity are unchanged, and the melt doesn't score the play that caused it. Edge and corner contact does nothing. Water only ever arises this way: it has no shop price, so it's never sold or unlocked.
 
 **Custard freezes into gelato (#383).** When a play settles, custard sharing a face with ice, and with no source of heat (flame) on any face, becomes **gelato**: +4 and ×1.5 in place of custard's +2 and ×1.2. Gelato sharing a face with heat thaws back into custard. Heat beside custard prevents freezing, so with ice and flame both beside it, the card stays (or becomes) custard and doesn't oscillate. Gelato without heat stays gelato even after the ice is gone. It persists between stages, but every gelato card reverts to custard when the **round** ends, not each stage. Rank, suit and identity are unchanged, a save keeps the current state within the round, and the change doesn't score the play that caused it. Gelato is never sold; it only arises this way.
@@ -397,6 +399,10 @@ This section is the agreed target design. It replaces the first-version placehol
 - Prices are in coins and are **fixed** base prices from the balance config. Price-changing passives are future work and will be modifiers applied on top of the base price, never edits to it.
 - When two comparable passives differ only in strength, the stronger costs more (×4 > ×2, Scrapper > Seeing Red).
 - Each round of the initial progression introduces at least one new item or material.
+
+#### Passive power progression
+
+[Passive power and balance rationale](passive-balance.md) guides new designs: early broadly useful boosts give way to stronger, more specialized material/deck synergies as targets rise. Acquisition rarity and difficulty of meeting a condition are separate; meaningful objectives generally deserve stronger payoffs than unconditional peers at comparable progression. Test provisional rules in the balance bench before numerical rebalance/certification. This does not automatically upgrade owned passives or change current prices/weights.
 
 #### Passive catalogue
 
