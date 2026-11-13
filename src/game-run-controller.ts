@@ -285,6 +285,15 @@ export function createGameRunController<Context>(options: {
     services.frame.setLayout(resolveLayout(next.layout, viewport(), services.frame.layout));
   }
 
+  /** A card the run holds now, wherever it is, by id: what a visible inspection re-describes. */
+  function currentCard(id: string): CardBlock | undefined {
+    const { hand, deck, discardPile, field } = game.state;
+    return (
+      field.find(({ block }) => block.id === id)?.block ??
+      [...hand, ...deck, ...discardPile].find((card) => card.id === id)
+    );
+  }
+
   function updateHud(): void {
     // The game state updates as soon as a placement is accepted, but the card still
     // has to land before its scoring presentation begins. Keep outcomes hidden across
@@ -304,6 +313,8 @@ export function createGameRunController<Context>(options: {
       deckSize: deck.length,
     });
     services.input.refreshDiscardTarget();
+    // Every model change refreshes the HUD: an open inspection follows the card's new state.
+    services.input.refreshInspection(currentCard);
   }
 
   function showSelection(): void {
