@@ -263,3 +263,7 @@ The owner changed the policy: most sounds stay **pre-generated samples**, and a 
 ## Material-change response (#539)
 
 [The committed transition contract](presentation-contracts.md#committed-transition-fact-and-independent-responses-479-539) assigns one target-definition transition SFX response per committed material change to an independent controller trait. Use registered target transition IDs with existing attach sounds as placeholders. No playback on rejected/same-material/restore/preview paths; remove duplicate change playback during migration. Audio does not depend on the dissolve callback and does not determine game state.
+
+## Outcome versus screen-entry cues (#866)
+
+A deciding action has a win/loss cue after its required visible consequences finish. The result scene independently plays its configured entrance cue. Both are intentional; neither depends on the previous sample finishing. See [the outcome presentation contract](outcome-presentation.md) for committed fact ownership, scheduler timing, destruction/burn alignment and no replay on restore.
