@@ -66,7 +66,7 @@ describe("acquired bonus label (#432)", () => {
       set font(_: string) {},
     } as unknown as CanvasRenderingContext2D;
     const pen = () => "#000";
-    const identity = card().traits.identity;
+    const identity = card().traits.identity!;
     cardFaceArt(identity).paint(g, pen);
     const plain = calls.length;
     calls.length = 0;

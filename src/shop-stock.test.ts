@@ -131,7 +131,7 @@ describe("shop preview", () => {
     const back = restored?.state.deck.at(-1);
     expect(back?.id).toBe(card.block.id);
     expect(back && materialOf(back)).toBe(materialOf(card.block as CardBlock));
-    expect(back?.traits.identity).toEqual((card.block as CardBlock).traits.identity);
+    expect(back?.traits.identity!).toEqual((card.block as CardBlock).traits.identity!);
     expect(restored?.state.boughtCards?.map(({ id }) => id)).toEqual([card.block.id]);
   });
 });

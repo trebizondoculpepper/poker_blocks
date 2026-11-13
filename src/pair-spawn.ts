@@ -17,7 +17,14 @@
  *   the field (`asGenerated`, #424), so it leaves with the table and never joins the deck.
  * - Inputs are unchanged. The new block is reported as an applied reaction with `sound`.
  */
-import { createCard, rankValue, ranks, type CardBlock } from "./cards";
+import {
+  createCard,
+  rankValue,
+  ranks,
+  type CardBlock,
+  type IdentityTrait,
+  pokerIdentity,
+} from "./cards";
 import type { GameEvent } from "./passives";
 import type { GameState, PlacedBlock } from "./game-state";
 import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
@@ -38,15 +45,15 @@ export type PairSpawnConfig = {
 };
 
 /** The rank above this one in the game's order, capped at Ace (the highest). */
-export function rankAbove(rank: CardBlock["traits"]["identity"]["rank"]) {
+export function rankAbove(rank: IdentityTrait["rank"]) {
   const ordered = [...ranks].sort((a, b) => rankValue(a) - rankValue(b));
   return ordered[Math.min(ordered.indexOf(rank) + 1, ordered.length - 1)]!;
 }
 
 /** The identity a new block takes from its two inputs; equal ranks take the partner's suit. */
 export function spawnedIdentity(reacting: CardBlock, partner: CardBlock) {
-  const a = reacting.traits.identity;
-  const b = partner.traits.identity;
+  const a = pokerIdentity(reacting);
+  const b = pokerIdentity(partner);
   const higher = rankValue(a.rank) > rankValue(b.rank) ? a : b;
   return { rank: rankAbove(higher.rank), suit: higher.suit };
 }

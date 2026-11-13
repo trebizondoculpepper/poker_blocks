@@ -31,7 +31,7 @@ describe("custard and gelato (#383)", () => {
     const gelato = after.field[0]!.block;
     expect(materialOf(gelato)).toBe("gelato");
     expect(gelato.id).toBe(custard.id);
-    expect(gelato.traits.identity).toEqual(custard.traits.identity);
+    expect(gelato.traits.identity!).toEqual(custard.traits.identity!);
   });
 
   it("doesn't freeze custard while a source of heat is beside it too", () => {
