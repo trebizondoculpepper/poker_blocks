@@ -535,7 +535,7 @@ Title and pause menu blocks float over the visible 3D scene with no menu panel/b
 
 ## Certified and provisional content
 
-Certified definitions are approved for normal play subject to ordinary unlock and acquisition rules. Provisional definitions are available only through explicitly composed experimental catalogues. Bench listings and inspection identify the same status. New packing, mass and material-diversity modifiers remain provisional until an explicit documented certification decision. See [release status](release-status.md); registration or successful experimentation alone is not approval.
+Certified definitions are approved for normal play subject to ordinary unlock and acquisition rules. Provisional definitions are available only through explicitly composed experimental catalogues. Certification is internal: certified content shows no public certification notice. Bench listings and inspection clearly mark provisional/experimental content through the same registered facet. New packing, mass and material-diversity modifiers remain provisional until an explicit documented certification decision. See [release status](release-status.md); registration or successful experimentation alone is not approval.
 
 ## Explicit gameplay lifecycle declarations (#915)
 
