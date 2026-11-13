@@ -131,6 +131,9 @@ function scoreLines(
   random: () => number,
 ): PassiveScoredLine[] {
   const lines = findScoringLines(field);
+  // One snapshot for the whole pass, so every row's context queries read (and cache) the same
+  // committed field (doc/experiments/spatial-modifiers.md, "Scoring scope and frequency").
+  const snapshot = { field };
   // One resolution: each passive's value sources (a die's roll) resolve once, here, before any
   // candidate hand is evaluated, and the same values apply to every line (#97).
   // Only line-scoring rules resolve here; every other hook resolves its own values, once, when
@@ -208,7 +211,7 @@ function scoreLines(
       (previous, phase) => {
         const next = evaluateRules(
           lineRules(sources, phase),
-          { type: phase, score: { line, intersections } },
+          { type: phase, score: { line, intersections, snapshot } },
           previous.value,
         );
         return { value: next.value, activations: [...previous.activations, ...next.activations] };
@@ -219,7 +222,7 @@ function scoreLines(
     const clamped = Math.max(0, phases.value);
     const after = evaluateRules(
       lineRules(sources, afterClampPhase),
-      { type: afterClampPhase, score: { line, intersections } },
+      { type: afterClampPhase, score: { line, intersections, snapshot } },
       clamped,
     );
     // Commit: the chosen hand's contributing blocks, then the line phases.

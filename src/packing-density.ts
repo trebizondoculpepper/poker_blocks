@@ -5,8 +5,7 @@
  * the authoritative occupied cells, never a camera or a mesh. An empty field is unavailable,
  * never zero. Mass is a separate measurement and doesn't affect it. No reward is computed here.
  */
-import { contextQueries, type QueryResult } from "./context-queries";
-import type { GameState } from "./game-state";
+import { contextQueries, type QueryResult, type QuerySnapshot } from "./context-queries";
 
 export type PackingDensity = {
   occupied: number;
@@ -17,7 +16,7 @@ export type PackingDensity = {
   density: number;
 };
 
-export function packingDensity(state: GameState): QueryResult<PackingDensity> {
+export function packingDensity(state: QuerySnapshot): QueryResult<PackingDensity> {
   // Unique occupied cells: one per cell, however the field lists them.
   const cells = [
     ...new Map(state.field.map(({ cell }) => [`${cell.x},${cell.y},${cell.z}`, cell])).values(),

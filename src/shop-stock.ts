@@ -12,6 +12,7 @@ import { itemOfferPools } from "./item-offers";
 // Registers the transmogrifiers' item offers (#388).
 import "./transmogrifiers";
 import "./nothingifier";
+import "./trial-modifiers";
 
 export type { ShopOffer } from "./offer-kinds";
 
