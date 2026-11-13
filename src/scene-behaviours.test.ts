@@ -496,8 +496,11 @@ describe("scene traits own their behaviour", () => {
     const scenes = new SceneManager(sceneBehaviours(), host);
     scenes.register(
       scene("lost", {
-        gameOverScreen: {},
-        gameOverDialog: gameDialogs.gameOver,
+        resultMenu: {
+          information: "runStats",
+          showAfter: "statsReady",
+          dialog: gameDialogs.gameOver,
+        },
         musicCue: { operations: [{ op: "windDown" }] },
       }),
     );
@@ -513,6 +516,29 @@ describe("scene traits own their behaviour", () => {
     calls.length = 0;
     scenes.switchTo("next");
     expect(calls).toEqual(["dialog:remove:Game over", "gameOver:hide"]);
+  });
+
+  it("takes a result menu's choices away while covered and brings them back once (#949)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(
+      scene("lost", {
+        resultMenu: {
+          information: "runStats",
+          showAfter: "statsReady",
+          dialog: gameDialogs.gameOver,
+        },
+      }),
+    );
+    scenes.register(scene("over", {}));
+    scenes.switchTo("lost");
+    calls.length = 0;
+    scenes.push("over");
+    expect(calls).toEqual(["dialog:remove:Game over"]);
+    calls.length = 0;
+    scenes.pop();
+    // Shown again, without showing the stats a second time.
+    expect(calls).toEqual(["dialog:add:Game over", "choices:newRun,quitToTitle"]);
   });
 
   it("marks the host with the scene in front again after a pushed scene pops (#35)", () => {

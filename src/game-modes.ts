@@ -180,8 +180,11 @@ export type SceneTraits = {
    * The game over screen is shown while this scene is in front: the run's totals, and one
    * button per item, each dispatching its id as a named action (#90).
    */
-  /** The result screen's information (stats, seed); its choices come from `gameOverDialog`. */
-  gameOverScreen: Record<string, never>;
+  /**
+   * A result screen (doc/result-menus.md): a registered information provider, and the dialog of
+   * choices shown below it once the named completion has settled (#949).
+   */
+  resultMenu: { information: string; showAfter: string; dialog: DialogConfig };
   /**
    * Entering this scene runs a music cue: an ordered list of registered music operations naming
    * plan entries and slots (#758; src/audio/music-controller.ts).
@@ -665,9 +668,12 @@ export const sceneDefinitions = [
     name: "game-over",
     traits: {
       tableBackground: {},
-      gameOverScreen: {},
-      // After `gameOverScreen`, so its choices are drawn below the stats it shows (#949).
-      gameOverDialog: gameDialogs.gameOver,
+      // The run's stats, then New run and Main menu below them once they are written (#949).
+      resultMenu: {
+        information: "runStats",
+        showAfter: "statsReady",
+        dialog: gameDialogs.gameOver,
+      },
       musicCue: { operations: [{ op: "windDown" }] },
     },
   },
