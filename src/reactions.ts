@@ -32,7 +32,7 @@ export type Reaction = {
   when: HandlerRef;
   results: readonly HandlerRef[];
   /**
-   * When in a play it resolves (doc/game-events.md, "Resolution order for a play"):
+   * When in a play it resolves (doc/material-phases.md, "Authored phases and shared ownership"):
    * `placement` for an explicitly placement-timed interaction, resolved before scoring (the
    * approved Air/flame upgrade); omitted, `afterScore`, with the other reactions.
    */

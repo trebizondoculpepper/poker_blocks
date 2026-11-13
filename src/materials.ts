@@ -815,7 +815,7 @@ export const materialDefinitions = [
     heat: {},
     reactions: [
       {
-        // Placement-timed (doc/game-events.md, step 3): the upgrade counts in this play's score.
+        // Placement-timed (doc/material-phases.md): the upgrade counts in this play's score.
         timing: "placement",
         when: {
           id: "neighbour-material",
