@@ -17,6 +17,7 @@ import {
   waterFill,
   type MassComponent,
   type PhysicalMass,
+  validatePhysicalMass,
 } from "./physical-mass";
 import type { ChopSettings } from "./visual/chopped-geometry";
 import type { Lettering } from "./visual/lettering";
@@ -1428,8 +1429,25 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
 export type BlockMaterial = (typeof materialDefinitions)[number]["id"];
 export const blockMaterials: readonly BlockMaterial[] = materialDefinitions.map(({ id }) => id);
 const materialRegistry = new Map<string, MaterialDefinition>(
-  [...materialDefinitions, ...experimentalMaterials].map((item) => [item.id, item]),
+  composeMaterials([...materialDefinitions, ...experimentalMaterials]).map((item) => [
+    item.id,
+    item,
+  ]),
 );
+
+/**
+ * The installed definitions, validated as they are composed: a missing or invalid physical mass
+ * recipe is an error here, before any query can use it (doc/playfield-rocking.md, #816).
+ */
+export function composeMaterials(
+  definitions: readonly MaterialDefinition[],
+): readonly MaterialDefinition[] {
+  const problems = definitions.flatMap((definition) =>
+    validatePhysicalMass(definition.id, definition.mass),
+  );
+  if (problems.length) throw new Error(`invalid material definitions:\n${problems.join("\n")}`);
+  return definitions;
+}
 
 export function getMaterialDefinition(kind: BlockMaterial): MaterialDefinition {
   const definition = materialRegistry.get(kind);

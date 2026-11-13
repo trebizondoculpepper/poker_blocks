@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { experimentalMaterials, materialDefinitions, type MaterialDefinition } from "./materials";
+import {
+  composeMaterials,
+  experimentalMaterials,
+  materialDefinitions,
+  type MaterialDefinition,
+} from "./materials";
 import { aggregateMass, massKg, validatePhysicalMass } from "./physical-mass";
 
 /** doc/playfield-rocking.md, "Density calibration and full current catalogue". */
@@ -56,6 +61,12 @@ describe("authored physical mass (#816)", () => {
       expect(massKg(definition.mass), definition.id).toBeCloseTo(expected, 9);
     }
     expect(Object.keys(catalogue).every((id) => all.some((d) => d.id === id))).toBe(true);
+  });
+
+  it("refuses to compose a definition whose recipe is invalid (#845 review)", () => {
+    const wood = materialDefinitions.find(({ id }) => id === "wood")!;
+    expect(() => composeMaterials([{ ...wood, mass: { components: [] } }])).toThrow(/wood/);
+    expect(composeMaterials([wood])).toEqual([wood]);
   });
 
   it("rejects missing, empty and non-positive recipes", () => {
