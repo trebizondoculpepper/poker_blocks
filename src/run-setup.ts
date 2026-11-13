@@ -1,3 +1,5 @@
+import type { GameRun } from "./game-run";
+import type { ReplayCommand, ScenarioDefinition, ScenarioSession } from "./dev-scenario";
 import type { DeckBuilderStep } from "./deck-builder";
 /**
  * Run setup: the ordered steps a game mode applies when a game run is created.
@@ -35,6 +37,11 @@ export type RunSetupStepConfigs = {
   uniformMaterialDeck: { material: BlockMaterial };
   /** A mode's own starting deck: ordered deck-builder operations (doc/deck-builders.md, #827). */
   deckBuilder: { operations: readonly DeckBuilderStep[] };
+  /**
+   * A Dev scenario (#901): prepares a trial session from a scenario definition, off to the side,
+   * through buildScenario. The composed mode or controller supplies the definition.
+   */
+  devScenario: { scenario: ScenarioDefinition; trialId?: string };
   /** The run begins on a structure holding one block of every material. */
   materialSample: Record<never, never>;
   /** Testing only: about `share` of the deck is destructible by the given causes. */
@@ -71,6 +78,26 @@ export type RunStartContext = {
   rules: RunRules;
   deck: RunDeck;
   snapshot: RunSnapshot;
+  /**
+   * A prepared session a step built off to the side (#901;
+   * doc/experiments/trial-session-adoption.md): its run, rules, identity universe, own random
+   * stream and provenance, to be adopted together. Not flattened to the snapshot alone.
+   */
+  prepared?: PreparedSession;
+};
+
+/** A prepared trial session and its provenance, as a setup step hands it to the adopting host. */
+export type PreparedSession = ScenarioSession & {
+  run: GameRun;
+  provenance: {
+    trialId: string;
+    scenarioVersion: number;
+    seed: number;
+    /** The hydrated starting state: configured fixture state. */
+    initialSnapshot: RunSnapshot;
+    /** The ordinary commands replayed after it: effects caused by actions. */
+    actionLog: readonly ReplayCommand[];
+  };
 };
 
 /**
