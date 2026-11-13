@@ -36,6 +36,13 @@ export type CardBlock = {
      */
     active?: { definition: string };
     /**
+     * An opaque container's one stored, unplaced playable instance (#927;
+     * src/playable-payload.ts). Owned by the container; in no zone.
+     */
+    opaqueContainer?: {
+      payload: { id: string; definition: string; components: Record<string, unknown> };
+    };
+    /**
      * A block without a rank/suit value provider names itself (#893): its public name and a
      * short symbol for compact lists. Never a hint about hidden contents.
      */
