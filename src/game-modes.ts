@@ -3,7 +3,9 @@ import type { SpringAnchorSettings } from "./traits/spring-anchor";
 import type { DragSourceConfig, DropTargetConfig } from "./drag-drop";
 import type { DevDropInspectorConfig } from "./scene-traits/dev-drop-inspector";
 import type { DevTrialReadoutsConfig } from "./scene-traits/dev-trial-readouts";
-import type { DevBenchPanelConfig } from "./scene-traits/dev-bench-panel";
+import type { BenchScenario, DevBenchPanelConfig } from "./scene-traits/dev-bench-panel";
+import { scenarioVersion } from "./dev-scenario";
+import "./trial-modifiers";
 import type { ActionHistoryConfig } from "./scene-traits/action-history";
 import type { FirstPlayPromptConfig } from "./scene-traits/first-play-prompt";
 import type { DevHudStyleAuditionConfig, HudStyleConfig } from "./scene-traits/hud-style";
@@ -773,6 +775,44 @@ export const standardNavigation: GameFlow<NavigationAction, SceneName> = {
 
 export const gameModeRegistry = new Registry<GameMode>("game mode");
 
+/**
+ * The trial room's seeded scenarios (#905): the same mixed-material deck and opening hand, with
+ * one provisional trial passive each, or none for the baseline. Plain configuration for the
+ * bench panel; the passives' parameters are edited per instance there.
+ */
+const trialScenario = (label: string, definitionIds: readonly string[]): BenchScenario => ({
+  label,
+  scenario: {
+    version: scenarioVersion,
+    seed: 20,
+    steps: [
+      {
+        capability: "devDeck",
+        config: {
+          steps: [
+            { operation: "standardTemplates" },
+            { operation: "assignBalanced", config: { pool: "gameplay" } },
+            { operation: "shuffle" },
+          ],
+        },
+      },
+      { capability: "devHand", config: { indices: [0, 1, 2, 3, 4, 5, 6, 7] } },
+      {
+        capability: "devPassives",
+        config: { passives: definitionIds.map((definitionId) => ({ definitionId })) },
+      },
+    ],
+  },
+});
+const trialBenchScenarios: readonly BenchScenario[] = [
+  trialScenario("Baseline (no trial)", []),
+  trialScenario("Dense packing", ["trial-dense-packing"]),
+  trialScenario("Sparse packing", ["trial-sparse-packing"]),
+  trialScenario("Heavy (mean mass)", ["trial-heavy-mean-mass"]),
+  trialScenario("Light (mean mass)", ["trial-light-mean-mass"]),
+  trialScenario("Material diversity", ["trial-material-diversity"]),
+];
+
 const gameModes: GameMode[] = [
   {
     id: "game",
@@ -1280,6 +1320,42 @@ const gameModes: GameMode[] = [
             onLoad: "newRun",
             save: { key: "poker-blocks.dev19-run" },
             console: { name: "dev19" },
+            restartable: { param: "restart" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // Modifier trial room (#905, epic #820): ordinary sandbox play with the trial bench.
+          // The panel offers seeded scenarios, each installing one provisional trial passive
+          // (or none, for the baseline); Apply restarts the same scenario and seed with edited
+          // settings through the run host. Readouts show geometry, mass and real contributions.
+          id: "dev20",
+          scenes: composeScenes("dev20", [
+            {
+              scenes: playScenes,
+              traits: {
+                devBenchPanel: { scenarios: trialBenchScenarios },
+                devTrialReadouts: {},
+              },
+            },
+          ]),
+          startScene: "stage-1",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [
+            { step: "sandbox" },
+            {
+              step: "deckBuilder",
+              operations: [
+                { operation: "standardTemplates" },
+                { operation: "assignBalanced", config: { pool: "gameplay" } },
+              ],
+            },
+          ],
+          traits: {
+            onLoad: "newRun",
+            save: { key: "poker-blocks.dev20-run" },
+            console: { name: "dev20" },
             restartable: { param: "restart" },
             music: { style: "quiet" },
           },
