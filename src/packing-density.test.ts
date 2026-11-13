@@ -57,6 +57,34 @@ describe("packing density query (#815)", () => {
     expect(density(state)).toMatchObject({ occupied: 150_000, capacity: 150_000, density: 1 });
   });
 
+  it("rejects non-grid coordinates and inputs past the declared limit (#846 review)", () => {
+    expect(query("packingDensity", field([0.5, 0, 0])).available).toBe(false);
+    expect(query("packingDensity", field([2 ** 60, 0, 0])).available).toBe(false);
+    contextQueries.register("test.tiny", {
+      cost: "O(1)",
+      limit: 1,
+      size: (snapshot) => snapshot.field.length,
+      run: () => ({ available: true, value: "ran" }),
+    });
+    expect(query("test.tiny", field([0, 0, 0], [1, 0, 0]))).toMatchObject({ available: false });
+    expect(query("test.tiny", field([0, 0, 0]))).toEqual({ available: true, value: "ran" });
+  });
+
+  it("keeps omitted and null configuration apart in its cache (#846 review)", () => {
+    contextQueries.register("test.config", {
+      cost: "O(1)",
+      limit: Infinity,
+      size: () => 0,
+      run: (_snapshot, config) => ({
+        available: true,
+        value: config === null ? "null" : "default",
+      }),
+    });
+    const state = field([0, 0, 0]);
+    expect(query("test.config", state)).toEqual({ available: true, value: "default" });
+    expect(query("test.config", state, null)).toEqual({ available: true, value: "null" });
+  });
+
   it("is cached per snapshot, and a new snapshot is computed afresh", () => {
     const state = field([0, 0, 0], [1, 0, 0]);
     expect(query("packingDensity", state)).toBe(query("packingDensity", state));

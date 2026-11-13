@@ -13,6 +13,10 @@ export type QueryResult<T> = { available: true; value: T } | { available: false;
 export type ContextQuery<T = unknown> = {
   /** How its cost grows: stated so a caller can tell a cheap query from an expensive one. */
   cost: string;
+  /** The largest input it accepts, in its own units: beyond it, the result is unavailable. */
+  limit: number;
+  /** How big this snapshot's input is, in the same units as `limit`; cheap to compute. */
+  size(snapshot: GameState): number;
   run(snapshot: GameState, config: unknown): QueryResult<T>;
 };
 
@@ -22,9 +26,23 @@ const cache = new WeakMap<GameState, Map<string, QueryResult<unknown>>>();
 
 /** Run a registered query on a snapshot, reusing its result for that same snapshot. */
 export function query<T>(name: string, snapshot: GameState, config?: unknown): QueryResult<T> {
-  const key = `${name}:${JSON.stringify(config ?? null)}`;
+  // Omitted and null configuration are different keys: a provider may treat them differently.
+  const key = `${name}:${config === undefined ? "default" : JSON.stringify(config)}`;
   let results = cache.get(snapshot);
   if (!results) cache.set(snapshot, (results = new Map()));
-  if (!results.has(key)) results.set(key, contextQueries.get(name).run(snapshot, config));
+  if (!results.has(key)) {
+    const provider = contextQueries.get(name);
+    // A deterministic input limit, checked before any scan: never a machine-speed decision.
+    const size = provider.size(snapshot);
+    results.set(
+      key,
+      size > provider.limit
+        ? {
+            available: false,
+            reason: `input of ${size} exceeds the query's limit of ${provider.limit}`,
+          }
+        : provider.run(snapshot, config),
+    );
+  }
   return results.get(key) as QueryResult<T>;
 }

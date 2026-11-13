@@ -23,6 +23,9 @@ export function packingDensity(state: GameState): QueryResult<PackingDensity> {
     ...new Map(state.field.map(({ cell }) => [`${cell.x},${cell.y},${cell.z}`, cell])).values(),
   ];
   if (!cells.length) return { available: false, reason: "the field is empty" };
+  // World-grid cells only: a fractional or unsafe coordinate is not a cell to measure.
+  if (cells.some(({ x, y, z }) => ![x, y, z].every(Number.isSafeInteger)))
+    return { available: false, reason: "a field cell has a non-integer coordinate" };
   // One pass, no spread: bounds over any number of cells, with no engine argument limit.
   let [minX, minY, minZ] = [Infinity, Infinity, Infinity];
   let [maxX, maxY, maxZ] = [-Infinity, -Infinity, -Infinity];
@@ -51,7 +54,12 @@ export function packingDensity(state: GameState): QueryResult<PackingDensity> {
   };
 }
 
+/** The most field entries the packing query scans. */
+export const packingQueryLimit = 1_000_000;
+
 contextQueries.register("packingDensity", {
   cost: "O(n) in occupied cells",
+  limit: packingQueryLimit,
+  size: (snapshot) => snapshot.field.length,
   run: (snapshot) => packingDensity(snapshot),
 });
