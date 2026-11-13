@@ -174,18 +174,16 @@ export function createMusicController(
    */
   const slots = new Map<string, string>();
   /**
-   * The track playing as the cue being run sees it: each operation updates it at once, before its
-   * deferred playback, so later operations in the same cue observe earlier ones (#855 review).
-   * Null while wound down.
+   * The track that is logically playing: every cue and transport call updates it at once, before
+   * its deferred playback, so later operations (in the same cue or a later one) observe earlier
+   * ones however long a track takes to load (#855 review). Null while silent or wound down.
    */
   let logicalCurrent: string | null = null;
-  /** What a logical wind-down in the cue stopped, for a later logical wind-up. */
+  /** What the last logical wind-down stopped, for a later wind-up. */
   let logicalBeforeDown: string | null = null;
   /** The last request, replayed on unlock. */
   let wanted: () => void = () => {};
   let woundDown = false;
-  /** What was playing when the music wound down, for windUp(). */
-  let beforeWindDown: string | null = null;
 
   const request = (action: () => void) => {
     wanted = action;
@@ -203,12 +201,6 @@ export function createMusicController(
     } else {
       void player.play(id);
     }
-  };
-  const windDown = () => {
-    if (woundDown) return;
-    beforeWindDown = player.current;
-    woundDown = true;
-    player.windDown();
   };
   const applyFilter = (kind: MusicFilter | null) => {
     // The filter asked for comes on and every other one goes off.
@@ -248,9 +240,7 @@ export function createMusicController(
       if (starts && playback.at(-1)?.starts) playback.pop();
       playback.push({ starts, run });
     };
-    // Wound down, nothing counts as playing; otherwise the player's track.
-    logicalCurrent = woundDown ? null : player.current;
-    logicalBeforeDown = beforeWindDown;
+
     const api: MusicOperationApi = {
       // A keep queues nothing, so it never displaces a start already queued (#855 review).
       select: (plan) => {
@@ -275,11 +265,9 @@ export function createMusicController(
       // `current` only once a track has loaded, so playback must never read it back (#855 review).
       windDown: () => {
         if (logicalCurrent !== null) logicalBeforeDown = logicalCurrent;
-        const stopped = logicalBeforeDown;
         logicalCurrent = null;
         queue(false, () => {
           if (woundDown) return;
-          beforeWindDown = stopped;
           woundDown = true;
           player.windDown();
         });
@@ -299,13 +287,20 @@ export function createMusicController(
   return {
     run,
     filter: applyFilter,
-    windDown: () => request(windDown),
-    windUp: () => request(() => start(beforeWindDown)),
+    // The public transport goes through the same logical model as configured cues.
+    windDown: () => run([{ op: "windDown" }]),
+    windUp: () => run([{ op: "windUp" }]),
     get woundDown() {
       return woundDown;
     },
-    play: (id) => request(() => start(id)),
-    stop: () => request(() => player.stop()),
+    play: (id) => {
+      logicalCurrent = id;
+      request(() => start(id));
+    },
+    stop: () => {
+      logicalCurrent = null;
+      request(() => player.stop());
+    },
     unlock() {
       player.unlock();
       if (unlocked) return;

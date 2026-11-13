@@ -308,6 +308,17 @@ describe("music controller", () => {
     expect(log.filter(isStart)).toHaveLength(1);
   });
 
+  it("keeps the logical selection across separate cues while a track loads (#855 review)", () => {
+    const { music, log } = setup();
+    music.run([{ op: "selectTrack", config: { plan: "boss" } }]);
+    // A separate cue, before unlock: memory still follows the selection.
+    music.run([{ op: "rememberTrack", config: { slot: "saved" } }]);
+    music.run([{ op: "selectTrack", config: { plan: "title" } }]);
+    music.run([{ op: "resumeTrack", config: { slot: "saved" } }]);
+    music.unlock();
+    expect(log.filter(isStart).map(started).at(-1)).toBe("solitaire-boss");
+  });
+
   it("rejects an unknown operation at composition rather than falling back", () => {
     expect(validateMusicOperations("scene", [{ op: "selectTrack" }, { op: "shuffleAll" }])).toEqual(
       ['scene: unknown music operation "shuffleAll"'],
