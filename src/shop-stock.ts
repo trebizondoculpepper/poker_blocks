@@ -1,7 +1,7 @@
 import { createCard, ranks, suits } from "./cards";
 import type { GameState } from "./game-state";
 import { withMaterial } from "./materials";
-import { createPassiveBlock, passiveDefinitions, type PassiveDefinition } from "./passives";
+import { createPassiveBlock, ordinaryPassives, type PassiveDefinition } from "./passives";
 import { defaultShop, type ShopTrait } from "./game-modes";
 import { drawWeighted, passiveFrequencies, weightAt } from "./offer-weights";
 import { passiveUnlockRound } from "./offer-eligibility";
@@ -52,9 +52,8 @@ export function shopPreviewState(
   };
 
   const owned = new Set(state.passiveRack.map(({ definitionId }) => definitionId));
-  const passives: Candidate[] = passiveDefinitions
-    .names()
-    .map((name) => passiveDefinitions.get(name))
+  // Only certified passives reach normal stock (doc/release-status.md, #812).
+  const passives: Candidate[] = ordinaryPassives()
     .filter((definition) => !definition.retired && !owned.has(definition.id))
     .map((definition) => ({
       weight: passiveWeight(definition, round),
