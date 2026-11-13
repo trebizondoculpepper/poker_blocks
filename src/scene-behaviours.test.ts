@@ -170,7 +170,7 @@ function recordingHost() {
           field: [],
           round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
         }),
-        lastScoredLines: () => [],
+        lastScoring: () => ({ field: [], lines: [] }),
         hasSave: () => false,
         rackCapacity: () => 5,
         seed: () => 4242,

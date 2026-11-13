@@ -155,8 +155,11 @@ export type GameRunController = {
    * immutable: a reader holds the version it read, never a live reference into a later action.
    */
   committedState(): Pick<GameState, "field" | "round">;
-  /** The lines the last committed play scored, with the activations actually applied (#904). */
-  lastScoredLines(): readonly PassiveScoredLine[];
+  /**
+   * What the last committed play scored (#904): the field as it was scored, before after-score
+   * steps changed it, and its lines with the activations actually applied.
+   */
+  lastScoring(): { field: GameState["field"]; lines: readonly PassiveScoredLine[] };
   /** Every live card in the run and where it is (#472): a query, never a second catalogue. */
   inventory(): readonly InventoryRecord[];
   /** The won stage's paid rewards, which the stage-won pop-up shows; null before payment. */
@@ -861,7 +864,7 @@ export function createGameRunController<Context>(options: {
     shopStock: () => game.state.shopStock ?? [],
     deckBlocks: () => game.state.deck,
     committedState: () => game.state,
-    lastScoredLines: () => game.lastScoredLines,
+    lastScoring: () => ({ field: game.lastScoringField, lines: game.lastScoredLines }),
     inventory: () => runInventory(game.state),
     runStats: () => game.stats,
     // A run with no rack limit shows exactly the passives it holds.

@@ -14,6 +14,7 @@ const field = [placed(0, 0), placed(13, 1, "steel")];
 const line = (points: number, outcomes: { operation: string; operand?: number }[] = []) =>
   ({
     blockIds: field.map(({ block }) => block.id),
+    contributingIds: field.map(({ block }) => block.id),
     points,
     activations: outcomes.length ? [{ outcomes }] : [],
   }) as unknown as PassiveScoredLine;
@@ -28,7 +29,7 @@ const values = (rows: readonly { label: string }[]) =>
 
 describe("trial readouts (#904)", () => {
   it("measures the current field's geometry and mass", () => {
-    const readout = trialReadout({ field, round }, []);
+    const readout = trialReadout({ field, round }, { field, lines: [] });
     const geometry = values(readout.geometry);
     expect(geometry.Occupied).toBe("2");
     expect(geometry.Bounds).toBe("2×1×1");
@@ -40,17 +41,20 @@ describe("trial readouts (#904)", () => {
   });
 
   it("shows an empty field's measures as unavailable, never zero", () => {
-    const geometry = values(trialReadout({ field: [], round }, []).geometry);
+    const geometry = values(trialReadout({ field: [], round }, { field: [], lines: [] }).geometry);
     expect(geometry.Occupied).toBe("0");
     expect(geometry.Packing).toMatch(/^\(/);
     expect(geometry["Mean mass"]).toMatch(/^\(/);
   });
 
   it("reports each scored row's families, mass and applied contributions", () => {
-    const readout = trialReadout({ field, round }, [
-      line(30, [{ operation: "multiply-line-score-by-query", operand: 2 }]),
-      line(10),
-    ]);
+    const readout = trialReadout(
+      { field, round },
+      {
+        field,
+        lines: [line(30, [{ operation: "multiply-line-score-by-query", operand: 2 }]), line(10)],
+      },
+    );
     const [first, second] = readout.scored.map(({ rows }) => values(rows));
     expect(first!.Points).toBe("30");
     expect(first!.Families).toBe("2");
@@ -90,7 +94,7 @@ describe("the devTrialReadouts trait (#904)", () => {
       services: {
         run: {
           committedState: () => state,
-          lastScoredLines: () => [line(30)],
+          lastScoring: () => ({ field, lines: [line(30)] }),
           onCommitted(listener: (facts: readonly { type: string }[]) => void) {
             listeners.add(listener);
             return () => listeners.delete(listener);
@@ -114,5 +118,24 @@ describe("the devTrialReadouts trait (#904)", () => {
     trait.exit!(context as never, {});
     expect(listeners.size).toBe(0);
     expect(panels.every(({ removed }) => removed)).toBe(true);
+  });
+});
+
+describe("scored rows measured as they were scored (#904 review)", () => {
+  it("uses the scoring-time field and only contributing cards", () => {
+    const kicker = placed(26, 2, "steel");
+    const scoringField = [...field, kicker];
+    const scored = {
+      blockIds: scoringField.map(({ block }) => block.id),
+      contributingIds: [field[0]!.block.id],
+      points: 5,
+      activations: [],
+    } as unknown as PassiveScoredLine;
+    // After scoring, the field changed (say an after-score step removed blocks).
+    const readout = trialReadout({ field: [], round }, { field: scoringField, lines: [scored] });
+    const row = values(readout.scored[0]!.rows);
+    expect(row.Families).toBe("1");
+    expect(row["Scored mean mass"]).toMatch(/kg$/);
+    expect(readout.scored[0]!.label).toBe("Row 1 (1 of 3 blocks counted)");
   });
 });

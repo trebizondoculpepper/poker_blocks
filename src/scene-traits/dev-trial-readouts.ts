@@ -52,9 +52,11 @@ const contributions = (activations: readonly RuleActivation[]) =>
 /** The readout for this committed state and the lines its last action scored. Pure. */
 export function trialReadout(
   state: Pick<GameState, "field" | "round">,
-  scoredLines: readonly PassiveScoredLine[],
+  scoring: { field: GameState["field"]; lines: readonly PassiveScoredLine[] },
 ): TrialReadout {
   const snapshot: QuerySnapshot = { field: state.field };
+  // Scored rows are measured on the field as it was scored, before after-score changes.
+  const scoredSnapshot: QuerySnapshot = { field: scoring.field };
   type Packing = {
     occupied: number;
     extents: { x: number; y: number; z: number };
@@ -73,21 +75,22 @@ export function trialReadout(
       shown("Total mass", mass, ({ totalKg }) => kg(totalKg)),
       shown("Mean mass", mass, ({ meanKg }) => kg(meanKg)),
     ],
-    scored: scoredLines.map(({ blockIds, points, activations }, index) => {
-      const scope = { ids: blockIds };
+    scored: scoring.lines.map(({ blockIds, contributingIds, points, activations }, index) => {
+      // Only the cards that made the hand, as the scoring pipeline's own queries see them.
+      const scope = { ids: contributingIds };
       const applied = contributions(activations);
       return {
-        label: `Row ${index + 1} (${blockIds.length} blocks)`,
+        label: `Row ${index + 1} (${contributingIds.length} of ${blockIds.length} blocks counted)`,
         rows: [
           { label: "Points", value: String(points) },
           shown(
             "Families",
-            query<{ families: number }>("materialDiversity", snapshot, scope),
+            query<{ families: number }>("materialDiversity", scoredSnapshot, scope),
             ({ families }) => String(families),
           ),
           shown(
             "Scored mean mass",
-            query<Mass>("scoredSubsetMass", snapshot, scope),
+            query<Mass>("scoredSubsetMass", scoredSnapshot, scope),
             ({ meanKg }) => kg(meanKg),
           ),
           applied.length
@@ -126,7 +129,7 @@ export function devTrialReadouts<
     services: {
       run: {
         committedState(): Pick<GameState, "field" | "round">;
-        lastScoredLines(): readonly PassiveScoredLine[];
+        lastScoring(): { field: GameState["field"]; lines: readonly PassiveScoredLine[] };
         onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void;
       };
     };
@@ -143,7 +146,7 @@ export function devTrialReadouts<
       panel.setAttribute("aria-label", "Trial readouts");
       host.append(panel);
       // The field as it stands; nothing scored yet in this view.
-      panel.innerHTML = readoutHtml(trialReadout(run.committedState(), []));
+      panel.innerHTML = readoutHtml(trialReadout(run.committedState(), { field: [], lines: [] }));
       // Each committed action, read as it commits: its state and the lines it scored.
       stop = run.onCommitted((facts) => {
         if (!panel) return;
@@ -152,7 +155,10 @@ export function devTrialReadouts<
           ({ payload }) => (payload as { score?: unknown }).score !== undefined,
         );
         panel.innerHTML = readoutHtml(
-          trialReadout(run.committedState(), scoredThisAction ? run.lastScoredLines() : []),
+          trialReadout(
+            run.committedState(),
+            scoredThisAction ? run.lastScoring() : { field: [], lines: [] },
+          ),
         );
       });
     },
