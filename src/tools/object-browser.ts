@@ -1,3 +1,4 @@
+import { releaseStatusDescriptor, type ReleaseStatusDescriptor } from "../release-status";
 import { playSfx } from "../audio/sfx";
 import { createPreviewRotation } from "./preview-rotation";
 import { cardFaceArt, type CardFaceOptions } from "../visual/face-art";
@@ -36,6 +37,8 @@ type BrowsedObject = {
   name: string;
   /** A note under the name (an experiment, a retired passive). */
   note?: string;
+  /** Its release status, as catalogues describe it (#813): shown in the list and on its page. */
+  status?: ReleaseStatusDescriptor;
   properties: unknown;
   /** A model to turn in the preview, or nothing for objects without one (a sound). */
   preview?: (size: number) => { object: THREE.Object3D; dispose(): void };
@@ -62,6 +65,7 @@ function materialPage(
     id,
     name,
     note,
+    status: releaseStatusDescriptor(definition.id, definition.releaseStatus),
     // The caller says what the page shows: the material's definition unless told otherwise.
     properties: page.properties ?? definition,
     preview(size) {
@@ -144,6 +148,7 @@ const categories: readonly Category[] = [
           id,
           name: definition.name,
           note: definition.retired ? "Retired: never offered" : undefined,
+          status: releaseStatusDescriptor(definition.id, definition.releaseStatus),
           properties: definition,
           preview(size) {
             const visual = createPassiveVisual(
@@ -187,6 +192,7 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       <h2 data-browser="name"></h2>
       <p class="object-browser-id" data-browser="id"></p>
       <p class="object-browser-note" data-browser="note"></p>
+      <p class="object-browser-status-line" data-browser="status"></p>
       <div class="object-browser-preview" data-browser="preview"></div>
       <div class="object-browser-view" data-browser="view">
         <button type="button" data-browser="auto">Auto rotate</button>
@@ -296,11 +302,17 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       }),
     );
     part("list").replaceChildren(
-      ...objects.map(({ id, name }) => {
+      ...objects.map(({ id, name, status }) => {
         const item = document.createElement("li");
         const link = document.createElement("a");
         link.href = `#${category.id}/${id}`;
         link.textContent = name;
+        if (status) {
+          const badge = document.createElement("span");
+          badge.className = "object-browser-status";
+          badge.textContent = status.label;
+          link.append(" ", badge);
+        }
         link.classList.toggle("is-current", id === object.id);
         item.append(link);
         return item;
@@ -310,6 +322,10 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     part("id").textContent = `${category.id}/${object.id}`;
     part("note").textContent = object.note ?? "";
     part("note").hidden = !object.note;
+    part("status").textContent = object.status
+      ? `${object.status.label}: ${object.status.explanation}`
+      : "";
+    part("status").hidden = !object.status;
     showPreview(object);
     showProperties(object.properties);
   }

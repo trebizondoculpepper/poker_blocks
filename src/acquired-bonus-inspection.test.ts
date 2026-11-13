@@ -52,6 +52,7 @@ describe("acquired bonus inspection (#751)", () => {
     const lines = inspectBlock(card({ run: { additive: 3 } }, gold))!.split("\n");
     expect(lines[0]).toBe(gold.traits.inspectable!.inspect());
     expect(lines).toContain("Run: +3 (for the rest of the run)");
-    if (definition.scoringModifier) expect(lines[1]).toMatch(/^Base: /);
+    if (definition.scoringModifier)
+      expect(lines.some((line) => line.startsWith("Base: "))).toBe(true);
   });
 });

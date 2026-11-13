@@ -2,6 +2,7 @@ import {
   composeCatalogue,
   experimentalCatalogue,
   ordinaryCatalogue,
+  releaseStatusDescriptor,
   type CatalogueAccess,
   type ReleaseStatusDeclaration,
 } from "./release-status";
@@ -1514,6 +1515,13 @@ export function scoringEligibilityOf(block: CardBlock): string {
   // A material that isn't registered (a test's own) names none, so it takes the default.
   return materialRegistry.get(materialOf(block))?.scoringEligibility ?? "contributing";
 }
+
+// Inspection names the card material's release status, from the same descriptor catalogues use
+// (doc/release-status.md, #813). Registered first, so it reads right after the card's name.
+inspectionProviders.register("releaseStatus", (block) => {
+  const definition = getMaterialDefinition(materialOf(block));
+  return [`Status: ${releaseStatusDescriptor(definition.id, definition.releaseStatus).label}`];
+});
 
 // Inspection lists a card's base and acquired bonuses after its name (#751).
 inspectionProviders.register("acquiredBonuses", (block) =>

@@ -56,7 +56,7 @@ releaseStatuses.register("certified", {
 releaseStatuses.register("provisional", {
   descriptor: Object.freeze({
     label: "Provisional",
-    explanation: "Experimental: only in explicitly experimental catalogues, never in normal play.",
+    explanation: "Only in explicitly experimental catalogues, never in normal play.",
   }),
   contribute: (contribution, contributions) => contributions.add("provisional", contribution),
 });
@@ -87,6 +87,14 @@ export function resolveReleaseStatus(
         : `${owner}: no release status declared`,
     );
   return named[0]!;
+}
+
+/** The descriptor views show for a definition's declared status (#813). */
+export function releaseStatusDescriptor(
+  owner: string,
+  declaration: ReleaseStatusDeclaration | undefined,
+): ReleaseStatusDescriptor {
+  return releaseStatuses.get(resolveReleaseStatus(owner, declaration)).descriptor;
 }
 
 /** What a catalogue admits: the registered admission operations it composes, request-local. */
