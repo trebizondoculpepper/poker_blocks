@@ -1,3 +1,23 @@
+import {
+  airFanHousing,
+  cloudFill,
+  custardFill,
+  darkOilFill,
+  flameFill,
+  framedGlass,
+  gelatoScoops,
+  giftWrapping,
+  magicStarsFill,
+  massOf,
+  paperShell,
+  plasticShell,
+  soilFill,
+  solid,
+  stainedLantern,
+  waterFill,
+  type MassComponent,
+  type PhysicalMass,
+} from "./physical-mass";
 import type { ChopSettings } from "./visual/chopped-geometry";
 import type { Lettering } from "./visual/lettering";
 import { Registry } from "./core/registry";
@@ -56,6 +76,8 @@ export type MaterialDefinition = {
    */
   cardFace?: string;
   traits: { transparent?: Record<string, never>; resistant?: ResistantTrait };
+  /** Its authored physical mass recipe (doc/playfield-rocking.md, #816): required of every definition. */
+  mass: PhysicalMass;
   /**
    * Whether a generated hidden payload (a Present's card, doc/opaque-actives.md) may be made of
    * this material. Omitted: it may. Read uniformly by the card generator's eligibility (#555).
@@ -250,6 +272,8 @@ const grass = {
 export const materialDefinitions = [
   {
     id: "paper",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(paperShell),
     // Never inside a Present (doc/presents.md): it is excluded from generated payloads.
     payloadEligible: false,
     lettering: { font: "Times New Roman", fallback: "Tinos, serif", weight: 400 },
@@ -284,6 +308,8 @@ export const materialDefinitions = [
   },
   {
     id: "wood",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(solid("wood", 650)),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Wood",
     acoustics: { character: "knocking", hardness: 3, attach: "material.attach.wood" },
@@ -323,6 +349,8 @@ export const materialDefinitions = [
   },
   {
     id: "steel",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(solid("steel", 7850)),
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Steel",
     acoustics: { character: "clanking", hardness: 8, attach: "material.attach.steel" },
@@ -352,6 +380,8 @@ export const materialDefinitions = [
   },
   {
     id: "prismatic",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(solid("glass-like crystal", 2500)),
     // Crystal celebrates with three whistles (#494, owner decision on #497).
     celebration: { whistles: 3 },
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
@@ -430,6 +460,8 @@ export const materialDefinitions = [
   },
   {
     id: "gold",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(solid("gold", 19320)),
     lettering: { font: "Tinos", fallback: "serif", weight: 400 },
     name: "Gold",
     acoustics: { character: "dense", hardness: 7, attach: "material.attach.gold" },
@@ -462,6 +494,8 @@ export const materialDefinitions = [
     // Earth (#371): sold from round 2, in terracotta's old place. Beside flame it bakes into
     // terracotta. Its look is #358's soil with grass, in a plastic vessel.
     id: "earth",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(plasticShell, soilFill),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Earth",
     acoustics: { character: "dry", hardness: 3.5, attach: "material.attach.terracotta" },
@@ -525,6 +559,8 @@ export const materialDefinitions = [
   },
   {
     id: "terracotta",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(solid("fired clay", 1800)),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Terracotta",
     acoustics: { character: "dry", hardness: 6, attach: "material.attach.terracotta" },
@@ -560,6 +596,8 @@ export const materialDefinitions = [
   },
   {
     id: "ice",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(solid("ice", 917)),
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
     name: "Ice",
     acoustics: { character: "clinking", hardness: 5, attach: "material.attach.ice" },
@@ -628,6 +666,8 @@ export const materialDefinitions = [
   },
   {
     id: "meat",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(solid("meat", 1050)),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Meat",
     acoustics: { character: "squishy", hardness: 1, attach: "material.attach.meat" },
@@ -709,6 +749,8 @@ export const materialDefinitions = [
   },
   {
     id: "fire",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(framedGlass, flameFill),
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Fire",
     acoustics: { character: "rattling", hardness: 9, attach: "material.attach.fire" },
@@ -755,6 +797,8 @@ export const materialDefinitions = [
   },
   {
     id: "custard",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(plasticShell, custardFill),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Custard",
     // Plastic, between wood and ice (#232).
@@ -819,6 +863,8 @@ export const materialDefinitions = [
     // in place of custard's +2 and ×1.2. Heat beside it thaws it back to custard, and every
     // gelato card reverts to custard when the round ends. Its look is #382's settling scoops.
     id: "gelato",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(plasticShell, gelatoScoops),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Gelato",
     acoustics: { character: "muffled", hardness: 4.5, attach: "material.attach.custard" },
@@ -864,6 +910,8 @@ export const materialDefinitions = [
     // (`rowPresence`): it enhances the hand without changing it, and is never a wildcard.
     // Its look is #336's contained cloud.
     id: "cloud",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(plasticShell, cloudFill),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Cloud",
     acoustics: { character: "soft", hardness: 0.5, attach: "material.attach.meat" },
@@ -892,6 +940,8 @@ export const materialDefinitions = [
     // has no shop price. A clear blue fluid in custard's plastic vessel until #333 gives it
     // refractive optics.
     id: "water",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(plasticShell, waterFill),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Water",
     acoustics: { character: "splashy", hardness: 1.5, attach: "material.attach.custard" },
@@ -948,6 +998,8 @@ export const materialDefinitions = [
     // stars, aging white to black, in a plastic vessel. Its scoring package is +1, ×2 and ^1.2,
     // applied by the shared scorer in its documented order. Price: assumed 16 (see #375).
     id: "magic",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(plasticShell, magicStarsFill),
     // Magic celebrates with three whistles (#494, owner decision on #497).
     celebration: { whistles: 3 },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -1107,8 +1159,10 @@ function plasticFluidExperiments(): MaterialDefinition[] {
     id: string,
     name: string,
     contents: MaterialDefinition["appearance"]["contents"],
+    fill: MassComponent[],
   ): MaterialDefinition => ({
     id,
+    mass: massOf(plasticShell, fill),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name,
     acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
@@ -1128,18 +1182,21 @@ function plasticFluidExperiments(): MaterialDefinition[] {
     },
   });
   return [
-    plastic("waterInPlastic", "Water in plastic", clearWater),
+    plastic("waterInPlastic", "Water in plastic", clearWater, waterFill),
     // Earth (#358): slow soil with grass, in plastic and in the lantern; no residue.
-    withInclusions(plastic("earthInPlastic", "Earth in plastic", slowEarth), [grass]),
+    withInclusions(plastic("earthInPlastic", "Earth in plastic", slowEarth, soilFill), [grass]),
     // Hot water (#353): the same water, with very slowly rising bubbles as an inclusion.
-    withInclusions(plastic("hotWaterInPlastic", "Hot water in plastic", clearWater), [slowBubbles]),
-    // Boiling water (#354): the same water, with fast bubbles.
-    withInclusions(plastic("boilingWaterInPlastic", "Boiling water in plastic", clearWater), [
-      fastBubbles,
+    withInclusions(plastic("hotWaterInPlastic", "Hot water in plastic", clearWater, waterFill), [
+      slowBubbles,
     ]),
-    plastic("darkFluid", "Dark fluid", darkFluid),
-    plastic("cloudInPlastic", "Cloud in plastic", softCloud),
-    plastic("magicLock", "Magic Lock", magicStars),
+    // Boiling water (#354): the same water, with fast bubbles.
+    withInclusions(
+      plastic("boilingWaterInPlastic", "Boiling water in plastic", clearWater, waterFill),
+      [fastBubbles],
+    ),
+    plastic("darkFluid", "Dark fluid", darkFluid, darkOilFill),
+    plastic("cloudInPlastic", "Cloud in plastic", softCloud, cloudFill),
+    plastic("magicLock", "Magic Lock", magicStars, magicStarsFill),
   ];
 }
 
@@ -1151,10 +1208,12 @@ function glassContainerExperiments(): MaterialDefinition[] {
   const lantern = (
     id: string,
     name: string,
+    fill: MassComponent[],
     contents?: MaterialDefinition["appearance"]["contents"],
     residue?: MaterialDefinition["appearance"]["residue"],
   ) => ({
     id,
+    mass: massOf(stainedLantern, fill),
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
     name,
     acoustics: { character: "ringing", hardness: 9, attach: "material.attach.prismatic" as const },
@@ -1175,20 +1234,21 @@ function glassContainerExperiments(): MaterialDefinition[] {
     },
   });
   return [
-    lantern("emptyLantern", "Empty lantern"),
-    lantern("custardLantern", "Custard in a lantern", custardContents, custardResidue),
-    lantern("flameLantern", "Flame in a lantern", { effect: "flame", config: {} }),
+    lantern("emptyLantern", "Empty lantern", []),
+    lantern("custardLantern", "Custard in a lantern", custardFill, custardContents, custardResidue),
+    lantern("flameLantern", "Flame in a lantern", flameFill, { effect: "flame", config: {} }),
     // Fluid looks (#333): the same levelling fluid, other optics, in either container.
-    lantern("waterInLantern", "Water in a lantern", clearWater),
+    lantern("waterInLantern", "Water in a lantern", waterFill, clearWater),
     // A contained cloud (#336): the same contents in either container.
-    lantern("cloudInLantern", "Cloud in a lantern", softCloud),
-    withInclusions(lantern("earthInLantern", "Earth in a lantern", slowEarth), [grass]),
+    lantern("cloudInLantern", "Cloud in a lantern", cloudFill, softCloud),
+    withInclusions(lantern("earthInLantern", "Earth in a lantern", soilFill, slowEarth), [grass]),
     // Magic Lock (#349): the crystal trail's stars, aging white to black, in either container.
-    lantern("magicLockLantern", "Magic Lock (lantern)", magicStars),
+    lantern("magicLockLantern", "Magic Lock (lantern)", magicStarsFill, magicStars),
     {
       // Aggressive flame (#355): the fire block's own flame, slightly larger and brighter, in the
       // same iron frame. A visual variant only: configuration of the same flame.
       id: "aggressiveFlame",
+      mass: massOf(framedGlass, flameFill),
       lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
       name: "Aggressive flame",
       acoustics: { character: "rattling", hardness: 9, attach: "material.attach.fire" as const },
@@ -1220,6 +1280,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
     },
     {
       id: "custardFrame",
+      mass: massOf(framedGlass, custardFill),
       lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
       name: "Custard in a frame",
       acoustics: { character: "clanking", hardness: 8, attach: "material.attach.fire" as const },
@@ -1257,6 +1318,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     // wrap in pale foil ink, which reads on red, green and blue alike (#558); a card's rank and
     // suit never are (its `cardFace` below).
     id: "giftWrap",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(giftWrapping),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     // A Present's card never shows its rank or suit (#568); a letter block still shows its letter.
     cardFace: "concealed",
@@ -1280,6 +1343,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     // An empty plastic vessel (#330): custard's container with nothing inside, composed rather
     // than special-cased. A visual experiment only.
     id: "emptyVessel",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(plasticShell),
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Empty vessel",
     acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
@@ -1301,6 +1366,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     // Air (#357): a visual experiment only. A fan on two opposite faces (its variant faces,
     // +x and −x), louvred vents on the other four. No airflow, scoring, price or reward.
     id: "airVent",
+    // Authored physical mass (doc/playfield-rocking.md, #816).
+    mass: massOf(airFanHousing),
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
     name: "Air",
     // A powder-coated housing: it sounds like steel until it has a sound of its own.
