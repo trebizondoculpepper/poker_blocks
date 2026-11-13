@@ -1646,3 +1646,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 ## Inherited lifecycle declaration resolution (#915)
 
 [The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.
+
+## Shop Continue presentation
+
+The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD word-cube host, semantic action and fixed material configuration; its canvas does not intercept input outside registered action bounds.
