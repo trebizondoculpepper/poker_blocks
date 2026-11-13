@@ -1641,3 +1641,33 @@ body,
   margin: 8px 0 0;
   white-space: pre-wrap;
 }
+
+/* Transient activation text (#918, src/visual/activation-labels.ts): placed by transform. */
+.activation-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.activation-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 12em;
+  padding: 0.15em 0.45em;
+  border-radius: 0.3em;
+  background: rgb(0 0 0 / 70%);
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: pre-line;
+}
+.activation-labels-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
