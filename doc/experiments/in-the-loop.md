@@ -16,13 +16,11 @@ The owner described this as a post-scoring modifier on every scored row. Initial
 
 Post-score reactions that open/close a hoop affect the next play's eligibility, not already finalized lines. Pre-score changes are included in the scoring snapshot. Captured activation outcomes state eligibility, exponent contribution and actual affected row; presentation does not rescan a later live layout. The detector must be documented before this interpretation is implemented. This brief does not introduce a loophole for post-score material effects to rewrite scores.
 
-## Detector requirements and unresolved semantics
+## Detector requirements and selected semantics
 
 The initial positive fixtures are a flat ring with empty space through it, in each principal orientation, and a deeper through-tunnel. Negative fixtures include a solid filled slab/cube, an open U-shape and a merely long or sparse arrangement. A square cycle in the face-adjacency graph of a solid filled 2×2 slab must NOT count as a hole: graph cycle count and empty-space topology differ. A sealed cavity alone is not the selected objective.
 
-#883 must investigate exact foreground/background connectivity, corner/edge contact, open passages versus hoops, bent/branching tunnels, multiple openings and large sparse coordinate bounds. Compare cubical-complex/voxel topology with simpler restricted detectors and explain what each would miss. Do not silently narrow the owner’s deeper-tunnel semantics to a convenient planar-only algorithm or treat a camera-projected gap as authoritative. Conversely, this brief does not approve an unbounded general topology search.
-
-Provide a pure registered boolean eligibility query over an explicit immutable field snapshot, with shared occupancy indexing, cache/invalidation rules and deterministic input/operation limits. No per-passive topology code or material/room identity branches. Define unavailable/oversize handling in #884 as part of the gameplay contract, never a machine-speed-dependent zero. Ordinary play without a subscriber must not pay for expensive topology. The detector architecture merges after inspectable research and before implementation.
+The owner selected face-only contact: edge/corner touching does not complete a hoop. [The selected query contract](../hoop-query.md) records the ×3 face refinement, Betti/Euler calculation, bounded cavity analysis, snapshot caching and explicit neutral-exponent fallback when the query is unavailable. The research is merged; runtime #885/#886 still follows the selected contract and remains provisional. Its limits/performance are experimental and inspectable, not an invisible device-speed cutoff.
 
 ## Bench protocol and evidence
 
