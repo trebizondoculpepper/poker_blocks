@@ -17,3 +17,9 @@ Miniature magician's cabinet: midnight blue, gold trim, a hovering wand and glow
 ## Experiment and delivery
 
 Document the reusable [lifecycle and instance-state contract](../passive-lifecycle-state.md) before implementation. Test counters across stage boundaries, independent copies, multi-card plays, no-target failure, save/load without replay, deterministic selection, model/RNG rollback and post-reaction target selection. Audition the cabinet/countdown separately from balance acceptance. Use controlled bench scenarios and export configuration, initial state, seed and ordered moves; no player trials have been recorded yet. Price, shop weights and production certification are deliberately undecided.
+
+## Measurements and next decision
+
+For each controlled trial record committed play count, counter before/after, eligible target count, conversion successes/failures, selected target and material before/after, resulting scores on later plays, and the number of Magic cards created. Compare matched initial states and ordered actions with and without the passive; distinguish the conversion's later scoring benefit from unrelated material reactions. Observe whether the four-star countdown and target selection are understandable at rack scale, including the no-target fizzle.
+
+The next decision is whether four-play pacing, persistent progress and random conversion produce a readable, worthwhile strategy in the bench, or need a revised provisional cadence/feedback. No measurements or price are asserted here. Production availability requires a later explicit certification decision and wider playtesting; a successful scripted trial alone does not certify it.
