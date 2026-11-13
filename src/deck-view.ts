@@ -5,7 +5,8 @@ import { inspectBlock } from "./traits/inspectable";
  * saying where it is (deck, hand, table or discard). Hover, focus or tap on a block shows its
  * details and location. It never changes the run.
  */
-import { ranks, type CardBlock, pokerIdentity } from "./cards";
+import { ranks, type CardBlock } from "./cards";
+import { blockChip } from "./block-presentation";
 import { getMaterialDefinition, materialOf } from "./materials";
 
 /** Where a listed card is: its marker and its description. */
@@ -29,14 +30,20 @@ export type DeckView = {
 /** Display order: 2 to 10, the court cards, then the Ace. */
 export const deckRankOrder = [...ranks.slice(1), ranks[0]];
 
-/** The deck grouped by rank, in display order; empty ranks are left out. */
+/** The label of the group for blocks with no rank (rankless actives, #893), listed last. */
+export const ranklessGroup = "Other";
+
+/**
+ * The deck grouped by rank, in display order; empty ranks are left out. A block with no rank/suit
+ * value provider joins the last group rather than being given a rank.
+ */
 export function groupDeckByRank(
   blocks: readonly CardBlock[],
 ): { rank: string; blocks: CardBlock[] }[] {
-  return deckRankOrder
+  return [...deckRankOrder, ranklessGroup]
     .map((rank) => ({
       rank,
-      blocks: blocks.filter((block) => pokerIdentity(block).rank === rank),
+      blocks: blocks.filter((block) => (block.traits.identity?.rank ?? ranklessGroup) === rank),
     }))
     .filter(({ blocks: group }) => group.length > 0);
 }
@@ -45,7 +52,7 @@ export function groupDeckByRank(
 export function deckBlockDetails(block: CardBlock): string {
   return (
     inspectBlock(block) ??
-    `${pokerIdentity(block).rank}${pokerIdentity(block).suit.symbol} · ${getMaterialDefinition(materialOf(block)).name}`
+    `${blockChip(block).text} · ${getMaterialDefinition(materialOf(block)).name}`
   );
 }
 
@@ -80,8 +87,8 @@ export function createDeckView(host: HTMLElement): DeckView {
           const chip = document.createElement("button");
           chip.type = "button";
           chip.className = "deck-view-block";
-          const { rank, suit } = pokerIdentity(block);
-          chip.textContent = `${rank}${suit.symbol}`;
+          const face = blockChip(block);
+          chip.textContent = face.text;
           const location = locationOf(block);
           if (location) {
             const marker = document.createElement("span");
@@ -90,7 +97,7 @@ export function createDeckView(host: HTMLElement): DeckView {
             marker.setAttribute("aria-hidden", "true");
             chip.append(marker);
           }
-          chip.style.color = suit.color;
+          chip.style.color = face.color ?? "";
           chip.dataset.material = materialOf(block);
           const text = location
             ? `${deckBlockDetails(block)}\n${location.label[0]!.toUpperCase()}${location.label.slice(1)}`

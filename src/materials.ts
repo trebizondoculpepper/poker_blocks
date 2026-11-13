@@ -1,3 +1,4 @@
+import { blockName } from "./block-presentation";
 import {
   composeCatalogue,
   experimentalCatalogue,
@@ -36,7 +37,7 @@ import type {
   ResidueConfig,
   InclusionConfig,
 } from "./visual/contained";
-import { cardName, standardDeck, type CardBlock, pokerIdentity } from "./cards";
+import { standardDeck, type CardBlock } from "./cards";
 import { inspectable, inspectionProviders } from "./traits/inspectable";
 import { acquiredBonusLines } from "./acquired-bonus-inspection";
 import type { WeightCurve } from "./offer-weights";
@@ -1679,11 +1680,9 @@ export function withMaterial(card: CardBlock, definition: MaterialDefinition): C
       ...definition.traits,
       // A cookable material names its first doneness step too ("· Raw", #372).
       inspectable: inspectable(
-        [
-          cardName(pokerIdentity(card)),
-          definition.name,
-          ...[definition.cookable?.steps.at(0) ?? []].flat(),
-        ].join(" · "),
+        [blockName(card), definition.name, ...[definition.cookable?.steps.at(0) ?? []].flat()].join(
+          " · ",
+        ),
       ),
     },
   };

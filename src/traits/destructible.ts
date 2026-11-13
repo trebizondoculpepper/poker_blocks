@@ -1,10 +1,11 @@
+import { blockName } from "../block-presentation";
 /**
  * A block that can be destroyed, and by what. Destruction removes the block from the field
  * and leaves a gap: nothing settles into it (settling will be a trait of its own). The
  * rule lives in GameRun.destroyBlock; what causes a destruction (a double-click in a
  * test mode, later melting or bombs) is a separate trait that names its cause.
  */
-import { cardName, type CardBlock, pokerIdentity } from "../cards";
+import { type CardBlock } from "../cards";
 import type { BlockTraitBehavior } from "../block-trait-behaviours";
 import { inspectable } from "./inspectable";
 
@@ -48,7 +49,7 @@ export function withDevDestructibleMix(
             ...chosen.traits,
             destructible: { by: mix.by },
             inspectable: inspectable(
-              `${chosen.traits.inspectable?.inspect() ?? cardName(pokerIdentity(chosen))} · Destructible`,
+              `${chosen.traits.inspectable?.inspect() ?? blockName(chosen)} · Destructible`,
             ),
           },
         }))

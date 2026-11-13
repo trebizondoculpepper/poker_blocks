@@ -1,13 +1,12 @@
+import { blockName, blockFaceArt } from "./block-presentation";
 import { inspectBlock } from "./traits/inspectable";
 import { acquiredBonusDescriptor } from "./modifier-registers";
-import { cardFaceArt } from "./visual/face-art";
 import { cardLook } from "./card-look";
 import { createScatterPlacer } from "./shop-scatter";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { clamp01, easeInOutCubic, lerp } from "./easing";
 import { playSfx } from "./audio/sfx";
-import { cardName, pokerIdentity } from "./cards";
 import { addExtras, createPassiveVisual } from "./passive-visual";
 import { passiveAppearance, passiveDefinitions } from "./passives";
 import type { ShopOffer } from "./shop-stock";
@@ -107,7 +106,7 @@ function passiveCube(block: PassiveBlock): OfferCube {
 function cardCube(block: CardBlock): OfferCube {
   const look = cardLook(block);
   const appearance = createBlockAppearance(
-    cardFaceArt(pokerIdentity(block), {
+    blockFaceArt(block, {
       face: look.cardFace,
       bonus: acquiredBonusDescriptor(block),
     }),
@@ -147,8 +146,8 @@ function cardCube(block: CardBlock): OfferCube {
 
 registerOfferView<CardBlock>("card", {
   cube: cardCube,
-  name: (block) => cardName(pokerIdentity(block)),
-  describe: (block) => inspectBlock(block) ?? cardName(pokerIdentity(block)),
+  name: (block) => blockName(block),
+  describe: (block) => inspectBlock(block) ?? blockName(block),
   className: "is-card",
   purchaseDescription: "BUY to add to the deck",
   flightTarget: "deck",
