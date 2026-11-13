@@ -46,13 +46,21 @@ export function scenarioPassives(scenario: ScenarioDefinition): PassiveDescripto
   );
 }
 
-/** One passive's controls: its schema-derived settings with these overrides applied. */
+/**
+ * One passive's controls: the schema-derived settings of its declared configuration, showing any
+ * pending edits as they were typed. Pending values are displayed, not validated here, so an
+ * invalid edit stays visible and correctable; Apply validates them.
+ */
 export function passiveSettings(
   descriptor: PassiveDescriptor,
-  overrides: Overrides,
+  pending: Overrides,
 ): EffectiveSetting[] {
   const block = createPassiveBlock(descriptor.definitionId, "bench-preview");
-  return effectiveSettings(configurePassive(block, { ...descriptor.overrides, ...overrides }));
+  return effectiveSettings(configurePassive(block, { ...descriptor.overrides })).map((setting) =>
+    Object.hasOwn(pending, setting.name)
+      ? { ...setting, value: pending[setting.name]!, overridden: true }
+      : setting,
+  );
 }
 
 /** Everything wrong with these edits, through the shared per-instance validators. */

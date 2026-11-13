@@ -44,6 +44,14 @@ describe("bench panel settings (#903)", () => {
     expect(parameterControls.has(coefficient.schema.kind)).toBe(true);
   });
 
+  it("shows an invalid pending edit without failing, so it can be corrected", () => {
+    const [dense] = scenarioPassives(scenario);
+    const maximum = passiveSettings(dense!, { maximum: 999 }).find(
+      ({ name }) => name === "maximum",
+    )!;
+    expect(maximum.value).toBe(999);
+  });
+
   it("validates edits with the shared validators", () => {
     expect(editProblems(scenario, [{ maximum: 4 }, {}])).toEqual([]);
     expect(editProblems(scenario, [{ maximum: 999 }, {}])).toEqual([
