@@ -8,7 +8,9 @@ This area records reproducible gameplay and presentation experiments. Experiment
 
 - [Centroid versus material-weighted pivot](pivot-comparison.md): planned A/B room with a paper-heavy seeded deck; production pivot unchanged.
 
-- [Passive scenario test bench](passive-test-bench.md): selectable deck, passive settings and initial patterns for interactive balance experiments.
+- [In the Loop](in-the-loop.md): agreed provisional hoop/tunnel objective and exponent reward; detector research/architecture still required.
+
+- [Passive scenario test bench](passive-test-bench.md): planned selectable deck, passive settings and initial-pattern bench for interactive balance experiments.
 
 ## Recording an experiment
 
@@ -18,4 +20,4 @@ Results belong beside the brief or in linked versioned artifacts, with hardware/
 
 ## Balance rationale
 
-[Passive power progression](../passive-balance.md) explains why the bench exists: try abstract reproducible situations, observe how provisional rules feel and behave, then use evidence to inform wider testing and later balance/certification decisions.
+[Passive power progression](../passive-balance.md) explains the purpose of the planned bench: try abstract reproducible situations, observe how provisional rules feel and behave, then use evidence to inform wider testing and later balance/certification decisions.
