@@ -178,6 +178,11 @@ export function createMusicController(
    * the first gesture): `rememberTrack` records this, not what is still audibly playing.
    */
   let selected: string | null = null;
+  /**
+   * Whether the music is wound down as the cue being run sees it: a `windDown` earlier in the
+   * same cue counts at once, before its deferred playback (#855 review).
+   */
+  let logicallyDown = false;
   /** The last request, replayed on unlock. */
   let wanted: () => void = () => {};
   let woundDown = false;
@@ -225,11 +230,12 @@ export function createMusicController(
     const previous = entry.slot ? (slots.get(entry.slot) ?? null) : null;
     // Wound down, nothing counts as playing: a keeping selector chooses afresh.
     const chosen = musicSelectors.get(entry.selector)(entry.tracks, {
-      current: woundDown ? null : player.current,
+      current: woundDown || logicallyDown ? null : player.current,
       previous,
       random,
     });
     if (chosen && entry.slot) slots.set(entry.slot, chosen);
+    if (chosen) logicallyDown = false;
     // A keeping selector leaves the playing track as the selection.
     selected = chosen === undefined ? player.current : chosen;
     return chosen === undefined ? () => {} : () => start(chosen);
@@ -237,6 +243,7 @@ export function createMusicController(
 
   const run = (operations: readonly MusicOperation[]) => {
     const playback: (() => void)[] = [];
+    logicallyDown = woundDown;
     const api: MusicOperationApi = {
       select: (plan) => playback.push(choose(plan)),
       remember: (slot) => {
@@ -247,11 +254,18 @@ export function createMusicController(
         const remembered = slots.get(slot);
         if (remembered) {
           selected = remembered;
+          logicallyDown = false;
           playback.push(() => start(remembered));
         } else if (fallbackPlan) playback.push(choose(fallbackPlan));
       },
-      windDown: () => playback.push(windDown),
-      windUp: () => playback.push(() => start(beforeWindDown)),
+      windDown: () => {
+        logicallyDown = true;
+        playback.push(windDown);
+      },
+      windUp: () => {
+        logicallyDown = false;
+        playback.push(() => start(beforeWindDown));
+      },
       // Not playback: a filter applies to whatever plays, so it never replaces a request.
       filter: applyFilter,
     };

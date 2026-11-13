@@ -207,6 +207,16 @@ describe("music controller", () => {
     expect(log.map(started)).toEqual(["solitaire-boss"]);
   });
 
+  it("lets a selection see a wind-down earlier in the same cue (#855 review)", () => {
+    const { music, log, ...cue } = setup();
+    music.unlock();
+    cue.title();
+    log.length = 0;
+    music.run([{ op: "windDown" }, { op: "selectTrack", config: { plan: "title" } }]);
+    expect(log.some(isStart)).toBe(true);
+    expect(music.woundDown).toBe(false);
+  });
+
   it("rejects an unknown operation at composition rather than falling back", () => {
     expect(validateMusicOperations("scene", [{ op: "selectTrack" }, { op: "shuffleAll" }])).toEqual(
       ['scene: unknown music operation "shuffleAll"'],
