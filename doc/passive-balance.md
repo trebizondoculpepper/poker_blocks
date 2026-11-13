@@ -24,7 +24,7 @@ Compare actual score effects at representative baselines. An exponent contributi
 
 ## Bench first, then wider evidence
 
-The [spatial-modifier experiment](experiments/spatial-modifiers.md) and reusable scenario bench (#820) exist so provisional rules can be explored interactively in rather abstract controlled setups. Configure deck properties, installed passives/settings, hand and field patterns, then play and inspect what happens. This helps discover whether the rule feels understandable, achievable and rewarding before treating the numbers as balanced.
+The [spatial-modifier experiment](experiments/spatial-modifiers.md) plans a reusable scenario bench (#820) for exploring provisional rules interactively in rather abstract controlled setups. When implemented, it will let the designer configure deck properties, installed passives/settings and hand/field patterns, then play and inspect what happens. The initial geometry probe and several query/modifier foundations are implemented; the interactive room is not yet available. The planned bench will help discover whether a rule feels understandable, achievable and rewarding before treating its numbers as balanced.
 
 Use repeatable initial states, seeds and action logs to compare baseline and directed strategies. Record the stage target, deck/material composition, passive configuration, scored contributors, activation counts, actual score factors/results and missed opportunities. Test an effect alone, alongside compatible effects, and with conflicting objectives. Bench outcomes are observations; record failures and exploits rather than adjusting definitions invisibly until one screenshot looks good. Change settings as a new recorded trial segment.
 
