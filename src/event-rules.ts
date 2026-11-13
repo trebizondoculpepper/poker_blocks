@@ -30,6 +30,8 @@ export type ResolvedOutcome = Readonly<{
   unit?: string;
   scope?: string;
   targets?: readonly string[];
+  /** A captured status worth showing with it (an unmeasured query's fallback, #886). */
+  note?: string;
 }>;
 
 export type RuleFrame = {
