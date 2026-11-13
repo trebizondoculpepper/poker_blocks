@@ -144,6 +144,42 @@ describe("GameRun progression", () => {
     expect(allCards(session.state)).toHaveLength(52);
   });
 
+  it("publishes a committed action's facts once it commits, and nothing for an invalid one (#755)", () => {
+    const session = makeSession();
+    const heard: string[][] = [];
+    const stop = session.onCommitted((facts) => heard.push(facts.map(({ type }) => type)));
+    expect(session.discard("no-such-card")).toBeNull();
+    expect(heard).toEqual([]);
+    session.discard(session.state.hand[0]!.id);
+    expect(heard).toHaveLength(1);
+    expect(heard[0]).toContain("discard.completed");
+    expect(heard[0]).toEqual(session.actionFacts.map(({ type }) => type));
+    // A listener that throws neither stops the others nor undoes the action.
+    session.onCommitted(() => {
+      throw new Error("listener");
+    });
+    stop();
+    const later: number[] = [];
+    session.onCommitted((facts) => later.push(facts.length));
+    const errors: unknown[] = [];
+    const original = globalThis.queueMicrotask;
+    globalThis.queueMicrotask = (task) => {
+      try {
+        task();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+    try {
+      expect(session.discard(session.state.hand[0]!.id)).not.toBeNull();
+    } finally {
+      globalThis.queueMicrotask = original;
+    }
+    expect(later).toHaveLength(1);
+    expect(heard).toHaveLength(1);
+    expect(errors).toHaveLength(1);
+  });
+
   it("keeps a stage-1 discard out of stages 2 and 3", () => {
     const session = makeSession();
     const discarded = session.state.hand[0];

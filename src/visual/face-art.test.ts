@@ -15,7 +15,7 @@ describe("shared face artwork", () => {
     expect(experimentalMaterials.find(({ id }) => id === "giftWrap")!.cardFace).toBe("concealed");
   });
 
-  it("preserves card seeds, centred positions, fonts and ink across the deck", () => {
+  it("preserves card seeds, fonts and ink, with rank and suit top-left, across the deck", () => {
     for (const {
       traits: { identity },
     } of standardDeck) {
@@ -33,21 +33,21 @@ describe("shared face artwork", () => {
       expect(calls).toEqual([
         [
           identity.rank,
-          128,
-          100,
-          "bold 80px system-ui, sans-serif",
+          256 * 0.08 + (256 * 0.36) / 2,
+          256 * 0.08,
+          "bold 77px system-ui, sans-serif",
           identity.suit.color === "#bd3651" ? "red" : "black",
         ],
         [
           identity.suit.symbol,
-          128,
-          180,
-          "94px Georgia, serif",
+          256 * 0.08 + (256 * 0.36) / 2,
+          256 * (0.08 + 0.3),
+          "92px Georgia, serif",
           identity.suit.color === "#bd3651" ? "red" : "black",
         ],
       ]);
       expect(g.textAlign).toBe("center");
-      expect(g.textBaseline).toBe("middle");
+      expect(g.textBaseline).toBe("top");
     }
   });
   it("keeps the material builder independent of card identity and face-art kinds", () => {

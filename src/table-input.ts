@@ -134,6 +134,11 @@ export type TableInput = {
    * is played, discarded, sold or rotated, and dragged blocks return (#124).
    */
   cancelGestures(): void;
+  /**
+   * Re-describe the block whose inspection is showing, from the card `current` finds for its id
+   * (#751: inspection updates while visible). Nothing happens when no inspection of ours shows.
+   */
+  refreshInspection(current: (id: string) => CardBlock | undefined): void;
   /** Refresh the discard target: exhausted when no discards are left, armed with a count. */
   refreshDiscardTarget(): void;
   /** The id of the table block under a screen point, if any. */
@@ -362,8 +367,13 @@ export function createTableInput(options: {
   const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
   const dragPoint = new THREE.Vector3();
 
+  /** The card this input last described, where, and with what text, to refresh it in place. */
+  let inspected: { id: string; clientX: number; clientY: number; label: string } | null = null;
+
   function showInspection(block: CardBlock | undefined, clientX: number, clientY: number): void {
-    options.overlays().inspect((block && inspectBlock(block)) || null, clientX, clientY);
+    const label = (block && inspectBlock(block)) || null;
+    inspected = block && label ? { id: block.id, clientX, clientY, label } : null;
+    options.overlays().inspect(label, clientX, clientY);
   }
 
   function pointRay(
@@ -1099,6 +1109,12 @@ export function createTableInput(options: {
     },
     get candidateCell() {
       return drag?.active ? (gridShown?.cell ?? null) : null;
+    },
+    refreshInspection(current) {
+      // Only our own description, still showing: another host's tooltip is left alone.
+      if (!inspected || options.overlays().inspection() !== inspected.label) return;
+      const card = current(inspected.id);
+      showInspection(card, inspected.clientX, inspected.clientY);
     },
     cancelGestures() {
       onBlur();

@@ -58,6 +58,8 @@ export type Overlays = {
   hideStageWon(): void;
   /** Show the inspection tooltip near a pointer, or hide it with a null label. */
   inspect(label: string | null, clientX?: number, clientY?: number): void;
+  /** The label the tooltip shows now, or null while it is hidden (#751). */
+  inspection(): string | null;
   hideTooltip(): void;
   /** Flash a drop target's red X, shaking it unless motion is reduced. */
   flashRefused(target: HTMLElement): void;
@@ -169,6 +171,9 @@ export function createOverlays(
       const top = clientY - bounds.top + 14;
       tooltip.style.left = `${Math.max(8, Math.min(left, bounds.width - tooltip.offsetWidth - 8))}px`;
       tooltip.style.top = `${Math.max(8, Math.min(top, bounds.height - tooltip.offsetHeight - 8))}px`;
+    },
+    inspection() {
+      return tooltip.hidden ? null : tooltip.textContent;
     },
     hideTooltip() {
       tooltip.hidden = true;

@@ -1,3 +1,4 @@
+import type { EventEnvelope } from "./lifecycle/action";
 /**
  * Run controller: the run being played and the game mode it is played in. It owns the
  * `GameRun`, starts, resumes and saves runs, moves between stages and the shop, follows
@@ -88,6 +89,11 @@ export type RunServices = {
 
 export type GameRunController = {
   readonly game: GameRun;
+  /**
+   * Hear each committed action's facts, from whichever run is current (#755). Presentation
+   * controller traits subscribe here; returns a function that stops listening.
+   */
+  onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void;
   /** The mode being played. */
   readonly mode: GameMode;
   readonly settings: Settings;
@@ -197,7 +203,17 @@ export function createGameRunController<Context>(options: {
     checkpoint: () => randomizer.checkpoint(),
     restore: (mark: { state: number; draws: number }) => randomizer.restore(mark),
   };
-  let game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+  // Every run this controller holds publishes its committed facts to the same listeners (#755).
+  const committedListeners = new Set<(facts: readonly EventEnvelope[]) => void>();
+  const adopt = (run: GameRun): GameRun => {
+    run.onCommitted((facts) => {
+      // A replaced run is no longer the one on screen: its facts present nothing.
+      if (run !== game) return;
+      for (const listener of Array.from(committedListeners)) listener(facts);
+    });
+    return run;
+  };
+  let game = adopt(new GameRun(dealerRegistry, runRules, cards, () => randomizer.next()));
   game.attachRandomCheckpoints(randomCheckpoints);
   let settings = loadSettings(storage);
   let reducedMotion = false;
@@ -285,6 +301,15 @@ export function createGameRunController<Context>(options: {
     services.frame.setLayout(resolveLayout(next.layout, viewport(), services.frame.layout));
   }
 
+  /** A card the run holds now, wherever it is, by id: what a visible inspection re-describes. */
+  function currentCard(id: string): CardBlock | undefined {
+    const { hand, deck, discardPile, field } = game.state;
+    return (
+      field.find(({ block }) => block.id === id)?.block ??
+      [...hand, ...deck, ...discardPile].find((card) => card.id === id)
+    );
+  }
+
   function updateHud(): void {
     // The game state updates as soon as a placement is accepted, but the card still
     // has to land before its scoring presentation begins. Keep outcomes hidden across
@@ -304,6 +329,8 @@ export function createGameRunController<Context>(options: {
       deckSize: deck.length,
     });
     services.input.refreshDiscardTarget();
+    // Every model change refreshes the HUD: an open inspection follows the card's new state.
+    services.input.refreshInspection(currentCard);
   }
 
   function showSelection(): void {
@@ -466,7 +493,7 @@ export function createGameRunController<Context>(options: {
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
   function startRun(session: GameRun): void {
     const { rack, cameraView, audio } = services;
-    game = session;
+    game = adopt(session);
     game.attachRandomCheckpoints(randomCheckpoints);
     rack.render(game.state.passiveRack);
     gameOverAt = null;
@@ -551,7 +578,7 @@ export function createGameRunController<Context>(options: {
       // A previous mode can have an outcome timer or an animated play in flight. Replace
       // its run before changing scenes so neither can resume into this scene-only tool.
       stageWonAt = gameOverAt = null;
-      game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+      game = adopt(new GameRun(dealerRegistry, runRules, cards, () => randomizer.next()));
       game.attachRandomCheckpoints(randomCheckpoints);
       resetTable();
       showScene(currentMode.startScene);
@@ -689,7 +716,7 @@ export function createGameRunController<Context>(options: {
       // The active mode's own save slot, never a named mode.
       clearRun(storage, runSaveKey);
       // The run on screen is gone too, so the table returns to its empty start.
-      game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+      game = adopt(new GameRun(dealerRegistry, runRules, cards, () => randomizer.next()));
       game.attachRandomCheckpoints(randomCheckpoints);
       stageWonAt = gameOverAt = null;
       services.presenter.reset();
@@ -721,6 +748,10 @@ export function createGameRunController<Context>(options: {
   return {
     get game() {
       return game;
+    },
+    onCommitted(listener) {
+      committedListeners.add(listener);
+      return () => committedListeners.delete(listener);
     },
     get mode() {
       return currentMode;

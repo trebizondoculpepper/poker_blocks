@@ -1,3 +1,5 @@
+import { inspectBlock } from "./traits/inspectable";
+import { acquiredBonusDescriptor } from "./modifier-registers";
 import { cardFaceArt } from "./visual/face-art";
 import { cardLook } from "./card-look";
 import { createScatterPlacer } from "./shop-scatter";
@@ -105,7 +107,10 @@ function passiveCube(block: PassiveBlock): OfferCube {
 function cardCube(block: CardBlock): OfferCube {
   const look = cardLook(block);
   const appearance = createBlockAppearance(
-    cardFaceArt(block.traits.identity, { face: look.cardFace }),
+    cardFaceArt(block.traits.identity, {
+      face: look.cardFace,
+      bonus: acquiredBonusDescriptor(block),
+    }),
     look,
     1.35,
   );
@@ -143,7 +148,7 @@ function cardCube(block: CardBlock): OfferCube {
 registerOfferView<CardBlock>("card", {
   cube: cardCube,
   name: (block) => cardName(block.traits.identity),
-  describe: (block) => block.traits.inspectable?.inspect() ?? cardName(block.traits.identity),
+  describe: (block) => inspectBlock(block) ?? cardName(block.traits.identity),
   className: "is-card",
   purchaseDescription: "BUY to add to the deck",
   flightTarget: "deck",
