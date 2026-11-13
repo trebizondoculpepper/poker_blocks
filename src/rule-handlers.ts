@@ -147,36 +147,48 @@ ruleHandlers.registerEffect<{ factor: number }, unknown>(
   ({ factor }, _selected, frame) =>
     scored(frame, "multiply-line-score", factor, "line", (value) => value * factor),
 );
+/**
+ * `frame` with its line raised by one more exponent contribution, reported as `operation`.
+ * Exponents add their increases above 1 (#431): the phase's starting value is raised to the new
+ * total, so it ends at base^(1 + sum(e - 1)) in any order, even through a total of 0. A neutral
+ * power (1) changes nothing but is still reported, with any captured `note`.
+ */
+export function raiseLine(
+  frame: Readonly<RuleFrame>,
+  power: number,
+  operation: string,
+  note?: string,
+): RuleFrame {
+  const exponent = (frame.exponent ?? 1) + power - 1;
+  const base = frame.powerBase ?? frame.workingValue ?? 0;
+  // A power that has no finite result (a zero line under a negative total exponent) scores
+  // nothing, so a score is always a finite number (#476 review).
+  const raised = base ** exponent;
+  const after = Number.isFinite(raised) ? raised : 0;
+  return {
+    ...frame,
+    workingValue: after,
+    exponent,
+    powerBase: base,
+    outcomes: [
+      ...(frame.outcomes ?? []),
+      {
+        operation,
+        operand: power,
+        before: frame.workingValue ?? 0,
+        after,
+        unit: "score",
+        scope: "line",
+        ...(note ? { note } : {}),
+      },
+    ],
+  };
+}
+
 /** Raises the working score to `power` (a prismatic crystal's exponential modifier). */
 ruleHandlers.registerEffect<{ power: number }, unknown>(
   "power-line-score",
-  // Exponents add their increases above 1 (#431): the phase's starting value is raised to the
-  // new total, so it ends at base^(1 + sum(e - 1)) in any order, even through a total of 0.
-  ({ power }, _selected, frame) => {
-    const exponent = (frame.exponent ?? 1) + power - 1;
-    const base = frame.powerBase ?? frame.workingValue ?? 0;
-    // A power that has no finite result (a zero line under a negative total exponent) scores
-    // nothing, so a score is always a finite number (#476 review).
-    const raised = base ** exponent;
-    const after = Number.isFinite(raised) ? raised : 0;
-    return {
-      ...frame,
-      workingValue: after,
-      exponent,
-      powerBase: base,
-      outcomes: [
-        ...(frame.outcomes ?? []),
-        {
-          operation: "power-line-score",
-          operand: power,
-          before: frame.workingValue ?? 0,
-          after,
-          unit: "score",
-          scope: "line",
-        },
-      ],
-    };
-  },
+  ({ power }, _selected, frame) => raiseLine(frame, power, "power-line-score"),
 );
 /** Adds `amount` once, or once per crossing cell with `perIntersection`. */
 ruleHandlers.registerEffect<
