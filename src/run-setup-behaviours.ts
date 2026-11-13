@@ -130,6 +130,8 @@ export function createRunSetupRegistry(
   // invalid scenario throws its diagnostics; nothing is adopted.
   registry.register("devScenario", {
     start: (context, { scenario, trialId }) => {
+      if (typeof trialId !== "string" || !trialId)
+        throw new ScenarioError("devScenario needs a fresh trial ID from its controller");
       const result = buildScenario(scenario, { dealers: dealerRegistry, rules: context.rules });
       if (!result.ok) throw new ScenarioError(result.diagnostics.join("\n"));
       const { session, run, initialSnapshot, actionLog } = result.trial;
@@ -140,7 +142,7 @@ export function createRunSetupRegistry(
           ...session,
           run,
           provenance: {
-            trialId: trialId ?? `trial-${scenario.seed}`,
+            trialId,
             scenarioVersion: scenario.version,
             seed: scenario.seed,
             initialSnapshot,

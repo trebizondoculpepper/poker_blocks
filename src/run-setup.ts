@@ -41,7 +41,11 @@ export type RunSetupStepConfigs = {
    * A Dev scenario (#901): prepares a trial session from a scenario definition, off to the side,
    * through buildScenario. The composed mode or controller supplies the definition.
    */
-  devScenario: { scenario: ScenarioDefinition; trialId?: string };
+  devScenario: {
+    scenario: ScenarioDefinition;
+    /** A fresh ID the requesting controller allocated: same-seed trials still differ. */
+    trialId: string;
+  };
   /** The run begins on a structure holding one block of every material. */
   materialSample: Record<never, never>;
   /** Testing only: about `share` of the deck is destructible by the given causes. */

@@ -27,9 +27,10 @@ const scenario = (steps: ScenarioDefinition["steps"]): ScenarioDefinition => ({
     ...steps,
   ],
 });
-const start = (definition: ScenarioDefinition, trialId?: string) =>
+let serial = 0;
+const start = (definition: ScenarioDefinition, trialId = `trial-${++serial}`) =>
   createRunSetupRegistry().start(
-    [{ step: "devScenario", scenario: definition, ...(trialId ? { trialId } : {}) }],
+    [{ step: "devScenario", scenario: definition, trialId }],
     base(),
     services,
   );
@@ -87,6 +88,14 @@ describe("the devScenario run-setup step (#901)", () => {
 
   it("throws the scenario's diagnostics for an invalid definition, preparing nothing", () => {
     expect(() => start({ ...scenario([]), version: 99 })).toThrow(ScenarioError);
+  });
+
+  it("requires a caller-allocated trial ID, so same-seed trials stay distinct", () => {
+    const definition = scenario([]);
+    expect(start(definition).prepared!.provenance.trialId).not.toBe(
+      start(definition).prepared!.provenance.trialId,
+    );
+    expect(() => start(definition, "")).toThrow(ScenarioError);
   });
 
   it("leaves ordinary start steps without a prepared session", () => {
