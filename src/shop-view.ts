@@ -1,3 +1,4 @@
+import { inspectBlock } from "./traits/inspectable";
 import { acquiredBonusDescriptor } from "./modifier-registers";
 import { cardFaceArt } from "./visual/face-art";
 import { cardLook } from "./card-look";
@@ -147,7 +148,7 @@ function cardCube(block: CardBlock): OfferCube {
 registerOfferView<CardBlock>("card", {
   cube: cardCube,
   name: (block) => cardName(block.traits.identity),
-  describe: (block) => block.traits.inspectable?.inspect() ?? cardName(block.traits.identity),
+  describe: (block) => inspectBlock(block) ?? cardName(block.traits.identity),
   className: "is-card",
   purchaseDescription: "BUY to add to the deck",
   flightTarget: "deck",

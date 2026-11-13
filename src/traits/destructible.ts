@@ -6,7 +6,7 @@
  */
 import { cardName, type CardBlock } from "../cards";
 import type { BlockTraitBehavior } from "../block-trait-behaviours";
-import { inspectBlock, inspectable } from "./inspectable";
+import { inspectable } from "./inspectable";
 
 /** What can destroy a block. "manual" is the testing mode's double-click. */
 export type DestroyCause = "manual";
@@ -48,7 +48,7 @@ export function withDevDestructibleMix(
             ...chosen.traits,
             destructible: { by: mix.by },
             inspectable: inspectable(
-              `${inspectBlock(chosen) ?? cardName(chosen.traits.identity)} · Destructible`,
+              `${chosen.traits.inspectable?.inspect() ?? cardName(chosen.traits.identity)} · Destructible`,
             ),
           },
         }))
