@@ -9,36 +9,25 @@ Brief the user on the most urgent work in this repository, using the `github-tri
 
 ## 1. Update the tool
 
-The tool is a Git dependency that follows the `main` branch of `trebizondoculpepper/github_triage` ([doc/github-triage-cli.md](../../../doc/github-triage-cli.md), "Git dependency installation and launch"). `package-lock.json` pins one commit of it, so a newer `main` isn't used until the lockfile moves.
+The tool is installed globally as the `github-triage` command, from the `main` branch of `trebizondoculpepper/github_triage` ([doc/github-triage-cli.md](../../../doc/github-triage-cli.md), "Global installation and launch"). Nothing in this repository pins it, so an update needs no PR.
 
-1. Compare the pinned commit with the remote:
+1. Check how it is installed: `npm ls -g github-triage`. If it points at a local checkout (`-> …`), a developer has `npm link`ed their own copy: leave it alone, say so, and use it as it is.
+2. Otherwise reinstall from `main`, noting the commit you get:
 
    ```sh
-   grep -A2 '"node_modules/github-triage"' package-lock.json | grep resolved   # pinned: text after '#'
-   git ls-remote https://github.com/trebizondoculpepper/github_triage.git main  # latest
+   git ls-remote https://github.com/trebizondoculpepper/github_triage.git main
+   npm install -g git+https://github.com/trebizondoculpepper/github_triage.git#main
+   github-triage --help
    ```
 
-2. If they match, say the tool is current and go to step 2.
-3. If they differ:
-   - Check the working tree first (`git status`). Don't disturb another agent's uncommitted work. Note the branch you are on and the pinned commit, so a failed update can be undone (step 4).
-   - Update it on a branch of its own, never on `main`: `git checkout -b chore/update-github-triage origin/main`, then `npm install github-triage@"git+https://git@github.com/trebizondoculpepper/github_triage.git#main"`.
-   - Confirm that the lockfile's `resolved` now names the new commit, and that `npm run triage -- --help` still runs.
-   - Commit only `package.json` and `package-lock.json`. Push, then open a small PR: "Update github-triage to <short sha>". Give the old and new commits, and the upstream log between them (`gh api repos/trebizondoculpepper/github_triage/compare/<old>...<new> -q '.commits[].commit.message'`).
-   - Merge it under the normal rules: CI green, Codex clean on the current head, no open threads.
-   - Return to the branch you were on. Use the updated tool for the briefing: it is installed locally even before the PR merges.
-4. If the update fails (the network, an install error, or a CLI that no longer starts), say so, and restore the pinned version before the briefing. `npm run triage` runs whatever is installed in `node_modules`, so a broken update would still be the one in use.
-   - Discard the update: `git checkout -- package.json package-lock.json`.
-   - Reinstall from the restored lockfile: `npm ci`.
-   - Return to the branch you started on, and delete the abandoned update branch.
-   - Confirm that the lockfile's `resolved` names the original commit again, and that `npm run triage -- --help` runs.
-   - Then run the briefing, saying which version you used.
+3. If the install fails or the command no longer starts, say so. If it doesn't start at all, there is no briefing: report it instead of improvising one.
 
-Updating the tool changes no game code. It is still a lockfile change, so it goes through a PR like any other.
+Name the commit (or the linked checkout) at the top of the briefing.
 
 ## 2. Run the briefing
 
 ```sh
-npm run --silent triage -- --json
+github-triage --json
 ```
 
 Use the JSON: the text output is truncated. Read it before acting:
@@ -84,7 +73,7 @@ Written by the designer, for the human owner. Include only the decisions that ne
 
 ### Every role
 
-Recheck the live owner label and PR head before claiming or merging anything: the briefing's candidates are suggestions, not approval. For a single ticket, run full intake with `npm run triage -- --issue N`.
+Recheck the live owner label and PR head before claiming or merging anything: the briefing's candidates are suggestions, not approval. For a single ticket, run full intake with `github-triage --issue N`.
 
 ## Feedback
 
