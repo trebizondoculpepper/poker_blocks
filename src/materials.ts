@@ -301,9 +301,9 @@ export const materialDefinitions = [
     name: "Paper",
     acoustics: { character: "flimsy", hardness: 2, attach: "material.attach.paper" },
     traits: {},
-    // Never sold as a card, so its transmogrifier sets its own price (#384: 2 coins) and is
-    // offered from round 1 at a low weight (a safe default, noted on #388).
-    transmogrifier: { price: 2, weights: [[1, 0.5]] },
+    // Never offered, as a card or as its transmogrifier (#792, doc/game.md): weight zero from
+    // round 1 on. The definition and its historical 2-coin price stay for items already owned.
+    transmogrifier: { price: 2, weights: [[1, 0]] },
     appearance: {
       // Bursts into small torn scraps that scatter, flutter and fade as the sheet vanishes (#447).
       exit: {
