@@ -38,6 +38,9 @@ const fragmentShader = /* glsl */ `
   uniform float heightScale;
   // How much of the dim, smoky low-heat edge is kept (1 = all of it, #743).
   uniform float haze;
+  uniform float extinction;
+  // The soft shoulder's gain, chosen so the flames keep the brightness the owner approved (#743).
+  const float exposure = 2.0;
   varying vec3 vLocal;
 
   float hash(vec3 p) {
@@ -110,18 +113,30 @@ const fragmentShader = /* glsl */ `
     float leave = min(min(far.x, far.y), far.z);
     const int steps = 40;
     float stepLength = (leave - enter) / float(steps);
+    // Front-to-back emission and absorption (#744): each step adds its own light, dimmed by what
+    // lies in front of it, and absorbs a share of what lies behind. Nothing here reads a scene light.
     vec3 colour = vec3(0.0);
+    float transmittance = 1.0;
     for (int i = 0; i < steps; i++) {
       vec3 p = origin + direction * (enter + stepLength * (float(i) + 0.5));
       vec2 flameAt = flame(p / halfSize);
-      colour += fireColour(clamp(flameAt.y, 0.0, 1.0)) * flameAt.x * stepLength / halfSize;
+      float amount = flameAt.x * stepLength / halfSize;
+      colour += transmittance * fireColour(clamp(flameAt.y, 0.0, 1.0)) * amount;
+      transmittance *= exp(-extinction * amount);
+      if (transmittance < 0.01) break;
     }
-    // Premultiplied light: the glow's own brightness is its coverage, so the transparent front
-    // canvas (#116, #190) holds a valid colour wherever the flame is, and nothing where it isn't.
-    vec3 light = min(colour * intensity, vec3(1.0)) * opacity;
-    gl_FragColor = vec4(light, max(light.r, max(light.g, light.b)));
+    // A soft shoulder instead of a hard clamp, so the hot core keeps its gradation rather than
+    // flattening into one plateau. Premultiplied: the transparent front canvas (#116, #190) holds a
+    // valid colour wherever the flame is, and nothing where it isn't.
+    vec3 light = (vec3(1.0) - exp(-colour * intensity * exposure)) * opacity;
+    // Coverage is what the flame absorbs, never less than its own light (a valid premultiplied pixel).
+    float coverage = max((1.0 - transmittance) * opacity, max(light.r, max(light.g, light.b)));
+    gl_FragColor = vec4(light, coverage);
   }
 `;
+
+/** How strongly the flame's own body absorbs light passing through it (#744). */
+export const flameExtinction = 1.0;
 
 /** The flame base's default depth below the centre (doc/presentation-contracts.md, #745). */
 export const flameBaseOffset = 0.6;
@@ -155,6 +170,7 @@ export function createFireCore(size: number): THREE.Mesh {
       core: { value: new THREE.Color(...flamePalette.core) },
       heightScale: { value: 1 },
       haze: { value: 1 },
+      extinction: { value: flameExtinction },
       // Read from the material's own opacity at render (set below), never a copy.
       opacity: { value: 1 },
     },
@@ -211,6 +227,8 @@ export type FlameConfig = {
   speed?: number;
   /** How much of the dim, smoky outer edge is kept, 0 to 1; omitted, all of it (#743). */
   haze?: number;
+  /** How strongly the flame absorbs what is behind it; omitted, `flameExtinction` (#744). */
+  extinction?: number;
 };
 
 containedContents.register("flame", (boundary, raw) => {
@@ -222,6 +240,7 @@ containedContents.register("flame", (boundary, raw) => {
     height = 1,
     speed = 1,
     haze = 1,
+    extinction = flameExtinction,
   } = (raw ?? {}) as FlameConfig;
   // It keeps the core's own order (drawn last, after the frame): it is an additive, non-depth-
   // writing material in the opaque queue, so the frame must be drawn first or its rear bars
@@ -232,6 +251,7 @@ containedContents.register("flame", (boundary, raw) => {
   uniforms.intensity!.value *= brightness;
   uniforms.baseOffset!.value = baseOffset;
   (core.material as THREE.ShaderMaterial).userData.speed = speed;
+  uniforms.extinction!.value = Math.max(extinction, 0);
   uniforms.haze!.value = Math.min(Math.max(haze, 0), 1);
   // Headroom: the envelope never reaches past the top of the interior (1 above the centre).
   uniforms.heightScale!.value = Math.min(height, (1 + baseOffset) / 1.35);
