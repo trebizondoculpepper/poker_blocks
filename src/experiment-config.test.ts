@@ -24,6 +24,8 @@ const rules: RunRules = {
   policies: { stockShop: { shop: { offers: 6 } } },
 };
 const runtime = { dealers, rules };
+// A controlled fixture identity: every export below is made, and imported, by this build.
+const build = "1.2.3";
 
 const scenario: ScenarioDefinition = {
   version: scenarioVersion,
@@ -49,7 +51,7 @@ describe("experiment configuration export (#934)", () => {
   it("round-trips to an equivalent configuration that builds the same trial", () => {
     const config = exportConfiguration(scenario, runtime, "1.2.3");
     const text = serializeConfiguration(config);
-    const imported = importConfiguration(text, runtime);
+    const imported = importConfiguration(text, runtime, build);
     expect(imported).toEqual({ ok: true, config });
     const original = buildScenario(scenario, runtime);
     const restored = buildScenario(imported.ok ? imported.config.scenario : scenario, runtime);
@@ -71,8 +73,8 @@ describe("experiment configuration export (#934)", () => {
 
   it("rejects bad input without building anything", () => {
     const good = exportConfiguration(scenario, runtime, "1.2.3");
-    const as = (value: unknown) => importConfiguration(JSON.stringify(value), runtime);
-    expect(importConfiguration("{", runtime)).toMatchObject({ ok: false });
+    const as = (value: unknown) => importConfiguration(JSON.stringify(value), runtime, build);
+    expect(importConfiguration("{", runtime, build)).toMatchObject({ ok: false });
     expect(as({ ...good, format: "other" })).toMatchObject({ ok: false });
     expect(as({ ...good, version: experimentConfigVersion + 1 })).toMatchObject({
       diagnostics: [`unsupported configuration version ${experimentConfigVersion + 1}`],
@@ -105,7 +107,7 @@ describe("experiment configuration export (#934)", () => {
     const [first] = changed.generated.passives as { settings: Record<string, unknown> }[];
     const name = Object.keys(first!.settings).find((key) => key !== "maximum")!;
     first!.settings[name] = "an older default";
-    expect(importConfiguration(JSON.stringify(changed), runtime)).toMatchObject({
+    expect(importConfiguration(JSON.stringify(changed), runtime, build)).toMatchObject({
       ok: false,
       diagnostics: [expect.stringMatching(/generated\.passives\.0\.settings/)],
     });
@@ -116,14 +118,14 @@ describe("experiment configuration export (#934)", () => {
     expect(good.generated.cards.length).toBeGreaterThan(0);
     const changed = structuredClone(good);
     (changed.generated.cards[0] as { material?: unknown }).material = { id: "elsewhere" };
-    expect(importConfiguration(JSON.stringify(changed), runtime)).toMatchObject({
+    expect(importConfiguration(JSON.stringify(changed), runtime, build)).toMatchObject({
       ok: false,
       diagnostics: [
         expect.stringMatching(/^this build generates a different trial.*generated\.cards\.0/),
       ],
     });
     expect(
-      importConfiguration(JSON.stringify({ ...good, generated: undefined }), runtime),
+      importConfiguration(JSON.stringify({ ...good, generated: undefined }), runtime, build),
     ).toMatchObject({ ok: false });
   });
 
@@ -146,7 +148,7 @@ describe("experiment configuration export (#934)", () => {
     ] as const) {
       const changed = structuredClone(good);
       change(changed);
-      expect(importConfiguration(JSON.stringify(changed), runtime)).toEqual({
+      expect(importConfiguration(JSON.stringify(changed), runtime, build)).toEqual({
         ok: false,
         diagnostics: [`its rules differ from this mode's at ${path}`],
       });
@@ -158,9 +160,39 @@ describe("experiment configuration export (#934)", () => {
     const [hand] = Object.keys(good.rules.handMultipliers);
     const changed = structuredClone(good);
     changed.rules.handMultipliers[hand!] = 999;
-    expect(importConfiguration(JSON.stringify(changed), runtime)).toEqual({
+    expect(importConfiguration(JSON.stringify(changed), runtime, build)).toEqual({
       ok: false,
       diagnostics: [`its rules differ from this mode's at rules.handMultipliers.${hand}`],
+    });
+  });
+
+  it("imports only into the exact build that exported it, refusing before building anything", () => {
+    const good = serializeConfiguration(exportConfiguration(scenario, runtime, "build-a"));
+    expect(importConfiguration(good, runtime, "build-a")).toMatchObject({ ok: true });
+    for (const current of ["build-b", "", undefined])
+      expect(importConfiguration(good, runtime, current)).toMatchObject({ ok: false });
+    expect(importConfiguration(good, runtime, "build-b")).toEqual({
+      ok: false,
+      diagnostics: [
+        "made by build build-a, not this build (build-b): verified import needs the same build",
+      ],
+    });
+    for (const revision of ["", undefined])
+      expect(
+        importConfiguration(JSON.stringify({ ...JSON.parse(good), revision }), runtime, "build-a"),
+      ).toEqual({ ok: false, diagnostics: ["a configuration needs its source revision"] });
+    // A mismatch is refused before the scenario is built: an unbuildable one gets the same answer.
+    const broken = {
+      ...JSON.parse(good),
+      scenario: { ...scenario, steps: [{ capability: "nope", config: {} }] },
+    };
+    expect(importConfiguration(JSON.stringify(broken), runtime, "build-b")).toMatchObject({
+      diagnostics: [expect.stringMatching(/needs the same build/)],
+    });
+    // Same build, invalid input: still refused.
+    expect(importConfiguration(JSON.stringify(broken), runtime, "build-a")).toMatchObject({
+      ok: false,
+      diagnostics: ['unknown scenario capability "nope"'],
     });
   });
 
@@ -169,7 +201,7 @@ describe("experiment configuration export (#934)", () => {
     const text = serializeConfiguration(
       exportConfiguration(scenario, { dealers, rules: other }, "1.2.3"),
     );
-    expect(importConfiguration(text, runtime)).toEqual({
+    expect(importConfiguration(text, runtime, build)).toEqual({
       ok: false,
       diagnostics: ["its rules differ from this mode's at rules.rackCapacity"],
     });
@@ -182,14 +214,15 @@ describe("experiment configuration export (#934)", () => {
       importConfiguration(
         text({ ...rules, policies: { stockShop: { shop: { offers: 9 } } } }),
         runtime,
+        build,
       ),
     ).toMatchObject({ ok: false, diagnostics: [expect.stringMatching(/policies\.stockShop/)] });
-    expect(importConfiguration(text({ ...rules, policies: undefined }), runtime)).toEqual({
+    expect(importConfiguration(text({ ...rules, policies: undefined }), runtime, build)).toEqual({
       ok: false,
       diagnostics: ["these rules can't be verified: stockShop"],
     });
     const resale: RunRules = { ...rules, resaleModifiers: [(value) => value] };
-    expect(importConfiguration(text(resale), { dealers, rules: resale })).toEqual({
+    expect(importConfiguration(text(resale), { dealers, rules: resale }, build)).toEqual({
       ok: false,
       diagnostics: ["these rules can't be verified: resaleModifiers"],
     });
@@ -203,11 +236,11 @@ describe("experiment configuration export (#934)", () => {
     const short = serializeConfiguration(
       exportConfiguration(scenario, { dealers, rules: later }, "1.2.3"),
     );
-    expect(importConfiguration(short, runtime)).toMatchObject({ ok: true });
+    expect(importConfiguration(short, runtime, build)).toMatchObject({ ok: true });
     const long = serializeConfiguration(
       exportConfiguration(scenario, { dealers, rules: later }, "1.2.3", 12),
     );
-    expect(importConfiguration(long, runtime)).toMatchObject({ ok: false });
+    expect(importConfiguration(long, runtime, build)).toMatchObject({ ok: false });
     expect(JSON.parse(long).rules.horizon).toBe(12);
   });
 

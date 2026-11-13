@@ -172,7 +172,15 @@ function difference(a: unknown, b: unknown, path = "rules"): string | null {
  * Parse and validate a configuration for a runtime, changing nothing: the scenario is built off
  * to the side by its own builder and discarded, and the rules must be the runtime's own.
  */
-export function importConfiguration(text: string, runtime: ScenarioRuntime): ImportResult {
+export function importConfiguration(
+  text: string,
+  runtime: ScenarioRuntime,
+  /**
+   * The running build's identity, supplied explicitly by the trusted caller
+   * (doc/experiments/configuration-compatibility.md): never inferred here, never `appVersion`.
+   */
+  currentBuild: string | undefined,
+): ImportResult {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -187,8 +195,21 @@ export function importConfiguration(text: string, runtime: ScenarioRuntime): Imp
       ok: false,
       diagnostics: [`unsupported configuration version ${String(config.version)}`],
     };
-  if (typeof config.revision !== "string")
+  if (typeof config.revision !== "string" || config.revision === "")
     return { ok: false, diagnostics: ["a configuration needs its source revision"] };
+  // Exact-build verified import, before anything is built: no cross-build success path.
+  if (typeof currentBuild !== "string" || currentBuild === "")
+    return {
+      ok: false,
+      diagnostics: ["verified import is unavailable: this build's identity is unknown"],
+    };
+  if (config.revision !== currentBuild)
+    return {
+      ok: false,
+      diagnostics: [
+        `made by build ${config.revision}, not this build (${currentBuild}): verified import needs the same build`,
+      ],
+    };
   const built = generatedCards(config.scenario as ScenarioDefinition, runtime);
   if (!built.ok) return { ok: false, diagnostics: built.diagnostics };
   if (typeof config.generated !== "object" || config.generated === null)
