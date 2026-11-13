@@ -120,6 +120,8 @@ export type SceneHost = {
       | "shopStock"
       | "deckBlocks"
       | "committedState"
+      | "requestSession"
+      | "sessionProvenance"
       | "lastScoring"
       | "inventory"
       | "dispatch"
