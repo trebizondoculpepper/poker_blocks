@@ -1682,3 +1682,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Passive multi-action lifecycle and instance state
 
 [Passive lifecycle actions and instance state](passive-lifecycle-state.md) defines multiple registered actions per passive, phase-local rack ordering, persistent instance state versus operation-scoped values, transactional state/RNG and restoration. [Could It Be Magic Now?](experiments/could-it-be-magic-now.md) provides the agreed experimental counter use case. Implementation follows this documentation separately.
+
+## Debug snapshot command
+
+[Read-only debug snapshot](debug-snapshot.md) defines the development console report, registered bounded providers, model/presentation ownership summaries, explicit clipboard fallback and no-side-effect guarantees. It is diagnostic evidence, not an import format or replay system (#987).
