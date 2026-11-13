@@ -117,7 +117,8 @@ deckBuilderOperations.register("assignWeighted", (context, raw) => {
   if (weights.some(({ weight }) => !Number.isFinite(weight) || weight < 0))
     throw new DeckBuilderError("material weights must be finite and nonnegative");
   const total = weights.reduce((sum, { weight }) => sum + weight, 0);
-  if (!(total > 0)) throw new DeckBuilderError("material weights must have a positive sum");
+  if (!(total > 0) || !Number.isFinite(total))
+    throw new DeckBuilderError("material weights must have a positive, finite sum");
   const candidates = weights.map(({ material, weight }) => ({
     definition: definitionOf(material),
     weight,

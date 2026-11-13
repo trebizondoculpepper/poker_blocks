@@ -147,5 +147,12 @@ describe("deck builders (#827)", () => {
     expect(() => weighted([{ material: "wood", weight: -1 }])).toThrow(/nonnegative/);
     expect(() => weighted([{ material: "wood", weight: 0 }])).toThrow(/positive sum/);
     expect(() => weighted([{ material: "wood", weight: Number.NaN }])).toThrow(DeckBuilderError);
+    // Finite weights whose sum overflows are rejected too (#848 review).
+    expect(() =>
+      weighted([
+        { material: "wood", weight: 1e308 },
+        { material: "steel", weight: 1e308 },
+      ]),
+    ).toThrow(/finite sum/);
   });
 });
