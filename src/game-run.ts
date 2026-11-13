@@ -1123,28 +1123,48 @@ export class GameRun {
     // settled again, rather than progressing past it and losing the payout (#740 review). A
     // loss with nothing to pay settles nothing, and still proceeds.
     if (this.settlementFailed) return false;
-    if (outcome === "lost") {
-      this.currentPhase = "over";
-      return true;
-    }
-    this.shopAfter = this.currentPhase as StageKind;
-    this.currentState = this.clearTable(this.currentState);
-    this.currentPhase = shopPosition;
-    // The round's last stage completes the round; no stage is named for it.
-    if (!nextStage(this.shopAfter)) this.runStats = recordRoundComplete(this.runStats);
-    this.lifecycle("shop.entered");
-    this.stockEmptyShop();
-    return true;
+    // The progression itself is one transaction, like a play (doc/outcome-presentation.md,
+    // "Finish the model before presenting it"): its facts publish once it has committed, and a
+    // failure rolls back state and RNG and publishes nothing (#878).
+    return outcome === "lost"
+      ? this.transact("endRun", undefined, () => {
+          // The terminal fact, recorded while the final stage is still the context.
+          this.lifecycle("run.ended", { result: "lost" });
+          this.currentPhase = "over";
+          return true;
+        }) === true
+      : this.transact("enterShop", undefined, () => {
+          this.shopAfter = this.currentPhase as StageKind;
+          this.currentState = this.clearTable(this.currentState);
+          this.currentPhase = shopPosition;
+          // The round's last stage completes the round; no stage is named for it.
+          if (!nextStage(this.shopAfter)) this.runStats = recordRoundComplete(this.runStats);
+          this.lifecycle("shop.entered");
+          this.stockEmptyShop();
+          return true;
+        }) === true;
   }
 
   /** Leave a shop for the next stage, or stage 1 of the next round after a boss. */
-  leaveShop(): boolean {
+  leaveShop(actionId?: string): boolean {
     if (this.currentPhase !== "shop") return false;
+    // One transaction (#878): leaving commits ownership, the next stage's deal and its RNG
+    // together, and records shop.left once; a failure rolls all of it back, publishing nothing.
+    return this.transact("leaveShop", actionId, () => this.resolveLeaveShop()) === true;
+  }
+
+  private resolveLeaveShop(): true {
     const completed = this.shopAfter ?? finalStage;
     const next = nextStage(completed);
     // Each unbought offer's kind says what leaving does with it (borrowed cards go back to the
     // deck). Undefined stock means a later shop generates fresh stock, including after a skip.
     const stock = this.currentState.shopStock ?? [];
+    // What actually left, captured now for presentation (the burn) to present later.
+    const outgoingStock = stock.map(({ kind, block }) => ({ kind, blockId: block.id }));
+    const destination = {
+      round: next ? this.currentRound : this.currentRound + 1,
+      stage: next ?? stageKinds[0],
+    };
     this.currentState = {
       ...stock.reduce(
         (state, offer) => offerKind(offer).unbought(state, offer.block),
@@ -1158,10 +1178,10 @@ export class GameRun {
       this.currentState = resetRoundState(
         discardPileAtRoundEnd[this.config.discardPileAfterShop](this.currentState),
       );
-    this.lifecycle("shop.left");
+    this.lifecycle("shop.left", { outgoingStock, destination });
     if (!next) this.currentRound++;
     this.shopAfter = null;
-    this.startStage(next ?? "stage-1");
+    this.startStage(destination.stage);
     return true;
   }
 
