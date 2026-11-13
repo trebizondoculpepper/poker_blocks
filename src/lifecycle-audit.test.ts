@@ -28,10 +28,11 @@ describe("lifecycle declarations on every installed definition (#917)", () => {
       retention: "run",
       reset: { facet: "resettable", config: { boundary: "round" } },
     });
-    expect(lifecycleOf("material:cloud")).toMatchObject({
-      retention: "stage",
-      reset: { facet: "nonResettable" },
-    });
+    for (const cloud of ["material:cloud", "material:cloudInPlastic", "material:cloudInLantern"])
+      expect(lifecycleOf(cloud)).toMatchObject({
+        retention: "stage",
+        reset: { facet: "nonResettable" },
+      });
   });
 
   it("gives ordinary cards, items and wrappers run retention and no automatic reset", () => {

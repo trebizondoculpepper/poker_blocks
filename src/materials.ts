@@ -289,6 +289,9 @@ const grass = {
 };
 
 /** A material with inclusions suspended in its contents (#353). */
+/** Cloud's lifecycle, shared by its container appearances: it lasts the stage only. */
+const cloudLifecycle: LifecycleDeclaration = { parent: "ordinaryCard", retention: "stage" };
+
 export const materialDefinitions = [
   {
     id: "paper",
@@ -1020,7 +1023,7 @@ export const materialDefinitions = [
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Cloud lasts the stage only; expiry removes it, with no reset.
-    lifecycle: { parent: "ordinaryCard", retention: "stage" },
+    lifecycle: cloudLifecycle,
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "cloud",
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -1342,13 +1345,14 @@ function plasticFluidExperiments(): MaterialDefinition[] {
     contents: MaterialDefinition["appearance"]["contents"],
     fill: MassComponent[],
     family: string,
+    // Its gameplay parent's full lifecycle (#917 review): an ordinary run card unless given.
+    lifecycle: LifecycleDeclaration = { parent: "ordinaryCard" },
   ): MaterialDefinition => ({
     id,
     materialFamily: family,
     mass: massOf(plasticShell, fill),
     releaseStatus: { provisional: {} },
-    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
-    lifecycle: { parent: "ordinaryCard" },
+    lifecycle,
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name,
     acoustics: { character: "hollow", hardness: 4, attach: "material.attach.custard" },
@@ -1384,7 +1388,8 @@ function plasticFluidExperiments(): MaterialDefinition[] {
       [fastBubbles],
     ),
     plastic("darkFluid", "Dark fluid", darkFluid, darkOilFill, "darkFluid"),
-    plastic("cloudInPlastic", "Cloud in plastic", softCloud, cloudFill, "cloud"),
+    // Cloud's container appearances keep Cloud's own stage retention (#917 review).
+    plastic("cloudInPlastic", "Cloud in plastic", softCloud, cloudFill, "cloud", cloudLifecycle),
     plastic("magicLock", "Magic Lock", magicStars, magicStarsFill, "magic"),
   ];
 }
@@ -1401,13 +1406,14 @@ function glassContainerExperiments(): MaterialDefinition[] {
     family: string,
     contents?: MaterialDefinition["appearance"]["contents"],
     residue?: MaterialDefinition["appearance"]["residue"],
+    // Its gameplay parent's full lifecycle (#917 review): an ordinary run card unless given.
+    lifecycle: LifecycleDeclaration = { parent: "ordinaryCard" },
   ) => ({
     id,
     materialFamily: family,
     mass: massOf(stainedLantern, fill),
     releaseStatus: { provisional: {} },
-    // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
-    lifecycle: { parent: "ordinaryCard" },
+    lifecycle,
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
     name,
     acoustics: { character: "ringing", hardness: 9, attach: "material.attach.prismatic" as const },
@@ -1444,7 +1450,15 @@ function glassContainerExperiments(): MaterialDefinition[] {
     // Fluid looks (#333): the same levelling fluid, other optics, in either container.
     lantern("waterInLantern", "Water in a lantern", waterFill, "water", clearWater),
     // A contained cloud (#336): the same contents in either container.
-    lantern("cloudInLantern", "Cloud in a lantern", cloudFill, "cloud", softCloud),
+    lantern(
+      "cloudInLantern",
+      "Cloud in a lantern",
+      cloudFill,
+      "cloud",
+      softCloud,
+      undefined,
+      cloudLifecycle,
+    ),
     withInclusions(lantern("earthInLantern", "Earth in a lantern", soilFill, "earth", slowEarth), [
       grass,
     ]),
