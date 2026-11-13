@@ -5,7 +5,7 @@ import { createActionLog } from "./action-log";
 import { describe, expect, it } from "vite-plus/test";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
 import { sceneBehaviours, type SceneHost } from "./scene-behaviours";
-import { gameModeFor, type SceneTraits } from "./game-modes";
+import { gameDialogs, gameModeFor, type SceneTraits } from "./game-modes";
 import type { HudPanel } from "./hud-panels";
 import type { ShopOffer } from "./shop-stock";
 
@@ -206,8 +206,7 @@ function recordingHost() {
         hideMenu: () => void calls.push("menu:hide"),
         showSettings: () => void calls.push("settings:show"),
         hideSettings: () => void calls.push("settings:hide"),
-        showGameOver: (stats, choices) =>
-          void calls.push(`gameOver:${stats.totalScore}:${choices.map(({ id }) => id).join(",")}`),
+        showGameOver: (stats) => void calls.push(`gameOver:${stats.totalScore}`),
         hideGameOver: () => void calls.push("gameOver:hide"),
         // Two arguments only: a stage result never carries the seed (#164).
         showStageWon: (...args: unknown[]) => {
@@ -492,23 +491,28 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toEqual(["stageWon:hide"]);
   });
 
-  it("shows the game over screen with the run's totals and its items, and hides it on exit (#90)", () => {
+  it("shows the game over screen with the run's totals, its choices below, and hides both (#90)", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
-    const items = [
-      { id: "again", label: "Again" },
-      { id: "leave", label: "Leave" },
-    ];
     scenes.register(
-      scene("lost", { gameOverScreen: { items }, musicCue: { operations: [{ op: "windDown" }] } }),
+      scene("lost", {
+        gameOverScreen: {},
+        gameOverDialog: gameDialogs.gameOver,
+        musicCue: { operations: [{ op: "windDown" }] },
+      }),
     );
     scenes.register(scene("next", {}));
 
     scenes.switchTo("lost");
-    expect(calls).toEqual(["gameOver:900:again,leave", "cue:windDown"]);
+    expect(calls).toEqual([
+      "gameOver:900",
+      "dialog:add:Game over",
+      "choices:newRun,quitToTitle",
+      "cue:windDown",
+    ]);
     calls.length = 0;
     scenes.switchTo("next");
-    expect(calls).toEqual(["gameOver:hide"]);
+    expect(calls).toEqual(["dialog:remove:Game over", "gameOver:hide"]);
   });
 
   it("marks the host with the scene in front again after a pushed scene pops (#35)", () => {

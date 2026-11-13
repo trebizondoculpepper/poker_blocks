@@ -619,8 +619,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
   });
   behaviours.register("gameOverScreen", {
-    enter({ services }, { items }) {
-      services.overlays.showGameOver(services.run.runStats(), items, services.run.seed());
+    enter({ services }) {
+      services.overlays.showGameOver(services.run.runStats(), services.run.seed());
     },
     exit: ({ services }) => services.overlays.hideGameOver(),
   });

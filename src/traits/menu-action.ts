@@ -1,12 +1,14 @@
 import { defineTrait } from "../core/trait";
 import { playSfx } from "../audio/sfx";
+import type { SoundEffectId } from "../audio/sfx-registry";
 import { availability } from "./availability";
 
 export type InteractionState = { enabled: boolean; hovered: boolean; pressed: boolean };
 /** Actions are opaque data. The scene receives menu.action and dispatches through its own flow. */
 export const menuAction = defineTrait({
   name: "menuAction",
-  defaults: { action: "", enabled: true },
+  // `sfx` is the sound choosing it plays (#949): a click, or Back's sound for a leaving choice.
+  defaults: { action: "", enabled: true, sfx: "ui.click" as SoundEffectId },
   setup({ block, settings }) {
     let hovered = false;
     let pressed = false;
@@ -45,7 +47,7 @@ export const menuAction = defineTrait({
           playSfx("action.denied");
           return;
         }
-        playSfx("ui.click");
+        playSfx(settings.sfx);
         block.emit("menu.action", settings.action);
       }),
       block.on("input.enabled", (value) => {
