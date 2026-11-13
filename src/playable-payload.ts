@@ -19,6 +19,7 @@ import {
   restoreActiveObjects,
   type SavedActiveObject,
 } from "./active-objects";
+import { cardOwners, ownerOf } from "./card-ownership";
 import { createCard, ranks, suits, type CardBlock } from "./cards";
 import { cloneCodecs } from "./clonable";
 import { faces } from "./traits/attachable";
@@ -94,8 +95,31 @@ activeDefinitions.register("playableCard", {
   lifecycle: { parent: "ordinaryCard" },
   create: (id) => ({
     id,
-    traits: { active: { definition: "playableCard" }, selectable: {}, attachable: { faces } },
+    traits: {
+      active: { definition: "playableCard" },
+      // Adopted into the run for good (#928): a run-owned active, not the field's.
+      owner: { id: "runActive" },
+      selectable: {},
+      attachable: { faces },
+    },
   }),
+});
+
+// An owner other than the one its definition creates (an adopted payload's runActive, #928
+// review): saved with it, so a Continue keeps who retires it.
+activeComponentCodecs.register("owner", {
+  save: (block) => {
+    const definition = [block.traits.active ?? []].flat()[0]?.definition;
+    if (!definition || !activeDefinitions.has(definition)) return undefined;
+    const owner = ownerOf(block);
+    return owner === ownerOf(activeDefinitions.get(definition).create(block.id))
+      ? undefined
+      : owner;
+  },
+  restore: (block, saved) => {
+    if (typeof saved !== "string" || !cardOwners.has(saved)) throw new Error("bad active owner");
+    return { ...block, traits: { ...block.traits, owner: { id: saved } } };
+  },
 });
 
 activeComponentCodecs.register("pokerIdentity", {

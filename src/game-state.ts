@@ -37,6 +37,11 @@ export type GameState = {
    */
   removedCards?: readonly string[];
   /**
+   * Active instances consumed for the rest of the run (an opened wrapper, #928), in full, so a
+   * save can rebuild them for its removal accounting. Their IDs are also in `removedCards`.
+   */
+  retiredActives?: readonly CardBlock[];
+  /**
    * Cards whose material changed this run (#387), by id: saved so Continue rebuilds them with
    * it (src/card-material.ts). Absent when nothing changed.
    */
