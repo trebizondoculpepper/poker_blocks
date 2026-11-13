@@ -1600,3 +1600,7 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 ## Profiler capture-pass ownership (#776)
 
 [Profiler render-pass capability](profiler-render-passes.md) extends the automatic-profiler host contract for multi-pass appearances. Recipes declare registered production pipeline requirements; hosts own scoped targets, timing and disposal. Generic measurement code never branches on an optics/material identity, and all contributing passes are measured.
+
+## Experimental design records
+
+Reproducible experiment briefs and measured outcomes live in [experiments](experiments/README.md). Their provisional parameters are not production rules. The [spatial-modifier brief](experiments/spatial-modifiers.md) separates packing, material mass and topology, and records the planned bench and evidence limits. Promote decisions into canonical rules and architecture before implementation.
