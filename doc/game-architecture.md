@@ -1604,3 +1604,7 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 ## Experimental design records
 
 Reproducible experiment briefs and measured outcomes live in [experiments](experiments/README.md). Their provisional parameters are not production rules. The [spatial-modifier brief](experiments/spatial-modifiers.md) separates packing, material mass and topology, and records the planned bench and evidence limits. Promote decisions into canonical rules and architecture before implementation.
+
+## Experimental pivot policies
+
+[The pivot-comparison experiment](experiments/pivot-comparison.md) specifies registered centroid and mass-weighted queries plus a Dev controller for switching on the same layout. This does not change the production centroid or couple pivot selection to rocking speed. Query data, configured policy and numeric presentation mechanics have separate owners.

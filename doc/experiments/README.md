@@ -6,6 +6,8 @@ This area records reproducible gameplay and presentation experiments. Experiment
 
 - [Spatial modifiers: packing, mass and topology](spatial-modifiers.md): planned interactive playtest; initial geometry probe exists, but no player-session results yet.
 
+- [Centroid versus material-weighted pivot](pivot-comparison.md): planned A/B room with a paper-heavy seeded deck; production pivot unchanged.
+
 ## Recording an experiment
 
 Each brief states its question, agreed semantics, provisional assumptions, evidence, reproducible setup, measurements, limitations and next decision. Record configuration/schema version, source revision, random seed, initial state and ordered actions with results. A seed alone cannot reproduce player choices. Keep observations separate from interpretations, include failed trials, and report unsupported measurements explicitly rather than as zero.
