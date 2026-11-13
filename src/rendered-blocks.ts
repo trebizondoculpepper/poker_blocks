@@ -1,3 +1,4 @@
+import { acquiredBonusDescriptor } from "./modifier-registers";
 import { cardFaceArt } from "./visual/face-art";
 /**
  * The three.js side of every block on screen: a cube built from the block's appearance,
@@ -83,7 +84,10 @@ export function createBlockViews(parents: {
     create(block, size, location) {
       const look = cardLook(block);
       const appearance = createBlockAppearance(
-        cardFaceArt(block.traits.identity, { face: look.cardFace }),
+        cardFaceArt(block.traits.identity, {
+          face: look.cardFace,
+          bonus: acquiredBonusDescriptor(block),
+        }),
         look,
         size,
       );

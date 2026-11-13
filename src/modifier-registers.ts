@@ -234,3 +234,23 @@ export function restoreModifierRegisters(saved: unknown): Record<string, Scoring
     }),
   );
 }
+
+/** The acquired bonus a card's face shows (#432): its highest-priority non-neutral modifier. */
+export type AcquiredBonusDescriptor = {
+  operator: "exponent" | "multiplier" | "additive";
+  value: number;
+};
+
+/**
+ * The compact descriptor for a card's acquired modifiers, every lifetime combined first, by the
+ * model's own arithmetic (doc/presentation-contracts.md, "Acquired bonus artwork and inspection").
+ * Priority is exponent, then multiplier, then additive; lower ones still score while hidden. Null
+ * when the card has no acquired bonus. Base material values are never included.
+ */
+export function acquiredBonusDescriptor(card: CardBlock): AcquiredBonusDescriptor | null {
+  const { additive = 0, multiplicative = 1, exponential = 1 } = acquiredModifier(card);
+  if (exponential !== 1) return { operator: "exponent", value: exponential };
+  if (multiplicative !== 1) return { operator: "multiplier", value: multiplicative };
+  if (additive !== 0) return { operator: "additive", value: additive };
+  return null;
+}
