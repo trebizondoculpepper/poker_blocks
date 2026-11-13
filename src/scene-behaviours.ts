@@ -17,7 +17,10 @@ import { blockTitle, type BlockTitles } from "./scene-traits/block-title";
 import type { SelectionBadge } from "./selection-badge";
 import type { BinView } from "./bin-view";
 import { devDropInspector } from "./scene-traits/dev-drop-inspector";
+import { devTrialReadouts } from "./scene-traits/dev-trial-readouts";
+import { devBenchPanel } from "./scene-traits/dev-bench-panel";
 import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
+import { committedEventSounds } from "./scene-traits/committed-event-sounds";
 import type { ActionLog } from "./action-log";
 import { firstPlayPrompt, type FirstPlayTable } from "./scene-traits/first-play-prompt";
 import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
@@ -97,6 +100,7 @@ export type SceneHost = {
       show(config: SceneTraits["devCrystalComparison"]): void;
       hide(): void;
     };
+    devEffectAudition: { show(config: SceneTraits["devEffectAudition"]): void; hide(): void };
     devWordCubeRoom: {
       show(config: SceneTraits["devWordCubeRoom"]): void;
       hide(): void;
@@ -116,7 +120,13 @@ export type SceneHost = {
       | "rackCapacity"
       | "shopStock"
       | "deckBlocks"
+      | "committedState"
+      | "requestSession"
+      | "sessionProvenance"
+      | "lastScoring"
+      | "inventory"
       | "dispatch"
+      | "onCommitted"
       | "hasSave"
       | "runStats"
       | "seed"
@@ -142,7 +152,7 @@ export type SceneHost = {
     >;
     /** The build's version, shown in a panel's footer (`src/version.ts`). */
     version: string;
-    audio: Pick<AudioService, "setMusicFilter" | "playStageMusic" | "playCue">;
+    audio: Pick<AudioService, "setMusicFilter" | "playStageMusic" | "playCue" | "resumeTable">;
     /** Play a registered sound effect (src/audio/sfx.ts). */
     sound(id: SoundEffectId): void;
   };
@@ -324,12 +334,20 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.bin.sellBinEntered(false),
   });
   behaviours.register("deckView", {
-    // Read-only: it shows the deck and its Back button goes back; it never changes the deck.
-    enter: ({ services }) =>
-      services.deckView.show(services.run.deckBlocks(), () => {
-        services.sound("ui.back");
-        services.run.dispatch("back");
-      }),
+    // Read-only: the run's inventory (#472), every live card marked with where it is; its Back
+    // button goes back. It never changes the run.
+    enter({ services }) {
+      const records = services.run.inventory();
+      const where = new Map(records.map(({ card, icon, label }) => [card, { icon, label }]));
+      services.deckView.show(
+        records.map(({ card }) => card),
+        () => {
+          services.sound("ui.back");
+          services.run.dispatch("back");
+        },
+        (card) => where.get(card),
+      );
+    },
     exit: ({ services }) => services.deckView.hide(),
   });
   behaviours.register("devAttractTuning", {
@@ -521,6 +539,11 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     enter: ({ services }, config) => services.devCrystalComparison.show(config),
     exit: ({ services }) => services.devCrystalComparison.hide(),
   });
+  // The smoke/dust audition room's note (#466), a development-only service.
+  behaviours.register("devEffectAudition", {
+    enter: ({ services }, config) => services.devEffectAudition.show(config),
+    exit: ({ services }) => services.devEffectAudition.hide(),
+  });
   behaviours.register("devContainedProof", {
     enter: ({ services }, { backTo }) => services.devContainedProof.show(backTo),
     exit: ({ services }) => services.devContainedProof.hide(),
@@ -574,6 +597,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.devObjectBrowser.hide(),
   });
   behaviours.register("devDropInspector", devDropInspector<Context>());
+  behaviours.register("devTrialReadouts", devTrialReadouts<Context>());
+  behaviours.register("devBenchPanel", devBenchPanel<Context>());
   behaviours.register("actionHistory", actionHistory<Context>());
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
   behaviours.register("hudStyle", hudStyle<Context>());
@@ -604,10 +629,15 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.overlays.hideStageWon(),
   });
   behaviours.register("musicCue", {
-    enter: ({ services }, { cue }) => services.audio.playCue(cue),
+    enter: ({ services }, { operations }) => services.audio.playCue(operations),
+  });
+  behaviours.register("musicResume", {
+    enter: ({ services }, { operations }) => services.audio.resumeTable(operations),
   });
   // A play scene starts its own music as it comes in front; covering and uncovering it (the
   // pause menu) neither restarts nor changes it.
+  // Each committed fact's configured sound, for plays and discards alike (#755).
+  behaviours.register("committedEventSounds", committedEventSounds<Context>());
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });
@@ -622,7 +652,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
   });
   behaviours.register("musicTrack", {
-    enter: ({ services }, { pool }) => services.audio.playStageMusic(pool),
+    enter: ({ services }, { operations }) => services.audio.playStageMusic(operations),
   });
   behaviours.register("titleScreen", {
     enter(context) {

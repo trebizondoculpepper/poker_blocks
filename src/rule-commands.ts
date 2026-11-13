@@ -1,3 +1,4 @@
+import type { ResolvedOutcome } from "./event-rules";
 /**
  * Rule commands (#63 slice 3): what a fired rule asks the game run to do, committed after the
  * rule is evaluated. A rule's effects only collect commands; the handlers registered here are
@@ -37,6 +38,30 @@ export function commitCommands(
 ): GameEvent[] {
   // Each command is charged by the registry as it is looked up (see Registry.get, #661 review).
   return commands.flatMap(({ id, config }) => [...ruleCommands.get(id)(config, target)]);
+}
+
+/**
+ * Commit commands one by one, recording what each actually did (#483, #858 review): an outcome
+ * per command naming its committed facts, or an explicit no-op when it committed nothing (a grant
+ * refused by a full rack, say). The events are the same as `commitCommands` returns.
+ */
+export function commitCommandsWithOutcomes(
+  commands: readonly RuleCommand[],
+  target: CommandTarget,
+): { events: GameEvent[]; outcomes: ResolvedOutcome[] } {
+  const events: GameEvent[] = [];
+  const outcomes: ResolvedOutcome[] = [];
+  for (const { id, config } of commands) {
+    const committed = [...ruleCommands.get(id)(config, target)];
+    events.push(...committed);
+    outcomes.push({
+      operation: `${id}.committed`,
+      operand: committed.length,
+      unit: "facts",
+      targets: committed.flatMap(({ type, blockId }) => [blockId ? `${type}:${blockId}` : type]),
+    });
+  }
+  return { events, outcomes };
 }
 
 // Each command reports what it committed as an event carrying the sound its configuration names

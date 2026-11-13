@@ -8,7 +8,7 @@
  */
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { CardBlock } from "./cards";
-import { EventRuleRegistry, type RuleFrame } from "./event-rules";
+import { EventRuleRegistry, type ResolvedOutcome, type RuleFrame } from "./event-rules";
 import type { BlockMaterial } from "./materials";
 import { materialOf } from "./materials";
 import type { ScoreEventContext, StageContext } from "./passives";
@@ -17,11 +17,28 @@ import type { HandlerConfig } from "./event-rules";
 
 export const ruleHandlers = new EventRuleRegistry();
 
-/** The working value with `change` applied: how every scoring effect moves the number. */
-const working = (frame: Readonly<RuleFrame>, change: (value: number) => number): RuleFrame => ({
-  ...frame,
-  workingValue: change(frame.workingValue ?? 0),
-});
+/**
+ * A scoring effect's change, reported as it applies (#483): its operation, resolved operand and
+ * the working value before and after, on a `scope` measured in score.
+ */
+const scored = (
+  frame: Readonly<RuleFrame>,
+  operation: string,
+  operand: number,
+  scope: string,
+  change: (value: number) => number,
+): RuleFrame => {
+  const before = frame.workingValue ?? 0;
+  const after = change(before);
+  return {
+    ...frame,
+    workingValue: after,
+    outcomes: [
+      ...(frame.outcomes ?? []),
+      { operation, operand, before, after, unit: "score", scope },
+    ],
+  };
+};
 
 // ----- Selectors: what a rule looks at -----
 
@@ -75,11 +92,11 @@ ruleHandlers.registerCondition<Record<never, never>, ScoreEventContext | undefin
 
 ruleHandlers.registerCondition<{ suits: readonly string[] }, CardBlock | undefined>(
   "suit-in",
-  ({ suits }, block) => !!block && suits.includes(block.traits.identity.suit.name),
+  ({ suits }, block) => !!block && suits.includes(block.traits.identity?.suit.name ?? ""),
 );
 ruleHandlers.registerCondition<{ rank: string }, CardBlock | undefined>(
   "rank-is",
-  ({ rank }, block) => block?.traits.identity.rank === rank,
+  ({ rank }, block) => block?.traits.identity?.rank === rank,
 );
 /** At least `minimum` selected things (blocks, say). */
 ruleHandlers.registerCondition<{ minimum: number }, readonly unknown[]>(
@@ -117,15 +134,18 @@ ruleHandlers.registerValueSource<{ sides: number }>(
 
 ruleHandlers.registerEffect<{ factor: number }, unknown>(
   "multiply-block-value",
-  ({ factor }, _selected, frame) => working(frame, (value) => value * factor),
+  ({ factor }, _selected, frame) =>
+    scored(frame, "multiply-block-value", factor, "block", (value) => value * factor),
 );
 ruleHandlers.registerEffect<{ amount: number }, unknown>(
   "add-block-value",
-  ({ amount }, _selected, frame) => working(frame, (value) => value + amount),
+  ({ amount }, _selected, frame) =>
+    scored(frame, "add-block-value", amount, "block", (value) => value + amount),
 );
 ruleHandlers.registerEffect<{ factor: number }, unknown>(
   "multiply-line-score",
-  ({ factor }, _selected, frame) => working(frame, (value) => value * factor),
+  ({ factor }, _selected, frame) =>
+    scored(frame, "multiply-line-score", factor, "line", (value) => value * factor),
 );
 /** Raises the working score to `power` (a prismatic crystal's exponential modifier). */
 ruleHandlers.registerEffect<{ power: number }, unknown>(
@@ -138,11 +158,23 @@ ruleHandlers.registerEffect<{ power: number }, unknown>(
     // A power that has no finite result (a zero line under a negative total exponent) scores
     // nothing, so a score is always a finite number (#476 review).
     const raised = base ** exponent;
+    const after = Number.isFinite(raised) ? raised : 0;
     return {
       ...frame,
-      workingValue: Number.isFinite(raised) ? raised : 0,
+      workingValue: after,
       exponent,
       powerBase: base,
+      outcomes: [
+        ...(frame.outcomes ?? []),
+        {
+          operation: "power-line-score",
+          operand: power,
+          before: frame.workingValue ?? 0,
+          after,
+          unit: "score",
+          scope: "line",
+        },
+      ],
     };
   },
 );
@@ -150,16 +182,24 @@ ruleHandlers.registerEffect<{ power: number }, unknown>(
 ruleHandlers.registerEffect<
   { amount: number; perIntersection?: boolean },
   ScoreEventContext | undefined
->("add-line-score", ({ amount, perIntersection }, score, frame) =>
-  working(frame, (value) => value + amount * (perIntersection ? (score?.intersections ?? 0) : 1)),
-);
+>("add-line-score", ({ amount, perIntersection }, score, frame) => {
+  // The actual contribution: per crossing cell when so configured (Crossroads), resolved here.
+  const added = amount * (perIntersection ? (score?.intersections ?? 0) : 1);
+  return scored(frame, "add-line-score", added, "line", (value) => value + added);
+});
 
 // ----- Effects that collect commands, committed by the game run (src/rule-commands.ts) -----
 
-/** Ask for a command; the rule itself changes nothing. */
-const command = (frame: Readonly<RuleFrame>, id: string, config: unknown): RuleFrame => ({
+/** Ask for a command; the rule itself changes nothing. A coin amount is reported as its outcome. */
+const command = (
+  frame: Readonly<RuleFrame>,
+  id: string,
+  config: unknown,
+  outcome?: ResolvedOutcome,
+): RuleFrame => ({
   ...frame,
   commands: [...frame.commands, { id, config }],
+  ...(outcome ? { outcomes: [...(frame.outcomes ?? []), outcome] } : {}),
 });
 // A coin or grant effect passes on the sound its rule configures, if any; the command falls back
 // to its default (#566 review).
@@ -168,16 +208,27 @@ const withSound = ({ sound }: Sounded) => (sound ? { sound } : {});
 ruleHandlers.registerEffect<{ amount: number } & Sounded, unknown>(
   "add-coins",
   (config, _selected, frame) =>
-    command(frame, "add-coins", { amount: config.amount, ...withSound(config) }),
+    command(
+      frame,
+      "add-coins",
+      { amount: config.amount, ...withSound(config) },
+      { operation: "add-coins", operand: config.amount, unit: "coins" },
+    ),
 );
 /** `amount` coins for each selected thing (each matching block, say). */
 ruleHandlers.registerEffect<{ amount: number } & Sounded, readonly unknown[]>(
   "add-coins-per-selected",
   (config, selected, frame) =>
-    command(frame, "add-coins", {
-      amount: config.amount * selected.length,
-      ...withSound(config),
-    }),
+    command(
+      frame,
+      "add-coins",
+      { amount: config.amount * selected.length, ...withSound(config) },
+      {
+        operation: "add-coins-per-selected",
+        operand: config.amount * selected.length,
+        unit: "coins",
+      },
+    ),
 );
 ruleHandlers.registerEffect<Sounded | undefined, unknown>(
   "grant-random-unowned-passive",

@@ -150,6 +150,7 @@ type TraitContext = {
     devProfiler: ProfilerRoom;
     devCrystalComparison: CrystalComparisonRoom;
     devWordCubeRoom: WordCubeRoom;
+    devEffectAudition: { show(config: { hint: string }): void; hide(): void; dispose(): void };
     dialogs: SceneHost["services"]["dialogs"];
     devDialogRoom: DialogRoom;
     version: string;
@@ -192,6 +193,9 @@ const devCrystalComparison: CrystalComparisonRoom = import.meta.env.DEV
   ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host, {
       reducedMotion: () => run.reducedMotion,
     })
+  : { show() {}, hide() {}, dispose() {} };
+const devEffectAudition = import.meta.env.DEV
+  ? (await import("./tools/effect-audition")).createEffectAuditionNote(host)
   : { show() {}, hide() {}, dispose() {} };
 const devWordCubeRoom: WordCubeRoom = import.meta.env.DEV
   ? (await import("./tools/word-cube-room")).createWordCubeRoom(host)
@@ -284,6 +288,7 @@ const traitContext: TraitContext = {
     devProfiler,
     devCrystalComparison,
     devWordCubeRoom,
+    devEffectAudition,
     // Every dialog a scene composes goes to the game's presenter and, in development, to the
     // dialog room (dev14), which shows only while its own scene does.
     dialogs: {
@@ -379,6 +384,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   rackChanged: () => run.rackChanged(),
   activated: (sourceIds) => sourceIds.forEach((id) => passiveRackView.activate(id)),
   refill: () => run.refillHand(),
+  drawReplacements: () => run.drawReplacements(),
   save: () => run.autosave(),
   decided: (outcome, now) => run.decided(outcome, now),
 });
@@ -496,6 +502,7 @@ if (import.meta.hot) {
     devProfiler.dispose();
     devCrystalComparison.dispose();
     devWordCubeRoom.dispose();
+    devEffectAudition.dispose();
     devDialogRoom.dispose();
     dialogPresenter.dispose();
     view.dispose();

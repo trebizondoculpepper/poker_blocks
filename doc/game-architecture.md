@@ -89,7 +89,7 @@ When dragging a hand block starts, the structure's wobble slows to one-tenth of 
 
 The hand is rendered as a fixed overlay with its own camera. Only the structure uses the perspective board camera. After a block attaches, the board camera waits one second, then eases over two seconds to a distance calculated from the grid's bounding box, so the growing structure stays visible. The hand's size and position do not follow that camera move.
 
-All standard cubes currently have equal mass. The structure keeps a running sum of block grid positions and divides by the block count to find its true center of gravity after each attachment. The rotation pivot moves to that center while preserving the existing block positions. The structure gently oscillates on two axes around the pivot instead of spinning continuously. Dragging any placed block rotates the structure on horizontal and vertical axes; the oscillation continues around the new orientation. A click without dragging still toggles selection.
+The production rotation pivot is the geometric centroid: the structure keeps a running sum of block grid positions and divides by block count. This arithmetic center is not a physical center of mass when materials have different authored masses. [Physical mass and rocking](playfield-rocking.md) defines the shared mass capability and the target mass-dependent speed; a weighted pivot remains a separate experiment. The rotation pivot moves to that center while preserving the existing block positions. The structure gently oscillates on two axes around the pivot instead of spinning continuously. Dragging any placed block rotates the structure on horizontal and vertical axes; the oscillation continues around the new orientation. A click without dragging still toggles selection.
 
 ## Stage overlay and discard area
 
@@ -305,16 +305,11 @@ reactions?: readonly {
 - **Neighbours** are the six face offsets already defined in `src/traits/attachable.ts` (`faceNormal`), looked up in a cell map of the field. Edge and corner cells are never consulted.
 - **Results** are a registry keyed by handler name, like matchers. `transform` turns its config into a `transform-block { blockId, material?, stateBonus? }` command. `advance-cooking` turns its config into an `advance-cooking { blockId, steps }` command, so meat asks to cook through data on its own definition (`when` a heat source, `results: [{ id: "advance-cooking", config: { steps: 1 } }]`) with no branch on meat. A new kind of outcome is a new registered result handler. Commands are committed through the existing `commitCommands` path, as discard rules are. A reaction never edits state directly.
 
-**Reactions never score (owner, 2026-11-11).** A reaction does not add to the score of the play that caused it, or of any play. The play is scored on the field as placed, and its reactions are resolved and committed afterwards. What a reaction changes is the state of the game (a material, a state bonus), and that raises what later plays can score. A later modifier may subscribe to `reaction.applied` and award points for the reaction itself, but that would be an ordinary rule on that event, not part of the reaction.
+**Phased consequences (owner, 2026-11-13).** [Material phases](material-phases.md) supersedes the older blanket one-step-per-play rule. Reactions declare their timing. Resolve opening, pre-score changes and countdowns, then score once, then post-score reactions and pending detonations. Pre-score changes are visible to later phases in the same play; Air can strengthen Flame before scoring and that Flame can boil Water afterward. Phase assignment expresses immediate-versus-slower perceived processes, not wall-clock model waits.
 
-**One step per play, with no cascades.** The resolver works on a **snapshot** of the field taken once, after placement:
+Each configured reaction step reads its own entry snapshot and selects the first matching applicable reaction per block in stable field order. There is no automatic fixed-point rescan within that step. Follow-up registered commands/facts drain under the one action-wide transaction and limits. New post-score state does not retroactively alter finalized scores. Cooking still advances once per play. See the linked contract for ownership, determinism, failure/rollback, scope and source evidence.
 
-1. Every block on the field is checked against its own material's reactions, with its neighbours read **from the snapshot**. Every block is checked, not only the one just placed, so meat keeps cooking on each later play while it stays beside heat.
-2. Each block takes **at most one** reaction per play (all of that reaction's results): the **first** of its material's reactions whose matcher accepts, in the order listed on the definition. That listed order is the conflict rule, and it is deterministic. A block next to both flame and aggressive flame takes whichever reaction its material lists first.
-3. All transformations are committed together, after resolution. Because everything read the snapshot, a block changed this play cannot trigger its neighbours until the **next** play. Air makes flame aggressive on one play, and that aggressive flame boils water on a later play, never both at once. That is what "one step per play" means here, and it also rules out repeated rewards from one play.
-4. Blocks are visited in a fixed order (field order, which is placement order), so the commands, events and presentation are reproducible. Which reactions are selected does not depend on that order, because of the snapshot. Anything that subscribes to the resulting `reaction.applied` events (a passive with limited uses, say) sees them in that field order, and its own outcome may depend on it.
-
-**Events and presentation.** Each committed transformation emits a `reaction.applied { blockId, from, to }` event after `play.completed`. The play presenter uses it to restyle the block and to play the reaction's registered sound, which is configured on the reaction and has a placeholder until its audio exists. Presentation never decides whether a reaction happened (model first).
+**Events and presentation.** Committed reaction and material/state-transition facts capture before/after snapshots, source, phase and action/sequence identity. They are published only after the action commits, not as mutable afterthoughts following play.completed. The shared scheduler presents phase-ordered consequences and target-defined transition sounds; reaction presentation does not duplicate that audio. Presentation cannot decide reactions, rescore or consume model RNG.
 
 **Persistence.** A transformed card is a new object with the same id, so it follows the card through deck and stages, as in "State bonuses (proposal)". The save's optional `cardStates` record from that section carries `material` as well as `stateBonus`, and a cooking step for meat, so both are restored on Continue.
 
@@ -322,7 +317,7 @@ reactions?: readonly {
 
 **Out of scope here:** creating new blocks (cloud from air and boiling water, #374) is identity creation, not a transformation, and gets its own contract. So do container visuals (#328): a reaction changes the model, and the material's appearance follows.
 
-**Guardrails for #366:** a test that edge or corner contact never reacts; that a block changes at most once per play; that a two-step chain (air → aggressive flame → boiling water) takes two plays; that discards, refills and stage advance never react; that candidate-hand scoring is unchanged by pending reactions; that the same reactions are selected whatever order the blocks are visited in (events are still dispatched in field order); that a transformation survives save and Continue; and the guardrail scan, so that no generic code names a material.
+**Verification for the phased migration (#614):** six-face contact only; first match per block per reaction-step snapshot; pre-score state visible to scoring/post-score; same-play cross-phase chain; no automatic within-step rescan or post-score rescore; stable ordering and action-wide budget/RNG rollback; restore without replay; persistence and no generic material branches. The old two-play Air→Flame→Water test is superseded by the explicitly authored phase test.
 
 ### State bonuses (#364, built in #365, epic #362)
 
@@ -630,6 +625,7 @@ controller traits (composed, configured) ─┤ subscribe; choose policy from co
 **Examples.**
 
 - _Music:_ the music player and its controller are capabilities: play, fade, filter, wind down. Scene traits (`musicCue`, `musicTrack`, `musicFilter`) are the controllers: the scene's configuration says what to request on enter and exit.
+- _Committed sounds (built, #755):_ `GameRun` publishes each committed action's facts once it commits (`onCommitted`, forwarded by the run controller from whichever run is current); a rolled-back or invalid action publishes nothing. The `committedEventSounds` controller trait, composed onto the play scenes, plays the sound each fact's configuration named, once per action, for plays and discards alike. The presenter no longer plays them.
 - _Explosions:_ the dazzle (`createDazzle`), smoke and the SFX player are services that render or play at a supplied location. An `explosionEffects` controller trait consumes a committed detonation (`block.removed` with cause `explosion`) and coordinates dazzle, smoke and sound from its configuration. The removal happened in the model already.
 - _Tweening:_ the Tween.js service (`doc/tweening-library-research.md`, #556) supplies interpolation only; effect and controller traits choose endpoints, easing and interruption, and the visual-event scheduler decides when ("Visual-event scheduler and game-time units" below; #541, #545).
 
@@ -637,12 +633,10 @@ controller traits (composed, configured) ─┤ subscribe; choose policy from co
 
 **Current gaps (transitional code).** These are where today's code differs from the target. They are the scope of #538, each to be fixed in a small PR of its own. Untouched legacy code is not a review finding; a PR that changes these lines should move them toward the target.
 
-| Where                             | Today                                                                                                                                                                                                                                                                                              | Target                                                                                                                       |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `src/play-presenter.ts` `discard` | No longer diffs state (#538): `add-coins` and `grant-unowned-passive` commit `coins.gained` / `passive.installed` events carrying their configured sound, and the presenter plays each committed event's sound from `GameRun.lastDiscardEvents`. The presenter (a service) still does the playing. | A controller trait plays committed events' sounds, shared by plays and discards.                                             |
-| `src/game-run-controller.ts`      | Plays presentation sounds inline at outcome sites (`shop.stock.burn`, `shop.leave`, `run.lost`, `block.destroyed`, `round.cleared`).                                                                                                                                                               | Outcomes are events; sounds come from scene or controller trait configuration (as `enterSound`/`exitSound` already do).      |
-| Block exits                       | `block.removed` / `block.resisted` are emitted, but no controller presents them: the exit effects (#439) and the dazzle (#493) are not wired into play.                                                                                                                                            | An exit/explosion controller trait consumes the committed events and drives the exit runner and dazzle (#510, #520).         |
-| `src/audio/music-controller.ts`   | The controller's API names scene meanings (`switchToBossTrack`, `playTitle`).                                                                                                                                                                                                                      | Cue names come from scene trait configuration; the controller maps a cue to tracks through the music plan, knowing no scene. |
+| Where                        | Today                                                                                                                                                   | Target                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `src/game-run-controller.ts` | Plays presentation sounds inline at outcome sites (`shop.stock.burn`, `shop.leave`, `run.lost`, `block.destroyed`, `round.cleared`).                    | Outcomes are events; sounds come from scene or controller trait configuration (as `enterSound`/`exitSound` already do). |
+| Block exits                  | `block.removed` / `block.resisted` are emitted, but no controller presents them: the exit effects (#439) and the dazzle (#493) are not wired into play. | An exit/explosion controller trait consumes the committed events and drives the exit runner and dazzle (#510, #520).    |
 
 Acceptance for #538 children: the gap's row is gone or rewritten; the behaviour players see and hear is unchanged; tests cover the event and its configured response; the guardrail and production build pass.
 
@@ -1048,6 +1042,14 @@ When a rule fires, the thing it belongs to swells and glows: a passive's rack to
 
 Presentation only: the pulse shows activations the rules already decided (a line's committed `activations`, a resolved discard's), and never blocks input or decides a result.
 
+### Activation descriptor (#484)
+
+Concise text for what an activation did, alongside its pulse: `src/activation-descriptor.ts`. It reads only the activation's **resolved outcomes** (#483), so it never rerolls, re-runs a rule or reads the model, and it renders nothing itself.
+
+- **Composition:** a definition composes `activationDescriptor: { descriptor, config }` naming a registered descriptor (`activationDescriptors`); omitted, the shared `resolvedOutcomes`. A host (rack, field) asks for the text with the activation it was given (`describePassiveActivation`) and never asks which item it holds.
+- **Formatting:** `resolvedOutcomes` writes one line per effective operation, in the order they applied, through the formatter registered for each operation (`outcomeFormatters`, keyed by the effect's registered name): `+6` (an added score: a die's actual roll, Crossroads' effective bonus), `×2`, `^1.2`, `+2 coins` / `+1 coin`, `+1 passive`, or `Rack full` when a grant found no room. Numbers keep at most two decimals. An operation with no formatter that changed the working value shows `a → b`; anything else is left out, never invented. A coin command's committed fact repeats its effect's line and is omitted.
+- **Lifetime:** the label lasts as long as the pulse's effect (`milliseconds(effect)`); the host owns placement.
+
 ### Shared block face artwork (#292)
 
 `createBlockAppearance` takes a `FaceArt` provider with a stable seed and a `paint(context, pen)` function. Material assemblies ask this provider to draw colour, relief and transparent skin artwork using the layer’s ink pen. Card callers supply `cardFaceArt(identity)`, preserving the existing centred rank/suit and fonts. **Rank glyph styles (#489):** each rank's display definition (`src/visual/rank-faces.ts`, `rankFaces`) carries its plain glyph and optional alternates by style name. `cardFaceArt(identity, { rankStyle })` prints the rank's own glyph for that style where it has one, and its plain glyph otherwise; the renderer never names a rank. The first style, `underlined`, gives 6 and 9 a combining low line (U+0332); omitted, the artwork is unchanged. It is artwork only: the canonical rank, matching, scoring and saves are untouched, and the art's `seed` (which seeds material noise) is the same either way. Face textures are built per block from its art, with no shared cache keyed by artwork, so styled and plain blocks never share a face. The object browser's **Rank glyphs** category shows each styled rank, plain and styled, on paper, wood, steel, ice and gold, for audition in the real canvas fonts. New face artwork can reuse geometry and material appearance without adding kind branches to the builder. **Card faces (#568):** how a card shows its identity is a registered card face (`cardFaces` in `src/visual/face-art.ts`), chosen by the material's `cardFace` (omitted: `rankAndSuit`) and passed by every card caller as `cardFaceArt(identity, { face })`. `concealed` prints nothing, so the Present's gift wrap never shows a card's rank or suit, while its letter and word blocks (which use `textFaceArt`) still print their text. The seed is unchanged, so the material's noise is the same.
@@ -1331,7 +1333,7 @@ A contained block may list **inclusions**: things suspended in its contents, reg
 
 **`growingGrass`** (`src/visual/growing-grass.ts`) is an inclusion reading `liquidSurface` and the shared frame's rotation:
 
-- **Target correction (#761):** turning resets new-growth stillness but does not clear existing blades. Blades stay at stored local roots/orientations and disappear only when fully buried, not on partial cover or falling soil. [Grass burial](presentation-contracts.md#grass-survives-until-fully-buried) supersedes the current clear-on-turn and live-root-projection implementation. Camera movement never deletes grass.
+- **Target correction (#761):** turning resets new-growth stillness but does not clear existing blades. Blades stay at stored local roots/orientations and disappear only when fully buried, not on partial cover or falling soil. [Grass burial](presentation-contracts.md#grass-survives-until-fully-buried) is built (#765), replacing the clear-on-turn and live-root projection. Camera movement never deletes grass.
 - **Surface readiness:** stillness is timed from the end of the last turn. No blade is born until the published surface normal is within `settledDegrees` (20°) of world up seen from the block, so grass never grows on an obsolete top. The first blade therefore appears at whichever comes later: `delay` (5 s) of stillness, or the earth settling. After a quarter turn at `settleSeconds: 5`, settling to 20° takes about 7.5 s.
 - **Growth:** one blade at a time, about `interval` (0.12 s) apart with jitter, at random places on the top inside the walls. Each tip draws up from its base over `growSeconds` (0.8 s), and earlier blades stay. The pool is bounded (90 blades).
 - **Rendering:** one opaque mesh of triangles, in the contents' opaque layer.
@@ -1575,7 +1577,7 @@ Visual acceptance is the owner's comparison in the room, reported on #524.
 
 ## GitHub action briefing tool
 
-The developer-only action briefing tool is owned by the standalone [github_triage project](https://github.com/trebizondoculpepper/github_triage). poker_blocks keeps only npm wiring to its installed Git development dependency, `node node_modules/github-triage/src/cli.js`; see [the consumer launch contract and evidence](github-triage-cli.md). The CLI inherits the game checkout's working directory and authenticated gh session. Collector, registered workflow rules, presentation, configuration, lifecycle and tests are composed and maintained in that project, outside the game build. No local implementation or fallback is retained. Freshness/completeness and candidate-only advice do not confer authority to mutate or merge.
+The developer-only action briefing tool is owned by the standalone [github_triage project](https://github.com/trebizondoculpepper/github_triage). poker_blocks has no dependency on it: developers install the `github-triage` command globally; see [the installation contract and evidence](github-triage-cli.md). The CLI inherits the game checkout's working directory and authenticated gh session. Collector, registered workflow rules, presentation, configuration, lifecycle and tests are composed and maintained in that project, outside the game build. No local implementation or fallback is retained. Freshness/completeness and candidate-only advice do not confer authority to mutate or merge.
 
 ## Agreed presentation follow-ups (#761)
 
@@ -1583,7 +1585,7 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 
 ## Ordered card ownership target (#550)
 
-[Ordered cards and authoritative ownership](ordered-card-ownership.md) specifies index-zero pop, seeded shuffle, atomic zone transfers, run-level inventory, discardable composition, stage/round collection order and compatible save boundaries. It supersedes random-index drawing as the target; legacy reconstruction receipts are not live cards. Runtime migration remains #551/#574/#472 and the linked lifecycle work.
+[Ordered cards and authoritative ownership](ordered-card-ownership.md) specifies index-zero pop, seeded shuffle, atomic zone transfers, run-level inventory, discardable composition, stage/round collection order and compatible save boundaries. Ordered pop and the once-per-stage seeded shuffle are built (#551, `src/deal.ts`): drawing never uses the random stream. Legacy reconstruction receipts are not live cards. Runtime migration of zone transfers, discardable and inventory remains #574/#472 and the linked lifecycle work.
 
 ## Concrete visual scheduling interface (#545)
 
@@ -1604,3 +1606,39 @@ The developer-only action briefing tool is owned by the standalone [github_triag
 ## Foreground menu host target (#627)
 
 [Foreground title and pause menus](foreground-menus.md) specifies configured panel-free menu cubes, visible running title scene, visible frozen pause scene, Settings' retained panel, scene-stack input isolation, focus and cleanup. It supersedes earlier instructions to preserve title/pause menu backdrops; it does not hide the underlying 3D scene. Runtime changes remain #628/#530.
+
+## Release-status facet
+
+[Release status and catalogue access](release-status.md) defines certified/provisional admission and shared bench/inspection descriptors. Definitions bring registered availability behavior; generic code never checks a status trait as a flag. Lookup/restoration remains separate from new acquisition. This applies across object families and does not replace ordinary unlock or shop rules.
+
+## Experimental design records
+
+Reproducible experiment briefs and measured outcomes live in [experiments](experiments/README.md). Their provisional parameters are not production rules. The [spatial-modifier brief](experiments/spatial-modifiers.md) separates packing, material mass and topology, and records the planned bench and evidence limits. Promote decisions into canonical rules and architecture before implementation.
+
+## Experimental pivot policies
+
+[The pivot-comparison experiment](experiments/pivot-comparison.md) specifies registered centroid and mass-weighted queries plus a Dev controller for switching on the same layout. This does not change the production centroid or couple pivot selection to rocking speed. Query data, configured policy and numeric presentation mechanics have separate owners.
+
+## Physical mass and rocking controller
+
+[Physical mass and rocking](playfield-rocking.md) defines authored density/volume recipes, pure snapshot-scoped mass queries, and controller-owned quiet/ramp/mass-rate envelopes. Real-material reference values and composite/fantasy assumptions are distinguished. Normal pivot selection remains the geometric centroid; #823 explores a separate weighted pivot.
+
+## Composable starting-deck builders
+
+[Deck builders](deck-builders.md) defines mode-composed builder definitions invoked through registered run setup. Ordered registered operations own template construction, material assignment, special-card creation and shuffle. Generation and restoration remain distinct; preserve existing generator semantics for old saves. The pivot experiment uses configuration of this shared capability, not a room-specific deck factory.
+
+## Provisional spatial-modifier trials
+
+[The experimental trial contract](experiments/spatial-modifiers.md#provisional-modifier-implementation-contract-814) defines registered snapshot queries, row contribution scope, provisional density/mass/diversity curves, dev controls and reproducibility. These are experiment-only targets, not certified normal-game modifiers. Implementations follow the release-status, physical-mass and deck-builder prerequisites.
+
+## Passive scenario bench and instance settings (#867)
+
+[Passive scenario testing](experiments/passive-test-bench.md) defines a Dev controller composing registered setup for deck/hand/passives/field and optional replay. Reusable configurablePassive behavior validates per-instance overrides and constructs ordinary instance rules; shared definitions stay immutable. Use existing rack trait codecs and schema-driven controls; no test-room identity or passive-name branches.
+
+## Outcome presentation contract (#866)
+
+[Outcome facts and audio](outcome-presentation.md) separates transactional outcome/progression facts, required-sequence completion cues and independently composed result-scene enterSound responses. The model resolves rescue opportunities before final defeat; presentation never revises it. Burn/destruction audio follows captured effect starts through the shared scheduler. This target supersedes direct controller sound calls and awaited pre-commit burn behavior.
+
+## Prepared session adoption for experimental trials (#900)
+
+[Trial session adoption](experiments/trial-session-adoption.md) defines the generic injected run-host seam used by composed Dev scenario controllers. Policy selects configuration/seed; registered factories prepare; the host atomically adopts run/rules/identity universe/RNG/provenance and rebinds presentation. Invalid preparation leaves the current trial intact. The seam is not a mode identity branch or a parallel game controller.

@@ -25,7 +25,25 @@ export type IdentityTrait = {
 export type CardBlock = {
   id: string;
   traits: {
-    identity: IdentityTrait;
+    /**
+     * Its rank/suit value provider (doc/opaque-actives.md, #892). Absent on a rankless active:
+     * never rank zero or a fake suit. Read it through `pokerIdentity`.
+     */
+    identity?: IdentityTrait;
+    /**
+     * A run-owned active instance's registered definition (#894; src/active-objects.ts): saves
+     * record it under `activeObjects` and rebuild it through that definition.
+     */
+    active?: { definition: string };
+    /**
+     * A block without a rank/suit value provider names itself (#893): its public name and a
+     * short symbol for compact lists. Never a hint about hidden contents.
+     */
+    label?: { name: string; symbol: string };
+    /**
+     * Its discard behaviour by registered name (#574; src/discardable.ts); ordinary when absent.
+     */
+    discardable?: { behaviour: string; config?: unknown };
     selectable?: Record<string, never>;
     attachable?: AttachableTrait;
     inspectable?: InspectableTrait;
@@ -52,6 +70,25 @@ export type CardBlock = {
     modifiers?: Readonly<Record<string, ScoringModifier>>;
   };
 };
+
+/**
+ * A block has no rank/suit value provider where one is required: a rankless active reached poker
+ * evaluation or another path that needs a rank and suit. The action is refused, not given a
+ * fabricated identity.
+ */
+export class MissingValueProvider extends Error {
+  constructor(blockId: string, need: string) {
+    super(`${blockId} has no rank/suit value provider, which ${need} needs`);
+    this.name = "MissingValueProvider";
+  }
+}
+
+/** The block's rank and suit; throws MissingValueProvider for a rankless block. */
+export function pokerIdentity(block: CardBlock, need = "this"): IdentityTrait {
+  const identity = block.traits.identity;
+  if (!identity) throw new MissingValueProvider(block.id, need);
+  return identity;
+}
 
 /** A plain playable card with this identity. */
 export function createCard(identity: IdentityTrait, id: string): CardBlock {

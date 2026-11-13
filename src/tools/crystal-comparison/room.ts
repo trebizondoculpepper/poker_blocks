@@ -14,7 +14,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Gesture } from "@use-gesture/vanilla";
 import { playSfx } from "../../audio/sfx";
-import { standardDeck } from "../../cards";
+import { standardDeck, pokerIdentity } from "../../cards";
 import { gameModeFor, modeLink, type DevCrystalComparisonConfig } from "../../game-modes";
 import { getMaterialDefinition, type BlockMaterial } from "../../materials";
 import {
@@ -29,8 +29,7 @@ import {
   withOpticsBackend,
   type OpticsControl,
 } from "../../visual/optics-backends";
-import { disposeRefraction } from "../../visual/crystal-refraction";
-import { disposeInternal } from "../../visual/crystal-internal";
+import type { RenderPass } from "../../visual/render-pass";
 import { viewControls } from "./view-controls";
 import "./room.css";
 
@@ -131,6 +130,14 @@ export function createCrystalComparisonRoom(
 
   let config: DevCrystalComparisonConfig | null = null;
   let backend = "current";
+  /** The chosen look's own passes for this room's renderer, if it needs any (a capture). */
+  let capture: RenderPass | null = null;
+  /** Show the blocks through another backend, with a fresh capture of its own. */
+  function choose(name: string): void {
+    capture?.dispose();
+    backend = name;
+    capture = opticsBackends.get(name).capture?.() ?? null;
+  }
   let slots: Slot[] = [];
   let frame = 0;
   let last: number | null = null;
@@ -181,7 +188,7 @@ export function createCrystalComparisonRoom(
     for (const slot of slots) {
       release(slot);
       const appearance = createBlockAppearance(
-        cardFaceArt(slot.card.traits.identity, { face: definition.cardFace }),
+        cardFaceArt(pokerIdentity(slot.card), { face: definition.cardFace }),
         definition,
         1,
       );
@@ -298,7 +305,7 @@ export function createCrystalComparisonRoom(
     // Any passes the chosen look needs first (a background capture), as its backend declares,
     // with the presentation time since the last frame for a look that animates (#674).
     const delta = last === null ? 0 : (time - last) / 1000;
-    opticsBackends.get(backend).frame?.({
+    capture?.render({
       renderer,
       scene,
       camera,
@@ -368,7 +375,7 @@ export function createCrystalComparisonRoom(
         gameModeFor(next.backTo),
         window.location.href,
       ).href;
-      backend = next.backends[0] ?? "current";
+      choose(next.backends[0] ?? "current");
       part("backends").replaceChildren(
         ...next.backends.map((name) => {
           const button = document.createElement("button");
@@ -377,7 +384,7 @@ export function createCrystalComparisonRoom(
           button.textContent = opticsBackends.get(name).label;
           button.addEventListener("click", () => {
             playSfx("ui.click");
-            backend = name;
+            choose(name);
             build();
           });
           return button;
@@ -402,8 +409,8 @@ export function createCrystalComparisonRoom(
       cancelAnimationFrame(frame);
       slots.forEach(release);
       gesture.destroy();
-      disposeRefraction();
-      disposeInternal();
+      capture?.dispose();
+      capture = null;
       environment.dispose();
       (backdrop.material as THREE.MeshBasicMaterial).map?.dispose();
       (backdrop.material as THREE.Material).dispose();

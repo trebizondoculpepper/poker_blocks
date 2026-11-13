@@ -136,7 +136,7 @@ describe("the assembled contained block (#330 review)", () => {
         .get("registered")()
         .find(({ id }) => id === "custard")!;
       const appearance = createBlockAppearance(
-        cardFaceArt(standardDeck[0]!.traits.identity),
+        cardFaceArt(standardDeck[0]!.traits.identity!),
         custard,
         1,
       );
@@ -197,7 +197,7 @@ describe("a shell's generated textures are the block's to dispose (#399 review)"
         .get("registered")()
         .find(({ id }) => id === "custardFrame")!;
       const appearance = createBlockAppearance(
-        cardFaceArt(standardDeck[0]!.traits.identity),
+        cardFaceArt(standardDeck[0]!.traits.identity!),
         frame,
         1,
       );
@@ -380,6 +380,44 @@ describe("a contained cloud (#336)", () => {
 });
 
 describe("flame configuration (#355)", () => {
+  it("sits its base 0.60 below the centre by default, configurable on the definition (#745)", async () => {
+    await import("./fire-core");
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    const boundary = createInteriorBoundary(new THREE.BoxGeometry(1, 1, 1), 1, 0.9);
+    const offset = (config: unknown) =>
+      (
+        (containedContents.get("flame")(boundary, config).meshes[0] as THREE.Mesh)
+          .material as THREE.ShaderMaterial
+      ).uniforms.baseOffset!.value;
+    expect(offset({})).toBe(0.6);
+    expect(offset({ baseOffset: 0.5 })).toBe(0.5);
+  });
+
+  it("takes its palette, height and speed from configuration (#743)", async () => {
+    await import("./fire-core");
+    const { containedContents, createInteriorBoundary } = await import("./contained");
+    const boundary = createInteriorBoundary(new THREE.BoxGeometry(1, 1, 1), 1, 0.9);
+    const material = (config: unknown) =>
+      (containedContents.get("flame")(boundary, config).meshes[0] as THREE.Mesh)
+        .material as THREE.ShaderMaterial;
+    const hot = material({ palette: { core: [1, 0.97, 0.9] }, height: 1.15, speed: 1.6 });
+    expect((hot.uniforms.core!.value as THREE.Color).toArray()).toEqual([1, 0.97, 0.9]);
+    expect(hot.uniforms.heightScale!.value).toBeCloseTo(1.15);
+    expect(hot.userData.speed).toBe(1.6);
+    expect(material({ haze: 0.4 }).uniforms.haze!.value).toBe(0.4);
+    // Emission and absorption only (#744): a configurable extinction, never negative, no scene lights.
+    const { flameExtinction } = await import("./fire-core");
+    expect(material({}).uniforms.extinction!.value).toBe(flameExtinction);
+    expect(material({ extinction: 2 }).uniforms.extinction!.value).toBe(2);
+    expect(material({ extinction: -1 }).uniforms.extinction!.value).toBe(0);
+    expect(material({}).lights).toBe(false);
+    // Its alpha is the absorption coverage, written once (#804 review).
+    expect(material({}).fragmentShader.match(/gl_FragColor\s*=/g)).toHaveLength(1);
+    expect(material({}).fragmentShader).toContain("1.0 - transmittance");
+    // Never taller than the interior allows.
+    expect(material({ height: 5 }).uniforms.heightScale!.value).toBeCloseTo(1.6 / 1.35);
+  });
+
   it("defaults to the original flame, and scales size and brightness by configuration", async () => {
     await import("./fire-core");
     const { containedContents, createInteriorBoundary } = await import("./contained");

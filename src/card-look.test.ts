@@ -13,7 +13,7 @@ describe("meat browns as it cooks (#376)", () => {
     donenessSteps(meat).forEach((_, step) => {
       const cooked = withDoneness(meat, step);
       expect(cardLook(cooked).appearance.tint).toEqual(looks[step] ?? undefined);
-      expect(cooked.traits.identity).toEqual(meat.traits.identity);
+      expect(cooked.traits.identity!).toEqual(meat.traits.identity!);
     });
   });
 

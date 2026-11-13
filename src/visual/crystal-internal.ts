@@ -2,9 +2,9 @@
  * Internal reflections, ignoring the background: a PROTOTYPE for the owner to judge (follows
  * Crystal v3, #645, and the refraction prototype). Not yet a merged design.
  *
- * Per frame, shared by every block:
+ * Per frame, by one capture pass per renderer (`createInternalCapture`), for every block it draws:
  * 1. **Rear pass: the inside of the crystal.** Only the blocks' back faces are drawn, on their own
- *    camera layer, into a shared screen-sized colour target. Each pixel is the rainbow map seen by
+ *    camera layer, into the pass's own screen-sized colour target. Each pixel is the rainbow map seen by
  *    the view ray reflecting off that back facet from inside. Nothing behind the block is used.
  * 2. **Front faces distort it.** Each front pixel reads that inner image displaced on screen by
  *    the difference between the facet's external reflection and the ray bent into the crystal
@@ -17,6 +17,7 @@
  */
 import * as THREE from "three";
 import { crystalV3Environment } from "./crystal-v3";
+import { preservingRenderState, type RenderPass } from "./render-pass";
 
 /** The camera layer the rear (inner image) pass draws: never the main view. */
 export const internalLayer = 8;
@@ -38,53 +39,43 @@ export const internalTuning = {
   spectral: { value: 0.9 },
 };
 
-const shared = {
-  inner: null as THREE.WebGLRenderTarget | null,
-  uniforms: {
-    innerMap: { value: null as THREE.Texture | null },
-    screenSize: { value: new THREE.Vector2(1, 1) },
-  },
+/** The uniform slots the internal materials read; each capture pass binds its own target. */
+const captureSlots = {
+  innerMap: { value: null as THREE.Texture | null },
+  screenSize: { value: new THREE.Vector2(1, 1) },
 };
 
 const size = new THREE.Vector2();
-const clearColour = new THREE.Color();
 
-/** The rear pass, run before the main render by whoever draws these blocks (its `frame` hook). */
-export function internalFrame(context: {
-  renderer: THREE.WebGLRenderer;
-  scene: THREE.Scene;
-  camera: THREE.Camera;
-}): void {
-  const { renderer, scene, camera } = context;
-  renderer.getDrawingBufferSize(size);
-  const width = Math.max(1, Math.floor(size.x));
-  const height = Math.max(1, Math.floor(size.y));
-  shared.inner ??= new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
-  shared.inner.setSize(width, height);
-  shared.uniforms.innerMap.value = shared.inner.texture;
-  shared.uniforms.screenSize.value.set(width, height);
-
-  const previous = renderer.getRenderTarget();
-  const alpha = renderer.getClearAlpha();
-  renderer.getClearColor(clearColour);
-  const mask = camera.layers.mask;
-  const background = scene.background;
-  scene.background = null;
-  camera.layers.set(internalLayer);
-  renderer.setRenderTarget(shared.inner);
-  renderer.setClearColor(0x000000, 0);
-  renderer.clear();
-  renderer.render(scene, camera);
-  camera.layers.mask = mask;
-  scene.background = background;
-  renderer.setClearColor(clearColour, alpha);
-  renderer.setRenderTarget(previous);
-}
-
-/** Free the shared target (the room's dispose). */
-export function disposeInternal(): void {
-  shared.inner?.dispose();
-  shared.inner = null;
+/**
+ * The rear pass, run before the main render by whoever draws these blocks, one instance per
+ * renderer with its own target (doc/profiler-render-passes.md).
+ */
+export function createInternalCapture(): RenderPass {
+  const inner = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  return {
+    render(frame) {
+      const { renderer, scene, camera } = frame;
+      renderer.getDrawingBufferSize(size);
+      const width = Math.max(1, Math.floor(size.x));
+      const height = Math.max(1, Math.floor(size.y));
+      inner.setSize(width, height);
+      captureSlots.innerMap.value = inner.texture;
+      captureSlots.screenSize.value.set(width, height);
+      preservingRenderState(frame, () => {
+        scene.background = null;
+        camera.layers.set(internalLayer);
+        renderer.setRenderTarget(inner);
+        renderer.setClearColor(0x000000, 0);
+        renderer.clear();
+        renderer.render(scene, camera);
+      });
+    },
+    dispose() {
+      if (captureSlots.innerMap.value === inner.texture) captureSlots.innerMap.value = null;
+      inner.dispose();
+    },
+  };
 }
 
 const vertexShader = /* glsl */ `
@@ -176,7 +167,7 @@ export function createInternalRear(geometry: THREE.BufferGeometry): THREE.Mesh {
   const material = new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader: rearFragment,
-    uniforms: { ...shared.uniforms, ...internalTuning, ...environmentUniform() },
+    uniforms: { ...captureSlots, ...internalTuning, ...environmentUniform() },
     side: THREE.BackSide,
   });
   const rear = new THREE.Mesh(geometry, material);
@@ -189,7 +180,7 @@ export function createInternalFront(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader: frontFragment,
-    uniforms: { ...shared.uniforms, ...internalTuning, ...environmentUniform() },
+    uniforms: { ...captureSlots, ...internalTuning, ...environmentUniform() },
     side: THREE.FrontSide,
   });
 }

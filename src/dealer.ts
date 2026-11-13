@@ -1,8 +1,9 @@
+import { discardRefusal } from "./discardable";
 import type { CardBlock } from "./cards";
 import { gameTuning } from "./balance";
 import { blockAttachmentCell } from "./block-trait-behaviours";
 import { Registry } from "./core/registry";
-import { drawCards } from "./deal";
+import { popCards, shuffleCards } from "./deal";
 import type { GameState, PlayAction, StageRules } from "./game-state";
 import { scoreField } from "./scoring";
 import { cellKey, faceNormal, type Cell, type Face } from "./traits/attachable";
@@ -27,11 +28,15 @@ export type HandRefill = { state: GameState; drawn: CardBlock[] };
 export interface Dealer {
   readonly name: string;
   readonly handSize: number;
-  /** A new game: every card in the deck, then the first stage dealt with default rules. */
-  startGame(cards: readonly CardBlock[], random?: () => number): GameState;
-  /** Clear the field into the deck, set the stage's counters and fill the hand. */
+  /**
+   * A new game: every card in the deck, then the first stage dealt with `rules` (default rules
+   * when omitted). The stage start shuffles the deck exactly once (#551).
+   */
+  startGame(cards: readonly CardBlock[], random?: () => number, rules?: StageRules): GameState;
+  /** Clear the field into the deck, shuffle it once, set the stage's counters and fill the hand. */
   startStage(state: GameState, rules: StageRules, random?: () => number): GameState;
-  refillHand(state: GameState, random?: () => number): HandRefill;
+  /** Fill the hand from the top of the deck, in order; never random (#551). */
+  refillHand(state: GameState): HandRefill;
   canPlay(state: GameState): boolean;
   placementFor(state: GameState, targetId?: string, face?: Face): Cell | null;
   /**
@@ -52,7 +57,7 @@ export const baseDealer: Dealer = {
   name: "base",
   handSize: gameTuning.baseHandSize,
 
-  startGame(cards, random: () => number = Math.random) {
+  startGame(cards, random: () => number = Math.random, rules: StageRules = defaultStageRules) {
     const empty: GameState = {
       field: [],
       hand: [],
@@ -62,14 +67,16 @@ export const baseDealer: Dealer = {
       coins: 0,
       round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
     };
-    return this.startStage(empty, defaultStageRules, random);
+    return this.startStage(empty, rules, random);
   },
 
   startStage(state, rules, random: () => number = Math.random) {
     const cleared: GameState = {
       ...state,
       field: [],
-      deck: [...state.deck, ...state.field.map(({ block }) => block)],
+      // The field's cards go back into the deck and the deck is shuffled once, as the stage
+      // begins: every draw after this pops the top card (#551).
+      deck: shuffleCards([...state.deck, ...state.field.map(({ block }) => block)], random),
       round: {
         score: 0,
         targetScore: rules.targetScore,
@@ -77,12 +84,13 @@ export const baseDealer: Dealer = {
         discardsLeft: rules.discards,
       },
     };
-    return this.refillHand(cleared, random).state;
+    return this.refillHand(cleared).state;
   },
 
-  refillHand(state, random: () => number = Math.random) {
+  refillHand(state) {
     const missing = Math.max(0, this.handSize - state.hand.length);
-    const draw = drawCards(state.deck, Math.min(missing, state.deck.length), random);
+    // The top cards, in order: drawing never uses the random stream (#551, #836).
+    const draw = popCards(state.deck, Math.min(missing, state.deck.length));
     const drawn = draw.cards.map(withSelectable);
     return {
       state: { ...state, deck: draw.deck, hand: [...state.hand, ...drawn] },
@@ -155,6 +163,9 @@ export const baseDealer: Dealer = {
     // In hand order, so the discard pile reads left to right.
     const blocks = state.hand.filter(({ id }) => ids.has(id));
     if (blocks.length !== ids.size) return null;
+    // Every chosen card's own discard behaviour must accept it; one refusal refuses the group,
+    // changing nothing (#574).
+    if (blocks.some((block) => discardRefusal(block) !== null)) return null;
     return {
       ...state,
       hand: state.hand.filter(({ id }) => !ids.has(id)),

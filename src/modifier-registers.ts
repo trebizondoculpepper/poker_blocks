@@ -30,16 +30,27 @@ import { stageEndResets } from "./stage-end";
 /** A lifetime register: how to hook its clearing into the run's boundaries, if it has one. */
 export type ModifierLifetime = {
   clearOn: ((name: string, clear: (state: GameState) => GameState) => void) | null;
+  /** What inspection calls it, and how long it lasts (#751). */
+  label: string;
+  expires: string;
 };
 
 export const modifierLifetimes = new Registry<ModifierLifetime>("modifier lifetime");
 modifierLifetimes.register("stage", {
   clearOn: (name, clear) => stageEndResets.register(name, clear),
+  label: "Stage",
+  expires: "until the stage ends",
 });
 modifierLifetimes.register("round", {
   clearOn: (name, clear) => roundEndResets.register(name, clear),
+  label: "Round",
+  expires: "until the round ends",
 });
-modifierLifetimes.register("run", { clearOn: null });
+modifierLifetimes.register("run", {
+  clearOn: null,
+  label: "Run",
+  expires: "for the rest of the run",
+});
 
 /** Several modifiers as one: additives summed, multipliers multiplied, exponents' increases summed. */
 export function combineModifiers(modifiers: readonly ScoringModifier[]): ScoringModifier {
@@ -233,4 +244,50 @@ export function restoreModifierRegisters(saved: unknown): Record<string, Scoring
       return [lifetime, modifier];
     }),
   );
+}
+
+/** The acquired bonus a card's face shows (#432): its highest-priority non-neutral modifier. */
+export type AcquiredBonusDescriptor = {
+  operator: "exponent" | "multiplier" | "additive";
+  value: number;
+};
+
+/**
+ * The compact descriptor for a card's acquired modifiers, every lifetime combined first, by the
+ * model's own arithmetic (doc/presentation-contracts.md, "Acquired bonus artwork and inspection").
+ * Priority is exponent, then multiplier, then additive; lower ones still score while hidden. Null
+ * when the card has no acquired bonus. Base material values are never included.
+ */
+export function acquiredBonusDescriptor(card: CardBlock): AcquiredBonusDescriptor | null {
+  const { additive = 0, multiplicative = 1, exponential = 1 } = acquiredModifier(card);
+  if (exponential !== 1) return { operator: "exponent", value: exponential };
+  if (multiplicative !== 1) return { operator: "multiplier", value: multiplicative };
+  if (additive !== 0) return { operator: "additive", value: additive };
+  return null;
+}
+
+/** One non-neutral lifetime register, as inspection lists it (#751). */
+export type AcquiredBonusRow = {
+  lifetime: string;
+  label: string;
+  expires: string;
+  modifier: ScoringModifier;
+};
+
+/**
+ * Every non-neutral acquired register of a card, in the lifetimes' registered order, and their
+ * combination by the model's own arithmetic. Pure: it reads the card, never the run.
+ */
+export function acquiredBonusBreakdown(card: CardBlock): {
+  rows: AcquiredBonusRow[];
+  combined: ScoringModifier;
+} {
+  const registers = card.traits.modifiers ?? {};
+  const rows = modifierLifetimes.names().flatMap((lifetime) => {
+    const modifier = combineModifiers([registers[lifetime] ?? {}]);
+    if (!Object.keys(modifier).length) return [];
+    const { label, expires } = modifierLifetimes.get(lifetime);
+    return [{ lifetime, label, expires, modifier }];
+  });
+  return { rows, combined: acquiredModifier(card) };
 }

@@ -1,4 +1,5 @@
-import { cardFaceArt } from "./visual/face-art";
+import { blockFaceArt } from "./block-presentation";
+import { acquiredBonusDescriptor } from "./modifier-registers";
 /**
  * The three.js side of every block on screen: a cube built from the block's appearance,
  * in the hand (small, rocking) or on the table (full size, in the board assembly). The hand
@@ -83,7 +84,10 @@ export function createBlockViews(parents: {
     create(block, size, location) {
       const look = cardLook(block);
       const appearance = createBlockAppearance(
-        cardFaceArt(block.traits.identity, { face: look.cardFace }),
+        blockFaceArt(block, {
+          face: look.cardFace,
+          bonus: acquiredBonusDescriptor(block),
+        }),
         look,
         size,
       );

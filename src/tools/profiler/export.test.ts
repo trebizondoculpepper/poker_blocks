@@ -17,6 +17,7 @@ const result = (id: string, gpu: number | null, cpu: number): CaseResult => ({
   unit: { kind: "group", size: 4 },
   sampling: "steady",
   host: "board",
+  pipeline: { passes: [], passCount: 0, setup: 0 },
   baseline: set(gpu === null ? null : 0.1, 0.1),
   counts: [1, 10, 50].map((count) => ({
     count,
@@ -103,7 +104,7 @@ describe("profiler export (#619)", () => {
     expect(round.coverage.complete).toBe(false);
     expect(round.results[0].unit).toEqual({ kind: "group", size: 4 });
     expect(round.coverage.catalogs[1]).toMatchObject({ catalog: "rack item", installed: false });
-    expect(round.method.version).toBe(2);
+    expect(round.method.version).toBe(3);
     // No isolation stated: the default is the honest one, that frames may have been shared.
     expect(round.isolation).toBe("shared");
     expect(round.failures).toEqual([{ id: "b", kind: "timeout", reason: "exceeded 120000 ms" }]);
@@ -112,15 +113,27 @@ describe("profiler export (#619)", () => {
 });
 
 describe("export schema versions (#721)", () => {
-  it("reads version 2, recognises version 1 as old results, and refuses anything else", async () => {
+  it("reads version 3, recognises version 1 as old results, and refuses anything else", async () => {
     const { readProfilerExport } = await import("./export");
-    const current = JSON.stringify({ method: { version: 2 }, results: [] });
+    const current = JSON.stringify({ method: { version: 3 }, results: [] });
     expect(readProfilerExport(current).kind).toBe("current");
     const old = JSON.stringify({ method: { version: 1 }, results: [{ collection: {} }] });
     expect(readProfilerExport(old)).toEqual({ kind: "legacy", version: 1 });
     expect(() => readProfilerExport(JSON.stringify({ method: { version: 9 } }))).toThrow(
       /version: 9/,
     );
+  });
+
+  it("reads a version-2 matrix as main-render-only, its pipeline setup never timed (#764)", async () => {
+    const { readProfilerExport } = await import("./export");
+    const { pipeline: _pipeline, ...before } = result("old", 1, 1);
+    const read = readProfilerExport(JSON.stringify({ method: { version: 2 }, results: [before] }));
+    expect(read.kind).toBe("current");
+    expect(read.kind === "current" && read.record.results[0]!.pipeline).toEqual({
+      passes: [],
+      passCount: 0,
+      setup: null,
+    });
   });
 
   it("ranks by the largest count, missing GPU time last", async () => {

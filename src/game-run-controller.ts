@@ -1,3 +1,17 @@
+import { discardRefusal } from "./discardable";
+import type { GameState } from "./game-state";
+import type { PreparedSession } from "./run-setup";
+import {
+  createSessionRequester,
+  type SessionFactoryHost,
+  type SessionRequest,
+  type SessionResult,
+} from "./session-host";
+import type { PassiveScoredLine } from "./passive-effects";
+import { blockName } from "./block-presentation";
+import { runInventory, type InventoryRecord } from "./run-inventory";
+import type { DeckBuilderStep } from "./deck-builder";
+import type { EventEnvelope } from "./lifecycle/action";
 /**
  * Run controller: the run being played and the game mode it is played in. It owns the
  * `GameRun`, starts, resumes and saves runs, moves between stages and the shop, follows
@@ -16,7 +30,7 @@ import { menuScreenScenes } from "./overlays";
 import { refusalSound } from "./purchase-refusals";
 import { playSfx } from "./audio/sfx";
 import type { CameraViewService } from "./camera-view";
-import { cardName, standardDeck, type CardBlock } from "./cards";
+import { standardDeck, type CardBlock } from "./cards";
 import type { ConsoleApp } from "./console-host";
 import { dealerRegistry, roundOutcome, type RoundOutcome } from "./dealer";
 import type { FieldView } from "./field-view";
@@ -88,6 +102,11 @@ export type RunServices = {
 
 export type GameRunController = {
   readonly game: GameRun;
+  /**
+   * Hear each committed action's facts, from whichever run is current (#755). Presentation
+   * controller traits subscribe here; returns a function that stops listening.
+   */
+  onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void;
   /** The mode being played. */
   readonly mode: GameMode;
   readonly settings: Settings;
@@ -119,6 +138,11 @@ export type GameRunController = {
   showSelection(): void;
   /** The hand has room again: draw replacements. */
   refillHand(): void;
+  /**
+   * Draw replacements into the model's hand now, without showing them (#775): the caller reveals
+   * them later with the hand view. Returns the cards drawn.
+   */
+  drawReplacements(): readonly CardBlock[];
   /** The passive rack may have changed (a discard can grant passives). */
   rackChanged(): void;
   autosave(): void;
@@ -134,6 +158,27 @@ export type GameRunController = {
   shopStock(): readonly ShopOffer[];
   /** The run's deck, for the read-only deck view (#175). */
   deckBlocks(): readonly CardBlock[];
+  /**
+   * Prepare a session through a registered factory and, if it succeeds, adopt it atomically as
+   * the current run (#902; doc/experiments/trial-session-adoption.md): its run, rules, card
+   * universe, random stream and provenance together. A stale request (an ID not newer than the
+   * last) or a failed preparation changes nothing.
+   */
+  requestSession(request: SessionRequest): SessionResult;
+  /** The active session's provenance when it is an adopted trial; null for an ordinary run. */
+  sessionProvenance(): PreparedSession["provenance"] | null;
+  /**
+   * The committed field and round, read-only, for snapshot-scoped measurement (#904). The state is
+   * immutable: a reader holds the version it read, never a live reference into a later action.
+   */
+  committedState(): Pick<GameState, "field" | "round">;
+  /**
+   * What the last committed play scored (#904): the field as it was scored, before after-score
+   * steps changed it, and its lines with the activations actually applied.
+   */
+  lastScoring(): { field: GameState["field"]; lines: readonly PassiveScoredLine[] };
+  /** Every live card in the run and where it is (#472): a query, never a second catalogue. */
+  inventory(): readonly InventoryRecord[];
   /** The won stage's paid rewards, which the stage-won pop-up shows; null before payment. */
   stageReward(): StageReward | null;
   /** The run's totals so far, which the game over screen shows. */
@@ -197,7 +242,17 @@ export function createGameRunController<Context>(options: {
     checkpoint: () => randomizer.checkpoint(),
     restore: (mark: { state: number; draws: number }) => randomizer.restore(mark),
   };
-  let game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+  // Every run this controller holds publishes its committed facts to the same listeners (#755).
+  const committedListeners = new Set<(facts: readonly EventEnvelope[]) => void>();
+  const adopt = (run: GameRun): GameRun => {
+    run.onCommitted((facts) => {
+      // A replaced run is no longer the one on screen: its facts present nothing.
+      if (run !== game) return;
+      for (const listener of Array.from(committedListeners)) listener(facts);
+    });
+    return run;
+  };
+  let game = adopt(new GameRun(dealerRegistry, runRules, cards, () => randomizer.next()));
   game.attachRandomCheckpoints(randomCheckpoints);
   let settings = loadSettings(storage);
   let reducedMotion = false;
@@ -231,12 +286,20 @@ export function createGameRunController<Context>(options: {
    * steps rebuild the same deck; a new run passes none and the steps that deal a deck choose a
    * fresh seed. Only card ids are saved, so this is also how the testing-only mix returns.
    */
-  function deckForRun(seed: number | undefined): readonly CardBlock[] {
-    return runSetup.deck(currentMode.runSetup, { deck: standardDeck, seed }, setupServices()).deck;
+  function deckForRun(
+    seed: number | undefined,
+    recipe?: readonly DeckBuilderStep[],
+  ): readonly CardBlock[] {
+    return runSetup.deck(
+      currentMode.runSetup,
+      { deck: standardDeck, seed, ...(recipe ? { savedRecipe: recipe } : {}) },
+      setupServices(),
+    ).deck;
   }
 
-  /** The cards a saved run's deck is rebuilt from. */
-  const cardsForSavedRun = (seed: number | undefined) => deckForRun(seed);
+  /** The cards a saved run's deck is rebuilt from: its own seed and, if it has one, its recipe. */
+  const cardsForSavedRun = (seed: number | undefined, recipe?: readonly DeckBuilderStep[]) =>
+    deckForRun(seed, recipe);
 
   function switchScene(name: SceneName): void {
     const id = modeSceneId(currentMode.id, name);
@@ -285,6 +348,15 @@ export function createGameRunController<Context>(options: {
     services.frame.setLayout(resolveLayout(next.layout, viewport(), services.frame.layout));
   }
 
+  /** A card the run holds now, wherever it is, by id: what a visible inspection re-describes. */
+  function currentCard(id: string): CardBlock | undefined {
+    const { hand, deck, discardPile, field } = game.state;
+    return (
+      field.find(({ block }) => block.id === id)?.block ??
+      [...hand, ...deck, ...discardPile].find((card) => card.id === id)
+    );
+  }
+
   function updateHud(): void {
     // The game state updates as soon as a placement is accepted, but the card still
     // has to land before its scoring presentation begins. Keep outcomes hidden across
@@ -304,6 +376,8 @@ export function createGameRunController<Context>(options: {
       deckSize: deck.length,
     });
     services.input.refreshDiscardTarget();
+    // Every model change refreshes the HUD: an open inspection follows the card's new state.
+    services.input.refreshInspection(currentCard);
   }
 
   function showSelection(): void {
@@ -312,21 +386,44 @@ export function createGameRunController<Context>(options: {
     views.highlight(selected);
     const selectedNames = views.all
       .filter(({ block }) => selected.has(block.id))
-      .map(({ block }) => cardName(block.traits.identity));
+      .map(({ block }) => blockName(block));
     // With two or more hand blocks selected, a badge over the hand says how many (#305), so a
     // drag that will carry the whole selection is never a surprise.
     const inHand = game.state.hand.filter((block) => selected.has(block.id)).length;
     services.selectionBadge.count(inHand);
     host.setAttribute(
       "aria-label",
-      `${game.state.field.length} blocks in play. Hand: ${game.state.hand.map((block) => cardName(block.traits.identity)).join(", ")}. ${game.state.deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,
+      `${game.state.field.length} blocks in play. Hand: ${game.state.hand.map((block) => blockName(block)).join(", ")}. ${game.state.deck.length} in deck. Selected: ${selectedNames.join(", ") || "none"}.`,
     );
   }
 
   /** Save at a safe point: never while a placement, discard or score presentation is running. */
+  /**
+   * The active session's origin (#902): how it saves and where it came from. An ordinary run saves
+   * to the mode's slot; an adopted trial carries its provenance and stays out of the mode's
+   * ordinary save (doc/experiments/trial-session-adoption.md: save namespaces stay isolated).
+   */
+  type SessionOrigin = {
+    save(): void;
+    provenance: PreparedSession["provenance"] | null;
+  };
+  const ordinarySession: SessionOrigin = {
+    save() {
+      game.setRandomCursor({ seed: randomizer.seed, position: randomizer.cursor });
+      saveRun(storage, game.snapshot(), runSaveKey, currentMode.flow);
+    },
+    provenance: null,
+  };
+  let activeSession: SessionOrigin = ordinarySession;
+
   function autosave(): void {
-    game.setRandomCursor({ seed: randomizer.seed, position: randomizer.cursor });
-    saveRun(storage, game.snapshot(), runSaveKey, currentMode.flow);
+    activeSession.save();
+  }
+
+  function drawReplacements(): readonly CardBlock[] {
+    const drawn = game.refillHand();
+    updateHud();
+    return drawn;
   }
 
   function refillHand(): void {
@@ -431,7 +528,11 @@ export function createGameRunController<Context>(options: {
       randomizer.next(),
     ).snapshot();
     // The run records the seed of the deck it was dealt, so Continue rebuilds the same one.
-    const snapshot = { ...opening, ...(dealt.seed === undefined ? {} : { seed: dealt.seed }) };
+    const snapshot = {
+      ...opening,
+      ...(dealt.seed === undefined ? {} : { seed: dealt.seed }),
+      ...(dealt.recipe === undefined ? {} : { deckRecipe: dealt.recipe }),
+    };
     const started = runSetup.start(steps, { rules: runRules, deck: dealt, snapshot }, services);
     return GameRun.fromSnapshot(dealerRegistry, runRules, cards, started.snapshot, () =>
       randomizer.next(),
@@ -463,10 +564,42 @@ export function createGameRunController<Context>(options: {
     }
   }
 
+  /** Preparation runs the mode's policy and the given start steps off to the side. */
+  const sessionHost: SessionFactoryHost = {
+    prepare(steps) {
+      // Preparing must not touch the active run's stream (doc/experiments/trial-session-adoption.md).
+      const isolated: RunSetupServices = {
+        standardDeck,
+        newSeed: () => {
+          throw new Error("session preparation may not draw from the active stream");
+        },
+        random: () => {
+          throw new Error("session preparation may not draw from the active stream");
+        },
+      };
+      const rules = runSetup.policy(currentMode.runSetup, baseRunRules(currentMode), isolated);
+      const snapshot = new GameRun(dealerRegistry, rules, standardDeck, () => 0).snapshot();
+      return runSetup.start(steps, { rules, deck: { deck: standardDeck }, snapshot }, isolated);
+    },
+  };
+
+  // One synchronous adoption: stream, rules and card universe first, then the run itself, whose
+  // checkpoints now refer to the adopted stream. Old gestures and presentation are cancelled.
+  const requestSession = createSessionRequester(sessionHost, (prepared) => {
+    services.input.cancelGestures();
+    randomizer = prepared.random;
+    runRules = prepared.rules;
+    cards = prepared.cards;
+    // A trial is not resumable through the mode's setup: it keeps its provenance and saves
+    // nothing over the mode's ordinary save (export is a separate product, #821).
+    startRun(prepared.run, { save: () => {}, provenance: prepared.provenance });
+  });
+
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
-  function startRun(session: GameRun): void {
+  function startRun(session: GameRun, origin: SessionOrigin = ordinarySession): void {
+    activeSession = origin;
     const { rack, cameraView, audio } = services;
-    game = session;
+    game = adopt(session);
     game.attachRandomCheckpoints(randomCheckpoints);
     rack.render(game.state.passiveRack);
     gameOverAt = null;
@@ -506,7 +639,7 @@ export function createGameRunController<Context>(options: {
       runSetup.requiresSavedSeed(currentMode.runSetup),
     );
   const resume = (snapshot: NonNullable<ReturnType<typeof loadSaved>>) => {
-    cards = cardsForSavedRun(snapshot.seed);
+    cards = cardsForSavedRun(snapshot.seed, snapshot.deckRecipe);
     // Continue resumes the session's random sequence where it left off, so the run replays
     // rather than drawing fresh (#134). A save without a cursor keeps the seeded default.
     if (snapshot.random)
@@ -551,7 +684,7 @@ export function createGameRunController<Context>(options: {
       // A previous mode can have an outcome timer or an animated play in flight. Replace
       // its run before changing scenes so neither can resume into this scene-only tool.
       stageWonAt = gameOverAt = null;
-      game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+      game = adopt(new GameRun(dealerRegistry, runRules, cards, () => randomizer.next()));
       game.attachRandomCheckpoints(randomCheckpoints);
       resetTable();
       showScene(currentMode.startScene);
@@ -566,7 +699,8 @@ export function createGameRunController<Context>(options: {
     busy: () => services.presenter.busy,
     inStage: () => game.inStage,
     canPlay: () => game.dealer.canPlay(game.state),
-    canDiscard: () => game.dealer.canDiscard(game.state),
+    canDiscard: (blocks = []) =>
+      game.dealer.canDiscard(game.state) && blocks.every((block) => discardRefusal(block) === null),
     linePlacement: (count, targetId, face) =>
       game.dealer.linePlacementFor(game.state, count, targetId, face),
     hand: () => game.state.hand,
@@ -689,7 +823,7 @@ export function createGameRunController<Context>(options: {
       // The active mode's own save slot, never a named mode.
       clearRun(storage, runSaveKey);
       // The run on screen is gone too, so the table returns to its empty start.
-      game = new GameRun(dealerRegistry, runRules, cards, () => randomizer.next());
+      game = adopt(new GameRun(dealerRegistry, runRules, cards, () => randomizer.next()));
       game.attachRandomCheckpoints(randomCheckpoints);
       stageWonAt = gameOverAt = null;
       services.presenter.reset();
@@ -721,6 +855,10 @@ export function createGameRunController<Context>(options: {
   return {
     get game() {
       return game;
+    },
+    onCommitted(listener) {
+      committedListeners.add(listener);
+      return () => committedListeners.delete(listener);
     },
     get mode() {
       return currentMode;
@@ -775,6 +913,7 @@ export function createGameRunController<Context>(options: {
     updateHud,
     showSelection,
     refillHand,
+    drawReplacements,
     rackChanged: () => services.rack.render(game.state.passiveRack),
     autosave,
     decided(outcome, now) {
@@ -791,6 +930,11 @@ export function createGameRunController<Context>(options: {
     offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),
     shopStock: () => game.state.shopStock ?? [],
     deckBlocks: () => game.state.deck,
+    requestSession,
+    sessionProvenance: () => activeSession.provenance,
+    committedState: () => game.state,
+    lastScoring: () => ({ field: game.lastScoringField, lines: game.lastScoredLines }),
+    inventory: () => runInventory(game.state),
     runStats: () => game.stats,
     // A run with no rack limit shows exactly the passives it holds.
     rackCapacity: () =>

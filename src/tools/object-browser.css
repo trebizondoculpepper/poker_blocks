@@ -90,6 +90,31 @@
   height: 320px;
   max-width: 100%;
 }
+.object-browser-preview {
+  width: max-content;
+  max-width: 100%;
+  cursor: grab;
+}
+.object-browser-preview:focus-visible {
+  outline: 2px solid #7fd8c8;
+}
+.object-browser-view {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.object-browser-view[hidden] {
+  display: none;
+}
+.object-browser-view button {
+  padding: 4px 10px;
+  border: 1px solid #4a5a6b;
+  border-radius: 6px;
+  background: #1d2733;
+  color: #e6edf3;
+  font: inherit;
+  cursor: pointer;
+}
 .object-browser-properties {
   margin-top: 12px;
   border-collapse: collapse;
@@ -123,4 +148,19 @@
     overflow-x: auto;
     border-right: 0;
   }
+}
+.object-browser-status {
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+.object-browser-status-line {
+  margin: 0 0 10px;
+  color: #a8d8c9;
+}
+.object-browser-status-line[hidden] {
+  display: none;
 }

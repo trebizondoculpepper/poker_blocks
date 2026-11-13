@@ -77,7 +77,8 @@ body,
     600 14px system-ui,
     sans-serif;
   pointer-events: none;
-  white-space: nowrap;
+  /* One line per part of the description (#751: base and acquired bonuses), never wrapped. */
+  white-space: pre;
 }
 
 .inspect-tooltip[hidden] {
@@ -1404,6 +1405,11 @@ body,
   cursor: help;
 }
 
+.deck-view-location {
+  margin-left: 3px;
+  font-size: 0.75em;
+  opacity: 0.75;
+}
 .deck-view-block:focus-visible {
   outline: 2px solid #9ce6d7;
   outline-offset: 2px;
@@ -1514,4 +1520,95 @@ body,
 
 .selection-badge[hidden] {
   display: none;
+}
+
+/* The trial readouts (src/scene-traits/dev-trial-readouts.ts, #904). Never in the normal game. */
+.dev-trial-readouts {
+  position: absolute;
+  z-index: 50;
+  top: 230px;
+  right: 16px;
+  width: 280px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid #65f4dd;
+  border-radius: 8px;
+  background: #101a24ee;
+  color: #f4f0e8;
+  font:
+    12px ui-monospace,
+    monospace;
+  /* Scrollable when many rows score: the panel takes its own wheel, touch and scrollbar. */
+  pointer-events: auto;
+  overscroll-behavior: contain;
+}
+.dev-trial-readouts h2,
+.dev-trial-readouts h3 {
+  margin: 6px 0 4px;
+  font-size: 13px;
+  color: #65f4dd;
+}
+.dev-trial-readouts dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  margin: 0;
+}
+.dev-trial-readouts dd {
+  margin: 0;
+  text-align: right;
+}
+.dev-trial-readouts .unavailable {
+  color: #9aa5b1;
+  font-style: italic;
+}
+
+/* The trial bench panel (src/scene-traits/dev-bench-panel.ts, #903). Never in the normal game. */
+.dev-bench-panel {
+  position: absolute;
+  z-index: 50;
+  top: 230px;
+  left: 16px;
+  width: 280px;
+  max-height: 60vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 10px 12px;
+  border: 1px solid #f2c14e;
+  border-radius: 8px;
+  background: #101a24ee;
+  color: #f4f0e8;
+  font:
+    12px ui-monospace,
+    monospace;
+}
+.dev-bench-panel h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #f2c14e;
+}
+.dev-bench-panel fieldset {
+  margin: 8px 0;
+  padding: 6px 8px;
+  border: 1px solid #3a4a5a;
+  border-radius: 6px;
+}
+.dev-bench-panel label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 3px 0;
+}
+.dev-bench-panel input {
+  width: 6em;
+}
+.dev-bench-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.dev-bench-status {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
 }

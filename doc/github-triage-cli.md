@@ -1,49 +1,32 @@
-# GitHub Triage: npm Git dependency
+# GitHub Triage: global install
 
 GitHub Triage is developed in the standalone [github_triage repository](https://github.com/trebizondoculpepper/github_triage). Its [CLI contract](https://github.com/trebizondoculpepper/github_triage/blob/main/doc/github-triage-cli.md), [dependency design](https://github.com/trebizondoculpepper/github_triage/blob/main/doc/issue-dependencies.md) and issues belong there. This game repository consumes the tool; it owns no collector, workflow-rule, formatter or CLI test implementation.
 
-## Git dependency installation and launch (#724)
+## Global installation and launch
 
-The owner selected an npm URL dependency while the standalone tool is unreleased. Add `github-triage` to `devDependencies` using a public Git HTTPS URL tracking its `main` branch, and commit `package-lock.json`. The consumer script launches the installed source entry:
+The owner chose a **global install** (superseding the #724 project dependency). The tool is a developer-only briefing command: the game, its build, its tests and CI never run it, so pinning it in this repository's `package.json` and `package-lock.json` bought nothing and cost a lockfile PR for every upstream change. poker_blocks has no `github-triage` dependency and no `triage` npm script.
 
-```json
-"triage": "node node_modules/github-triage/src/cli.js"
-```
-
-The Git dependency follows `main`:
-
-```text
-git+https://git@github.com/trebizondoculpepper/github_triage.git#main
-```
-
-The literal `git` username is public and contains no credential; it preserves HTTPS in npm's resolved lockfile instead of npm normalizing this GitHub URL to SSH. No registry publication, local sibling checkout, global install or SSH key is required. Use normal `npm install` / `npm ci` with development dependencies. The dependency may run its upstream `prepare` lifecycle as permitted by the npm version's lifecycle policy; it is not imported into the game or built at runtime.
-
-Run it from poker_blocks:
+Install it once per machine, from the standalone project's `main` branch:
 
 ```sh
-npm run triage -- --help
-npm run --silent triage -- --json
-npm run triage -- --issue 432
-npm run triage -- deps 675 --tree
+npm install -g git+https://github.com/trebizondoculpepper/github_triage.git#main
 ```
 
-npm forwards arguments and preserves the game checkout as the working directory, so the tool's authenticated `gh repo view` resolves poker_blocks. The standalone project owns runtime requirements, feature availability, lifecycle and testing. Use `--help` for current flags. Missing development dependencies fail visibly; do not fall back to a sibling or vendored implementation. Game builds and tests do not invoke the optional developer command.
+Its package declares the `github-triage` command. Run it from the poker_blocks checkout:
+
+```sh
+github-triage --help
+github-triage --json
+github-triage --issue 432
+github-triage deps 675 --tree
+```
+
+The working directory stays the game checkout, so the tool's authenticated `gh repo view` resolves poker_blocks. The standalone project owns runtime requirements, features, lifecycle and tests; use `--help` for current flags. If the command is missing, install it; do not fall back to a sibling or vendored implementation.
 
 ## Updates, evidence and limits
 
-The owner selected branch tracking with **explicit updates**, rather than fetching on every execution. `package.json` follows `main`; `package-lock.json` records the last resolved commit so `npm ci` remains reproducible. Merely running the CLI or `npm ci` does not fetch a newer upstream commit.
+Update by reinstalling with the same command. An update changes no file in this repository, so it needs no PR. Each agent's machine updates independently, so a briefing should say which upstream commit it ran (`npm ls -g github-triage`, or the commit shown by `git ls-remote https://github.com/trebizondoculpepper/github_triage.git main` at install time). A developer working on the tool itself may `npm link` their checkout instead; the command is then that checkout.
 
-Refresh to the latest `main` commit with:
+Trade-off accepted: agents may briefly run different revisions, in exchange for no lockfile churn. Reproducibility for the game is unaffected, since nothing in the build or CI depends on the tool.
 
-```sh
-npm update github-triage
-npm run triage -- --help
-```
-
-Commit the updated lockfile through the normal PR/check process and smoke-test full-ticket JSON when updating. No pre-run updater is installed; offline cache behavior remains under the standalone CLI's control. Git fetching is a temporary distribution choice before release, not authorization to publish a package.
-
-Source audit at `35bc593`: standalone `package.json` declares `src/cli.js` as its CLI entry and a `prepare` hook using Vite+; `src/github.js` uses `gh repo view` with the inherited working directory. Disposable normal npm installs verified Git URL installation and explicit installed-source execution. An explicit HTTPS URL with the public `git` username preserved HTTPS in the generated lockfile, while the same URL without it was normalized to `git+ssh` by npm 11.19.0. The implementation PR must also validate clean `npm ci` and the project's normal checks.
-
-The upstream npm-bin entry-point symlink guard still exits silently ([github_triage#11](https://github.com/trebizondoculpepper/github_triage/issues/11)). Calling the installed JS entry with Node avoids that defect without copying or patching the tool here. Once upstream fixes and tests the package executable, a later dependency upgrade can simplify the script. Smoke tests check actual nonempty help/valid JSON, rather than accepting exit zero alone.
-
-Briefings remain inspection evidence: recheck live ownership, PR head, required checks and review findings before acting. Missing evidence, offline snapshots and closed blockers are not approval. Game workflow labels and native dependency policy remain in [process.md](process.md) and [issue-dependencies.md](issue-dependencies.md).
+Evidence (2026-11-13): the standalone `package.json` declares `"bin": { "github-triage": "src/cli.js" }`; `grep` of `.github/workflows` finds no use of triage; on a machine with the command linked globally, `github-triage --help` run from the poker_blocks checkout printed the usual help. The implementation PR removes the dependency and script, and updates the triage skill's update step.

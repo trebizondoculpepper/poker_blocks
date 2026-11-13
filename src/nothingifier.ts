@@ -18,6 +18,7 @@ export const nothingifierId = "nothingifier";
 
 passiveDefinitions.register(nothingifierId, {
   id: nothingifierId,
+  releaseStatus: { certified: {} },
   name: "Nothingifier",
   symbol: "∅",
   description:

@@ -49,18 +49,18 @@ Every open ticket that isn't claimed still has exactly one readiness label. What
 gh issue list --search "label:status:ready -is:blocked"
 ```
 
-then skip any carrying another agent's `agent:` label. `npm run triage` applies all three conditions for you.
+then skip any carrying another agent's `agent:` label. `github-triage` applies all three conditions for you.
 
 When a blocker closes, its dependants become pickable **with no label change**. That is the automatic status update the owner asked for. `status:blocked` without at least one `blocked:*` reason label is a labelling error. Other `blocked:*` reasons can be added when needed; each is a label and needs the "why" comment.
 
 ## Triage CLI: dependency commands
 
-These extend `npm run triage` ([contract](github-triage-cli.md)). The read command keeps that contract's read-only guarantees. Commands that change GitHub follow "Rules for commands that change tickets" below, which #701 reuses for claiming and flagging.
+These extend `github-triage` ([contract](github-triage-cli.md)). The read command keeps that contract's read-only guarantees. Commands that change GitHub follow "Rules for commands that change tickets" below, which #701 reuses for claiming and flagging.
 
 ### `deps <N>`: show a ticket's dependencies (read-only)
 
 ```sh
-npm run triage -- deps 675 [--tree] [--json]
+github-triage deps 675 [--tree] [--json]
 ```
 
 - **Upstream:** each blocker with its state (open, closed as completed, closed as not planned), plus a verdict:
@@ -74,8 +74,8 @@ npm run triage -- deps 675 [--tree] [--json]
 ### `deps add` and `deps remove`: change dependencies
 
 ```sh
-npm run triage -- deps add 675 --on 674 [--on 673] --note "why" [--dry-run]
-npm run triage -- deps remove 675 --on 674 --note "why" [--dry-run]
+github-triage deps add 675 --on 674 [--on 673] --note "why" [--dry-run]
+github-triage deps remove 675 --on 674 --note "why" [--dry-run]
 ```
 
 - Validates first. It refuses a self-dependency, a pull request as a blocker (name the issue it closes instead), a blocker that doesn't exist, and an edge that would create a cycle; cycles are checked with a live upstream walk from the blocker. Adding an edge that already exists is a no-op, reported as such.
@@ -101,8 +101,8 @@ npm run triage -- deps remove 675 --on 674 --note "why" [--dry-run]
 A one-time migration converts existing `Depends on` text and `blocked:work` labels, in two steps. The plan step reads only. The apply step changes GitHub, and applies only a plan a person has reviewed.
 
 ```sh
-npm run triage -- deps migrate --plan migration.json        # read-only: writes the plan and prints a summary
-npm run triage -- deps migrate --apply migration.json [--dry-run]
+github-triage deps migrate --plan migration.json        # read-only: writes the plan and prints a summary
+github-triage deps migrate --apply migration.json [--dry-run]
 ```
 
 ### Plan (read-only)

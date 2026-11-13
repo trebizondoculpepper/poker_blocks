@@ -14,7 +14,7 @@ describe("registered block trait behavior", () => {
   it("adds a test-only capability without changing a caller", () => {
     const block = {
       ...standardDeck[0],
-      traits: { identity: standardDeck[0].traits.identity, testPulse: { cursor: "crosshair" } },
+      traits: { identity: standardDeck[0].traits.identity!, testPulse: { cursor: "crosshair" } },
     } as CardBlock;
     const unregister = registerBlockTrait("testPulse", {
       cursor: (config) => (config as { cursor: string }).cursor,

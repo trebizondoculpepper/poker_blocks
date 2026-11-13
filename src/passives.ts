@@ -1,3 +1,11 @@
+import type { ActivationDescriptorConfig } from "./activation-descriptor";
+import type { QuerySnapshot } from "./context-queries";
+import {
+  composeCatalogue,
+  ordinaryCatalogue,
+  releaseStatusDescriptor,
+  type ReleaseStatusDeclaration,
+} from "./release-status";
 import type { ActivationConfig } from "./activation-pulse";
 import "./visual/chef-toque";
 import type { SoundEffectId } from "./audio/sfx-registry";
@@ -12,12 +20,15 @@ import type { PassiveFaceDesign, PassiveTokenAppearance } from "./passive-visual
 import type { StageKind } from "./run-rules";
 import type { TriggerContext } from "./triggers";
 import { inspectable, type InspectableTrait } from "./traits/inspectable";
+import type { ConfigurableCapability, PassiveConfiguration } from "./configurable-passive";
 
 export type PassiveBlock = {
   id: string;
   definitionId: string;
   traits: Partial<PassiveCategoryTraits> & {
     rackResident?: { zone: "passive-rack" };
+    /** This instance's own configuration overrides (#876; src/configurable-passive.ts). */
+    configurablePassive?: PassiveConfiguration;
     appearance?: PassiveTokenAppearance;
     passive: { traitId: string; eventRules?: readonly EventRule[] };
     inspectable: InspectableTrait;
@@ -35,7 +46,15 @@ export type PassiveBlock = {
 };
 
 /** What a `score.*` event carries for its rules' selectors. */
-export type ScoreEventContext = { line: Line; intersections: number; block?: CardBlock };
+export type ScoreEventContext = {
+  line: Line;
+  intersections: number;
+  block?: CardBlock;
+  /** The field this scoring pass reads (#817): the immutable snapshot its context queries use. */
+  snapshot?: QuerySnapshot;
+  /** The row's actual scored subset, by card ID (#818): the default scope of a row's queries. */
+  scoredIds?: readonly string[];
+};
 
 /**
  * Which stage a lifecycle event belongs to, so a trait can match a moment by condition (#660;
@@ -90,6 +109,14 @@ export type GameEvent = {
   amount?: number;
   /** On `reward.finalized`: the coins paid, and the balance before and after. */
   reward?: { coins: number; balanceBefore: number; balance: number };
+  /**
+   * On `shop.left` (#878; doc/outcome-presentation.md): the unsold stock that actually left, as
+   * captured at commit, and where the run went next.
+   */
+  outgoingStock?: readonly { kind: string; blockId: string }[];
+  destination?: { round: number; stage: StageKind };
+  /** On `run.ended` (#878): the run's terminal result. */
+  result?: "lost";
 };
 
 export type PassiveTraitDefinition = {
@@ -110,6 +137,13 @@ export type PassiveShopBalance = {
 
 export type PassiveDefinition = {
   id: string;
+  /** Its release status: `certified` or `provisional` (doc/release-status.md, #812). */
+  releaseStatus: ReleaseStatusDeclaration;
+  /**
+   * How its activations are described (#484): a registered descriptor and its configuration.
+   * Omitted, the shared `resolvedOutcomes` descriptor.
+   */
+  activationDescriptor?: ActivationDescriptorConfig;
   name: string;
   symbol: string;
   description: string;
@@ -129,6 +163,12 @@ export type PassiveDefinition = {
   visual?: { builder: string; config: unknown };
   /** Its event rules: named, configured handlers from `src/rule-handlers.ts` (#139, #170). */
   eventRules: readonly EventRule[];
+  /**
+   * Instance configuration (#876; doc/experiments/passive-test-bench.md): a registered rule
+   * builder, its base configuration and the named parameters an instance may override. Absent,
+   * the passive has no adjustable settings.
+   */
+  configurable?: ConfigurableCapability;
   /**
    * Its shop balance (doc/game.md, "Shop rules"): base purchase price in coins and the first
    * round it can be stocked. Absent only on a retired passive.
@@ -191,6 +231,7 @@ function die(options: {
 }): PassiveDefinition {
   const { id, name, sides, shape, unlockRound, basePrice, pips } = options;
   return {
+    releaseStatus: { certified: {} },
     id,
     shop: { basePrice, unlockRound, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
@@ -216,6 +257,7 @@ function die(options: {
 const definitions: PassiveDefinition[] = [
   {
     id: "do-nothing",
+    releaseStatus: { certified: {} },
     categoryTrait: { effectCategory: {} },
     name: "Do Nothing",
     symbol: "∅",
@@ -226,6 +268,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "double-line",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 4, unlockRound: 1, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "×2",
@@ -238,6 +281,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "quad-line",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 9, unlockRound: 2, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "×4",
@@ -250,6 +294,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "gold-standard",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 5, unlockRound: 6, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Gold Standard",
@@ -263,6 +308,7 @@ const definitions: PassiveDefinition[] = [
   {
     // Le Chef (#104, #373): steak on the table at settlement pays 3 coins each instead of 1.
     id: "le-chef",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 5, unlockRound: 3, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Le Chef",
@@ -277,6 +323,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "carnivore",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 3, unlockRound: 4, frequency: "multiplicativeScoring" },
     categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
     name: "Carnivore",
@@ -292,6 +339,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "woodworker",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 4, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Woodworker",
@@ -307,6 +355,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "crossroads",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 2, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Crossroads",
@@ -323,6 +372,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "long-haul",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 4, unlockRound: 1, frequency: "additiveScoring" },
     categoryTrait: { scoringCategory: { operations: ["additive"] } },
     name: "Long Haul",
@@ -343,6 +393,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "scrapper",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 8, unlockRound: 2, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Scrapper",
@@ -353,6 +404,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "seeing-red",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 6, unlockRound: 1, frequency: "even" },
     categoryTrait: { economyCategory: {} },
     name: "Seeing Red",
@@ -369,6 +421,7 @@ const definitions: PassiveDefinition[] = [
   },
   {
     id: "ace-exchange",
+    releaseStatus: { certified: {} },
     shop: { basePrice: 5, unlockRound: 2, frequency: "even" },
     categoryTrait: { effectCategory: {} },
     name: "Ace Exchange",
@@ -433,7 +486,12 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
         traitId: definition.traitId,
         eventRules: definition.eventRules,
       },
-      inspectable: inspectable(`${definition.name} — ${definition.description}`),
+      inspectable: inspectable(
+        // Its release status from the shared descriptor, as card inspection shows (#813).
+        `${definition.name} — ${definition.description}\nStatus: ${
+          releaseStatusDescriptor(definition.id, definition.releaseStatus).label
+        }`,
+      ),
       ...(definition.shop ? { priced: { basePrice: definition.shop.basePrice } } : {}),
     },
   };
@@ -550,15 +608,26 @@ export class PassiveEventQueue {
 }
 
 /** Pick distinct definitions without depending on registry insertion order after each draw. */
+/**
+ * The passives normal play may offer or grant: the registered definitions admitted by the ordinary
+ * (certified-only) catalogue, in registration order (doc/release-status.md, #812).
+ */
+export function ordinaryPassives(): PassiveDefinition[] {
+  return composeCatalogue(
+    passiveDefinitions.names().map((name) => passiveDefinitions.get(name)),
+    ({ id }) => id,
+    ({ releaseStatus }) => releaseStatus,
+    ordinaryCatalogue,
+  ).map(({ definition }) => definition);
+}
+
 export function randomPassiveDefinitions(
   count: number,
   random: () => number,
   excluded: readonly string[] = [],
 ): PassiveDefinition[] {
-  const available = passiveDefinitions
-    .names()
-    .filter((name) => !excluded.includes(name) && !passiveDefinitions.get(name).retired)
-    .map((name) => passiveDefinitions.get(name))
+  const available = ordinaryPassives()
+    .filter(({ id, retired }) => !excluded.includes(id) && !retired)
     // Only what the passive shop could ever offer: an item stocked by its own dedicated slots
     // (a transmogrifier, #388) is made complete there, never granted as a bare passive.
     .filter(({ shop }) =>

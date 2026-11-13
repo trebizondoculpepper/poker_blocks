@@ -2,6 +2,10 @@ import type { BlockTitleConfig } from "./scene-traits/block-title";
 import type { SpringAnchorSettings } from "./traits/spring-anchor";
 import type { DragSourceConfig, DropTargetConfig } from "./drag-drop";
 import type { DevDropInspectorConfig } from "./scene-traits/dev-drop-inspector";
+import type { DevTrialReadoutsConfig } from "./scene-traits/dev-trial-readouts";
+import type { BenchScenario, DevBenchPanelConfig } from "./scene-traits/dev-bench-panel";
+import { scenarioVersion } from "./dev-scenario";
+import "./trial-modifiers";
 import type { ActionHistoryConfig } from "./scene-traits/action-history";
 import type { FirstPlayPromptConfig } from "./scene-traits/first-play-prompt";
 import type { DevHudStyleAuditionConfig, HudStyleConfig } from "./scene-traits/hud-style";
@@ -12,8 +16,7 @@ import type { DevHudStyleAuditionConfig, HudStyleConfig } from "./scene-traits/h
 import { Registry } from "./core/registry";
 import type { RoundPanelConfig, ShopExitConfig } from "./hud-panels";
 import type { GameFlow } from "./game-flow";
-import type { MusicFilter } from "./audio/music-controller";
-import type { MusicCue, StageMusicPool } from "./audio-service";
+import type { MusicFilter, MusicOperation } from "./audio/music-controller";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import type { RunFlowOutcome } from "./game-run";
 import type { RunSetupStep } from "./run-setup";
@@ -45,6 +48,8 @@ export type SceneTraits = {
   selectable: { sources: readonly { source: string }[] };
   /** The discard bin (also the passives' sell target) is shown while this scene is on the stack. */
   discardBin: Record<never, never>;
+  /** Plays the sound each committed fact names, for plays and discards (#755). */
+  committedEventSounds: Record<never, never>;
   /** The shared lower-left target presents Sell, and accepts installed passives only. */
   sellBin: Record<never, never>;
   /** The pulsing outline inviting a stage's first play is shown while this scene is on the stack. */
@@ -96,6 +101,8 @@ export type SceneTraits = {
   devObjectBrowser: { backTo: string };
   /** Developer tool: the block design room, auditioning letter-block materials and fonts (dev12). */
   devBlockDesigner: { backTo: string };
+  /** Developer tool: the smoke and dust audition room's note (dev19, #466). */
+  devEffectAudition: { hint: string };
   /** Developer tool: the contained-components rendering proof (dev15, #346). */
   devContainedProof: { backTo: string };
   /** Developer tool: the visual performance profiler (dev16, #527). */
@@ -141,6 +148,10 @@ export type SceneTraits = {
   devDialogRoom: DevDialogRoomConfig;
   /** Developer tool: a live panel of drag-and-drop state and input decisions (dev10). */
   devDropInspector: DevDropInspectorConfig;
+  /** Developer tool: live trial measurements (#904); composed by the trial room (#905). */
+  devTrialReadouts: DevTrialReadoutsConfig;
+  /** Developer tool: trial selection and schema-driven settings (#903); composed by #905. */
+  devBenchPanel: DevBenchPanelConfig;
   /**
    * Record interaction events and the game's callbacks while the scene shows, with a button that
    * copies the last 30 seconds of them with timestamps (dev10 for now; any mode can compose it).
@@ -162,13 +173,21 @@ export type SceneTraits = {
    * button per item, each dispatching its id as a named action (#90).
    */
   gameOverScreen: { items: readonly MenuItem[] };
-  /** Entering this scene plays a music cue (src/audio-service.ts, `musicCues`). */
-  musicCue: { cue: MusicCue };
   /**
-   * Entering this play scene starts a fresh track from its pool: a random stage vibe or the
-   * boss loop (#92). Quiet modes keep their stages silent.
+   * Entering this scene runs a music cue: an ordered list of registered music operations naming
+   * plan entries and slots (#758; src/audio/music-controller.ts).
    */
-  musicTrack: { pool: StageMusicPool };
+  musicCue: { operations: readonly MusicOperation[] };
+  /**
+   * Entering this scene resumes the table's music through its configured operations, as the
+   * mode plays it (a quiet mode stays wound down).
+   */
+  musicResume: { operations: readonly MusicOperation[] };
+  /**
+   * Entering this play scene runs its music operations: the stage plan's fresh random vibe, or
+   * the boss plan's loop (#92, #758). Quiet modes keep their stages silent.
+   */
+  musicTrack: { operations: readonly MusicOperation[] };
   /** Entering this scene plays a sound: a stage's start, the shop opening (#93). */
   enterSound: { sfx: SoundEffectId };
   /** Leaving this scene plays a sound: the title or settings screen closing. */
@@ -242,6 +261,11 @@ const escapeOpensPause: Partial<SceneTraits> = {
 };
 
 /** What every play scene shows and allows: the round and deck panels, and field placement. */
+/** The title's music: a title track, kept if one is already playing (#758). */
+const titleMusic: SceneTraits["musicCue"] = {
+  operations: [{ op: "selectTrack", config: { plan: "title" } }],
+};
+
 const playSceneTraits: Partial<SceneTraits> = {
   tableBackground: {},
   // The bin takes discards dropped on it; asked before the grid, since it sits over the table.
@@ -272,6 +296,7 @@ const playSceneTraits: Partial<SceneTraits> = {
   // A click selects a hand block, or else a table block.
   selectable: { sources: [{ source: "hand" }, { source: "field" }] },
   discardBin: {},
+  committedEventSounds: {},
   deckPanel: { opens: "openDeck" },
   runInPlay: {},
   ...escapeOpensPause,
@@ -458,7 +483,7 @@ export const sceneDefinitions = [
       // After `titleScreen`, so the panel is already showing when the footer is added to it.
       panelFooter: { links: projectLinks },
       attractBackground: {},
-      musicCue: { cue: "title" },
+      musicCue: titleMusic,
       enterSound: { sfx: "ui.title.enter" },
       exitSound: { sfx: "ui.title.exit" },
       ...escapeOpensPause,
@@ -526,7 +551,7 @@ export const sceneDefinitions = [
           traits: {
             attractBackground: {},
             blockTitle: { text: "Poker Blocks", scale: 1 },
-            musicCue: { cue: "title" },
+            musicCue: titleMusic,
           },
         },
       ] as const)
@@ -536,7 +561,7 @@ export const sceneDefinitions = [
     traits: {
       ...playSceneTraits,
       roundPanel: { stage: "STAGE 1", actions: stageActions },
-      musicTrack: { pool: "stage" },
+      musicTrack: { operations: [{ op: "selectTrack", config: { plan: "stage" } }] },
       enterSound: { sfx: "round.start" },
     },
   },
@@ -545,7 +570,7 @@ export const sceneDefinitions = [
     traits: {
       ...playSceneTraits,
       roundPanel: { stage: "STAGE 2", actions: stageActions },
-      musicTrack: { pool: "stage" },
+      musicTrack: { operations: [{ op: "selectTrack", config: { plan: "stage" } }] },
       enterSound: { sfx: "round.start" },
     },
   },
@@ -554,7 +579,7 @@ export const sceneDefinitions = [
     traits: {
       ...playSceneTraits,
       roundPanel: { stage: "BOSS STAGE", actions: stageActions },
-      musicTrack: { pool: "boss" },
+      musicTrack: { operations: [{ op: "selectTrack", config: { plan: "boss" } }] },
       enterSound: { sfx: "round.start" },
     },
   },
@@ -569,11 +594,16 @@ export const sceneDefinitions = [
       coinsPanel: {},
       shopExit: { label: "Continue" },
       shopStock: { source: "shop" },
+      // The deck counter opens the run's card inventory from the shop too (#472).
+      deckPanel: { opens: "openDeck" },
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},
       // A shop entered from the title (Continue) brings the table's music back.
-      musicCue: { cue: "resumeTable" },
+      // The table's remembered track, or a fresh one from the stage plan if none is remembered.
+      musicResume: {
+        operations: [{ op: "resumeTrack", config: { slot: "tableMusic", plan: "stage" } }],
+      },
       ...escapeOpensPause,
     },
   },
@@ -595,7 +625,7 @@ export const sceneDefinitions = [
           { id: "quitToTitle", label: "Main menu", sfx: "ui.back" },
         ],
       },
-      musicCue: { cue: "windDown" },
+      musicCue: { operations: [{ op: "windDown" }] },
     },
   },
 ] as const satisfies readonly SceneDefinition[];
@@ -744,6 +774,44 @@ export const standardNavigation: GameFlow<NavigationAction, SceneName> = {
 };
 
 export const gameModeRegistry = new Registry<GameMode>("game mode");
+
+/**
+ * The trial room's seeded scenarios (#905): the same mixed-material deck and opening hand, with
+ * one provisional trial passive each, or none for the baseline. Plain configuration for the
+ * bench panel; the passives' parameters are edited per instance there.
+ */
+const trialScenario = (label: string, definitionIds: readonly string[]): BenchScenario => ({
+  label,
+  scenario: {
+    version: scenarioVersion,
+    seed: 20,
+    steps: [
+      {
+        capability: "devDeck",
+        config: {
+          steps: [
+            { operation: "standardTemplates" },
+            { operation: "assignBalanced", config: { pool: "gameplay" } },
+            { operation: "shuffle" },
+          ],
+        },
+      },
+      { capability: "devHand", config: { indices: [0, 1, 2, 3, 4, 5, 6, 7] } },
+      {
+        capability: "devPassives",
+        config: { passives: definitionIds.map((definitionId) => ({ definitionId })) },
+      },
+    ],
+  },
+});
+const trialBenchScenarios: readonly BenchScenario[] = [
+  trialScenario("Baseline (no trial)", []),
+  trialScenario("Dense packing", ["trial-dense-packing"]),
+  trialScenario("Sparse packing", ["trial-sparse-packing"]),
+  trialScenario("Heavy (mean mass)", ["trial-heavy-mean-mass"]),
+  trialScenario("Light (mean mass)", ["trial-light-mean-mass"]),
+  trialScenario("Material diversity", ["trial-material-diversity"]),
+];
 
 const gameModes: GameMode[] = [
   {
@@ -1073,7 +1141,7 @@ const gameModes: GameMode[] = [
                 pauseDialog: gameDialogs.pause,
                 stageWonDialog: gameDialogs.stageWon,
                 gameOverDialog: gameDialogs.gameOver,
-                musicCue: { cue: "title" },
+                musicCue: titleMusic,
               },
             },
           ]),
@@ -1115,7 +1183,14 @@ const gameModes: GameMode[] = [
               traits: {
                 devProfiler: {
                   backTo: "game",
-                  catalogs: ["material", "rack item", "letter block", "menu cube", "exit effect"],
+                  catalogs: [
+                    "material",
+                    "rack item",
+                    "letter block",
+                    "menu cube",
+                    "exit effect",
+                    "optics",
+                  ],
                   // The standard sweep runs on entry, its result shown in the room.
                   autoRun: true,
                   sinks: ["screen"],
@@ -1180,7 +1255,14 @@ const gameModes: GameMode[] = [
               traits: {
                 devProfiler: {
                   backTo: "game",
-                  catalogs: ["material", "rack item", "letter block", "menu cube", "exit effect"],
+                  catalogs: [
+                    "material",
+                    "rack item",
+                    "letter block",
+                    "menu cube",
+                    "exit effect",
+                    "optics",
+                  ],
                   autoRun: true,
                   sinks: ["screen", "command"],
                 },
@@ -1195,6 +1277,86 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev18-run" },
             console: { name: "dev18" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // The smoke and dust audition (#466): an endless table dealt only fire-with-smoke and
+          // Earth-with-dust audition cards, equally weighted, from their experimental definitions.
+          // Normal play's decks and frequencies are untouched.
+          id: "dev19",
+          scenes: composeScenes("dev19", [
+            {
+              scenes: playScenes,
+              traits: {
+                devEffectAudition: {
+                  hint: "Smoke & dust audition: smoke rises from fire; turn the board quickly to shake dust from Earth.",
+                },
+              },
+            },
+          ]),
+          startScene: "stage-1",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [
+            { step: "sandbox" },
+            {
+              step: "deckBuilder",
+              operations: [
+                { operation: "standardTemplates" },
+                {
+                  operation: "assignWeighted",
+                  config: {
+                    weights: [
+                      { material: "fireSmokeAudition", weight: 1 },
+                      { material: "earthDustAudition", weight: 1 },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+          traits: {
+            onLoad: "newRun",
+            save: { key: "poker-blocks.dev19-run" },
+            console: { name: "dev19" },
+            restartable: { param: "restart" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // Modifier trial room (#905, epic #820): ordinary sandbox play with the trial bench.
+          // The panel offers seeded scenarios, each installing one provisional trial passive
+          // (or none, for the baseline); Apply restarts the same scenario and seed with edited
+          // settings through the run host. Readouts show geometry, mass and real contributions.
+          id: "dev20",
+          scenes: composeScenes("dev20", [
+            {
+              scenes: playScenes,
+              traits: {
+                devBenchPanel: { scenarios: trialBenchScenarios },
+                devTrialReadouts: {},
+              },
+            },
+          ]),
+          startScene: "stage-1",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [
+            { step: "sandbox" },
+            {
+              step: "deckBuilder",
+              operations: [
+                { operation: "standardTemplates" },
+                { operation: "assignBalanced", config: { pool: "gameplay" } },
+              ],
+            },
+          ],
+          traits: {
+            onLoad: "newRun",
+            save: { key: "poker-blocks.dev20-run" },
+            console: { name: "dev20" },
+            restartable: { param: "restart" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,

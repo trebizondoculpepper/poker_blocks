@@ -1,3 +1,4 @@
+import type { DeckBuilderStep } from "./deck-builder";
 import { rewardPresentations } from "./reward-presentation";
 import { coinEntry, ledgerTotal, rewardEffects, type RewardEntry } from "./stage-rewards";
 import type { CardBlock } from "./cards";
@@ -14,6 +15,9 @@ import "./transmogrifiers";
 import "./nothingifier";
 import { restoreModifierRegisters } from "./modifier-registers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
+import { restoreActiveObjects, saveActiveObjects, type SavedActiveObject } from "./active-objects";
+// Registers how a passive's instance configuration is saved and restored (#876).
+import "./configurable-passive";
 import { asGenerated } from "./card-ownership";
 import { type CardState } from "./card-material";
 import { applyCardStates } from "./card-states";
@@ -77,6 +81,11 @@ export type SaveRecord = {
     boughtCards?: SavedCard[];
     /** Cards made on the field during play (#424), saved in full; absent when there are none. */
     generatedCards?: SavedCard[];
+    /**
+     * Run-owned active instances (#894; src/active-objects.ts), by ID: rebuilt through their
+     * registered definitions and component codecs. Additive and optional; absent when none.
+     */
+    activeObjects?: Record<string, SavedActiveObject>;
     /** Cards removed for the rest of the run (#156), by id; absent when none. */
     removedCards?: string[];
     /** Cards whose material changed this run, by id (#387); absent in older saves. */
@@ -94,6 +103,8 @@ export type SaveRecord = {
    * setup existed, and in runs whose deck does not depend on one.
    */
   seed?: number;
+  /** The deck-builder recipe a `deckBuilder` step dealt from (#827); additive, absent before it. */
+  deckRecipe?: readonly DeckBuilderStep[];
   /** The session's random seed and its sequence position, so Continue resumes it (#134). */
   random?: { seed: number; position: number };
   /** Resolved actions, so a duplicate submission is still rejected after Continue (#661). */
@@ -143,6 +154,12 @@ function savedScene(record: SaveRecord): SceneName | null {
     : null;
 }
 
+/** The save's `activeObjects` field: present only when the run holds active instances. */
+function activeObjectsField(blocks: readonly CardBlock[]) {
+  const activeObjects = saveActiveObjects(blocks);
+  return Object.keys(activeObjects).length ? { activeObjects } : {};
+}
+
 export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGameFlow): SaveRecord {
   const ids = (blocks: readonly CardBlock[]) => blocks.map(({ id }) => id);
   const { state } = snapshot;
@@ -167,6 +184,12 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
       ...(state.generatedCards?.length
         ? { generatedCards: state.generatedCards.map(saveCard) }
         : {}),
+      ...activeObjectsField([
+        ...state.field.map(({ block }) => block),
+        ...state.hand,
+        ...state.deck,
+        ...state.discardPile,
+      ]),
       ...(state.cardStates && Object.keys(state.cardStates).length
         ? { cardStates: structuredClone(state.cardStates) }
         : {}),
@@ -177,6 +200,9 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
     ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
     ...(snapshot.rewarded ? { rewarded: snapshot.rewarded } : {}),
     ...(snapshot.seed === undefined ? {} : { seed: snapshot.seed }),
+    ...(snapshot.deckRecipe === undefined
+      ? {}
+      : { deckRecipe: structuredClone(snapshot.deckRecipe) as DeckBuilderStep[] }),
     ...(snapshot.random === undefined ? {} : { random: snapshot.random }),
     ...(snapshot.actions
       ? { actions: { counter: snapshot.actions.counter, explicit: [...snapshot.actions.explicit] } }
@@ -195,6 +221,7 @@ export function fromSaveRecord(
     const record = value as SaveRecord;
     if (record?.version !== saveVersion) return null;
     if (record.seed !== undefined && parseSeed(record.seed).seed === undefined) return null;
+    if (record.deckRecipe !== undefined && !parseDeckRecipe(record.deckRecipe)) return null;
     if (!Number.isInteger(record.round) || record.round < 1) return null;
     const phase = phaseForScene(flow, savedScene(record));
     if (!phase) return null;
@@ -208,8 +235,23 @@ export function fromSaveRecord(
     const generatedCards = (record.state.generatedCards ?? []).map((saved) =>
       asGenerated(restoreCard(saved)),
     );
-    const runCards = [...cards, ...boughtCards, ...generatedCards].map((card) =>
-      applyCardStates(card, cardStates),
+    // Run-owned active instances (#894), rebuilt through their registered definitions.
+    // One store per instance: a starting-deck card that is the same active instance (same ID and
+    // definition) is rebuilt from it, with its record's components; any other shared ID is still
+    // a conflict.
+    const sameInstance = (id: string, definition: string) =>
+      cards.find((card) => card.id === id && card.traits.active?.definition === definition);
+    const activeObjects = restoreActiveObjects(record.state.activeObjects, sameInstance);
+    const startingCards = cards.filter(
+      (card) =>
+        !activeObjects.some(
+          (active) =>
+            active.id === card.id &&
+            active.traits.active?.definition === card.traits.active?.definition,
+        ),
+    );
+    const runCards = [...startingCards, ...boughtCards, ...generatedCards, ...activeObjects].map(
+      (card) => applyCardStates(card, cardStates),
     );
     const byId = new Map(runCards.map((card) => [card.id, card]));
     if (byId.size !== runCards.length) return null;
@@ -293,6 +335,9 @@ export function fromSaveRecord(
       stats: parseRunStats(record.stats),
       ...parseRewarded(record.rewarded),
       ...parseSeed(record.seed),
+      ...(record.deckRecipe === undefined
+        ? {}
+        : { deckRecipe: parseDeckRecipe(record.deckRecipe)! }),
       ...parseRandom(record.random),
       ...parseActions(record.actions),
     };
@@ -330,6 +375,18 @@ function parseRandom(value: unknown): { random: RandomCursor } | Record<string, 
   )
     return {};
   return { random: { seed, position } };
+}
+
+/** A saved deck-builder recipe: a list of named operations, or null when it isn't one. */
+function parseDeckRecipe(value: unknown): DeckBuilderStep[] | null {
+  if (!Array.isArray(value)) return null;
+  const valid = value.every(
+    (step) =>
+      step !== null &&
+      typeof step === "object" &&
+      typeof (step as DeckBuilderStep).operation === "string",
+  );
+  return valid ? (structuredClone(value) as DeckBuilderStep[]) : null;
 }
 
 /** A saved deck seed; nothing when the run was dealt no seeded deck. */
@@ -449,7 +506,9 @@ export function loadRun(
    * The deck to resolve a saved run's cards against. A function when the deck depends on the
    * run (a material mix rebuilt from its own seed); `fromSaveRecord` parses that seed first.
    */
-  cards: readonly CardBlock[] | ((seed: number | undefined) => readonly CardBlock[]),
+  cards:
+    | readonly CardBlock[]
+    | ((seed: number | undefined, recipe?: readonly DeckBuilderStep[]) => readonly CardBlock[]),
   dealers: Registry<Dealer>,
   key = saveKey,
   flow: SaveFlow = standardGameFlow,
@@ -468,7 +527,10 @@ export function loadRun(
     // Validate before resolving card IDs: a fresh material deck would silently change them.
     const seed = parseSeed(record.seed).seed;
     if (seed === undefined && (requiresSeed || record.seed !== undefined)) return null;
-    const selected = typeof cards === "function" ? cards(seed) : cards;
+    if (record.deckRecipe !== undefined && !parseDeckRecipe(record.deckRecipe)) return null;
+    const recipe =
+      record.deckRecipe === undefined ? undefined : parseDeckRecipe(record.deckRecipe)!;
+    const selected = typeof cards === "function" ? cards(seed, recipe) : cards;
     return fromSaveRecord(record, selected, dealers, flow);
   } catch {
     return null;
@@ -560,13 +622,22 @@ function saveRackItem(block: PassiveBlock): SavedRackItem {
   };
 }
 
+/** Joins a restored trait to an item by setting it. */
+const setTrait =
+  (name: string) =>
+  (block: PassiveBlock, restored: unknown): PassiveBlock => ({
+    ...block,
+    traits: { ...block.traits, [name]: restored },
+  });
+
 function restoreRackItem(saved: SavedRackItem): PassiveBlock {
-  const block = createPassiveBlock(saved.definitionId, saved.id);
-  const traits = Object.fromEntries(
-    Object.entries(saved.traits ?? {}).map(([name, value]) => [
-      name,
-      rackTraitPersistence.get(name).restore(value),
-    ]),
+  // Each saved trait is restored, then joins the item as its persistence says (#876).
+  return Object.entries(saved.traits ?? {}).reduce(
+    (block, [name, value]) => {
+      const persistence = rackTraitPersistence.get(name);
+      const restored = persistence.restore(value);
+      return (persistence.attach ?? setTrait(name))(block, restored);
+    },
+    createPassiveBlock(saved.definitionId, saved.id),
   );
-  return { ...block, traits: { ...block.traits, ...traits } };
 }

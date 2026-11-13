@@ -1,3 +1,4 @@
+import type { ResolvedOutcome } from "./event-rules";
 import type { PlacedBlock } from "./game-state";
 import { withOperationCounter } from "./lifecycle/operations";
 import type { EventRule, RuleCommand } from "./event-rules";
@@ -22,19 +23,50 @@ import { scorableValue } from "./traits/scorable";
 export type RuleActivation = {
   /** Who brought the rule: a passive's instance id, or a card's id for its own (material) rules. */
   sourceId: string;
+  /**
+   * The source's description as it was when the rule fired (#483), so delayed presentation
+   * never describes a card or passive that has changed or gone since.
+   */
+  sourceDescription: string;
   on: string;
   /** On `score.beforeBlockValue`: the contributing block the rule changed. */
   blockId?: string;
   /** Commands the rule's effects collected, for the game run to commit. */
   commands: readonly RuleCommand[];
+  /**
+   * What each of its effects did, as resolved when they applied (#483): presentation reads
+   * these and never re-evaluates a rule, rolls again or infers an operation from a change.
+   */
+  outcomes: readonly ResolvedOutcome[];
+  /**
+   * Distinct for each committed activation, repeated triggers included, and its place in the
+   * committed order. Set where activations are committed (a scored line, an action).
+   */
+  activationId?: string;
+  order?: number;
 };
+
+/** Number a committed list of activations: each its own ID under `prefix`, in order (#483). */
+export function numberActivations(
+  activations: readonly RuleActivation[],
+  prefix: string,
+  start = 0,
+): RuleActivation[] {
+  return activations.map((activation, index) => ({
+    ...activation,
+    activationId: `${prefix}#${start + index}`,
+    order: start + index,
+  }));
+}
 
 export type PassiveScoredLine = ScoredLine & { activations: readonly RuleActivation[] };
 
 /** Something that brings event rules: an installed passive, or a card with its own rules. */
-type RuleSource = { id: string; rules: readonly EventRule[] };
+/** A rule's source, with its description captured as it is now (#858 review). */
+type RuleSource = { id: string; description: string; rules: readonly EventRule[] };
 const passiveSource = (passive: PassiveBlock): RuleSource => ({
   id: passive.id,
+  description: passive.traits.inspectable.inspect(),
   rules: passive.traits.passive.eventRules ?? [],
 });
 const cardSource = (
@@ -42,6 +74,7 @@ const cardSource = (
   rulesForCard: (block: CardBlock) => EventRule[],
 ): RuleSource => ({
   id: block.id,
+  description: block.traits.inspectable?.inspect() ?? block.id,
   rules: rulesForCard(block),
 });
 
@@ -96,9 +129,11 @@ function evaluateRules(
     if (frame.fired)
       activations.push({
         sourceId: source.id,
+        sourceDescription: source.description,
         on: rule.on,
         blockId: event.score?.block?.id,
         commands: frame.commands,
+        outcomes: frame.outcomes ?? [],
       });
   }
   return { value, activations };
@@ -131,6 +166,9 @@ function scoreLines(
   random: () => number,
 ): PassiveScoredLine[] {
   const lines = findScoringLines(field);
+  // One snapshot for the whole pass, so every row's context queries read (and cache) the same
+  // committed field (doc/experiments/spatial-modifiers.md, "Scoring scope and frequency").
+  const snapshot = { field };
   // One resolution: each passive's value sources (a die's roll) resolve once, here, before any
   // candidate hand is evaluated, and the same values apply to every line (#97).
   // Only line-scoring rules resolve here; every other hook resolves its own values, once, when
@@ -208,7 +246,10 @@ function scoreLines(
       (previous, phase) => {
         const next = evaluateRules(
           lineRules(sources, phase),
-          { type: phase, score: { line, intersections } },
+          {
+            type: phase,
+            score: { line, intersections, snapshot, scoredIds: result.contributingIds },
+          },
           previous.value,
         );
         return { value: next.value, activations: [...previous.activations, ...next.activations] };
@@ -219,7 +260,10 @@ function scoreLines(
     const clamped = Math.max(0, phases.value);
     const after = evaluateRules(
       lineRules(sources, afterClampPhase),
-      { type: afterClampPhase, score: { line, intersections } },
+      {
+        type: afterClampPhase,
+        score: { line, intersections, snapshot, scoredIds: result.contributingIds },
+      },
       clamped,
     );
     // Commit: the chosen hand's contributing blocks, then the line phases.
@@ -234,7 +278,11 @@ function scoreLines(
       blockIds: line.blocks.map(({ id }) => id),
       ...result,
       points: Math.max(0, Math.round(after.value)),
-      activations,
+      // The chosen hand's activations only (candidates never publish), each numbered in this line.
+      activations: numberActivations(
+        activations,
+        `line:${line.blocks.map(({ id }) => id).join(",")}`,
+      ),
     };
   });
 }

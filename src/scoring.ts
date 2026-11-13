@@ -1,4 +1,4 @@
-import { rankValue, type CardBlock } from "./cards";
+import { rankValue, type CardBlock, pokerIdentity } from "./cards";
 import type { PlacedBlock } from "./game-state";
 import { scorableValue } from "./traits/scorable";
 import { cellKey, type Cell } from "./traits/attachable";
@@ -123,7 +123,7 @@ export function evaluateHand(
   const groups = rankGroups(blocks);
   const sizes = groups.map((group) => group.length);
   const five = blocks.length === 5;
-  const flush = five && new Set(blocks.map((b) => b.traits.identity.suit.name)).size === 1;
+  const flush = five && new Set(blocks.map((b) => pokerIdentity(b).suit.name)).size === 1;
   const straight = five && sizes.length === 5 && isStraight(blocks);
 
   const result = (hand: HandType, counted: readonly CardBlock[]): LineEvaluation => ({
@@ -147,13 +147,13 @@ export function evaluateHand(
 function rankGroups(blocks: readonly CardBlock[]): CardBlock[][] {
   const byRank = new Map<string, CardBlock[]>();
   for (const block of blocks) {
-    const rank = block.traits.identity.rank;
+    const rank = pokerIdentity(block).rank;
     byRank.set(rank, [...(byRank.get(rank) ?? []), block]);
   }
   return [...byRank.values()].sort(
     (a, b) =>
       b.length - a.length ||
-      rankValue(b[0].traits.identity.rank) - rankValue(a[0].traits.identity.rank),
+      rankValue(pokerIdentity(b[0]).rank) - rankValue(pokerIdentity(a[0]).rank),
   );
 }
 
@@ -163,7 +163,7 @@ function highest(blocks: readonly CardBlock[], valueOf: (block: CardBlock) => nu
 
 /** Ace is high only (10-J-Q-K-A); whether A-2-3-4-5 counts is still an open question. */
 function isStraight(blocks: readonly CardBlock[]): boolean {
-  const values = blocks.map((b) => rankValue(b.traits.identity.rank)).sort((a, b) => a - b);
+  const values = blocks.map((b) => rankValue(pokerIdentity(b).rank)).sort((a, b) => a - b);
   return values.every((value, index) => index === 0 || value === values[index - 1] + 1);
 }
 

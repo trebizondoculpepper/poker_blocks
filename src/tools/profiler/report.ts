@@ -1,6 +1,6 @@
 /**
  * The profiler's end-of-run report (#733; doc/automatic-profiling.md, "Automatic report and
- * entry points"), built from a version-2 record. Pure: the room renders it, and the one-command
+ * entry points"), built from a version-3 record. Pure: the room renders it, and the one-command
  * run (#734) formats the same report as files.
  *
  * - The banner states the renderer (hardware, software or unknown), whether GPU timing was valid,
@@ -14,6 +14,7 @@
  *   report asking what any kind is.
  */
 import type { ProfilerExport } from "./export";
+import { describePipeline } from "./pipeline-description.ts";
 import type { CaseResult, CountResult } from "./runner";
 
 export type RendererKind = "hardware" | "software" | "unknown";
@@ -30,6 +31,10 @@ export type ReportRow = {
   family: string;
   phase?: string;
   host: string;
+  /** Its render pipeline as a person reads it (#764): declared passes, then the main render. */
+  pipeline: string;
+  /** Why baseline-relative values are withheld for its pipeline, if they are. */
+  baselineUnavailable?: string;
   unit: CaseResult["unit"];
   /** One entry per measured count, in order. */
   counts: number[];
@@ -127,6 +132,8 @@ function rowOf(result: CaseResult, invalidated: ReadonlySet<string>): ReportRow 
     family: result.family,
     ...(result.phase ? { phase: result.phase } : {}),
     host: result.host,
+    pipeline: describePipeline(result.pipeline.passes),
+    ...(result.baselineUnavailable ? { baselineUnavailable: result.baselineUnavailable } : {}),
     unit: result.unit,
     counts: result.counts.map(({ count }) => count),
     gpu: result.counts.map(({ set }) => set.gpu?.median ?? null),
@@ -177,6 +184,11 @@ export function profilerReport(record: ProfilerExport, topN = 10): ProfilerRepor
   const invalidated = new Set(record.invalidated);
   const hosts = [...new Set(record.results.map(({ host }) => host))];
   const mixedHosts = hosts.length > 1;
+  // Cases rendered through different pipelines are compared only with their passes named (#764).
+  const pipelines = [
+    ...new Set(record.results.map(({ pipeline }) => describePipeline(pipeline.passes))),
+  ];
+  const mixedPipelines = pipelines.length > 1;
   const pairs = record.results.map((result) => ({ result, row: rowOf(result, invalidated) }));
   const rows = pairs.map(({ row }) => row);
   const top = Math.max(
@@ -264,6 +276,14 @@ export function profilerReport(record: ProfilerExport, topN = 10): ProfilerRepor
               `Cases were drawn in ${hosts.length} different hosts (${hosts.join(", ")}): rankings name each entry's host`,
             ]
           : []),
+        ...(mixedPipelines
+          ? [
+              `Cases were rendered through ${pipelines.length} different pipelines: rankings name each entry's passes`,
+            ]
+          : []),
+        ...rows.flatMap(({ id, baselineUnavailable }) =>
+          baselineUnavailable ? [`${id}: no matched baseline (${baselineUnavailable})`] : [],
+        ),
         ...(record.invalidated.length
           ? [
               `${record.invalidated.length} set(s) invalidated (tab hidden through every retry), left out of the rankings: ${record.invalidated.join(", ")}`,
@@ -275,17 +295,17 @@ export function profilerReport(record: ProfilerExport, topN = 10): ProfilerRepor
     // With no valid GPU timing, the labelled CPU ranking comes first. When the cases were drawn
     // in different hosts, every entry names its host, so a lighting difference never passes as
     // a difference in object cost (#741 review).
-    rankings: (gpuValid ? [gpu, cpu, calls] : [cpu, calls]).map((ranking) =>
-      mixedHosts
-        ? {
-            ...ranking,
-            entries: ranking.entries.map((entry) => ({
-              ...entry,
-              text: `${entry.text} [host: ${entry.row.host}]`,
-            })),
-          }
-        : ranking,
-    ),
+    rankings: (gpuValid ? [gpu, cpu, calls] : [cpu, calls]).map((ranking) => ({
+      ...ranking,
+      entries: ranking.entries.map((entry) => ({
+        ...entry,
+        text: [
+          entry.text,
+          ...(mixedHosts ? [`[host: ${entry.row.host}]`] : []),
+          ...(mixedPipelines ? [`[pipeline: ${entry.row.pipeline}]`] : []),
+        ].join(" "),
+      })),
+    })),
     byUnit: kinds.map((kind) => ({ kind, rows: rows.filter((row) => row.unit.kind === kind) })),
   };
 }
