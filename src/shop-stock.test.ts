@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { PassiveBlock } from "./passives";
+import { ordinaryPassives } from "./passives";
 import type { CardBlock } from "./cards";
 import { standardDeck } from "./cards";
 import { dealerRegistry } from "./dealer";
@@ -313,7 +314,8 @@ describe("stock by round and weight (#145)", () => {
   it("has valid curves, and something of each kind to offer from round 1", () => {
     expect(validateMaterialBalance(materialDefinitions)).toEqual([]);
     expect(
-      validatePassiveBalance(passiveDefinitions.names().map((n) => passiveDefinitions.get(n))),
+      // Normal-shop balance covers what the ordinary catalogue can stock.
+      validatePassiveBalance(ordinaryPassives()),
     ).toEqual([]);
     expect(
       validateWeightCurve("bad", [
