@@ -111,3 +111,43 @@ describe("resettable (#582)", () => {
     expect(requestReset(state, "missing", { facet: "resettable", config: {} }).ok).toBe(false);
   });
 });
+
+describe("nonResettable (#583)", () => {
+  it("refuses with its reason through the same interface, changing nothing", async () => {
+    const { requestReset } = await import("./reset-facet");
+    const card = cookedMeat();
+    const state = stateWith(card);
+    const random = vi.spyOn(Math, "random");
+    const refused = requestReset(state, card.id, {
+      facet: "nonResettable",
+      config: { reason: "a keepsake" },
+    });
+    expect(refused).toEqual({ ok: false, reason: "a keepsake", state });
+    expect(refused.state).toBe(state);
+    expect(random).not.toHaveBeenCalled();
+    random.mockRestore();
+  });
+
+  it("dispatches each card to its own facet with no branch on which it is", async () => {
+    const { requestReset, resolveResetFacet } = await import("./reset-facet");
+    const card = cookedMeat();
+    const state = stateWith(card);
+    const outcomes = [
+      { resettable: { recipe: [{ handler: "doneness" }] } },
+      { nonResettable: { reason: "no" } },
+    ].map((declared) => requestReset(state, card.id, resolveResetFacet(declared)).ok);
+    expect(outcomes).toEqual([true, false]);
+  });
+
+  it("treats an absent, unknown or conflicting declaration as a configuration error", async () => {
+    const { requestReset, resolveResetFacet, ResetConfigurationError } =
+      await import("./reset-facet");
+    expect(() => resolveResetFacet({})).toThrow(ResetConfigurationError);
+    expect(() => resolveResetFacet({ resettable: {}, nonResettable: {} })).toThrow(/conflicting/);
+    expect(() => resolveResetFacet({ sometimes: {} })).toThrow(/unknown/);
+    const card = cookedMeat();
+    expect(() => requestReset(stateWith(card), card.id, { facet: "nope" })).toThrow(
+      ResetConfigurationError,
+    );
+  });
+});
