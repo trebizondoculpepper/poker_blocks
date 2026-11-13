@@ -23,7 +23,7 @@ import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
 import { committedEventSounds } from "./scene-traits/committed-event-sounds";
 import type { ActionLog } from "./action-log";
 import { firstPlayPrompt, type FirstPlayTable } from "./scene-traits/first-play-prompt";
-import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
+import type { MenuCondition, SceneTraits } from "./game-modes";
 import type { DialogHandlers } from "./block-menu/block-menus";
 import type { AudioService } from "./audio-service";
 import type { CameraViewService } from "./camera-view";
@@ -177,20 +177,6 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     inRun: () => runScenes > 0,
     hasSave: (context) => context.services.run.hasSave(),
   };
-  /**
-   * The items a menu shows: those whose `when` holds right now. An item whose `enabledWhen`
-   * fails stays, disabled, carrying its hint.
-   */
-  const itemsToShow = (
-    context: Context,
-    items: readonly MenuItem[],
-  ): (MenuItem & { disabled: boolean })[] =>
-    items
-      .filter(({ when }) => !when || menuConditions[when](context))
-      .map((item) => ({
-        ...item,
-        disabled: Boolean(item.enabledWhen) && !menuConditions[item.enabledWhen!](context),
-      }));
   behaviours.register("runInPlay", {
     enter() {
       runScenes++;
@@ -558,6 +544,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     "titleMenuDialog",
     "newGameDialog",
     "pauseDialog",
+    "settingsDialog",
     "stageWonDialog",
     "gameOverDialog",
   ] as const) {
@@ -567,11 +554,18 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       const { services } = context;
       shown.set(
         config,
-        services.dialogs.add(config, {
-          onAction: (action) => services.overlays.choose(action),
-          availability: (item) =>
-            item.enabledWhen ? menuConditions[item.enabledWhen](context) : true,
-        }),
+        // Choices whose `when` fails are left out altogether, as the text menus did.
+        services.dialogs.add(
+          {
+            ...config,
+            items: config.items.filter(({ when }) => !when || menuConditions[when](context)),
+          },
+          {
+            onAction: (action) => services.overlays.choose(action),
+            availability: (item) =>
+              item.enabledWhen ? menuConditions[item.enabledWhen](context) : true,
+          },
+        ),
       );
     };
     behaviours.register(name, {
@@ -604,8 +598,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("hudStyle", hudStyle<Context>());
   behaviours.register("devHudStyleAudition", devHudStyleAudition<Context>());
   behaviours.register("menu", {
-    enter(context, { label, items }) {
-      context.services.overlays.showMenu(label, itemsToShow(context, items));
+    enter(context, { label }) {
+      context.services.overlays.showMenu(label);
     },
     // Back in front after Settings closed over it.
     resume(context, config) {

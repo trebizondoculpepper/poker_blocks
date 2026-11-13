@@ -196,8 +196,7 @@ function recordingHost() {
         }),
       },
       overlays: {
-        showMenu: (label, choices) =>
-          void calls.push(`menu:${label}:${choices.map(({ id }) => id).join(",")}`),
+        showMenu: (label) => void calls.push(`menu:${label}`),
         hideMenu: () => void calls.push("menu:hide"),
         showSettings: () => void calls.push("settings:show"),
         hideSettings: () => void calls.push("settings:hide"),
@@ -631,21 +630,29 @@ describe("the pause menu's scene traits (#87)", () => {
     // Opening it also ends any drag under way on the table (#124).
     expect(calls).toEqual([
       "table:true",
-      "menu:Paused:resume,openSettings,quitToTitle",
+      "menu:Paused",
+      "dialog:add:Paused",
+      "choices:resume,openSettings,quitToTitle",
       "footer:1.2.3:Get source code,Report a bug",
       "gestures:cancel",
       "filter:lowpass",
     ]);
     calls.length = 0;
     scenes.pop();
-    expect(calls).toEqual(["filter:null", "footer:hide", "menu:hide", "table:false"]);
+    expect(calls).toEqual([
+      "filter:null",
+      "footer:hide",
+      "dialog:remove:Paused",
+      "menu:hide",
+      "table:false",
+    ]);
   });
 
   it("leaves out Quit to title over the title screen", () => {
     const { scenes, calls } = stack();
     scenes.switchTo(title.id);
     scenes.push(pause.id);
-    expect(calls).toContain("menu:Paused:resume,openSettings");
+    expect(calls).toContain("choices:resume,openSettings");
   });
 
   it("Settings over the pause menu swaps to the high-pass, and Back restores the low-pass", () => {
@@ -657,6 +664,8 @@ describe("the pause menu's scene traits (#87)", () => {
     expect(calls).toEqual([
       "table:true",
       "settings:show",
+      "dialog:add:Settings",
+      "choices:back",
       "gestures:cancel",
       "filter:highpass",
       "sound:ui.settings.enter",
@@ -667,11 +676,16 @@ describe("the pause menu's scene traits (#87)", () => {
       // Leaving Settings plays its own sound.
       "sound:ui.settings.exit",
       "filter:null",
+      "dialog:remove:Settings",
       "settings:hide",
       // Settings does not compose `tableBackground`: the pause menu under it already drew the
       // table, and a scene pushed over one must not turn it off on the way out.
       "table:false",
-      "menu:Paused:resume,openSettings,quitToTitle",
+      "menu:Paused",
+      // Back in front, the pause choices are drawn again.
+      "dialog:remove:Paused",
+      "dialog:add:Paused",
+      "choices:resume,openSettings,quitToTitle",
       // The pause panel's footer comes back with the panel it belongs to.
       "footer:1.2.3:Get source code,Report a bug",
       "filter:lowpass",

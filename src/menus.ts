@@ -49,8 +49,8 @@ export type Menus = {
   /** The footer of the panel in front: the version, then links out (#129). */
   showPanelFooter(links: readonly PanelLink[], version: string): void;
   hidePanelFooter(): void;
-  /** Show a menu of choices (the pause menu) over whatever is in front. */
-  showMenu(label: string, choices: readonly MenuChoice[]): void;
+  /** Show a menu screen (the pause menu) over whatever is in front; its choices are a block menu. */
+  showMenu(label: string): void;
   hideMenu(): void;
   /** Show or hide the Settings panel, over whatever is in front. */
   showSettings(): void;
@@ -84,13 +84,12 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const pauseMenu = overlay("pause-screen", "Paused");
   pauseMenu.panel.insertAdjacentHTML(
     "beforeend",
-    `<div class="menu-buttons" data-menu="choices"></div>`,
+    `<div class="block-menu-host" data-menu="items"></div>`,
   );
 
   const settingsScreen = overlay("settings-screen", "Settings");
   const settingsPanel = createSettingsPanel(settingsScreen.panel, initial, {
     onChange: (next) => callbacks.onSettingsChange(next),
-    onBack: () => callbacks.onAction("back"),
   });
 
   const gameOver = overlay("game-over-screen", "Game over");
@@ -132,7 +131,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   /** The footer currently shown, so hiding removes exactly that one. */
   let shownFooter: HTMLElement | null = null;
   const titleItems = find<HTMLDivElement>(title.panel, "items");
-  const choices = find<HTMLDivElement>(pauseMenu.panel, "choices");
 
   function open(screen: HTMLElement): void {
     title.root.hidden = screen !== title.root;
@@ -303,13 +301,11 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   }
 
   /** The pause menu: one button per choice, each dispatching its id as an action. */
-  function showMenu(label: string, menuChoices: readonly MenuChoice[]): void {
+  function showMenu(label: string): void {
     pauseMenu.root.setAttribute("aria-label", label);
-    choices.replaceChildren(...menuChoices.map(choiceButton));
     if (pauseMenu.root.hidden) cover(pauseMenu.root);
     pauseMenu.root.hidden = false;
     settingsButton.hidden = true;
-    choices.querySelector<HTMLElement>("button")?.focus();
   }
 
   function hideMenu(): void {
@@ -457,7 +453,9 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     panelHeadingHost: () => overlayInFront()?.querySelector<HTMLElement>(".menu-panel") ?? host,
     showTitle,
     hideTitle,
-    choicesHost: () => titleItems,
+    // The block-menu host of the screen in front: its scene's dialog trait draws its choices there.
+    choicesHost: () =>
+      overlayInFront()?.querySelector<HTMLElement>('[data-menu="items"]') ?? titleItems,
     choose,
     showPanelFooter,
     hidePanelFooter,

@@ -43,7 +43,7 @@ export type Overlays = {
   hidePanelFooter(): void;
   closeAll(): void;
   /** The pause menu's panel and the Settings panel, shown by their scenes' traits. */
-  showMenu(label: string, choices: readonly MenuChoice[]): void;
+  showMenu(label: string): void;
   hideMenu(): void;
   showSettings(): void;
   hideSettings(): void;
@@ -151,7 +151,7 @@ export function createOverlays(
     showPanelFooter: (links, version) => menus.showPanelFooter(links, version),
     hidePanelFooter: () => menus.hidePanelFooter(),
     closeAll: () => menus.closeAll(),
-    showMenu: (label, choices) => menus.showMenu(label, choices),
+    showMenu: (label) => menus.showMenu(label),
     hideMenu: () => menus.hideMenu(),
     showSettings: () => menus.showSettings(),
     hideSettings: () => menus.hideSettings(),

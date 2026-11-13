@@ -703,6 +703,12 @@ body,
 }
 
 /* Its height comes from the cube stage's sizing profile (src/block-menu/cube-stage.ts). */
+/* Nor a full-screen wash: the scene underneath stays in view (frozen, under pause). */
+.menu-overlay:has(.block-menu-host[data-panel="none"])::before {
+  background: transparent;
+  backdrop-filter: none;
+}
+
 .block-menu-host[data-panel="none"] {
   min-height: 150px;
 }
