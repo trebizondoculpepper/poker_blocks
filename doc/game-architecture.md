@@ -1575,7 +1575,7 @@ Visual acceptance is the owner's comparison in the room, reported on #524.
 
 ## GitHub action briefing tool
 
-The developer-only action briefing tool is owned by the standalone [github_triage project](https://github.com/trebizondoculpepper/github_triage). poker_blocks keeps only npm wiring to its installed Git development dependency, `node node_modules/github-triage/src/cli.js`; see [the consumer launch contract and evidence](github-triage-cli.md). The CLI inherits the game checkout's working directory and authenticated gh session. Collector, registered workflow rules, presentation, configuration, lifecycle and tests are composed and maintained in that project, outside the game build. No local implementation or fallback is retained. Freshness/completeness and candidate-only advice do not confer authority to mutate or merge.
+The developer-only action briefing tool is owned by the standalone [github_triage project](https://github.com/trebizondoculpepper/github_triage). poker_blocks has no dependency on it: developers install the `github-triage` command globally; see [the installation contract and evidence](github-triage-cli.md). The CLI inherits the game checkout's working directory and authenticated gh session. Collector, registered workflow rules, presentation, configuration, lifecycle and tests are composed and maintained in that project, outside the game build. No local implementation or fallback is retained. Freshness/completeness and candidate-only advice do not confer authority to mutate or merge.
 
 ## Agreed presentation follow-ups (#761)
 
