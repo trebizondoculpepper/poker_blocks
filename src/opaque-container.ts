@@ -57,8 +57,9 @@ activeComponentCodecs.register("opaqueContainer", {
   save: (block) =>
     [block.traits.opaqueContainer ?? []].flat().map(({ payload }) => structuredClone(payload))[0],
   restore: (block, saved) => {
-    const problems = payloadProblems(block.id, saved);
-    if (problems.length) throw new Error(problems.join("; "));
+    // The payload's own components are validated now, through their codecs, so a corrupt save is
+    // rejected on load rather than when the container is finally opened.
+    materializePayload(block.id, saved as StoredPayload);
     return {
       ...block,
       traits: { ...block.traits, opaqueContainer: { payload: saved as StoredPayload } },
@@ -125,8 +126,21 @@ registerRuleCommand<{ blockId: string }>("open-container", ({ blockId }, target)
     field: state.field.map((entry, i) =>
       i === index ? { block: payload, cell: entry.cell } : entry,
     ),
+    // The consumed wrapper is retired for the rest of the run: never dealt again, and kept so a
+    // save still accounts for it (doc/opaque-actives.md, "A removed wrapper's ID must not
+    // reappear").
+    removedCards: [...(state.removedCards ?? []), blockId],
+    retiredActives: [...(state.retiredActives ?? []), placed.block],
   });
-  return [{ type: "block.opened", blockId, opened: { wrapperId: blockId, payloadId: payload.id } }];
+  // The wrapper and the revealed card as they were at opening, for delayed presentation.
+  return [
+    {
+      type: "block.opened",
+      blockId,
+      blocks: [placed.block, payload],
+      opened: { wrapperId: blockId, payloadId: payload.id },
+    },
+  ];
 });
 
 // Openings resolve first, in placement order, before any material phase.

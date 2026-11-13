@@ -126,3 +126,67 @@ describe("containers and revealed cards in saves (#554)", () => {
     expect(fromSaveRecord(unknown, standardDeck, dealerRegistry)).toBeNull();
   });
 });
+
+describe("opening review cases (#554 review)", () => {
+  it("rejects a save whose unopened payload has corrupt components", () => {
+    const run = runWithHand([devOpaqueContainer("box-1", kingOfHearts("revealed-1"))]);
+    const record = JSON.parse(JSON.stringify(toSaveRecord(run.snapshot())));
+    record.state.activeObjects["box-1"].components.opaqueContainer.components.pokerIdentity.rank =
+      "invalid";
+    expect(fromSaveRecord(record, standardDeck, dealerRegistry)).toBeNull();
+  });
+
+  it("retires the opened wrapper and still continues", () => {
+    const king = standardDeck[12]!;
+    const run = runWithHand([king, devOpaqueContainer("box-1", kingOfHearts("revealed-1"))]);
+    run.play({ cardId: king.id });
+    run.play({ cardId: "box-1", targetId: king.id, face: "east" });
+    expect(run.state.removedCards).toContain("box-1");
+    const restored = fromSaveRecord(
+      JSON.parse(JSON.stringify(toSaveRecord(run.snapshot()))),
+      standardDeck,
+      dealerRegistry,
+    );
+    expect(restored).not.toBeNull();
+    expect(restored!.state.removedCards).toContain("box-1");
+  });
+
+  it("continues after opening a container that came from the starting deck", () => {
+    const box = devOpaqueContainer("start-box", kingOfHearts("revealed-s"));
+    const deck = [box, ...standardDeck];
+    const rules = sandboxRunRules(demoRunRules);
+    const opening = new GameRun(dealerRegistry, rules, deck, () => 0);
+    const king = standardDeck[12]!;
+    const run = GameRun.fromSnapshot(
+      dealerRegistry,
+      rules,
+      deck,
+      {
+        ...opening.snapshot(),
+        state: {
+          ...opening.state,
+          hand: [king, box],
+          deck: deck.filter(({ id }) => id !== king.id && id !== box.id),
+        },
+      },
+      () => 0,
+    );
+    run.play({ cardId: king.id });
+    expect(run.play({ cardId: box.id, targetId: king.id, face: "east" })).not.toBeNull();
+    const restored = fromSaveRecord(
+      JSON.parse(JSON.stringify(toSaveRecord(run.snapshot()))),
+      deck,
+      dealerRegistry,
+    );
+    expect(restored).not.toBeNull();
+  });
+
+  it("captures the wrapper and revealed card in the opening fact", () => {
+    const king = standardDeck[12]!;
+    const run = runWithHand([king, devOpaqueContainer("box-1", kingOfHearts("revealed-1"))]);
+    run.play({ cardId: king.id });
+    run.play({ cardId: "box-1", targetId: king.id, face: "east" });
+    const opened = facts(run).find(({ type }) => type === "block.opened")!;
+    expect(opened.blocks?.map(({ id }) => id)).toEqual(["box-1", "revealed-1"]);
+  });
+});
