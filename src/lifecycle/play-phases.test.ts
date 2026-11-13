@@ -659,3 +659,13 @@ describe("placement-timed reactions (#614)", () => {
     expect(run(["reactions"])).toEqual([undefined, undefined, "heated"]);
   });
 });
+
+describe("the game composes placement reactions before scoring (#614)", () => {
+  it("lists the placement step before scoring and the other reactions after it", () => {
+    const controller = demoRunRules.playfield?.find(({ id }) => id === "materialEffectsController")
+      ?.config as { beforeScore: string[]; afterScore: string[] };
+    expect(controller.beforeScore).toContain("placement-reactions");
+    expect(controller.afterScore).not.toContain("placement-reactions");
+    expect(controller.afterScore).toContain("reactions");
+  });
+});
