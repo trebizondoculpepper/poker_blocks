@@ -109,6 +109,14 @@ export type GameEvent = {
   amount?: number;
   /** On `reward.finalized`: the coins paid, and the balance before and after. */
   reward?: { coins: number; balanceBefore: number; balance: number };
+  /**
+   * On `shop.left` (#878; doc/outcome-presentation.md): the unsold stock that actually left, as
+   * captured at commit, and where the run went next.
+   */
+  outgoingStock?: readonly { kind: string; blockId: string }[];
+  destination?: { round: number; stage: StageKind };
+  /** On `run.ended` (#878): the run's terminal result. */
+  result?: "lost";
 };
 
 export type PassiveTraitDefinition = {
