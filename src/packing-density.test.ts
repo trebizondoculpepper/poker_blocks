@@ -48,6 +48,15 @@ describe("packing density query (#815)", () => {
     });
   });
 
+  it("handles a very large field without an engine argument limit (#846 review)", () => {
+    const line: [number, number, number][] = Array.from({ length: 150_000 }, (_, x) => [x, 0, 0]);
+    const state = {
+      ...field(),
+      field: line.map(([x, y, z]) => ({ block: standardDeck[0]!, cell: { x, y, z } })),
+    } as GameState;
+    expect(density(state)).toMatchObject({ occupied: 150_000, capacity: 150_000, density: 1 });
+  });
+
   it("is cached per snapshot, and a new snapshot is computed afresh", () => {
     const state = field([0, 0, 0], [1, 0, 0]);
     expect(query("packingDensity", state)).toBe(query("packingDensity", state));

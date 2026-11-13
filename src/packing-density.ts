@@ -23,13 +23,17 @@ export function packingDensity(state: GameState): QueryResult<PackingDensity> {
     ...new Map(state.field.map(({ cell }) => [`${cell.x},${cell.y},${cell.z}`, cell])).values(),
   ];
   if (!cells.length) return { available: false, reason: "the field is empty" };
-  const axis = (pick: (cell: (typeof cells)[number]) => number) => {
-    const values = cells.map(pick);
-    return [Math.min(...values), Math.max(...values)] as const;
-  };
-  const [minX, maxX] = axis(({ x }) => x);
-  const [minY, maxY] = axis(({ y }) => y);
-  const [minZ, maxZ] = axis(({ z }) => z);
+  // One pass, no spread: bounds over any number of cells, with no engine argument limit.
+  let [minX, minY, minZ] = [Infinity, Infinity, Infinity];
+  let [maxX, maxY, maxZ] = [-Infinity, -Infinity, -Infinity];
+  for (const { x, y, z } of cells) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    minZ = Math.min(minZ, z);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+    maxZ = Math.max(maxZ, z);
+  }
   const extents = { x: maxX - minX + 1, y: maxY - minY + 1, z: maxZ - minZ + 1 };
   const capacity = extents.x * extents.y * extents.z;
   if (!Number.isSafeInteger(capacity))
