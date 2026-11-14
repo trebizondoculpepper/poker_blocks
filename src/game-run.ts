@@ -326,6 +326,8 @@ export class GameRun {
     // Each fact names the fact it answered, from the parent the queue kept as it queued it
     // (#661 review); a fact from an earlier drain of this action is found the same way.
     for (const event of delivered) {
+      if (event.blockId && event.reaction)
+        this.playReactions?.push({ blockId: event.blockId, ...event.reaction });
       const cause = this.passiveEvents.parentOf(event);
       // A working-value capability belongs to the mutable phase, never to the recorded fact.
       const fact: GameEvent = { ...event };
@@ -787,8 +789,14 @@ export class GameRun {
     return [{ type: "passive.installed", blockId: id }];
   }
 
-  /** The reactions the last play set off, in field order, for presentation (#366). */
+  /**
+   * The material changes the last play committed, in delivery order, for presentation (#366):
+   * every delivered fact carrying a `reaction`, whoever caused it (a material reaction, or a
+   * rack item's conversion, #988), so the presenter redraws each changed block.
+   */
   lastReactions: readonly AppliedReaction[] = [];
+  /** The play being resolved collects its delivered material changes here. */
+  private playReactions: AppliedReaction[] | null = null;
   /** The aggregate rules that changed the last play's total, for presentation. */
   lastTotalActivations: readonly RuleActivation[] = [];
   /** The steps the composed playfield controllers attached, for the run's lifetime. */
@@ -801,7 +809,11 @@ export class GameRun {
    */
   play(action: PlayAction, actionId?: string): GameState | null {
     if (!this.inStage) return null;
-    return this.transact("play", actionId, (context) => this.resolvePlay(action, context));
+    try {
+      return this.transact("play", actionId, (context) => this.resolvePlay(action, context));
+    } finally {
+      this.playReactions = null;
+    }
   }
 
   /**
@@ -826,6 +838,8 @@ export class GameRun {
       pending: [],
       reactions: [],
     };
+    const reactions: AppliedReaction[] = [];
+    this.playReactions = reactions;
     // The score before this play, which the scoring phase adds the play's points to. Placement
     // scores nothing, so placement and pre-score steps see the score as it was (#682, #925).
     const scoreBefore = this.currentState.round.score;
@@ -923,7 +937,8 @@ export class GameRun {
     this.passiveEvents.emit({ type: "play.afterScore", cardIds: placed, blocks: placedBlocks() });
     this.drainPhase(context, "afterScore", batchId);
     this.runSteps(phases.afterScore, steps, context, "afterScore", batchId);
-    this.lastReactions = steps.reactions;
+    this.lastReactions = reactions;
+    this.playReactions = null;
 
     // 5. Settle: the stage outcome, then play.completed last, both in the settle phase and batch.
     this.activeAction = { ...this.activeAction!, phase: "settle", batchId };

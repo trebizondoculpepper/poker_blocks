@@ -48,6 +48,8 @@ describe("Could It Be Magic Now? (#988)", () => {
     playOne(run);
     expect(counters(run)).toEqual([0]);
     expect(magicOnField(run)).toHaveLength(1);
+    // The presenter redraws it like any material change (play-presenter reads lastReactions).
+    expect(run.lastReactions.map(({ blockId }) => blockId)).toEqual(magicOnField(run));
   });
 
   it("counts a multi-card play once", () => {

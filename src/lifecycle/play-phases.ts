@@ -53,10 +53,10 @@ const reactionStep =
       materialReactions(block).filter((reaction) => reactionTiming(reaction) === timing),
     );
     context.reactions.push(...applied);
-    return applied.map(({ blockId, from, to }) => ({
+    return applied.map(({ blockId, ...reaction }) => ({
       type: "reaction.applied",
       blockId,
-      reaction: { from, to },
+      reaction,
     }));
   };
 // Explicitly placement-timed interactions, before scoring (the approved Air/flame upgrade).
