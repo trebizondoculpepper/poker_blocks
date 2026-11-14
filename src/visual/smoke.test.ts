@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
 import { blockEffects, createBlockEffects } from "./block-effects";
-import "./smoke";
+import { createSmokeBurst } from "./smoke";
 
 const config = {
   effect: "smoke",
@@ -100,5 +100,41 @@ describe("smoke block effect (#464)", () => {
     expect(live(still!.object as THREE.Points)).toHaveLength(0);
     smoke!.dispose();
     still!.dispose();
+  });
+});
+
+describe("smoke burst (#510)", () => {
+  // 7.5 units: half a second.
+  const burst = { ...config, emitUnits: 7.5 };
+  const at = new THREE.Vector3(2, 1, -3);
+
+  it("puffs from its point for a bounded time, then finishes once the last puff has gone", () => {
+    const smoke = createSmokeBurst(burst, { random, size: 1 }, at);
+    expect(smoke.update(0.1, false)).toBe(true);
+    const first = live(smoke.object as THREE.Points);
+    expect(first.length).toBeGreaterThan(0);
+    for (const puff of first) {
+      expect(puff.x).toBeCloseTo(at.x, 0);
+      expect(puff.y).toBeGreaterThanOrEqual(at.y);
+    }
+    for (let t = 0.1; t < 0.6; t += 0.1) smoke.update(0.1, false);
+    // Emission has stopped: no more puffs than half a second's worth.
+    const most = Math.ceil(burst.frequency * 0.5) + 1;
+    expect(live(smoke.object as THREE.Points).length).toBeLessThanOrEqual(most);
+    let running = true;
+    let steps = 0;
+    while (running && steps++ < 100) running = smoke.update(0.1, false);
+    expect(running).toBe(false);
+    // At most the emission plus lifetime: 2.5 s, here in 0.1 s steps.
+    expect(steps).toBeLessThanOrEqual(21);
+    expect(live(smoke.object as THREE.Points)).toEqual([]);
+    smoke.dispose();
+  });
+
+  it("emits nothing and finishes at once under reduced motion", () => {
+    const smoke = createSmokeBurst(burst, { random, size: 1 }, at);
+    expect(smoke.update(0.016, true)).toBe(false);
+    expect(live(smoke.object as THREE.Points)).toEqual([]);
+    smoke.dispose();
   });
 });

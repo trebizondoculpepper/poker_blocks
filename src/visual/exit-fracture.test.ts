@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { createExitRunner, type ExitVisual } from "./exit-presentation";
+import { type ExitVisual } from "./exit-presentation";
+import { createSteppedExits } from "./exit-stepping";
 import { pieceSources } from "./exit-fracture";
 
 function visual() {
@@ -14,7 +15,7 @@ function visual() {
   return { v, root, faces, fan };
 }
 const run = (v: ExitVisual, effect: string, config: object, reduced = false) => {
-  const runner = createExitRunner(() => reduced);
+  const runner = createSteppedExits(() => reduced);
   runner.start({ blockId: "b" }, v, {
     steps: [{ effects: [{ effect, target: "shell", config }] }],
   });
@@ -91,7 +92,7 @@ describe("fracture (#442)", () => {
 describe("targets and grouped components (#512 review)", () => {
   it("cracks only its configured target: a solid block's empty contents get no cracks", () => {
     const { v, root } = visual();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [{ effects: [{ effect: "crack", target: "contents" }] }],
     });
@@ -114,7 +115,7 @@ describe("targets and grouped components (#512 review)", () => {
     root.add(wrapper);
     new THREE.Group().add(root);
     const v: ExitVisual = { root, shell: [wrapper], contents: [], release: vi.fn() };
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         { effects: [{ effect: "fracture", target: "shell", config: { pieces: "components" } }] },
@@ -130,7 +131,7 @@ describe("targets and grouped components (#512 review)", () => {
     root.parent!.rotation.y = Math.PI / 4;
     root.parent!.updateMatrixWorld(true);
     const before = root.children.length;
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [{ effects: [{ effect: "fracture", target: "shell", config: { pieces: "slabs" } }] }],
     });
@@ -138,7 +139,7 @@ describe("targets and grouped components (#512 review)", () => {
     // The shell is the 2-unit body (and the fan inside it): unchanged by the turn.
     expect(piece.scale.x).toBeCloseTo(2);
     runner.dispose();
-    const empty = createExitRunner();
+    const empty = createSteppedExits();
     empty.start({ blockId: "c" }, v, {
       steps: [
         { effects: [{ effect: "fracture", target: "contents", config: { pieces: "slabs" } }] },
@@ -153,7 +154,7 @@ describe("fracture beside other effects (#512 review)", () => {
   it("never hides a sibling effect's particles: a burst alongside stays visible", async () => {
     await import("./exit-burst");
     const { v, root } = visual();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         { effects: [{ effect: "burst" }, { effect: "fracture", config: { pieces: "slabs" } }] },
@@ -179,7 +180,7 @@ describe("fracture in awkward hierarchies (#512 review)", () => {
     root.add(wrapper);
     new THREE.Group().add(root);
     const v: ExitVisual = { root, shell: [wrapper], contents: [], release: vi.fn() };
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         {
@@ -203,7 +204,7 @@ describe("fracture in awkward hierarchies (#512 review)", () => {
     const root = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
     new THREE.Group().add(root);
     const v: ExitVisual = { root, shell: [root], contents: [], release: vi.fn() };
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [{ effects: [{ effect: "fracture", target: "shell", config: { pieces: "slabs" } }] }],
     });
@@ -226,7 +227,7 @@ describe("hiding only what should hide (#512 review)", () => {
     root.add(blade);
     new THREE.Group().add(root);
     const v: ExitVisual = { root, shell: [root], contents: [], release: vi.fn() };
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         { effects: [{ effect: "fracture", target: "shell", config: { pieces: "components" } }] },
@@ -242,7 +243,7 @@ describe("hiding only what should hide (#512 review)", () => {
   it("a parallel flash's overlays stay visible on meshes a fracture hides", async () => {
     await import("./flash-shudder");
     const { v, faces } = visual();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         {
@@ -265,7 +266,7 @@ describe("hiding only what should hide (#512 review)", () => {
     await import("./exit-burst");
     const { v, root } = visual();
     const before = root.children.length;
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         {
@@ -295,7 +296,7 @@ describe("everything that draws hides (#512 review)", () => {
     root.add(body, outline, sparks);
     new THREE.Group().add(root);
     const v: ExitVisual = { root, shell: [body, outline], contents: [sparks], release: vi.fn() };
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [{ effects: [{ effect: "fracture", config: { pieces: "slabs" } }] }],
     });
@@ -310,7 +311,7 @@ describe("overlapping fractures and nested pieces (#512 review)", () => {
   it("two fractures over one block share its hiding: the real material comes back exactly once", () => {
     const { v, faces } = visual();
     const real = faces.material;
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         {
@@ -338,7 +339,7 @@ describe("overlapping fractures and nested pieces (#512 review)", () => {
     root.add(outer);
     new THREE.Group().add(root);
     const v: ExitVisual = { root, shell: [outer], contents: [], release: vi.fn() };
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         {
@@ -389,7 +390,7 @@ describe("components keep their places (#512 review)", () => {
   it("never moves a component out of its group, so a parallel effect still finds it", async () => {
     await import("./flash-shudder");
     const { v, parts } = wrapped();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         {
@@ -407,7 +408,7 @@ describe("components keep their places (#512 review)", () => {
 
   it("two component fractures over one block leave every part in its group, order and place", () => {
     const { v, wrapper, parts } = wrapped();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         {
@@ -440,7 +441,7 @@ describe("fracture with a parallel shudder (#512 review)", () => {
     ]) {
       const { v, fan } = visual();
       const start = fan.position.clone();
-      const runner = createExitRunner();
+      const runner = createSteppedExits();
       runner.start({ blockId: "b" }, v, { steps: [{ effects: order }] });
       for (let frame = 0; frame < 20; frame++) runner.update(1 / 60);
       expect(fan.position.distanceTo(start)).toBeGreaterThan(0.2);
@@ -458,7 +459,7 @@ describe("flash beside a fracture (#512 review)", () => {
     ]) {
       const { v, root } = visual();
       const before = root.children.length;
-      const runner = createExitRunner();
+      const runner = createSteppedExits();
       runner.start({ blockId: "b" }, v, { steps: [{ effects: order }] });
       const slabs = root.children.slice(before) as THREE.Mesh[];
       expect(slabs.length).toBeGreaterThan(0);
@@ -473,7 +474,7 @@ describe("fracture gravity on a turned block (#512 review)", () => {
     const { v, root } = visual();
     root.rotation.z = Math.PI / 2;
     root.updateMatrixWorld(true);
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         { effects: [{ effect: "fracture", config: { pieces: "slabs", speed: [0, 0], spin: 0 } }] },

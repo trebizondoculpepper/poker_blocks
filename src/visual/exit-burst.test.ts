@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { createExitRunner, type ExitVisual } from "./exit-presentation";
+import { type ExitVisual } from "./exit-presentation";
+import { createSteppedExits } from "./exit-stepping";
 import { maxParticles } from "./exit-burst";
 
 function visual(): ExitVisual {
@@ -20,7 +21,7 @@ const heights = (p: THREE.Points) =>
 describe("particle burst exit effect (#444)", () => {
   it("launches its configured count outward, then gravity brings them down: a parabola", () => {
     const v = visual();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [
         {
@@ -48,7 +49,7 @@ describe("particle burst exit effect (#444)", () => {
 
   it("never emits more than its bound", () => {
     const v = visual();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [{ effects: [{ effect: "burst", config: { count: 99999 } }] }],
     });
@@ -58,7 +59,7 @@ describe("particle burst exit effect (#444)", () => {
 
   it("frees what it made when it ends, and removes its particles", () => {
     const v = visual();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [{ effects: [{ effect: "burst", config: { life: 0.2 } }] }],
     });
@@ -74,7 +75,7 @@ describe("particle burst exit effect (#444)", () => {
 
   it("shows nothing and ends at once under reduced motion", () => {
     const v = visual();
-    const runner = createExitRunner(() => true);
+    const runner = createSteppedExits(() => true);
     runner.start({ blockId: "b" }, v, { steps: [{ effects: [{ effect: "burst" }] }] });
     expect(points(v)!.geometry.attributes.position!.count).toBe(0);
     runner.update(0.016);
@@ -85,7 +86,7 @@ describe("particle burst exit effect (#444)", () => {
     const v = visual();
     v.root.parent!.scale.setScalar(3);
     v.root.parent!.updateMatrixWorld(true);
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [{ effects: [{ effect: "burst", config: { size: 0.1 } }] }],
     });
@@ -98,7 +99,7 @@ describe("particle burst exit effect (#444)", () => {
     const v = visual();
     v.root.parent!.rotation.y = Math.PI / 4;
     v.root.parent!.updateMatrixWorld(true);
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [{ effects: [{ effect: "burst", config: { size: 0.1 } }] }],
     });
@@ -108,7 +109,7 @@ describe("particle burst exit effect (#444)", () => {
 
   it("emits only from its configured target: a solid block's empty contents emit nothing", () => {
     const v = visual();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [{ effects: [{ effect: "burst", target: "contents" }] }],
     });

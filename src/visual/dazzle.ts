@@ -6,7 +6,9 @@
  * a configured registered sound (the live `block.dazzle_pop`, #519) through `playSfx`.
  *
  * - A **flash** at a world point whites the view out round where it is seen for a frame or two,
- *   with one to four circles of light blooming out there (`popPattern`, never the same twice).
+ *   with `minCircles` to `circles` circles of light blooming out there (`popPattern`, never the
+ *   same twice), white at the centre shading to a configured fringe (`colours`). A flash may
+ *   override any of this for itself (#510: an explosion's three to six white-and-yellow pops).
  * - Each circle leaves a dark, faintly purple **afterimage** fixed to the screen (it is on the
  *   eye: it doesn't move as the camera does), fading over about seven seconds (`ghostSeconds`).
  * - It draws on a DOM layer over the canvas that never takes input (`pointer-events: none`).
@@ -24,11 +26,17 @@ export type DazzleConfig = {
   flashFrames: number;
   /** How long an afterimage lasts: normally distributed, never under `min` (seconds). */
   ghost: { mean: number; sd: number; min: number };
-  /** At most this many circles a pop, strewn up to `spread` (shares of the screen's height). */
+  /**
+   * At least `minCircles` and at most `circles` circles a pop, strewn up to `spread` (shares of
+   * the screen's height).
+   */
+  minCircles?: number;
   circles: number;
   spread: number;
   /** The glare's peak opacity, and its opacity under reduced motion. */
   glare: { max: number; reduced: number };
+  /** A circle's colours: its centre, and the fringe it shades to (CSS colours). */
+  colours: { centre: string; fringe: string };
   /** At most this many afterimages on screen at once. */
   maxGhosts: number;
   /** The registered sound a flash plays, once; none when omitted. */
@@ -41,9 +49,16 @@ export const defaultDazzle: DazzleConfig = {
   circles: 4,
   spread: 0.09,
   glare: { max: 0.8, reduced: 0.25 },
+  colours: { centre: "#ffffff", fringe: "rgb(236, 244, 255)" },
   maxGhosts: 24,
   sound: "block.dazzle_pop",
 };
+
+/** What one flash may override: its pop's circles, colours, glare and sound. */
+export type DazzleLook = Pick<
+  DazzleConfig,
+  "minCircles" | "circles" | "spread" | "colours" | "glare" | "sound"
+>;
 
 /** Seconds an afterimage lasts, from two uniform random numbers (normal, floored). */
 export function ghostSeconds(
@@ -67,15 +82,18 @@ export function ghostLevel(age: number, seconds: number): number {
 export type PopCircle = { dx: number; dy: number; radius: number; frames: number };
 
 /**
- * A pop's circles: one to `circles`, the first on the discharge and the rest strewn round it,
+ * A pop's circles: `minCircles` (default one) to `circles`, the first on the discharge and the
+ * rest strewn round it,
  * smaller further out, each blooming out in one to three frames. `strength` (0 to 1) sizes them.
  */
 export function popPattern(
-  config: Pick<DazzleConfig, "circles" | "spread">,
+  config: Pick<DazzleConfig, "minCircles" | "circles" | "spread">,
   strength = 1,
   random: () => number = Math.random,
 ): PopCircle[] {
-  const count = 1 + Math.min(config.circles - 1, Math.floor(random() * config.circles));
+  const least = Math.max(1, Math.min(config.minCircles ?? 1, config.circles));
+  const choices = config.circles - least + 1;
+  const count = least + Math.min(choices - 1, Math.floor(random() * choices));
   const scale = 0.6 + 0.4 * Math.max(0, Math.min(1, strength));
   return Array.from({ length: count }, (_, i) => {
     const angle = random() * Math.PI * 2;
@@ -167,9 +185,16 @@ export function createDazzle(
   };
 
   return {
-    /** A discharge at a world point: it pops, and dazzles where it is seen, if in view. */
-    flash(at: THREE.Vector3, { strength = 1 }: { strength?: number } = {}) {
-      if (config.sound) playSfx(config.sound);
+    /**
+     * A discharge at a world point: it pops, and dazzles where it is seen, if in view. `look`
+     * overrides this dazzle's pop for this flash only (its circles, colours, glare or sound).
+     */
+    flash(
+      at: THREE.Vector3,
+      { strength = 1, look = {} }: { strength?: number; look?: Partial<DazzleLook> } = {},
+    ) {
+      const pop = { ...config, ...look };
+      if (pop.sound) playSfx(pop.sound);
       seen.copy(at).project(camera);
       // Only a point inside the camera's depth range dazzles: beyond the far plane or before the
       // near one (behind an orthographic camera, z < -1) is out of view (#535 review).
@@ -178,17 +203,17 @@ export function createDazzle(
       const x = ((seen.x + 1) / 2) * 100;
       const y = ((1 - seen.y) / 2) * 100;
       glare.style.background = `radial-gradient(circle at ${x}% ${y}%, #ffffff 0%, #f4f8ff 35%, #dfe8ff 100%)`;
-      glare.style.opacity = String(reduced ? config.glare.reduced : config.glare.max * strength);
+      glare.style.opacity = String(reduced ? pop.glare.reduced : pop.glare.max * strength);
       glareFrames = config.flashFrames;
       const aspect = host.clientWidth / Math.max(1, host.clientHeight) || 1;
-      for (const circle of popPattern(config, strength, random)) {
+      const { centre, fringe } = pop.colours;
+      for (const circle of popPattern(pop, strength, random)) {
         const element = document.createElement("div");
         Object.assign(element.style, {
           position: "absolute",
           borderRadius: "50%",
           transform: "translate(-50%, -50%)",
-          background:
-            "radial-gradient(closest-side, #ffffff, #ffffff 55%, rgba(236, 244, 255, 0.85) 75%, rgba(220, 232, 255, 0) 100%)",
+          background: `radial-gradient(closest-side, ${centre}, ${centre} 55%, color-mix(in srgb, ${fringe} 85%, transparent) 75%, color-mix(in srgb, ${fringe} 0%, transparent) 100%)`,
           mixBlendMode: "screen",
           opacity: reduced ? "0.35" : "1",
         });
