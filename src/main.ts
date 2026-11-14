@@ -58,6 +58,10 @@ import { createTableRenderer, type TableRenderer } from "./table-renderer";
 import { createHudFrame } from "./hud-frame";
 import { gameplayHudZones, type HudElement } from "./hud-layout";
 import { appVersion } from "./version";
+import { createDiagnosticRegistry } from "./diagnostics/debug-snapshot";
+import { registerSnapshotProviders, snapshotSections } from "./diagnostics/providers";
+import { debugSnapshotCommand } from "./diagnostics/snapshot-command";
+import { registerConsoleCommand } from "./console/commands";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -448,6 +452,29 @@ const unbindScreenshot = bindScreenshotShortcut(
 hud.onAction(() => run.takeNextAction());
 hud.onOpen((action) => run.dispatch(action));
 // Developer console: ~ (or `) drops it down.
+// The debug snapshot (#987): development builds only (doc/debug-snapshot.md). A production build
+// composes neither its providers nor its command. The scheduler section stays `unavailable`
+// until the running game owns a visual scheduler (#547).
+const leaveDiagnostics = import.meta.env.DEV
+  ? (() => {
+      const diagnostics = createDiagnosticRegistry(snapshotSections);
+      const leaveProviders = registerSnapshotProviders(diagnostics, {
+        version: appVersion,
+        mode: () => run.consoleApp.mode().id,
+        sceneStack: () => sceneManager.stack.map(({ id }) => id),
+        state: () => run.consoleApp.game().state,
+        titles: () => blockTitles.mounted(),
+        actions: () => ({ recording: actionLog.recording, entries: actionLog.entries() }),
+      });
+      const leaveCommand = registerConsoleCommand(
+        debugSnapshotCommand(() => diagnostics.snapshot()),
+      );
+      return () => {
+        leaveCommand();
+        leaveProviders();
+      };
+    })()
+  : () => {};
 const devConsole = createConsoleHost(run.consoleApp, audio);
 cameraView.start();
 
@@ -494,6 +521,7 @@ if (import.meta.hot) {
     audio.dispose();
     hud.dispose();
     devConsole.dispose();
+    leaveDiagnostics();
     overlays.dispose();
     run.dispose();
     attract.dispose();

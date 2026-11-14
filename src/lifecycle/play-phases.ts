@@ -63,10 +63,10 @@ const reactionStep =
       materialReactions(block).filter((reaction) => reactionTiming(reaction) === timing),
     );
     context.reactions.push(...applied);
-    return applied.map(({ blockId, from, to }) => ({
+    return applied.map(({ blockId, ...reaction }) => ({
       type: "reaction.applied",
       blockId,
-      reaction: { from, to },
+      reaction,
     }));
   };
 // Explicitly placement-timed interactions, before scoring (the approved Air/flame upgrade).
@@ -122,6 +122,15 @@ export type PlayPhases = {
   afterScore: readonly string[];
 };
 
+/**
+ * The late rack step (#988; doc/experiments/could-it-be-magic-now.md): once the post-score
+ * reactions and detonations have drained, `play.afterReactions` is delivered once per committed
+ * play to rack listeners, left to right, against the resulting field, before settlement.
+ */
+playSteps.register("passive-late", (context) => [
+  { type: "play.afterReactions", cardIds: [...context.placedOrder] },
+]);
+
 /** A model controller composed onto the playfield, by registered name, with its configuration. */
 export type PlayfieldController = { id: string; config: unknown };
 
@@ -142,6 +151,12 @@ playfieldControllers.register("openingController", () => ({
   opening: ["open-placed"],
   beforeScore: [],
   afterScore: [],
+}));
+
+/** Rack listeners' late step, composed after the material steps it must follow. */
+playfieldControllers.register("lateRackStepController", () => ({
+  beforeScore: [],
+  afterScore: ["passive-late"],
 }));
 
 const none: PlayPhases = { opening: [], beforeScore: [], afterScore: [] };

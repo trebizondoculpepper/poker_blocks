@@ -39,6 +39,8 @@ export type ConsoleHost = {
   musicNow(): string | null;
   playMusic(id: string): void;
   stopMusic(): void;
+  /** Print a line later, after the command returned (an asynchronous result). */
+  say(text: string, tone: "output" | "error"): void;
   /** Clear the console's screen. */
   clear(): void;
   history(): readonly string[];
@@ -63,7 +65,7 @@ const fail = (text: string): never => {
 const cards = (blocks: readonly CardBlock[]): string =>
   blocks.length ? blocks.map((b) => blockName(b)).join(", ") : "(none)";
 
-export const COMMANDS: readonly ConsoleCommand[] = [
+const commands: ConsoleCommand[] = [
   {
     name: "help",
     usage: "[command]",
@@ -243,7 +245,24 @@ export const COMMANDS: readonly ConsoleCommand[] = [
   },
 ];
 
+export const COMMANDS: readonly ConsoleCommand[] = commands;
 const COMMAND_BY_NAME = new Map(COMMANDS.map((c) => [c.name, c]));
+
+/**
+ * Add a command composed by its owner (a development-only tool, #987); the returned function
+ * removes it. A name already taken is an error.
+ */
+export function registerConsoleCommand(command: ConsoleCommand): () => void {
+  if (COMMAND_BY_NAME.has(command.name))
+    throw new Error(`Console command "${command.name}" exists`);
+  commands.push(command);
+  COMMAND_BY_NAME.set(command.name, command);
+  return () => {
+    const at = commands.indexOf(command);
+    if (at >= 0) commands.splice(at, 1);
+    if (COMMAND_BY_NAME.get(command.name) === command) COMMAND_BY_NAME.delete(command.name);
+  };
+}
 
 /**
  * The command a statement runs: the longest command name whose words the statement starts

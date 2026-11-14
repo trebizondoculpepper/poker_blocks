@@ -105,6 +105,8 @@ export const demoRunRules: RunRules = {
         afterScore: ["reactions", "countdown-detonations"],
       },
     },
+    // After the material steps have drained: the rack's late step (#988).
+    { id: "lateRackStepController", config: {} },
   ],
   stage(round, kind) {
     return {
