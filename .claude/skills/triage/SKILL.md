@@ -9,20 +9,22 @@ Brief the user on the most urgent work in this repository, using the `github-tri
 
 ## 1. Update the tool
 
-The tool is installed globally as the `github-triage` command, from the `main` branch of `trebizondoculpepper/github_triage` ([doc/github-triage-cli.md](../../../doc/github-triage-cli.md), "Global installation and launch"). Nothing in this repository pins it, so an update needs no PR.
+The tool is installed globally as the `github-triage` command, from the latest npm release of `@trebizondoculpepper/github-triage` ([doc/github-triage-cli.md](../../../doc/github-triage-cli.md), "Global installation and launch"). Nothing in this repository pins it, so an update needs no PR.
 
-1. Check how it is installed: `npm ls -g github-triage`. If it points at a local checkout (`-> …`), a developer has `npm link`ed their own copy: leave it alone, say so, and use it as it is.
-2. Otherwise reinstall from `main`, noting the commit you get:
+1. Check how it is installed: `npm ls -g @trebizondoculpepper/github-triage`. If it points at a local checkout (`-> …`), a developer has `npm link`ed their own copy: leave it alone, say so, and use it as it is.
+2. Otherwise reinstall the latest release, noting the version you get:
 
    ```sh
-   git ls-remote https://github.com/trebizondoculpepper/github_triage.git main
-   npm install -g git+https://github.com/trebizondoculpepper/github_triage.git#main
+   npm install -g @trebizondoculpepper/github-triage
+   npm ls -g @trebizondoculpepper/github-triage
    github-triage --help
    ```
 
+   Never install from the Git URL: it leaves a broken link and no command (doc/github-triage-cli.md explains why). If `npm ls -g` shows a link into `~/.npm/_cacache/tmp`, an earlier Git install broke it: `npm uninstall -g @trebizondoculpepper/github-triage`, then install as above.
+
 3. If the install fails or the command no longer starts, say so. If it doesn't start at all, there is no briefing: report it instead of improvising one.
 
-Name the commit (or the linked checkout) at the top of the briefing.
+Name the version (or the linked checkout) at the top of the briefing.
 
 ## 2. Run the briefing
 

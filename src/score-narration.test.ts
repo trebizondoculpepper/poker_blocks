@@ -6,7 +6,20 @@ import {
   type NarratedLine,
   type NarratedPlay,
 } from "./score-narration";
-import { createVisualScheduler, unitMs } from "./visual-events/scheduler";
+import { createVisualScheduler, unitMs, visualHandlers } from "./visual-events/scheduler";
+
+/** An event shown alongside a line (#919): logs when it starts and lasts 2 seconds. */
+const besideLog: string[] = [];
+let besideCancels = 0;
+visualHandlers.register("test.narration.beside", (payload, context) => {
+  besideLog.push(`${Math.round(context.scheduledAtMs)}:${String(payload)}`);
+  const until = context.scheduledAtMs + 2000;
+  return {
+    update: (nowMs) => (nowMs >= until ? "finished" : "running"),
+    cancel: () => void besideCancels++,
+    dispose() {},
+  };
+});
 
 const line = (id: string, points: number): NarratedLine => ({
   blockIds: [id],
@@ -276,5 +289,35 @@ describe("score narration on the visual-event scheduler (#547)", () => {
     advance(1000);
     expect(narration.presenting).toBe(false);
     expect(scheduler.counts).toMatchObject({ pending: 0, active: 0, heap: 0, entries: 0 });
+  });
+});
+
+describe("events shown alongside narrated lines (#919)", () => {
+  const beside = (id: string, points: number, ...labels: string[]): NarratedLine => ({
+    ...line(id, points),
+    alongside: labels.map((label) => ({ handler: "test.narration.beside", payload: label })),
+  });
+
+  it("starts each with its line, in order, without holding up lines, plays or the outcome", () => {
+    besideLog.length = 0;
+    const { log, narration, advance, scheduler } = narrating();
+    const start = Math.round(scheduler.nowMs);
+    narration.narrate(play([beside("a", 1, "a1", "a2"), beside("b", 1, "b1")]));
+    narration.narrate(play([line("c", 1)]));
+    advance(3000);
+    const step = Math.round(2 * unitMs);
+    expect(besideLog).toEqual([`${start}:a1`, `${start}:a2`, `${start + step}:b1`]);
+    // The same timings as without them, though each lasts 2 seconds.
+    expect(log).toEqual(["10:line a", "140:line b", "270:line c", "670:outcome"]);
+  });
+
+  it("cancels them on a reset", () => {
+    besideCancels = 0;
+    const { narration, advance, scheduler } = narrating();
+    narration.narrate(play([beside("a", 1, "a1")]));
+    advance(500);
+    narration.reset();
+    expect(besideCancels).toBe(1);
+    expect(scheduler.counts.active).toBe(0);
   });
 });

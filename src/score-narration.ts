@@ -24,8 +24,21 @@ import {
   type VisualScheduler,
 } from "./visual-events/scheduler";
 
+/**
+ * A visual event shown alongside a line (#919): a registered handler and its captured payload,
+ * such as an item's activation label. It starts with its line, in a scope of its own, so it never
+ * holds up the next line, the next play or the outcome.
+ */
+export type AlongsideEvent = { handler: string; payload: unknown };
+
 /** One scoring line as committed: its blocks, the rule sources that fired, its points. */
-export type NarratedLine = { blockIds: string[]; sourceIds: string[]; points: number };
+export type NarratedLine = {
+  blockIds: string[];
+  sourceIds: string[];
+  points: number;
+  /** Shown with this line, in this order, each lasting as long as its own handler says. */
+  alongside?: readonly AlongsideEvent[];
+};
 
 /**
  * Where a committed play left the stage, captured when it committed: narration and its
@@ -119,6 +132,8 @@ export function createScoreNarration(
   let reached: NarratedEndpoint | null = null;
   let current: ScopeHandle | null = null;
   let outcome: ScopeHandle | null = null;
+  /** Scopes of events shown alongside lines (#919), until each settles or a reset cancels it. */
+  const besides = new Set<ScopeHandle>();
   /** Bumped by a reset, so a settling scope from before it starts nothing. */
   let epoch = 0;
 
@@ -191,6 +206,7 @@ export function createScoreNarration(
       next();
       return;
     }
+    showAlongside(lines, at);
     current = scope;
     if (lines.length) hold(at + (lines.length - 1) * timing.lineStep);
     scheduler.seal(scope);
@@ -199,6 +215,29 @@ export function createScoreNarration(
       current = null;
       next();
     });
+  }
+
+  /**
+   * Each line's accompanying events, due with their line, in one scope of their own that nothing
+   * waits for (#919). Optional feedback: a batch that can't be admitted is simply not shown.
+   */
+  function showAlongside(lines: readonly NarratedLine[], at: number): void {
+    const events = lines.flatMap((line, index) =>
+      (line.alongside ?? []).map(({ handler, payload }) => ({
+        handler,
+        payload,
+        dueUnits: at + index * timing.lineStep,
+      })),
+    );
+    if (!events.length) return;
+    const scope = scheduler.createScope(null);
+    if (!scheduler.scheduleBatch(scope, events).accepted) {
+      scheduler.cancel(scope);
+      return;
+    }
+    besides.add(scope);
+    scheduler.seal(scope);
+    scheduler.observe(scope, () => besides.delete(scope));
   }
 
   function announce(endpoint: NarratedEndpoint): void {
@@ -260,7 +299,8 @@ export function createScoreNarration(
     reset(): void {
       // Detached before cancelling, under a new epoch, so no reentrant observer can announce.
       epoch++;
-      const owned = [current, outcome, ...holds];
+      const owned = [current, outcome, ...holds, ...besides];
+      besides.clear();
       waiting = [];
       reached = null;
       holds = new Set();

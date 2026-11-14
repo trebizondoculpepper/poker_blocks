@@ -95,6 +95,30 @@ export function registerOfferView<Block extends OfferBlock>(
   offerViews.register(name, view as unknown as OfferView<OfferBlock>);
 }
 
+/**
+ * The shop's drag-guide provider (#924, #501, #502; doc/presentation-contracts.md, "Laser
+ * target-guide controller"): the dragged offer's preferred target, as its registered view names
+ * it, and the live purchase verdict for its kind's destination. Guidance only: it applies no rule
+ * of its own, and every target in the view's `dropTargets` still accepts the drop. Empty while
+ * no offer is dragged.
+ */
+export function shopGuideProvider(
+  dragged: () => ShopOffer | null,
+  targets: Readonly<Record<"buy" | "rack", readonly HTMLElement[]>>,
+  verdict: (id: string, destination: OfferDestination) => { reason: string } | null,
+): DropGuideProvider {
+  return {
+    preferred: () => {
+      const offer = dragged();
+      return offer ? targets[offerViews.get(offer.kind).preferredTarget] : [];
+    },
+    refusal: () => {
+      const offer = dragged();
+      return offer ? (verdict(offer.block.id, offerKind(offer).destination)?.reason ?? null) : null;
+    },
+  };
+}
+
 /** A price in words: "1 coin", "4 coins". */
 const coins = (amount: number) => `${amount} coin${amount === 1 ? "" : "s"}`;
 
@@ -614,15 +638,7 @@ export function createShopView(
     buyTarget,
     dragSource,
     dragVerdict: () => guidance && { targets: [...guidance.targets], reason: guidance.reason },
-    guideProvider: {
-      preferred: () =>
-        dragging ? dropTargets[offerViews.get(dragging.entry.offer.kind).preferredTarget] : [],
-      refusal: () => {
-        if (!dragging) return null;
-        const { offer } = dragging.entry;
-        return verdict(offer.block.id, offerKind(offer).destination)?.reason ?? null;
-      },
-    },
+    guideProvider: shopGuideProvider(() => dragging?.entry.offer ?? null, dropTargets, verdict),
     render,
     burnUnsold,
     frame,
