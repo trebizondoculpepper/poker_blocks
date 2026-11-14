@@ -37,6 +37,7 @@ export function acquiredBonusLines(card: CardBlock, base: ScoringModifier = {}):
           ),
           `Combined acquired: ${describeModifier(combined)}`,
         ]
-      : ["No acquired bonuses"]),
+      : // Nothing acquired, nothing said: no empty-state line (#1034).
+        []),
   ];
 }

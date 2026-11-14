@@ -15,8 +15,8 @@ const card = (
     : base;
 
 describe("acquired bonus inspection (#751)", () => {
-  it("says an unmodified card has no acquired bonuses, never a zero-valued one", () => {
-    expect(acquiredBonusLines(card())).toEqual(["No acquired bonuses"]);
+  it("says nothing for an unmodified card: no empty-state line, never a zero-valued one (#1034)", () => {
+    expect(acquiredBonusLines(card())).toEqual([]);
     expect(acquiredBonusBreakdown(card()).rows).toEqual([]);
   });
 
@@ -40,7 +40,6 @@ describe("acquired bonus inspection (#751)", () => {
   it("keeps base material values apart, and full precision", () => {
     expect(acquiredBonusLines(card(), { additive: 2, multiplicative: 1.2 })).toEqual([
       "Base: +2 ×1.2",
-      "No acquired bonuses",
     ]);
     expect(describeModifier({ multiplicative: 1.23456789 })).toBe("×1.23456789");
     expect(describeModifier({ additive: -1 })).toBe("−1");
