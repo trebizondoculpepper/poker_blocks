@@ -37,7 +37,7 @@ import { createDeckView, type DeckView } from "./deck-view";
 import { createOverlays, type Overlays } from "./overlays";
 import { createDialogPresenter } from "./block-menu/block-menus";
 import { createPresentationClock, type PresentationClock } from "./presentation-clock";
-import { createPassiveRack } from "./passive-rack";
+import { createPassiveRack, type RackLabelServices } from "./passive-rack";
 import { createPlayPresenter, type PlayPresenter } from "./play-presenter";
 import { createBlockViews, type BlockViews } from "./rendered-blocks";
 import { blockMenuMotion, gameModeRegistry } from "./game-modes";
@@ -62,6 +62,11 @@ import type { DropTargetGuides } from "./scene-traits/drop-target-guide";
 import { appVersion } from "./version";
 import { createVisualScheduler } from "./visual-events/scheduler";
 import type { ScoreNarrationServices } from "./score-narration";
+import type { RewardLedgerServices } from "./reward-ledger";
+import {
+  createActivationLabelLayer,
+  type ActivationLabelServices,
+} from "./visual/activation-labels";
 import { createDiagnosticRegistry } from "./diagnostics/debug-snapshot";
 import { registerSnapshotProviders, snapshotSections } from "./diagnostics/providers";
 import { debugSnapshotCommand } from "./diagnostics/snapshot-command";
@@ -395,10 +400,20 @@ const shopView = createShopView(
 shopView.render([], false);
 // The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
 // these services; the frame loop below advances its clock.
-const visualServices: ScoreNarrationServices = {
+const visualServices: ScoreNarrationServices &
+  ActivationLabelServices &
+  RackLabelServices &
+  RewardLedgerServices = {
   get scoreNarration() {
     return presenter.narration;
   },
+  // The stage-won ledger's count-up (#950).
+  get rewardLedger() {
+    return overlays.rewardLedger;
+  },
+  // Item activation labels beside the rack (#919), drawn over the same host the rack is in.
+  activationLabels: createActivationLabelLayer(host),
+  passiveRack: passiveRackView,
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
@@ -417,6 +432,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   moved: () => run.showSelection(),
   rackChanged: () => run.rackChanged(),
   activated: (sourceIds) => sourceIds.forEach((id) => passiveRackView.activate(id)),
+  alongside: (activation) => passiveRackView.labelFor(activation),
   refill: () => run.refillHand(),
   drawReplacements: () => run.drawReplacements(),
   save: () => run.autosave(),
@@ -454,6 +470,7 @@ const overlays: Overlays = createOverlays(host, {
   menus: run.menus,
   // A won or lost stage waits while the deck view is open, like a menu (#175).
   panels: [deckView],
+  visualEvents,
 });
 // Each HUD element goes in its zone of the shared frame (src/hud-layout.ts, #117).
 const hudElements: Record<HudElement, HTMLElement> = {
