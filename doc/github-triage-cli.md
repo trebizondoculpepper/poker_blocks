@@ -6,11 +6,13 @@ GitHub Triage is developed in the standalone [github_triage repository](https://
 
 The owner chose a **global install** (superseding the #724 project dependency). The tool is a developer-only briefing command: the game, its build, its tests and CI never run it, so pinning it in this repository's `package.json` and `package-lock.json` bought nothing and cost a lockfile PR for every upstream change. poker_blocks has no `github-triage` dependency and no `triage` npm script.
 
-Install it once per machine, from the standalone project's `main` branch:
+Install it once per machine, from the standalone project's latest published npm release:
 
 ```sh
-npm install -g git+https://github.com/trebizondoculpepper/github_triage.git#main
+npm install -g @trebizondoculpepper/github-triage
 ```
+
+Do not install from the Git URL (`npm install -g git+https://…/github_triage.git#main`). The package builds its `dist/` command only when packed, and npm's install-script policy blocks its `prepare` script. The Git install therefore leaves an empty global package linked to a deleted temporary clone, with no `github-triage` command (observed 2026-11-14 with npm on macOS, twice). If an earlier Git install left that link behind, `npm uninstall -g @trebizondoculpepper/github-triage` before reinstalling. To try unreleased `main`, clone the project and install a tarball made with `npm pack` (its `prepack` builds `dist/`). The `@next` tag is a prerelease channel, but check its version first: it can be older than `latest`.
 
 Its package declares the `github-triage` command. Run it from the poker_blocks checkout:
 
@@ -25,11 +27,13 @@ The working directory stays the game checkout, so the tool's authenticated `gh r
 
 ## Updates, evidence and limits
 
-Update by reinstalling with the same command. An update changes no file in this repository, so it needs no PR. Each agent's machine updates independently, so a briefing should say which upstream commit it ran (`npm ls -g github-triage`, or the commit shown by `git ls-remote https://github.com/trebizondoculpepper/github_triage.git main` at install time). A developer working on the tool itself may `npm link` their checkout instead; the command is then that checkout.
+Update by reinstalling with the same command. An update changes no file in this repository, so it needs no PR. Each agent's machine updates independently, so a briefing should say which version it ran (`npm ls -g @trebizondoculpepper/github-triage`). A developer working on the tool itself may `npm link` their checkout instead; the command is then that checkout.
 
 Trade-off accepted: agents may briefly run different revisions, in exchange for no lockfile churn. Reproducibility for the game is unaffected, since nothing in the build or CI depends on the tool.
 
 Evidence (2026-11-13): the standalone `package.json` declares `"bin": { "github-triage": "src/cli.js" }`; `grep` of `.github/workflows` finds no use of triage; on a machine with the command linked globally, `github-triage --help` run from the poker_blocks checkout printed the usual help. The implementation PR removes the dependency and script, and updates the triage skill's update step.
+
+Evidence (2026-11-14): the package now declares `"bin": { "github-triage": "dist/cli.mjs" }`, with `"prepare": "vp config --hooks --no-agent"` and `"prepack": "npm run build"`, so `dist/` exists only in a packed tarball. `npm install -g git+…#main` warned that the `prepare` install script was not covered by `allowScripts`, and `npm ls -g` then showed `@trebizondoculpepper/github-triage@` linked to a removed `~/.npm/_cacache/tmp/git-clone…` directory, with no command on `PATH`. `npm install -g @trebizondoculpepper/github-triage` installed 0.5.0 (registry `latest`; `next` was the older 0.1.7-next.1), and `github-triage --help` ran.
 
 ## Triage-first command map
 
