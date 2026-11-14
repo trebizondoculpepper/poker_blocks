@@ -33,6 +33,9 @@ export function createSteppedExits(reducedMotion: () => boolean = () => false) {
     update(delta: number): void {
       realMs += delta * 1000;
       scheduler.update(realMs, true);
+      // The scheduler keeps settled scopes until its generation ends: with no exit left, end
+      // it, so a profiler repeating exits holds no growing record (#1035 review).
+      if (exits.active === 0 && scheduler.counts.scopes > 0) scheduler.disposeGeneration();
     },
     cancel: (blockId: string) => exits.cancel(blockId),
     get active(): number {

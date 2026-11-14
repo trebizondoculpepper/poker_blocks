@@ -254,4 +254,16 @@ describe("block exits on the shared scheduler (#549)", () => {
     expect(exits.active).toBe(0);
     expect(scheduler.counts.active).toBe(0);
   });
+
+  it("holds no settled scopes once a stepped exit has gone, however often exits repeat (#1035 review)", () => {
+    const stepped = createSteppedExits();
+    for (let k = 0; k < 5; k++) {
+      stepped.start({ ...snapshot, blockId: `b${k}` }, visual(), {
+        steps: [{ effects: [timed(`r${k}`, 0.1)] }],
+      });
+      stepped.update(0.2);
+      expect(stepped.active).toBe(0);
+      expect(stepped.scheduler.counts.scopes).toBe(0);
+    }
+  });
 });
