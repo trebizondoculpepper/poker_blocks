@@ -103,10 +103,10 @@ const cameraView: CameraViewService = createCameraViewService({
   layoutHand: () => hand.layout(),
   render,
 });
-const blockViews: BlockViews = createBlockViews({
-  board: cameraView.assembly,
-  hand: view.handScene,
-});
+const blockViews: BlockViews = createBlockViews(
+  { board: cameraView.assembly, hand: view.handScene },
+  view.prepasses,
+);
 const field: FieldView = createFieldView({
   views: blockViews,
   assembly: cameraView.assembly,
