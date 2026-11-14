@@ -26,6 +26,7 @@ function setup() {
   const scene = new THREE.Scene();
   const observed = new Set<Element>();
   let disposed = false;
+  let renders = 0;
   const overlay = (() => ({
     scene,
     rectOf: () => ({ left: 10, top: 20, width: 100, height: 40 }),
@@ -34,7 +35,9 @@ function setup() {
       return () => observed.delete(element);
     },
     onLayout: () => () => undefined,
-    render: () => undefined,
+    render: () => {
+      renders++;
+    },
     dispose: () => {
       disposed = true;
     },
@@ -67,6 +70,7 @@ function setup() {
     prefer: (areas: Element[]) => void (preferred = areas),
     listening: () => listener !== null,
     disposed: () => disposed,
+    renders: () => renders,
   };
 }
 
@@ -98,6 +102,8 @@ describe("drag target guide (#922)", () => {
       expect(t.guide.showing()).toEqual([]);
       expect(t.scene.children).toHaveLength(0);
       expect(t.observed.size).toBe(0);
+      // Drawn cleared at once, without waiting for a frame.
+      expect(t.renders()).toBe(1);
     }
   });
 

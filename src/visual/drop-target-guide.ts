@@ -93,6 +93,8 @@ export function createDropTargetGuide(config: DropTargetGuideConfig, host: DropT
   const stopDrag = host.observeDrag((event) => {
     drag = event.live ? event : null;
     refresh();
+    // A drag that ended clears now, even if no frame follows (a pausing menu stops updates).
+    if (!drag) overlay.render();
   });
 
   return {
