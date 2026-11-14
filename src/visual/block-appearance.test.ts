@@ -14,6 +14,9 @@ describe("composed material appearance", () => {
     });
     const definition: MaterialDefinition = {
       id: "test-amber",
+      mass: { effective: 1, rationale: "test definition" },
+      releaseStatus: { provisional: {} },
+      materialFamily: "test",
       name: "Test Amber",
       traits: {},
       acoustics: { character: "test", hardness: 1, attach: "material.attach.paper" },
@@ -31,7 +34,7 @@ describe("composed material appearance", () => {
     };
     try {
       const appearance = createBlockAppearance(
-        cardFaceArt(standardDeck[0].traits.identity),
+        cardFaceArt(standardDeck[0].traits.identity!),
         definition,
         2.4,
       );

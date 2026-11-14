@@ -13,10 +13,10 @@
     "test": "vp test run --passWithNoTests",
     "sfx": "node --env-file-if-exists=.env scripts/generate-sfx.ts",
     "sfx:usage": "node scripts/sfx-usage.ts",
+    "profile": "node scripts/profile.ts",
     "release": "node scripts/release.ts",
     "version-guard": "node scripts/version-guard.ts",
-    "prepare": "vp config --hooks --no-agent",
-    "triage": "node scripts/triage/cli.js"
+    "prepare": "vp config --hooks --no-agent"
   },
   "dependencies": {
     "@dnd-kit/abstract": "0.5.3",
@@ -25,7 +25,8 @@
     "@dnd-kit/geometry": "0.5.3",
     "@use-gesture/vanilla": "10.3.1",
     "html-to-image": "^1.11.13",
-    "three": "^0.187.0"
+    "three": "^0.187.0",
+    "tinyqueue": "3.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

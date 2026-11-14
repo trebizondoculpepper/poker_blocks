@@ -14,11 +14,18 @@ const result = (id: string, gpu: number | null, cpu: number): CaseResult => ({
   id,
   family: "test",
   label: id,
-  creation: { build: 1, firstFrame: 2 },
+  unit: { kind: "group", size: 4 },
+  sampling: "steady",
+  host: "board",
+  pipeline: { passes: [], passCount: 0, setup: 0 },
   baseline: set(gpu === null ? null : 0.1, 0.1),
-  one: set(gpu, cpu),
-  collection: set(gpu, cpu),
-  relative: { oneGpu: gpu, oneCpu: cpu, collectionGpu: gpu },
+  counts: [1, 10, 50].map((count) => ({
+    count,
+    framing: { gridSide: Math.ceil(Math.sqrt(count)), cameraDistance: 5, fov: 40 },
+    creation: { build: count, firstFrame: 2 },
+    set: set(gpu === null ? null : gpu * count, cpu * count),
+    relative: { gpu, cpu },
+  })),
   leaked: { geometries: 0, textures: 0 },
 });
 
@@ -33,12 +40,21 @@ describe("profiler export (#619)", () => {
     const run: RunResult = {
       results: [result("a", null, 2)],
       cancelled: false,
+      failures: [{ id: "b", kind: "timeout", reason: "exceeded 120000 ms" }],
+      aborted: null,
+      notRun: [],
       gpuTiming: "unavailable",
       invalidated: [],
     };
     const exported = profilerExport(
       run,
-      { frames: 120, warmupFrames: 30, seed: 527, count: 25, signal: new AbortController().signal },
+      {
+        frames: 120,
+        warmupFrames: 30,
+        seed: 527,
+        counts: [1, 10, 50],
+        signal: new AbortController().signal,
+      },
       {
         userAgent: "test",
         gpu: null,
@@ -47,15 +63,120 @@ describe("profiler export (#619)", () => {
         pixelRatio: 1.5,
         quality: "standard",
       },
-      [{ family: "material", missing: ["material:steel"] }],
+      {
+        catalogs: [
+          {
+            catalog: "material",
+            installed: true,
+            expected: 2,
+            available: 1,
+            unsupported: [],
+            uncovered: ["material:steel"],
+          },
+          {
+            catalog: "rack item",
+            installed: false,
+            expected: 0,
+            available: 0,
+            unsupported: [],
+            uncovered: [],
+          },
+        ],
+        totals: { expected: 2, available: 1, unsupported: 0, uncovered: 1 },
+        complete: false,
+      },
       new Date("2026-11-12T00:00:00Z"),
     );
     const round = JSON.parse(JSON.stringify(exported));
-    expect(round.options).toEqual({ frames: 120, warmupFrames: 30, seed: 527, count: 25 });
+    expect(round.options).toEqual({
+      frames: 120,
+      warmupFrames: 30,
+      seed: 527,
+      counts: [1, 10, 50],
+    });
     expect(round.gpuTiming).toBe("unavailable");
-    expect(round.results[0].collection.gpu).toBeNull();
+    expect(round.results[0].counts.map(({ set }: { set: { gpu: unknown } }) => set.gpu)).toEqual([
+      null,
+      null,
+      null,
+    ]);
     expect(round.uncovered).toEqual([{ family: "material", missing: ["material:steel"] }]);
-    expect(round.method.version).toBe(1);
+    expect(round.coverage.complete).toBe(false);
+    expect(round.results[0].unit).toEqual({ kind: "group", size: 4 });
+    expect(round.coverage.catalogs[1]).toMatchObject({ catalog: "rack item", installed: false });
+    expect(round.method.version).toBe(3);
+    // No isolation stated: the default is the honest one, that frames may have been shared.
+    expect(round.isolation).toBe("shared");
+    expect(round.failures).toEqual([{ id: "b", kind: "timeout", reason: "exceeded 120000 ms" }]);
     expect(round.exportedAt).toBe("2026-11-12T00:00:00.000Z");
+  });
+});
+
+describe("export schema versions (#721)", () => {
+  it("reads version 3, recognises version 1 as old results, and refuses anything else", async () => {
+    const { readProfilerExport } = await import("./export");
+    const current = JSON.stringify({ method: { version: 3 }, results: [] });
+    expect(readProfilerExport(current).kind).toBe("current");
+    const old = JSON.stringify({ method: { version: 1 }, results: [{ collection: {} }] });
+    expect(readProfilerExport(old)).toEqual({ kind: "legacy", version: 1 });
+    expect(() => readProfilerExport(JSON.stringify({ method: { version: 9 } }))).toThrow(
+      /version: 9/,
+    );
+  });
+
+  it("reads a version-2 matrix as main-render-only, its pipeline setup never timed (#764)", async () => {
+    const { readProfilerExport } = await import("./export");
+    const { pipeline: _pipeline, ...before } = result("old", 1, 1);
+    const read = readProfilerExport(JSON.stringify({ method: { version: 2 }, results: [before] }));
+    expect(read.kind).toBe("current");
+    expect(read.kind === "current" && read.record.results[0]!.pipeline).toEqual({
+      passes: [],
+      passCount: 0,
+      setup: null,
+    });
+  });
+
+  it("ranks by the largest count, missing GPU time last", async () => {
+    const { sortedByCost } = await import("./export");
+    const ranked = sortedByCost(
+      [result("small", 1, 1), result("none", null, 9), result("big", 3, 1)],
+      "gpu",
+    );
+    expect(ranked.map(({ id }) => id)).toEqual(["big", "small", "none"]);
+  });
+});
+
+describe("isolation in the exported record (#735 review)", () => {
+  it("keeps whether the application's rendering was paused", async () => {
+    const { profilerExport } = await import("./export");
+    const run = {
+      results: [],
+      failures: [],
+      aborted: null,
+      notRun: [],
+      cancelled: false,
+      gpuTiming: "unavailable" as const,
+      invalidated: [],
+    };
+    const coverage = {
+      catalogs: [],
+      totals: { expected: 0, available: 0, unsupported: 0, uncovered: 0 },
+      complete: false,
+    };
+    const environment = {
+      userAgent: "test",
+      gpu: null,
+      width: 1,
+      height: 1,
+      pixelRatio: 1,
+      quality: "standard",
+    };
+    const options = { frames: 10, warmupFrames: 3, seed: 1 };
+    expect(profilerExport(run, options, environment, coverage, undefined, "paused").isolation).toBe(
+      "paused",
+    );
+    expect(
+      JSON.parse(JSON.stringify(profilerExport(run, options, environment, coverage))).isolation,
+    ).toBe("shared");
   });
 });

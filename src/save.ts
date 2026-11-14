@@ -1,3 +1,6 @@
+import type { DeckBuilderStep } from "./deck-builder";
+import { rewardPresentations } from "./reward-presentation";
+import { coinEntry, ledgerTotal, rewardEffects, type RewardEntry } from "./stage-rewards";
 import type { CardBlock } from "./cards";
 import { Registry } from "./core/registry";
 import type { Dealer } from "./dealer";
@@ -12,6 +15,16 @@ import "./transmogrifiers";
 import "./nothingifier";
 import { restoreModifierRegisters } from "./modifier-registers";
 import { rackTraitPersistence } from "./rack-trait-persistence";
+// Registers the nested payload and playable card codecs a save may need (#927).
+import "./playable-payload";
+import {
+  ownedIdentities,
+  restoreActiveObjects,
+  saveActiveObjects,
+  type SavedActiveObject,
+} from "./active-objects";
+// Registers how a passive's instance configuration is saved and restored (#876).
+import "./configurable-passive";
 import { asGenerated } from "./card-ownership";
 import { type CardState } from "./card-material";
 import { applyCardStates } from "./card-states";
@@ -75,6 +88,11 @@ export type SaveRecord = {
     boughtCards?: SavedCard[];
     /** Cards made on the field during play (#424), saved in full; absent when there are none. */
     generatedCards?: SavedCard[];
+    /**
+     * Run-owned active instances (#894; src/active-objects.ts), by ID: rebuilt through their
+     * registered definitions and component codecs. Additive and optional; absent when none.
+     */
+    activeObjects?: Record<string, SavedActiveObject>;
     /** Cards removed for the rest of the run (#156), by id; absent when none. */
     removedCards?: string[];
     /** Cards whose material changed this run, by id (#387); absent in older saves. */
@@ -92,6 +110,8 @@ export type SaveRecord = {
    * setup existed, and in runs whose deck does not depend on one.
    */
   seed?: number;
+  /** The deck-builder recipe a `deckBuilder` step dealt from (#827); additive, absent before it. */
+  deckRecipe?: readonly DeckBuilderStep[];
   /** The session's random seed and its sequence position, so Continue resumes it (#134). */
   random?: { seed: number; position: number };
   /** Resolved actions, so a duplicate submission is still rejected after Continue (#661). */
@@ -141,6 +161,25 @@ function savedScene(record: SaveRecord): SceneName | null {
     : null;
 }
 
+/** Restored retired actives: active records whose instances were removed for the run (#928). */
+function retiredField(
+  activeObjects: readonly CardBlock[],
+  removedCards: readonly string[],
+  byId: ReadonlyMap<string, CardBlock>,
+) {
+  const removed = new Set(removedCards);
+  const retiredActives = activeObjects
+    .filter(({ id }) => removed.has(id))
+    .map(({ id }) => byId.get(id)!);
+  return retiredActives.length ? { retiredActives } : {};
+}
+
+/** The save's `activeObjects` field: present only when the run holds active instances. */
+function activeObjectsField(blocks: readonly CardBlock[]) {
+  const activeObjects = saveActiveObjects(blocks);
+  return Object.keys(activeObjects).length ? { activeObjects } : {};
+}
+
 export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGameFlow): SaveRecord {
   const ids = (blocks: readonly CardBlock[]) => blocks.map(({ id }) => id);
   const { state } = snapshot;
@@ -165,6 +204,14 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
       ...(state.generatedCards?.length
         ? { generatedCards: state.generatedCards.map(saveCard) }
         : {}),
+      ...activeObjectsField([
+        ...state.field.map(({ block }) => block),
+        ...state.hand,
+        ...state.deck,
+        ...state.discardPile,
+        // Retired actives (#928): removed for the run, still recorded so removal accounts for them.
+        ...(state.retiredActives ?? []),
+      ]),
       ...(state.cardStates && Object.keys(state.cardStates).length
         ? { cardStates: structuredClone(state.cardStates) }
         : {}),
@@ -175,6 +222,9 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
     ...(snapshot.stats ? { stats: { ...snapshot.stats } } : {}),
     ...(snapshot.rewarded ? { rewarded: snapshot.rewarded } : {}),
     ...(snapshot.seed === undefined ? {} : { seed: snapshot.seed }),
+    ...(snapshot.deckRecipe === undefined
+      ? {}
+      : { deckRecipe: structuredClone(snapshot.deckRecipe) as DeckBuilderStep[] }),
     ...(snapshot.random === undefined ? {} : { random: snapshot.random }),
     ...(snapshot.actions
       ? { actions: { counter: snapshot.actions.counter, explicit: [...snapshot.actions.explicit] } }
@@ -193,6 +243,7 @@ export function fromSaveRecord(
     const record = value as SaveRecord;
     if (record?.version !== saveVersion) return null;
     if (record.seed !== undefined && parseSeed(record.seed).seed === undefined) return null;
+    if (record.deckRecipe !== undefined && !parseDeckRecipe(record.deckRecipe)) return null;
     if (!Number.isInteger(record.round) || record.round < 1) return null;
     const phase = phaseForScene(flow, savedScene(record));
     if (!phase) return null;
@@ -206,11 +257,35 @@ export function fromSaveRecord(
     const generatedCards = (record.state.generatedCards ?? []).map((saved) =>
       asGenerated(restoreCard(saved)),
     );
-    const runCards = [...cards, ...boughtCards, ...generatedCards].map((card) =>
-      applyCardStates(card, cardStates),
+    // Run-owned active instances (#894), rebuilt through their registered definitions.
+    // One store per instance: a starting-deck card that is the same active instance (same ID and
+    // definition) is rebuilt from it, with its record's components; any other shared ID is still
+    // a conflict.
+    const sameInstance = (id: string, definition: string) =>
+      cards.find((card) => card.id === id && card.traits.active?.definition === definition);
+    const activeObjects = restoreActiveObjects(record.state.activeObjects, sameInstance);
+    const startingCards = cards.filter(
+      (card) =>
+        !activeObjects.some(
+          (active) =>
+            active.id === card.id &&
+            active.traits.active?.definition === card.traits.active?.definition,
+        ),
+    );
+    const runCards = [...startingCards, ...boughtCards, ...generatedCards, ...activeObjects].map(
+      (card) => applyCardStates(card, cardStates),
     );
     const byId = new Map(runCards.map((card) => [card.id, card]));
     if (byId.size !== runCards.length) return null;
+    // Identities owned by saved components (a stored payload's) are their own (#927): not a
+    // run card's, a removed card's, or another component's.
+    const reserved = new Set(record.state.removedCards ?? []);
+    const owned = ownedIdentities(record.state.activeObjects, reserved);
+    if (
+      new Set(owned).size !== owned.length ||
+      owned.some((id) => byId.has(id) || reserved.has(id))
+    )
+      return null;
     if (Object.keys(cardStates ?? {}).some((id) => !byId.has(id))) return null;
     const seen = new Set<string>();
     const resolve = (id: unknown): CardBlock => {
@@ -272,6 +347,8 @@ export function fromSaveRecord(
         : {}),
       ...(cardStates ? { cardStates } : {}),
       ...(removedCards.length ? { removedCards } : {}),
+      // Retired active instances (#928): the removed ones the save rebuilt from activeObjects.
+      ...retiredField(activeObjects, removedCards, byId),
       coins: nonnegativeInteger(state.coins ?? 0),
       round: {
         score: number(state.round.score),
@@ -291,6 +368,9 @@ export function fromSaveRecord(
       stats: parseRunStats(record.stats),
       ...parseRewarded(record.rewarded),
       ...parseSeed(record.seed),
+      ...(record.deckRecipe === undefined
+        ? {}
+        : { deckRecipe: parseDeckRecipe(record.deckRecipe)! }),
       ...parseRandom(record.random),
       ...parseActions(record.actions),
     };
@@ -330,11 +410,60 @@ function parseRandom(value: unknown): { random: RandomCursor } | Record<string, 
   return { random: { seed, position } };
 }
 
+/** A saved deck-builder recipe: a list of named operations, or null when it isn't one. */
+function parseDeckRecipe(value: unknown): DeckBuilderStep[] | null {
+  if (!Array.isArray(value)) return null;
+  const valid = value.every(
+    (step) =>
+      step !== null &&
+      typeof step === "object" &&
+      typeof (step as DeckBuilderStep).operation === "string",
+  );
+  return valid ? (structuredClone(value) as DeckBuilderStep[]) : null;
+}
+
 /** A saved deck seed; nothing when the run was dealt no seeded deck. */
 function parseSeed(value: unknown): { seed: number } | Record<string, never> {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 4294967296
     ? { seed: value }
     : {};
+}
+
+/**
+ * One saved ledger row (#729): the typed form (effects, each validated by its registered handler,
+ * and a presentation name, resolved by the screen that shows it), or an older coin-only row ({ source, label, coins }), read as
+ * the same coin row it always was, never reissued. Anything else is refused.
+ */
+function parseRewardEntry(value: unknown): RewardEntry {
+  const row = value as Partial<RewardEntry> & { coins?: unknown };
+  if (
+    !row ||
+    typeof row.source !== "string" ||
+    !row.source ||
+    typeof row.label !== "string" ||
+    !row.label
+  )
+    throw new Error("bad reward entry");
+  if (row.effects === undefined) {
+    const coins = row.coins;
+    if (typeof coins !== "number" || !Number.isSafeInteger(coins) || coins < 0)
+      throw new Error("bad reward entry");
+    return coinEntry(row.source, row.label, coins);
+  }
+  // The presentation must be registered: a receipt the screen can't show is refused at load,
+  // not when its row is due to appear (#731 review).
+  if (
+    !Array.isArray(row.effects) ||
+    typeof row.presentation !== "string" ||
+    !rewardPresentations.has(row.presentation)
+  )
+    throw new Error("bad reward entry");
+  const effects = row.effects.map((effect: unknown) => {
+    const { id, config } = (effect ?? {}) as { id?: unknown; config?: unknown };
+    if (typeof id !== "string" || !rewardEffects.has(id)) throw new Error("bad reward effect");
+    return { id, config: rewardEffects.get(id).validate(config) };
+  });
+  return { source: row.source, label: row.label, effects, presentation: row.presentation };
 }
 
 /** A saved paid-stage marker; malformed data must never permit a second payout. */
@@ -350,22 +479,11 @@ function parseRewarded(
     !Array.isArray(saved.reward?.entries)
   )
     throw new Error("bad paid-stage marker");
-  const entries = saved.reward.entries.map(({ source, label, coins }) => {
-    if (
-      typeof source !== "string" ||
-      !source ||
-      typeof label !== "string" ||
-      !label ||
-      !Number.isSafeInteger(coins) ||
-      coins < 0
-    )
-      throw new Error("bad reward entry");
-    return { source, label, coins };
-  });
+  const entries = (saved.reward.entries as unknown[]).map(parseRewardEntry);
   const balanceBefore = nonnegativeInteger(saved.reward.balanceBefore);
   const balance = nonnegativeInteger(saved.reward.balance);
-  if (balance !== balanceBefore + entries.reduce((total, entry) => total + entry.coins, 0))
-    throw new Error("bad reward balance");
+  // Only coin effects count toward the balance; a non-cash row validates on its own (#729).
+  if (balance !== balanceBefore + ledgerTotal(entries)) throw new Error("bad reward balance");
   return {
     rewarded: {
       stage: saved.stage,
@@ -421,7 +539,9 @@ export function loadRun(
    * The deck to resolve a saved run's cards against. A function when the deck depends on the
    * run (a material mix rebuilt from its own seed); `fromSaveRecord` parses that seed first.
    */
-  cards: readonly CardBlock[] | ((seed: number | undefined) => readonly CardBlock[]),
+  cards:
+    | readonly CardBlock[]
+    | ((seed: number | undefined, recipe?: readonly DeckBuilderStep[]) => readonly CardBlock[]),
   dealers: Registry<Dealer>,
   key = saveKey,
   flow: SaveFlow = standardGameFlow,
@@ -440,7 +560,10 @@ export function loadRun(
     // Validate before resolving card IDs: a fresh material deck would silently change them.
     const seed = parseSeed(record.seed).seed;
     if (seed === undefined && (requiresSeed || record.seed !== undefined)) return null;
-    const selected = typeof cards === "function" ? cards(seed) : cards;
+    if (record.deckRecipe !== undefined && !parseDeckRecipe(record.deckRecipe)) return null;
+    const recipe =
+      record.deckRecipe === undefined ? undefined : parseDeckRecipe(record.deckRecipe)!;
+    const selected = typeof cards === "function" ? cards(seed, recipe) : cards;
     return fromSaveRecord(record, selected, dealers, flow);
   } catch {
     return null;
@@ -532,13 +655,22 @@ function saveRackItem(block: PassiveBlock): SavedRackItem {
   };
 }
 
+/** Joins a restored trait to an item by setting it. */
+const setTrait =
+  (name: string) =>
+  (block: PassiveBlock, restored: unknown): PassiveBlock => ({
+    ...block,
+    traits: { ...block.traits, [name]: restored },
+  });
+
 function restoreRackItem(saved: SavedRackItem): PassiveBlock {
-  const block = createPassiveBlock(saved.definitionId, saved.id);
-  const traits = Object.fromEntries(
-    Object.entries(saved.traits ?? {}).map(([name, value]) => [
-      name,
-      rackTraitPersistence.get(name).restore(value),
-    ]),
+  // Each saved trait is restored, then joins the item as its persistence says (#876).
+  return Object.entries(saved.traits ?? {}).reduce(
+    (block, [name, value]) => {
+      const persistence = rackTraitPersistence.get(name);
+      const restored = persistence.restore(value);
+      return (persistence.attach ?? setTrait(name))(block, restored);
+    },
+    createPassiveBlock(saved.definitionId, saved.id),
   );
-  return { ...block, traits: { ...block.traits, ...traits } };
 }

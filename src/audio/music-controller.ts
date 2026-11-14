@@ -1,24 +1,115 @@
 /**
- * The one place that decides music transitions. The game says what to play ("title
- * music", "a random stage track", "wind down") and the controller picks tracks from the
- * music plan and tells the player how to get there. Requests made before the browser allows
- * audio are remembered and played on the first gesture.
+ * The music controller: an orchestrator of configured operations (#758; doc/presentation-
+ * contracts.md, "Configured music operations"). A cue is an ordered list of registered
+ * operations (`selectTrack`, `rememberTrack`, `resumeTrack`, `windDown`, `windUp`, `filter`),
+ * each naming a plan entry or memory slot by opaque handle; selectors are registered policies.
+ * Nothing here knows a scene. Requests made before the browser allows audio are remembered and
+ * played on the first gesture.
  *
  * It remembers the record player's state: once wound down, the next music winds back up
  * from a standstill instead of fading in.
  */
-import { defaultMusicPlan, pickTrack, type MusicPlan } from "./music-plan";
+import { Registry } from "../core/registry";
+import { defaultMusicPlan, type MusicPlan } from "./music-plan";
 import type { MusicPlayer } from "./music-player";
 
+/** One step of a music cue: a registered operation and its configuration. */
+export type MusicOperation = { op: string; config?: unknown };
+
+/** A plan entry: the tracks it chooses among, the selector that chooses, and its memory slot. */
+export type MusicPlanEntry = {
+  tracks: readonly string[];
+  selector: string;
+  /** Where the chosen track is remembered, for a later `resumeTrack`. */
+  slot?: string;
+};
+export type MusicPlans = Readonly<Record<string, MusicPlanEntry>>;
+
+/**
+ * A registered selection policy: the track to play from `tracks` (only those available), or
+ * `undefined` to keep what is playing, or null when there is nothing to play.
+ */
+export type MusicSelector = (
+  tracks: readonly string[],
+  context: { current: string | null; previous: string | null; random: () => number },
+) => string | null | undefined;
+export const musicSelectors = new Registry<MusicSelector>("music selector");
+
+const randomFrom = (ids: readonly string[], random: () => number) =>
+  ids.length ? ids[Math.floor(random() * ids.length)]! : null;
+
+// A random track, never the slot's previous one when there is any other choice.
+musicSelectors.register("randomNoImmediateRepeat", (tracks, { previous, random }) =>
+  randomFrom(tracks.length > 1 ? tracks.filter((id) => id !== previous) : tracks, random),
+);
+// The plan's one track.
+musicSelectors.register("fixed", (tracks) => tracks[0] ?? null);
+// Keep a track of this selection already playing; otherwise a random one (the title's music).
+musicSelectors.register("keepOrRandom", (tracks, { current, random }) =>
+  current !== null && tracks.includes(current) ? undefined : randomFrom(tracks, random),
+);
+
+/** What an operation may ask of the controller. */
+export type MusicOperationApi = {
+  select(plan: string): void;
+  remember(slot: string): void;
+  resume(slot: string, fallbackPlan?: string): void;
+  windDown(): void;
+  windUp(): void;
+  filter(kind: MusicFilter | null): void;
+};
+export type MusicOperationHandler = (api: MusicOperationApi, config: unknown) => void;
+export const musicOperations = new Registry<MusicOperationHandler>("music operation");
+
+musicOperations.register("selectTrack", (api, raw) => api.select((raw as { plan: string }).plan));
+musicOperations.register("rememberTrack", (api, raw) =>
+  api.remember((raw as { slot: string }).slot),
+);
+musicOperations.register("resumeTrack", (api, raw) => {
+  const { slot, plan } = raw as { slot: string; plan?: string };
+  api.resume(slot, plan);
+});
+musicOperations.register("windDown", (api) => api.windDown());
+musicOperations.register("windUp", (api) => api.windUp());
+musicOperations.register("filter", (api, raw) =>
+  api.filter(((raw ?? {}) as { kind?: MusicFilter | null }).kind ?? null),
+);
+
+/** Everything wrong with a cue: unknown operations fail at composition, never fall back. */
+export function validateMusicOperations(
+  owner: string,
+  operations: readonly MusicOperation[],
+): string[] {
+  return operations
+    .filter(({ op }) => !musicOperations.has(op))
+    .map(({ op }) => `${owner}: unknown music operation "${op}"`);
+}
+
+/**
+ * The default plans, resolved once from the available loops: the title's tracks; the ordinary
+ * stage plan, every loop except the reserved ones; the boss loop. Both table plans remember their
+ * choice in the `tableMusic` slot.
+ */
+export function composeMusicPlans(
+  tracks: readonly string[],
+  plan: MusicPlan = defaultMusicPlan,
+): MusicPlans {
+  const available = (ids: readonly string[]) => ids.filter((id) => tracks.includes(id));
+  const reserved = new Set([plan.boss]);
+  return {
+    title: { tracks: available(plan.title), selector: "keepOrRandom" },
+    stage: {
+      tracks: tracks.filter((id) => !reserved.has(id)),
+      selector: "randomNoImmediateRepeat",
+      slot: "tableMusic",
+    },
+    boss: { tracks: available([plan.boss]), selector: "fixed", slot: "tableMusic" },
+  };
+}
+
 export type MusicController = {
-  /** Horns or sleaze; keeps playing if a title track already is. */
-  playTitle(): void;
-  /** A new normal stage: switch to a random stage vibe (never the same one twice running). */
-  switchToRandomStageTrack(): void;
-  /** A boss stage: switch to the boss loop. */
-  switchToBossTrack(): void;
-  /** Back to the table (from the title or a lost run's screen): the current stage's track. */
-  resumeStage(): void;
+  /** Run a cue: its operations in order (selection and memory at once, playback on unlock). */
+  run(operations: readonly MusicOperation[]): void;
   /**
    * Filter whatever is playing, easing over about 2 s; the track does not change. `lowpass`
    * muffles it (the pause menu), `highpass` thins it (Settings), and null clears both. Setting
@@ -63,7 +154,7 @@ export function createMusicController(
     | "clearHighPass"
   >,
   tracks: readonly string[],
-  plan: MusicPlan = defaultMusicPlan,
+  plans: MusicPlans = composeMusicPlans(tracks),
   random: () => number = Math.random,
 ): MusicController {
   let unlocked = false;
@@ -77,13 +168,22 @@ export function createMusicController(
       off: () => player.clearHighPass(muffleSeconds),
     },
   };
-  /** The loop for the current stage, kept while visiting settings. */
-  let stageTrack: string | null = null;
+  /**
+   * Memory slots (`tableMusic`): a track remembered within the session, never saved. A fresh
+   * Continue begins with them empty and uses the configured resume path.
+   */
+  const slots = new Map<string, string>();
+  /**
+   * The track that is logically playing: every cue and transport call updates it at once, before
+   * its deferred playback, so later operations (in the same cue or a later one) observe earlier
+   * ones however long a track takes to load (#855 review). Null while silent or wound down.
+   */
+  let logicalCurrent: string | null = null;
+  /** What the last logical wind-down stopped, for a later wind-up. */
+  let logicalBeforeDown: string | null = null;
   /** The last request, replayed on unlock. */
   let wanted: () => void = () => {};
   let woundDown = false;
-  /** What was playing when the music wound down, for windUp(). */
-  let beforeWindDown: string | null = null;
 
   const request = (action: () => void) => {
     wanted = action;
@@ -102,47 +202,105 @@ export function createMusicController(
       void player.play(id);
     }
   };
-  const playStage = () => {
-    stageTrack ??= pickTrack("stage", tracks, random);
-    start(stageTrack);
+  const applyFilter = (kind: MusicFilter | null) => {
+    // The filter asked for comes on and every other one goes off.
+    for (const [name, filter] of Object.entries(filters)) {
+      if (name === kind) filter.on();
+      else filter.off();
+    }
+  };
+
+  /**
+   * Choose from a plan entry now (so its slot is set at once), returning the playback to do: a
+   * selector that keeps the current track while it plays only spins it back up from a wind-down.
+   */
+  /** The start to queue, or null when the selector keeps the logically playing track. */
+  const choose = (name: string): (() => void) | null => {
+    if (!Object.hasOwn(plans, name)) throw new Error(`no music plan "${name}"`);
+    const entry = plans[name]!;
+    const previous = entry.slot ? (slots.get(entry.slot) ?? null) : null;
+    // Wound down, nothing counts as playing: a keeping selector chooses afresh.
+    const chosen = musicSelectors.get(entry.selector)(entry.tracks, {
+      current: logicalCurrent,
+      previous,
+      random,
+    });
+    if (chosen && entry.slot) slots.set(entry.slot, chosen);
+    // A keeping selector leaves the logically playing track as it is.
+    if (chosen) logicalCurrent = chosen;
+    return chosen === undefined ? null : () => start(chosen);
+  };
+
+  const run = (operations: readonly MusicOperation[]) => {
+    // Playback steps, each marked as a track start or not. Consecutive starts collapse to the
+    // last: a superseded selection is never requested, so it can't finish loading over the
+    // final one (#855 review).
+    const playback: { starts: boolean; run: () => void }[] = [];
+    const queue = (starts: boolean, run: () => void) => {
+      if (starts && playback.at(-1)?.starts) playback.pop();
+      playback.push({ starts, run });
+    };
+
+    const api: MusicOperationApi = {
+      // A keep queues nothing, so it never displaces a start already queued (#855 review).
+      select: (plan) => {
+        const step = choose(plan);
+        if (step) queue(true, step);
+      },
+      remember: (slot) => {
+        // What the cue has logically made current, not what is still audibly playing.
+        if (logicalCurrent) slots.set(slot, logicalCurrent);
+      },
+      resume: (slot, fallbackPlan) => {
+        const remembered = slots.get(slot);
+        if (remembered) {
+          logicalCurrent = remembered;
+          queue(true, () => start(remembered));
+        } else if (fallbackPlan) {
+          const step = choose(fallbackPlan);
+          if (step) queue(true, step);
+        }
+      },
+      // Each deferred step carries its logical target, captured now: the real player updates
+      // `current` only once a track has loaded, so playback must never read it back (#855 review).
+      windDown: () => {
+        if (logicalCurrent !== null) logicalBeforeDown = logicalCurrent;
+        logicalCurrent = null;
+        queue(false, () => {
+          if (woundDown) return;
+          woundDown = true;
+          player.windDown();
+        });
+      },
+      windUp: () => {
+        const restored = logicalBeforeDown;
+        logicalCurrent = restored;
+        queue(true, () => start(restored));
+      },
+      // Not playback: a filter applies to whatever plays, so it never replaces a request.
+      filter: applyFilter,
+    };
+    for (const { op, config } of operations) musicOperations.get(op)(api, config);
+    if (playback.length) request(() => playback.forEach(({ run }) => run()));
   };
 
   return {
-    playTitle: () =>
-      request(() => {
-        if (woundDown || !plan.title.includes(player.current ?? ""))
-          start(pickTrack("title", tracks, random));
-      }),
-    switchToRandomStageTrack() {
-      stageTrack = pickTrack("stage", tracks, random, stageTrack);
-      request(playStage);
-    },
-    switchToBossTrack() {
-      stageTrack = pickTrack("boss", tracks, random);
-      request(playStage);
-    },
-    resumeStage: () => request(playStage),
-    // Not a request: the filter applies to whatever plays, so it never replaces one.
-    filter(kind) {
-      // The filter asked for comes on and every other one goes off.
-      for (const [name, filter] of Object.entries(filters)) {
-        if (name === kind) filter.on();
-        else filter.off();
-      }
-    },
-    windDown: () =>
-      request(() => {
-        if (woundDown) return;
-        beforeWindDown = player.current;
-        woundDown = true;
-        player.windDown();
-      }),
-    windUp: () => request(() => start(beforeWindDown)),
+    run,
+    filter: applyFilter,
+    // The public transport goes through the same logical model as configured cues.
+    windDown: () => run([{ op: "windDown" }]),
+    windUp: () => run([{ op: "windUp" }]),
     get woundDown() {
       return woundDown;
     },
-    play: (id) => request(() => start(id)),
-    stop: () => request(() => player.stop()),
+    play: (id) => {
+      logicalCurrent = id;
+      request(() => start(id));
+    },
+    stop: () => {
+      logicalCurrent = null;
+      request(() => player.stop());
+    },
     unlock() {
       player.unlock();
       if (unlocked) return;

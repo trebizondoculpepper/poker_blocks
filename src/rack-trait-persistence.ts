@@ -5,6 +5,7 @@
  * src/transmogrifiers.ts).
  */
 import { Registry } from "./core/registry";
+import type { PassiveBlock } from "./passives";
 
 /**
  * How a rack item's trait is saved and restored, keyed by trait name. The save service runs
@@ -14,6 +15,12 @@ import { Registry } from "./core/registry";
 export type RackTraitPersistence = {
   save(value: unknown): unknown;
   restore(saved: unknown): unknown;
+  /**
+   * How the restored value joins the restored item. Omitted, it is set as the trait; a trait
+   * whose value derives other state (a passive's configuration rebuilds its rules, #876)
+   * rebuilds it here.
+   */
+  attach?(block: PassiveBlock, restored: unknown): PassiveBlock;
 };
 export const rackTraitPersistence = new Registry<RackTraitPersistence>("rack trait persistence");
 

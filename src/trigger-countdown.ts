@@ -45,11 +45,12 @@ const withCount = (card: CardBlock, left: number): CardBlock => ({
 });
 
 /**
- * Count down every counting block on the table after a committed play, and trigger each that
- * reaches zero through the shared command path. `placed` are the blocks this play put down: they
- * count only when their configuration says the placement counts. Returns the events caused.
+ * Count down every counting block on the table for a committed play, before it scores (#658;
+ * doc/game-events.md, "Resolution order for a play"). `placed` are the blocks this play put down:
+ * they count only when their configuration says the placement counts. Returns the blocks that
+ * reached zero, in field order: pending triggers, detonated after scoring, never before.
  */
-export function commitCountdowns(target: CommandTarget, placed: ReadonlySet<string>): GameEvent[] {
+export function deductCountdowns(target: CommandTarget, placed: ReadonlySet<string>): string[] {
   const reached: string[] = [];
   const state = target.state;
   const counts: Record<string, number> = {};
@@ -70,10 +71,26 @@ export function commitCountdowns(target: CommandTarget, placed: ReadonlySet<stri
   for (const [id, left] of Object.entries(counts))
     cardStates[id] = { ...cardStates[id], countdown: left };
   target.update({ ...state, field, cardStates });
+  return reached;
+}
+
+/**
+ * Trigger the pending countdowns, in the order they were found, after scoring. A source an
+ * earlier step removed is no longer on the table and is skipped, so nothing detonates twice.
+ */
+export function detonateCountdowns(target: CommandTarget, pending: readonly string[]): GameEvent[] {
+  const stillThere = pending.filter((id) =>
+    target.state.field.some(({ block }) => block.id === id),
+  );
   return commitCommands(
-    reached.map((blockId) => ({ id: "trigger-block", config: { blockId, cause: "countdown" } })),
+    stillThere.map((blockId) => ({ id: "trigger-block", config: { blockId, cause: "countdown" } })),
     target,
   );
+}
+
+/** Count down and trigger at once (deduct, then detonate): for callers outside a play's phases. */
+export function commitCountdowns(target: CommandTarget, placed: ReadonlySet<string>): GameEvent[] {
+  return detonateCountdowns(target, deductCountdowns(target, placed));
 }
 
 /** Every countdown back to its start as the table clears: trait and ledger entry both go. */

@@ -66,8 +66,8 @@
     "uses": 3,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
-      "game-run.ts": 1,
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1,
+      "game-run.ts": 1
     }
   },
   "block.dazzle_pop": {
@@ -81,12 +81,12 @@
     "files": {}
   },
   "action.denied": {
-    "uses": 10,
+    "uses": 11,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 2,
-      "menus.ts": 1,
+      "game-run-controller.ts": 1,
       "purchase-refusals.ts": 1,
-      "run-controller.ts": 1,
+      "scene-traits/dev-bench-panel.ts": 2,
       "table-input.ts": 4,
       "traits/menu-action.ts": 1
     }
@@ -144,13 +144,13 @@
   "round.cleared": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "round.failed": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "round.start": {
@@ -173,16 +173,22 @@
     }
   },
   "shop.stock.land": {
-    "uses": 2,
+    "uses": 3,
     "files": {
-      "audio/sfx-registry.ts (placeholder)": 1,
+      "audio/sfx-registry.ts (placeholder)": 2,
       "shop-view.ts": 1
     }
   },
   "shop.buy": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
+    }
+  },
+  "block.open": {
+    "uses": 1,
+    "files": {
+      "opaque-opening.ts": 1
     }
   },
   "celebration.pop": {
@@ -212,13 +218,13 @@
   "shop.stock.burn": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "run.lost": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "attract.card.bonk": {
@@ -228,28 +234,30 @@
     }
   },
   "ui.click": {
-    "uses": 41,
+    "uses": 44,
     "files": {
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 3,
       "game-modes.ts": 2,
-      "menus.ts": 5,
-      "run-controller.ts": 1,
+      "game-run-controller.ts": 1,
+      "menus.ts": 4,
+      "scene-traits/dev-bench-panel.ts": 1,
       "settings-panel.ts": 7,
       "tools/block-designer.ts": 3,
       "tools/contained-proof/room.ts": 4,
-      "tools/crystal-comparison/room.ts": 3,
+      "tools/crystal-comparison/room.ts": 4,
       "tools/dialog-room.ts": 1,
-      "tools/profiler/room.ts": 4,
+      "tools/object-browser.ts": 1,
+      "tools/profiler/room.ts": 5,
       "tools/shop-balance-editor.ts": 6,
       "traits/menu-action.ts": 1
     }
   },
   "ui.hover": {
-    "uses": 4,
+    "uses": 3,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
-      "menus.ts": 2,
+      "menus.ts": 1,
       "traits/menu-action.ts": 1
     }
   },
@@ -277,16 +285,17 @@
     }
   },
   "view.rotate": {
-    "uses": 2,
+    "uses": 3,
     "files": {
       "game-modes.ts": 1,
-      "tools/crystal-comparison/room.ts": 1
+      "tools/crystal-comparison/room.ts": 1,
+      "tools/object-browser.ts": 1
     }
   },
   "reward.coin": {
     "uses": 2,
     "files": {
-      "menus.ts": 1,
+      "reward-presentation.ts": 1,
       "table-input.ts": 1
     }
   },
@@ -388,7 +397,7 @@
   "shop.leave": {
     "uses": 1,
     "files": {
-      "run-controller.ts": 1
+      "game-run-controller.ts": 1
     }
   },
   "material.activate.wood": {

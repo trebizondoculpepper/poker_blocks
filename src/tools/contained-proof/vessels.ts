@@ -11,6 +11,7 @@
  *
  * Developer-only: nothing in the game imports this.
  */
+import { disposeMaterials } from "../../visual/dispose-materials";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { materialPools } from "../../materials";
@@ -110,7 +111,7 @@ const custard: VesselBuilder = ({ environment }) => {
     samples: 0,
     dispose() {
       new Set(shell).forEach((material) => material.dispose());
-      extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+      extras.forEach(disposeMaterials);
       (print.material as THREE.Material).dispose();
       (print.userData.texture as THREE.Texture).dispose();
     },

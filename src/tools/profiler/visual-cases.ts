@@ -39,6 +39,7 @@ for (const definition of allMaterials()) {
   profilingCases.register(`letter:${definition.id}`, {
     family: "letter block",
     label: `${definition.name} letter`,
+    variant: "one letter, A to Z by seed",
     defaultCount: 25,
     async create({ seed }) {
       const letter = await createLetterBlock("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[seed % 26]!, {
@@ -51,6 +52,7 @@ for (const definition of allMaterials()) {
   profilingCases.register(`menu-cube:${definition.id}`, {
     family: "menu cube",
     label: `${definition.name} menu cube`,
+    variant: "the word Play",
     defaultCount: 9,
     async create({ seed }) {
       const cube = await createWordCube("Play", {
@@ -114,7 +116,13 @@ for (const definition of withExit())
     family: "exit effect",
     label: `${definition.name} exit`,
     defaultCount: 9,
-    phases: Object.keys(exitPhases),
+    // One instance is one complete exit (an emitter); its exit phase restarts each block as
+    // its sequence ends, so no sampled frame shows a finished exit (#711).
+    unit: { kind: "emitter", size: 1 },
+    phases: [
+      { name: "idle", sampling: "steady" },
+      { name: "exit", sampling: "restarting" },
+    ],
     create: ({ seed, phase }) => exitPhases[phase ?? "idle"]!(definition, seed),
   });
 

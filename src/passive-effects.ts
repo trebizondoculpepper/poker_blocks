@@ -1,3 +1,4 @@
+import type { ResolvedOutcome } from "./event-rules";
 import type { PlacedBlock } from "./game-state";
 import { withOperationCounter } from "./lifecycle/operations";
 import type { EventRule, RuleCommand } from "./event-rules";
@@ -22,19 +23,50 @@ import { scorableValue } from "./traits/scorable";
 export type RuleActivation = {
   /** Who brought the rule: a passive's instance id, or a card's id for its own (material) rules. */
   sourceId: string;
+  /**
+   * The source's description as it was when the rule fired (#483), so delayed presentation
+   * never describes a card or passive that has changed or gone since.
+   */
+  sourceDescription: string;
   on: string;
   /** On `score.beforeBlockValue`: the contributing block the rule changed. */
   blockId?: string;
   /** Commands the rule's effects collected, for the game run to commit. */
   commands: readonly RuleCommand[];
+  /**
+   * What each of its effects did, as resolved when they applied (#483): presentation reads
+   * these and never re-evaluates a rule, rolls again or infers an operation from a change.
+   */
+  outcomes: readonly ResolvedOutcome[];
+  /**
+   * Distinct for each committed activation, repeated triggers included, and its place in the
+   * committed order. Set where activations are committed (a scored line, an action).
+   */
+  activationId?: string;
+  order?: number;
 };
+
+/** Number a committed list of activations: each its own ID under `prefix`, in order (#483). */
+export function numberActivations(
+  activations: readonly RuleActivation[],
+  prefix: string,
+  start = 0,
+): RuleActivation[] {
+  return activations.map((activation, index) => ({
+    ...activation,
+    activationId: `${prefix}#${start + index}`,
+    order: start + index,
+  }));
+}
 
 export type PassiveScoredLine = ScoredLine & { activations: readonly RuleActivation[] };
 
 /** Something that brings event rules: an installed passive, or a card with its own rules. */
-type RuleSource = { id: string; rules: readonly EventRule[] };
+/** A rule's source, with its description captured as it is now (#858 review). */
+type RuleSource = { id: string; description: string; rules: readonly EventRule[] };
 const passiveSource = (passive: PassiveBlock): RuleSource => ({
   id: passive.id,
+  description: passive.traits.inspectable.inspect(),
   rules: passive.traits.passive.eventRules ?? [],
 });
 const cardSource = (
@@ -42,6 +74,7 @@ const cardSource = (
   rulesForCard: (block: CardBlock) => EventRule[],
 ): RuleSource => ({
   id: block.id,
+  description: block.traits.inspectable?.inspect() ?? block.id,
   rules: rulesForCard(block),
 });
 
@@ -96,9 +129,11 @@ function evaluateRules(
     if (frame.fired)
       activations.push({
         sourceId: source.id,
+        sourceDescription: source.description,
         on: rule.on,
         blockId: event.score?.block?.id,
         commands: frame.commands,
+        outcomes: frame.outcomes ?? [],
       });
   }
   return { value, activations };
@@ -131,15 +166,33 @@ function scoreLines(
   random: () => number,
 ): PassiveScoredLine[] {
   const lines = findScoringLines(field);
+  // One snapshot for the whole pass, so every row's context queries read (and cache) the same
+  // committed field (doc/experiments/spatial-modifiers.md, "Scoring scope and frequency").
+  const snapshot = { field };
   // One resolution: each passive's value sources (a die's roll) resolve once, here, before any
   // candidate hand is evaluated, and the same values apply to every line (#97).
-  const passives = rack.map((passive) => {
-    const source = passiveSource(passive);
-    return {
-      ...source,
-      rules: source.rules.map((rule) => ruleHandlers.resolveValues(rule, random)),
-    };
-  });
+  // Only line-scoring rules resolve here; every other hook resolves its own values, once, when
+  // it runs (#682 review).
+  // One resolution: a passive rule's value sources (a die's roll) resolve the first time line
+  // scoring evaluates it, once for the whole play, and the same values apply to every line
+  // (#97). A rule line scoring never evaluates is never resolved here, so a rule on any other hook
+  // rolls once, when that hook is delivered (#695 review).
+  // Cached per installed passive and rule: two copies of one die share their definition's rule
+  // objects but roll independently (#695 review).
+  const passives = rack.map(passiveSource);
+  const resolved = new Map(passives.map((source) => [source, new Map<EventRule, EventRule>()]));
+  const resolve = (source: RuleSource, rule: EventRule): EventRule => {
+    const cache = resolved.get(source);
+    if (!cache) return rule;
+    const known = cache.get(rule) ?? ruleHandlers.resolveValues(rule, random);
+    cache.set(rule, known);
+    return known;
+  };
+  const lineRules = (sources: readonly RuleSource[], on: string) =>
+    subscribedRules(sources, on).map((entry) => ({
+      ...entry,
+      rule: resolve(entry.source, entry.rule),
+    }));
   return lines.map((line) => {
     const intersections = crossingCells(line, lines);
     // Evaluate: a block's value is the same in every candidate, so each is worked out once.
@@ -147,7 +200,7 @@ function scoreLines(
       line.blocks.map((block) => [
         block.id,
         evaluateRules(
-          subscribedRules([cardSource(block, rulesForCard), ...passives], "score.beforeBlockValue"),
+          lineRules([cardSource(block, rulesForCard), ...passives], "score.beforeBlockValue"),
           { type: "score.beforeBlockValue", score: { line, intersections, block } },
           scorableValue(block),
         ),
@@ -192,8 +245,11 @@ function scoreLines(
     const phases = linePhases.reduce(
       (previous, phase) => {
         const next = evaluateRules(
-          subscribedRules(sources, phase),
-          { type: phase, score: { line, intersections } },
+          lineRules(sources, phase),
+          {
+            type: phase,
+            score: { line, intersections, snapshot, scoredIds: result.contributingIds },
+          },
           previous.value,
         );
         return { value: next.value, activations: [...previous.activations, ...next.activations] };
@@ -203,8 +259,11 @@ function scoreLines(
     // The line is clamped at zero, then the after-clamp phase adds its flat bonuses.
     const clamped = Math.max(0, phases.value);
     const after = evaluateRules(
-      subscribedRules(sources, afterClampPhase),
-      { type: afterClampPhase, score: { line, intersections } },
+      lineRules(sources, afterClampPhase),
+      {
+        type: afterClampPhase,
+        score: { line, intersections, snapshot, scoredIds: result.contributingIds },
+      },
       clamped,
     );
     // Commit: the chosen hand's contributing blocks, then the line phases.
@@ -219,10 +278,17 @@ function scoreLines(
       blockIds: line.blocks.map(({ id }) => id),
       ...result,
       points: Math.max(0, Math.round(after.value)),
-      activations,
+      // The chosen hand's activations only (candidates never publish), each numbered in this line.
+      activations: numberActivations(
+        activations,
+        `line:${line.blocks.map(({ id }) => id).join(",")}`,
+      ),
     };
   });
 }
+
+/** The aggregate phase: may change a play's total delta, never a finalized line (#682 review). */
+export const beforeTotalPhase = "score.beforeTotalApplied";
 
 /** For callers without the run's random source: fine until a rule tries to draw from it. */
 function noRandomSource(): number {
@@ -230,7 +296,7 @@ function noRandomSource(): number {
 }
 
 /** How many of a line's cells another line on a different axis also passes through. */
-function crossingCells(line: Line, lines: readonly Line[]): number {
+export function crossingCells(line: Line, lines: readonly Line[]): number {
   const ownCells = new Set(line.cells.map(cellKey));
   return line.cells.filter((cell) =>
     lines.some(
@@ -251,6 +317,24 @@ function crossingCells(line: Line, lines: readonly Line[]): number {
 export function passiveActivations(
   passive: PassiveBlock,
   event: Readonly<GameEvent>,
+  random: () => number = noRandomSource,
 ): RuleActivation[] {
-  return evaluateRules(subscribedRules([passiveSource(passive)], event.type), event, 0).activations;
+  return resolvePassiveRules(passive, event, random, 0).activations;
+}
+
+/**
+ * One listener's rules for an event, over a working value: its value sources (a roll) resolve
+ * once, as it is delivered (#682 review), and it returns what the rules leave and what fired.
+ */
+export function resolvePassiveRules(
+  passive: PassiveBlock,
+  event: Readonly<GameEvent>,
+  random: () => number,
+  start: number,
+): { value: number; activations: RuleActivation[] } {
+  const resolved = subscribedRules([passiveSource(passive)], event.type).map((entry) => ({
+    ...entry,
+    rule: ruleHandlers.resolveValues(entry.rule, random),
+  }));
+  return evaluateRules(resolved, event, start);
 }

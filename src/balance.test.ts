@@ -11,7 +11,7 @@ import { defaultResale, resaleValue } from "./resale";
 
 /** Gameplay code that sells a passive, and the UI around it: neither may price it. */
 const transactionSources = import.meta.glob<string>(
-  ["./table-input.ts", "./run-controller.ts", "./passive-rack.ts"],
+  ["./table-input.ts", "./game-run-controller.ts", "./passive-rack.ts"],
   { query: "?raw", import: "default", eager: true },
 );
 

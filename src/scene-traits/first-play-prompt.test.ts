@@ -208,7 +208,7 @@ describe("first-play prompt trait (#203)", () => {
   });
 
   it("guardrail: the ghost's behaviour lives only in this trait", () => {
-    for (const file of ["../field-view.ts", "../run-controller.ts", "../main.ts"]) {
+    for (const file of ["../field-view.ts", "../game-run-controller.ts", "../main.ts"]) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
       expect(source, file).not.toMatch(/showPrompt|promptEntered|promptFirstPlay|pulseSeconds/);
     }

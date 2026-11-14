@@ -183,10 +183,10 @@ These are complete: `card.select`, `card.deselect`, `card.pickup`, `card.drag.sn
 
 | Id                                                              | Played from                            | Note                                                               |
 | --------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------ |
-| `shop.buy`                                                      | run-controller                         | Every purchase is silent. The table above still says planned.      |
+| `shop.buy`                                                      | game-run-controller                    | Every purchase is silent. The table above still says planned.      |
 | `shop.stock.toss`, `shop.stock.land`                            | shop-view                              | The shop's entrance animation is silent                            |
-| `shop.stock.burn`                                               | run-controller                         | Unbought stock burning on leaving is silent                        |
-| `block.destroyed`                                               | game-run, run-controller               | Destruction is silent; the table above lists it as `block.destroy` |
+| `shop.stock.burn`                                               | game-run-controller                    | Unbought stock burning on leaving is silent                        |
+| `block.destroyed`                                               | game-run, game-run-controller          | Destruction is silent; the table above lists it as `block.destroy` |
 | `passive.coins`, `passive.granted`                              | play-presenter                         |                                                                    |
 | `passive.activate.scoring`, `.economy`, `.effect`, `.retrigger` | passive-categories (category defaults) | Every passive activation is silent                                 |
 | `material.activate.wood`, `.gold`, `.steel`, `.prismatic`       | materials (activation data)            | Tracked by #212                                                    |
@@ -259,3 +259,15 @@ The owner changed the policy: most sounds stay **pre-generated samples**, and a 
 - **No latency promise:** synthesis avoids loading and decoding a file, but actual start latency depends on the browser and device.
 - **First recipe: `pop` (#519).** A sharp report (band-passed noise around 1400 Hz, Q 0.6, ~0.07 s) over a low thump gliding from 1.6× down to 110 Hz over 0.09 s. It is adapted from Encabulator's dazzle click (its intent, not its routing). Each voice varies its band (±8%), decay (±15%), level (±12%) and thump (±6%), so a rapid run of 3–6 pops never repeats exactly. Level 0.4 keeps headroom: five overlapping pops rendered offline peak at about 0.31 of full scale. It is registered as `block.dazzle_pop` (synth, with `ui.click` as its sample stand-in), so the dazzle effect (#520) can play it once per visual pop.
 - **In the listening room (#522).** Synthesised sounds are listed with the samples, in the same family groups. What a row says comes from `readinessOf` (`src/audio/sfx-readiness.ts`), a registry keyed by provider: a sample is its own takes, a stand-in or silent, as before; a synthesised sound is ready when its recipe is registered, with no MP3 needed, and is labelled `synthesised (<recipe>)`. Synthesised rows play through the game's real `playSfx` (the room's volume slider sets the game's sound volume) and offer **Rapid ×5**, five overlapping plays 0.09 s apart, within the shared voice cap. **Stop** cancels any repeats still to come and stops every synthesised voice. Play all includes them.
+
+## Material-change response (#539)
+
+[The committed transition contract](presentation-contracts.md#committed-transition-fact-and-independent-responses-479-539) assigns one target-definition transition SFX response per committed material change to an independent controller trait. Use registered target transition IDs with existing attach sounds as placeholders. No playback on rejected/same-material/restore/preview paths; remove duplicate change playback during migration. Audio does not depend on the dissolve callback and does not determine game state.
+
+## Outcome versus screen-entry cues (#866)
+
+A deciding action has a win/loss cue after its required visible consequences finish. The result scene independently plays its configured entrance cue. Both are intentional; neither depends on the previous sample finishing. See [the outcome presentation contract](outcome-presentation.md) for committed fact ownership, scheduler timing, destruction/burn alignment and no replay on restore.
+
+## Material/state transition cues (#864)
+
+A transformation uses one brief cue from the resolved target material/state, regardless of its cause. Water is watery; Hot Water bubbles; Boiling Water bubbles more intensely. Do not layer the old reaction cue for the same change. [The transition response contract](presentation-contracts.md#target-transition-audio-clarification-864--539) defines captured selection, target-state variants, scheduler alignment, de-duplication and stand-ins. Distinct input actions and result-scene cues remain separately configured. Samples and registered short synthesis recipes are both allowed; the game performs no runtime remote generation.

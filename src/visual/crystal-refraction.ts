@@ -3,7 +3,7 @@
  * Crystal v3, #645). Not yet a merged design: it goes to the designer with these results before any
  * production or dev-room merge.
  *
- * Per frame, shared by every block:
+ * Per frame, by one capture pass per renderer (`createRefractionCapture`), for every block it draws:
  * 1. **Background capture.** The scene is drawn with the crystals hidden into one half-resolution
  *    target: what lies behind them.
  * 2. **Rear pass: the bend, once per rear facet.** Only the blocks' back faces are drawn, on their
@@ -16,108 +16,253 @@
  *    differently (three taps). Crystal v3's spectral reflection is blended on by Fresnel. The front
  *    is opaque, so nothing behind it (such as far edges) shows except through the fake refraction.
  *
+ * A preset (`refractionPresets`) supplies the settings, so several looks share this one shader.
+ * Each may add a slow lookup ripple (src/visual/lookup-ripple.ts, #674).
+ *
  * Limits: crystals do not refract each other (they are not in the capture); where blocks overlap,
  * the nearest rear facet's shift wins; the hand has no captured background.
  */
 import * as THREE from "three";
+import { Registry } from "../core/registry";
 import { crystalV3Environment } from "./crystal-v3";
+import {
+  createLookupRipple,
+  rippleShiftGlsl,
+  rippleUniforms,
+  type LookupRipple,
+  type RippleSettings,
+} from "./lookup-ripple";
+import { preservingRenderState, type RenderPass } from "./render-pass";
 
 /** The camera layer the rear (offset) pass draws: never the main view. */
 export const refractionOffsetLayer = 7;
 
-export const refractionTuning = {
+/** A refraction preset's tunable settings, as plain numbers (its defaults or a copied preset). */
+export const crystalRefractionSettings = {
   /** How far a rear facet shifts the background. */
-  rearStrength: { value: 0.1 },
+  rearStrength: 0.1,
   /** How far a front facet adds to that. */
-  frontStrength: { value: 0.04 },
+  frontStrength: 0.04,
   /** How strongly the block magnifies what is behind it (pull towards its centre). */
-  magnify: { value: 0.3 },
+  magnify: 0.3,
   /** How far apart the red and blue samples are, as a share of the shift. */
-  dispersion: { value: 0.12 },
+  dispersion: 0.12,
   /** Spectral reflection: how strong face-on, how sharply it rises towards grazing angles. */
-  fresnelBase: { value: 0.04 },
-  fresnelPower: { value: 4 },
-  spectral: { value: 0.85 },
+  fresnelBase: 0.04,
+  fresnelPower: 4,
+  spectral: 0.85,
   /** How bright the spectral reflection is. */
-  reflection: { value: 0.6 },
+  reflection: 0.6,
   /** A slight cool tint on what is seen through the crystal. */
-  clarity: { value: 0.92 },
+  clarity: 0.92,
 };
 
-const shared = {
-  background: null as THREE.WebGLRenderTarget | null,
-  offsets: null as THREE.WebGLRenderTarget | null,
-  uniforms: {
-    backgroundMap: { value: null as THREE.Texture | null },
-    offsetMap: { value: null as THREE.Texture | null },
-    screenSize: { value: new THREE.Vector2(1, 1) },
-  },
+export type RefractionSettings = typeof crystalRefractionSettings;
+export type RefractionTuning = { [K in keyof RefractionSettings]: { value: number } };
+
+/**
+ * One configured fake-refraction look (#674): its own tuning uniforms, its own lookup ripple
+ * and the reflection map it shows. Presets share the shader program, the captures and the maps;
+ * only their settings are their own, so tuning one never changes another.
+ */
+export type RefractionPreset = {
+  tuning: RefractionTuning;
+  ripple: LookupRipple;
+  /** The reflection map: shared and immutable, never disposed by a block. */
+  environment: () => THREE.Texture;
+  /**
+   * The drawn outline's opacity, live, when the preset owns it (#796; 0 removes the outline,
+   * reflection is unaffected). Left out, a block keeps its material definition's own edge.
+   */
+  edgeOpacity?: { value: number };
+};
+
+export function createRefractionPreset(preset: {
+  settings: RefractionSettings;
+  ripple: RippleSettings;
+  environment: () => THREE.Texture;
+  edgeOpacity?: number;
+}): RefractionPreset {
+  return {
+    tuning: Object.fromEntries(
+      Object.entries(preset.settings).map(([key, value]) => [key, { value }]),
+    ) as RefractionTuning,
+    ripple: createLookupRipple(preset.ripple),
+    environment: preset.environment,
+    ...(preset.edgeOpacity !== undefined ? { edgeOpacity: { value: preset.edgeOpacity } } : {}),
+  };
+}
+
+/**
+ * The registered refraction presets: a block's `appearance.refraction` names one. The crystal
+ * prototype is still; a preset brings its own ripple by its settings, not by a flag.
+ */
+export const refractionPresets = new Registry<RefractionPreset>("refraction preset");
+refractionPresets.register(
+  "crystal",
+  createRefractionPreset({
+    settings: crystalRefractionSettings,
+    ripple: { amplitude: 0, period: 10, scale: 2 },
+    environment: crystalV3Environment,
+  }),
+);
+
+/**
+ * The uniform slots every refraction material reads its captures from. Each capture pass binds its
+ * own targets to them as it renders, so the main render that follows samples that renderer's
+ * capture of this frame, never another renderer's or a stale one.
+ */
+const captureSlots = {
+  backgroundMap: { value: null as THREE.Texture | null },
+  offsetMap: { value: null as THREE.Texture | null },
+  screenSize: { value: new THREE.Vector2(1, 1) },
 };
 
 const size = new THREE.Vector2();
-const clearColour = new THREE.Color();
 
 /**
- * The per-frame passes, run before the main render by whoever draws these blocks (the dev17 room,
- * through the backend's `frame` hook). `hide` is the group holding the crystals.
+ * The per-frame passes for one preset, run before the main render by whoever draws these blocks
+ * (the dev17 room, a profiler recipe), as one instance per renderer: it moves the preset's ripple
+ * on, then fills its own two targets (doc/profiler-render-passes.md). `hide` is the group holding
+ * the blocks.
  */
-export function refractionFrame(context: {
-  renderer: THREE.WebGLRenderer;
-  scene: THREE.Scene;
-  camera: THREE.Camera;
-  hide: THREE.Object3D;
-}): void {
-  const { renderer, scene, camera, hide } = context;
-  renderer.getDrawingBufferSize(size);
-  const width = Math.max(1, Math.floor(size.x));
-  const height = Math.max(1, Math.floor(size.y));
-  shared.background ??= new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
-  shared.offsets ??= new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
-  shared.background.setSize(Math.max(1, width >> 1), Math.max(1, height >> 1));
-  shared.offsets.setSize(width, height);
-  shared.uniforms.backgroundMap.value = shared.background.texture;
-  shared.uniforms.offsetMap.value = shared.offsets.texture;
-  shared.uniforms.screenSize.value.set(width, height);
-
-  const previous = renderer.getRenderTarget();
-  const alpha = renderer.getClearAlpha();
-  renderer.getClearColor(clearColour);
-
-  // 1. What lies behind the crystals.
-  const shown = hide.visible;
-  hide.visible = false;
-  renderer.setRenderTarget(shared.background);
-  renderer.render(scene, camera);
-  hide.visible = shown;
-
-  // 2. The rear facets' shifts, alone, on a cleared target (zero shift where there is none).
-  const mask = camera.layers.mask;
-  const background = scene.background;
-  scene.background = null;
-  camera.layers.set(refractionOffsetLayer);
-  renderer.setRenderTarget(shared.offsets);
-  renderer.setClearColor(0x000000, 0);
-  renderer.clear();
-  renderer.render(scene, camera);
-  camera.layers.mask = mask;
-  scene.background = background;
-
-  renderer.setClearColor(clearColour, alpha);
-  renderer.setRenderTarget(previous);
+export function createRefractionCapture(preset: string): RenderPass {
+  const background = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  const offsets = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  return {
+    render(frame) {
+      refractionPresets.get(preset).ripple.advance(frame);
+      const { renderer, scene, camera, hide } = frame;
+      renderer.getDrawingBufferSize(size);
+      const width = Math.max(1, Math.floor(size.x));
+      const height = Math.max(1, Math.floor(size.y));
+      background.setSize(Math.max(1, width >> 1), Math.max(1, height >> 1));
+      offsets.setSize(width, height);
+      captureSlots.backgroundMap.value = background.texture;
+      captureSlots.offsetMap.value = offsets.texture;
+      captureSlots.screenSize.value.set(width, height);
+      preservingRenderState(frame, () => {
+        // 1. What lies behind the blocks.
+        const shown = hide.visible;
+        hide.visible = false;
+        try {
+          renderer.setRenderTarget(background);
+          renderer.render(scene, camera);
+        } finally {
+          hide.visible = shown;
+        }
+        // 2. The rear facets' shifts, alone, on a cleared target (zero shift where there is none).
+        scene.background = null;
+        camera.layers.set(refractionOffsetLayer);
+        renderer.setRenderTarget(offsets);
+        renderer.setClearColor(0x000000, 0);
+        renderer.clear();
+        renderer.render(scene, camera);
+      });
+    },
+    dispose() {
+      for (const slot of [captureSlots.backgroundMap, captureSlots.offsetMap])
+        if (slot.value === background.texture || slot.value === offsets.texture) slot.value = null;
+      background.dispose();
+      offsets.dispose();
+    },
+  };
 }
 
-/** Free the shared targets (the room's dispose). */
-export function disposeRefraction(): void {
-  shared.background?.dispose();
-  shared.offsets?.dispose();
-  shared.background = shared.offsets = null;
+/**
+ * Calm water (prototype, #675; doc/refractive-water-prototypes.md): the same fake refraction,
+ * gentler. A lower bend and magnification, almost no colour split, a slight cool tint and a
+ * restrained, colourless reflection of a soft sky, with a slow lookup ripple. No bubbles: it
+ * composes none.
+ */
+export const calmWaterSettings: RefractionSettings = {
+  rearStrength: 0.06,
+  frontStrength: 0.02,
+  magnify: 0.12,
+  dispersion: 0.02,
+  fresnelBase: 0.02,
+  fresnelPower: 5,
+  spectral: 0,
+  reflection: 0.35,
+  clarity: 0.9,
+};
+
+refractionPresets.register(
+  "calmWater",
+  createRefractionPreset({
+    settings: calmWaterSettings,
+    // One full loop in 0.5–8 s, 8 s by default (#795; doc/calm-water-refinements.md).
+    ripple: {
+      amplitude: 0.006,
+      period: 8,
+      scale: 1.6,
+      periodBounds: { min: 0.5, max: 8, step: 0.5 },
+      // Rippling highlights (#797; doc/calm-water-refinements.md): provisional 0.015.
+      surfaceStrength: 0.015,
+    },
+    environment: calmSkyEnvironment,
+    // Faint outlines by default (#796; doc/calm-water-refinements.md): 0 hides them.
+    edgeOpacity: 0.08,
+  }),
+);
+
+let calmSky: THREE.DataTexture | null = null;
+
+/**
+ * A soft, colourless sky for water to reflect: bright overhead, pale at the horizon, dark below,
+ * with one broad light. Its own map, so water never reflects the crystals' spectral map or follows
+ * its pattern controls. Shared and immutable, like the spectral map.
+ */
+export function calmSkyEnvironment(): THREE.DataTexture {
+  if (calmSky) return calmSky;
+  const width = 64;
+  const height = 32;
+  const data = new Float32Array(width * height * 4);
+  const mix = (a: number, b: number, t: number) => a + (b - a) * Math.min(1, Math.max(0, t));
+  for (let row = 0; row < height; row++)
+    for (let column = 0; column < width; column++) {
+      // Rows run bottom (straight down) to top (straight up), as the lookup's latitude does.
+      const up = (row + 0.5) / height;
+      const below = [0.05, 0.08, 0.1];
+      const horizon = [0.55, 0.62, 0.68];
+      const above = [0.78, 0.86, 0.94];
+      const light = Math.exp(-(((column / width - 0.3) * 6) ** 2 + ((up - 0.78) * 8) ** 2));
+      const index = (row * width + column) * 4;
+      for (let channel = 0; channel < 3; channel++)
+        data[index + channel] =
+          (up < 0.5
+            ? mix(below[channel]!, horizon[channel]!, (up - 0.35) / 0.15)
+            : mix(horizon[channel]!, above[channel]!, (up - 0.5) / 0.3)) +
+          light * 0.8;
+      data[index + 3] = 1;
+    }
+  calmSky = new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.FloatType);
+  calmSky.colorSpace = THREE.LinearSRGBColorSpace;
+  calmSky.wrapS = THREE.RepeatWrapping;
+  calmSky.wrapT = THREE.ClampToEdgeWrapping;
+  calmSky.magFilter = calmSky.minFilter = THREE.LinearFilter;
+  calmSky.needsUpdate = true;
+  calmSky.userData.shared = true;
+  return calmSky;
 }
 
 const vertexShader = /* glsl */ `
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
   varying vec4 vCentre;
+  varying vec3 vLocal;
+  varying vec3 vLocalNormal;
+  // The local-to-world normal transform (inverse transpose), as columns (#797).
+  varying vec3 vNormalX;
+  varying vec3 vNormalY;
+  varying vec3 vNormalZ;
   void main() {
+    vLocal = position;
+    vLocalNormal = normal;
+    mat3 toWorld = transpose(inverse(mat3(modelMatrix)));
+    vNormalX = toWorld[0];
+    vNormalY = toWorld[1];
+    vNormalZ = toWorld[2];
     vec4 world = modelMatrix * vec4(position, 1.0);
     vWorldPosition = world.xyz;
     vWorldNormal = normalize(mat3(modelMatrix) * normal);
@@ -134,8 +279,24 @@ const rearFragment = /* glsl */ `
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
   varying vec4 vCentre;
+  varying vec3 vLocal;
+  varying vec3 vLocalNormal;
+  varying vec3 vNormalX;
+  varying vec3 vNormalY;
+  varying vec3 vNormalZ;
+  ${rippleShiftGlsl}
+  // The facet normal, perturbed by the ripple's height gradient in the face's own tangent plane,
+  // then taken to world space by the inverse transpose. At zero strength: the old normal exactly.
+  vec3 surfaceNormal() {
+    if (rippleSurface <= 0.0) return normalize(vWorldNormal);
+    vec3 local = normalize(vLocalNormal);
+    vec3 g = rippleGradient(vLocal);
+    vec3 tangential = g - dot(g, local) * local;
+    vec3 bent = normalize(local - rippleSurface * tangential);
+    return normalize(mat3(vNormalX, vNormalY, vNormalZ) * bent);
+  }
   void main() {
-    vec3 n = normalize(vWorldNormal);
+    vec3 n = surfaceNormal();
     vec3 v = normalize(cameraPosition - vWorldPosition);
     float incidence = abs(dot(n, v));
     // The facet's normal in view space: its screen direction is where the background shifts.
@@ -163,6 +324,22 @@ const frontFragment = /* glsl */ `
   uniform float reflection;
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
+  varying vec3 vLocal;
+  varying vec3 vLocalNormal;
+  varying vec3 vNormalX;
+  varying vec3 vNormalY;
+  varying vec3 vNormalZ;
+  ${rippleShiftGlsl}
+  // The facet normal, perturbed by the ripple's height gradient in the face's own tangent plane,
+  // then taken to world space by the inverse transpose. At zero strength: the old normal exactly.
+  vec3 surfaceNormal() {
+    if (rippleSurface <= 0.0) return normalize(vWorldNormal);
+    vec3 local = normalize(vLocalNormal);
+    vec3 g = rippleGradient(vLocal);
+    vec3 tangential = g - dot(g, local) * local;
+    vec3 bent = normalize(local - rippleSurface * tangential);
+    return normalize(mat3(vNormalX, vNormalY, vNormalZ) * bent);
+  }
   const float PI = 3.141592653589793;
 
   vec3 lookUp(vec3 direction) {
@@ -178,7 +355,7 @@ const frontFragment = /* glsl */ `
 
   void main() {
     vec2 uv = gl_FragCoord.xy / screenSize;
-    vec3 n = normalize(vWorldNormal);
+    vec3 n = surfaceNormal();
     vec3 v = normalize(cameraPosition - vWorldPosition);
     float incidence = clamp(abs(dot(n, v)), 0.0, 1.0);
     // The rear facet's shift under this pixel, reused, plus this front facet's own bend.
@@ -186,6 +363,8 @@ const frontFragment = /* glsl */ `
     vec2 shift = rear.b > 0.5 ? rear.rg : vec2(0.0);
     vec3 viewNormal = normalize((viewMatrix * vec4(n, 0.0)).xyz);
     shift -= viewNormal.xy * frontStrength * (1.0 - incidence);
+    // The preset's slow cyclic ripple: the lookup moves, the outline never does.
+    shift += rippleShift(vLocal);
     // Three taps: red bent least, blue most.
     vec3 seen = vec3(
       behind(uv + shift * (1.0 - dispersion)).r,
@@ -200,11 +379,15 @@ const frontFragment = /* glsl */ `
 `;
 
 /** The rear (offset) layer for one block: drawn only in the offset pass. */
-export function createRefractionRear(geometry: THREE.BufferGeometry): THREE.Mesh {
+export function createRefractionRear(
+  geometry: THREE.BufferGeometry,
+  preset: RefractionPreset,
+): THREE.Mesh {
   const material = new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader: rearFragment,
-    uniforms: { ...shared.uniforms, ...refractionTuning },
+    // The same ripple uniforms as the front: one surface, lit consistently in both passes.
+    uniforms: { ...captureSlots, ...preset.tuning, ...rippleUniforms(preset.ripple) },
     side: THREE.BackSide,
   });
   const rear = new THREE.Mesh(geometry, material);
@@ -213,14 +396,15 @@ export function createRefractionRear(geometry: THREE.BufferGeometry): THREE.Mesh
 }
 
 /** The front faces: the faked refraction of what is behind, with the spectral reflection. */
-export function createRefractionFront(): THREE.ShaderMaterial {
+export function createRefractionFront(preset: RefractionPreset): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader: frontFragment,
     uniforms: {
-      ...shared.uniforms,
-      ...refractionTuning,
-      environment: { value: crystalV3Environment() },
+      ...captureSlots,
+      ...preset.tuning,
+      ...rippleUniforms(preset.ripple),
+      environment: { value: preset.environment() },
     },
     side: THREE.FrontSide,
   });

@@ -107,6 +107,24 @@ describe("hand view", () => {
     expect(hand.slotAt(99)).toBe(2);
   });
 
+  it("counts replacements the model holds but doesn't show yet, in hit tests and previews (#830 review)", () => {
+    const { hand, setDrag } = setup();
+    // The model holds five; slots 2 and 3 are a discard's replacements, not drawn in yet.
+    const shown = [cards[0]!, cards[1]!, cards[4]!];
+    for (const card of shown) hand.add(card);
+    hand.sync(cards);
+    // The rightmost visible card's slot is reachable, not clamped to the three shown.
+    expect(hand.slotAt(2.4)).toBe(4);
+    // Dragging the first card to slot 4 previews the model's move: the others shift left,
+    // the hidden slots included, so the last visible card lands in slot 3.
+    const bySlot = [...hand.blocks].sort((a, b) => a.handSlot! - b.handSlot!);
+    const [first, , last] = bySlot;
+    setDrag({ source: first!, group: [], reorderSlot: 4 });
+    hand.layout();
+    expect(first!.handX).toBe(2.4);
+    expect(last!.handX).toBe(1.2);
+  });
+
   it("returns the selected cards in hand order and forgets removed ones", () => {
     const { hand } = setup();
     for (const card of cards) hand.add(card);

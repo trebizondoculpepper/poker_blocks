@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { approximateOuter, createFacetShell, fillPane } from "./approximate-crystal";
 import { createCrystalV3Front, createCrystalV3Rear } from "./crystal-v3";
-import { createRefractionFront, createRefractionRear } from "./crystal-refraction";
+import {
+  createRefractionFront,
+  createRefractionRear,
+  refractionPresets,
+} from "./crystal-refraction";
 import { createInternalFront, createInternalRear } from "./crystal-internal";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import type { FaceArt } from "./face-art";
@@ -39,6 +43,8 @@ export type BlockAppearance = {
   boardMaterials?: THREE.MeshStandardMaterial[];
   edgeColor: number;
   edgeOpacity: number;
+  /** A live outline opacity the outline reads each frame, overriding `edgeOpacity` (#796). */
+  liveEdgeOpacity?: { value: number };
   /**
    * The render order of the block's own faces, where it must sit among its extras (a contained
    * block's front shell, #330); the default order when absent.
@@ -540,14 +546,19 @@ const faceAxes: [THREE.Vector3, THREE.Vector3][] = [
 function meltwaterSkin(
   art: FaceArt,
   geometry: THREE.BufferGeometry,
-): { skin: THREE.Mesh; texture: THREE.CanvasTexture } {
+): { skin: THREE.Mesh; textures: THREE.CanvasTexture[] } {
   const texture = meltwater(art);
+  // Every texture the skin makes: the original and each face's clone. The block's owner frees
+  // them all; a clone left out of this list would never be disposed (#769).
+  const textures: THREE.CanvasTexture[] = [texture];
   // Seconds for a drop to slide the height of an upright face, varied a little per block.
   const secondsPerFace = 14 + randomFor(art, "ice", false)() * 10;
   const turned = new THREE.Quaternion();
   const down = new THREE.Vector3();
   const materials = faceAxes.map(([u, v]) => {
-    const faceTexture = texture.clone();
+    // A clone of a canvas texture is a canvas texture; three types `clone()` as the base class.
+    const faceTexture = texture.clone() as THREE.CanvasTexture;
+    textures.push(faceTexture);
     faceTexture.wrapS = faceTexture.wrapT = THREE.RepeatWrapping;
     faceTexture.center.set(0.5, 0.5);
     faceTexture.needsUpdate = true;
@@ -588,7 +599,7 @@ function meltwaterSkin(
   });
   const skin = new THREE.Mesh(geometry, materials);
   skin.renderOrder = 15;
-  return { skin, texture };
+  return { skin, textures };
 }
 
 /**
@@ -1350,21 +1361,29 @@ function crystalV3(context: AssemblyContext): BlockAppearance {
   );
 }
 
-/** Faked background refraction (prototype, src/visual/crystal-refraction.ts). */
+/**
+ * Faked background refraction (prototype, src/visual/crystal-refraction.ts), configured by the
+ * registered refraction preset its `appearance.refraction` names (#674).
+ */
 function crystalRefraction(context: AssemblyContext): BlockAppearance {
   const { art, definition, geometry } = context;
+  const preset = refractionPresets.get(definition.appearance.refraction ?? "crystal");
   const texture = faceTexture(art, definition, false, 0, false);
   const height = heightFor(texture, art, definition.appearance);
   const print = printSkin(art, definition.appearance, geometry);
   const inHand = surface(texture, definition.appearance, height);
-  const front = createRefractionFront() as unknown as THREE.MeshStandardMaterial;
-  return appearanceBase(
-    context,
-    [texture, ...[height].filter((value) => value !== undefined), print.texture],
-    Array.from({ length: 6 }, () => inHand),
-    [createRefractionRear(geometry), print.skin],
-    Array.from({ length: 6 }, () => front),
-  );
+  const front = createRefractionFront(preset) as unknown as THREE.MeshStandardMaterial;
+  return {
+    ...appearanceBase(
+      context,
+      [texture, ...[height].filter((value) => value !== undefined), print.texture],
+      Array.from({ length: 6 }, () => inHand),
+      [createRefractionRear(geometry, preset), print.skin],
+      Array.from({ length: 6 }, () => front),
+    ),
+    // The preset's own live outline opacity, where it owns one (#796).
+    ...(preset.edgeOpacity ? { liveEdgeOpacity: preset.edgeOpacity } : {}),
+  };
 }
 
 /** Internal reflections, ignoring the background (prototype, src/visual/crystal-internal.ts). */
@@ -1394,7 +1413,7 @@ function frostedBlock(context: AssemblyContext): BlockAppearance {
   const onTable = cloudyIce(texture, height, size, definition.appearance.reliefScale);
   return appearanceBase(
     context,
-    [texture, ...[height].filter((value) => value !== undefined), print.texture, melt.texture],
+    [texture, ...[height].filter((value) => value !== undefined), print.texture, ...melt.textures],
     Array.from({ length: 6 }, () => inHand),
     [melt.skin, print.skin],
     Array.from({ length: 6 }, () => onTable),

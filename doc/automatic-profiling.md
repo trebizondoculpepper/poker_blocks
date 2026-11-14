@@ -72,3 +72,11 @@ This measurement does not automatically choose a cheaper crystal renderer, lower
 ## Acceptance and delivery
 
 First merge this documentation. Then implement focused coverage/host validation, matrix runner, and automatic room/CLI report slices. Coordinate #620–#622 for recipe completeness. Tests use a temporary registered family/case to prove discovery of new entries without a generic runner edit; cover absent provider versus missing case, unsupported object, 1/10/50 counts, distinct group units, transient reset/window, GPU unavailable/disjoint, hidden-tab failure, timeout/partial export, cancellation/disposal and version-2 integrity. Browser verification must show a full sweep and exported report on actual installed families, with environment/coverage limits visible. Repeat a representative case to assess timing stability and resource retention; do not promise measured performance until those runs exist.
+
+## Animation fidelity follow-up (#752)
+
+[Profiler animation fidelity](presentation-contracts.md#profiler-animation-fidelity-752) makes representative production update/prepass wiring explicit, separating stationary ambient and registered motion-triggered phases. The existing runner calling `update(dt)` is not sufficient evidence that every recipe advances every contained shader/effect. Static results do not certify animated complexity. Preserve phase/count/clock identity and verify with clips and raw timing records.
+
+## Render-pipeline measurement contract (#776, #764)
+
+[Profiler render-pass capability](profiler-render-passes.md) defines a case-declared, host-owned registered render pipeline, including all production optical capture/interior passes inside CPU/GPU timing, aggregated renderer counters, matched baselines and set-scoped resource cleanup. Missing pipeline support is an explicit unsupported/setup failure, never an empty-capture success. Implementation #764 and optics recipes follow this documentation.

@@ -89,6 +89,24 @@ export type DragDropManager = {
   pressed(draggable: Draggable): Press | null;
   /** Forget every pending press: a cancelled gesture can't become a drag later. */
   forgetPresses(): void;
+  /** Follow every drag's lifecycle (presentation only, #922); returns how to stop. */
+  observe(listener: (event: DragLifecycle) => void): () => void;
+};
+
+/** A drag's lifecycle phase, as dnd-kit reports it (cancelled covers lost capture). */
+export type DragPhase = "began" | "changed" | "ended" | "cancelled";
+
+/**
+ * One drag lifecycle fact for observers (#922): the source's registered name, what it picked
+ * up and where the pointer is. Observers present it; they never decide the drop.
+ */
+export type DragLifecycle = {
+  phase: DragPhase;
+  /** Whether the drag is still going on after this fact (began, changed), or over. */
+  live: boolean;
+  source: string;
+  picked: unknown;
+  at: Point;
 };
 
 /** A press on a drag source: what it picked up and where the pointer went down. */
@@ -116,6 +134,14 @@ export function createDragDropManager(
   const presses = new Map<Draggable, Press>();
   /** The source running the current drag, if any. */
   let running: DragSource | null = null;
+  /** The current drag's source name and what it picked up, for observers. */
+  let current: { source: string; picked: unknown } | null = null;
+  const observers = new Set<(event: DragLifecycle) => void>();
+  const tell = (phase: DragPhase, live: boolean, at: Point) => {
+    if (!current) return;
+    const event = { phase, live, ...current, at };
+    for (const observer of observers) observer(event);
+  };
   const sourceOf = (draggable: unknown) =>
     sourcesEnabled.find((enabled) => enabled.draggable === draggable);
   dnd.monitor.addEventListener("dragstart", ({ operation }) => {
@@ -128,22 +154,26 @@ export function createDragDropManager(
     running = sources.kinds.get(entry.config.source);
     const { x, y } = operation.position.current;
     running.begin(press.picked, press, { clientX: x, clientY: y });
+    current = { source: entry.config.source, picked: press.picked };
+    tell("began", true, { clientX: x, clientY: y });
   });
   dnd.monitor.addEventListener("dragmove", ({ operation, to }) => {
     const { x, y } = to ?? operation.position.current;
     running?.move({ clientX: x, clientY: y });
+    tell("changed", true, { clientX: x, clientY: y });
   });
   dnd.monitor.addEventListener("dragend", ({ operation, canceled, nativeEvent }) => {
     const source = running;
     running = null;
     const release = nativeEvent as PointerEvent | undefined;
     const { x, y } = operation.position.current;
-    source?.end(
+    const at =
       release && !canceled
         ? { clientX: release.clientX, clientY: release.clientY }
-        : { clientX: x, clientY: y },
-      canceled,
-    );
+        : { clientX: x, clientY: y };
+    source?.end(at, canceled);
+    tell(canceled ? "cancelled" : "ended", false, at);
+    current = null;
   });
   type Enabled = { config: DropTargetConfig; droppable: Droppable };
   /** Enabled drop targets; one enabled by two scenes stays until both disable it. */
@@ -244,6 +274,10 @@ export function createDragDropManager(
     },
     pressed: (draggable) => presses.get(draggable) ?? null,
     forgetPresses: () => presses.clear(),
+    observe(listener) {
+      observers.add(listener);
+      return () => observers.delete(listener);
+    },
     hover(hit) {
       for (const name of new Set(enabled.map(({ config }) => config.target))) {
         const target = kinds.get(name);

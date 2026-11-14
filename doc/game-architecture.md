@@ -75,6 +75,8 @@ What an operation does to the selected cards is still to be decided.
 
 ## Inspectable trait
 
+**Target extension (#751):** [Acquired bonus artwork and inspection](presentation-contracts.md#acquired-bonus-artwork-and-inspection-432-751) defines full live bonus descriptions, separate from the compact face label.
+
 An inspectable trait instance implements `inspect(): string`. The hover UI calls that method and displays its result beside the pointer for a block in the hand or in play. Standard cards configure the trait with their rank and suit name. Future block types can provide their own description through the same trait, with no tooltip behavior on the block itself.
 
 ## Attachable trait and dealer
@@ -87,7 +89,7 @@ When dragging a hand block starts, the structure's wobble slows to one-tenth of 
 
 The hand is rendered as a fixed overlay with its own camera. Only the structure uses the perspective board camera. After a block attaches, the board camera waits one second, then eases over two seconds to a distance calculated from the grid's bounding box, so the growing structure stays visible. The hand's size and position do not follow that camera move.
 
-All standard cubes currently have equal mass. The structure keeps a running sum of block grid positions and divides by the block count to find its true center of gravity after each attachment. The rotation pivot moves to that center while preserving the existing block positions. The structure gently oscillates on two axes around the pivot instead of spinning continuously. Dragging any placed block rotates the structure on horizontal and vertical axes; the oscillation continues around the new orientation. A click without dragging still toggles selection.
+The production rotation pivot is the geometric centroid: the structure keeps a running sum of block grid positions and divides by block count. This arithmetic center is not a physical center of mass when materials have different authored masses. [Physical mass and rocking](playfield-rocking.md) defines the shared mass capability and the target mass-dependent speed; a weighted pivot remains a separate experiment. The rotation pivot moves to that center while preserving the existing block positions. The structure gently oscillates on two axes around the pivot instead of spinning continuously. Dragging any placed block rotates the structure on horizontal and vertical axes; the oscillation continues around the new orientation. A click without dragging still toggles selection.
 
 ## Stage overlay and discard area
 
@@ -303,16 +305,11 @@ reactions?: readonly {
 - **Neighbours** are the six face offsets already defined in `src/traits/attachable.ts` (`faceNormal`), looked up in a cell map of the field. Edge and corner cells are never consulted.
 - **Results** are a registry keyed by handler name, like matchers. `transform` turns its config into a `transform-block { blockId, material?, stateBonus? }` command. `advance-cooking` turns its config into an `advance-cooking { blockId, steps }` command, so meat asks to cook through data on its own definition (`when` a heat source, `results: [{ id: "advance-cooking", config: { steps: 1 } }]`) with no branch on meat. A new kind of outcome is a new registered result handler. Commands are committed through the existing `commitCommands` path, as discard rules are. A reaction never edits state directly.
 
-**Reactions never score (owner, 2026-11-11).** A reaction does not add to the score of the play that caused it, or of any play. The play is scored on the field as placed, and its reactions are resolved and committed afterwards. What a reaction changes is the state of the game (a material, a state bonus), and that raises what later plays can score. A later modifier may subscribe to `reaction.applied` and award points for the reaction itself, but that would be an ordinary rule on that event, not part of the reaction.
+**Phased consequences (owner, 2026-11-13).** [Material phases](material-phases.md) supersedes the older blanket one-step-per-play rule. Reactions declare their timing. Resolve opening, pre-score changes and countdowns, then score once, then post-score reactions and pending detonations. Pre-score changes are visible to later phases in the same play; Air can strengthen Flame before scoring and that Flame can boil Water afterward. Phase assignment expresses immediate-versus-slower perceived processes, not wall-clock model waits.
 
-**One step per play, with no cascades.** The resolver works on a **snapshot** of the field taken once, after placement:
+Each configured reaction step reads its own entry snapshot and selects the first matching applicable reaction per block in stable field order. There is no automatic fixed-point rescan within that step. Follow-up registered commands/facts drain under the one action-wide transaction and limits. New post-score state does not retroactively alter finalized scores. Cooking still advances once per play. See the linked contract for ownership, determinism, failure/rollback, scope and source evidence.
 
-1. Every block on the field is checked against its own material's reactions, with its neighbours read **from the snapshot**. Every block is checked, not only the one just placed, so meat keeps cooking on each later play while it stays beside heat.
-2. Each block takes **at most one** reaction per play (all of that reaction's results): the **first** of its material's reactions whose matcher accepts, in the order listed on the definition. That listed order is the conflict rule, and it is deterministic. A block next to both flame and aggressive flame takes whichever reaction its material lists first.
-3. All transformations are committed together, after resolution. Because everything read the snapshot, a block changed this play cannot trigger its neighbours until the **next** play. Air makes flame aggressive on one play, and that aggressive flame boils water on a later play, never both at once. That is what "one step per play" means here, and it also rules out repeated rewards from one play.
-4. Blocks are visited in a fixed order (field order, which is placement order), so the commands, events and presentation are reproducible. Which reactions are selected does not depend on that order, because of the snapshot. Anything that subscribes to the resulting `reaction.applied` events (a passive with limited uses, say) sees them in that field order, and its own outcome may depend on it.
-
-**Events and presentation.** Each committed transformation emits a `reaction.applied { blockId, from, to }` event after `play.completed`. The play presenter uses it to restyle the block and to play the reaction's registered sound, which is configured on the reaction and has a placeholder until its audio exists. Presentation never decides whether a reaction happened (model first).
+**Events and presentation.** Committed reaction and material/state-transition facts capture before/after snapshots, source, phase and action/sequence identity. They are published only after the action commits, not as mutable afterthoughts following play.completed. The shared scheduler presents phase-ordered consequences and target-defined transition sounds; reaction presentation does not duplicate that audio. Presentation cannot decide reactions, rescore or consume model RNG.
 
 **Persistence.** A transformed card is a new object with the same id, so it follows the card through deck and stages, as in "State bonuses (proposal)". The save's optional `cardStates` record from that section carries `material` as well as `stateBonus`, and a cooking step for meat, so both are restored on Continue.
 
@@ -320,7 +317,7 @@ reactions?: readonly {
 
 **Out of scope here:** creating new blocks (cloud from air and boiling water, #374) is identity creation, not a transformation, and gets its own contract. So do container visuals (#328): a reaction changes the model, and the material's appearance follows.
 
-**Guardrails for #366:** a test that edge or corner contact never reacts; that a block changes at most once per play; that a two-step chain (air → aggressive flame → boiling water) takes two plays; that discards, refills and stage advance never react; that candidate-hand scoring is unchanged by pending reactions; that the same reactions are selected whatever order the blocks are visited in (events are still dispatched in field order); that a transformation survives save and Continue; and the guardrail scan, so that no generic code names a material.
+**Verification for the phased migration (#614):** six-face contact only; first match per block per reaction-step snapshot; pre-score state visible to scoring/post-score; same-play cross-phase chain; no automatic within-step rescan or post-score rescore; stable ordering and action-wide budget/RNG rollback; restore without replay; persistence and no generic material branches. The old two-play Air→Flame→Water test is superseded by the explicitly authored phase test.
 
 ### State bonuses (#364, built in #365, epic #362)
 
@@ -461,6 +458,8 @@ Acceptance for that follow-up includes a new test-only contained definition rece
 
 ### Acquired modifier registers (#431)
 
+**Display contract (#432, #751):** [Acquired bonus artwork and inspection](presentation-contracts.md#acquired-bonus-artwork-and-inspection-432-751) specifies model-derived priority, face placement, formatting, live refresh and the full inspection breakdown.
+
 `src/modifier-registers.ts`. A card's acquired modifiers live in its `modifiers` trait, one `ScoringModifier` per lifetime register, apart from its material's values. Lifetimes are registered (`modifierLifetimes`): `stage` and `round` each register their clearing with `stageEndResets` and `roundEndResets`, `run` registers none, so neither the run nor the scorer names a lifetime. `addCardModifier(state, cardId, lifetime, modifier)` combines into a register on the card wherever it is, and records it in the card-state ledger (`cardStates[id].modifiers`). Saves validate each entry (a registered lifetime, valid numbers) and the `modifiers` card-state applier restores it. `cardScoringRules` adds the combined acquired modifier's rules after the material's and state bonus's, so the scorer needs no change. They are the card's own rules, so they share its scoring eligibility (`scoringEligibilities`): a cloud's acquired bonus applies in any scored line it is in, as its material's does (scored-subset eligibility is preserved, #431). The power phase composes exponents additively (see "State bonuses"). Nothing in the normal game writes a register yet; bombs (#24, #436) will.
 
 ### Permanent material change (#387)
@@ -561,7 +560,7 @@ The starting deck's rank and suit mapping and the material assignment algorithm 
 - **Game mode** (`GameMode`): a named playable configuration. It lists scenes and a start scene, supplies mode-wide configuration such as save identity and optional game features, and declares its **run setup** as ordered steps in `runSetup`. Music is a mode trait (`traits.music`) whose behaviour lives in `src/mode-music.ts`. The scene list is a catalogue of definitions, not a scene graph.
 - **Scene** (`Scene`): a presentation context such as title, stage, shop, settings, stage-won or game-over. Scene data composes traits. `SceneManager` calls trait lifecycle hooks when scenes enter and exit.
 - **Scene stack**: the runtime layers currently active. Settings and stage-won are pushed over gameplay and popped to resume it. Title and game-over replace the stack.
-- **Game flow**: outcome-keyed scene-stack transitions declared by a mode. `GameRun` reports its current run-position outcome; `run-controller.ts` applies the mode's transition through `src/game-flow.ts`. Menu actions and stage results still have legacy presentation paths pending the screen-scene slices.
+- **Game flow**: outcome-keyed scene-stack transitions declared by a mode. `GameRun` reports its current run-position outcome; `game-run-controller.ts` applies the mode's transition through `src/game-flow.ts`. Menu actions and stage results still have legacy presentation paths pending the screen-scene slices.
 - **GameRun**: live mutable state for one playthrough: cards, field, scoring, coins, passives and phase. It remains the same run while the scene stack changes. Its `snapshot()` method produces data that the run controller persists through `save.ts`.
 - **RunRules**: progression and economy rules used to create a run. Mode traits may further configure its save key, starting deck and optional features.
 - **Trait**: reusable behavior plus plain data, attached at a declared scope. A mode trait is not automatically copied onto each scene; composition between scopes must be explicit.
@@ -575,7 +574,7 @@ The starting deck's rank and suit mapping and the material assignment algorithm 
 ```text
 main.ts ── builds ──> services + SceneManager + selected GameMode
 GameMode ── catalogs ──> Scene definitions and start scene
-run-controller ── coordinates ──> GameRun state and game flow
+game-run-controller ── coordinates ──> GameRun state and game flow
 SceneManager ── owns ──> active scene stack; calls scene trait lifecycle hooks
 RunRules + the mode's run setup ── create ──> GameRun
 ```
@@ -626,21 +625,181 @@ controller traits (composed, configured) ─┤ subscribe; choose policy from co
 **Examples.**
 
 - _Music:_ the music player and its controller are capabilities: play, fade, filter, wind down. Scene traits (`musicCue`, `musicTrack`, `musicFilter`) are the controllers: the scene's configuration says what to request on enter and exit.
+- _Committed sounds (built, #755):_ `GameRun` publishes each committed action's facts once it commits (`onCommitted`, forwarded by the run controller from whichever run is current); a rolled-back or invalid action publishes nothing. The `committedEventSounds` controller trait, composed onto the play scenes, plays the sound each fact's configuration named, once per action, for plays and discards alike. The presenter no longer plays them.
 - _Explosions:_ the dazzle (`createDazzle`), smoke and the SFX player are services that render or play at a supplied location. An `explosionEffects` controller trait consumes a committed detonation (`block.removed` with cause `explosion`) and coordinates dazzle, smoke and sound from its configuration. The removal happened in the model already.
-- _Tweening:_ the Tween.js service (`doc/tweening-library-research.md`, #556) supplies interpolation only; effect and controller traits choose endpoints, easing and interruption, and the visual-event scheduler decides when (#541, #545).
+- _Tweening:_ the Tween.js service (`doc/tweening-library-research.md`, #556) supplies interpolation only; effect and controller traits choose endpoints, easing and interruption, and the visual-event scheduler decides when ("Visual-event scheduler and game-time units" below; #541, #545).
 
 **Naming.** `X` / `XController` names a genuine pair: one object and the controller that drives only it (`MusicPlayer` / `MusicController`). A controller trait that coordinates several services is named for its **responsibility** (`explosionEffects`, `scoringFeedback`), not forced to look like one service's controller. #473 audits existing names against this.
 
 **Current gaps (transitional code).** These are where today's code differs from the target. They are the scope of #538, each to be fixed in a small PR of its own. Untouched legacy code is not a review finding; a PR that changes these lines should move them toward the target.
 
-| Where                             | Today                                                                                                                                                                                                                                                                                              | Target                                                                                                                       |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `src/play-presenter.ts` `discard` | No longer diffs state (#538): `add-coins` and `grant-unowned-passive` commit `coins.gained` / `passive.installed` events carrying their configured sound, and the presenter plays each committed event's sound from `GameRun.lastDiscardEvents`. The presenter (a service) still does the playing. | A controller trait plays committed events' sounds, shared by plays and discards.                                             |
-| `src/run-controller.ts`           | Plays presentation sounds inline at outcome sites (`shop.stock.burn`, `shop.leave`, `run.lost`, `block.destroyed`, `round.cleared`).                                                                                                                                                               | Outcomes are events; sounds come from scene or controller trait configuration (as `enterSound`/`exitSound` already do).      |
-| Block exits                       | `block.removed` / `block.resisted` are emitted, but no controller presents them: the exit effects (#439) and the dazzle (#493) are not wired into play.                                                                                                                                            | An exit/explosion controller trait consumes the committed events and drives the exit runner and dazzle (#510, #520).         |
-| `src/audio/music-controller.ts`   | The controller's API names scene meanings (`switchToBossTrack`, `playTitle`).                                                                                                                                                                                                                      | Cue names come from scene trait configuration; the controller maps a cue to tracks through the music plan, knowing no scene. |
+| Where                        | Today                                                                                                                                                   | Target                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `src/game-run-controller.ts` | Plays presentation sounds inline at outcome sites (`shop.stock.burn`, `shop.leave`, `run.lost`, `block.destroyed`, `round.cleared`).                    | Outcomes are events; sounds come from scene or controller trait configuration (as `enterSound`/`exitSound` already do). |
+| Block exits                  | `block.removed` / `block.resisted` are emitted, but no controller presents them: the exit effects (#439) and the dazzle (#493) are not wired into play. | An exit/explosion controller trait consumes the committed events and drives the exit runner and dazzle (#510, #520).    |
 
 Acceptance for #538 children: the gap's row is gone or rewritten; the behaviour players see and hear is unchanged; tests cover the event and its configured response; the guardrail and production build pass.
+
+### Visual-event scheduler and game-time units (#541)
+
+**Target architecture; nothing here is built yet.** All timed presentation goes through **one shared visual-event scheduler**: score narration, flights, discards, exits, staggered activations and any later feedback. The scheduler is a service (see "Services and controller traits" above). Presentation controller traits decide what to present; the scheduler decides when it starts and tracks when it has finished. It presents outcomes the model has already committed, so it is not a gameplay bus. The synchronous core emitter (`src/core/emitter.ts`) keeps its meaning for local notifications. The **concrete interface, numeric limits and per-migration acceptance checks are #545's**, and must merge before #546 starts.
+
+_Evidence:_
+
+- the research result on #543 (patterns, a current-code map, and a recommended contract);
+- [the scheduler library decision](visual-scheduler-library-research.md) (#557, which supersedes #543's no-package preference);
+- [the tweening decision](tweening-library-research.md) (#556);
+- the gameplay lifecycle's presentation contract in [game-events.md](game-events.md), "Presentation and verification";
+- a source audit at `d023b29`, summarised under "Today's scheduling" below.
+
+The decisions below combine that evidence with the owner's requirements on #541 (game-time units, model first, concurrent interaction). Where this section picks a default the evidence leaves open, it says so.
+
+**Game-time units.** Presentation timing is configured in **game-time units**. One unit is **1/15 second** (1000/15 ms ≈ 66.667 ms).
+
+- A unit is a continuous length of time. It is not a rendering frame and not a 15 Hz simulation tick, so timings stay frame-rate independent.
+- Trait and effect configuration states durations and spacing in units. Only the scheduler's clock converts units to milliseconds.
+- A future gameplay-speed setting would scale that one conversion: one multiplier on the presentation clock, never a change to each effect. No speed setting or UI is built now.
+- Examples: the default stagger spacing is **2 units** (≈ 133.333 ms). This supersedes the 125 ms first written on #540. The Present reveal delay is 5 units (game-events.md).
+
+**One presentation clock.** The scheduler, the Tween.js service (#562) and every effect's progress read **one monotonic presentation clock**, in milliseconds.
+
+- The existing frame loop advances it by the real time between visible frames. It is not capped.
+- Today's 0.05 s cap on `delta` (`src/main.ts`, `animate`) stays as a stability limit for per-frame simulation. The scheduler never mixes that capped delta with absolute deadlines, and no presenter mixes `performance.now()` stamps with rAF timestamps (the mixing in today's code is a gap; see below).
+- **Hidden tab (proposed default):** the clock pauses while the document is hidden and resumes where it stopped. A returning player sees the remaining feedback continue, not a burst of every overdue flash and sound. This pauses presentation only. The model, saving and the legality of moves are unaffected. The owner has not separately decided this; it is the reversible engineering default the research recommended (#543, #557).
+
+**Events and handlers.** A scheduled event is plain data:
+
+- a registered **handler key**;
+- an immutable captured **payload**;
+- the **run generation** it belongs to;
+- its **scope**;
+- its **due time** on the presentation clock;
+- a monotonic **insertion number**.
+
+Handlers are registered by handler or step name and own all behaviour. The scheduler orders and dispatches entries and never asks what an event, item, material, scene or mode is.
+
+A handler receives a narrow presentation context: services, the clock, and the scheduler's own schedule/cancel capability for child events. It never receives `GameRun`, mutation access or the session RNG. A handler either completes instantly or returns an **effect handle** that advances on the clock and settles exactly once, as finished or as cancelled. The existing exit lifecycle (`ExitEffectInstance`: `update`/`finish`/`dispose`, run by `createExitRunner` in `src/visual/exit-presentation.ts`) is adapted to that handle, not rewritten. The same goes for the activation pulse's `start`/`frame`/`stop`.
+
+**Ordering, late frames and re-entry.** On each update the scheduler dispatches every entry whose due time has passed, in **(due time, insertion number)** order. TinyQueue 3.0.0 holds that order, behind the scheduler's adapter, as #557 decided.
+
+- **Late frames:** a late frame dispatches each due entry **exactly once**, in order. Each effect is started **at its scheduled due time**, not the frame's time, so a slow frame does not push later starts back. No entry is lost or repeated, and no minimum frame duration is invented.
+- **Budget:** work beyond the per-update budget stays due and goes first on the next update, still in order.
+- **Re-entry:** a handler that schedules a child goes through the same API, never recursing into the update. A child that is already due joins the same bounded pass.
+- **Tween callbacks:** Tween.js callbacks schedule only through this API (#556).
+
+**Composition.** Three compositions are built on scheduling and completion, not on new timers:
+
+- **Sequence:** a step starts when the previous step's scope settles.
+- **Parallel:** a scope settles when all its children settle.
+- **Stagger:** children start at fixed offsets and do not wait for one another.
+
+Starts may overlap. For example, a 450 ms pulse is still running when the next one starts 2 units later. That is why the scheduler is a timeline and not a FIFO that waits for each effect to finish.
+
+**`staggerEvents`.** `staggerEvents` is a reusable trait and a client of this scheduler. It is not a timer of its own.
+
+- **Input:** an ordered, captured sequence of event descriptions, from whichever controller trait produced them. The rack's order is captured when scoring commits (#540).
+- **Configuration:** `spacing` in units (default **2**) and `first` in units (default **0**, so the first event starts immediately).
+- **Schedule:** event _i_ starts at _t_ + `first` + _i_ × `spacing`. With the defaults, the starts are at _t_, _t_ + 2 units and _t_ + 4 units: 0, ≈133.333 and ≈266.667 ms after _t_.
+- **Completion:** it returns a scope that settles when every child has settled.
+- **What it doesn't know:** rack, passive, scoring and item identity. Each event's handler, for example an item's own activation pulse (#485), owns that event's look and sound.
+
+**Scopes, completion and cancellation.** Every event belongs to a scope.
+
+- **Hierarchy:** scopes nest: run generation, then scene, then committed action (a play or a discard), then event, then descendants.
+- **Completion:** a scope is complete only when all of these have settled: its pending starts, its active effects, and every descendant. A handler registers its children before its own effect settles, so a parent cannot settle early. An empty queue is not completion while an effect is still running.
+- **Cancellation:**
+  - It is idempotent and cascades to descendants.
+  - It settles each effect once, as cancelled, and releases its resources once.
+  - It never undoes committed gameplay.
+  - A new run invalidates the old generation, so late callbacks from it do nothing.
+  - Leaving a scene cancels that scene's scopes, unless a documented transfer moves them to a compatible scene.
+
+**Model first, concurrent play.** The scheduler is downstream of committed outcomes (game-events.md).
+
+- **Immediate commit:** every valid placement, discard or other action commits immediately. That covers scoring arithmetic, RNG, rewards and the stage outcome.
+- **Input is never gated:** nothing refuses, queues or ignores input because presentation is busy. Only a terminal model state may forbid moves, by the game's rules.
+- **One scope per action:** each committed action gets its own scope, with an immutable payload: the captured lines, shown-score endpoints, activations, source handles and captured order. A later play cannot change an earlier play's feedback. Earlier feedback cannot overwrite newer state, re-award points or present a stale outcome.
+- **Ordering across plays:** **score narration is sequenced in committed-play order**: play 2's narration starts when play 1's has settled. Independent feedback such as play 2's flight starts at once and may overlap.
+- **Missing targets:** a handler whose live visual target has gone uses its declared policy: settle without drawing, or draw from its snapshot. It never picks up a replacement card.
+
+**Result screens.** A stage-won or game-over presentation needs both of these:
+
+- the model is terminal for that generation;
+- that action's **required** scoring and material narration scopes have settled.
+
+Required scopes contain only bounded effects. Ambient effects never hold a result screen open, and a cancelled or stale generation cannot announce a result. The model's rewards and outcome are not delayed by this wait.
+
+**Bounds and overload.** #545 sets finite limits, each with synthetic-load evidence:
+
+- queued entries;
+- active effects;
+- dispatch work per update;
+- descendant depth;
+- the longest an effect may run before it is force-settled with a diagnostic.
+
+What happens at a limit:
+
+- An admission failure can't lock input, unbalance a scope's count or silently drop a score.
+- The producing controller trait's declared fallback applies, for example collapsing to a captured summary. Optional decorative work may be omitted under configured policy.
+- The scheduler itself never hard-codes "score" or "decorative" categories.
+
+**Reduced motion.** Reduced motion is effect policy, not scheduling. Effects and controller traits choose their shorter or still path from their configuration, as the activation pulse and exit effects already do, and still settle their handles. Scheduling order, scope completion and scoring correctness are the same either way.
+
+**Sound.** A handler plays registered sounds through `playSfx` when it dispatches. No effect creates its own audio context or timer.
+
+**Saving.** The queue is never saved. Continue restores the authoritative run and renders its current state, without replaying scoring, rewards or sounds.
+
+**What stays outside the scheduler.** Continuous per-frame behaviour keeps its own `update`/`frame` loop:
+
+- grass sway and rocking;
+- smoke emission and laser haze;
+- springs;
+- bubbles;
+- shader clocks such as the refraction ripple (#674).
+
+These aren't discrete events: scheduling them would turn every frame into queue entries. They never gate completion. A bounded effect that a committed action starts, such as an exit or a pulse, belongs in the scheduler.
+
+**Today's scheduling (source audit, `d023b29`).** These are migration gaps, not precedents:
+
+| Where                                                                 | Today                                                                                                                                                                                                      | Target                                                                                                             |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/play-presenter.ts` `queueScoreSteps`/`updateScore`               | Its own timed queue: `scoreSteps` 320 ms apart, then `outcomeAt`. At `outcomeAt` it reads the **live** `game().state` for the shown score and `roundOutcome` (stale-outcome risk). Only `reset()` cancels. | Score narration events with captured endpoints and outcome, in a per-play scope sequenced in play order (#547).    |
+| `src/play-presenter.ts` flights and discards                          | `startedAt: performance.now()` compared with rAF time (two time bases). A landing re-reads the live field.                                                                                                 | Flight and discard effects on the presentation clock with captured targets and a missing-target policy (#548).     |
+| `src/game-run-controller.ts` `decided`/`followOutcomes`               | `stageWonAt`/`gameOverAt` absolute deadlines (900/1400 ms) gated on `presenter.busy`, not on score narration settling.                                                                                     | Result screens wait on the terminal model and the required scopes.                                                 |
+| `src/main.ts` `animate`                                               | No hidden-tab handling. After a long gap every absolute deadline falls due on the same frame.                                                                                                              | The presentation clock pauses while the tab is hidden.                                                             |
+| `src/visual/exit-presentation.ts`                                     | A good lifecycle (parallel steps, `maxSeconds`, finish/dispose), but `createExitRunner` has no gameplay caller yet.                                                                                        | Adapted as scheduler effect handles when exits are presented (#549, with #510/#520).                               |
+| `src/passive-rack.ts` `activate`, `arrivalAt`                         | The pulse starts at `performance.now()`. The stagger is a side effect of score-step timing. Arrivals are spaced 180 ms by `performance.now()`.                                                             | Activations scheduled by `staggerEvents` from the captured order (#542, #540). Arrivals on the presentation clock. |
+| `src/menus.ts` stage-won ledger rows, `src/shop-view.ts` `burnUnsold` | Their own `setTimeout`/`performance.now()` timers.                                                                                                                                                         | Scheduler clients when next changed. Not part of #544's required migration.                                        |
+
+Neither `tinyqueue` nor `@tweenjs/tween.js` is installed today. #546 and #562 pin them when they implement.
+
+**Order of work.**
+
+1. **#545:** the concrete interface and limits. Documentation only, merged first.
+2. **#546:** the scheduler, clock and scopes, with a test handler. No production code uses it yet.
+3. **#547, #548, #549:** migrate scoring, then flights and discards, then exits. Each reuses the existing effect implementations and removes only the scheduling it replaces.
+4. **#542:** `staggerEvents`.
+5. **#540:** the rack integration, with 2-unit spacing.
+
+The Tween.js service (#562) can land alongside. Nothing in this list may start before the step above it has merged.
+
+**Implementation acceptance.** Tests use an injected clock and fake handlers, never real sleeps. They cover:
+
+- tied due times keeping insertion order;
+- a long late frame, with every event dispatched once at its scheduled start;
+- nested and same-time children within the budget;
+- sequence, parallel and stagger completion, including effects still running after the queue empties;
+- cancellation before and during effects, cascading once;
+- a new run and a scene exit;
+- a missing target;
+- overload fallback after partial admission, without hanging completion;
+- two plays committed in quick succession: the second plays while the first's long stagger is still running, the totals and RNG are correct, each keeps its own feedback, and the narration stays in order;
+- the result screen waiting for required scopes but not for ambient ones;
+- the hidden-tab pause;
+- no model mutation or RNG draw from any handler;
+- a new handler registered without editing the scheduler.
+
+A browser check confirms sound/visual order and that input stays responsive during long sequences.
 
 ### Example: game progression is a flow
 
@@ -709,14 +868,14 @@ The pause menu is the pilot for screens as scenes. It is the `pause` scene, comp
 - **`pausesBelow`** stops input and updates reaching the scene underneath.
 - **`musicFilter { kind }`** filters the music while the scene is in front: `lowpass` muffles it (the pause menu), `highpass` thins it (Settings), both with the 550 Hz cut-off and a two-second ease. A scene pushed over it replaces the filter with its own, and `resume` restores it; exit clears it.
 - **`musicCue { cue }`** plays a named music cue as the scene enters; the audio service keeps each cue's handler. The title composes `title`, game over `windDown`, and the shop `resumeTable` (the table's music as the mode plays it, for a shop entered from the title). Play scenes start their own music with `musicTrack`. No "screen" tells the audio service what to play any more (#179).
-- **`gameOverScreen { items }`** shows the game over screen while the scene is in front: the run's totals (`RunController.runStats`) and one button per item, each dispatching its id like a menu item. Exit hides it. The run controller only follows the flow to the `game-over` scene; it never opens the screen itself (#90).
-- **`stageWonScreen { next }`** shows the stage-won pop-up while the scene is in front: the won stage's paid reward rows counting in (`RunController.stageReward`), then a button for `next` (`leaveStage`, "Visit shop"), which dispatches its id. Exit closes the pop-up. The run controller pays the rewards (gameplay) and then follows the flow outcome `run.stage.won`, which the standard flow maps to pushing `stage-won` (#91).
+- **`gameOverScreen { items }`** shows the game over screen while the scene is in front: the run's totals (`GameRunController.runStats`) and one button per item, each dispatching its id like a menu item. Exit hides it. The run controller only follows the flow to the `game-over` scene; it never opens the screen itself (#90).
+- **`stageWonScreen { next }`** shows the stage-won pop-up while the scene is in front: the won stage's paid reward rows counting in (`GameRunController.stageReward`), then a button for `next` (`leaveStage`, "Visit shop"), which dispatches its id. Exit closes the pop-up. The run controller pays the rewards (gameplay) and then follows the flow outcome `run.stage.won`, which the standard flow maps to pushing `stage-won` (#91).
 - **`musicTrack { pool }`** starts a fresh track as a play scene comes in front: the stages ask for the `stage` pool (a random vibe), the boss for the `boss` loop (#92). Covering and uncovering the scene (the pause menu) doesn't restart it, and quiet modes keep their stages silent. The pools are data in `src/audio/music-plan.ts`; nothing chooses music by phase or scene name.
 - **`firstPlayPrompt { colour, glow, laser?, armed, dance?, release }`** (`src/scene-traits/first-play-prompt.ts`) is the ghost cube that invites a stage's first play. All of its behaviour lives in the trait: its meshes, when it shows, its steady idle glow (no pulse or flash: the laser edges' noise and its `dance` with the music give it life), its response while a dragged block is over its cell ("armed": brighter, breathing larger), and its release when the first block is played (an outline that grows and fades). Reduced motion keeps each response without the movement. It asks the table only generic questions through `FirstPlayTable`: where the first play would go, how many blocks are on the field, which cell a drag would play into, whether anything is busy, and where to put a model. The play scenes compose it with the game's settings; the title doesn't, so it never shows there. The field's ordinary drop preview marks only attachments to a block, so on an empty table the trait's ghost is the only preview. `src/scene-traits/first-play-prompt.test.ts` guards that no prompt code remains in the field view, the run controller or `main.ts`.
 - **`enterSound { sfx }`** plays a sound as its scene comes in front: `round.start` for the stages and boss, `shop.open` for the shop, `ui.title.enter` and `ui.settings.enter` for the title and settings screens. **`exitSound { sfx }`** plays one as its scene leaves the stack: `ui.title.exit` and `ui.settings.exit`. Settings therefore plays no sound on its own Back button or Escape key; leaving it is the sound. **`shopEntrance`** runs the shop's camera entrance (#19) on entering, unless motion is reduced (#93). The run controller no longer asks whether the run is in the shop to choose either.
 - **`keyAction { key, action }`** dispatches a named action for a key, once per press (a held key's auto-repeat is ignored). Escape opens the pause menu from the title, the stages and the shop, resumes from the pause menu, and goes back from Settings. Keys reach the scenes from the window after bubbling, so a focused field or the open developer console handles them first.
 
-**Actions.** `RunController.dispatch(action)` carries out a named action. A **navigation action** (`openPause`, `openSettings`, `back`, `resume`) is mode data: `GameMode.navigation` maps each one to a stack operation, applied by the same `followFlow` as the game flow. A **game action** (`quitToTitle`, `newRun`, `leaveStage`) runs its handler in the run controller. A menu item may name the sound its button plays (`sfx`, `ui.click` by default). The Settings scene composes `settingsPanel`, which shows and hides the Settings panel (`src/settings-panel.ts`, #89): its own controls, kept in step with the player's settings, with Back dispatching the `back` navigation action. Settings no longer has a music track of its own; its `musicFilter` thins whatever is playing.
+**Actions.** `GameRunController.dispatch(action)` carries out a named action. A **navigation action** (`openPause`, `openSettings`, `back`, `resume`) is mode data: `GameMode.navigation` maps each one to a stack operation, applied by the same `followFlow` as the game flow. A **game action** (`quitToTitle`, `newRun`, `leaveStage`) runs its handler in the run controller. A menu item may name the sound its button plays (`sfx`, `ui.click` by default). The Settings scene composes `settingsPanel`, which shows and hides the Settings panel (`src/settings-panel.ts`, #89): its own controls, kept in step with the player's settings, with Back dispatching the `back` navigation action. Settings no longer has a music track of its own; its `musicFilter` thins whatever is playing.
 
 ### Run rules and the game flow (#94)
 
@@ -767,7 +926,7 @@ The extracted services own presentation and interaction. `main.ts` constructs an
 | `table-renderer.ts`                     | Owns the WebGL scenes, lights, reflection environment, drag layer and frame drawing. The card room is its physical backdrop.                                                                                                      |
 | `play-presenter.ts`                     | Animates accepted plays and discards, presents scoring lines and announces outcomes to the run controller.                                                                                                                        |
 
-`src/run-controller.ts` completes the split. It owns the run and its mode: the `GameRun`, the mode configuration (run rules, deck and save key), starting, resuming and saving runs, moving between stages and the shop, following an announced outcome with the stage-won pop-up or game over, applying settings, and opening the start screen. It answers the other services through `rules` (input), `menus` and `screenScenes` (overlays) and `consoleApp` (the console). `src/scene-behaviours.ts` holds the behaviour each scene trait installs.
+`src/game-run-controller.ts` completes the split. It owns the run and its mode: the `GameRun`, the mode configuration (run rules, deck and save key), starting, resuming and saving runs, moving between stages and the shop, following an announced outcome with the stage-won pop-up or game over, applying settings, and opening the start screen. It answers the other services through `rules` (input), `menus` and `screenScenes` (overlays) and `consoleApp` (the console). `src/scene-behaviours.ts` holds the behaviour each scene trait installs.
 
 **Mode traits shape run rules (#36).** `src/mode-trait-rules.ts` maps a mode trait to its contribution to the run's rules, keyed by the trait: `passiveRack` sets `rackCapacity`, and `shop` sets `stockShop`. `baseRunRules` applies whatever the mode composes, then the run setup steps adjust the result. The run controller holds no phase or mode-trait branches; its last ones moved to their owners:
 
@@ -882,6 +1041,14 @@ When a rule fires, the thing it belongs to swells and glows: a passive's rack to
 - **Reduced motion:** keeps the glow and drops the swell, as the effect's frame says.
 
 Presentation only: the pulse shows activations the rules already decided (a line's committed `activations`, a resolved discard's), and never blocks input or decides a result.
+
+### Activation descriptor (#484)
+
+Concise text for what an activation did, alongside its pulse: `src/activation-descriptor.ts`. It reads only the activation's **resolved outcomes** (#483), so it never rerolls, re-runs a rule or reads the model, and it renders nothing itself.
+
+- **Composition:** a definition composes `activationDescriptor: { descriptor, config }` naming a registered descriptor (`activationDescriptors`); omitted, the shared `resolvedOutcomes`. A host (rack, field) asks for the text with the activation it was given (`describePassiveActivation`) and never asks which item it holds.
+- **Formatting:** `resolvedOutcomes` writes one line per effective operation, in the order they applied, through the formatter registered for each operation (`outcomeFormatters`, keyed by the effect's registered name): `+6` (an added score: a die's actual roll, Crossroads' effective bonus), `×2`, `^1.2`, `+2 coins` / `+1 coin`, `+1 passive`, or `Rack full` when a grant found no room. Numbers keep at most two decimals. An operation with no formatter that changed the working value shows `a → b`; anything else is left out, never invented. A coin command's committed fact repeats its effect's line and is omitted.
+- **Lifetime:** the label lasts as long as the pulse's effect (`milliseconds(effect)`); the host owns placement.
 
 ### Shared block face artwork (#292)
 
@@ -1166,12 +1333,12 @@ A contained block may list **inclusions**: things suspended in its contents, reg
 
 **`growingGrass`** (`src/visual/growing-grass.ts`) is an inclusion reading `liquidSurface` and the shared frame's rotation:
 
-- **Turning:** the block's world rotation moving more than `turnDegrees` (30°) from where the grass started clears every blade at once and resets the stillness timer. Camera motion doesn't change the block's rotation. The tolerance sits above the board's automatic wobble (8–12°), which would otherwise reset it forever, and far below a deliberate quarter turn (90°).
+- **Target correction (#761):** turning resets new-growth stillness but does not clear existing blades. Blades stay at stored local roots/orientations and disappear only when fully buried, not on partial cover or falling soil. [Grass burial](presentation-contracts.md#grass-survives-until-fully-buried) is built (#765), replacing the clear-on-turn and live-root projection. Camera movement never deletes grass.
 - **Surface readiness:** stillness is timed from the end of the last turn. No blade is born until the published surface normal is within `settledDegrees` (20°) of world up seen from the block, so grass never grows on an obsolete top. The first blade therefore appears at whichever comes later: `delay` (5 s) of stillness, or the earth settling. After a quarter turn at `settleSeconds: 5`, settling to 20° takes about 7.5 s.
 - **Growth:** one blade at a time, about `interval` (0.12 s) apart with jitter, at random places on the top inside the walls. Each tip draws up from its base over `growSeconds` (0.8 s), and earlier blades stay. The pool is bounded (90 blades).
 - **Rendering:** one opaque mesh of triangles, in the contents' opaque layer.
 - **Reduced motion:** blades appear at full height instead of growing.
-- **Previewing:** the object browser's turntable keeps turning the block, so grass correctly never grows there. To see it, hold a block still in the game.
+- **Previewing:** automatic turntable motion can prevent new growth. The target [manual preview rotation](presentation-contracts.md#object-browser-manual-rotation-746) pauses the pose on release and continues internal animation, allowing inspection after stillness.
 
 ### Magic Lock: contained stars (#349)
 
@@ -1362,6 +1529,8 @@ The runner's tests use a fake timer and renderer, so they check the logic (rejec
 
 ## Approximate crystal optics and the comparison room (#523, #524)
 
+**Production decision (#749, supersedes earlier “production unchanged” statements below):** the owner selected the Internal look as **Total Internal Reflection Crystal**, including its transmogrifier. [Promotion contract](presentation-contracts.md#prismatic-crystal-promotion-749) covers shared prepasses, renderer ownership, initial settings and verification. Earlier sections below describe historical experiments/current implementation; they do not override this target. Precise slider tuning is optional later optimization, not a blocker.
+
 **Room name (#679).** Dev 17 is the **Transparent materials bench**, reflecting its broader crystal, water and transparent-material experiments. This is the current human-facing title and documentation term. Its entry remains `?mode=dev17`; existing `devCrystalComparison`, `crystal-comparison` module paths and serialized handles remain compatibility/internal names. Current UI/accessible room labels should use the new name; historical screenshots, source-audit references and issue history remain evidence under their original names.
 
 **Water gallery and preset export (#673).** [Refractive water prototypes](refractive-water-prototypes.md) defines the next two Dev 17 experiments: calm cyclic lookup distortion and the same with composable rising bubbles, using the existing fake-refraction baseline. It also defines complete Copy settings JSON via registered backend schemas, independent of slider labels and scoped tuning. Existing production water/crystal choices remain unchanged; capture, volume, reduced-motion and reproducibility boundaries are explicit in that design.
@@ -1406,6 +1575,114 @@ A small panel shows the backend's name and the renderer counts (draw calls, tria
 
 Visual acceptance is the owner's comparison in the room, reported on #524.
 
-## GitHub action briefing tool (#626)
+## GitHub action briefing tool
 
-The plain JavaScript [read-only triage CLI](github-triage-cli.md), run through npm on Node 20+ with the existing gh authentication/session, collects paginated GitHub facts through authenticated `gh`, applies registered workflow analysis rules and emits a compact evidence-linked action briefing or versioned JSON. Full-ticket mode provides intake context; explicit since/checkpoint and offline-cache semantics prevent stale snapshots from looking current. Natural-language questions and apparently satisfied dependencies remain inspection candidates, never authoritative decisions. The tool does not mutate GitHub and stays outside production.
+The developer-only action briefing tool is owned by the standalone [github_triage project](https://github.com/trebizondoculpepper/github_triage). poker_blocks has no dependency on it: developers install the `github-triage` command globally; see [the installation contract and evidence](github-triage-cli.md). The CLI inherits the game checkout's working directory and authenticated gh session. Collector, registered workflow rules, presentation, configuration, lifecycle and tests are composed and maintained in that project, outside the game build. No local implementation or fallback is retained. Freshness/completeness and candidate-only advice do not confer authority to mutate or merge.
+
+## Agreed presentation follow-ups (#761)
+
+[Agreed presentation contracts](presentation-contracts.md) is the target for material transition facts and independent dissolve/audio responses (#479/#539), resolved activation operands (#483), laser target-guide controller (#500), experimental smoke/dust composition (#466), manual preview rotation (#746), reviewed water/flame/grass corrections, lightweight imported assets (#747/#748/#753/#759), crystal promotion (#749), profiler animation fidelity (#752), and configured music operations (#758). It records ownership, configuration, lifecycle, composition, source evidence and initial defaults. These are documentation-first targets, not claims that runtime migration has shipped.
+
+## Ordered card ownership target (#550)
+
+[Ordered cards and authoritative ownership](ordered-card-ownership.md) specifies index-zero pop, seeded shuffle, atomic zone transfers, run-level inventory, discardable composition, stage/round collection order and compatible save boundaries. Ordered pop and the once-per-stage seeded shuffle are built (#551, `src/deal.ts`): drawing never uses the random stream. Legacy reconstruction receipts are not live cards. Runtime migration of zone transfers, discardable and inventory remains #574/#472 and the linked lifecycle work.
+
+## Concrete visual scheduling interface (#545)
+
+[Visual-event scheduler interface](visual-event-interface.md) finalizes the shared API, clock boundary, admission/active/depth/lifetime limits, overload summary path, cancellation and migration acceptance after #541. Its capacity probe is reproducible evidence for bounds, not a production performance benchmark. The earlier hidden-tab pause, scheduled-time late starts and committed-play narration order are adopted as reversible engineering defaults under the owner's instruction; no further owner decision blocks this implementation.
+
+## Rankless opaque active contract (#552)
+
+[Opaque rankless actives and replacement](opaque-actives.md) defines capability-based placement/value/inspection/discard, nested creation-fixed payload ownership, transactional opening/adoption, generation policy, validation and save/clone boundaries. Present composes these generic capabilities; it is not a branch in generic code. This supplements the acquisition/reward contract in `presents.md` and leaves runtime to #553–#555/#497.
+
+## Clone, reset and inherited lifecycle facets (#580)
+
+[Clone and reset facets](clone-reset.md) defines exact unplaced cloning, resettable/nonResettable behavior, atomic reset-clone, inherited explicit retention/reset configuration and lifecycle integration. It preserves identity/state/RNG boundaries, run bonuses and fixed hidden payloads. It is the target for #581–#584 and #504–#506; generic lifecycle callers dispatch registered behavior instead of checking material or trait flags.
+
+## Profiler capture-pass ownership (#776)
+
+[Profiler render-pass capability](profiler-render-passes.md) extends the automatic-profiler host contract for multi-pass appearances. Recipes declare registered production pipeline requirements; hosts own scoped targets, timing and disposal. Generic measurement code never branches on an optics/material identity, and all contributing passes are measured.
+
+## Foreground menu host target (#627)
+
+[Foreground title and pause menus](foreground-menus.md) specifies configured panel-free menu cubes, visible running title scene, visible frozen pause scene, Settings' retained panel, scene-stack input isolation, focus and cleanup. It supersedes earlier instructions to preserve title/pause menu backdrops; it does not hide the underlying 3D scene. Runtime changes remain #628/#530.
+
+## Release-status facet
+
+[Release status and catalogue access](release-status.md) defines certified/provisional admission and shared bench/inspection descriptors. Definitions bring registered availability behavior; generic code never checks a status trait as a flag. Lookup/restoration remains separate from new acquisition. This applies across object families and does not replace ordinary unlock or shop rules.
+
+## Experimental design records
+
+Reproducible experiment briefs and measured outcomes live in [experiments](experiments/README.md). Their provisional parameters are not production rules. The [spatial-modifier brief](experiments/spatial-modifiers.md) separates packing, material mass and topology, and records the planned bench and evidence limits. Promote decisions into canonical rules and architecture before implementation.
+
+## Experimental pivot policies
+
+[The pivot-comparison experiment](experiments/pivot-comparison.md) specifies registered centroid and mass-weighted queries plus a Dev controller for switching on the same layout. This does not change the production centroid or couple pivot selection to rocking speed. Query data, configured policy and numeric presentation mechanics have separate owners.
+
+## Physical mass and rocking controller
+
+[Physical mass and rocking](playfield-rocking.md) defines authored density/volume recipes, pure snapshot-scoped mass queries, and controller-owned quiet/ramp/mass-rate envelopes. Real-material reference values and composite/fantasy assumptions are distinguished. Normal pivot selection remains the geometric centroid; #823 explores a separate weighted pivot.
+
+## Composable starting-deck builders
+
+[Deck builders](deck-builders.md) defines mode-composed builder definitions invoked through registered run setup. Ordered registered operations own template construction, material assignment, special-card creation and shuffle. Generation and restoration remain distinct; preserve existing generator semantics for old saves. The pivot experiment uses configuration of this shared capability, not a room-specific deck factory.
+
+## Provisional spatial-modifier trials
+
+[The experimental trial contract](experiments/spatial-modifiers.md#provisional-modifier-implementation-contract-814) defines registered snapshot queries, row contribution scope, provisional density/mass/diversity curves, dev controls and reproducibility. These are experiment-only targets, not certified normal-game modifiers. Implementations follow the release-status, physical-mass and deck-builder prerequisites.
+
+## Passive scenario bench and instance settings (#867)
+
+[Passive scenario testing](experiments/passive-test-bench.md) defines a Dev controller composing registered setup for deck/hand/passives/field and optional replay. Reusable configurablePassive behavior validates per-instance overrides and constructs ordinary instance rules; shared definitions stay immutable. Use existing rack trait codecs and schema-driven controls; no test-room identity or passive-name branches.
+
+## Outcome presentation contract (#866)
+
+[Outcome facts and audio](outcome-presentation.md) separates transactional outcome/progression facts, required-sequence completion cues and independently composed result-scene enterSound responses. The model resolves rescue opportunities before final defeat; presentation never revises it. Burn/destruction audio follows captured effect starts through the shared scheduler. This target supersedes direct controller sound calls and awaited pre-commit burn behavior.
+
+## Prepared session adoption for experimental trials (#900)
+
+[Trial session adoption](experiments/trial-session-adoption.md) defines the generic injected run-host seam used by composed Dev scenario controllers. Policy selects configuration/seed; registered factories prepare; the host atomically adopts run/rules/identity universe/RNG/provenance and rebinds presentation. Invalid preparation leaves the current trial intact. The seam is not a mode identity branch or a parallel game controller.
+
+## Face-connected topology query (#884)
+
+[The hoop query contract](hoop-query.md) selects the owner-approved face-only topology for In the Loop, with exact bounded refinement/Betti calculation, explicit unavailable diagnostics and a declared modifier-specific neutral fallback. Queries are pure and snapshot-scoped; the renderer and scorer do not infer geometry or choose identity-specific rules. Runtime remains #885/#886 and certification is separate.
+
+## Inherited lifecycle declaration resolution (#915)
+
+[The declaration matrix](block-lifecycle-declarations.md) specifies the pure single-parent resolver, complete overrides, explicit reset facets, per-family authoring values and save compatibility for #916/#917. Component recipes and boundary runners own execution; generic code does not derive policy from material, zone or trait flags.
+
+## Terminal loss field presentation
+
+The [terminal field-burn contract](loss-field-burn.md) separates required deciding-action effects, a bounded 80%-completion exit gate and an independently owned cancellable tail. Visual ghosts cannot mutate gameplay or session RNG.
+
+## Configured optical ripple refinements
+
+[Calm Water refinement contract](calm-water-refinements.md) gives the preset ownership of period bounds, outline opacity and independent normal perturbation; common controls, codecs and clocks consume those capabilities uniformly.
+
+## Current offer eligibility
+
+[Shop eligibility](shop-eligibility.md) uses definition-owned weight curves and registered eligibility providers for generation, restoration and purchase validation, while preserving compatible already owned objects.
+
+## Shop stock motion composition
+
+[Shop stock motion](shop-stock-motion.md) defines the shared beat floor, independent transform ownership, pose-preserving handoffs and registered input-state feedback. Motion never decides purchases or gates input.
+
+## Result-menu completion contract
+
+Configured result-menu controllers mount accessible block actions after bounded information-presentation completion, without awarding rewards or deciding outcomes in visual callbacks. See [result-menu contract and source audit](result-menus.md).
+
+## Shop Continue presentation
+
+The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD word-cube host, semantic action and fixed material configuration; its canvas does not intercept input outside registered action bounds.
+
+## Verified experiment configuration imports
+
+[Exact-build configuration compatibility](experiments/configuration-compatibility.md) bounds the first import/export delivery: a trusted adapter supplies the current immutable build identity; a registered/pure import boundary rejects mismatches before scenario construction, then performs normal schema/configuration checks. Cross-build semantic verification is deferred. A display version, mode identity, imported claim or partial field list cannot substitute for that identity. This affects experimental artifacts, not production saves or game rules.
+
+## Passive multi-action lifecycle and instance state
+
+[Passive lifecycle actions and instance state](passive-lifecycle-state.md) defines multiple registered actions per passive, phase-local rack ordering, persistent instance state versus operation-scoped values, transactional state/RNG and restoration. [Could It Be Magic Now?](experiments/could-it-be-magic-now.md) provides the agreed experimental counter use case. Implementation follows this documentation separately.
+
+## Debug snapshot command
+
+[Read-only debug snapshot](debug-snapshot.md) defines the development console report, registered bounded providers, model/presentation ownership summaries, explicit clipboard fallback and no-side-effect guarantees. It is diagnostic evidence, not an import format or replay system (#987).

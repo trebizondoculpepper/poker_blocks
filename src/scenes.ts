@@ -14,6 +14,8 @@ export type SceneTraitBehaviour<Context, Config extends object> = {
   exit?(context: Context, config: Config): void;
   /** The scene is in front again after the scene pushed over it popped. */
   resume?(context: Context, config: Config): void;
+  /** A scene was pushed over this one; `resume` follows when it pops (#530). */
+  cover?(context: Context, config: Config): void;
   update?(context: Context, config: Config, dt: number): void;
   /** Return true when this trait consumes the event and stops propagation below. */
   handles?(context: Context, config: Config, event: unknown): boolean;
@@ -103,6 +105,8 @@ export class SceneManager<Traits extends SceneTraitConfigs, Context> {
   /** Enter a scene over the current one without exiting or re-entering the lower scene. */
   push(id: string): void {
     const next = this.requireScene(id);
+    const below = this.current;
+    if (below) this.cover(below);
     this.active.push(next.id);
     this.enter(next);
   }
@@ -168,6 +172,12 @@ export class SceneManager<Traits extends SceneTraitConfigs, Context> {
   private enter(scene: Scene<Traits>): void {
     for (const [name, config] of Object.entries(scene.traits)) {
       this.behaviours.get(name as keyof Traits & string).enter?.(this.context, config!);
+    }
+  }
+
+  private cover(scene: Scene<Traits>): void {
+    for (const [name, config] of Object.entries(scene.traits)) {
+      this.behaviours.get(name as keyof Traits & string).cover?.(this.context, config!);
     }
   }
 

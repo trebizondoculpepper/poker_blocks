@@ -12,6 +12,7 @@
  */
 import { createSceneLayer } from "./scene-layer";
 import * as THREE from "three";
+import { boardLights, handLights } from "./visual/lighting";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { setReflectionEnvironment } from "./visual/block-appearance";
 import { createCardRoom, type ShadowQuality } from "./visual/card-room";
@@ -29,8 +30,9 @@ export type TableRenderer = {
   setDragLayer(cube: THREE.Object3D, dragging: boolean): void;
   render(boardCamera: THREE.Camera, handCamera: THREE.Camera): void;
   /**
-   * A scene composing `tableBackground` came to the front, or left (#147). The room and table
-   * are drawn while any such scene is on the stack, so the title shows none of it.
+   * A scene composing `tableBackground` came to the front, or left (#147). The room, the table
+   * and the blocks on it are drawn while any such scene is on the stack, so the title shows none
+   * of it (#789).
    */
   tableEntered(entered: boolean): void;
   /**
@@ -86,14 +88,8 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
 
   // The hand keeps its neutral studio light; the board sits in the warmer card room,
   // whose overhead lamp (see createCardRoom) adds the shadows.
-  handScene.add(new THREE.HemisphereLight(0xffffff, 0x56627b, 2.4));
-  const handSun = new THREE.DirectionalLight(0xffffff, 2.4);
-  handSun.position.set(-3, 6, 7);
-  handScene.add(handSun);
-  scene.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3226, 2));
-  const boardFill = new THREE.DirectionalLight(0xffffff, 1.3);
-  boardFill.position.set(-3, 6, 7);
-  scene.add(boardFill);
+  handScene.add(...handLights());
+  scene.add(...boardLights());
   const cardRoom = createCardRoom(scene, [renderer, front], backgroundLayer);
   // Something for crystal and metals to reflect: a soft studio room, prefiltered once, on the
   // front canvas, where the blocks are drawn.
@@ -145,18 +141,23 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
       cube.traverse((object) => (dragging ? object.layers.set(dragLayer) : object.layers.set(0)));
     },
     render(boardCamera, handCamera) {
-      // Drawn only while the table's layer is in the page.
-      if (backLayer.mounted) renderBack(boardCamera);
-      // The front canvas: the board's blocks (the default layer only), then the hand over
-      // them, then dragged blocks on a fresh depth buffer, so nothing can clip into them.
       front.clear();
-      const layers = boardCamera.layers.mask;
-      boardCamera.layers.set(0);
-      const background = scene.background;
-      scene.background = null;
-      front.render(scene, boardCamera);
-      scene.background = background;
-      boardCamera.layers.mask = layers;
+      // The table, and the blocks standing on it, are drawn only while a scene composing
+      // `tableBackground` is on the stack (#789): a scene without the table, such as the title,
+      // never renders the field, so a finished run's blocks can't show through its attract
+      // sequence. The field itself is untouched; it shows again when the table does.
+      if (backLayer.mounted) {
+        renderBack(boardCamera);
+        // The front canvas: the board's blocks (the default layer only), then the hand over
+        // them, then dragged blocks on a fresh depth buffer, so nothing can clip into them.
+        const layers = boardCamera.layers.mask;
+        boardCamera.layers.set(0);
+        const background = scene.background;
+        scene.background = null;
+        front.render(scene, boardCamera);
+        scene.background = background;
+        boardCamera.layers.mask = layers;
+      }
       if (handScenes > 0) renderHand(handCamera);
     },
     tableEntered: (entered) => backLayer.entered(entered),

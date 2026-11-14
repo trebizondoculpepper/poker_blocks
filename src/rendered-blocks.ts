@@ -1,4 +1,5 @@
-import { cardFaceArt } from "./visual/face-art";
+import { blockFaceArt } from "./block-presentation";
+import { acquiredBonusDescriptor } from "./modifier-registers";
 /**
  * The three.js side of every block on screen: a cube built from the block's appearance,
  * in the hand (small, rocking) or on the table (full size, in the board assembly). The hand
@@ -13,6 +14,7 @@ import { randomRock, type Rock, type RockState } from "./motion";
 import type { Selection } from "./traits/selectable";
 import type { Cell } from "./traits/attachable";
 import { createBlockAppearance, disposeMaterialTextures } from "./visual/block-appearance";
+import { blockOutline } from "./visual/block-outline";
 
 /** The outline colour of a selected block (#305): the game's accent cyan. */
 const selectionOutline = 0x65f4dd;
@@ -29,7 +31,7 @@ export type RenderedBlock = {
   boardMaterials: THREE.MeshStandardMaterial[];
   /** Meshes inside the block, such as the crystal's fire. */
   extras: (THREE.Mesh | THREE.Points)[];
-  edgeGeometry: THREE.EdgesGeometry;
+  edgeGeometry: THREE.BufferGeometry;
   edgeMaterial: THREE.LineBasicMaterial;
   /** The edge colour and opacity its material gives it, restored when it's deselected. */
   edgeLook: { color: number; opacity: number };
@@ -84,24 +86,24 @@ export function createBlockViews(parents: {
     create(block, size, location) {
       const look = cardLook(block);
       const appearance = createBlockAppearance(
-        cardFaceArt(block.traits.identity, { face: look.cardFace }),
+        blockFaceArt(block, {
+          face: look.cardFace,
+          bonus: acquiredBonusDescriptor(block),
+        }),
         look,
         size,
       );
-      const { geometry, textures, edgeColor, edgeOpacity } = appearance;
+      const { geometry, textures } = appearance;
       const handMaterials = appearance.materials;
       const boardMaterials = appearance.boardMaterials ?? handMaterials;
       const materials = location === "board" ? boardMaterials : handMaterials;
       const cube = new THREE.Mesh(geometry, materials);
       cube.renderOrder = appearance.faceLayer ?? 0;
       cube.castShadow = cube.receiveShadow = true;
-      const edgeGeometry = new THREE.EdgesGeometry(geometry);
-      const edgeMaterial = new THREE.LineBasicMaterial({
-        color: edgeColor,
-        transparent: edgeOpacity < 1,
-        opacity: edgeOpacity,
-      });
-      cube.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
+      const outline = blockOutline(appearance);
+      const edgeGeometry = outline.geometry;
+      const edgeMaterial = outline.material as THREE.LineBasicMaterial;
+      cube.add(outline);
       const extras = appearance.extras ?? [];
       for (const extra of extras) cube.add(extra);
       parents[location].add(cube);
@@ -116,7 +118,7 @@ export function createBlockViews(parents: {
         extras,
         edgeGeometry,
         edgeMaterial,
-        edgeLook: { color: edgeColor, opacity: edgeOpacity },
+        edgeLook: { color: appearance.edgeColor, opacity: appearance.edgeOpacity },
         location,
         cell: null,
         baseY: 0,
@@ -142,6 +144,8 @@ export function createBlockViews(parents: {
         edgeMaterial.color.setHex(active ? selectionOutline : edgeLook.color);
         edgeMaterial.opacity = active ? 1 : edgeLook.opacity;
         edgeMaterial.transparent = edgeMaterial.opacity < 1;
+        // A live outline setting (#796) yields to the selection while it is selected.
+        edgeMaterial.userData.selected = active;
         edgeMaterial.needsUpdate = true;
       });
     },

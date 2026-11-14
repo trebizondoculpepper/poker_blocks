@@ -10,8 +10,32 @@
  * so the runner itself is tested with fakes.
  */
 import * as THREE from "three";
-import type { ProfiledObject, ProfilingCase } from "./cases";
+import "./hosts";
+import {
+  defaultProfilingHost,
+  oneBlock,
+  profilingHosts,
+  type ProfiledObject,
+  type ProfilingCase,
+  type ProfilingPhase,
+  type ProfilingUnit,
+} from "./cases";
+
+/** A case without phases is sampled once, as one steady phase with no name. */
+const steadyPhase: { name: string | undefined; sampling: ProfilingPhase["sampling"] } = {
+  name: undefined,
+  sampling: "steady",
+};
 import type { GpuTimer } from "./gpu-timer";
+import {
+  createPipeline,
+  profilingPasses,
+  type PassHandler,
+  type PassReference,
+  type ProfilingPipeline,
+} from "./pipelines";
+import type { Registry } from "../../core/registry";
+import type { PassRenderer } from "../../visual/render-pass";
 import { useCosmeticRandom } from "../../visual/block-effects";
 
 /** A small seeded stream (mulberry32): the same numbers for the same seed, run after run. */
@@ -34,10 +58,12 @@ export type RendererCounts = {
   programs: number;
 };
 
-/** The parts of a renderer the runner uses (a THREE.WebGLRenderer fits). */
-export type ProfilerRenderer = {
-  render(scene: THREE.Scene, camera: THREE.Camera): void;
+/** The parts of a renderer the runner and its passes use (a THREE.WebGLRenderer fits). */
+export type ProfilerRenderer = PassRenderer & {
   info: {
+    /** Off while a frame renders, so its counts add up across every pass (#764). */
+    autoReset: boolean;
+    reset(): void;
     render: { calls: number; triangles: number };
     memory: { geometries: number; textures: number };
     programs?: readonly unknown[] | null;
@@ -51,6 +77,18 @@ export type ProfilerEnvironment = {
   now(): number;
   /** Resolves on the next animation frame. */
   nextFrame(): Promise<void>;
+  /**
+   * Reflections made by this environment's own renderer, for reflective looks (#712); none when
+   * it can't make them (a test).
+   */
+  reflections?(): THREE.Texture;
+  /** Whether the renderer's WebGL context has been lost (#722); the run stops if so. */
+  contextLost?(): boolean;
+  /**
+   * Hear the moment the context is lost, so the active case stops at once rather than measuring
+   * a renderer that no longer draws (#726 review). Returns how to stop listening.
+   */
+  onContextLost?(listener: () => void): () => void;
   /** Whether the page is hidden now (its timing is not trustworthy). */
   hidden(): boolean;
   /**
@@ -61,13 +99,15 @@ export type ProfilerEnvironment = {
 };
 
 export type RunOptions = {
-  /** Objects in the collection; a case's own default when omitted. */
-  count?: number;
+  /** The collection sizes measured, in order; the standard [1, 10, 50] when omitted. */
+  counts?: readonly number[];
   /** Frames sampled per set. */
   frames: number;
   /** Frames rendered before sampling, to compile shaders and settle. */
   warmupFrames: number;
   seed: number;
+  /** Milliseconds one case or phase may take before it is recorded as timed out (#722). */
+  timeoutMs?: number;
   /** Retakes allowed for a set spoiled by the tab being hidden. */
   retries?: number;
   signal?: AbortSignal;
@@ -85,24 +125,80 @@ export type SampleSet = {
   gpuRejected: number;
 };
 
+/** One count's measurement and its baseline-relative estimate (not an additive per-object cost). */
+/**
+ * How a count was framed: its square grid and the camera's distance and field of view. A fixed
+ * viewport fits each count, so per-object screen area shrinks as the count grows; compare a
+ * series as a fixed-viewport collection test, not as constant per-object cost.
+ */
+export type Framing = { gridSide: number; cameraDistance: number; fov: number };
+
+export type CountResult = {
+  count: number;
+  framing: Framing;
+  /** Milliseconds to build this count's objects and render their first (compiling) frame. */
+  creation: { build: number; firstFrame: number };
+  set: SampleSet;
+  /** Null when the case's baseline can't be matched (`CaseResult.baselineUnavailable`). */
+  relative: { gpu: number | null; cpu: number | null };
+};
+
+/**
+ * The passes a case was rendered through (#764), so comparisons are inspectable: its declared
+ * pass references in order, how many, and the milliseconds spent building them (first-use setup,
+ * kept apart from the sampled frames).
+ */
+export type PipelineRecord = {
+  passes: readonly PassReference[];
+  passCount: number;
+  /** Null for a record from before pipelines, which never timed one. */
+  setup: number | null;
+};
+
+/** The standard sweep's counts (doc/automatic-profiling.md, "Sweep and representative host"). */
+export const standardCounts: readonly number[] = [1, 10, 50];
+
+/** How long one case or phase may run, by default (doc/automatic-profiling.md): 120 seconds. */
+export const defaultCaseTimeout = 120_000;
+
 export type CaseResult = {
   id: string;
   family: string;
   label: string;
   phase?: string;
-  /** Milliseconds to build one object and to render its first (compiling) frame. */
-  creation: { build: number; firstFrame: number };
+  /** What one instance is, its representative variant, and how its phase was sampled (#711). */
+  unit: ProfilingUnit;
+  variant?: string;
+  sampling: ProfilingPhase["sampling"];
+  /** The registered host it was drawn in (#712). */
+  host: string;
+  /** Its render pipeline (#764): every sample, the baseline included, rendered through it. */
+  pipeline: PipelineRecord;
   baseline: SampleSet;
-  one: SampleSet;
-  collection: SampleSet;
-  /** Baseline-relative estimates (not additive per-object costs). */
-  relative: { oneGpu: number | null; oneCpu: number; collectionGpu: number | null };
+  /** Why baseline-relative values are withheld, when a pass can't render an empty collection. */
+  baselineUnavailable?: string;
+  /** One record per requested count, in the order run (#721): never fixed one/collection slots. */
+  counts: CountResult[];
   /** Resources left after disposal compared with before the case: positive means a leak. */
   leaked: { geometries: number; textures: number };
 };
 
+/** A case or phase that produced no result, and why (#722): recorded, never a zero-cost row. */
+export type CaseFailure = {
+  id: string;
+  phase?: string;
+  kind: "error" | "timeout" | "context-lost";
+  reason: string;
+};
+
 export type RunResult = {
   results: CaseResult[];
+  /** Cases that failed or timed out; the run went on with the next independent case. */
+  failures: CaseFailure[];
+  /** Why the run stopped before every case ran, other than a cancel: a lost WebGL context. */
+  aborted: "context-lost" | null;
+  /** Cases and phases never started because the run stopped (cancelled or aborted). */
+  notRun: string[];
   cancelled: boolean;
   gpuTiming: "available" | "unavailable";
   /** Sets that stayed spoiled by a hidden tab after every retry. */
@@ -130,13 +226,37 @@ export function gridPositions(count: number, spacing = 1.4): THREE.Vector3[] {
 
 class Cancelled extends Error {}
 
-export function createProfilerRunner(env: ProfilerEnvironment) {
+export function createProfilerRunner(
+  env: ProfilerEnvironment,
+  passes: Pick<Registry<PassHandler>, "has" | "get"> = profilingPasses,
+) {
   const scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-  sun.position.set(3, 5, 4);
-  scene.add(sun);
+  // No lights of its own: each case's registered host lights the scene (#712).
   const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 200);
+  /** Every profiled object is built under this root, and nothing else is: passes hide it. */
+  const collection = new THREE.Group();
+  scene.add(collection);
+
+  /** Build a case's declared pipeline in its host, on this runner's renderer, scene and camera. */
+  function preparePipeline(profile: ProfilingCase): Promise<ProfilingPipeline> {
+    return createPipeline(
+      profile.pipeline ?? [],
+      {
+        renderer: env.renderer,
+        scene,
+        camera,
+        root: collection,
+        host: profile.host ?? defaultProfilingHost,
+      },
+      passes,
+    );
+  }
+
+  /** The pipeline frames render through: the running case's, else the main render alone. */
+  const mainOnly: Pick<ProfilingPipeline, "render"> = {
+    render: () => env.renderer.render(scene, camera),
+  };
+  let pipeline = mainOnly;
 
   /** The running run's cancel signal, so frame waits can be abandoned when it fires. */
   let signal: AbortSignal | undefined;
@@ -157,7 +277,44 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     });
   }
 
-  const counts = (): RendererCounts => ({
+  /**
+   * A factory's promise, or the current signal's abort, whichever comes first (#722): a factory
+   * that never settles can't hold a run past its deadline. One that settles later is disposed.
+   */
+  function untilAborted<T extends { dispose(): void }>(made: T | Promise<T>): Promise<T> {
+    const current = signal;
+    if (!current) return Promise.resolve(made);
+    if (current.aborted) {
+      void Promise.resolve(made).then(
+        (late) => late.dispose(),
+        () => {},
+      );
+      return Promise.reject(new Cancelled());
+    }
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () => {
+        void Promise.resolve(made).then(
+          (late) => late.dispose(),
+          () => {},
+        );
+        reject(new Cancelled());
+      };
+      current.addEventListener("abort", onAbort, { once: true });
+      Promise.resolve(made).then(
+        (one) => {
+          current.removeEventListener("abort", onAbort);
+          // Already aborted: the abort handler owns disposing it, exactly once.
+          if (!current.aborted) resolve(one);
+        },
+        (error: unknown) => {
+          current.removeEventListener("abort", onAbort);
+          reject(error);
+        },
+      );
+    });
+  }
+
+  const rendererCounts = (): RendererCounts => ({
     calls: env.renderer.info.render.calls,
     triangles: env.renderer.info.render.triangles,
     geometries: env.renderer.info.memory.geometries,
@@ -165,24 +322,36 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     programs: env.renderer.info.programs?.length ?? 0,
   });
 
+  /**
+   * One frame: the objects' updates, then every declared pass and the main render, all inside the
+   * CPU time and the GPU query (#764). The renderer's counts are reset once here and add up
+   * across the passes, then its own setting is put back.
+   */
   function frame(objects: readonly ProfiledObject[], dt: number): number {
     const start = env.now();
     for (const each of objects) each.update?.(dt);
+    const { info } = env.renderer;
+    const autoReset = info.autoReset;
+    info.autoReset = false;
+    info.reset();
     env.timer.begin();
     try {
-      env.renderer.render(scene, camera);
+      pipeline.render({ delta: dt, reducedMotion: false });
     } finally {
       // A render that throws still closes its query (#625 review).
       env.timer.end();
+      info.autoReset = autoReset;
     }
     return env.now() - start;
   }
 
   /** Fit the camera so the collection's grid fills a fixed share of the view. */
-  function frameFor(count: number): void {
+  function frameFor(count: number): Framing {
     const side = Math.ceil(Math.sqrt(Math.max(1, count)));
-    camera.position.set(0, 0, 3 + side * 2.2);
+    const distance = 3 + side * 2.2;
+    camera.position.set(0, 0, distance);
     camera.lookAt(0, 0, 0);
+    return { gridSide: side, cameraDistance: distance, fov: camera.fov };
   }
 
   async function sample(
@@ -200,7 +369,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     let spoiled = env.hidden();
     const changesBefore = env.visibilityChanges();
     let last = env.now();
-    let setCounts = counts();
+    let setCounts = rendererCounts();
     for (let i = 0; i < options.frames; i++) {
       check();
       await waitFrame();
@@ -208,7 +377,7 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       frames.push(now - last);
       last = now;
       cpu.push(frame(objects, frames.at(-1)! / 1000));
-      if (i === 0) setCounts = counts();
+      if (i === 0) setCounts = rendererCounts();
       gpu.push(...env.timer.poll());
       if (env.hidden() || env.visibilityChanges() !== changesBefore) spoiled = true;
     }
@@ -266,9 +435,9 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
       for (let index = 0; index < count; index++) {
         // A cancel stops the build between creations, not after the whole collection (#625).
         check();
-        const one = await profile.create({ seed: options.seed + index, phase });
+        const one = await untilAborted(profile.create({ seed: options.seed + index, phase }));
         one.object.position.copy(positions[index]!);
-        scene.add(one.object);
+        collection.add(one.object);
         made.push(one);
       }
       check();
@@ -305,65 +474,126 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
     invalidated: string[],
   ): Promise<CaseResult> {
     const label = phase ? `${id}:${phase}` : id;
-    const count = options.count ?? profile.defaultCount ?? 25;
-    // One framing for every set of the case, chosen for its collection: baseline, one object and
-    // collection are all seen from the same place, so each object covers the same screen area
-    // in every set (#625 review).
-    frameFor(count);
-    await warm([], options, check);
-    const baseline = await measured(`${label}/baseline`, [], options, check, invalidated);
-
-    const buildStart = env.now();
-    let objects = await build(profile, 1, options, phase, check);
-    const buildTime = env.now() - buildStart;
+    const counts = options.counts ?? standardCounts;
+    // The case's host sets the scene up before anything is built, and is undone after (#712).
+    const host = profile.host ?? defaultProfilingHost;
+    const undoHost = prepareHost(host);
+    let built: ProfilingPipeline | null = null;
     try {
-      // The compiling first frame is inside the cleanup, so a case that throws here is still
-      // removed and freed (#625 review).
-      const firstStart = env.now();
-      frame(objects, 0);
-      const firstFrame = env.now() - firstStart;
-      await warm(objects, options, check);
-      const one = await measured(`${label}/one`, objects, options, check, invalidated);
-      remove(objects);
-      // Freed: a cancel during the next build must not free them again.
-      objects = [];
-      objects = await build(profile, count, options, phase, check);
-      await warm(objects, options, check);
-      const collection = await measured(
-        `${label}/collection`,
-        objects,
+      // Its passes are built once, in its host, and every set renders through them: the
+      // baseline too, so it is matched (doc/profiler-render-passes.md, "Timing and baseline").
+      const setupStart = env.now();
+      built = await untilAborted(preparePipeline(profile));
+      const setup = env.now() - setupStart;
+      pipeline = built;
+      const result = await measureCase(
+        id,
+        profile,
+        phase,
         options,
         check,
         invalidated,
+        label,
+        counts,
+        built.baselineUnavailable,
       );
-      remove(objects);
-      objects = [];
+      return {
+        ...result,
+        host,
+        pipeline: { passes: built.passes, passCount: built.passes.length, setup },
+        ...(built.baselineUnavailable ? { baselineUnavailable: built.baselineUnavailable } : {}),
+      };
+    } finally {
+      pipeline = mainOnly;
+      // Its targets go whether the case finished, failed, timed out or was cancelled.
+      built?.dispose();
+      undoHost();
+    }
+  }
+
+  /** Prepare a registered host on the run's scene; returns how to undo it. */
+  function prepareHost(host: string): () => void {
+    return profilingHosts.get(host).prepare({ scene, reflections: env.reflections?.() ?? null });
+  }
+
+  async function measureCase(
+    id: string,
+    profile: ProfilingCase,
+    phase: string | undefined,
+    options: RunOptions,
+    check: () => void,
+    invalidated: string[],
+    label: string,
+    counts: readonly number[],
+    baselineUnavailable: string | null,
+  ): Promise<Omit<CaseResult, "host" | "pipeline">> {
+    // Each count has its own fixed-grid framing (doc/automatic-profiling.md, "Sweep and
+    // representative host"): a fixed-viewport collection test, so per-object screen area shrinks
+    // as the count grows. The empty baseline is taken once per case, in this case's host.
+    frameFor(1);
+    await warm([], options, check);
+    const baseline = await measured(`${label}/baseline`, [], options, check, invalidated);
+
+    // An unmatched baseline gives no relative values at all, never a main-only subtraction.
+    const less = (a: number | undefined, b: number | undefined) =>
+      a === undefined || b === undefined || baselineUnavailable ? null : a - b;
+    const measuredCounts: CountResult[] = [];
+    let objects: ProfiledObject[] = [];
+    try {
+      for (const count of counts) {
+        const framing = frameFor(count);
+        const buildStart = env.now();
+        objects = await build(profile, count, options, phase, check);
+        const buildTime = env.now() - buildStart;
+        // The compiling first frame is inside the cleanup, so a case that throws here is still
+        // removed and freed (#625 review).
+        const firstStart = env.now();
+        frame(objects, 0);
+        const firstFrame = env.now() - firstStart;
+        await warm(objects, options, check);
+        const set = await measured(`${label}/${count}`, objects, options, check, invalidated);
+        remove(objects);
+        // Freed: a cancel during the next build must not free them again.
+        objects = [];
+        measuredCounts.push({
+          count,
+          framing,
+          // Raw, for the whole set: building all `count` objects and their compiling first
+          // frame. Shared setup and compilation make it non-additive, so it is never divided.
+          creation: { build: buildTime, firstFrame },
+          set,
+          // Baseline-relative estimates: not additive per-object costs.
+          relative: {
+            gpu: less(set.gpu?.median, baseline.gpu?.median),
+            cpu: less(set.cpu.median, baseline.cpu.median),
+          },
+        });
+      }
       frame([], 0);
       // Leaks across a repeated cycle: by now anything a case creates once and shares (a cached
       // texture, a compiled program) already exists, so one more build, render and dispose of a
       // single object should leave the counts where they were.
-      const before = counts();
+      const before = rendererCounts();
       const again = await build(profile, 1, options, phase, check);
-      frame(again, 0);
-      remove(again);
+      // Removed and freed whatever happens: a throw here must not leave it in the shared scene
+      // for the next case to measure (#726 review).
+      try {
+        frame(again, 0);
+      } finally {
+        remove(again);
+      }
       frame([], 0);
-      const after = counts();
-      const less = (a: number | undefined, b: number | undefined) =>
-        a === undefined || b === undefined ? null : a - b;
+      const after = rendererCounts();
       return {
         id,
         family: profile.family,
         label: profile.label,
         ...(phase ? { phase } : {}),
-        creation: { build: buildTime, firstFrame },
+        unit: profile.unit ?? oneBlock,
+        ...(profile.variant ? { variant: profile.variant } : {}),
+        sampling: "steady" as ProfilingPhase["sampling"],
         baseline,
-        one,
-        collection,
-        relative: {
-          oneGpu: less(one.gpu?.median, baseline.gpu?.median),
-          oneCpu: one.cpu.median - baseline.cpu.median,
-          collectionGpu: less(collection.gpu?.median, baseline.gpu?.median),
-        },
+        counts: measuredCounts,
         leaked: {
           geometries: after.geometries - before.geometries,
           textures: after.textures - before.textures,
@@ -377,35 +607,113 @@ export function createProfilerRunner(env: ProfilerEnvironment) {
   return {
     scene,
     camera,
+    /** The root every profiled object goes under. */
+    collection,
+    prepareHost,
+    preparePipeline,
     /** Measure these cases one at a time, in order. */
     async run(
       cases: readonly (readonly [string, ProfilingCase])[],
       options: RunOptions,
     ): Promise<RunResult> {
       const results: CaseResult[] = [];
+      const failures: CaseFailure[] = [];
       const invalidated: string[] = [];
-      const check = () => {
-        if (options.signal?.aborted) throw new Cancelled();
-      };
-      signal = options.signal;
-      try {
-        for (const [id, profile] of cases)
-          for (const phase of profile.phases ?? [undefined]) {
-            // Cosmetic randomness (stars, bubbles, grass) repeats exactly for a seed (#653 review).
-            const restore = useCosmeticRandom(seededStream(options.seed));
-            try {
-              results.push(await runCase(id, profile, phase, options, check, invalidated));
-            } finally {
-              restore();
-            }
+      const queue = cases.flatMap(([id, profile]) =>
+        (profile.phases ?? [steadyPhase]).map(({ name: phase, sampling }) => ({
+          id,
+          profile,
+          phase,
+          sampling,
+        })),
+      );
+      const labelOf = ({ id, phase }: { id: string; phase?: string }) =>
+        phase ? `${id}:${phase}` : id;
+      const finish = (from: number, ending: Pick<RunResult, "cancelled" | "aborted">) => ({
+        results,
+        failures,
+        notRun: queue.slice(from).map(labelOf),
+        gpuTiming: timing(),
+        invalidated,
+        ...ending,
+      });
+      for (const [index, entry] of queue.entries()) {
+        if (options.signal?.aborted) return finish(index, { cancelled: true, aborted: null });
+        // A lost context can't measure anything more: stop, and say so (#722).
+        if (env.contextLost?.())
+          return finish(index, { cancelled: false, aborted: "context-lost" });
+        // Each case or phase gets its own deadline, combined with the run's cancel.
+        const deadline = new AbortController();
+        const timer = setTimeout(() => deadline.abort(), options.timeoutMs ?? defaultCaseTimeout);
+        // Losing the context mid-case stops this case at once, and the run after it.
+        let lostDuring = false;
+        const stopListening = env.onContextLost?.(() => {
+          lostDuring = true;
+          deadline.abort();
+        });
+        const lost = () => lostDuring || (env.contextLost?.() ?? false);
+        signal = options.signal
+          ? AbortSignal.any([options.signal, deadline.signal])
+          : deadline.signal;
+        const caseSignal = signal;
+        const check = () => {
+          if (caseSignal.aborted || lost()) throw new Cancelled();
+        };
+        // Cosmetic randomness (stars, bubbles, grass) repeats exactly for a seed (#653 review).
+        const restore = useCosmeticRandom(seededStream(options.seed));
+        try {
+          const result = await runCase(
+            entry.id,
+            entry.profile,
+            entry.phase,
+            options,
+            check,
+            invalidated,
+          );
+          // Measured on a lost context: not a result. Recorded, and the run stops here.
+          if (lost()) {
+            failures.push(contextLostFailure(entry));
+            return finish(index + 1, { cancelled: false, aborted: "context-lost" });
           }
-      } catch (error) {
-        if (!(error instanceof Cancelled)) throw error;
-        return { results, cancelled: true, gpuTiming: timing(), invalidated };
+          results.push({ ...result, sampling: entry.sampling });
+        } catch (error) {
+          if (options.signal?.aborted) return finish(index, { cancelled: true, aborted: null });
+          if (lost()) {
+            failures.push(contextLostFailure(entry));
+            return finish(index + 1, { cancelled: false, aborted: "context-lost" });
+          }
+          // The case's own resources were released by its cleanup; independent cases go on.
+          failures.push({
+            id: entry.id,
+            ...(entry.phase ? { phase: entry.phase } : {}),
+            ...(deadline.signal.aborted
+              ? {
+                  kind: "timeout" as const,
+                  reason: `exceeded ${options.timeoutMs ?? defaultCaseTimeout} ms`,
+                }
+              : {
+                  kind: "error" as const,
+                  reason: error instanceof Error ? error.message : String(error),
+                }),
+          });
+        } finally {
+          clearTimeout(timer);
+          stopListening?.();
+          restore();
+        }
       }
-      return { results, cancelled: false, gpuTiming: timing(), invalidated };
+      return finish(queue.length, { cancelled: false, aborted: null });
     },
   };
+
+  function contextLostFailure(entry: { id: string; phase?: string }): CaseFailure {
+    return {
+      id: entry.id,
+      ...(entry.phase ? { phase: entry.phase } : {}),
+      kind: "context-lost",
+      reason: "the WebGL context was lost while this case ran",
+    };
+  }
 
   function timing(): RunResult["gpuTiming"] {
     return env.timer.available ? "available" : "unavailable";

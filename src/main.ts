@@ -31,20 +31,25 @@ import type { SoundEffectId } from "./audio/sfx-registry";
 import { createFieldView, type FieldView } from "./field-view";
 import { createHandView, type HandView } from "./hand-view";
 import { createHudPanels, type HudPanels } from "./hud-panels";
+// Registers the word-cube HUD action presenter (#780).
+import "./block-menu/hud-word-cube";
 import { createDeckView, type DeckView } from "./deck-view";
 import { createOverlays, type Overlays } from "./overlays";
 import { createDialogPresenter } from "./block-menu/block-menus";
+import { createPresentationClock, type PresentationClock } from "./presentation-clock";
 import { createPassiveRack } from "./passive-rack";
 import { createPlayPresenter, type PlayPresenter } from "./play-presenter";
 import { createBlockViews, type BlockViews } from "./rendered-blocks";
 import { blockMenuMotion, gameModeRegistry } from "./game-modes";
-import { createRunController, type RunController } from "./run-controller";
+import { createGameRunController, type GameRunController } from "./game-run-controller";
 import { browserStorage } from "./save";
 import { SceneManager } from "./scenes";
 import { sceneBehaviours, type SceneHost } from "./scene-behaviours";
 import { bindScreenshotShortcut } from "./screenshot";
 import { createShopView, type ShopView } from "./shop-view";
 import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
+import type { ProfilerRoom } from "./tools/profiler/room";
+import { createRenderGate } from "./render-gate";
 import type { CrystalComparisonRoom } from "./tools/crystal-comparison/room";
 import { createBinView, type BinView } from "./bin-view";
 import { createSelectionBadge, type SelectionBadge } from "./selection-badge";
@@ -52,7 +57,13 @@ import { createDiscardTarget, createTableInput, type TableInput } from "./table-
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
 import { createHudFrame } from "./hud-frame";
 import { gameplayHudZones, type HudElement } from "./hud-layout";
+import { createDropTargetGuide, dropGuideProviders } from "./visual/drop-target-guide";
+import type { DropTargetGuides } from "./scene-traits/drop-target-guide";
 import { appVersion } from "./version";
+import { createDiagnosticRegistry } from "./diagnostics/debug-snapshot";
+import { registerSnapshotProviders, snapshotSections } from "./diagnostics/providers";
+import { debugSnapshotCommand } from "./diagnostics/snapshot-command";
+import { registerConsoleCommand } from "./console/commands";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -64,7 +75,8 @@ const cubeSize = 2.4;
 
 // Background traits mount their canvases here while their scenes are on the stack (#189).
 const backgrounds = createBackgroundLayers(host);
-const hud: HudPanels = createHudPanels(host);
+// HUD actions can be word cubes (#780), moving as block menu cubes do.
+const hud: HudPanels = createHudPanels(host, blockMenuMotion);
 const discardArea = createDiscardTarget(host);
 const bin = createBinView(discardArea);
 const selectionBadge = createSelectionBadge(host);
@@ -115,6 +127,7 @@ const audio: AudioService = createAudioService({
 type TraitContext = {
   host: HTMLElement;
   services: {
+    presentationClock: PresentationClock;
     bin: BinView;
     selectionBadge: SelectionBadge;
     renderer: TableRenderer;
@@ -129,7 +142,7 @@ type TraitContext = {
     actionWatch: ActionWatch;
     presenter: PlayPresenter;
     input: TableInput;
-    run: RunController;
+    run: GameRunController;
     board: BlockDestroyerBoard;
     blockTitles: BlockTitles;
     attract: {
@@ -139,15 +152,17 @@ type TraitContext = {
       hideTuning(): void;
     };
     shop: ShopView;
+    dropTargetGuides: DropTargetGuides;
     rack: { viewEntered(entered: boolean, capacity: number): void };
     deckView: DeckView;
     devShopBalanceEditor: ShopBalanceEditor;
     devObjectBrowser: ShopBalanceEditor;
     devBlockDesigner: ShopBalanceEditor;
     devContainedProof: ShopBalanceEditor;
-    devProfiler: ShopBalanceEditor;
+    devProfiler: ProfilerRoom;
     devCrystalComparison: CrystalComparisonRoom;
     devWordCubeRoom: WordCubeRoom;
+    devEffectAudition: { show(config: { hint: string }): void; hide(): void; dispose(): void };
     dialogs: SceneHost["services"]["dialogs"];
     devDialogRoom: DialogRoom;
     version: string;
@@ -167,11 +182,32 @@ const devBlockDesigner: ShopBalanceEditor = import.meta.env.DEV
 const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/contained-proof/room")).createContainedProofRoom(host)
   : { show() {}, hide() {}, dispose() {} };
-const devProfiler: ShopBalanceEditor = import.meta.env.DEV
-  ? (await import("./tools/profiler/room")).createProfilerRoom(host)
-  : { show() {}, hide() {}, dispose() {} };
+// The frame loop's pause capability, for tools that need the GPU to themselves.
+const renderGate = createRenderGate();
+const devProfiler: ProfilerRoom = import.meta.env.DEV
+  ? (await import("./tools/profiler/room")).createProfilerRoom(host, {
+      pauseRendering: () => renderGate.pause(),
+    })
+  : {
+      show() {},
+      hide() {},
+      dispose() {},
+      orchestration: () => ({
+        enter: async () => {},
+        rerun: async () => {},
+        exit: async () => {},
+        generation: 0,
+      }),
+      onRunAll: () => () => {},
+      showReport() {},
+    };
 const devCrystalComparison: CrystalComparisonRoom = import.meta.env.DEV
-  ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host)
+  ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host, {
+      reducedMotion: () => run.reducedMotion,
+    })
+  : { show() {}, hide() {}, dispose() {} };
+const devEffectAudition = import.meta.env.DEV
+  ? (await import("./tools/effect-audition")).createEffectAuditionNote(host)
   : { show() {}, hide() {}, dispose() {} };
 const devWordCubeRoom: WordCubeRoom = import.meta.env.DEV
   ? (await import("./tools/word-cube-room")).createWordCubeRoom(host)
@@ -188,9 +224,11 @@ const devDialogRoom: DialogRoom = import.meta.env.DEV
 const devObjectBrowser: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/object-browser")).createObjectBrowser(host)
   : { show() {}, hide() {}, dispose() {} };
+const presentationClock = createPresentationClock();
 const traitContext: TraitContext = {
   host,
   services: {
+    presentationClock,
     bin,
     selectionBadge,
     renderer: view,
@@ -253,6 +291,14 @@ const traitContext: TraitContext = {
     get shop() {
       return shopView;
     },
+    // Drag target guides over the page host, following the input's drag lifecycle (#922, #924).
+    dropTargetGuides: {
+      create: (config) =>
+        createDropTargetGuide(config, {
+          element: host,
+          observeDrag: (listener) => input.observeDrag(listener),
+        }),
+    },
     get rack() {
       return passiveRackView;
     },
@@ -264,6 +310,7 @@ const traitContext: TraitContext = {
     devProfiler,
     devCrystalComparison,
     devWordCubeRoom,
+    devEffectAudition,
     // Every dialog a scene composes goes to the game's presenter and, in development, to the
     // dialog room (dev14), which shows only while its own scene does.
     dialogs: {
@@ -287,7 +334,7 @@ for (const modeId of gameModeRegistry.names()) {
 // The shared HUD frame (#116), over the back canvas; the run lays it out from settings (#119).
 const hudFrame = createHudFrame(host);
 const storage = browserStorage();
-const run: RunController = createRunController({
+const run: GameRunController = createGameRunController({
   host,
   storage,
   params: new URLSearchParams(window.location.search),
@@ -359,6 +406,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   rackChanged: () => run.rackChanged(),
   activated: (sourceIds) => sourceIds.forEach((id) => passiveRackView.activate(id)),
   refill: () => run.refillHand(),
+  drawReplacements: () => run.drawReplacements(),
   save: () => run.autosave(),
   decided: (outcome, now) => run.decided(outcome, now),
 });
@@ -383,6 +431,8 @@ const input: TableInput = createTableInput({
 });
 // The shop's stock drags like everything else (#277); its shopStock trait enables it.
 input.registerDragSource("shop", shopView.dragSource);
+// What the shop scene's drag guide points to (#924), named by its `dropTargetGuide` trait.
+dropGuideProviders.register("shopOffers", shopView.guideProvider);
 run.begin();
 const overlays: Overlays = createOverlays(host, {
   settings: run.settings,
@@ -415,6 +465,29 @@ const unbindScreenshot = bindScreenshotShortcut(
 hud.onAction(() => run.takeNextAction());
 hud.onOpen((action) => run.dispatch(action));
 // Developer console: ~ (or `) drops it down.
+// The debug snapshot (#987): development builds only (doc/debug-snapshot.md). A production build
+// composes neither its providers nor its command. The scheduler section stays `unavailable`
+// until the running game owns a visual scheduler (#547).
+const leaveDiagnostics = import.meta.env.DEV
+  ? (() => {
+      const diagnostics = createDiagnosticRegistry(snapshotSections);
+      const leaveProviders = registerSnapshotProviders(diagnostics, {
+        version: appVersion,
+        mode: () => run.consoleApp.mode().id,
+        sceneStack: () => sceneManager.stack.map(({ id }) => id),
+        state: () => run.consoleApp.game().state,
+        titles: () => blockTitles.mounted(),
+        actions: () => ({ recording: actionLog.recording, entries: actionLog.entries() }),
+      });
+      const leaveCommand = registerConsoleCommand(
+        debugSnapshotCommand(() => diagnostics.snapshot()),
+      );
+      return () => {
+        leaveCommand();
+        leaveProviders();
+      };
+    })()
+  : () => {};
 const devConsole = createConsoleHost(run.consoleApp, audio);
 cameraView.start();
 
@@ -422,26 +495,32 @@ cameraView.start();
 
 let frame = 0;
 let lastTime = 0;
-const animate = (time: number) => {
+// One frame's updates and render; the render gate runs it only while no tool holds the GPU.
+const step = (time: number) => {
   const delta = lastTime ? Math.min((time - lastTime) / 1000, 0.05) : 0;
   lastTime = time;
+  // The playfield draws on the presentation clock, which a pausing scene holds still (#530).
+  const playfield = presentationClock.advance(time, delta);
   actionLog.tick();
   beat.update(delta);
   danceFloor.update();
-  cameraView.update(time, delta);
+  cameraView.update(playfield.time, playfield.delta);
   presenter.update(time, delta);
   presenter.updateScore(time);
   run.followOutcomes(time);
-  field.update(time, run.reducedMotion);
+  field.update(playfield.time, run.reducedMotion);
   sceneManager.update(delta);
   attract.frame(delta);
   blockTitles.frame();
-  hand.animate(time, delta, input.selection);
-  view.frame(cameraView.pivot.position, cameraView.structureRadius(), delta);
+  hand.animate(playfield.time, playfield.delta, input.selection);
+  view.frame(cameraView.pivot.position, cameraView.structureRadius(), playfield.delta);
   input.frame();
-  passiveRackView.frame(time, run.reducedMotion);
+  passiveRackView.frame(playfield.time, run.reducedMotion);
   shopView.frame();
   render();
+};
+const animate = (time: number) => {
+  renderGate.run(time, step);
   frame = requestAnimationFrame(animate);
 };
 frame = requestAnimationFrame(animate);
@@ -455,6 +534,7 @@ if (import.meta.hot) {
     audio.dispose();
     hud.dispose();
     devConsole.dispose();
+    leaveDiagnostics();
     overlays.dispose();
     run.dispose();
     attract.dispose();
@@ -472,6 +552,7 @@ if (import.meta.hot) {
     devProfiler.dispose();
     devCrystalComparison.dispose();
     devWordCubeRoom.dispose();
+    devEffectAudition.dispose();
     devDialogRoom.dispose();
     dialogPresenter.dispose();
     view.dispose();

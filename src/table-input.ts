@@ -19,6 +19,7 @@ import {
 } from "@dnd-kit/dom";
 import {
   createDragDropManager,
+  type DragLifecycle,
   type DragSource,
   type Point,
   type DragSourceConfig,
@@ -53,7 +54,8 @@ export type TableRules = {
   busy(): boolean;
   inStage(): boolean;
   canPlay(): boolean;
-  canDiscard(): boolean;
+  /** Whether a discard is allowed now and, given blocks, whether each one accepts (#574). */
+  canDiscard(blocks?: readonly CardBlock[]): boolean;
   /** The cells a line of `count` blocks would fill: from a face, or the empty field's centre. */
   linePlacement(count: number, targetId?: string, face?: Face): Cell[] | null;
   /** The hand, in order. */
@@ -112,6 +114,8 @@ export type TableInput = {
   enableSelectSource(config: { source: string }): () => void;
   /** Register a drag source kind that lives outside the table (the shop's stock, #277). */
   registerDragSource(name: string, source: DragSource): void;
+  /** Follow every drag's lifecycle, for presentation only (#922); returns how to stop. */
+  observeDrag(listener: (event: DragLifecycle) => void): () => void;
   /**
    * Bind the board gestures while a scene shows (the `boardGestures` trait, #275): dragging the
    * structure turns it, a pinch zooms and a two-finger twist turns it, the wheel zooms. Returns
@@ -134,6 +138,11 @@ export type TableInput = {
    * is played, discarded, sold or rotated, and dragged blocks return (#124).
    */
   cancelGestures(): void;
+  /**
+   * Re-describe the block whose inspection is showing, from the card `current` finds for its id
+   * (#751: inspection updates while visible). Nothing happens when no inspection of ours shows.
+   */
+  refreshInspection(current: (id: string) => CardBlock | undefined): void;
   /** Refresh the discard target: exhausted when no discards are left, armed with a count. */
   refreshDiscardTarget(): void;
   /** The id of the table block under a screen point, if any. */
@@ -236,8 +245,12 @@ export function createTableInput(options: {
    */
   let discardHover: DropVerdict | null = null;
   dropTargetKinds.register("discard", {
-    canDrop: (_carried, clientX, clientY) =>
-      overDiscardArea(clientX, clientY) ? (rules.canDiscard() ? "accept" : "reject") : null,
+    canDrop: (carried, clientX, clientY) =>
+      overDiscardArea(clientX, clientY)
+        ? rules.canDiscard(carried.map(({ block }) => block))
+          ? "accept"
+          : "reject"
+        : null,
     hover(verdict) {
       if (verdict === "accept" && discardHover !== "accept") playSfx("discard.hover");
       discardHover = verdict;
@@ -362,8 +375,13 @@ export function createTableInput(options: {
   const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
   const dragPoint = new THREE.Vector3();
 
+  /** The card this input last described, where, and with what text, to refresh it in place. */
+  let inspected: { id: string; clientX: number; clientY: number; label: string } | null = null;
+
   function showInspection(block: CardBlock | undefined, clientX: number, clientY: number): void {
-    options.overlays().inspect((block && inspectBlock(block)) || null, clientX, clientY);
+    const label = (block && inspectBlock(block)) || null;
+    inspected = block && label ? { id: block.id, clientX, clientY, label } : null;
+    options.overlays().inspect(label, clientX, clientY);
   }
 
   function pointRay(
@@ -926,7 +944,7 @@ export function createTableInput(options: {
     }
     const chosen = hand.selected(selected);
     if (!chosen.length) return;
-    if (!rules.canDiscard() || !rules.discard(chosen)) {
+    if (!rules.canDiscard(chosen.map(({ block }) => block)) || !rules.discard(chosen)) {
       options.overlays().flashRefused(discardArea);
       playSfx("action.denied");
     }
@@ -1081,6 +1099,7 @@ export function createTableInput(options: {
       };
     },
     registerDragSource: (name, source) => dragSourceKinds.register(name, source),
+    observeDrag: (listener) => dragDrop.observe(listener),
     enableBoardGestures: bindBoardGestures,
     fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
     get selection() {
@@ -1099,6 +1118,12 @@ export function createTableInput(options: {
     },
     get candidateCell() {
       return drag?.active ? (gridShown?.cell ?? null) : null;
+    },
+    refreshInspection(current) {
+      // Only our own description, still showing: another host's tooltip is left alone.
+      if (!inspected || options.overlays().inspection() !== inspected.label) return;
+      const card = current(inspected.id);
+      showInspection(card, inspected.clientX, inspected.clientY);
     },
     cancelGestures() {
       onBlur();

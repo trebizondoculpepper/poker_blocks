@@ -48,3 +48,5 @@ music/auditions/
 
 # Python bytecode from music tools
 __pycache__/
+# Profiler runs written by `npm run profile` (#734)
+profiles/

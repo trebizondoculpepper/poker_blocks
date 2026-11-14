@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { defaultShop } from "../game-modes";
 import { materialDefinitions } from "../materials";
 import { passiveFrequencies } from "../offer-weights";
-import { passiveDefinitions } from "../passives";
+import { ordinaryPassives } from "../passives";
 import { currentShopBalanceDraft, validateShopBalanceDraft } from "./shop-balance-draft";
 
 describe("shop balance draft", () => {
@@ -10,7 +10,8 @@ describe("shop balance draft", () => {
     const draft = currentShopBalanceDraft();
     expect(validateShopBalanceDraft(draft)).toEqual([]);
     expect(Object.keys(draft.materials)).toEqual(materialDefinitions.map(({ id }) => id));
-    expect(Object.keys(draft.passives)).toEqual(passiveDefinitions.names());
+    // Normal-shop balance: the ordinary catalogue, never provisional trials (#812).
+    expect(Object.keys(draft.passives)).toEqual(ordinaryPassives().map(({ id }) => id));
     expect(Object.keys(draft.frequencies)).toEqual(passiveFrequencies.names());
     expect(draft.stock).toMatchObject(defaultShop);
     draft.frequencies.additiveScoring![0]![1] = 99;

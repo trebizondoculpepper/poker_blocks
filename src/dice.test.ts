@@ -8,7 +8,7 @@ import { ruleHandlers } from "./rule-handlers";
 
 const card = (rank: string, suit: string): CardBlock =>
   standardDeck.find(
-    (block) => block.traits.identity.rank === rank && block.traits.identity.suit.name === suit,
+    (block) => block.traits.identity!.rank === rank && block.traits.identity!.suit.name === suit,
   )!;
 const at = (block: CardBlock, x: number, y = 0): PlacedBlock => ({ block, cell: { x, y, z: 0 } });
 /** Two scoring lines crossing at the 3 of hearts. */
@@ -118,7 +118,7 @@ describe("dice passives (#97)", () => {
   it("guardrail: dice come from configuration, never from named branches in the run or scorer", () => {
     for (const file of [
       "game-run.ts",
-      "run-controller.ts",
+      "game-run-controller.ts",
       "passive-effects.ts",
       "rule-handlers.ts",
       "event-rules.ts",

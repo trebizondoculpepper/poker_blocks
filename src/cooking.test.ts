@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { coinEntry } from "./stage-rewards";
 import { standardDeck, type CardBlock } from "./cards";
 import type { GameState, PlacedBlock } from "./game-state";
 import { getMaterialDefinition, withMaterial, type BlockMaterial } from "./materials";
@@ -88,7 +89,7 @@ describe("steak payout and Le Chef (#373)", () => {
     );
     // Raw (0), Well Done (4) and Overcooked (5) don't qualify: Bloody (1) and Medium Rare (3) do.
     expect(materialFieldRewardEntries(table(...field))).toEqual([
-      { source: "material.meat.field", label: "Steak (2)", coins: 2 },
+      coinEntry("material.meat.field", "Steak (2)", 2),
     ]);
   });
 
@@ -100,7 +101,7 @@ describe("steak payout and Le Chef (#373)", () => {
       passiveRack: [createPassiveBlock("le-chef", "passive.1")],
     };
     expect(materialFieldRewardEntries(state)).toEqual([
-      { source: "material.meat.field", label: "Steak (1)", coins: 3 },
+      coinEntry("material.meat.field", "Steak (1)", 3),
     ]);
   });
 

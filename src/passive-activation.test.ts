@@ -12,7 +12,7 @@ import { demoRunRules, sandboxRunRules } from "./run-rules";
 
 const card = (rank: string, suit: string): CardBlock =>
   standardDeck.find(
-    (block) => block.traits.identity.rank === rank && block.traits.identity.suit.name === suit,
+    (block) => block.traits.identity!.rank === rank && block.traits.identity!.suit.name === suit,
   )!;
 
 describe("passive activation feedback (#81)", () => {
@@ -108,7 +108,7 @@ describe("passive activation feedback (#81)", () => {
 
 describe("committed sounds (#566 review)", () => {
   it("plays each named sound once per discard, in first-named order", async () => {
-    const { committedSounds } = await import("./play-presenter");
+    const { committedSounds } = await import("./scene-traits/committed-event-sounds");
     expect(
       committedSounds([
         { type: "coins.gained", amount: 1, sound: "passive.coins" },

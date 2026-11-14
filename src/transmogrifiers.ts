@@ -66,6 +66,8 @@ export function transmogrifierMaterials(): {
 for (const { material, price, weights } of transmogrifierMaterials())
   passiveDefinitions.register(transmogrifierId(material.id as BlockMaterial), {
     id: transmogrifierId(material.id as BlockMaterial),
+    releaseStatus: { certified: {} },
+    lifecycle: { parent: "limitedUseItem" },
     name: `${material.name} transmogrifier`,
     symbol: "⟳",
     description: `Turns a card in your hand or on the table to ${material.name}, keeping its rank and suit. Uses: ${defaultTransmogrifierUses}.`,

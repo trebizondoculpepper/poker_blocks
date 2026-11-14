@@ -1,70 +1,56 @@
-# Read-only GitHub action briefing CLI (#626)
+# GitHub Triage: global install
 
-## Purpose and ownership
+GitHub Triage is developed in the standalone [github_triage repository](https://github.com/trebizondoculpepper/github_triage). Its [CLI contract](https://github.com/trebizondoculpepper/github_triage/blob/main/doc/github-triage-cli.md), [dependency design](https://github.com/trebizondoculpepper/github_triage/blob/main/doc/issue-dependencies.md) and issues belong there. This game repository consumes the tool; it owns no collector, workflow-rule, formatter or CLI test implementation.
 
-`npm run triage` gives an LLM a single current briefing for this repository: suggested next actions, evidence, ready/unclaimed work, active owners, design/question/blocker context, PR checks/review findings, label inconsistencies and known dependency states. `--json` produces the same versioned structured information; `--issue N` includes the full issue body/comments and linked PR information for intake. This is a plain JavaScript ES-module CLI under `scripts/triage/`, launched as `node scripts/triage/cli.js` by npm and never imported into production. It needs no TypeScript loader, build step or GitHub SDK. The user explicitly authorized implementation after this design merges.
+## Global installation and launch
 
-The collector invokes the authenticated `gh api graphql` via argument arrays, without a shell. It does not handle/read/print tokens, request new credentials or send content to an LLM service. All GitHub operations are queries. No claim, comment, label edit, issue creation, review submission or merge occurs. This tool recommends inspection/action; it is not authority to bypass process, documentation-first or review requirements.
+The owner chose a **global install** (superseding the #724 project dependency). The tool is a developer-only briefing command: the game, its build, its tests and CI never run it, so pinning it in this repository's `package.json` and `package-lock.json` bought nothing and cost a lockfile PR for every upstream change. poker_blocks has no `github-triage` dependency and no `triage` npm script.
 
-## Evidence and initial scope
-
-Existing `doc/process.md` defines readiness labels, `agent:` ownership, dependencies and review/merge requirements. #626 records the owner's one-shot intake/triage request. Manual `gh issue list/view` and `gh pr list/checks` currently require many separate calls and interpretation. There is no repository triage utility at the source audit `3be61a8`.
-
-A live GraphQL probe on 2026-11-12 confirmed repository issue/comment/label connections, issue `stateReason`, PR closing references, review threads, mergeability/review decision and head-commit status-check rollup/context fields. Reuse these factual API fields and paginate connections; no GitHub SDK or third-party summarization dependency is necessary. Stable registered analysis rules express workflow policy separately from retrieval/formatting, consistent with the project's no-special-cases rule.
-
-The first implementation is one coherent read-only collector/action briefing, not an autonomous agent. Other human workflows or tracker integrations can follow separately. Deterministic hints never claim to reliably resolve natural-language questions or establish design approval.
-
-## Inputs and commands
-
-- `npm run triage` refreshes open issues and PRs and prints a compact text briefing, highest-priority suggested actions first. Repository defaults to `gh repo view` for the checkout; `--repo owner/name` overrides it.
-- `--json` emits schema-versioned JSON without progress/debug noise on stdout. Use `npm run --silent triage -- --json` to suppress npm’s own command banner.
-- `--issue N` additionally fetches that issue even when closed and includes unabridged body/comments plus related open PR evidence; it never automatically claims it.
-- `--since <ISO timestamp>` includes changed issues and PRs (including closed/merged) since that time. Without it, the briefing describes current state, not an invented “since yesterday”.
-- `--checkpoint <path>` compares with the last successful checkpoint time and advances it only after a complete successful live report is produced. A missing checkpoint establishes a baseline explicitly; it is not a claim to have observed all history. Supplied `--since` is explicit and takes precedence.
-- `--cache <path>` writes the successful fetched snapshot atomically. `--offline` requires an explicit cache path and labels its original fetch time/age and missing live verification. Never silently fall back to stale cache on an API error. Checkpoints do not advance from an offline or incomplete result.
-- `--limit N` bounds displayed/listed actions per section (default 10); output includes total/omitted counts and stable issue/PR URLs. Full raw history is available through `--issue`, not silently guessed from a truncated summary. `--help` documents flags and exit behavior.
-
-Default text should fit a useful intake response rather than dump every comment. JSON includes compact issue/PR context (body/latest-comment excerpts, source URLs, owners, labels, timestamps, docs links, dependency and PR relations), actions and warnings. Detail mode includes full issue history. Text truncation is marked; structured output names omitted context and a detail command. No critical action disappears without an omitted-count indicator. Raw snapshot caching is separate from this compact presentation schema.
-
-## Collection and freshness
-
-Capture repository, request start/fetch time and source endpoints; describe the fetch as a window, not an atomic GitHub snapshot. Fetch every page of open issues/PRs and their comments. Page nested labels, review threads, head checks and closing references or report explicit completeness warnings; unknown is never clean/passing. Review-thread comments may be represented by their linked first comment plus omitted count, but the thread's resolved/outdated state must be preserved. Query failure, permission failure or rate-limit exhaustion is a nonzero exit with a concise diagnostic; no empty-success result. Available rate-limit metadata belongs in JSON. Errors must not echo an environment/token or arbitrary request secrets.
-
-For `--since`/checkpoints, fetch updated issue/PR connections in descending update order across all states until the cutoff; this includes closed/merged work, not just still-open items. An update timestamp indicates the object changed, not which label/comment changed. Report exact relabel/answer history only if actually observed; the initial version reports updated/current facts with evidence. Use server-provided cursors and never assume page order from issue number. Fixed text clipping is not evidence of an unanswered question.
-
-Dependencies come from an explicit `Depends on #N` or cross-repository URL list in the issue body, not every issue reference. Support bullet lists in a clearly marked dependencies section. Resolve referenced issue/PR states, deduplicate lookups, preserve cross-repository scope and distinguish CLOSED/COMPLETED, CLOSED/NOT_PLANNED and MERGED PRs. An optional prerequisite, prose mention or linked epic is not automatically a blocker. Human-written ambiguity remains a warning. All declared blockers closed is a **candidate to verify**, not proof the required behavior was implemented or the architecture merged.
-
-## Workflow analysis and next actions
-
-Use a registry of named rule handlers over normalized facts and a declarative workflow policy (readiness labels, owner prefix and expected CI check names). The generic runner invokes handlers uniformly; do not add issue-number special cases, a table keyed by object identity, or a giant branch chain on status labels. Identity handles only locate evidence/relations. Each action has rule ID, priority, target URL, concise reason, suggested next step and evidence URLs. Multiple true findings remain visible; a blanket “merge” verdict never replaces failed or unknown checks.
-
-Initial rules cover:
-
-- open PRs with failed/pending/absent checks, conflicts/out-of-date state, review changes requested or unresolved review threads; clean/current verified PRs become **inspect and consider merge** candidates, never auto-merges;
-- ready unclaimed issues, active claims and multiple-owner conflicts;
-- unclaimed issues with missing/multiple readiness labels, and ready labels left on claimed work;
-- blocked issues whose explicit prerequisites appear satisfied, or whose blocker explanation is absent; parked work remains deliberately parked, not pickup advice;
-- needs-design/question/human-review labels and **candidate** question/review comments, including later reply context so a question mark is never declared unanswered just by regex;
-- issue scope/dependency/documentation links for intake. Missing extracted docs links means “not found in this text”, not “architecture missing”.
-
-The registry may emit heuristic findings only with an explicit uncertainty label. Semantic reconciliation of historical versus superseding answers remains the consuming LLM's job, with full linked history available. No special casing of named agents; an optional current-agent filter can compare supplied ownership configuration uniformly. CI conclusions and check names are interpreted through registered policy; CodeRabbit/Codex advisory findings still need inspection as described in process, and required `verify` cannot be inferred from some unrelated green job.
-
-## Verification and rollout
-
-First merge this document and the canonical architecture/process pointers, then implement in a separate PR. Tests must cover primary and nested pagination/completeness, declared versus incidental dependencies, cross-repository references, closed-unplanned versus merged status, missing/failed/pending head checks, unresolved threads, competing owners/readiness contradictions, question candidates with later replies, deterministic ordering, cache repo/schema mismatch/offline age, checkpoint failure safety and unknown/error reporting. Use injected gh query/clock/filesystem boundaries; tests must not need a GitHub credential. Run a real read-only report against this repository and inspect its suggested actions and full-ticket mode before delivery. No gameplay changes or generation keys are involved.
-
-## Running the implementation
+Install it once per machine, from the standalone project's `main` branch:
 
 ```sh
-npm run triage
-npm run --silent triage -- --json
-npm run --silent triage -- --issue 677 --json
-npm run triage -- --checkpoint /tmp/poker-triage-checkpoint.json --cache /tmp/poker-triage-cache.json
-npm run triage -- --offline --cache /tmp/poker-triage-cache.json
+npm install -g git+https://github.com/trebizondoculpepper/github_triage.git#main
 ```
 
-Requires Node 20+ and an already authenticated `gh`. All API requests run through that existing gh installation/session, including its existing host/account credential handling; the CLI never calls `gh auth login`, reads a token itself or asks the user to reauthenticate. The cache contains repository issue/comment data; keep it outside git. Offline mode always uses its recorded timestamp, does not poll GitHub or advance a checkpoint, and cannot be combined with `--since`. Primary issues/PRs and comment history are paginated fully; unusually large nested PR/label connections are explicitly incomplete with exit 2 rather than silently certified for merge. Review thread previews retain total/omitted comment metadata. No background daemon is installed: invoke the command whenever the agent needs a new briefing, or use an external caller to poll it.
+Its package declares the `github-triage` command. Run it from the poker_blocks checkout:
 
-## Development-process use and feedback
+```sh
+github-triage --help
+github-triage --json
+github-triage --issue 432
+github-triage deps 675 --tree
+```
 
-[One-command GitHub briefing in the process guide](process.md#one-command-github-briefing-626) is the operating workflow: session orientation, full-ticket intake, live ownership/head recheck, checkpoint polling, explicit offline/error handling and evidence-backed improvements. Start there when using the tool to decide an agent's next action. The CLI contract describes available facts and limitations; the process guide explains how to act on them.
+The working directory stays the game checkout, so the tool's authenticated `gh repo view` resolves poker_blocks. The standalone project owns runtime requirements, features, lifecycle and tests; use `--help` for current flags. If the command is missing, install it; do not fall back to a sibling or vendored implementation.
+
+## Updates, evidence and limits
+
+Update by reinstalling with the same command. An update changes no file in this repository, so it needs no PR. Each agent's machine updates independently, so a briefing should say which upstream commit it ran (`npm ls -g github-triage`, or the commit shown by `git ls-remote https://github.com/trebizondoculpepper/github_triage.git main` at install time). A developer working on the tool itself may `npm link` their checkout instead; the command is then that checkout.
+
+Trade-off accepted: agents may briefly run different revisions, in exchange for no lockfile churn. Reproducibility for the game is unaffected, since nothing in the build or CI depends on the tool.
+
+Evidence (2026-11-13): the standalone `package.json` declares `"bin": { "github-triage": "src/cli.js" }`; `grep` of `.github/workflows` finds no use of triage; on a machine with the command linked globally, `github-triage --help` run from the poker_blocks checkout printed the usual help. The implementation PR removes the dependency and script, and updates the triage skill's update step.
+
+## Triage-first command map
+
+These commands were verified against the installed help on 2026-11-13. Consult current `--help` for version changes; this is a workflow map, not a duplicate CLI implementation.
+
+| Question or action                       | First triage command                                                   |
+| ---------------------------------------- | ---------------------------------------------------------------------- |
+| What should I do next?                   | `github-triage --role implementer --agent NAME` (or designer)          |
+| What changed?                            | `github-triage --since ISO_TIMESTAMP`                                  |
+| Read full ticket context                 | `github-triage --issue N --json`                                       |
+| Why is a PR blocked?                     | `github-triage pr N`; use `--history` for recurring review rounds      |
+| Who owns this? / team activity           | `github-triage who N` / `github-triage team`                           |
+| Dependencies and unlocks                 | `github-triage deps N --tree`                                          |
+| Claim / release / raise a decision       | `github-triage claim`, `release`, `needs-human` (read subcommand help) |
+| Change dependencies / record an estimate | `github-triage deps add/remove` / `estimate`                           |
+| Local setup / board consistency          | `github-triage doctor` / `ticket-doctor`                               |
+
+Triage wraps authenticated GH and may itself make multiple API calls; fewer operator steps do not guarantee fewer API requests or lower latency. Measure and report both when comparing workflows. A full-context report may be larger than a narrowly filtered GH query. Prefer the matching detail view rather than repeatedly fetching a general briefing.
+
+### Fallback and optional Inbox
+
+Follow [the triage-first process](process.md#one-command-github-briefing): use GH only for a capability/evidence gap or concrete failure, record why and report reproducible friction upstream. Inbox is an optional missing-capability fallback, not a required identity/startup/coordination service. Do not assume triage already supports arbitrary messaging or every edit; use actual installed capabilities. Established local identity may retain the filename agent-inbox.toml without requiring an Inbox server call.
+
+Evidence: installed help lists role/since/issue/pr/who/team/deps/claim/release/needs-human/doctor operations; `github-triage claim 976 --agent farhad_taphrale --branch docs/issue-976-triage-first --json` successfully recorded an eligible claim and provenance. The user's comparisons exposed redundant manual GH queries and merge-readiness priority friction recorded in upstream issue #182. These support the process choice, not a claim that all triage commands are faster or that missing capabilities have shipped. No runtime/game-rule change is involved.

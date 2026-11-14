@@ -14,7 +14,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Gesture } from "@use-gesture/vanilla";
 import { playSfx } from "../../audio/sfx";
-import { standardDeck } from "../../cards";
+import { standardDeck, pokerIdentity } from "../../cards";
 import { gameModeFor, modeLink, type DevCrystalComparisonConfig } from "../../game-modes";
 import { getMaterialDefinition, type BlockMaterial } from "../../materials";
 import {
@@ -25,13 +25,14 @@ import {
 import { cardFaceArt } from "../../visual/face-art";
 import {
   opticsBackends,
+  snapshotOptics,
   withOpticsBackend,
   type OpticsControl,
 } from "../../visual/optics-backends";
-import { disposeRefraction } from "../../visual/crystal-refraction";
-import { disposeInternal } from "../../visual/crystal-internal";
+import type { RenderPass } from "../../visual/render-pass";
 import { viewControls } from "./view-controls";
 import "./room.css";
+import { blockOutline } from "../../visual/block-outline";
 
 export type CrystalComparisonRoom = {
   show(config: DevCrystalComparisonConfig): void;
@@ -75,13 +76,19 @@ export function distribution(values: readonly number[]) {
 const warmupFrames = 60;
 const sampleFrames = 120;
 
-export function createCrystalComparisonRoom(host: HTMLElement): CrystalComparisonRoom {
+/** What the game lends the room: the player's reduced-motion setting, read each frame. */
+export type CrystalComparisonOptions = { reducedMotion: () => boolean };
+
+export function createCrystalComparisonRoom(
+  host: HTMLElement,
+  options: CrystalComparisonOptions,
+): CrystalComparisonRoom {
   const root = document.createElement("section");
   root.className = "crystal-comparison";
   root.hidden = true;
   root.innerHTML = `
     <header class="crystal-comparison-header">
-      <h1>Crystal comparison</h1>
+      <h1>Transparent materials bench</h1>
       <a data-part="back" href="#">Back to the game</a>
     </header>
     <aside class="crystal-comparison-controls">
@@ -89,6 +96,12 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       <label>Count <input data-part="count" type="number" min="1" max="100" /></label>
       <p data-part="unsupported" class="crystal-comparison-note"></p>
       <fieldset data-part="tuning" class="crystal-comparison-tuning" hidden><legend>Tuning</legend></fieldset>
+      <div class="crystal-comparison-copy">
+        <button type="button" data-part="copy">Copy settings</button>
+        <p data-part="copy-status" role="status"></p>
+        <textarea data-part="copy-fallback" readonly hidden rows="10"
+          aria-label="Settings JSON: select it and copy"></textarea>
+      </div>
       <output data-part="stats" class="crystal-comparison-stats"></output>
     </aside>
     <div class="crystal-comparison-stage" data-part="stage"></div>`;
@@ -118,6 +131,14 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
 
   let config: DevCrystalComparisonConfig | null = null;
   let backend = "current";
+  /** The chosen look's own passes for this room's renderer, if it needs any (a capture). */
+  let capture: RenderPass | null = null;
+  /** Show the blocks through another backend, with a fresh capture of its own. */
+  function choose(name: string): void {
+    capture?.dispose();
+    backend = name;
+    capture = opticsBackends.get(name).capture?.() ?? null;
+  }
   let slots: Slot[] = [];
   let frame = 0;
   let last: number | null = null;
@@ -168,7 +189,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     for (const slot of slots) {
       release(slot);
       const appearance = createBlockAppearance(
-        cardFaceArt(slot.card.traits.identity, { face: definition.cardFace }),
+        cardFaceArt(pokerIdentity(slot.card), { face: definition.cardFace }),
         definition,
         1,
       );
@@ -177,14 +198,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
         appearance.boardMaterials ?? appearance.materials,
       );
       mesh.renderOrder = appearance.faceLayer ?? 0;
-      const edges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(appearance.geometry),
-        new THREE.LineBasicMaterial({
-          color: appearance.edgeColor,
-          transparent: appearance.edgeOpacity < 1,
-          opacity: appearance.edgeOpacity,
-        }),
-      );
+      const edges = blockOutline(appearance);
       mesh.add(edges, ...(appearance.extras ?? []));
       mesh.position.copy(slot.position);
       mesh.rotation.copy(slot.rotation);
@@ -198,6 +212,30 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     showTuning();
     for (const button of part("backends").querySelectorAll("button"))
       button.setAttribute("aria-pressed", String(button.dataset.backend === backend));
+  }
+
+  /**
+   * Copy the selected backend's complete settings as versioned JSON (#677;
+   * doc/refractive-water-prototypes.md, "Copy settings"): reported as copied only once the
+   * clipboard accepts it, else shown in a selectable box, so tuned values are never lost.
+   */
+  async function copySettings(): Promise<void> {
+    playSfx("ui.click");
+    const json = JSON.stringify(snapshotOptics(backend), null, 2);
+    const status = part("copy-status");
+    const fallback = part<HTMLTextAreaElement>("copy-fallback");
+    try {
+      if (!navigator.clipboard) throw new Error("no clipboard");
+      await navigator.clipboard.writeText(json);
+      status.textContent = `${opticsBackends.get(backend).label} settings copied`;
+      fallback.hidden = true;
+    } catch {
+      status.textContent = "Clipboard unavailable: select the settings below and copy them";
+      fallback.value = json;
+      fallback.hidden = false;
+      fallback.focus();
+      fallback.select();
+    }
   }
 
   /** The chosen backend's live controls, as its registration lists them (none for most). */
@@ -258,8 +296,17 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     camera.lookAt(0, 0, 0);
     renderer.info.reset();
     const start = performance.now();
-    // Any passes the chosen look needs first (a background capture), as its backend declares.
-    opticsBackends.get(backend).frame?.({ renderer, scene, camera, hide: group });
+    // Any passes the chosen look needs first (a background capture), as its backend declares,
+    // with the presentation time since the last frame for a look that animates (#674).
+    const delta = last === null ? 0 : (time - last) / 1000;
+    capture?.render({
+      renderer,
+      scene,
+      camera,
+      hide: group,
+      delta,
+      reducedMotion: options.reducedMotion(),
+    });
     renderer.render(scene, camera);
     const submitted = performance.now() - start;
     if (last !== null) {
@@ -309,6 +356,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
     camera.updateProjectionMatrix();
   }
 
+  part("copy").addEventListener("click", () => void copySettings());
   part("count").addEventListener("change", () => {
     playSfx("ui.click");
     layout(Math.max(1, Math.min(100, Number(part<HTMLInputElement>("count").value) || 1)));
@@ -321,7 +369,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
         gameModeFor(next.backTo),
         window.location.href,
       ).href;
-      backend = next.backends[0] ?? "current";
+      choose(next.backends[0] ?? "current");
       part("backends").replaceChildren(
         ...next.backends.map((name) => {
           const button = document.createElement("button");
@@ -330,7 +378,7 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
           button.textContent = opticsBackends.get(name).label;
           button.addEventListener("click", () => {
             playSfx("ui.click");
-            backend = name;
+            choose(name);
             build();
           });
           return button;
@@ -355,8 +403,8 @@ export function createCrystalComparisonRoom(host: HTMLElement): CrystalCompariso
       cancelAnimationFrame(frame);
       slots.forEach(release);
       gesture.destroy();
-      disposeRefraction();
-      disposeInternal();
+      capture?.dispose();
+      capture = null;
       environment.dispose();
       (backdrop.material as THREE.MeshBasicMaterial).map?.dispose();
       (backdrop.material as THREE.Material).dispose();

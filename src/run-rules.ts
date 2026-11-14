@@ -26,6 +26,11 @@ export type RunRules = {
   stage(round: number, kind: StageKind): StageSetup;
   /** Cards still in hand when a stage ends. Open rule; only one option exists so far. */
   handAtStageEnd: "return-to-deck";
+  /**
+   * The model controllers composed onto the playfield (#658; doc/game-events.md, "Ownership and
+   * composition"). None composed: no material steps run.
+   */
+  playfield?: readonly import("./lifecycle/play-phases").PlayfieldController[];
   /** How much one action may resolve before it is rolled back (#657); the documented defaults. */
   resolutionLimits?: { events: number; operations: number };
   /** Whether the discard pile returns to the deck after the boss-stage shop. */
@@ -45,6 +50,12 @@ export type RunRules = {
    * shop has no stock.
    */
   stockShop?: (state: GameState, random: () => number, round: number) => GameState;
+  /**
+   * Plain-data descriptors of the function-valued policies above, by field name (#934): the
+   * configuration each was built from, so an export can record and compare it. A policy with no
+   * descriptor cannot be verified.
+   */
+  policies?: Readonly<Partial<Record<"stockShop" | "resaleModifiers", unknown>>>;
 };
 
 /** A stage in the round, in order, with the data that is its own. */
@@ -81,6 +92,22 @@ export function targetForStage<Kind extends string>(
  * the base dealer until boss rules exist.
  */
 export const demoRunRules: RunRules = {
+  // Material effects in the documented order: placement-timed reactions (the Air/flame upgrade)
+  // and countdown deductions before scoring; the other reactions, then the pending detonations,
+  // after it.
+  playfield: [
+    // Placed blocks open first (#926), before any material step.
+    { id: "openingController", config: {} },
+    {
+      id: "materialEffectsController",
+      config: {
+        beforeScore: ["placement-reactions", "countdown-deductions"],
+        afterScore: ["reactions", "countdown-detonations"],
+      },
+    },
+    // After the material steps have drained: the rack's late step (#988).
+    { id: "lateRackStepController", config: {} },
+  ],
   stage(round, kind) {
     return {
       dealer: "base",

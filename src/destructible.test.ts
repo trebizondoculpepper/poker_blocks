@@ -31,7 +31,7 @@ describe("the destructible trait", () => {
     expect(again.filter((card) => blockCanDestroy(card, "manual")).map(({ id }) => id)).toEqual(
       marked.map(({ id }) => id),
     );
-    expect(inspectBlock(marked[0])).toMatch(/Destructible$/);
+    expect(inspectBlock(marked[0])?.split("\n")[0]).toMatch(/Destructible$/);
     expect(withDevDestructibleMix(standardDeck)).toEqual(standardDeck);
   });
 });

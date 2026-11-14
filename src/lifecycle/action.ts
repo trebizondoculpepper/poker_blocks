@@ -29,6 +29,14 @@ export function deepFreeze<T>(value: T): T {
   return value;
 }
 
+/**
+ * A deeply immutable copy, sharing nothing with the live model: for an event's payload before
+ * delivery, so no listener can change the model or a later listener's view (#682 review).
+ */
+export function captured<T>(value: T): T {
+  return deepFreeze(structuredCloneable(value));
+}
+
 /** A captured gameplay fact with its correlation data. */
 export type EventEnvelope<Payload = unknown> = Readonly<{
   eventId: string;

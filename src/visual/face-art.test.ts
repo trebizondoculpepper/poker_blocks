@@ -6,7 +6,7 @@ import { cardFaceArt } from "./face-art";
 
 describe("shared face artwork", () => {
   it("a concealed card face (the Present, #568) prints nothing but keeps the card's seed", () => {
-    const { identity } = standardDeck[0]!.traits;
+    const identity = standardDeck[0]!.traits.identity!;
     const fillText = vi.fn();
     const art = cardFaceArt(identity, { face: "concealed" });
     art.paint({ fillText } as unknown as CanvasRenderingContext2D, (tone) => tone);
@@ -15,10 +15,11 @@ describe("shared face artwork", () => {
     expect(experimentalMaterials.find(({ id }) => id === "giftWrap")!.cardFace).toBe("concealed");
   });
 
-  it("preserves card seeds, centred positions, fonts and ink across the deck", () => {
+  it("preserves card seeds, fonts and ink, with rank and suit top-left, across the deck", () => {
     for (const {
-      traits: { identity },
+      traits: { identity: maybe },
     } of standardDeck) {
+      const identity = maybe!;
       const calls: unknown[] = [];
       const g = {
         fillText: vi.fn((text, x, y) => calls.push([text, x, y, g.font, g.fillStyle])),
@@ -33,21 +34,21 @@ describe("shared face artwork", () => {
       expect(calls).toEqual([
         [
           identity.rank,
-          128,
-          100,
-          "bold 80px system-ui, sans-serif",
+          256 * 0.08 + (256 * 0.36) / 2,
+          256 * 0.08,
+          "bold 77px system-ui, sans-serif",
           identity.suit.color === "#bd3651" ? "red" : "black",
         ],
         [
           identity.suit.symbol,
-          128,
-          180,
-          "94px Georgia, serif",
+          256 * 0.08 + (256 * 0.36) / 2,
+          256 * (0.08 + 0.3),
+          "92px Georgia, serif",
           identity.suit.color === "#bd3651" ? "red" : "black",
         ],
       ]);
       expect(g.textAlign).toBe("center");
-      expect(g.textBaseline).toBe("middle");
+      expect(g.textBaseline).toBe("top");
     }
   });
   it("keeps the material builder independent of card identity and face-art kinds", () => {

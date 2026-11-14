@@ -52,6 +52,33 @@ reviews:
           a save file, `typeof x === "string"`) and tests are not special cases.
           PASS otherwise. When failing, name each offending line and suggest the trait,
           registry entry or configuration that should own the behaviour instead.
+      - name: "Triage-first project workflow"
+        mode: warning
+        instructions: |
+          Follow doc/process.md "One-command GitHub briefing" and AGENTS.md:
+          triage is first for supported status, intake, ownership, dependency,
+          coordination and mutation operations. GH is a capability/evidence-gap
+          or concrete-failure fallback, with recorded reason and upstream feedback.
+          Inbox is optional, not a mandatory startup/ping/coordination service.
+          Flag contradictory changed guidance or a concrete recorded bypass of an
+          available capability. Do not demand shell transcripts, infer command use
+          from missing evidence, require missing triage features, or treat an
+          advisory report as ownership or merge approval.
+      - name: "Recorded ticket scope and split handoff"
+        mode: warning
+        instructions: |
+          Follow doc/process.md, "Oversized tickets: reject the scope and return it for a split",
+          and AGENTS.md. At intake, an implementer who considers a ticket too complicated for
+          one focused delivery rejects its scope with concrete reasons on the issue and returns
+          it to design. The designer proposes smaller tickets; implementers may suggest a split
+          and have final choice on workable delivery boundaries. This does not transfer game-rule
+          or architecture ownership. Partial work is preserved and the implementer takes other work.
+          Report a finding only when linked issue/PR evidence shows an unresolved recorded sizing
+          rejection being bypassed by implementation, or an explicit ownership/handoff violation.
+          Cite the objection and missing resolution. Do not infer oversized scope from line count,
+          demand a split-approval comment on every ordinary PR, or block a documentation/process
+          PR that is itself resolving the objection. If issue context is unavailable, state that
+          limitation rather than inventing a violation. Tracking epics are not omnibus code tasks.
       - name: "Architecturally correct"
         mode: error
         instructions: |
@@ -109,6 +136,17 @@ reviews:
              outcome; or policy (when or why something plays) lives in a service, the run
              controller or src/main.ts instead of a configured controller trait. A
              controller trait has no exemption from "No special cases".
+          10. Presentation timing ("Visual-event scheduler and game-time units" in
+             doc/game-architecture.md, #541): timed feedback added outside the one shared
+             scheduler and presentation clock (a new setTimeout, setInterval,
+             performance.now() deadline, presenter-owned queue or parallel stagger timer);
+             timings hard-coded in ms or frames where configuration should use game-time
+             units (1/15 s); performance.now() mixed with rAF time; a delayed handler that
+             reads live GameRun state, mutates the model or draws session RNG instead of
+             presenting its captured payload; input or model resolution held for
+             presentation; a result screen gated on anything but a terminal model plus the
+             action's required scopes; ambient per-frame work pushed through the scheduler.
+             The timers listed under "Today's scheduling" are migration gaps, not precedents.
           PASS otherwise. When failing, explain which principle is broken, cite the doc
           section, and propose the architecturally correct shape (which trait, service,
           registry or scene should own it).

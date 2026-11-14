@@ -23,8 +23,15 @@ describe("letter, menu cube and exit profiling cases (#622)", () => {
     // Contained looks get their composition's default exit, so water has a case too.
     expect(exiting.map(({ id }) => id)).toContain("water");
     expect(exiting.length).toBeGreaterThan(0);
-    for (const { id } of exiting)
-      expect(profilingCases.get(`exit:${id}`).phases).toEqual(["idle", "exit"]);
+    for (const { id } of exiting) {
+      const exit = profilingCases.get(`exit:${id}`);
+      // One instance is one complete exit, and its exit phase restarts as each one ends (#711).
+      expect(exit.unit).toEqual({ kind: "emitter", size: 1 });
+      expect(exit.phases).toEqual([
+        { name: "idle", sampling: "steady" },
+        { name: "exit", sampling: "restarting" },
+      ]);
+    }
   });
 
   it("leaves nothing uncovered", () => {

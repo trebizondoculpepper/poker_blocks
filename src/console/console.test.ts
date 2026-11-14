@@ -4,7 +4,8 @@ import { dealerRegistry } from "../dealer";
 import { GameRun } from "../game-run";
 import { demoRunRules } from "../run-rules";
 import { completionsAt, remember, splitStatements, tokenise } from "./command-line";
-import { candidates, runLine, type ConsoleHost } from "./commands";
+import { candidates, registerConsoleCommand, runLine, type ConsoleHost } from "./commands";
+import { debugSnapshotCommand } from "../diagnostics/snapshot-command";
 import { isConsoleKey } from "./console-view";
 
 function fakeHost() {
@@ -27,11 +28,40 @@ function fakeHost() {
     musicNow: () => now,
     playMusic: (id) => void (now = id),
     stopMusic: () => void (now = null),
+    say: (text, tone) => void calls.push(`${tone}: ${text}`),
     clear: () => void calls.push("clear"),
     history: () => ["help", "status"],
   };
   return { host, calls, game, text: (line: string) => runLine(host, line).map((l) => l.text) };
 }
+
+describe("debug snapshot (#987)", () => {
+  const snapshot = () => ({ schema: 1 as const, takenAt: "t", sections: {}, truncated: [] });
+  const run = async (copies: boolean) => {
+    const leave = registerConsoleCommand(debugSnapshotCommand(snapshot, async () => copies));
+    try {
+      const { text, calls } = fakeHost();
+      const printed = text("debug snapshot");
+      await Promise.resolve();
+      await Promise.resolve();
+      return { printed, calls };
+    } finally {
+      leave();
+    }
+  };
+  it("is not a command until its owner composes it", () => {
+    expect(candidates(fakeHost().host, [])).not.toContain("debug snapshot");
+  });
+  it("prints the snapshot and reports a copy", async () => {
+    const { printed, calls } = await run(true);
+    expect(printed).toEqual([JSON.stringify(snapshot())]);
+    expect(calls).toContain("output: snapshot copied to the clipboard");
+  });
+  it("says to select the text when the clipboard refuses", async () => {
+    const { calls } = await run(false);
+    expect(calls).toContain("error: could not copy: select the snapshot text above instead");
+  });
+});
 
 describe("the console key", () => {
   it("is backquote or tilde", () => {

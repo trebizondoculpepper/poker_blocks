@@ -15,7 +15,7 @@ import { cardFaceArt } from "./visual/face-art";
 import { createSceneLayer } from "./scene-layer";
 import { playSfx } from "./audio/sfx";
 import * as THREE from "three";
-import { standardDeck, type IdentityTrait } from "./cards";
+import { standardDeck, type IdentityTrait, pokerIdentity } from "./cards";
 import { blockMaterials, getMaterialDefinition, type BlockMaterial } from "./materials";
 import { createAttractTuningPanel, type TuningControl } from "./attract-tuning-panel";
 import { createBlockAppearance, disposeMaterialTextures } from "./visual/block-appearance";
@@ -338,8 +338,8 @@ function randomCard(
 ): { identity: IdentityTrait; material: BlockMaterial } {
   return {
     identity: {
-      rank: standardDeck[Math.floor(random() * standardDeck.length)].traits.identity.rank,
-      suit: standardDeck[Math.floor(random() * standardDeck.length)].traits.identity.suit,
+      rank: pokerIdentity(standardDeck[Math.floor(random() * standardDeck.length)]).rank,
+      suit: pokerIdentity(standardDeck[Math.floor(random() * standardDeck.length)]).suit,
     },
     material: pickMaterial(weights, random),
   };
