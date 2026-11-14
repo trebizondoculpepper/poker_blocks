@@ -173,9 +173,9 @@
     }
   },
   "shop.stock.land": {
-    "uses": 2,
+    "uses": 3,
     "files": {
-      "audio/sfx-registry.ts (placeholder)": 1,
+      "audio/sfx-registry.ts (placeholder)": 2,
       "shop-view.ts": 1
     }
   },
@@ -183,6 +183,12 @@
     "uses": 1,
     "files": {
       "game-run-controller.ts": 1
+    }
+  },
+  "block.open": {
+    "uses": 1,
+    "files": {
+      "opaque-opening.ts": 1
     }
   },
   "celebration.pop": {
