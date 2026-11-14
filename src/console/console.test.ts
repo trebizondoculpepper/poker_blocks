@@ -7,7 +7,7 @@ import { completionsAt, remember, splitStatements, tokenise } from "./command-li
 import { candidates, runLine, type ConsoleHost } from "./commands";
 import { isConsoleKey } from "./console-view";
 
-function fakeHost() {
+function fakeHost(copies = true) {
   const game = new GameRun(dealerRegistry, demoRunRules, standardDeck);
   const calls: string[] = [];
   let now: string | null = null;
@@ -27,11 +27,34 @@ function fakeHost() {
     musicNow: () => now,
     playMusic: (id) => void (now = id),
     stopMusic: () => void (now = null),
+    snapshot: () => '{\n  "schema": 1\n}',
+    copyText: async (text) => {
+      calls.push(`copy ${text.length}`);
+      return copies;
+    },
+    say: (text, tone) => void calls.push(`${tone}: ${text}`),
     clear: () => void calls.push("clear"),
     history: () => ["help", "status"],
   };
   return { host, calls, game, text: (line: string) => runLine(host, line).map((l) => l.text) };
 }
+
+describe("debug snapshot (#987)", () => {
+  it("prints the snapshot and reports a copy", async () => {
+    const { text, calls } = fakeHost();
+    expect(text("debug snapshot")).toEqual(["{", '  "schema": 1', "}"]);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls).toContain("output: snapshot copied to the clipboard");
+  });
+  it("says to select the text when the clipboard refuses", async () => {
+    const { text, calls } = fakeHost(false);
+    text("debug snapshot");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls).toContain("error: could not copy: select the snapshot text above instead");
+  });
+});
 
 describe("the console key", () => {
   it("is backquote or tilde", () => {

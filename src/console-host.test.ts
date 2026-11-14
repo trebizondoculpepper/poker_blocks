@@ -41,6 +41,10 @@ function setup(start: string | null, href = "http://localhost/?restart=true") {
         calls.push(`url ${url.search}`);
       },
     },
+    {
+      snapshot: () => ({ schema: 1, takenAt: "t", sections: {}, truncated: [] }),
+      copyText: async () => true,
+    },
   );
   return { host, calls, address: () => address };
 }

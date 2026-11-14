@@ -39,6 +39,12 @@ export type ConsoleHost = {
   musicNow(): string | null;
   playMusic(id: string): void;
   stopMusic(): void;
+  /** The read-only debug snapshot (#987), as formatted JSON. */
+  snapshot(): string;
+  /** Copy text to the clipboard on the user's explicit command; resolves whether it worked. */
+  copyText(text: string): Promise<boolean>;
+  /** Print a line later, after the command returned (an asynchronous result). */
+  say(text: string, tone: "output" | "error"): void;
   /** Clear the console's screen. */
   clear(): void;
   history(): readonly string[];
@@ -200,6 +206,22 @@ export const COMMANDS: readonly ConsoleCommand[] = [
         return fail(`reset: no mode "${mode}" (modes are ${host.modes().join(", ")})`);
       host.resetMode(target);
       return target ? `resetting ${target}` : "new run";
+    },
+  },
+  {
+    name: "debug snapshot",
+    usage: "",
+    help: "print read-only diagnostics and copy them to the clipboard (#987)",
+    run(host) {
+      const text = host.snapshot();
+      void host
+        .copyText(text)
+        .then((copied) =>
+          copied
+            ? host.say("snapshot copied to the clipboard", "output")
+            : host.say("could not copy: select the snapshot text above instead", "error"),
+        );
+      return text.split("\n");
     },
   },
   {
