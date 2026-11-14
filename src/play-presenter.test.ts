@@ -41,6 +41,12 @@ async function presenter(reduced = false) {
     lastDiscardActivations: [],
   };
   const noop = () => undefined;
+  const services = {
+    get presentedActions() {
+      return play.presentedActions;
+    },
+  };
+  const scheduler = createVisualScheduler({ services });
   const play = createPlayPresenter({
     game: () => session as never,
     views: {
@@ -67,25 +73,29 @@ async function presenter(reduced = false) {
     drawReplacements: drawReplacements as never,
     save: noop,
     decided: noop,
-    visualEvents: createVisualScheduler(),
+    visualEvents: scheduler,
   });
-  return { play, refill, disposed, drawReplacements, revealed };
+  // The shared scheduler runs the discards (#548); each frame advances it 16 ms.
+  let real = 0;
+  scheduler.update(real, true);
+  const frame = () => scheduler.update((real += 16), true);
+  return { play, refill, disposed, drawReplacements, revealed, frame, scheduler };
 }
 
 describe("discard refill order (#775)", () => {
   it("draws in the model at once, and reveals only after the discarded cards dissolve", async () => {
     dissolves.length = 0;
-    const { play, refill, disposed, drawReplacements, revealed } = await presenter();
+    const { play, refill, disposed, drawReplacements, revealed, frame } = await presenter();
     expect(play.discard([source("a"), source("b")] as never)).toBe(true);
     // Model first: the replacements are drawn as the discard commits.
     expect(drawReplacements).toHaveBeenCalledTimes(1);
-    // Long past a wall-clock second, but the dissolves still run: nothing is shown yet.
-    play.update(performance.now() + 5000, 0.016);
+    // Many frames, but the dissolves still run: nothing is shown yet.
+    for (let i = 0; i < 100; i++) frame();
     dissolves[0]!.done = true;
-    play.update(performance.now() + 5000, 0.016);
+    frame();
     expect(revealed).toEqual([]);
     dissolves[1]!.done = true;
-    play.update(performance.now() + 5000, 0.016);
+    frame();
     expect(revealed).toEqual([["new1"]]);
     expect(disposed).toEqual(["a", "b"]);
     expect(refill).not.toHaveBeenCalled();
@@ -94,25 +104,55 @@ describe("discard refill order (#775)", () => {
 
   it("reveals as soon as reduced motion's short fade ends, without waiting a second", async () => {
     dissolves.length = 0;
-    const { play, revealed } = await presenter(true);
+    const { play, revealed, frame } = await presenter(true);
     play.discard([source("a")] as never);
     expect(dissolves[0]!.reduced).toBe(true);
     dissolves[0]!.done = true;
-    play.update(performance.now(), 0.016);
+    frame();
+    frame();
     expect(revealed).toEqual([["new1"]]);
   });
 
   it("each discard reveals only its own replacements, whichever finishes first", async () => {
     dissolves.length = 0;
-    const { play, revealed, drawReplacements } = await presenter();
+    const { play, revealed, drawReplacements, frame } = await presenter();
     play.discard([source("a")] as never);
     play.discard([source("b")] as never);
     expect(drawReplacements).toHaveBeenCalledTimes(2);
+    frame();
     dissolves[1]!.done = true;
-    play.update(performance.now(), 0.016);
+    frame();
     expect(revealed).toEqual([["new2"]]);
     dissolves[0]!.done = true;
-    play.update(performance.now(), 0.016);
+    frame();
     expect(revealed).toEqual([["new2"], ["new1"]]);
+  });
+
+  it("runs on the shared scheduler: a reset cancels it, and nothing shows afterwards (#548)", async () => {
+    dissolves.length = 0;
+    const { play, revealed, frame, scheduler } = await presenter();
+    play.discard([source("a")] as never);
+    frame();
+    expect(play.busy).toBe(true);
+    expect(scheduler.counts.active).toBe(1);
+    play.reset();
+    // Its dissolve is put back, and its replacements are never revealed by a late frame.
+    expect(dissolves[0]!.done).toBe(true);
+    for (let i = 0; i < 10; i++) frame();
+    expect(revealed).toEqual([]);
+    expect(play.busy).toBe(false);
+    expect(scheduler.counts.active).toBe(0);
+  });
+
+  it("holds while the page is hidden: hidden time never advances it (#548)", async () => {
+    dissolves.length = 0;
+    const { play, frame, scheduler } = await presenter();
+    play.discard([source("a")] as never);
+    frame();
+    frame();
+    const updates = dissolves[0]!.updates;
+    scheduler.update(100_000, false);
+    expect(dissolves[0]!.updates).toBe(updates);
+    expect(play.busy).toBe(true);
   });
 });

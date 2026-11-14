@@ -38,7 +38,11 @@ import { createOverlays, type Overlays } from "./overlays";
 import { createDialogPresenter } from "./block-menu/block-menus";
 import { createPresentationClock, type PresentationClock } from "./presentation-clock";
 import { createPassiveRack, type RackLabelServices } from "./passive-rack";
-import { createPlayPresenter, type PlayPresenter } from "./play-presenter";
+import {
+  createPlayPresenter,
+  type PlayPresenter,
+  type PresentedActionServices,
+} from "./play-presenter";
 import { createBlockViews, type BlockViews } from "./rendered-blocks";
 import { blockMenuMotion, gameModeRegistry } from "./game-modes";
 import { createGameRunController, type GameRunController } from "./game-run-controller";
@@ -399,9 +403,16 @@ const shopView = createShopView(
 shopView.render([], false);
 // The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
 // these services; the frame loop below advances its clock.
-const visualServices: ScoreNarrationServices & ActivationLabelServices & RackLabelServices = {
+const visualServices: ScoreNarrationServices &
+  ActivationLabelServices &
+  RackLabelServices &
+  PresentedActionServices = {
   get scoreNarration() {
     return presenter.narration;
+  },
+  // Plays' flights and discards' dissolves (#548).
+  get presentedActions() {
+    return presenter.presentedActions;
   },
   // Item activation labels beside the rack (#919), drawn over the same host the rack is in.
   activationLabels: createActivationLabelLayer(host),
