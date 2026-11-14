@@ -76,6 +76,35 @@ describe("the opening phase (#926)", () => {
     ]);
   });
 
+  it("scores the revealed identity, never the wrapper", () => {
+    const [a, b] = [wrapped(standardDeck[0]!), wrapped(standardDeck[1]!)];
+    const game = runWith([a, b]);
+    expect(game.play({ cardId: a.id, cardIds: [a.id, b.id] })).not.toBeNull();
+    const scored = game.lastScoredLines.flatMap(({ blockIds }) => blockIds);
+    expect(scored).toEqual(expect.arrayContaining([revealed(a.id), revealed(b.id)]));
+    expect(scored).not.toContain(a.id);
+  });
+
+  it("rolls back an earlier successful opening when a later one fails", () => {
+    const [good, broken] = [
+      wrapped(standardDeck[0]!),
+      wrapped(standardDeck[1]!, "testBrokenWrapper"),
+    ];
+    const game = runWith([good, broken]);
+    const before = game.state;
+    const factsBefore = game.actionFacts.length;
+    let failed = false;
+    try {
+      failed = game.play({ cardId: good.id, cardIds: [good.id, broken.id] }) === null;
+    } catch {
+      failed = true;
+    }
+    expect(failed).toBe(true);
+    expect(game.state).toEqual(before);
+    expect(game.state.hand.map(({ id }) => id)).toEqual([good.id, broken.id]);
+    expect(game.actionFacts.length).toBe(factsBefore);
+  });
+
   it("leaves ordinary placements alone", () => {
     const card = standardDeck[0]!;
     const game = runWith([card]);
