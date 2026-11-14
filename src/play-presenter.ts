@@ -14,6 +14,7 @@ import { landingSounds } from "./attachment-sound";
 import { getMaterialDefinition, materialOf } from "./materials";
 import * as THREE from "three";
 import { playSfx } from "./audio/sfx";
+import type { SoundEffectId } from "./audio/sfx-registry";
 import type { CameraViewService } from "./camera-view";
 import { roundOutcome, type RoundOutcome } from "./dealer";
 import { tweenValue } from "./easing";
@@ -121,6 +122,8 @@ type Playing = {
   effects: Materialise[];
   /** The replacements the model drew when this play committed, shown once it has landed. */
   drawn: readonly CardBlock[];
+  /** The sounds its landing makes, decided from the field it committed to. */
+  landingSounds: readonly SoundEffectId[];
 };
 
 /** A discard being shown. */
@@ -361,15 +364,8 @@ export function createPlayPresenter(options: {
       }
     }
     options.moved();
-    // The softer material where each block meets the structure decides its sound (#232).
-    const placed = game().state.field;
-    const landed = action.flights.flatMap(
-      (flight) => placed.find(({ block }) => block.id === flight.source.block.id) ?? [],
-    );
-    for (const id of landingSounds(landed, placed, (block) =>
-      getMaterialDefinition(materialOf(block)),
-    ))
-      playSfx(id);
+    // Its landing sounds, as captured when it committed (#1033 review).
+    for (const id of action.landingSounds) playSfx(id);
     announceScore(action);
     cameraView.scheduleCameraMove();
     // Model first: its replacements were drawn when it committed; only their reveal waits.
@@ -488,6 +484,11 @@ export function createPlayPresenter(options: {
         endpoint: { score: game().state.round.score, outcome: roundOutcome(game().state) },
         slot: narration.reserve(),
         drawn,
+        // The softer material where each block meets the structure decides its sound (#232),
+        // from the field this play committed to.
+        landingSounds: landingSounds(landed, next.field, (block) =>
+          getMaterialDefinition(materialOf(block)),
+        ),
       };
       playing.push(action);
       present({
