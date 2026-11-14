@@ -12,6 +12,7 @@
  *   time: an explosion's smoke, rather than a block's ongoing effect.
  */
 import * as THREE from "three";
+import { unitsToMs } from "../visual-events/scheduler";
 import {
   blockEffects,
   createParticles,
@@ -119,13 +120,17 @@ export function createSmoke(raw: AppearanceEffect, context: BlockEffectContext) 
   };
 }
 
-/** A smoke burst (#510): the same puffs, emitted from one point for `emitSeconds`. */
-export type SmokeBurstConfig = SmokeConfig & { emitSeconds: number };
+/**
+ * A smoke burst (#510): the same puffs, emitted from one point for `emitUnits` game-time units
+ * (1/15 s, doc/game-architecture.md, "Visual-event scheduler and game-time units"). The puffs'
+ * own `lifetime` stays in seconds, as every smoke look's does.
+ */
+export type SmokeBurstConfig = SmokeConfig & { emitUnits: number };
 
 /**
- * A finite puff of smoke at a world point (#510): it emits for `emitSeconds`, then lets its puffs
- * rise and thin out, and reports it has finished once the last is gone (at most `emitSeconds +
- * lifetime` after it began). Under reduced motion it emits nothing and finishes at once. Its
+ * A finite puff of smoke at a world point (#510): it emits for `emitUnits`, then lets its puffs
+ * rise and thin out, and reports it has finished once the last is gone (at most the emission
+ * plus `lifetime` after it began). Its owner advances it from the shared presentation clock. Under reduced motion it emits nothing and finishes at once. Its
  * owner adds `object` to the scene and calls `dispose` once it has finished or is cancelled.
  */
 export function createSmokeBurst(
@@ -135,19 +140,20 @@ export function createSmokeBurst(
 ) {
   const emitter = smokeEmitter(config, context);
   const origin = at.clone();
+  const emitSeconds = unitsToMs(config.emitUnits) / 1000;
   let elapsed = 0;
   return {
     object: emitter.object,
     /** Advance by `delta` seconds; false once every puff has gone. */
     update(delta: number, reducedMotion: boolean): boolean {
-      const emitting = !reducedMotion && elapsed < config.emitSeconds;
-      if (reducedMotion && elapsed === 0) elapsed = config.emitSeconds + config.lifetime;
+      const emitting = !reducedMotion && elapsed < emitSeconds;
+      if (reducedMotion && elapsed === 0) elapsed = emitSeconds + config.lifetime;
       // Emit only within the burst: its last step stops at `emitSeconds`.
-      const emitFor = emitting ? Math.min(delta, config.emitSeconds - elapsed) : 0;
+      const emitFor = emitting ? Math.min(delta, emitSeconds - elapsed) : 0;
       if (emitFor > 0) emitter.step(emitFor, origin);
       emitter.step(delta - emitFor, null);
       elapsed += delta;
-      return elapsed < config.emitSeconds + config.lifetime;
+      return elapsed < emitSeconds + config.lifetime;
     },
     dispose: emitter.dispose,
   };

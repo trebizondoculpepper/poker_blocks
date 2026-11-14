@@ -104,7 +104,8 @@ describe("smoke block effect (#464)", () => {
 });
 
 describe("smoke burst (#510)", () => {
-  const burst = { ...config, emitSeconds: 0.5 };
+  // 7.5 units: half a second.
+  const burst = { ...config, emitUnits: 7.5 };
   const at = new THREE.Vector3(2, 1, -3);
 
   it("puffs from its point for a bounded time, then finishes once the last puff has gone", () => {
@@ -118,13 +119,13 @@ describe("smoke burst (#510)", () => {
     }
     for (let t = 0.1; t < 0.6; t += 0.1) smoke.update(0.1, false);
     // Emission has stopped: no more puffs than half a second's worth.
-    const most = Math.ceil(burst.frequency * burst.emitSeconds) + 1;
+    const most = Math.ceil(burst.frequency * 0.5) + 1;
     expect(live(smoke.object as THREE.Points).length).toBeLessThanOrEqual(most);
     let running = true;
     let steps = 0;
     while (running && steps++ < 100) running = smoke.update(0.1, false);
     expect(running).toBe(false);
-    // At most emitSeconds + lifetime: 2.5 s, here in 0.1 s steps.
+    // At most the emission plus lifetime: 2.5 s, here in 0.1 s steps.
     expect(steps).toBeLessThanOrEqual(21);
     expect(live(smoke.object as THREE.Points)).toEqual([]);
     smoke.dispose();
