@@ -44,6 +44,11 @@ export type DropGuideConfig = {
   colour: number;
   /** Beam thickness and haze, as the laser outline takes them. */
   laser?: Partial<LaserOutlineConfig>;
+  /**
+   * The size the beams' radii and haze are fractions of. Omitted, the target's own larger side,
+   * so a small target gets thin beams; a fixed scale gives every target the same beams (#924).
+   */
+  beamScale?: number;
 };
 
 /** A laser drop guide of a registered shape; size it with `setBounds`. */
@@ -71,7 +76,12 @@ export function createDropGuide(config: DropGuideConfig) {
       segments = new THREE.BufferGeometry().setFromPoints(
         dropGuideShapes.get(config.shape)(width, height),
       );
-      beams = createLaserLines(segments, config.colour, Math.max(width, height), config.laser);
+      beams = createLaserLines(
+        segments,
+        config.colour,
+        config.beamScale ?? Math.max(width, height),
+        config.laser,
+      );
       beams.object.traverse((child) => {
         child.raycast = () => {};
       });

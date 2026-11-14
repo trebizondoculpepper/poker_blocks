@@ -57,6 +57,8 @@ import { createDiscardTarget, createTableInput, type TableInput } from "./table-
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
 import { createHudFrame } from "./hud-frame";
 import { gameplayHudZones, type HudElement } from "./hud-layout";
+import { createDropTargetGuide, dropGuideProviders } from "./visual/drop-target-guide";
+import type { DropTargetGuides } from "./scene-traits/drop-target-guide";
 import { appVersion } from "./version";
 import { createDiagnosticRegistry } from "./diagnostics/debug-snapshot";
 import { registerSnapshotProviders, snapshotSections } from "./diagnostics/providers";
@@ -150,6 +152,7 @@ type TraitContext = {
       hideTuning(): void;
     };
     shop: ShopView;
+    dropTargetGuides: DropTargetGuides;
     rack: { viewEntered(entered: boolean, capacity: number): void };
     deckView: DeckView;
     devShopBalanceEditor: ShopBalanceEditor;
@@ -288,6 +291,14 @@ const traitContext: TraitContext = {
     get shop() {
       return shopView;
     },
+    // Drag target guides over the page host, following the input's drag lifecycle (#922, #924).
+    dropTargetGuides: {
+      create: (config) =>
+        createDropTargetGuide(config, {
+          element: host,
+          observeDrag: (listener) => input.observeDrag(listener),
+        }),
+    },
     get rack() {
       return passiveRackView;
     },
@@ -420,6 +431,8 @@ const input: TableInput = createTableInput({
 });
 // The shop's stock drags like everything else (#277); its shopStock trait enables it.
 input.registerDragSource("shop", shopView.dragSource);
+// What the shop scene's drag guide points to (#924), named by its `dropTargetGuide` trait.
+dropGuideProviders.register("shopOffers", shopView.guideProvider);
 run.begin();
 const overlays: Overlays = createOverlays(host, {
   settings: run.settings,
