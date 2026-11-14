@@ -9,6 +9,16 @@ const benchConfig = () =>
   gameModeFor("dev21").scenes.find(({ id }) => id === "dev21/flame-bench")?.traits.devFlameBench;
 
 describe("the Flame Bench (#1025)", () => {
+  it("stands the camera far enough back for a narrow preview to fit the whole block", async () => {
+    const { fittingDistance } = await import("./room");
+    const radius = (Math.sqrt(3) / 2) * 1.12;
+    expect(fittingDistance(30, 1.5)).toBeCloseTo(4.24);
+    const narrow = 130 / 390;
+    const half = Math.atan(Math.tan((15 * Math.PI) / 180) * narrow);
+    expect(fittingDistance(30, narrow) * Math.sin(half)).toBeCloseTo(radius);
+    expect(fittingDistance(30, narrow)).toBeGreaterThan(fittingDistance(30, 1));
+  });
+
   it("is a developer mode whose every preview has tunable contents", () => {
     const config = benchConfig();
     expect(config?.previews.length).toBeGreaterThanOrEqual(3);

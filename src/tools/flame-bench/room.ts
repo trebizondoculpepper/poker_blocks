@@ -112,6 +112,19 @@ parameterControls.register("choice", (raw, value, set) => {
   return { element: select, refresh };
 });
 
+/** A unit block's bounding sphere at any rotation (half its diagonal), with a little margin. */
+const previewRadius = (Math.sqrt(3) / 2) * 1.12;
+
+/**
+ * How far the camera stands so a preview fits both ways: the narrower of the vertical field of
+ * view (degrees) and the horizontal one this aspect gives, never nearer than the default view.
+ */
+export function fittingDistance(fov: number, aspect: number): number {
+  const vertical = THREE.MathUtils.degToRad(fov) / 2;
+  const horizontal = Math.atan(Math.tan(vertical) * aspect);
+  return Math.max(4.24, previewRadius / Math.sin(Math.min(vertical, horizontal)));
+}
+
 export function createFlameBenchRoom(
   host: HTMLElement,
   options: FlameBenchOptions,
@@ -149,8 +162,7 @@ export function createFlameBenchRoom(
   sun.position.set(3, 5, 6);
   scene.add(sun);
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-  camera.position.set(0, 0.6, 4.2);
-  camera.lookAt(0, 0, 0);
+  const viewDirection = new THREE.Vector3(0, 0.6, 4.2).normalize();
   const prepasses = createPrepassContext();
   const rotation = createPreviewRotation(
     {},
@@ -325,6 +337,9 @@ export function createFlameBenchRoom(
     const width = size.x / Math.max(1, previews.length);
     camera.aspect = width / size.y;
     camera.updateProjectionMatrix();
+    // However narrow a preview's viewport, the whole block fits at any rotation (#1025 review).
+    camera.position.copy(viewDirection).multiplyScalar(fittingDistance(camera.fov, camera.aspect));
+    camera.lookAt(0, 0, 0);
     previews.forEach((preview, index) => {
       const mesh = preview.built!.mesh;
       mesh.quaternion.copy(rotation.pose);
