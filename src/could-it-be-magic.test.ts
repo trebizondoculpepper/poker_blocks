@@ -117,7 +117,7 @@ describe("Could It Be Magic Now? (#988)", () => {
     passiveDefinitions.register(failing, {
       ...couldItBeMagicNow,
       id: failing,
-      playCounter: { every: 1 },
+      instanceState: { playCounter: { count: 0, every: 1 } },
       eventRules: [
         {
           ...couldItBeMagicNow.eventRules[0]!,

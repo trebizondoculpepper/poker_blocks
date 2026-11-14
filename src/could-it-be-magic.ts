@@ -23,7 +23,7 @@ export const couldItBeMagicNow: PassiveDefinition = {
     "Counts your plays. Every fourth play, after reactions, turns one random non-Magic card on the field to Magic. Provisional trial.",
   traitId: "passive.event-rules",
   categoryTrait: { effectCategory: {} },
-  playCounter: { every: magicEvery },
+  instanceState: { playCounter: { count: 0, every: magicEvery } },
   eventRules: [
     {
       on: "play.afterReactions",

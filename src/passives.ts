@@ -173,10 +173,11 @@ export type PassiveDefinition = {
   /** Its event rules: named, configured handlers from `src/rule-handlers.ts` (#139, #170). */
   eventRules: readonly EventRule[];
   /**
-   * A per-instance play counter (#988): each installed copy starts at zero of `every`. Its
-   * rules advance it with the `advance-play-counter` effect.
+   * Each installed instance's own initial state (doc/passive-lifecycle-state.md): copied onto
+   * every new instance's traits, so copies never share it. Its owning capability updates and
+   * saves it (a play counter's `{ count: 0, every: 4 }`, #988).
    */
-  playCounter?: { every: number };
+  instanceState?: Partial<PassiveBlock["traits"]>;
   /**
    * Instance configuration (#876; doc/experiments/passive-test-bench.md): a registered rule
    * builder, its base configuration and the named parameters an instance may override. Absent,
@@ -521,9 +522,7 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
         ].join("\n"),
       ),
       ...(definition.shop ? { priced: { basePrice: definition.shop.basePrice } } : {}),
-      ...(definition.playCounter
-        ? { playCounter: { count: 0, every: definition.playCounter.every } }
-        : {}),
+      ...structuredClone(definition.instanceState ?? {}),
     },
   };
 }
