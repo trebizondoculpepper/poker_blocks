@@ -18,6 +18,7 @@
 import * as THREE from "three";
 import { crystalV3Environment } from "./crystal-v3";
 import { preservingRenderState, type RenderPass } from "./render-pass";
+import { appearancePrepasses } from "./appearance-prepass";
 
 /** The camera layer the rear (inner image) pass draws: never the main view. */
 export const internalLayer = 8;
@@ -77,6 +78,12 @@ export function createInternalCapture(): RenderPass {
     },
   };
 }
+
+/**
+ * The rear capture as an appearance prepass (#971): an appearance using these materials declares
+ * `internalCapture`, and every host that shows it makes and runs its own (#969, #970).
+ */
+appearancePrepasses.register("internalCapture", { create: () => createInternalCapture() });
 
 const vertexShader = /* glsl */ `
   varying vec3 vWorldPosition;

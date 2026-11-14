@@ -1392,7 +1392,7 @@ function crystalRefraction(context: AssemblyContext): BlockAppearance {
   };
 }
 
-/** Internal reflections, ignoring the background (prototype, src/visual/crystal-internal.ts). */
+/** Total Internal Reflection Crystal: internal reflections, ignoring the background (src/visual/crystal-internal.ts). */
 function crystalInternal(context: AssemblyContext): BlockAppearance {
   const { art, definition, geometry } = context;
   const texture = faceTexture(art, definition, false, 0, false);
@@ -1400,13 +1400,17 @@ function crystalInternal(context: AssemblyContext): BlockAppearance {
   const print = printSkin(art, definition.appearance, geometry);
   const inHand = surface(texture, definition.appearance, height);
   const front = createInternalFront() as unknown as THREE.MeshStandardMaterial;
-  return appearanceBase(
-    context,
-    [texture, ...[height].filter((value) => value !== undefined), print.texture],
-    Array.from({ length: 6 }, () => inHand),
-    [createInternalRear(geometry), print.skin],
-    Array.from({ length: 6 }, () => front),
-  );
+  return {
+    ...appearanceBase(
+      context,
+      [texture, ...[height].filter((value) => value !== undefined), print.texture],
+      Array.from({ length: 6 }, () => inHand),
+      [createInternalRear(geometry), print.skin],
+      Array.from({ length: 6 }, () => front),
+    ),
+    // Its front reads the inner image this pass captures, in whichever host draws it (#971).
+    prepasses: [{ handler: "internalCapture" }],
+  };
 }
 
 function frostedBlock(context: AssemblyContext): BlockAppearance {

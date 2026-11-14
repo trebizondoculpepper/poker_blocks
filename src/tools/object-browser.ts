@@ -27,6 +27,7 @@ import {
 import { passiveAppearance, createPassiveBlock, passiveDefinitions } from "../passives";
 import { createPassiveVisual } from "../passive-visual";
 import { createBlockAppearance, setReflectionEnvironment } from "../visual/block-appearance";
+import { createPrepassContext, type PrepassReference } from "../visual/appearance-prepass";
 import "./object-browser.css";
 
 export type ObjectBrowser = { show(backTo: string): void; hide(): void; dispose(): void };
@@ -41,7 +42,12 @@ type BrowsedObject = {
   status?: ReleaseStatusPresentation;
   properties: unknown;
   /** A model to turn in the preview, or nothing for objects without one (a sound). */
-  preview?: (size: number) => { object: THREE.Object3D; dispose(): void };
+  /** A preview, with any prepasses its look declares (#971) for the browser's own renderer. */
+  preview?: (size: number) => {
+    object: THREE.Object3D;
+    prepasses?: readonly PrepassReference[];
+    dispose(): void;
+  };
 };
 
 type Category = { id: string; label: string; objects: () => BrowsedObject[] };
@@ -81,6 +87,7 @@ function materialPage(
       for (const extra of appearance.extras ?? []) cube.add(extra);
       return {
         object: cube,
+        prepasses: appearance.prepasses,
         dispose() {
           appearance.geometry.dispose();
           appearance.textures.forEach((texture) => texture.dispose());
@@ -157,7 +164,7 @@ const categories: readonly Category[] = [
             );
             const object = new THREE.Mesh(visual.geometry, visual.materials);
             object.add(...(visual.extras ?? []));
-            return { object, dispose: () => visual.dispose() };
+            return { object, prepasses: visual.prepasses, dispose: () => visual.dispose() };
           },
         };
       }),
@@ -219,6 +226,9 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
   camera.lookAt(0, 0, 0);
   const environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
   let shown: { object: THREE.Object3D; dispose(): void } | null = null;
+  // The preview's prepasses, on this renderer's own targets (#971).
+  const prepasses = createPrepassContext();
+  let releasePrepasses = () => {};
   let frame = 0;
 
   // The preview's pose (#746): turntable until dragged, then wherever the drag leaves it. It
@@ -237,12 +247,22 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     const seconds = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
     rotation.update(seconds, shown?.object ?? null);
+    prepasses.render({
+      renderer,
+      scene,
+      camera,
+      hide: scene,
+      delta: seconds,
+      reducedMotion: false,
+    });
     renderer.render(scene, camera);
     frame = requestAnimationFrame(spin);
   }
 
   function showPreview(object: BrowsedObject): void {
     if (shown) {
+      releasePrepasses();
+      releasePrepasses = () => {};
       scene.remove(shown.object);
       shown.dispose();
       shown = null;
@@ -250,7 +270,9 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     part("preview").hidden = !object.preview;
     part("view").hidden = !object.preview;
     if (!object.preview) return;
-    shown = object.preview(2.2);
+    const preview = object.preview(2.2);
+    shown = preview;
+    releasePrepasses = prepasses.require(preview.prepasses ?? []);
     scene.add(shown.object);
     // A new entry: any drag in progress ends (its handlers are replaced), the pose stays.
     if (unmountRotation) {
@@ -356,7 +378,9 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       unmountRotation?.();
       unmountRotation = null;
       window.removeEventListener("hashchange", route);
+      releasePrepasses();
       shown?.dispose();
+      prepasses.dispose();
       environment.dispose();
       renderer.dispose();
       root.remove();

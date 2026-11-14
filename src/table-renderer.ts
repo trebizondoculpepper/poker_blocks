@@ -164,7 +164,12 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
     handScene,
     prepasses,
     setDragLayer(cube, dragging) {
-      cube.traverse((object) => (dragging ? object.layers.set(dragLayer) : object.layers.set(0)));
+      // Only what is drawn in the main view moves: a part on a pass's own layer (a crystal's
+      // rear, captured by its prepass, #971) stays there, or it would show in the main render.
+      cube.traverse((object) => {
+        if (!object.layers.isEnabled(0) && !object.layers.isEnabled(dragLayer)) return;
+        object.layers.set(dragging ? dragLayer : 0);
+      });
     },
     render(boardCamera, handCamera) {
       front.clear();

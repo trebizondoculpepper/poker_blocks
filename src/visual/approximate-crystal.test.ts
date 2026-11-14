@@ -43,7 +43,8 @@ describe("optics backends (#523)", () => {
       crystal.appearance,
     );
     expect(withOpticsBackend(crystal, "current").appearance.assembly).toBe("refractiveCrystal");
-    expect(crystal.appearance.assembly).toBe("refractiveCrystal");
+    // The promoted look (#971): Total Internal Reflection Crystal.
+    expect(crystal.appearance.assembly).toBe("crystalInternal");
   });
 
   it("states what the approximation cannot show", () => {

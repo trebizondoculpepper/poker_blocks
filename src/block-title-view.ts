@@ -7,6 +7,7 @@ import {
   sparkleEnvironment,
 } from "./visual/attract-look";
 import { boardFinish } from "./visual/written-block";
+import { createPrepassContext } from "./visual/appearance-prepass";
 import { beatShapes, bouncePhase } from "./dance/beat-shapes";
 import { danceCycles, type DanceFloor, type DanceMove } from "./dance/dance-floor";
 import type { BlockTitleConfig, BlockTitles } from "./scene-traits/block-title";
@@ -199,6 +200,8 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
       // on blocks this close read as specks.
       const environment = sparkleEnvironment(renderer, 0);
       scene.environment = environment;
+      // The letters' prepasses (a crystal letter's inner capture), on this view's renderer (#971).
+      const prepasses = createPrepassContext();
       const title = new THREE.Group();
       title.scale.setScalar(config.scale);
       scene.add(title);
@@ -235,6 +238,7 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
         observer.disconnect();
         leave.forEach((stop) => stop());
         rows.forEach((row) => row.dispose());
+        prepasses.dispose();
         environment.dispose();
         renderer.dispose();
         renderer.forceContextLoss();
@@ -257,6 +261,14 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
               motion.energy,
             );
           }
+          prepasses.render({
+            renderer,
+            scene,
+            camera,
+            hide: scene,
+            delta: 0,
+            reducedMotion: false,
+          });
           renderer.render(scene, camera);
         },
         dispose() {
@@ -277,6 +289,8 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
             return;
           }
           rows.push(row);
+          // Held for the view's life: the context is disposed with it.
+          for (const letter of row.letters) prepasses.require(letter.prepasses);
           // Material environment textures belong to this renderer, never another WebGL context.
           // Only each block's own faces reflect it: its extras (a fire's glass, crystal fire)
           // keep their own look, so no reflection slides over the flame.
