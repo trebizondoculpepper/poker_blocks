@@ -418,7 +418,7 @@ The `giftBox` block assembly (`src/visual/gift-box.ts`, listed in the appearance
 
 ### Dazzle (#493)
 
-`createDazzle(host, camera, { config, random, reducedMotion })` (`src/visual/dazzle.ts`) draws being dazzled by a bright discharge over the view. It is adapted from Encabulator's `createDazzle` (the owner's project) and rewritten for this project's configuration, lifecycle and sounds; its runtime-synthesised click is replaced by a registered sound. `flash(worldPoint, { strength })` plays the configured sound once (default `block.dazzle_pop`, #519) through `playSfx`. Where the point is in view, it whites the view out round it for `flashFrames` and blooms one to `circles` circles of light (`popPattern`, never the same twice). Each circle leaves a dark, faintly purple afterimage fixed to the screen (it is on the eye, so it doesn't move with the camera), fading over about `ghost.mean` seconds. It draws on a DOM layer that never takes input. At most `maxGhosts` afterimages are kept, oldest first out. The glare is capped (`glare.max`) and is only a soft brightening under reduced motion (`glare.reduced`). Call `update(delta)` each frame and `dispose()` on scene exit. It is presentation only, with cosmetic randomness.
+`createDazzle(host, camera, { config, random, reducedMotion })` (`src/visual/dazzle.ts`) draws being dazzled by a bright discharge over the view. It is adapted from Encabulator's `createDazzle` (the owner's project) and rewritten for this project's configuration, lifecycle and sounds; its runtime-synthesised click is replaced by a registered sound. `flash(worldPoint, { strength })` plays the configured sound once (default `block.dazzle_pop`, #519) through `playSfx`. Where the point is in view, it whites the view out round it for `flashFrames` and blooms `minCircles` (default one) to `circles` circles of light (`popPattern`, never the same twice), shading from `colours.centre` to `colours.fringe`. A flash may override its pop for itself with `flash(at, { look })` (circle range, spread, colours, glare, sound), so one dazzle service serves every caller: an explosion's three to six white-centred, yellow-fringed pops (#510) are configuration on its controller, never a branch in the dazzle. Each circle leaves a dark, faintly purple afterimage fixed to the screen (it is on the eye, so it doesn't move with the camera), fading over about `ghost.mean` seconds. It draws on a DOM layer that never takes input. At most `maxGhosts` afterimages are kept, oldest first out. The glare is capped (`glare.max`) and is only a soft brightening under reduced motion (`glare.reduced`). Call `update(delta)` each frame and `dispose()` on scene exit. It is presentation only, with cosmetic randomness.
 
 ### Block exits (#439)
 
@@ -538,7 +538,12 @@ The run is saved automatically (`src/save.ts`) at safe points only: when a place
     "hand": ["K-spades"],
     "deck": ["..."],
     "discardPile": ["..."],
-    "round": { "score": 0, "targetScore": 525, "movesLeft": 6, "discardsLeft": 4 }
+    "round": {
+      "score": 0,
+      "targetScore": 525,
+      "movesLeft": 6,
+      "discardsLeft": 4
+    }
   }
 }
 ```
@@ -1114,6 +1119,7 @@ Some looks keep emitting while a block is on the table: smoke from fire or sizzl
 - Each puff rises along **world up** at `rise` block sizes per second (±20% each), whatever the block's orientation.
 - `turbulence` (block sizes) is a cheap bounded swirl: two sine waves per puff, at their own phases and rates, push it sideways while it keeps rising. The sideways offset never exceeds `turbulence`, and the upward speed is never reduced. There is no fluid simulation.
 - A puff grows from `size` toward twice that and fades over `lifetime` seconds, in `colour` at most `opacity`. Normal blending, depth-tested but not depth-writing, so smoke sits behind and in front of blocks correctly and never hides them.
+- **Burst (#510):** `createSmokeBurst({ ...smoke, emitSeconds }, context, at)` is the same emitter from one world point for a bounded time, for a detonation rather than a block. It emits for `emitSeconds`, then lets its puffs rise and thin, and its `update(delta, reducedMotion)` reports finished once the last has gone (at most `emitSeconds + lifetime`). Under reduced motion it emits nothing and finishes at once. Its owner adds its `object` to the scene and disposes it.
 
 **Dust (#465)** (`src/visual/dust.ts`, effect `dust { colour, size, opacity, lifetime, turbulence, threshold, proportionality, launch, drag, terminal, samples, max }`): grains shaken loose when a block turns.
 
@@ -1222,7 +1228,11 @@ type ContentsHandler = (
 
 type Capabilities = {
   /** A liquid's top: points p (block-local) with dot(p, normal) <= height are inside it. */
-  liquidSurface: { normal: THREE.Vector3; height: number; wet(p: THREE.Vector3): boolean };
+  liquidSurface: {
+    normal: THREE.Vector3;
+    height: number;
+    wet(p: THREE.Vector3): boolean;
+  };
 };
 ```
 
