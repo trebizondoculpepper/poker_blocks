@@ -10,6 +10,8 @@ import { resetRoundState } from "./round-end";
 import { clearField, removeCardForRun } from "./card-ownership";
 // Registers the spawn-beyond-pair reaction result (#425).
 import "./pair-spawn";
+// Registers the opaque container's opening, run by the play's opening phase (#930).
+import "./opaque-opening";
 // Registers cooking's stage-end reset (#372).
 import "./cooking";
 // Registers the `trigger-block` rule command (#433).

@@ -362,6 +362,15 @@ const entries = [
     prompt: "Cheerful short cash register ding with a coin clink, a purchase made",
   },
   {
+    id: "block.open",
+    name: "Container opens",
+    family: "block",
+    description:
+      "A placed container opens and reveals the card it held, in its place (#930), once per opening",
+    placeholder: "shop.stock.land",
+    prompt: "A small soft paper rip and pop, a wrapped box opening, short and bright",
+  },
+  {
     id: "celebration.pop",
     name: "Celebration pop",
     family: "celebration",
