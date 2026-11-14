@@ -9,5 +9,5 @@ import "./exit-fracture";
 import "./exit-fragments";
 import "./flash-shudder";
 
-export { createExitRunner, exitEffects, exitTargets } from "./exit-presentation";
+export { createExitPresenter, exitEffects, exitTargets } from "./exit-presentation";
 export type { ExitSequence, ExitSnapshot, ExitVisual } from "./exit-presentation";

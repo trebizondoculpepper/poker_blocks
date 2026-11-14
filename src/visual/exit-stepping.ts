@@ -1,0 +1,47 @@
+/**
+ * Block exits on a scheduler of their own, stepped by hand (#549): for tests and the profiler,
+ * which drive their own time in seconds. The game presents exits on its one shared scheduler
+ * (`createExitPresenter` with the scheduler the frame loop advances); this only supplies a clock
+ * for code that has no frame loop. Exits are started at once, as they would be on the next frame.
+ */
+import { createVisualScheduler } from "../visual-events/scheduler";
+import {
+  createExitPresenter,
+  type ExitPresenter,
+  type ExitSequence,
+  type ExitSnapshot,
+  type ExitVisual,
+} from "./exit-presentation";
+
+export function createSteppedExits(reducedMotion: () => boolean = () => false) {
+  let presenter: ExitPresenter | null = null;
+  const scheduler = createVisualScheduler({
+    services: {
+      get blockExits() {
+        return presenter!.blockExits;
+      },
+    },
+  });
+  presenter = createExitPresenter(scheduler, reducedMotion);
+  const exits = presenter;
+  let realMs = 0;
+  scheduler.update(realMs, true);
+  return {
+    scheduler,
+    start(snapshot: ExitSnapshot, visual: ExitVisual, sequence: ExitSequence): void {
+      exits.start(snapshot, visual, sequence);
+      // Same clock time: starts it without advancing anything.
+      scheduler.update(realMs, true);
+    },
+    /** Advance every exit by `delta` seconds. */
+    update(delta: number): void {
+      realMs += delta * 1000;
+      scheduler.update(realMs, true);
+    },
+    cancel: (blockId: string) => exits.cancel(blockId),
+    get active(): number {
+      return exits.active;
+    },
+    dispose: () => exits.dispose(),
+  };
+}

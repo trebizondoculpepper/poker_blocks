@@ -5,7 +5,8 @@ import "./visual/cloud";
 import { createFireCore } from "./visual/fire-core";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { experimentalMaterials, materialDefinitions, type MaterialDefinition } from "./materials";
-import { createExitRunner, exitEffects, exitTargets, type ExitVisual } from "./visual/exit-effects";
+import { exitEffects, exitTargets, type ExitVisual } from "./visual/exit-effects";
+import { createSteppedExits } from "./visual/exit-stepping";
 
 const all: readonly MaterialDefinition[] = [...materialDefinitions, ...experimentalMaterials];
 const exitOf = (id: string) => all.find((material) => material.id === id)!.appearance.exit!;
@@ -52,7 +53,7 @@ describe("material exits (#438)", () => {
     release.mockClear();
     const v = visual();
     const body = v.root.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "w" }, v, exitOf("wood"));
     const splinters = v.root.children.slice(1);
     expect(splinters).toHaveLength(14);
@@ -66,7 +67,7 @@ describe("material exits (#438)", () => {
 
   it("wood's exit shows no debris and ends at once with reduced motion", () => {
     const v = visual();
-    const runner = createExitRunner(() => true);
+    const runner = createSteppedExits(() => true);
     runner.start({ blockId: "w" }, v, exitOf("wood"));
     expect(v.root.children).toHaveLength(1);
     runner.update(1 / 60);
@@ -76,7 +77,7 @@ describe("material exits (#438)", () => {
   it("terracotta fractures into pottery shards that scatter and fade (#455)", () => {
     release.mockClear();
     const v = visual();
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "t" }, v, exitOf("terracotta"));
     const shards = v.root.children.slice(1) as THREE.Mesh<
       THREE.BufferGeometry,
@@ -97,7 +98,7 @@ describe("material exits (#438)", () => {
     release.mockClear();
     const v = visual();
     const body = v.root.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "p" }, v, exitOf("paper"));
     expect(v.root.children.slice(1)).toHaveLength(28);
     for (let frame = 0; frame < 6; frame++) runner.update(1 / 60);
@@ -110,7 +111,7 @@ describe("material exits (#438)", () => {
   it("ice cracks into five translucent predefined pieces that scatter and fade (#449)", () => {
     release.mockClear();
     const v = visual();
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "i" }, v, exitOf("ice"));
     const pieces = v.root.children.slice(1) as THREE.Mesh<
       THREE.BufferGeometry,
@@ -121,7 +122,7 @@ describe("material exits (#438)", () => {
     expect(pieces[0]!.material.opacity).toBeCloseTo(0.55);
     // Shared, predefined geometry: another ice block's pieces reuse it.
     const other = visual();
-    const second = createExitRunner(() => false);
+    const second = createSteppedExits(() => false);
     second.start({ blockId: "i2" }, other, exitOf("ice"));
     expect((other.root.children[1] as THREE.Mesh).geometry).toBe(pieces[0]!.geometry);
     runner.update(0.75);
@@ -134,7 +135,7 @@ describe("material exits (#438)", () => {
   it("meat breaks into a few soft chunks that tumble and fade (#450)", () => {
     release.mockClear();
     const v = visual();
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "m" }, v, exitOf("meat"));
     const chunks = v.root.children.slice(1) as THREE.Mesh<
       THREE.SphereGeometry,
@@ -153,7 +154,7 @@ describe("material exits (#438)", () => {
   it("magic: the shell breaks apart and releases its stars outward, then they fade (#458)", () => {
     release.mockClear();
     const v = container();
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "magic" }, v, exitOf("magic"));
     expect(v.root.children.some((child) => child instanceof THREE.Points)).toBe(true);
     for (let frame = 0; frame < 90; frame++) runner.update(1 / 60);
@@ -165,7 +166,7 @@ describe("material exits (#438)", () => {
     release.mockClear();
     const v = visual();
     const body = v.root.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "c" }, v, exitOf("prismatic"));
     const own = body.material;
     // First the crack lines, the block still whole.
@@ -188,7 +189,7 @@ describe("material exits (#438)", () => {
     // Like the real Air block: one body mesh, fans and vents only face artwork.
     const v = visual();
     const body = v.root.children[0] as THREE.Mesh;
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "air" }, v, exitOf("airVent"));
     const parts = v.root.children.slice(1) as THREE.Mesh<
       THREE.BufferGeometry,
@@ -218,7 +219,7 @@ describe("material exits (#438)", () => {
   it("flame: the shared container break cracks the shell, then shards fall as the contents fade (#452)", () => {
     release.mockClear();
     const v = container();
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "f" }, v, exitOf("fire"));
     // Crack lines first, over the shell; nothing thrown yet.
     const before = v.root.children.length;
@@ -245,7 +246,7 @@ describe("material exits (#438)", () => {
     root.add(shellMesh, flame);
     new THREE.Group().add(root);
     const v: ExitVisual = { root, shell: [shellMesh], contents: [flame], release };
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "fire" }, v, exitOf("fire"));
     const shader = flame.material as THREE.ShaderMaterial;
     expect(shader.fragmentShader).toContain("* opacity");
@@ -259,7 +260,7 @@ describe("material exits (#438)", () => {
   it("cloud simply fades away, with no debris (#459)", () => {
     release.mockClear();
     const v = container();
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "cloud" }, v, exitOf("cloud"));
     expect(v.root.children).toHaveLength(2);
     runner.update(0.3);
@@ -286,7 +287,7 @@ describe("material exits (#438)", () => {
   it("earth: the shell breaks apart and earth bursts out in falling particles (#456)", () => {
     release.mockClear();
     const v = container();
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "earth" }, v, exitOf("earth"));
     expect(v.root.children.some((child) => child instanceof THREE.Points)).toBe(true);
     expect(v.root.children.length).toBeGreaterThanOrEqual(2 + 8 + 1);
@@ -308,7 +309,7 @@ describe("material exits (#438)", () => {
   it("custard composes the shared container break (#453)", () => {
     release.mockClear();
     const v = container();
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "custard" }, v, exitOf("custard"));
     expect(
       exitOf("custard").steps.map(({ effects }) => effects.map(({ effect }) => effect)),
@@ -323,7 +324,7 @@ describe("material exits (#438)", () => {
   it("gelato composes the shared container break (#457)", () => {
     release.mockClear();
     const v = container();
-    const runner = createExitRunner(() => false);
+    const runner = createSteppedExits(() => false);
     runner.start({ blockId: "gelato" }, v, exitOf("gelato"));
     expect(
       exitOf("gelato").steps.map(({ effects }) => effects.map(({ effect }) => effect)),
