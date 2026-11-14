@@ -7,7 +7,6 @@
 import type { AudioService } from "./audio-service";
 import type { ConsoleHost } from "./console/commands";
 import { createConsole, type GameConsole } from "./console/console-view";
-import type { DebugSnapshot } from "./diagnostics/debug-snapshot";
 import type { GameRun } from "./game-run";
 import {
   modeConsoleNames,
@@ -45,17 +44,10 @@ export type ModeAddress = {
 
 export type ConsoleHostOptions = Omit<ConsoleHost, "clear" | "history" | "say">;
 
-/** What the console reads for `debug snapshot`, and how it reaches the clipboard. */
-export type ConsoleDiagnostics = {
-  snapshot(): DebugSnapshot;
-  copyText(text: string): Promise<boolean>;
-};
-
 export function consoleHostFor(
   app: ConsoleApp,
   audio: Pick<AudioService, "music">,
   address: ModeAddress,
-  diagnostics: ConsoleDiagnostics,
 ): ConsoleHostOptions {
   const modeName = () => modeConsoleNames(app.mode())[0] ?? null;
   return {
@@ -85,36 +77,15 @@ export function consoleHostFor(
       audio.music.play(id);
     },
     stopMusic: () => audio.music.stop(),
-    snapshot: () => JSON.stringify(diagnostics.snapshot(), null, 2),
-    copyText: (text) => diagnostics.copyText(text),
   };
 }
 
-/** The browser clipboard; a refusal or a missing API resolves false, never throws. */
-export async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** The developer console (~ or `), wired to the game and the audio service. */
-export function createConsoleHost(
-  app: ConsoleApp,
-  audio: AudioService,
-  diagnostics: Pick<ConsoleDiagnostics, "snapshot">,
-): GameConsole {
+export function createConsoleHost(app: ConsoleApp, audio: AudioService): GameConsole {
   return createConsole(
-    consoleHostFor(
-      app,
-      audio,
-      {
-        href: () => window.location.href,
-        replace: (url) => window.history.replaceState(window.history.state, "", url),
-      },
-      { snapshot: () => diagnostics.snapshot(), copyText: copyToClipboard },
-    ),
+    consoleHostFor(app, audio, {
+      href: () => window.location.href,
+      replace: (url) => window.history.replaceState(window.history.state, "", url),
+    }),
   );
 }

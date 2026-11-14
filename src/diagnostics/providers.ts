@@ -45,11 +45,13 @@ export function registerSnapshotProviders(
       const state = sources.state();
       return {
         coins: state.coins,
+        // Identities per zone, so a duplicated, lost or left-over card shows (bounded by the
+        // snapshot's item limit, which reports any cut).
         hand: state.hand.map(card),
-        deck: state.deck.length,
-        discardPile: state.discardPile.length,
-        field: state.field.length,
-        removedCards: state.removedCards?.length ?? 0,
+        deck: state.deck.map(({ id }) => id),
+        discardPile: state.discardPile.map(({ id }) => id),
+        field: state.field.map(({ block, cell }) => ({ ...card(block), cell: { ...cell } })),
+        removedCards: [...(state.removedCards ?? [])],
       };
     }),
     registry.register("passives", () =>

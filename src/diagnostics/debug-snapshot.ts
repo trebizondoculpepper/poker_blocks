@@ -83,14 +83,22 @@ export function createDiagnosticRegistry(
         sections,
         truncated,
       };
-      // Over the byte budget: drop the largest sections' data until it fits, saying which.
+      // Over the byte budget: drop the largest sections' data until it fits, saying which; then,
+      // if the notices alone are too long, keep the first ones and count the rest. Only the
+      // fixed skeleton (schema, time, section statuses) can still exceed a tiny budget.
       while (byteLength(snapshot) > limits.bytes) {
         const largest = Object.entries(sections)
           .filter(([, section]) => section.status === "ok")
           .sort(([, a], [, b]) => byteLength(b) - byteLength(a))[0];
         if (!largest) break;
-        sections[largest[0]] = { status: "failed", error: "dropped: over the snapshot byte limit" };
+        sections[largest[0]] = { status: "failed", error: "over byte limit" };
         truncated.push(`${largest[0]}: bytes`);
+      }
+      const notices = [...truncated];
+      for (let kept = notices.length; byteLength(snapshot) > limits.bytes && kept > 0;) {
+        kept = Math.floor(kept / 2);
+        truncated.splice(0, truncated.length, ...notices.slice(0, kept));
+        truncated.push(`…${notices.length - kept} more truncations`);
       }
       return snapshot;
     },

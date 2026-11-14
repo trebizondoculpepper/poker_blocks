@@ -60,6 +60,8 @@ import { gameplayHudZones, type HudElement } from "./hud-layout";
 import { appVersion } from "./version";
 import { createDiagnosticRegistry } from "./diagnostics/debug-snapshot";
 import { registerSnapshotProviders, snapshotSections } from "./diagnostics/providers";
+import { debugSnapshotCommand } from "./diagnostics/snapshot-command";
+import { registerConsoleCommand } from "./console/commands";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -450,22 +452,30 @@ const unbindScreenshot = bindScreenshotShortcut(
 hud.onAction(() => run.takeNextAction());
 hud.onOpen((action) => run.dispatch(action));
 // Developer console: ~ (or `) drops it down.
-// The debug snapshot's read-only providers (#987); the scheduler section stays `unavailable`
+// The debug snapshot (#987): development builds only (doc/debug-snapshot.md). A production build
+// composes neither its providers nor its command. The scheduler section stays `unavailable`
 // until the running game owns a visual scheduler (#547).
-const diagnostics = createDiagnosticRegistry(snapshotSections);
-// Development builds only (doc/debug-snapshot.md): a production build registers no provider, so
-// every section reads `unavailable`.
 const leaveDiagnostics = import.meta.env.DEV
-  ? registerSnapshotProviders(diagnostics, {
-      version: appVersion,
-      mode: () => run.consoleApp.mode().id,
-      sceneStack: () => sceneManager.stack.map(({ id }) => id),
-      state: () => run.consoleApp.game().state,
-      titles: () => blockTitles.mounted(),
-      actions: () => ({ recording: actionLog.recording, entries: actionLog.entries() }),
-    })
+  ? (() => {
+      const diagnostics = createDiagnosticRegistry(snapshotSections);
+      const leaveProviders = registerSnapshotProviders(diagnostics, {
+        version: appVersion,
+        mode: () => run.consoleApp.mode().id,
+        sceneStack: () => sceneManager.stack.map(({ id }) => id),
+        state: () => run.consoleApp.game().state,
+        titles: () => blockTitles.mounted(),
+        actions: () => ({ recording: actionLog.recording, entries: actionLog.entries() }),
+      });
+      const leaveCommand = registerConsoleCommand(
+        debugSnapshotCommand(() => diagnostics.snapshot()),
+      );
+      return () => {
+        leaveCommand();
+        leaveProviders();
+      };
+    })()
   : () => {};
-const devConsole = createConsoleHost(run.consoleApp, audio, diagnostics);
+const devConsole = createConsoleHost(run.consoleApp, audio);
 cameraView.start();
 
 // ----- The frame loop -----

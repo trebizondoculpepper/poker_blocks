@@ -42,8 +42,26 @@ describe("debug snapshot (#987)", () => {
       "long.list: 4 items",
       "long.text: string",
     ]);
-    const tight = registry.snapshot({ bytes: 170 });
-    expect(tight.truncated.some((cut) => cut.endsWith(": bytes"))).toBe(true);
+  });
+  it("drops the largest section to fit the byte limit, keeping the rest", () => {
+    const registry = createDiagnosticRegistry([], fixed);
+    registry.register("big", () => Array.from({ length: 10 }, () => "x".repeat(300)));
+    registry.register("small", () => 1);
+    const snapshot = registry.snapshot({ bytes: 1000 });
+    expect(snapshot.sections.big).toEqual({ status: "failed", error: "over byte limit" });
+    expect(snapshot.sections.small).toEqual({ status: "ok", data: 1 });
+    expect(snapshot.truncated).toEqual(["big: bytes"]);
+    expect(new TextEncoder().encode(JSON.stringify(snapshot)).length).toBeLessThanOrEqual(1000);
+  });
+  it("keeps the total within the byte limit even when the truncation notices are long", () => {
+    const registry = createDiagnosticRegistry([], fixed);
+    const wide = () =>
+      Array.from({ length: 50 }, () => Array.from({ length: 50 }, () => "x".repeat(401)));
+    registry.register("a", wide);
+    registry.register("b", wide);
+    const snapshot = registry.snapshot();
+    expect(new TextEncoder().encode(JSON.stringify(snapshot)).length).toBeLessThanOrEqual(65536);
+    expect(snapshot.truncated.at(-1)).toMatch(/more truncations$/);
   });
   it("never serialises callbacks or live objects", () => {
     const registry = createDiagnosticRegistry([], fixed);
