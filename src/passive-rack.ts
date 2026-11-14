@@ -11,6 +11,17 @@ import {
   type ActivationPulse,
 } from "./activation-pulse";
 import { playSfx } from "./audio/sfx";
+import { describePassiveActivation } from "./activation-descriptor";
+import { pulseMilliseconds } from "./activation-pulse";
+import { passiveDefinitions } from "./passives";
+import type { RuleActivation } from "./passive-effects";
+import type { AlongsideEvent } from "./score-narration";
+import {
+  labelAnchorSpaces,
+  type ActivationLabelPayload,
+  type Point,
+} from "./visual/activation-labels";
+import { unitMs } from "./visual-events/scheduler";
 
 const slotWidth = 72;
 const slotGap = 8;
@@ -64,6 +75,42 @@ export function passiveActivation(block: PassiveBlock): ActivationConfig {
   return block.traits.activationPulse ?? categoryDefaults(block.traits).activation;
 }
 
+/** What the rack offers activation labels (#919), as a visual-event service. */
+export type RackLabelAnchors = {
+  /** A live point above an installed item's slot, in its host's CSS pixels; null once it's gone. */
+  anchorOf(sourceId: string): () => Point | null;
+};
+export type RackLabelServices = { passiveRack?: RackLabelAnchors };
+
+/**
+ * The rack's label anchor space (#919): the opaque anchor is the item's instance id, resolved
+ * live through the rack service, so a label follows its slot and ends when the item leaves.
+ */
+labelAnchorSpaces.register("rack", (anchor, services) => {
+  const rack = (services as RackLabelServices | undefined)?.passiveRack;
+  return rack ? rack.anchorOf(String(anchor)) : () => null;
+});
+
+/**
+ * An installed item's activation label (#919; doc/presentation-contracts.md, "Resolved activation
+ * results"): the text its own composed descriptor writes from the resolved outcomes, for as long
+ * as its own activation pulse lasts, anchored to its rack slot. Null when there is nothing to say.
+ */
+export function rackActivationLabel(
+  block: PassiveBlock,
+  activation: RuleActivation,
+): AlongsideEvent | null {
+  const text = describePassiveActivation(passiveDefinitions.get(block.definitionId), activation);
+  if (!text) return null;
+  const payload: ActivationLabelPayload = {
+    text,
+    space: "rack",
+    anchor: block.id,
+    durationUnits: pulseMilliseconds(passiveActivation(block).effect) / unitMs,
+  };
+  return { handler: "activationLabel", payload };
+}
+
 /** A fixed screen-space rack with one Three.js scene for all rotating passive blocks. */
 export function createPassiveRack(host: HTMLElement): {
   element: HTMLElement;
@@ -87,6 +134,15 @@ export function createPassiveRack(host: HTMLElement): {
    * activation effect and sound. Other sources (a card's own rules) are not in the rack.
    */
   activate(sourceId: string): void;
+  /**
+   * The label shown beside an installed item when it activates in a scored line (#919): its
+   * text from the item's own composed descriptor, lasting as long as its pulse, anchored to its
+   * slot. Null for a source not in the rack (a card's own rules) or an activation with nothing
+   * to say. Captured when the play commits.
+   */
+  labelFor(activation: RuleActivation): AlongsideEvent | null;
+  /** Anchors for its labels, by item id (the `rack` anchor space reads these). */
+  anchorOf(sourceId: string): () => Point | null;
   dispose(): void;
 } {
   const element = document.createElement("aside");
@@ -293,6 +349,20 @@ export function createPassiveRack(host: HTMLElement): {
       const activation = passiveActivation(entry.block);
       entry.pulse.start(activation.effect, performance.now());
       playSfx(activation.sfx);
+    },
+    labelFor(activation) {
+      const entry = rendered.get(activation.sourceId);
+      return entry ? rackActivationLabel(entry.block, activation) : null;
+    },
+    anchorOf(sourceId) {
+      return () => {
+        const entry = rendered.get(sourceId);
+        if (!entry || element.hidden || !entry.item.isConnected) return null;
+        const slot = entry.item.getBoundingClientRect();
+        // The rack's own host: activation labels are drawn over it (main wires them together).
+        const origin = host.getBoundingClientRect();
+        return { x: slot.left + slot.width / 2 - origin.left, y: slot.top - origin.top };
+      };
     },
     dispose() {
       clear();
