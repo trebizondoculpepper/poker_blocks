@@ -17,6 +17,8 @@ function recordingHost() {
   const runAll = new Set<() => void>();
   const shown = new Set<HudPanel>();
   let deckClose = () => {};
+  /** Who waits on the stage-won ledger: the test finishes it when it likes (#951). */
+  const ledgerWaiters = new Set<() => void>();
   const host: SceneHost = {
     host: { dataset: {} } as HTMLElement,
     services: {
@@ -212,10 +214,14 @@ function recordingHost() {
         hideSettings: () => void calls.push("settings:hide"),
         showGameOver: (stats) => void calls.push(`gameOver:${stats.totalScore}`),
         hideGameOver: () => void calls.push("gameOver:hide"),
-        // Two arguments only: a stage result never carries the seed (#164).
+        // The reward only: a stage result never carries the seed (#164).
         showStageWon: (...args: unknown[]) => {
-          const [reward, next] = args as [{ balance: number }, { id: string }];
-          calls.push(`stageWon:${reward.balance}:${next.id}${args.length > 2 ? ":seed" : ""}`);
+          const [reward] = args as [{ balance: number }];
+          calls.push(`stageWon:${reward.balance}${args.length > 1 ? ":seed" : ""}`);
+        },
+        whenLedgerFinished: (ready) => {
+          ledgerWaiters.add(ready);
+          return () => void ledgerWaiters.delete(ready);
         },
         hideStageWon: () => void calls.push("stageWon:hide"),
         showTitle: () => void calls.push("title:show"),
@@ -240,7 +246,12 @@ function recordingHost() {
       sound: (id) => void calls.push(`sound:${id}`),
     },
   };
-  return { host, calls, runAll, shown, closeDeck: () => deckClose() };
+  const finishLedger = () => {
+    const waiting = [...ledgerWaiters];
+    ledgerWaiters.clear();
+    waiting.forEach((ready) => ready());
+  };
+  return { host, calls, runAll, shown, closeDeck: () => deckClose(), finishLedger };
 }
 
 const scene = (id: string, traits: Partial<SceneTraits>) => ({ id, traits });
@@ -479,20 +490,53 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toContain("deck:hide");
   });
 
-  it("shows the won stage's paid rewards with its next action, and closes on exit (#91)", () => {
-    const { host, calls } = recordingHost();
+  it("shows the won stage's paid rewards, and Visit shop below only once the ledger finishes (#951)", () => {
+    const { host, calls, finishLedger } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
     scenes.register(scene("table", {}));
     scenes.register(
-      scene("reward", { stageWonScreen: { next: { id: "onward", label: "Onward" } } }),
+      scene("reward", {
+        resultMenu: {
+          information: "stageReward",
+          showAfter: "ledgerFinished",
+          dialog: gameDialogs.stageWon,
+        },
+      }),
     );
 
     scenes.switchTo("table");
     scenes.push("reward");
-    expect(calls).toEqual(["stageWon:5:onward"]);
+    // The ledger counts in; no choice is offered yet, not even a hidden one.
+    expect(calls).toEqual(["stageWon:5"]);
+    finishLedger();
+    expect(calls).toEqual(["stageWon:5", "dialog:add:Stage won", "choices:leaveStage"]);
+    // Finishing again offers nothing more.
+    finishLedger();
+    expect(calls).toHaveLength(3);
     calls.length = 0;
     scenes.switchTo("table");
-    expect(calls).toEqual(["stageWon:hide"]);
+    expect(calls).toEqual(["dialog:remove:Stage won", "stageWon:hide"]);
+  });
+
+  it("never offers Visit shop for a stage-won screen closed before its ledger finished (#951)", () => {
+    const { host, calls, finishLedger } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("table", {}));
+    scenes.register(
+      scene("reward", {
+        resultMenu: {
+          information: "stageReward",
+          showAfter: "ledgerFinished",
+          dialog: gameDialogs.stageWon,
+        },
+      }),
+    );
+    scenes.switchTo("table");
+    scenes.push("reward");
+    scenes.switchTo("table");
+    calls.length = 0;
+    finishLedger();
+    expect(calls).toEqual([]);
   });
 
   it("shows the game over screen with the run's totals, its choices below, and hides both (#90)", () => {

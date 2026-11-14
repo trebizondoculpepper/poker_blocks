@@ -62,12 +62,18 @@ export type Menus = {
   showGameOver(stats: RunStats, seed: number | null): void;
   hideGameOver(): void;
   /**
-   * A stage is won: show "Stage Won" and count the reward rows in one by one, then offer
-   * `action` (Visit shop), which calls `onContinue`. The music is
-   * left alone.
+   * A stage is won: show "Stage Won" and count the reward rows in one by one, then the totals.
+   * Its choices are a block menu the scene's result menu mounts below, once the ledger has
+   * finished (#951). The music is left alone; the seed is the final result screen's alone (#164).
    */
-  /** Show the pop-up; the seed is the final result screen's alone (#164). */
-  showStageWon(reward: StageReward, next: MenuChoice): void;
+  showStageWon(reward: StageReward): void;
+  /**
+   * Hear the stage-won ledger finish (#951; doc/result-menus.md): `ready` is called once, when
+   * this showing's rows and totals have all been presented (by count-up, reduced motion or the
+   * summary fallback), or at once if they already have. Never for a showing closed first.
+   * Returns a cancel.
+   */
+  whenLedgerFinished(ready: () => void): () => void;
   /** The stage-won ledger, for the shared scheduler's `rewardLedger` service (#950). */
   readonly rewardLedger: LedgerSink;
   /** Close the stage-won pop-up, cancelling any rows still counting in. */
@@ -132,7 +138,7 @@ export function createMenus(
        <div><dt>Total earned</dt><dd data-menu="total"></dd></div>
        <div><dt>Coins</dt><dd data-menu="balance"></dd></div>
      </dl>
-     <div class="menu-buttons"><button type="button" data-menu="stage-next" hidden></button></div>
+     <div class="block-menu-host" data-menu="items"></div>
 `,
   );
 
@@ -350,20 +356,14 @@ export function createMenus(
     settingsButton.hidden = !title.root.hidden || !stageWon.root.hidden;
   }
 
-  let stageNextChoice: MenuChoice | null = null;
   /** The ledger's count-up on the shared scheduler (#950), until it finishes or the screen closes. */
   let ledgerScope: ScopeHandle | null = null;
   /** Whether this showing has offered its next choice: once only, whichever path gets there. */
   let ledgerFinished = true;
   const ledger = find<HTMLElement>(stageWon.panel, "ledger");
   const totals = find<HTMLElement>(stageWon.panel, "totals");
-  const stageNext = find<HTMLButtonElement>(stageWon.panel, "stage-next");
-  // The button dispatches its action; the scene's exit closes the pop-up.
-  stageNext.addEventListener("click", () => {
-    if (!stageNextChoice) return;
-    playSfx(stageNextChoice.sfx ?? "ui.click");
-    callbacks.onAction(stageNextChoice.id);
-  });
+  /** Who is waiting for this showing's ledger to finish (#951): told once, then forgotten. */
+  let ledgerListeners = new Set<() => void>();
 
   function cancelLedger(): void {
     if (ledgerScope) presentation?.visualEvents.cancel(ledgerScope);
@@ -395,8 +395,9 @@ export function createMenus(
       find(totals, "total").textContent = total;
       find(totals, "balance").textContent = balance;
       totals.hidden = false;
-      stageNext.hidden = false;
-      stageNext.focus();
+      const listeners = [...ledgerListeners];
+      ledgerListeners = new Set();
+      for (const ready of listeners) ready();
     },
     summarise({ rows, totals: captured }) {
       if (ledgerFinished) return;
@@ -406,7 +407,8 @@ export function createMenus(
   };
 
   function hideStageWon(): void {
-    stageNextChoice = null;
+    // Anyone still waiting is never told: a closed showing offers no choice later.
+    ledgerListeners = new Set();
     ledgerFinished = true;
     cancelLedger();
     stageWon.root.hidden = true;
@@ -414,13 +416,21 @@ export function createMenus(
     settingsButton.hidden = false;
   }
 
-  function showStageWon(reward: StageReward, next: MenuChoice): void {
+  function whenLedgerFinished(ready: () => void): () => void {
+    if (stageWon.root.hidden) return () => {};
+    if (ledgerFinished) {
+      ready();
+      return () => {};
+    }
+    ledgerListeners.add(ready);
+    return () => void ledgerListeners.delete(ready);
+  }
+
+  function showStageWon(reward: StageReward): void {
     cancelLedger();
+    ledgerListeners = new Set();
     ledger.replaceChildren();
     totals.hidden = true;
-    stageNext.hidden = true;
-    stageNext.textContent = next.label;
-    stageNextChoice = next;
     // Not open(): the game screen (and its music) stays as it is behind the pop-up.
     title.root.hidden = settingsScreen.root.hidden = gameOver.root.hidden = true;
     // A pause menu left open under it can't be reached until the dialog closes.
@@ -465,6 +475,7 @@ export function createMenus(
     showGameOver,
     hideGameOver,
     showStageWon,
+    whenLedgerFinished,
     hideStageWon,
     rewardLedger,
     showMenu,

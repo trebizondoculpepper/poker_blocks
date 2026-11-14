@@ -216,11 +216,6 @@ export type SceneTraits = {
    */
   titleScreen: Record<never, never>;
   /**
-   * The stage-won pop-up is shown while this scene is in front: the won stage's reward rows
-   * counting in, then a button for `next`, which dispatches its id as a named action (#91).
-   */
-  stageWonScreen: { next: MenuItem };
-  /**
    * Small text lines in the corner of the panel: the build version and links out to the
    * project. The scene shows them while it is in front.
    */
@@ -685,7 +680,12 @@ export const sceneDefinitions = [
     name: "stage-won",
     traits: {
       tableBackground: {},
-      stageWonScreen: { next: { id: "leaveStage", label: "Visit shop" } },
+      // The reward ledger, then Visit shop below it once every row has counted in (#951).
+      resultMenu: {
+        information: "stageReward",
+        showAfter: "ledgerFinished",
+        dialog: gameDialogs.stageWon,
+      },
       pausesBelow: { input: true, update: true },
     },
   },
