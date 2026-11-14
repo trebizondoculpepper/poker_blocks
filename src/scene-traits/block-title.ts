@@ -65,21 +65,30 @@ export type BlockTitles = {
   retune(tuning: BlockTitleTuning): void;
   show(config: BlockTitleConfig): () => void;
   frame(): void;
+  /** The titles mounted now, for the debug snapshot (#987): read-only, plain data. */
+  mounted(): { text: string; scale: number }[];
   dispose(): void;
 };
 
-/** A scene owns one title instance, even while a modal is stacked over it. */
+/**
+ * A scene owns one title instance, even while a modal is stacked over it. Scenes may share one
+ * config object (the title and the pause menu over it, #985), so each config keeps a stack of
+ * open titles: nested scenes enter and exit in stack order, so an exit closes the newest one.
+ */
 export function blockTitle<
   Context extends { services: { blockTitles: Pick<BlockTitles, "show"> } },
 >(): SceneTraitBehaviour<Context, BlockTitleConfig> {
-  const exits = new WeakMap<BlockTitleConfig, () => void>();
+  const exits = new WeakMap<BlockTitleConfig, (() => void)[]>();
   return {
     enter({ services }, config) {
-      exits.set(config, services.blockTitles.show(config));
+      const open = exits.get(config) ?? [];
+      open.push(services.blockTitles.show(config));
+      exits.set(config, open);
     },
     exit(_context, config) {
-      exits.get(config)?.();
-      exits.delete(config);
+      const open = exits.get(config);
+      open?.pop()?.();
+      if (open?.length === 0) exits.delete(config);
     },
   };
 }

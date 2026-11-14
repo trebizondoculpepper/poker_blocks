@@ -42,7 +42,9 @@ export type GameConsole = {
   dispose(): void;
 };
 
-export function createConsole(hostOptions: Omit<ConsoleHost, "clear" | "history">): GameConsole {
+export function createConsole(
+  hostOptions: Omit<ConsoleHost, "clear" | "history" | "say">,
+): GameConsole {
   const panel = document.createElement("div");
   panel.className = "game-console";
   panel.hidden = true;
@@ -96,6 +98,7 @@ export function createConsole(hostOptions: Omit<ConsoleHost, "clear" | "history"
   const host: ConsoleHost = {
     ...hostOptions,
     clear: () => screen.replaceChildren(),
+    say: (text, tone) => print([{ text, tone }]),
     history: () => history,
   };
 
