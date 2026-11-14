@@ -88,6 +88,21 @@ visualHandlers.register("score.line", (payload, context) => {
   return effect;
 });
 
+/**
+ * A play's tint tail as declared scheduler work (#999): it lasts from the last line's start until
+ * that line's tint has settled, in its own hold scope, so only the outcome waits for it.
+ */
+visualHandlers.register("score.hold", (payload, context) => {
+  const { durationUnits } = payload as { durationUnits: number };
+  const until = context.scheduledAtMs + durationUnits * unitMs;
+  const effect: EffectHandle = {
+    update: (nowMs) => (nowMs >= until ? "finished" : "running"),
+    cancel() {},
+    dispose() {},
+  };
+  return effect;
+});
+
 visualHandlers.register("score.outcome", (payload, context) => {
   sinkOf(context.services).decide(payload as NarratedEndpoint);
   return "done";
@@ -122,10 +137,13 @@ export function createScoreNarration(
   /** Bumped by a reset, so a settling scope from before it starts nothing. */
   let epoch = 0;
 
-  const nowUnits = () => scheduler.nowMs / unitMs;
+  /**
+   * Hold scopes still running: each scored play's tint tail (#999). Separate from the narration
+   * scopes, so the next play's lines keep their pace while the outcome waits for every hold.
+   */
+  let holds = new Set<ScopeHandle>();
 
-  /** When the last scored line's tint has settled, in units: empty plays never shorten it. */
-  let settledAt = 0;
+  const nowUnits = () => scheduler.nowMs / unitMs;
 
   function next(): void {
     const head = waiting[0];
@@ -134,7 +152,35 @@ export function createScoreNarration(
     if (head?.play) {
       waiting.shift();
       start(head.play);
-    } else if (reached) announce(reached, Math.max(0, settledAt - nowUnits()));
+    } else gate();
+  }
+
+  /** Announce the captured outcome once narration is drained and every hold has settled. */
+  function gate(): void {
+    if (current || outcome || waiting.length > 0 || holds.size > 0 || !reached) return;
+    announce(reached);
+  }
+
+  /** Declare a scored play's tint tail, from its last line's start to that tint settling. */
+  function hold(lastLineUnits: number): void {
+    const mine = epoch;
+    const scope = scheduler.createScope(null);
+    const admitted = scheduler.schedule(scope, {
+      handler: "score.hold",
+      payload: { durationUnits: timing.settle },
+      dueUnits: lastLineUnits,
+    });
+    // Not admitted: nothing to wait for, so the outcome isn't held up by it.
+    if (!admitted.accepted) {
+      scheduler.cancel(scope);
+      return;
+    }
+    holds.add(scope);
+    scheduler.seal(scope);
+    scheduler.observe(scope, () => {
+      if (mine !== epoch || !holds.delete(scope)) return;
+      gate();
+    });
   }
 
   function start({ lines, endpoint }: NarratedPlay): void {
@@ -160,9 +206,9 @@ export function createScoreNarration(
       next();
       return;
     }
-    if (lines.length) settledAt = at + (lines.length - 1) * timing.lineStep + timing.settle;
     showAlongside(lines, at);
     current = scope;
+    if (lines.length) hold(at + (lines.length - 1) * timing.lineStep);
     scheduler.seal(scope);
     scheduler.observe(scope, () => {
       if (mine !== epoch || current !== scope) return;
@@ -194,15 +240,22 @@ export function createScoreNarration(
     scheduler.observe(scope, () => besides.delete(scope));
   }
 
-  function announce(endpoint: NarratedEndpoint, delayUnits: number): void {
+  function announce(endpoint: NarratedEndpoint): void {
     const mine = epoch;
     const scope = scheduler.createScope(null);
-    outcome = scope;
-    scheduler.schedule(scope, {
+    const admitted = scheduler.schedule(scope, {
       handler: "score.outcome",
       payload: endpoint,
-      dueUnits: nowUnits() + delayUnits,
+      dueUnits: nowUnits(),
     });
+    // Not admitted: the outcome goes straight through the direct sink, so results never wait.
+    if (!admitted.accepted) {
+      scheduler.cancel(scope);
+      sink.decide(endpoint);
+      idle();
+      return;
+    }
+    outcome = scope;
     scheduler.seal(scope);
     scheduler.observe(scope, () => {
       if (mine !== epoch || outcome !== scope) return;
@@ -240,16 +293,19 @@ export function createScoreNarration(
     },
     /** Narration or its outcome is still to come. */
     get presenting(): boolean {
-      return current !== null || waiting.length > 0 || outcome !== null;
+      return current !== null || waiting.length > 0 || outcome !== null || holds.size > 0;
     },
     /** Stop narrating: nothing queued is shown, and nothing settling starts more. */
     reset(): void {
+      // Detached before cancelling, under a new epoch, so no reentrant observer can announce.
       epoch++;
+      const owned = [current, outcome, ...holds, ...besides];
+      besides.clear();
       waiting = [];
       reached = null;
-      for (const scope of [current, outcome, ...besides]) if (scope) scheduler.cancel(scope);
-      besides.clear();
+      holds = new Set();
       current = outcome = null;
+      for (const scope of owned) if (scope) scheduler.cancel(scope);
     },
   };
 }
