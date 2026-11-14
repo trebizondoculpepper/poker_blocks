@@ -829,12 +829,25 @@ export class GameRun {
     // Placed, not scored (#925): the phases below resolve first, then the run scores once.
     const next = this.activeDealer.place(this.currentState, action);
     if (!next) return null;
-    // Captured: listeners receive these IDs, and must not change the play (#682 review).
-    const placed = captured(action.cardIds?.length ? [...action.cardIds] : [action.cardId]);
+    // The placed identities in placement order. An opening replacement (#926) puts the revealed
+    // identity in its wrapper's place, so every later phase sees it once; each fact receives a
+    // captured copy, so listeners can't change the play (#682 review).
+    const order = [...(action.cardIds?.length ? action.cardIds : [action.cardId])];
+    const placedSet = new Set(order);
+    const placed = () => captured([...order]);
     const phases = this.playPhases;
     const steps: PlayStepContext = {
       target: this.commandTarget,
-      placed: new Set(placed),
+      placed: placedSet,
+      placedOrder: order,
+      replacePlaced(from, to) {
+        const at = order.indexOf(from);
+        if (at < 0) throw new Error(`replacePlaced: "${from}" was not placed this play`);
+        if (placedSet.has(to)) throw new Error(`replacePlaced: "${to}" is already placed`);
+        order[at] = to;
+        placedSet.delete(from);
+        placedSet.add(to);
+      },
       pending: [],
       reactions: [],
     };
@@ -852,7 +865,7 @@ export class GameRun {
     // them, and a rollback can't be undone by a shared nested object (#682 review).
     const placedBlocks = () =>
       captured(
-        placed.flatMap(
+        order.flatMap(
           (id) => this.currentState.field.find(({ block }) => block.id === id)?.block ?? [],
         ),
       );
@@ -860,7 +873,7 @@ export class GameRun {
     this.passiveEvents.emit({
       type: "play.placed",
       blockId: action.cardId,
-      cardIds: placed,
+      cardIds: placed(),
       blocks: blocksNow,
     });
     for (const block of blocksNow)
@@ -871,8 +884,16 @@ export class GameRun {
       });
     this.drainPhase(context, "placement", batchId);
 
-    // 2. Before score: its configured steps (countdown deductions record pending triggers).
-    this.passiveEvents.emit({ type: "play.beforeScore", cardIds: placed, blocks: placedBlocks() });
+    // 2. Opening: each placed block's registered opening, in placement order, before any material
+    //    phase (#926; doc/game-events.md, "Resolve opening/replacement").
+    this.runSteps(phases.opening ?? [], steps, context, "opening", batchId);
+
+    // 3. Before score: its configured steps (countdown deductions record pending triggers).
+    this.passiveEvents.emit({
+      type: "play.beforeScore",
+      cardIds: placed(),
+      blocks: placedBlocks(),
+    });
     this.drainPhase(context, "beforeScore", batchId);
     this.runSteps(phases.beforeScore, steps, context, "beforeScore", batchId);
 
@@ -925,7 +946,7 @@ export class GameRun {
     this.drainPhase(context, "score", batchId, aggregate);
     this.lastTotalActivations = aggregate;
     const total = { value: Math.max(0, Math.round(working)) };
-    this.runStats = recordPlay(this.runStats, total.value, placed.length);
+    this.runStats = recordPlay(this.runStats, total.value, order.length);
     this.currentState = {
       ...this.currentState,
       round: { ...this.currentState.round, score: scoreBefore + total.value },
@@ -934,7 +955,7 @@ export class GameRun {
     this.drainPhase(context, "score", batchId);
 
     // 4. After score: its configured steps (reactions, then pending detonations).
-    this.passiveEvents.emit({ type: "play.afterScore", cardIds: placed, blocks: placedBlocks() });
+    this.passiveEvents.emit({ type: "play.afterScore", cardIds: placed(), blocks: placedBlocks() });
     this.drainPhase(context, "afterScore", batchId);
     this.runSteps(phases.afterScore, steps, context, "afterScore", batchId);
     this.lastReactions = reactions;
@@ -943,7 +964,7 @@ export class GameRun {
     // 5. Settle: the stage outcome, then play.completed last, both in the settle phase and batch.
     this.activeAction = { ...this.activeAction!, phase: "settle", batchId };
     this.announceOutcome();
-    this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId, cardIds: placed });
+    this.passiveEvents.emit({ type: "play.completed", blockId: order[0], cardIds: placed() });
     this.drainPhase(context, "settle", batchId);
     return this.currentState;
   }

@@ -24,8 +24,18 @@ import { deductCountdowns, detonateCountdowns } from "../trigger-countdown";
 /** What a play's steps share while it resolves. */
 export type PlayStepContext = {
   target: CommandTarget;
-  /** The blocks this play placed, in placement order. */
+  /**
+   * The blocks this play placed, by identity. An opening replacement (#926) updates it, so later
+   * steps see the revealed identity, never the wrapper's.
+   */
   placed: ReadonlySet<string>;
+  /** The same identities in placement order, as opening replacements have left them. */
+  placedOrder: readonly string[];
+  /**
+   * Record that the placed block `from` was replaced in its place by `to` (an opening's
+   * adoption, #926): `to` takes `from`'s position in the placement order, once.
+   */
+  replacePlaced(from: string, to: string): void;
   /** Countdowns that reached zero before scoring, in discovery order, waiting to detonate. */
   pending: string[];
   /** Reactions applied this play, for presentation. */
@@ -68,16 +78,58 @@ playSteps.register("countdown-detonations", (context) =>
 );
 
 /**
+ * What opens a placed block (#926; doc/game-events.md, "Resolve opening/replacement"), keyed by
+ * the trait that brings the behaviour: the opening step runs the handler registered for each of
+ * a placed block's traits, never asking what kind of block it is. A handler commits through the
+ * command target and returns the facts it caused, and the identity that took the block's place
+ * if it was replaced (its payload adopted in the same cell).
+ */
+export type OpeningHandler = (
+  blockId: string,
+  config: unknown,
+  target: CommandTarget,
+) => { events: readonly GameEvent[]; replacedBy?: string };
+export const openingHandlers = new Registry<OpeningHandler>("opening handler");
+
+/**
+ * The generic opening step: each placed block in placement order, each of its traits with a
+ * registered opening handler in trait order. A replacement carries the revealed identity into
+ * every later phase. Opening draws no randomness of its own.
+ */
+playSteps.register("open-placed", (context) => {
+  const events: GameEvent[] = [];
+  // A replacement only rewrites the entry already visited, so iterating the live order is safe.
+  for (const id of context.placedOrder) {
+    const block = context.target.state.field.find((entry) => entry.block.id === id)?.block;
+    if (!block) continue;
+    for (const [trait, config] of Object.entries(block.traits)) {
+      if (!openingHandlers.has(trait)) continue;
+      const opened = openingHandlers.get(trait)(id, config, context.target);
+      events.push(...opened.events);
+      if (opened.replacedBy !== undefined) {
+        context.replacePlaced(id, opened.replacedBy);
+        break;
+      }
+    }
+  }
+  return events;
+});
+
+/** Which steps run in each mutable phase, in order. `opening` runs before `beforeScore`. */
+export type PlayPhases = {
+  opening?: readonly string[];
+  beforeScore: readonly string[];
+  afterScore: readonly string[];
+};
+
+/**
  * The late rack step (#988; doc/experiments/could-it-be-magic-now.md): once the post-score
  * reactions and detonations have drained, `play.afterReactions` is delivered once per committed
  * play to rack listeners, left to right, against the resulting field, before settlement.
  */
 playSteps.register("passive-late", (context) => [
-  { type: "play.afterReactions", cardIds: [...context.placed] },
+  { type: "play.afterReactions", cardIds: [...context.placedOrder] },
 ]);
-
-/** Which steps run in each mutable phase, in order. */
-export type PlayPhases = { beforeScore: readonly string[]; afterScore: readonly string[] };
 
 /** A model controller composed onto the playfield, by registered name, with its configuration. */
 export type PlayfieldController = { id: string; config: unknown };
@@ -94,13 +146,20 @@ export const playfieldControllers = new Registry<(config: unknown) => PlayPhases
 /** Block-defined material behaviour, dispatched uniformly: its configuration names the steps. */
 playfieldControllers.register("materialEffectsController", (config) => config as PlayPhases);
 
+/** Opening placed blocks (#926), composed before the material steps. */
+playfieldControllers.register("openingController", () => ({
+  opening: ["open-placed"],
+  beforeScore: [],
+  afterScore: [],
+}));
+
 /** Rack listeners' late step, composed after the material steps it must follow. */
 playfieldControllers.register("lateRackStepController", () => ({
   beforeScore: [],
   afterScore: ["passive-late"],
 }));
 
-const none: PlayPhases = { beforeScore: [], afterScore: [] };
+const none: PlayPhases = { opening: [], beforeScore: [], afterScore: [] };
 
 /**
  * Attach the composed controllers, in composition order, and validate what they subscribe:
@@ -114,6 +173,7 @@ export function attachPlayfield(controllers: readonly PlayfieldController[] = []
   const phases = controllers.reduce<PlayPhases>((all, { id, config }) => {
     const own = playfieldControllers.get(id)(config);
     return {
+      opening: [...(all.opening ?? []), ...(own.opening ?? [])],
       beforeScore: [...all.beforeScore, ...own.beforeScore],
       afterScore: [...all.afterScore, ...own.afterScore],
     };
@@ -128,7 +188,7 @@ export function attachPlayfield(controllers: readonly PlayfieldController[] = []
  * must be deterministic and complete). Empty when it is valid.
  */
 export function validatePlayPhases(phases: PlayPhases): string[] {
-  const listed = [...phases.beforeScore, ...phases.afterScore];
+  const listed = [...(phases.opening ?? []), ...phases.beforeScore, ...phases.afterScore];
   const problems = listed
     .filter((name) => !playSteps.has(name))
     .map((name) => `unknown play step "${name}"`);
