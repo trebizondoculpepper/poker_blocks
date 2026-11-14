@@ -257,6 +257,37 @@ export function composeContained(
   };
 }
 
+/**
+ * A built contained block's own split (#672, #1024): the children its composition marked as
+ * contents, and the rest (the shell's inner layers and gloss, the print skin). The block's faces
+ * are its own materials.
+ */
+export function containedParts(block: THREE.Mesh): {
+  shell: THREE.Object3D[];
+  contents: THREE.Object3D[];
+} {
+  return {
+    shell: block.children.filter((child) => !child.userData.containedContents),
+    contents: block.children.filter((child) => child.userData.containedContents),
+  };
+}
+
+/**
+ * Show or hide a contained block's container and its contents independently (#1024, doc/
+ * audition-followups.md, "Flame Bench"): the faces through the block's own materials, so hiding
+ * the container never hides the contents. The materials belong to this block alone.
+ */
+export function setContainedVisibility(
+  block: THREE.Mesh,
+  visible: { container: boolean; contents: boolean },
+): void {
+  const { shell, contents } = containedParts(block);
+  const faces = ([] as THREE.Material[]).concat(block.material);
+  for (const face of faces) face.visible = visible.container;
+  for (const part of shell) part.visible = visible.container;
+  for (const part of contents) part.visible = visible.contents;
+}
+
 /** The current frame's time, in seconds: the same for every block drawn in one frame. */
 function frameSeconds(): number {
   const time = typeof document === "undefined" ? null : document.timeline?.currentTime;
