@@ -4,6 +4,7 @@ import { tweenValue } from "./easing";
 import "./passive-rack.css";
 import { passiveAppearance, type PassiveBlock } from "./passives";
 import { addExtras, createPassiveVisual, type PassiveVisual } from "./passive-visual";
+import { createPrepassContext } from "./visual/appearance-prepass";
 import { categoryDefaults } from "./passive-categories";
 import {
   createActivationPulse,
@@ -39,6 +40,8 @@ type RenderedPassive = {
   block: PassiveBlock;
   /** Its activation pulse (#485), shown on its token. */
   pulse: ActivationPulse;
+  /** Its hold on the prepasses its look declared, in this rack's own context (#970). */
+  releasePrepasses: () => void;
 };
 
 /**
@@ -174,6 +177,13 @@ export function createPassiveRack(host: HTMLElement): {
   camera.position.set(0, 0, 8);
   camera.lookAt(0, 0, 0);
   const rendered = new Map<string, RenderedPassive>();
+  // The rack's own prepass context (#970): its renderer's targets, for the tokens it shows.
+  const prepasses = createPrepassContext();
+  /** The tokens' prepasses, then the rack itself. */
+  const draw = (reducedMotion = false) => {
+    prepasses.render({ renderer, scene, camera, hide: scene, delta: 0, reducedMotion });
+    renderer.render(scene, camera);
+  };
   let liftedId: string | null = null;
   let order: string[] = [];
   let slotCount = 1;
@@ -193,6 +203,7 @@ export function createPassiveRack(host: HTMLElement): {
 
   const remove = (entry: RenderedPassive) => {
     entry.pulse.stop();
+    entry.releasePrepasses();
     scene.remove(entry.mesh);
     entry.edges.material.dispose();
     entry.visual.dispose();
@@ -261,6 +272,7 @@ export function createPassiveRack(host: HTMLElement): {
             item,
             block,
             pulse: createActivationPulse({ object: mesh, materials: visual.materials }),
+            releasePrepasses: prepasses.require(visual.prepasses ?? []),
           };
           rendered.set(block.id, entry);
           mesh.scale.setScalar(0.001);
@@ -282,12 +294,12 @@ export function createPassiveRack(host: HTMLElement): {
         slot.setAttribute("aria-label", "Empty passive slot");
         slots.append(slot);
       }
-      renderer.render(scene, camera);
+      draw();
     },
     lift(id) {
       liftedId = id;
       for (const passive of rendered.values()) passive.mesh.visible = passive.id !== id;
-      renderer.render(scene, camera);
+      draw();
     },
     blockAt(clientX, clientY) {
       for (const passive of rendered.values()) {
@@ -341,7 +353,7 @@ export function createPassiveRack(host: HTMLElement): {
           0,
         );
       }
-      if (rendered.size) renderer.render(scene, camera);
+      if (rendered.size) draw(reducedMotion);
     },
     activate(sourceId) {
       const entry = rendered.get(sourceId);
@@ -366,6 +378,7 @@ export function createPassiveRack(host: HTMLElement): {
     },
     dispose() {
       clear();
+      prepasses.dispose();
       renderer.dispose();
       element.remove();
     },

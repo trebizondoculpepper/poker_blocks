@@ -26,6 +26,8 @@ passiveVisualBuilders.register("materialBlock", (_appearance, size, raw) => {
     faces: [],
     // The material's own inside (the fire's flame, custard's fluid), drawn within the token.
     extras: block.extras ?? [],
+    // The material's own prepasses, required by whichever host shows the token (#970).
+    prepasses: block.prepasses ?? [],
     dispose() {
       block.geometry.dispose();
       edges.dispose();
