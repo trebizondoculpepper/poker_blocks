@@ -67,6 +67,15 @@ playSteps.register("countdown-detonations", (context) =>
   detonateCountdowns(context.target, context.pending),
 );
 
+/**
+ * The late rack step (#988; doc/experiments/could-it-be-magic-now.md): once the post-score
+ * reactions and detonations have drained, `play.afterReactions` is delivered once per committed
+ * play to rack listeners, left to right, against the resulting field, before settlement.
+ */
+playSteps.register("passive-late", (context) => [
+  { type: "play.afterReactions", cardIds: [...context.placed] },
+]);
+
 /** Which steps run in each mutable phase, in order. */
 export type PlayPhases = { beforeScore: readonly string[]; afterScore: readonly string[] };
 
@@ -84,6 +93,12 @@ export const playfieldControllers = new Registry<(config: unknown) => PlayPhases
 
 /** Block-defined material behaviour, dispatched uniformly: its configuration names the steps. */
 playfieldControllers.register("materialEffectsController", (config) => config as PlayPhases);
+
+/** Rack listeners' late step, composed after the material steps it must follow. */
+playfieldControllers.register("lateRackStepController", () => ({
+  beforeScore: [],
+  afterScore: ["passive-late"],
+}));
 
 const none: PlayPhases = { beforeScore: [], afterScore: [] };
 

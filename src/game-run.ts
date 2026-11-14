@@ -59,7 +59,12 @@ import {
   type PassiveScoredLine,
   type RuleActivation,
 } from "./passive-effects";
-import { commitCommands, commitCommandsWithOutcomes, type CommandTarget } from "./rule-commands";
+import {
+  commitCommands,
+  commitCommandsWithOutcomes,
+  sourcedTarget,
+  type CommandTarget,
+} from "./rule-commands";
 import type { RandomCursor } from "./random";
 import {
   ActionContext,
@@ -760,6 +765,7 @@ export class GameRun {
     },
     update: (state: GameState) => void (run.currentState = state),
     grantUnownedPassive: () => run.grantUnownedPassive(),
+    random: () => run.random(),
   }))(this);
 
   /** A passive instance id no installed passive has: `passive.<n>`, from the rack size up. */
@@ -982,7 +988,10 @@ export class GameRun {
     // (a grant, or an explicit nothing); then each is numbered within its action (#483).
     const events: GameEvent[] = [];
     const committed = fired.map((activation) => {
-      const result = commitCommandsWithOutcomes(activation.commands, this.commandTarget);
+      const result = commitCommandsWithOutcomes(
+        activation.commands,
+        sourcedTarget(this.commandTarget, block.id),
+      );
       events.push(...result.events);
       return { ...activation, outcomes: [...activation.outcomes, ...result.outcomes] };
     });

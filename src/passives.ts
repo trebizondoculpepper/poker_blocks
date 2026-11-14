@@ -37,6 +37,12 @@ export type PassiveBlock = {
     priced?: { basePrice: number };
     /** Uses left of its total, for an item that wears out (a transmogrifier, #388). */
     limitedUse?: { uses: number; total: number };
+    /**
+     * This instance's own play counter (#988; doc/passive-lifecycle-state.md): `count` of
+     * `every` plays so far. It lives on the installed object, never the definition, so two
+     * copies count independently, and it is saved with the instance.
+     */
+    playCounter?: { count: number; every: number };
     /** The material a transmogrifier turns a card into (#388). */
     transmogrifier?: { material: BlockMaterial };
     /** Removes the card it is used on from the run (#156). */
@@ -166,6 +172,11 @@ export type PassiveDefinition = {
   visual?: { builder: string; config: unknown };
   /** Its event rules: named, configured handlers from `src/rule-handlers.ts` (#139, #170). */
   eventRules: readonly EventRule[];
+  /**
+   * A per-instance play counter (#988): each installed copy starts at zero of `every`. Its
+   * rules advance it with the `advance-play-counter` effect.
+   */
+  playCounter?: { every: number };
   /**
    * Instance configuration (#876; doc/experiments/passive-test-bench.md): a registered rule
    * builder, its base configuration and the named parameters an instance may override. Absent,
@@ -510,6 +521,9 @@ export function createPassiveBlock(definitionId: string, id: string): PassiveBlo
         ].join("\n"),
       ),
       ...(definition.shop ? { priced: { basePrice: definition.shop.basePrice } } : {}),
+      ...(definition.playCounter
+        ? { playCounter: { count: 0, every: definition.playCounter.every } }
+        : {}),
     },
   };
 }

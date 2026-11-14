@@ -355,3 +355,5 @@ for (const definition of [
 
 // In the Loop (#886): a provisional exponent trial on the face hoop query.
 import "./in-the-loop";
+// Could It Be Magic Now? (#988): a provisional per-instance play counter and conversion.
+import "./could-it-be-magic";
