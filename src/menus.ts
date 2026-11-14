@@ -5,7 +5,8 @@ import type { SoundEffectId } from "./audio/sfx-registry";
 import type { PanelLink } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { StageReward } from "./stage-rewards";
-import { rewardPresentations } from "./reward-presentation";
+import { captureLedger, presentLedger, type LedgerRow, type LedgerSink } from "./reward-ledger";
+import type { ScopeHandle, VisualScheduler } from "./visual-events/scheduler";
 import type { Settings } from "./settings";
 import { createSettingsPanel } from "./settings-panel";
 
@@ -67,12 +68,28 @@ export type Menus = {
    */
   /** Show the pop-up; the seed is the final result screen's alone (#164). */
   showStageWon(reward: StageReward, next: MenuChoice): void;
+  /** The stage-won ledger, for the shared scheduler's `rewardLedger` service (#950). */
+  readonly rewardLedger: LedgerSink;
   /** Close the stage-won pop-up, cancelling any rows still counting in. */
   hideStageWon(): void;
   readonly isOpen: boolean;
 };
 
-export function createMenus(host: HTMLElement, initial: Settings, callbacks: MenuCallbacks): Menus {
+/** What times the stage-won ledger (#950): the shared scheduler and the reduced-motion setting. */
+export type MenuPresentation = {
+  visualEvents: Pick<
+    VisualScheduler,
+    "nowMs" | "createScope" | "scheduleBatch" | "seal" | "cancel"
+  >;
+  reducedMotion(): boolean;
+};
+
+export function createMenus(
+  host: HTMLElement,
+  initial: Settings,
+  callbacks: MenuCallbacks,
+  presentation?: MenuPresentation,
+): Menus {
   const title = overlay("title-screen", "Poker Blocks");
   title.panel.insertAdjacentHTML(
     "beforeend",
@@ -333,10 +350,11 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     settingsButton.hidden = !title.root.hidden || !stageWon.root.hidden;
   }
 
-  /** Seconds between reward rows as they count in. */
-  const rowSeconds = 0.25;
-  let rowTimers: number[] = [];
   let stageNextChoice: MenuChoice | null = null;
+  /** The ledger's count-up on the shared scheduler (#950), until it finishes or the screen closes. */
+  let ledgerScope: ScopeHandle | null = null;
+  /** Whether this showing has offered its next choice: once only, whichever path gets there. */
+  let ledgerFinished = true;
   const ledger = find<HTMLElement>(stageWon.panel, "ledger");
   const totals = find<HTMLElement>(stageWon.panel, "totals");
   const stageNext = find<HTMLButtonElement>(stageWon.panel, "stage-next");
@@ -347,17 +365,57 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     callbacks.onAction(stageNextChoice.id);
   });
 
+  function cancelLedger(): void {
+    if (ledgerScope) presentation?.visualEvents.cancel(ledgerScope);
+    ledgerScope = null;
+  }
+
+  function ledgerRow({ label, value }: LedgerRow): HTMLElement {
+    const row = document.createElement("div");
+    row.className = "reward-row";
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const amount = document.createElement("dd");
+    amount.textContent = value;
+    row.append(term, amount);
+    return row;
+  }
+
+  /** The stage-won screen's ledger, as the scheduler's `rewardLedger` service (#950). */
+  const rewardLedger: LedgerSink = {
+    row(row) {
+      if (ledgerFinished) return;
+      ledger.append(ledgerRow(row));
+      playSfx(row.cue);
+    },
+    finish({ total, balance }) {
+      if (ledgerFinished) return;
+      ledgerFinished = true;
+      ledgerScope = null;
+      find(totals, "total").textContent = total;
+      find(totals, "balance").textContent = balance;
+      totals.hidden = false;
+      stageNext.hidden = false;
+      stageNext.focus();
+    },
+    summarise({ rows, totals: captured }) {
+      if (ledgerFinished) return;
+      ledger.replaceChildren(...rows.map(ledgerRow));
+      rewardLedger.finish(captured);
+    },
+  };
+
   function hideStageWon(): void {
     stageNextChoice = null;
-    rowTimers.forEach((timer) => window.clearTimeout(timer));
-    rowTimers = [];
+    ledgerFinished = true;
+    cancelLedger();
     stageWon.root.hidden = true;
     uncover(stageWon.root);
     settingsButton.hidden = false;
   }
 
   function showStageWon(reward: StageReward, next: MenuChoice): void {
-    rowTimers.forEach((timer) => window.clearTimeout(timer));
+    cancelLedger();
     ledger.replaceChildren();
     totals.hidden = true;
     stageNext.hidden = true;
@@ -369,35 +427,13 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     if (stageWon.root.hidden) cover(stageWon.root);
     stageWon.root.hidden = false;
     settingsButton.hidden = true;
-    const reveal = (index: number) => {
-      const entry = reward.entries[index];
-      const row = document.createElement("div");
-      row.className = "reward-row";
-      const label = document.createElement("dt");
-      label.textContent = entry.label;
-      // Each row through its own registered presentation: its value text and its cue.
-      const presentation = rewardPresentations.get(entry.presentation);
-      const value = document.createElement("dd");
-      value.textContent = presentation.value(entry);
-      row.append(label, value);
-      ledger.append(row);
-      playSfx(presentation.cue);
-    };
-    rowTimers = reward.entries.map((_, index) =>
-      window.setTimeout(() => reveal(index), (index + 1) * rowSeconds * 1000),
-    );
-    rowTimers.push(
-      window.setTimeout(
-        () => {
-          find(totals, "total").textContent = `+${reward.balance - reward.balanceBefore}`;
-          find(totals, "balance").textContent = String(reward.balance);
-          totals.hidden = false;
-          stageNext.hidden = false;
-          stageNext.focus();
-        },
-        (reward.entries.length + 1) * rowSeconds * 1000,
-      ),
-    );
+    ledgerFinished = false;
+    const captured = captureLedger(reward);
+    // Without a scheduler (a host that composes none) the ledger shows at once.
+    if (!presentation) return rewardLedger.summarise(captured);
+    ledgerScope = presentLedger(presentation.visualEvents, rewardLedger, captured, {
+      reduced: presentation.reducedMotion(),
+    });
   }
 
   function overlay(className: string, label: string): { root: HTMLElement; panel: HTMLElement } {
@@ -430,6 +466,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     hideGameOver,
     showStageWon,
     hideStageWon,
+    rewardLedger,
     showMenu,
     hideMenu,
     showSettings,
