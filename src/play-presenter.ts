@@ -119,6 +119,8 @@ type Playing = {
   slot: NarrationSlot;
   /** Every running dissolve, for clean-up. */
   effects: Materialise[];
+  /** The replacements the model drew when this play committed, shown once it has landed. */
+  drawn: readonly CardBlock[];
 };
 
 /** A discard being shown. */
@@ -199,8 +201,6 @@ export function createPlayPresenter(options: {
    * commits: an item's activation label, or null when the host shows nothing for it.
    */
   alongside?(activation: RuleActivation): AlongsideEvent | null;
-  /** The hand has room again: draw replacements. */
-  refill(): void;
   /** Draw replacements into the model now, unshown (#775); returns them for a later reveal. */
   drawReplacements(): readonly CardBlock[];
   /** A safe point to save the run. */
@@ -223,6 +223,8 @@ export function createPlayPresenter(options: {
   /** Each running action's scope, until it settles or a reset cancels it. */
   const actionScopes = new Set<ScopeHandle>();
   let nextActionId = 0;
+  /** While a reset cancels every action: they are dropped, not completed. */
+  let resetting = false;
 
   /**
    * Run an action's animation on the shared scheduler, from now, in a scope of its own: plays and
@@ -370,7 +372,8 @@ export function createPlayPresenter(options: {
       playSfx(id);
     announceScore(action);
     cameraView.scheduleCameraMove();
-    options.refill();
+    // Model first: its replacements were drawn when it committed; only their reveal waits.
+    hand.drawIn(action.drawn, game().state.hand);
     options.save();
     return false;
   }
@@ -436,6 +439,10 @@ export function createPlayPresenter(options: {
       options.deselect(ids);
       hand.remove(sources);
       hand.sync(game().state.hand);
+      // Model first (#775, #1033 review): the play's replacements are drawn as it commits, so no
+      // presentation timing or cancellation decides whether they enter the hand.
+      const drawn = options.drawReplacements();
+      hand.sync(game().state.hand);
       // The cameras use different projections. Match each hand cube's screen position and
       // apparent size in the board view, then let the assembly carry it as it wobbles.
       cameraView.handCamera.updateWorldMatrix(true, false);
@@ -480,11 +487,15 @@ export function createPlayPresenter(options: {
         lines: game().lastScoredLines,
         endpoint: { score: game().state.round.score, outcome: roundOutcome(game().state) },
         slot: narration.reserve(),
+        drawn,
       };
       playing.push(action);
       present({
         step: (elapsed, delta) => updatePlay(action, elapsed, delta),
+        // A reset drops it; any other cancellation (an effect that ran too long) lands it at
+        // once, so its narration slot, landing and replacements still complete (#1033 review).
         cancel: () => {
+          if (!resetting) return void updatePlay(action, Infinity, Infinity);
           playing = playing.filter((other) => other !== action);
           action.effects.forEach((effect) => effect.finish());
         },
@@ -522,8 +533,10 @@ export function createPlayPresenter(options: {
       present({
         step: (_elapsed, delta) => updateDiscard(action, delta),
         cancel: () => {
-          discarding = discarding.filter((other) => other !== action);
           action.effects.forEach((effect) => effect.finish());
+          // Not a reset: its dissolves are done, so its replacements are revealed now.
+          if (!resetting) return void updateDiscard(action, 0);
+          discarding = discarding.filter((other) => other !== action);
         },
       });
       playSfx("card.discard");
@@ -544,7 +557,9 @@ export function createPlayPresenter(options: {
     },
     reset() {
       // Every action's effect is cancelled with its scope; one not yet started is dropped.
+      resetting = true;
       for (const scope of Array.from(actionScopes)) options.visualEvents.cancel(scope);
+      resetting = false;
       actionScopes.clear();
       waiting.clear();
       playing = [];

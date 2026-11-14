@@ -26,10 +26,9 @@ vi.mock("./visual/materialise", () => ({
 
 const source = (id: string) => ({ block: { id }, cube: new THREE.Group() });
 
-async function presenter(reduced = false) {
+async function presenter(reduced = false, limits = {}) {
   const { createVisualScheduler } = await import("./visual-events/scheduler");
   const { createPlayPresenter } = await import("./play-presenter");
-  const refill = vi.fn();
   const disposed: string[] = [];
   /** Each discard draws its own replacements in the model, named after the call. */
   let draws = 0;
@@ -46,7 +45,7 @@ async function presenter(reduced = false) {
       return play.presentedActions;
     },
   };
-  const scheduler = createVisualScheduler({ services });
+  const scheduler = createVisualScheduler({ services, limits });
   const play = createPlayPresenter({
     game: () => session as never,
     views: {
@@ -69,7 +68,6 @@ async function presenter(reduced = false) {
     moved: noop,
     rackChanged: noop,
     activated: noop,
-    refill,
     drawReplacements: drawReplacements as never,
     save: noop,
     decided: noop,
@@ -79,13 +77,13 @@ async function presenter(reduced = false) {
   let real = 0;
   scheduler.update(real, true);
   const frame = () => scheduler.update((real += 16), true);
-  return { play, refill, disposed, drawReplacements, revealed, frame, scheduler };
+  return { play, disposed, drawReplacements, revealed, frame, scheduler };
 }
 
 describe("discard refill order (#775)", () => {
   it("draws in the model at once, and reveals only after the discarded cards dissolve", async () => {
     dissolves.length = 0;
-    const { play, refill, disposed, drawReplacements, revealed, frame } = await presenter();
+    const { play, disposed, drawReplacements, revealed, frame } = await presenter();
     expect(play.discard([source("a"), source("b")] as never)).toBe(true);
     // Model first: the replacements are drawn as the discard commits.
     expect(drawReplacements).toHaveBeenCalledTimes(1);
@@ -98,7 +96,6 @@ describe("discard refill order (#775)", () => {
     frame();
     expect(revealed).toEqual([["new1"]]);
     expect(disposed).toEqual(["a", "b"]);
-    expect(refill).not.toHaveBeenCalled();
     expect(play.busy).toBe(false);
   });
 
@@ -154,5 +151,16 @@ describe("discard refill order (#775)", () => {
     scheduler.update(100_000, false);
     expect(dissolves[0]!.updates).toBe(updates);
     expect(play.busy).toBe(true);
+  });
+
+  it("completes, rather than drops, an action whose effect runs too long (#1033 review)", async () => {
+    dissolves.length = 0;
+    const { play, revealed, frame } = await presenter(false, { maxEffectMs: 100 });
+    play.discard([source("a")] as never);
+    // Its dissolve never finishes by itself; the scheduler gives up on it after 100 ms.
+    for (let i = 0; i < 20; i++) frame();
+    expect(dissolves[0]!.done).toBe(true);
+    expect(revealed).toEqual([["new1"]]);
+    expect(play.busy).toBe(false);
   });
 });

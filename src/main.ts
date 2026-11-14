@@ -442,7 +442,6 @@ const presenter: PlayPresenter = createPlayPresenter({
   rackChanged: () => run.rackChanged(),
   activated: (sourceIds) => sourceIds.forEach((id) => passiveRackView.activate(id)),
   alongside: (activation) => passiveRackView.labelFor(activation),
-  refill: () => run.refillHand(),
   drawReplacements: () => run.drawReplacements(),
   save: () => run.autosave(),
   decided: (outcome, now) => run.decided(outcome, now),
