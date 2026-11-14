@@ -87,7 +87,7 @@ describe("score narration on the visual-event scheduler (#547)", () => {
     narration.narrate(play([line("c", 1)]));
     advance(1000);
     // Play 1's scope settles a step after its last line (≈267 ms); play 2 starts then.
-    expect(log).toEqual(["10:line a", "140:line b", "270:line c", "680:outcome"]);
+    expect(log).toEqual(["10:line a", "140:line b", "270:line c", "670:outcome"]);
   });
 
   it("cancels a pending outcome when another play commits before it shows", () => {
@@ -234,5 +234,47 @@ describe("score narration on the visual-event scheduler (#547)", () => {
     narration.narrate(play([line("a", 1)]));
     scheduler.update(2000, true); // a one-second stall before the line dispatches
     expect(lates).toEqual([1000]);
+  });
+
+  it("doesn't let a reset play's tint tail hold up a later empty play (#999)", () => {
+    const { log, narration, advance } = narrating();
+    narration.narrate(play([line("old", 1)]));
+    advance(10);
+    narration.reset();
+    log.length = 0;
+    narration.narrate(play([], 0));
+    advance(20);
+    // Announced on the next dispatch, not 400 ms later for the cancelled line's tint.
+    expect(log).toEqual(["20:outcome"]);
+    expect(narration.presenting).toBe(false);
+  });
+
+  it("keeps the earlier tint tail when an empty play follows a scored one (#999)", () => {
+    const { log, narration, advance } = narrating();
+    narration.narrate(play([line("a", 1)]));
+    advance(200);
+    narration.narrate(play([]));
+    advance(1000);
+    expect(log).toEqual(["10:line a", "400:outcome"]);
+  });
+
+  it("lets the next play's lines keep pace while an earlier tail holds the outcome (#999)", () => {
+    const { log, narration, advance } = narrating();
+    narration.narrate(play([line("a", 1)]));
+    narration.narrate(play([line("b", 1)]));
+    advance(1000);
+    expect(log).toEqual(["10:line a", "140:line b", "540:outcome"]);
+  });
+
+  it("releases every scope after repeated resets (#999)", () => {
+    const { narration, scheduler, advance } = narrating();
+    for (let round = 0; round < 3; round++) {
+      narration.narrate(play([line("a", 1), line("b", 1)]));
+      advance(50);
+      narration.reset();
+    }
+    advance(1000);
+    expect(narration.presenting).toBe(false);
+    expect(scheduler.counts).toMatchObject({ pending: 0, active: 0, heap: 0, entries: 0 });
   });
 });
