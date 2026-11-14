@@ -30,6 +30,21 @@ describe("reusable block title", () => {
     behaviour.exit!(context, large);
     expect(first).toHaveBeenCalledTimes(1);
   });
+  it("releases every title when scenes share one config (title, then pause over it, #985)", () => {
+    const titleView = vi.fn();
+    const pauseView = vi.fn();
+    const show = vi.fn().mockReturnValueOnce(titleView).mockReturnValueOnce(pauseView);
+    const context = { services: { blockTitles: { show } } };
+    const behaviour = blockTitle<typeof context>();
+    const shared: BlockTitleConfig = { text: "Poker Blocks", scale: 1 };
+    behaviour.enter!(context, shared); // title
+    behaviour.enter!(context, shared); // Escape pushes pause over it
+    behaviour.exit!(context, shared); // pause pops
+    expect(pauseView).toHaveBeenCalledTimes(1);
+    expect(titleView).not.toHaveBeenCalled();
+    behaviour.exit!(context, shared); // new game replaces the title
+    expect(titleView).toHaveBeenCalledTimes(1);
+  });
   it("animates a rigid row and rests without music/reduced-motion energy", () => {
     const row = new THREE.Group();
     const letter = new THREE.Group();
