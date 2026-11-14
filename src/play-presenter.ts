@@ -23,13 +23,14 @@ import type { HandView } from "./hand-view";
 import type { BlockViews, RenderedBlock } from "./rendered-blocks";
 import { magnitudeSfxFor } from "./score-presentation";
 import { presentationOrder } from "./scoring";
-import type { PassiveScoredLine } from "./passive-effects";
+import type { PassiveScoredLine, RuleActivation } from "./passive-effects";
 import type { Cell } from "./traits/attachable";
 import { needsLandingHandover } from "./block-trait-behaviours";
 import { createMaterialise } from "./visual/materialise";
 import {
   createScoreNarration,
   type NarratedEndpoint,
+  type AlongsideEvent,
   type NarratedLine,
   type NarrationSlot,
   type ScoreNarrationSink,
@@ -138,6 +139,11 @@ export function createPlayPresenter(options: {
   rackChanged(): void;
   /** These rule sources' rules just fired, as their outcome is shown (#81). */
   activated(sourceIds: readonly string[]): void;
+  /**
+   * What the activation's host shows alongside its scored line (#919), captured as the play
+   * commits: an item's activation label, or null when the host shows nothing for it.
+   */
+  alongside?(activation: RuleActivation): AlongsideEvent | null;
   /** The hand has room again: draw replacements. */
   refill(): void;
   /** Draw replacements into the model now, unshown (#775); returns them for a later reveal. */
@@ -196,7 +202,9 @@ export function createPlayPresenter(options: {
    */
   function announceScore(action: Playing): void {
     narration.release(action.slot, {
-      lines: presentationOrder(action.lines).map(capturedLine),
+      lines: presentationOrder(action.lines).map((line) =>
+        capturedLine(line, (activation) => options.alongside?.(activation) ?? null),
+      ),
       endpoint: action.endpoint,
     });
   }
@@ -439,11 +447,18 @@ export function createPlayPresenter(options: {
   };
 }
 
-/** A scored line as plain data: its blocks and sources by id, and its points. */
-export function capturedLine(line: PassiveScoredLine): NarratedLine {
+/**
+ * A scored line as plain data: its blocks and sources by id, its points and, in committed order,
+ * what each activation's host shows alongside it (#919).
+ */
+export function capturedLine(
+  line: PassiveScoredLine,
+  alongside: (activation: RuleActivation) => AlongsideEvent | null = () => null,
+): NarratedLine {
   return {
     blockIds: line.line.blocks.map(({ id }) => id),
     sourceIds: [...new Set(line.activations.map(({ sourceId }) => sourceId))],
     points: line.points,
+    alongside: line.activations.flatMap((activation) => alongside(activation) ?? []),
   };
 }
