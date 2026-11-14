@@ -17,7 +17,27 @@ export type CommandTarget = {
   update(state: GameState): void;
   /** Install one random passive the rack doesn't hold; the events it causes. */
   grantUnownedPassive(): readonly GameEvent[];
+  /**
+   * The run's model-owned seeded random stream, staged with the action's transaction so a
+   * rollback restores it (doc/passive-lifecycle-state.md). Absent where no run owns one.
+   */
+  random?(): number;
+  /** The rack instance whose rule requested these commands, as an opaque handle (#988). */
+  readonly source?: string;
 };
+
+/** The same target, naming the instance whose rule requested its commands. */
+export function sourcedTarget(target: CommandTarget, source: string): CommandTarget {
+  return {
+    get state() {
+      return target.state;
+    },
+    update: (state) => target.update(state),
+    grantUnownedPassive: () => target.grantUnownedPassive(),
+    ...(target.random ? { random: () => target.random!() } : {}),
+    source,
+  };
+}
 
 type CommandHandler = (config: unknown, target: CommandTarget) => readonly GameEvent[];
 

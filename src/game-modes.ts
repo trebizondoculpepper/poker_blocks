@@ -878,6 +878,7 @@ const trialBenchScenarios: readonly BenchScenario[] = [
   trialScenario("Light (mean mass)", ["trial-light-mean-mass"]),
   trialScenario("Material diversity", ["trial-material-diversity"]),
   trialScenario("In the Loop", ["trial-in-the-loop"]),
+  trialScenario("Could It Be Magic Now?", ["trial-could-it-be-magic-now"]),
 ];
 
 const gameModes: GameMode[] = [
