@@ -19,7 +19,8 @@
  *   event is. A handler gets the clock, its scope and scheduling capabilities, and the services it
  *   was given; never the run, mutation or the session's random stream.
  *
- * Nothing in the game uses it yet: migrations (#547 onward) move presentation onto it one at a time.
+ * Migrations move presentation onto it one at a time: score narration first (#547,
+ * `src/score-narration.ts`); flights, exits and staggers follow (#548 onward).
  */
 import TinyQueue from "tinyqueue";
 import { Registry } from "../core/registry";
@@ -84,7 +85,12 @@ export type HandlerContext = {
 export type VisualHandler = (payload: unknown, context: HandlerContext) => "done" | EffectHandle;
 
 /** A producer's summary fallback, run once when its scope fails (a timeout, a thrown handler). */
-export type VisualFallback = (failure: { reason: string; services: unknown }) => void;
+export type VisualFallback = (failure: {
+  reason: string;
+  services: unknown;
+  /** The scope's captured fallback payload: what it summarises, never live state. */
+  payload: unknown;
+}) => void;
 
 export const visualHandlers = new Registry<VisualHandler>("visual event handler");
 export const visualFallbacks = new Registry<VisualFallback>("visual fallback");
@@ -96,6 +102,8 @@ export type ScopeConfig = {
   maxEffectMs?: number;
   /** The registered fallback that runs once if the scope fails. */
   fallback?: string;
+  /** Captured data handed to the fallback, so a summary shows what was committed. */
+  fallbackPayload?: unknown;
 };
 
 declare const scopeBrand: unique symbol;
@@ -250,7 +258,11 @@ export function createVisualScheduler(
     if (scope.fallbackRan || !scope.config.fallback) return;
     scope.fallbackRan = true;
     try {
-      fallbacks.get(scope.config.fallback)({ reason, services });
+      fallbacks.get(scope.config.fallback)({
+        reason,
+        services,
+        payload: scope.config.fallbackPayload,
+      });
     } catch (error) {
       scope.failure ??= `fallback failed: ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -262,6 +274,11 @@ export function createVisualScheduler(
     if (scope.state !== "pending" || scope.cancelling || scope.generation !== generation) return;
     scope.failure ??= reason;
     runFallback(scope, reason);
+    // The summary replaces the scope's presentation: what had yet to start never does, so it
+    // cannot show its part a second time on top of the summary (#800 review).
+    if (scope.config.fallback)
+      for (const entry of Array.from(scope.events))
+        if (entry.state === "pending") finishEntry(entry);
   };
 
   /** Settle a scope once everything it owns has settled, then its parent may settle. */
@@ -504,7 +521,8 @@ export function createVisualScheduler(
         parent: parentScope,
         children: new Set(),
         events: new Set(),
-        config,
+        // The fallback's payload is captured like any event's: plain data, frozen now.
+        config: { ...config, fallbackPayload: capturePayload(config.fallbackPayload ?? null) },
         sealed: false,
         state:
           staleParent ||
@@ -620,6 +638,14 @@ export function createVisualScheduler(
      * Advance the clock by visible elapsed time and dispatch, within the budget. One host calls
      * this; a handler that tried would be refused.
      */
+    /**
+     * The host's visibility changed: the next update rebases the clock rather than counting the
+     * time in between, which a browser that stops animation frames for a hidden tab would
+     * otherwise add in one burst (#800 review).
+     */
+    suspend(): void {
+      lastRealMs = null;
+    },
     update(realNowMs: number, visible: boolean): void {
       if (updating) throw new Error("The visual scheduler cannot be updated from inside a handler");
       if (!visible) {

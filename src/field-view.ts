@@ -71,7 +71,7 @@ export type FieldView = {
   /** One cell's edge length, in the structure's units. */
   readonly cubeSize: number;
   /** Briefly tint these blocks toward gold. */
-  tint(blocks: readonly CardBlock[], now: number): void;
+  tint(blockIds: readonly string[], now: number): void;
   /** Play the configured cue for placed cards whose material scoring rule fired. */
   activate(sourceIds: readonly string[], now: number): void;
   /** Advance scoring tints and material activation pulses by one frame. */
@@ -302,8 +302,8 @@ export function createFieldView(options: {
       assembly.remove(object);
     },
     cubeSize,
-    tint(blocks, now) {
-      const ids = new Set(blocks.map(({ id }) => id));
+    tint(blockIds, now) {
+      const ids = new Set(blockIds);
       tints.push({ blocks: views.all.filter(({ block }) => ids.has(block.id)), startedAt: now });
     },
     activate(sourceIds, now) {

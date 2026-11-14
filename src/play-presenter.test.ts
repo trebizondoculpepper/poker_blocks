@@ -27,6 +27,7 @@ vi.mock("./visual/materialise", () => ({
 const source = (id: string) => ({ block: { id }, cube: new THREE.Group() });
 
 async function presenter(reduced = false) {
+  const { createVisualScheduler } = await import("./visual-events/scheduler");
   const { createPlayPresenter } = await import("./play-presenter");
   const refill = vi.fn();
   const disposed: string[] = [];
@@ -66,6 +67,7 @@ async function presenter(reduced = false) {
     drawReplacements: drawReplacements as never,
     save: noop,
     decided: noop,
+    visualEvents: createVisualScheduler(),
   });
   return { play, refill, disposed, drawReplacements, revealed };
 }

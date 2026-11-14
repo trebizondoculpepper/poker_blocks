@@ -60,6 +60,8 @@ import { gameplayHudZones, type HudElement } from "./hud-layout";
 import { createDropTargetGuide, dropGuideProviders } from "./visual/drop-target-guide";
 import type { DropTargetGuides } from "./scene-traits/drop-target-guide";
 import { appVersion } from "./version";
+import { createVisualScheduler } from "./visual-events/scheduler";
+import type { ScoreNarrationServices } from "./score-narration";
 import { createDiagnosticRegistry } from "./diagnostics/debug-snapshot";
 import { registerSnapshotProviders, snapshotSections } from "./diagnostics/providers";
 import { debugSnapshotCommand } from "./diagnostics/snapshot-command";
@@ -391,6 +393,16 @@ const shopView = createShopView(
   (id, destination) => run.game.purchaseVerdict(id, destination),
 );
 shopView.render([], false);
+// The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
+// these services; the frame loop below advances its clock.
+const visualServices: ScoreNarrationServices = {
+  get scoreNarration() {
+    return presenter.narration;
+  },
+};
+const visualEvents = createVisualScheduler({ services: visualServices });
+// Hidden time never counts as presentation time, even when the browser stops sending frames.
+document.addEventListener("visibilitychange", () => visualEvents.suspend());
 const presenter: PlayPresenter = createPlayPresenter({
   game: () => run.game,
   views: blockViews,
@@ -409,6 +421,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   drawReplacements: () => run.drawReplacements(),
   save: () => run.autosave(),
   decided: (outcome, now) => run.decided(outcome, now),
+  visualEvents,
 });
 const input: TableInput = createTableInput({
   host,
@@ -506,7 +519,7 @@ const step = (time: number) => {
   danceFloor.update();
   cameraView.update(playfield.time, playfield.delta);
   presenter.update(time, delta);
-  presenter.updateScore(time);
+  visualEvents.update(time, document.visibilityState === "visible");
   run.followOutcomes(time);
   field.update(playfield.time, run.reducedMotion);
   sceneManager.update(delta);
