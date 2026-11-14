@@ -22,11 +22,21 @@
  * - **Cancellation and cleanup.** Cancelling an exit (its cell is reused, the scene leaves)
  *   finishes and disposes every effect at once. When an exit ends, by completion or cancellation,
  *   each effect's `dispose` releases what it made, the visual is removed from its parent, and the
- *   owner's `release` frees the visual's own resources. Disposing the runner cancels them all.
+ *   owner's `release` frees the visual's own resources. Disposing the presenter cancels them all.
+ * - **Timing (#549).** Exits run on the one shared visual-event scheduler: each is a `block.exit`
+ *   event whose effect handle is the exit's sequence, advanced on the presentation clock. Steps
+ *   and their caps stay the exit's own lifecycle; there is no separate exit clock or frame loop.
  */
 import * as THREE from "three";
 import { Registry } from "../core/registry";
 import type { Cell } from "../traits/attachable";
+import {
+  unitMs,
+  visualHandlers,
+  type EffectHandle,
+  type ScopeHandle,
+  type VisualScheduler,
+} from "../visual-events/scheduler";
 
 /** What the block was and where, captured before the model removed it. */
 export type ExitSnapshot = { blockId: string; cell?: Cell; material?: string };
@@ -134,19 +144,27 @@ class Exit {
     this.elapsed = 0;
     this.current = this.remaining.shift();
     if (!this.current) return this.end();
-    this.running = this.current.effects.map(({ effect, target = "whole", config }) =>
-      exitEffects.get(effect)(
-        {
-          snapshot: this.snapshot,
-          visual: this.visual,
-          targets: exitTargets.get(target)(this.visual),
-          excluded: exitTargetExclusions.get(target)(this.visual),
-          reducedMotion: this.reducedMotion(),
-          ownsObject: (object) => this.own.has(object),
-        },
-        config,
-      ),
-    );
+    // Built one by one, so an effect that can't be made (#1035 review) releases those before it.
+    for (const { effect, target = "whole", config } of this.current.effects) {
+      try {
+        this.running.push(
+          exitEffects.get(effect)(
+            {
+              snapshot: this.snapshot,
+              visual: this.visual,
+              targets: exitTargets.get(target)(this.visual),
+              excluded: exitTargetExclusions.get(target)(this.visual),
+              reducedMotion: this.reducedMotion(),
+              ownsObject: (object) => this.own.has(object),
+            },
+            config,
+          ),
+        );
+      } catch (error) {
+        this.cancel();
+        throw error;
+      }
+    }
   }
 
   update(delta: number): void {
@@ -177,34 +195,109 @@ class Exit {
   }
 }
 
-/** Runs every block exit in a scene; the scene updates it each frame and disposes it on exit. */
-export function createExitRunner(reducedMotion: () => boolean = () => false) {
-  let exits: Exit[] = [];
+/** A block exit waiting for its scheduled start: the scheduler's payload holds only its id. */
+type PendingExit = {
+  snapshot: ExitSnapshot;
+  visual: ExitVisual;
+  sequence: ExitSequence;
+  reducedMotion: () => boolean;
+};
+
+/** The exits waiting to start, as the scheduler's `blockExits` service (#549). */
+export type BlockExitServices = {
+  blockExits: { take(id: number): PendingExit | null };
+};
+
+/**
+ * A block's exit on the shared scheduler (#549): its sequence becomes one effect handle, advanced
+ * on the presentation clock from its due time. Cancelling the handle (the scope is cancelled, the
+ * scene leaves, the scheduler's time limit) finishes and disposes its effects and releases the
+ * visual, exactly once.
+ */
+visualHandlers.register("block.exit", (payload, context): "done" | EffectHandle => {
+  const { id } = payload as { id: number };
+  const pending = (context.services as BlockExitServices).blockExits.take(id);
+  if (!pending) return "done";
+  // An exit that can't start (an unknown effect) cancels itself, releasing its block and any
+  // effects already made, then fails its scope.
+  const exit = new Exit(pending.snapshot, pending.visual, pending.sequence, pending.reducedMotion);
+  if (exit.done) return "done";
+  let last = context.scheduledAtMs;
   return {
+    update(nowMs) {
+      exit.update(Math.max(0, (nowMs - last) / 1000));
+      last = nowMs;
+      return exit.done ? "finished" : "running";
+    },
+    cancel: () => exit.cancel(),
+    // Already ended once finished or cancelled; this only guards a handle released otherwise.
+    dispose: () => exit.cancel(),
+  };
+});
+
+/**
+ * Presents block exits on the shared visual-event scheduler (#549): each exit starts now, in a
+ * sealed scope of its own, so exits overlap freely and a scope's completion is its exit's end.
+ * Its owner exposes `blockExits` to the scheduler's services and disposes it on scene exit.
+ *
+ * An exit the scheduler can't admit, or that is cancelled before it starts, is released at once:
+ * the block simply goes, with nothing left behind.
+ */
+export function createExitPresenter(
+  events: VisualScheduler,
+  reducedMotion: () => boolean = () => false,
+) {
+  let nextId = 0;
+  const waiting = new Map<number, PendingExit>();
+  /** Each exit's scope, with the block it is presenting, until it settles. */
+  const scopes = new Map<ScopeHandle, ExitSnapshot>();
+  return {
+    blockExits: {
+      take(id: number): PendingExit | null {
+        const pending = waiting.get(id) ?? null;
+        waiting.delete(id);
+        return pending;
+      },
+    } satisfies BlockExitServices["blockExits"],
     /** Start a block's exit. Its visual is the exit's from now on. */
     start(snapshot: ExitSnapshot, visual: ExitVisual, sequence: ExitSequence): void {
-      exits.push(new Exit(snapshot, visual, sequence, reducedMotion));
-      exits = exits.filter(({ done }) => !done);
-    },
-    update(delta: number): void {
-      exits.forEach((exit) => exit.update(delta));
-      exits = exits.filter(({ done }) => !done);
+      const id = ++nextId;
+      waiting.set(id, { snapshot, visual, sequence, reducedMotion });
+      const scope = events.createScope(null);
+      const admitted = events.schedule(scope, {
+        handler: "block.exit",
+        payload: { id },
+        dueUnits: events.nowMs / unitMs,
+      });
+      scopes.set(scope, snapshot);
+      events.observe(scope, () => {
+        scopes.delete(scope);
+        const unstarted = waiting.get(id);
+        if (!unstarted) return;
+        waiting.delete(id);
+        unstarted.visual.root.removeFromParent();
+        unstarted.visual.release();
+      });
+      if (admitted.accepted) events.seal(scope);
+      else events.cancel(scope);
     },
     /** End one block's exit now (its cell is reused), cleaning up everything. */
     cancel(blockId: string): void {
-      exits.filter(({ snapshot }) => snapshot.blockId === blockId).forEach((exit) => exit.cancel());
-      exits = exits.filter(({ done }) => !done);
+      for (const [scope, snapshot] of Array.from(scopes))
+        if (snapshot.blockId === blockId) events.cancel(scope);
     },
-    /** How many exits are still playing. */
+    /** How many exits are still waiting or playing. */
     get active(): number {
-      return exits.length;
+      return scopes.size;
     },
+    /** End every exit (the scene leaves). */
     dispose(): void {
-      exits.forEach((exit) => exit.cancel());
-      exits = [];
+      for (const scope of Array.from(scopes.keys())) events.cancel(scope);
     },
   };
 }
+
+export type ExitPresenter = ReturnType<typeof createExitPresenter>;
 
 /**
  * The bounds of `targets` in the departing block's own space: measured in the root's local

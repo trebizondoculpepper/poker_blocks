@@ -19,7 +19,7 @@ import {
   materialDefinitions,
   type MaterialDefinition,
 } from "../../materials";
-import { createExitRunner } from "../../visual/exit-effects";
+import { createSteppedExits } from "../../visual/exit-stepping";
 import { resolvedExit } from "../../visual/exit-defaults";
 import { createWordCube } from "../../word-cube";
 import { tableBlock } from "./block-object";
@@ -73,7 +73,7 @@ for (const definition of allMaterials()) {
 /** One block's exit, played over and over: a fresh block starts as soon as the last has gone. */
 function repeatingExit(definition: MaterialDefinition, seed: number): ProfiledObject {
   const holder = new THREE.Group();
-  const runner = createExitRunner();
+  const runner = createSteppedExits();
   const sequence = resolvedExit(definition.appearance)!;
   let generation = 0;
   const start = () => {

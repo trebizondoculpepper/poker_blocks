@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { createExitRunner, type ExitVisual } from "./exit-presentation";
+import { type ExitVisual } from "./exit-presentation";
+import { createSteppedExits } from "./exit-stepping";
 import { createFlash, createShudder } from "./flash-shudder";
 
 const lit = () => new THREE.MeshStandardMaterial({ emissive: 0x112233, emissiveIntensity: 0.2 });
@@ -87,7 +88,7 @@ describe("flash and shudder as exit effects (#441)", () => {
     root.add(new THREE.Mesh(new THREE.BoxGeometry(), material));
     new THREE.Group().add(root);
     const visual: ExitVisual = { root, shell: [root], contents: [], release: vi.fn() };
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, visual, {
       steps: [
         {

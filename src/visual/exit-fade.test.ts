@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { createExitRunner, exitEffects, type ExitVisual } from "./exit-presentation";
+import { exitEffects, type ExitVisual } from "./exit-presentation";
+import { createSteppedExits } from "./exit-stepping";
 import "./exit-fade";
 
 function visual() {
@@ -20,7 +21,7 @@ const snapshot = { blockId: "b1" };
 describe("fade exit effect (#440)", () => {
   it("fades its target to nothing over its configured time", () => {
     const { v, shellMaterial, contentsMaterial } = visual();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start(snapshot, v, {
       steps: [{ effects: [{ effect: "fade", target: "shell", config: { seconds: 1 } }] }],
     });
@@ -35,7 +36,7 @@ describe("fade exit effect (#440)", () => {
 
   it("can fade only a contained block's contents, from their own opacity", () => {
     const { v, shellMaterial, contentsMaterial } = visual();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start(snapshot, v, {
       steps: [{ effects: [{ effect: "fade", target: "contents", config: { seconds: 1 } }] }],
     });
@@ -52,7 +53,7 @@ describe("fade exit effect (#440)", () => {
     const shaded = new THREE.ShaderMaterial({ uniforms: { time: { value: 1 } } });
     const extra = new THREE.Mesh(new THREE.BoxGeometry(), shaded);
     v.root.add(extra);
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start(snapshot, v, {
       steps: [{ effects: [{ effect: "fade", config: { seconds: 1 } }] }],
     });
@@ -72,7 +73,7 @@ describe("fade exit effect (#440)", () => {
       restoredFirst =
         shellMaterial.opacity === 1 && !shellMaterial.transparent && shellMaterial.depthWrite;
     });
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start(snapshot, v, {
       steps: [{ effects: [{ effect: "fade", config: { seconds: 0.2 } }] }],
     });
@@ -83,13 +84,13 @@ describe("fade exit effect (#440)", () => {
 
   it("ends at once under reduced motion, and restores on cancellation", () => {
     const reduced = visual();
-    const runner = createExitRunner(() => true);
+    const runner = createSteppedExits(() => true);
     runner.start(snapshot, reduced.v, { steps: [{ effects: [{ effect: "fade" }] }] });
     expect(reduced.shellMaterial.opacity).toBe(0);
     runner.update(0.016);
     expect(runner.active).toBe(0);
     const cancelled = visual();
-    const other = createExitRunner();
+    const other = createSteppedExits();
     other.start(snapshot, cancelled.v, { steps: [{ effects: [{ effect: "fade" }] }] });
     other.cancel("b1");
     expect(cancelled.shellMaterial.opacity).toBe(1);
@@ -111,7 +112,7 @@ describe("fade beside another effect's output (#490 review)", () => {
     ]) {
       const { v, shellMaterial } = visual();
       const before = v.root.children.length;
-      const runner = createExitRunner();
+      const runner = createSteppedExits();
       runner.start(snapshot, v, { steps: [{ effects: order }] });
       const added = v.root.children.slice(before) as THREE.Mesh[];
       expect(added).toHaveLength(1);
@@ -129,7 +130,7 @@ describe("overlapping fades (#490 review)", () => {
   it("compose: a shorter fade finishing never lets the target reappear, and settings restore once", () => {
     const { v, shellMaterial } = visual();
     shellMaterial.depthWrite = true;
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start(snapshot, v, {
       steps: [
         {
@@ -158,7 +159,7 @@ describe("fade edge cases (#490 review)", () => {
   it("scales a cut-out threshold with the fade and restores it", () => {
     const { v, shellMaterial } = visual();
     shellMaterial.alphaTest = 0.5;
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start(snapshot, v, {
       steps: [{ effects: [{ effect: "fade", target: "shell", config: { seconds: 1 } }] }],
     });
@@ -172,7 +173,7 @@ describe("fade edge cases (#490 review)", () => {
   it("a shell-only fade leaves contents nested inside the shell alone", () => {
     const { v, shell, contents, contentsMaterial } = visual();
     shell.add(contents);
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start(snapshot, v, {
       steps: [{ effects: [{ effect: "fade", target: "shell", config: { seconds: 1 } }] }],
     });
@@ -187,7 +188,7 @@ describe("fade edge cases (#490 review)", () => {
     root.add(contents);
     new THREE.Group().add(root);
     const v: ExitVisual = { root, shell: [root], contents: [contents], release() {} };
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start(snapshot, v, {
       steps: [{ effects: [{ effect: "fade", config: { seconds: 1 } }] }],
     });
