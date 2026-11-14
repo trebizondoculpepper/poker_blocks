@@ -6,7 +6,15 @@
  * The game supplies what the menus act on (`MenuCallbacks`) and how to move between
  * scenes (`ScreenScenes`); this service decides which happens when a screen changes.
  */
-import { createMenus, type MenuCallbacks, type MenuChoice, type Menus, type Screen } from "./menus";
+import {
+  createMenus,
+  type MenuCallbacks,
+  type MenuChoice,
+  type MenuPresentation,
+  type Menus,
+  type Screen,
+} from "./menus";
+import type { LedgerSink } from "./reward-ledger";
 import type { PanelLink, SceneName } from "./game-modes";
 import type { RunStats } from "./run-stats";
 import type { Settings } from "./settings";
@@ -25,6 +33,8 @@ export type ScreenScenes = {
 export type Overlays = {
   /** The button that opens the pause menu, for the HUD frame to place (#116). */
   readonly menuButton: HTMLElement;
+  /** The stage-won ledger, for the shared scheduler's `rewardLedger` service (#950). */
+  readonly rewardLedger: LedgerSink;
   panelHeadingHost(): HTMLElement;
   /** The screen in front: a menu, or the game. */
   readonly screen: Screen;
@@ -115,6 +125,8 @@ export function createOverlays(
     reducedMotion(): boolean;
     /** Other full-screen panels (the deck view, #175) that hold a pending outcome while open. */
     panels?: readonly { readonly isOpen: boolean }[];
+    /** The shared visual-event scheduler the stage-won ledger counts in on (#950). */
+    visualEvents?: MenuPresentation["visualEvents"];
   },
 ): Overlays {
   const { scenes } = options;
@@ -125,18 +137,27 @@ export function createOverlays(
   host.append(tooltip);
 
   let screen: Screen = "title";
-  const menus: Menus = createMenus(host, options.settings, {
-    ...options.menus,
-    onScreen(next) {
-      screen = next;
-      screenScenes[next](scenes);
-      options.menus.onScreen?.(next);
+  const menus: Menus = createMenus(
+    host,
+    options.settings,
+    {
+      ...options.menus,
+      onScreen(next) {
+        screen = next;
+        screenScenes[next](scenes);
+        options.menus.onScreen?.(next);
+      },
     },
-  });
+    options.visualEvents && {
+      visualEvents: options.visualEvents,
+      reducedMotion: () => options.reducedMotion(),
+    },
+  );
   const timers = new Set<number>();
 
   return {
     menuButton: menus.menuButton,
+    rewardLedger: menus.rewardLedger,
     get screen() {
       return screen;
     },
