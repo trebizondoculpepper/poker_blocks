@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { PrepassReference } from "./appearance-prepass";
 import { approximateOuter, createFacetShell, fillPane } from "./approximate-crystal";
 import { createCrystalV3Front, createCrystalV3Rear } from "./crystal-v3";
 import {
@@ -52,6 +53,11 @@ export type BlockAppearance = {
   faceLayer?: number;
   /** Extra meshes to add inside the block (the crystal's fire); dispose their materials. */
   extras?: (THREE.Mesh | THREE.Points)[];
+  /**
+   * Passes this look needs before its host's main render (#969), by registered name: whoever
+   * mounts the block requires them from its host while it is shown (src/visual/appearance-prepass.ts).
+   */
+  prepasses?: readonly PrepassReference[];
 };
 
 const SIZE = 256;

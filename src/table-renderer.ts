@@ -16,6 +16,11 @@ import { boardLights, handLights } from "./visual/lighting";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { setReflectionEnvironment } from "./visual/block-appearance";
 import { createCardRoom, type ShadowQuality } from "./visual/card-room";
+import {
+  createPrepassContext,
+  prepassRequirements,
+  type PrepassRequirements,
+} from "./visual/appearance-prepass";
 
 export type TableRenderer = {
   /** The back canvas's renderer: the room and table. Input listens on its canvas. */
@@ -43,6 +48,11 @@ export type TableRenderer = {
   /** Whether any scene shows the hand right now. */
   handShown(): boolean;
   setShadowQuality(quality: ShadowQuality): void;
+  /**
+   * Where the table's blocks require their appearances' prepasses (#969): held in both its
+   * render contexts (the board and the hand), each with its own targets.
+   */
+  readonly prepasses: PrepassRequirements;
   /** Per frame: the card room's lamp follows the structure. */
   frame(center: THREE.Vector3, radius: number, delta: number): void;
   dispose(): void;
@@ -100,6 +110,13 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
   // The board's lights light both passes.
   for (const light of scene.children) light.layers.enable(backgroundLayer);
 
+  // One prepass context per camera the front canvas draws blocks through (#969).
+  const boardPrepasses = createPrepassContext();
+  const handPrepasses = createPrepassContext();
+  const prepasses = prepassRequirements([boardPrepasses, handPrepasses]);
+  /** Prepasses take presentation time; the table's main renders don't, so none is counted. */
+  const still = { delta: 0, reducedMotion: false };
+
   /** The back pass: the room and table, with every shadow-casting block standing in. */
   function renderBack(camera: THREE.Camera): void {
     const casters: { mesh: THREE.Mesh; material: THREE.Mesh["material"] }[] = [];
@@ -123,6 +140,14 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
 
   /** The hand over the board, then dragged blocks on a fresh depth buffer, above everything. */
   function renderHand(handCamera: THREE.Camera): void {
+    handCamera.layers.set(0);
+    handPrepasses.render({
+      ...still,
+      renderer: front,
+      scene: handScene,
+      camera: handCamera,
+      hide: handScene,
+    });
     front.clearDepth();
     handCamera.layers.set(0);
     front.render(handScene, handCamera);
@@ -137,6 +162,7 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
     front,
     scene,
     handScene,
+    prepasses,
     setDragLayer(cube, dragging) {
       cube.traverse((object) => (dragging ? object.layers.set(dragLayer) : object.layers.set(0)));
     },
@@ -154,6 +180,14 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
         boardCamera.layers.set(0);
         const background = scene.background;
         scene.background = null;
+        // The board's appearances' prepasses, right before the render that samples them.
+        boardPrepasses.render({
+          ...still,
+          renderer: front,
+          scene,
+          camera: boardCamera,
+          hide: scene,
+        });
         front.render(scene, boardCamera);
         scene.background = background;
         boardCamera.layers.mask = layers;
@@ -168,6 +202,8 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
     setShadowQuality: (quality) => cardRoom.setShadowQuality(quality),
     frame: (center, radius, delta) => cardRoom.frame(center, radius, delta),
     dispose() {
+      boardPrepasses.dispose();
+      handPrepasses.dispose();
       renderer.dispose();
       front.dispose();
     },

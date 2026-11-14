@@ -14,6 +14,7 @@ import { randomRock, type Rock, type RockState } from "./motion";
 import type { Selection } from "./traits/selectable";
 import type { Cell } from "./traits/attachable";
 import { createBlockAppearance, disposeMaterialTextures } from "./visual/block-appearance";
+import type { PrepassRequirements } from "./visual/appearance-prepass";
 import { blockOutline } from "./visual/block-outline";
 
 /** The outline colour of a selected block (#305): the game's accent cyan. */
@@ -56,13 +57,21 @@ export type BlockViews = {
   highlight(selected: Selection): void;
 };
 
-export function createBlockViews(parents: {
-  board: THREE.Object3D;
-  hand: THREE.Object3D;
-}): BlockViews {
+export function createBlockViews(
+  parents: {
+    board: THREE.Object3D;
+    hand: THREE.Object3D;
+  },
+  /** Where a block's declared prepasses are required while it is shown (#969). */
+  prepasses?: PrepassRequirements,
+): BlockViews {
   const all: RenderedBlock[] = [];
+  /** Each shown block's hold on the prepasses its appearance declared. */
+  const held = new Map<RenderedBlock, () => void>();
 
   function dispose(rendered: RenderedBlock): void {
+    held.get(rendered)?.();
+    held.delete(rendered);
     rendered.cube.removeFromParent();
     all.splice(all.indexOf(rendered), 1);
     rendered.geometry.dispose();
@@ -126,6 +135,8 @@ export function createBlockViews(parents: {
         handSlot: null,
       } satisfies RenderedBlock;
       all.push(rendered);
+      if (appearance.prepasses?.length && prepasses)
+        held.set(rendered, prepasses.require(appearance.prepasses));
       return rendered;
     },
     dispose,
