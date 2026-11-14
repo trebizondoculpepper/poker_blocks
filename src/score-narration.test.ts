@@ -41,13 +41,19 @@ function narrating(limits: Parameters<typeof createVisualScheduler>[0] = {}) {
   };
   const scheduler = createVisualScheduler({ ...limits, services: { scoreNarration: sink } });
   // 2 units between lines, 6 units to settle: 133⅓ ms and 400 ms.
-  const narration = createScoreNarration(scheduler, sink, { lineStep: 2, settle: 6 });
+  let idles = 0;
+  const narration = createScoreNarration(
+    scheduler,
+    sink,
+    { lineStep: 2, settle: 6 },
+    () => idles++,
+  );
   let real = 1000;
   scheduler.update(real, true);
   const advance = (ms: number, step = 10) => {
     for (let t = 0; t < ms; t += step) scheduler.update((real += step), true);
   };
-  return { log, endpoints, narration, scheduler, advance, shown: () => shown };
+  return { log, endpoints, narration, scheduler, advance, shown: () => shown, idles: () => idles };
 }
 
 describe("score narration on the visual-event scheduler (#547)", () => {
@@ -180,5 +186,26 @@ describe("score narration on the visual-event scheduler (#547)", () => {
     expect(endpoints).toEqual(["summary 3", "outcome 3 playing"]);
     expect(log.filter((entry) => entry.includes("line"))).toEqual(["10:line a"]);
     expect(shown()).toBe(1);
+  });
+
+  it("narrates in committed order even when a later play is ready first (#800 review)", () => {
+    const { log, endpoints, narration, advance } = narrating();
+    const first = narration.reserve();
+    const second = narration.reserve();
+    narration.release(second, { lines: [line("b", 1)], endpoint: { score: 2, outcome: "won" } });
+    advance(500);
+    expect(log).toEqual([]);
+    narration.release(first, { lines: [line("a", 1)], endpoint: { score: 1, outcome: "playing" } });
+    advance(1000);
+    expect(log.filter((entry) => entry.includes("line"))).toEqual(["510:line a", "640:line b"]);
+    expect(endpoints).toEqual(["outcome 2 won"]);
+  });
+
+  it("reports idle once the outcome has settled, when presenting is false (#800 review)", () => {
+    const { narration, advance, idles } = narrating();
+    narration.narrate(play([line("a", 1)]));
+    advance(1000);
+    expect(narration.presenting).toBe(false);
+    expect(idles()).toBe(1);
   });
 });

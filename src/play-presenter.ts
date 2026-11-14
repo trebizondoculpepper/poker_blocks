@@ -31,6 +31,7 @@ import {
   createScoreNarration,
   type NarratedEndpoint,
   type NarratedLine,
+  type NarrationSlot,
   type ScoreNarrationSink,
 } from "./score-narration";
 import type { VisualScheduler } from "./visual-events/scheduler";
@@ -63,6 +64,8 @@ type Playing = {
   lines: readonly PassiveScoredLine[];
   /** Where this play left the stage when it committed: its score and outcome (#547). */
   endpoint: NarratedEndpoint;
+  /** Its place in narration order, reserved when it committed (#800 review). */
+  slot: NarrationSlot;
   /** Every running dissolve, for clean-up. */
   effects: Materialise[];
 };
@@ -181,14 +184,19 @@ export function createPlayPresenter(options: {
       options.changed();
     },
   };
-  const narration = createScoreNarration(options.visualEvents, sink, narrationTiming);
+  const narration = createScoreNarration(options.visualEvents, sink, narrationTiming, () =>
+    options.changed(),
+  );
 
   /**
    * Narrate the lines from the play that just landed, lowest score first, after any play still
    * being narrated: captured now, as plain data, so a later play can't change them.
    */
-  function announceScore(scored: readonly PassiveScoredLine[], endpoint: NarratedEndpoint): void {
-    narration.narrate({ lines: presentationOrder(scored).map(capturedLine), endpoint });
+  function announceScore(action: Playing): void {
+    narration.release(action.slot, {
+      lines: presentationOrder(action.lines).map(capturedLine),
+      endpoint: action.endpoint,
+    });
   }
 
   function updatePlay(action: Playing, now: number, delta: number): void {
@@ -265,7 +273,7 @@ export function createPlayPresenter(options: {
       getMaterialDefinition(materialOf(block)),
     ))
       playSfx(id);
-    announceScore(action.lines, action.endpoint);
+    announceScore(action);
     cameraView.scheduleCameraMove();
     options.refill();
     options.save();
@@ -374,6 +382,7 @@ export function createPlayPresenter(options: {
         effects: [],
         lines: game().lastScoredLines,
         endpoint: { score: game().state.round.score, outcome: roundOutcome(game().state) },
+        slot: narration.reserve(),
       });
       playSfx("card.place.fly");
       options.changed();

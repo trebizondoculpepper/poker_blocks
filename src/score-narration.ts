@@ -87,9 +87,15 @@ export function createScoreNarration(
   >,
   sink: ScoreNarrationSink,
   timing: ScoreNarrationTiming,
+  /** Narration and its outcome have all settled: whoever shows `presenting` may refresh. */
+  idle: () => void = () => undefined,
 ) {
-  /** Plays committed but not yet narrating, in committed order. */
-  let waiting: NarratedPlay[] = [];
+  /**
+   * Plays committed but not yet narrating, in committed order. A slot is reserved when its play
+   * commits and filled when the play is ready to narrate, so a play that lands sooner still
+   * waits for every play committed before it (#800 review).
+   */
+  let waiting: NarrationSlot[] = [];
   /** The endpoint of the latest play started: the outcome announced after it. */
   let reached: NarratedEndpoint | null = null;
   let current: ScopeHandle | null = null;
@@ -100,9 +106,13 @@ export function createScoreNarration(
   const nowUnits = () => scheduler.nowMs / unitMs;
 
   function next(lastLines: number): void {
-    const play = waiting.shift();
-    if (play) start(play);
-    else if (reached)
+    const head = waiting[0];
+    // The next committed play isn't ready yet: everything after it waits, and so does the outcome.
+    if (head && !head.play) return;
+    if (head?.play) {
+      waiting.shift();
+      start(head.play);
+    } else if (reached)
       announce(reached, lastLines > 0 ? Math.max(0, timing.settle - timing.lineStep) : 0);
   }
 
@@ -149,21 +159,38 @@ export function createScoreNarration(
     });
     scheduler.seal(scope);
     scheduler.observe(scope, () => {
-      if (mine === epoch && outcome === scope) outcome = null;
+      if (mine !== epoch || outcome !== scope) return;
+      outcome = null;
+      idle();
     });
   }
 
+  /** Hold a place in committed order for a play that has just committed. */
+  function reserve(): NarrationSlot {
+    // A play committed before the outcome showed: the outcome waits for it too.
+    if (outcome) {
+      const pending = outcome;
+      outcome = null;
+      scheduler.cancel(pending);
+    }
+    const slot: NarrationSlot = { play: null, epoch };
+    waiting.push(slot);
+    return slot;
+  }
+
+  /** The reserved play is ready: narrate it in its committed place. */
+  function release(slot: NarrationSlot, play: NarratedPlay): void {
+    if (slot.epoch !== epoch || slot.play) return;
+    slot.play = { lines: [...play.lines], endpoint: play.endpoint };
+    if (!current) next(0);
+  }
+
   return {
-    /** Narrate a committed play's lines and captured endpoint, after any play still narrating. */
+    reserve,
+    release,
+    /** Reserve and release at once: a play that is ready as it commits. */
     narrate(play: NarratedPlay): void {
-      // A play committed before the outcome showed: the outcome waits for it too.
-      if (outcome) {
-        const pending = outcome;
-        outcome = null;
-        scheduler.cancel(pending);
-      }
-      waiting.push({ lines: [...play.lines], endpoint: play.endpoint });
-      if (!current) next(0);
+      release(reserve(), play);
     },
     /** Narration or its outcome is still to come. */
     get presenting(): boolean {
@@ -181,3 +208,6 @@ export function createScoreNarration(
 }
 
 export type ScoreNarration = ReturnType<typeof createScoreNarration>;
+
+/** A committed play's place in narration order, filled once the play is ready. */
+export type NarrationSlot = { play: NarratedPlay | null; readonly epoch: number };
