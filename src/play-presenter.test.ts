@@ -26,7 +26,15 @@ vi.mock("./visual/materialise", () => ({
 
 const source = (id: string) => ({ block: { id }, cube: new THREE.Group() });
 
-async function presenter(reduced = false, limits = {}) {
+async function presenter(
+  reduced = false,
+  limits = {},
+  extra: {
+    activations?: unknown[];
+    alongside?: (activation: never) => unknown;
+    order?: string[];
+  } = {},
+) {
   const { createVisualScheduler } = await import("./visual-events/scheduler");
   const { createPlayPresenter } = await import("./play-presenter");
   const disposed: string[] = [];
@@ -37,7 +45,7 @@ async function presenter(reduced = false, limits = {}) {
   const session = {
     discard: () => ({}),
     state: { hand: [], round: { score: 0 } },
-    lastDiscardActivations: [],
+    lastDiscardActivations: extra.activations ?? [],
   };
   const noop = () => undefined;
   const services = {
@@ -66,8 +74,9 @@ async function presenter(reduced = false, limits = {}) {
     deselect: noop,
     changed: noop,
     moved: noop,
-    rackChanged: noop,
+    rackChanged: () => void extra.order?.push("rackChanged"),
     activated: noop,
+    alongside: extra.alongside as never,
     drawReplacements: drawReplacements as never,
     save: noop,
     decided: noop,
@@ -162,5 +171,43 @@ describe("discard refill order (#775)", () => {
     expect(dissolves[0]!.done).toBe(true);
     expect(revealed).toEqual([["new1"]]);
     expect(play.busy).toBe(false);
+  });
+});
+
+describe("a discard's activation labels (#920)", () => {
+  it("captures each activation's label as the discard commits, before the rack redraws, and shows them at once", async () => {
+    const { visualHandlers } = await import("./visual-events/scheduler");
+    const shown: string[] = [];
+    if (!visualHandlers.has("test.discard.label"))
+      visualHandlers.register("test.discard.label", (payload) => {
+        shown.push(String(payload));
+        return "done";
+      });
+    const order: string[] = [];
+    const activations = [
+      { activationId: "x:0", sourceId: "die" },
+      { activationId: "x:1", sourceId: "quiet" },
+      { activationId: "x:2", sourceId: "die" },
+    ];
+    const { play, frame } = await presenter(
+      false,
+      {},
+      {
+        activations,
+        order,
+        alongside: (activation: { activationId: string; sourceId: string }) => {
+          order.push(`label ${activation.activationId}`);
+          // A host with nothing to say for one of them shows nothing for it.
+          return activation.sourceId === "quiet"
+            ? null
+            : { handler: "test.discard.label", payload: activation.activationId };
+        },
+      },
+    );
+    play.discard([source("a")] as never);
+    expect(order).toEqual(["label x:0", "label x:1", "label x:2", "rackChanged"]);
+    frame();
+    // Repeated activations of one item each keep their own label, in committed order.
+    expect(shown).toEqual(["x:0", "x:2"]);
   });
 });

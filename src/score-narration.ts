@@ -20,6 +20,7 @@ import {
   visualFallbacks,
   visualHandlers,
   type EffectHandle,
+  type EventDescription,
   type ScopeHandle,
   type VisualScheduler,
 } from "./visual-events/scheduler";
@@ -219,16 +220,25 @@ export function createScoreNarration(
 
   /**
    * Each line's accompanying events, due with their line, in one scope of their own that nothing
-   * waits for (#919). Optional feedback: a batch that can't be admitted is simply not shown.
+   * waits for (#919).
    */
   function showAlongside(lines: readonly NarratedLine[], at: number): void {
-    const events = lines.flatMap((line, index) =>
-      (line.alongside ?? []).map(({ handler, payload }) => ({
-        handler,
-        payload,
-        dueUnits: at + index * timing.lineStep,
-      })),
+    showBesides(
+      lines.flatMap((line, index) =>
+        (line.alongside ?? []).map(({ handler, payload }) => ({
+          handler,
+          payload,
+          dueUnits: at + index * timing.lineStep,
+        })),
+      ),
     );
+  }
+
+  /**
+   * Accompanying events in one scope of their own that nothing waits for, until each settles or a
+   * reset cancels it. Optional feedback: a batch that can't be admitted is simply not shown.
+   */
+  function showBesides(events: readonly EventDescription[]): void {
     if (!events.length) return;
     const scope = scheduler.createScope(null);
     if (!scheduler.scheduleBatch(scope, events).accepted) {
@@ -287,6 +297,15 @@ export function createScoreNarration(
   return {
     reserve,
     release,
+    /**
+     * Show events alongside an action that narrates no score (#920: a discard's activation
+     * labels), now and in committed order, outside the narration queue: they never wait for a
+     * play still being narrated, and a reset cancels them with the rest.
+     */
+    alongside(events: readonly AlongsideEvent[]): void {
+      const now = nowUnits();
+      showBesides(events.map(({ handler, payload }) => ({ handler, payload, dueUnits: now })));
+    },
     /** Reserve and release at once: a play that is ready as it commits. */
     narrate(play: NarratedPlay): void {
       release(reserve(), play);
