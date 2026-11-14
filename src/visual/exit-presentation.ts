@@ -144,19 +144,27 @@ class Exit {
     this.elapsed = 0;
     this.current = this.remaining.shift();
     if (!this.current) return this.end();
-    this.running = this.current.effects.map(({ effect, target = "whole", config }) =>
-      exitEffects.get(effect)(
-        {
-          snapshot: this.snapshot,
-          visual: this.visual,
-          targets: exitTargets.get(target)(this.visual),
-          excluded: exitTargetExclusions.get(target)(this.visual),
-          reducedMotion: this.reducedMotion(),
-          ownsObject: (object) => this.own.has(object),
-        },
-        config,
-      ),
-    );
+    // Built one by one, so an effect that can't be made (#1035 review) releases those before it.
+    for (const { effect, target = "whole", config } of this.current.effects) {
+      try {
+        this.running.push(
+          exitEffects.get(effect)(
+            {
+              snapshot: this.snapshot,
+              visual: this.visual,
+              targets: exitTargets.get(target)(this.visual),
+              excluded: exitTargetExclusions.get(target)(this.visual),
+              reducedMotion: this.reducedMotion(),
+              ownsObject: (object) => this.own.has(object),
+            },
+            config,
+          ),
+        );
+      } catch (error) {
+        this.cancel();
+        throw error;
+      }
+    }
   }
 
   update(delta: number): void {
@@ -210,15 +218,9 @@ visualHandlers.register("block.exit", (payload, context): "done" | EffectHandle 
   const { id } = payload as { id: number };
   const pending = (context.services as BlockExitServices).blockExits.take(id);
   if (!pending) return "done";
-  let exit: Exit;
-  try {
-    exit = new Exit(pending.snapshot, pending.visual, pending.sequence, pending.reducedMotion);
-  } catch (error) {
-    // An exit that can't start (an unknown effect) still lets its block go, then fails its scope.
-    pending.visual.root.removeFromParent();
-    pending.visual.release();
-    throw error;
-  }
+  // An exit that can't start (an unknown effect) cancels itself, releasing its block and any
+  // effects already made, then fails its scope.
+  const exit = new Exit(pending.snapshot, pending.visual, pending.sequence, pending.reducedMotion);
   if (exit.done) return "done";
   let last = context.scheduledAtMs;
   return {

@@ -242,8 +242,13 @@ describe("block exits on the shared scheduler (#549)", () => {
   it("still releases the visual, and fails its scope, when an exit can't start", () => {
     const { scheduler, exits, advance } = shared();
     const v = visual();
-    exits.start(snapshot, v, { steps: [{ effects: [{ effect: "no-such-effect" }] }] });
+    log.length = 0;
+    exits.start(snapshot, v, {
+      steps: [{ effects: [timed("made", 1), { effect: "no-such-effect" }] }],
+    });
     advance(16);
+    // The effect already made is finished and released too (#1035 review).
+    expect(log).toEqual(["made:start", "made:finish", "made:dispose"]);
     expect(v.root.parent).toBeNull();
     expect(v.released).toHaveBeenCalledOnce();
     expect(exits.active).toBe(0);
