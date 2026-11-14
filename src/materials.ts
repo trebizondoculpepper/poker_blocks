@@ -476,7 +476,9 @@ export const materialDefinitions = [
         ],
       },
       pattern: "rainbowCrystal",
-      assembly: "refractiveCrystal",
+      // Total Internal Reflection Crystal (#971, doc/presentation-contracts.md, "Prismatic
+      // Crystal promotion (#749)"): its front distorts an inner image its hosts capture first.
+      assembly: "crystalInternal",
       surface: "clear",
       height: "none",
       ink: lightInk,

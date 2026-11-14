@@ -3,6 +3,7 @@ import { createBlockAppearance, type BlockAppearance } from "./block-appearance"
 import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
 import { blockOutline } from "./block-outline";
+import type { PrepassReference } from "./appearance-prepass";
 
 /**
  * Which of an appearance's materials a written block wears: the hand's (the default), or, for
@@ -27,6 +28,8 @@ export function writtenBlock(
    * glass, crystal fire), which keep their own look.
    */
   surfaces: readonly THREE.Material[];
+  /** Passes its look needs before its host's render (#971): the host requires them. */
+  prepasses: readonly PrepassReference[];
   dispose(): void;
 } {
   const appearance = createBlockAppearance(art, definition, size);
@@ -52,6 +55,7 @@ export function writtenBlock(
   return {
     object,
     surfaces,
+    prepasses: appearance.prepasses ?? [],
     dispose() {
       if (disposed) return;
       disposed = true;

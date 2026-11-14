@@ -19,6 +19,8 @@ import { standardDeck, type IdentityTrait, pokerIdentity } from "./cards";
 import { blockMaterials, getMaterialDefinition, type BlockMaterial } from "./materials";
 import { createAttractTuningPanel, type TuningControl } from "./attract-tuning-panel";
 import { createBlockAppearance, disposeMaterialTextures } from "./visual/block-appearance";
+import { createPrepassContext, type PrepassContext } from "./visual/appearance-prepass";
+import type { PassRenderer } from "./visual/render-pass";
 import {
   addAttractLighting,
   attractFieldOfView,
@@ -277,6 +279,11 @@ export type AttractScene = {
    * scene, which exists only once the background has mounted.
    */
   setEnvironment(renderer: THREE.WebGLRenderer): void;
+  /**
+   * Its cards' appearance prepasses (#971), run on the background's renderer right before it
+   * draws the scene: the context is the scene's, so its targets are the attract host's own.
+   */
+  readonly prepasses: PrepassContext;
   dispose(): void;
 };
 
@@ -358,6 +365,8 @@ export function createAttractScene(
 
   /** What the cards reflect, once this scene's renderer exists (see `setEnvironment`). */
   let environment: THREE.Texture | null = null;
+  /** The prepasses its cards' looks declare, held while each card is in the field (#971). */
+  const prepasses = createPrepassContext();
 
   const camera = new THREE.PerspectiveCamera(attractFieldOfView, 1, 0.1, 120);
   camera.position.set(0, 0, cameraZ);
@@ -390,6 +399,7 @@ export function createAttractScene(
     );
     for (const extra of appearance.extras ?? []) cube.add(extra);
     scene.add(cube);
+    const releasePrepasses = prepasses.require(appearance.prepasses ?? []);
     // Anything on the card that reflects (a fire block's glass, say), not only its faces.
     reflectExtras(appearance.extras ?? []);
     // A card's opacity follows its depth (`depthOpacity`). Opacity only counts on a transparent
@@ -429,6 +439,7 @@ export function createAttractScene(
         Math.max(minimumSpeed, sample(tuning.velocity, random)) * 1.2,
       ),
       dispose() {
+        releasePrepasses();
         for (const trail of trails) trail.dispose();
         scene.remove(cube);
         appearance.geometry.dispose();
@@ -498,6 +509,7 @@ export function createAttractScene(
   return {
     scene,
     camera,
+    prepasses,
     setEnvironment(renderer) {
       if (environment) return;
       environment = sparkleEnvironment(renderer);
@@ -561,6 +573,7 @@ export function createAttractScene(
     dispose() {
       for (const card of cards) card.dispose();
       cards.length = 0;
+      prepasses.dispose();
       environment?.dispose();
       environment = null;
     },
@@ -652,6 +665,15 @@ export function createAttractBackground(
         scene.camera.aspect = width / height;
         scene.camera.updateProjectionMatrix();
       }
+      // The cards' prepasses (a crystal's inner capture), right before the draw that reads them.
+      scene.prepasses.render({
+        renderer: layer.renderer as unknown as PassRenderer,
+        scene: scene.scene,
+        camera: scene.camera,
+        hide: scene.scene,
+        delta,
+        reducedMotion: false,
+      });
       layer.renderer.render(scene.scene, scene.camera);
     },
     tuning: () => tuning,

@@ -187,7 +187,11 @@ export type OpticsBackend = {
 };
 
 export const opticsBackends = new Registry<OpticsBackend>("optics backend");
-opticsBackends.register("current", { label: "Current", assembly: "refractiveCrystal" });
+// The physical-transmission look Prismatic Crystal had before #971; the handle stays "current".
+opticsBackends.register("current", {
+  label: "Physical transmission (previous)",
+  assembly: "refractiveCrystal",
+});
 opticsBackends.register("approximation", {
   label: "Approximation",
   assembly: "approximateCrystal",
@@ -239,7 +243,8 @@ opticsBackends.register("calmWater", {
 });
 
 opticsBackends.register("internal", {
-  label: "Internal (prototype)",
+  // The promoted Prismatic Crystal look (#971); the backend handle stays "internal".
+  label: "Total Internal Reflection Crystal",
   assembly: "crystalInternal",
   unsupported:
     "Prototype: ignores the background. Back facets show the rainbow map reflected inside the crystal; front facets distort that by how far their outer and inner rays part. Overlapping blocks share one inner image, nearest facet first.",
