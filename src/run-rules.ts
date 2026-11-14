@@ -96,6 +96,8 @@ export const demoRunRules: RunRules = {
   // and countdown deductions before scoring; the other reactions, then the pending detonations,
   // after it.
   playfield: [
+    // Placed blocks open first (#926), before any material step.
+    { id: "openingController", config: {} },
     {
       id: "materialEffectsController",
       config: {
