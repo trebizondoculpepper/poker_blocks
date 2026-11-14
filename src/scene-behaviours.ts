@@ -153,6 +153,7 @@ export type SceneHost = {
       | "showGameOver"
       | "hideGameOver"
       | "showStageWon"
+      | "whenLedgerFinished"
       | "hideStageWon"
       | "showPanelFooter"
       | "hidePanelFooter"
@@ -583,6 +584,14 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       services.overlays.showGameOver(services.run.runStats(), services.run.seed()),
     hide: ({ services }) => services.overlays.hideGameOver(),
   });
+  // A won stage's reward ledger (#951): its committed receipt, counted in on the scheduler.
+  resultInformation.register("stageReward", {
+    show({ services }) {
+      const reward = services.run.stageReward();
+      if (reward) services.overlays.showStageWon(reward);
+    },
+    hide: ({ services }) => services.overlays.hideStageWon(),
+  });
   /**
    * When a result menu's choices may appear, by completion name: each calls `ready` once its
    * presentation has settled and returns a cancel, so a scene that leaves first never mounts them.
@@ -595,6 +604,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     ready();
     return () => {};
   });
+  // Visit shop appears only once every ledger row and the totals have been presented (#951).
+  resultCompletions.register("ledgerFinished", ({ services }, ready) =>
+    services.overlays.whenLedgerFinished(ready),
+  );
   /** Each result menu's live state, by its trait config. */
   const resultMenus = new WeakMap<
     object,
@@ -692,13 +705,6 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit(context) {
       context.services.overlays.hideMenu();
     },
-  });
-  behaviours.register("stageWonScreen", {
-    enter({ services }, { next }) {
-      const reward = services.run.stageReward();
-      if (reward) services.overlays.showStageWon(reward, next);
-    },
-    exit: ({ services }) => services.overlays.hideStageWon(),
   });
   behaviours.register("musicCue", {
     enter: ({ services }, { operations }) => services.audio.playCue(operations),
