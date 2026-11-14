@@ -5,6 +5,7 @@ import { GameRun } from "../game-run";
 import { dealerRegistry } from "../dealer";
 import { demoRunRules } from "../run-rules";
 import { standardDeck } from "../cards";
+import { createPassiveBlock, ordinaryPassives } from "../passives";
 
 const fixed = () => new Date("2026-11-14T00:00:00Z");
 
@@ -85,7 +86,10 @@ describe("debug snapshot (#987)", () => {
       version: "test",
       mode: () => "game",
       sceneStack: () => ["game"],
-      state: () => game.state,
+      state: () => ({
+        ...game.state,
+        passiveRack: [createPassiveBlock(ordinaryPassives()[0]!.id, "passive.1")],
+      }),
       titles: () => [{ text: "Poker Blocks", scale: 1 }],
       actions: () => ({ recording: false, entries: [] }),
     });
@@ -94,6 +98,7 @@ describe("debug snapshot (#987)", () => {
     expect(sections.titles).toEqual({ status: "ok", data: [{ text: "Poker Blocks", scale: 1 }] });
     expect(sections.scheduler).toEqual({ status: "unavailable" });
     expect(sections.model.status).toBe("ok");
+    expect(sections.passives.status).toBe("ok");
     expect(JSON.stringify(game.state)).toBe(before);
   });
 });

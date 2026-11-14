@@ -58,7 +58,8 @@ export function registerSnapshotProviders(
       sources.state().passiveRack.map((passive) => ({
         id: passive.id,
         definition: passive.definitionId,
-        traits: structuredClone(passive.traits),
+        // The bounded serializer replaces callbacks (an inspector's `inspect`) with a marker.
+        traits: passive.traits,
       })),
     ),
     registry.register("titles", () => sources.titles()),

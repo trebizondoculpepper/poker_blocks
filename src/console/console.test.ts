@@ -54,7 +54,7 @@ describe("debug snapshot (#987)", () => {
   });
   it("prints the snapshot and reports a copy", async () => {
     const { printed, calls } = await run(true);
-    expect(printed[0]).toBe("{");
+    expect(printed).toEqual([JSON.stringify(snapshot())]);
     expect(calls).toContain("output: snapshot copied to the clipboard");
   });
   it("says to select the text when the clipboard refuses", async () => {

@@ -26,13 +26,15 @@ export function debugSnapshotCommand(
     usage: "",
     help: "print read-only diagnostics and copy them to the clipboard (#987)",
     run(host) {
-      const text = JSON.stringify(snapshot(), null, 2);
+      // One line, so the console's screen limit can never cut off the start of the report,
+      // and the whole of it stays selectable if the clipboard refuses.
+      const text = JSON.stringify(snapshot());
       void copyText(text).then((copied) =>
         copied
           ? host.say("snapshot copied to the clipboard", "output")
           : host.say("could not copy: select the snapshot text above instead", "error"),
       );
-      return text.split("\n");
+      return text;
     },
   };
 }
