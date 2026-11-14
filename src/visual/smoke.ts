@@ -8,8 +8,11 @@
  *   sideways that never slows the rise. No fluid simulation.
  * - A puff grows from `size` toward twice that and fades over `lifetime`, at most `opacity`.
  * - A fixed pool recycles the oldest puff. Reduced motion emits nothing new.
+ * - A **burst** (`createSmokeBurst`, #510) is the same puffs from one world point for a bounded
+ *   time: an explosion's smoke, rather than a block's ongoing effect.
  */
 import * as THREE from "three";
+import { unitsToMs } from "../visual-events/scheduler";
 import {
   blockEffects,
   createParticles,
@@ -35,9 +38,11 @@ export type SmokeConfig = {
   opacity: number;
 };
 
-/** A smoke emitter: its own bounded pool, geometry and material. */
-export function createSmoke(raw: AppearanceEffect, { random, size }: BlockEffectContext) {
-  const config = raw as unknown as SmokeConfig & AppearanceEffect;
+/**
+ * The shared emitter: a bounded pool of puffs, emitting from `origin` each step it is given one
+ * and only ageing what it has emitted when it is given none.
+ */
+function smokeEmitter(config: SmokeConfig, { random, size }: BlockEffectContext) {
   const capacity = Math.ceil(config.frequency * config.lifetime) + 2;
   const { points, positions, sizes, alphas, commit, dispose } = createParticles(
     capacity,
@@ -56,14 +61,12 @@ export function createSmoke(raw: AppearanceEffect, { random, size }: BlockEffect
 
   let owed = 0;
   let next = 0;
-  const centre = new THREE.Vector3();
 
   return {
     object: points,
-    update(delta: number, block: THREE.Object3D, reducedMotion: boolean) {
-      if (!reducedMotion) {
+    step(delta: number, origin: THREE.Vector3 | null): void {
+      if (origin) {
         owed += config.frequency * delta;
-        block.getWorldPosition(centre);
         while (owed >= 1) {
           owed -= 1;
           const p = puffs[next]!;
@@ -71,7 +74,7 @@ export function createSmoke(raw: AppearanceEffect, { random, size }: BlockEffect
           // puffs emitted in one frame have their own ages rather than clumping.
           p.age = Math.min(delta, owed / config.frequency);
           p.born = true;
-          p.origin.copy(centre);
+          p.origin.copy(origin);
           p.speed = config.rise * (0.8 + random() * 0.4);
           p.risen = p.speed * p.age;
           p.phases = [random() * Math.PI * 2, random() * Math.PI * 2];
@@ -101,6 +104,58 @@ export function createSmoke(raw: AppearanceEffect, { random, size }: BlockEffect
       commit();
     },
     dispose,
+  };
+}
+
+/** A smoke emitter on a block: its own bounded pool, geometry and material. */
+export function createSmoke(raw: AppearanceEffect, context: BlockEffectContext) {
+  const emitter = smokeEmitter(raw as unknown as SmokeConfig, context);
+  const centre = new THREE.Vector3();
+  return {
+    object: emitter.object,
+    update(delta: number, block: THREE.Object3D, reducedMotion: boolean) {
+      emitter.step(delta, reducedMotion ? null : block.getWorldPosition(centre));
+    },
+    dispose: emitter.dispose,
+  };
+}
+
+/**
+ * A smoke burst (#510): the same puffs, emitted from one point for `emitUnits` game-time units
+ * (1/15 s, doc/game-architecture.md, "Visual-event scheduler and game-time units"). The puffs'
+ * own `lifetime` stays in seconds, as every smoke look's does.
+ */
+export type SmokeBurstConfig = SmokeConfig & { emitUnits: number };
+
+/**
+ * A finite puff of smoke at a world point (#510): it emits for `emitUnits`, then lets its puffs
+ * rise and thin out, and reports it has finished once the last is gone (at most the emission
+ * plus `lifetime` after it began). Its owner advances it from the shared presentation clock. Under reduced motion it emits nothing and finishes at once. Its
+ * owner adds `object` to the scene and calls `dispose` once it has finished or is cancelled.
+ */
+export function createSmokeBurst(
+  config: SmokeBurstConfig,
+  context: BlockEffectContext,
+  at: THREE.Vector3,
+) {
+  const emitter = smokeEmitter(config, context);
+  const origin = at.clone();
+  const emitSeconds = unitsToMs(config.emitUnits) / 1000;
+  let elapsed = 0;
+  return {
+    object: emitter.object,
+    /** Advance by `delta` seconds; false once every puff has gone. */
+    update(delta: number, reducedMotion: boolean): boolean {
+      const emitting = !reducedMotion && elapsed < emitSeconds;
+      if (reducedMotion && elapsed === 0) elapsed = emitSeconds + config.lifetime;
+      // Emit only within the burst: its last step stops at `emitSeconds`.
+      const emitFor = emitting ? Math.min(delta, emitSeconds - elapsed) : 0;
+      if (emitFor > 0) emitter.step(emitFor, origin);
+      emitter.step(delta - emitFor, null);
+      elapsed += delta;
+      return elapsed < emitSeconds + config.lifetime;
+    },
+    dispose: emitter.dispose,
   };
 }
 

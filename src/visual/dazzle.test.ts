@@ -64,4 +64,28 @@ describe("dazzle (#493)", () => {
     expect(inView(project(1))).toBe(false);
     expect(inView(project(-80))).toBe(false);
   });
+
+  it("pops between a configured least and most circles: three to six for an explosion (#510)", () => {
+    const range = { minCircles: 3, circles: 6, spread: 0.12 };
+    expect(popPattern(range, 1, sequence([0]))).toHaveLength(3);
+    expect(popPattern(range, 1, sequence([0.99, 0.5]))).toHaveLength(6);
+    for (let k = 0; k < 20; k++) {
+      const count = popPattern(range, 1, sequence([k / 20, 0.5])).length;
+      expect(count).toBeGreaterThanOrEqual(3);
+      expect(count).toBeLessThanOrEqual(6);
+    }
+    // A least above the most is held to the most; a least under one is one.
+    expect(popPattern({ minCircles: 9, circles: 4, spread: 0.1 }, 1, sequence([0]))).toHaveLength(
+      4,
+    );
+    expect(popPattern({ minCircles: 0, circles: 4, spread: 0.1 }, 1, sequence([0]))).toHaveLength(
+      1,
+    );
+  });
+
+  it("keeps its earlier look by default: one to four white circles", () => {
+    expect(defaultDazzle.minCircles ?? 1).toBe(1);
+    expect(defaultDazzle.circles).toBe(4);
+    expect(defaultDazzle.colours.centre).toBe("#ffffff");
+  });
 });
