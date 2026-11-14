@@ -105,15 +105,17 @@ export function createScoreNarration(
 
   const nowUnits = () => scheduler.nowMs / unitMs;
 
-  function next(lastLines: number): void {
+  /** When the last scored line's tint has settled, in units: empty plays never shorten it. */
+  let settledAt = 0;
+
+  function next(): void {
     const head = waiting[0];
     // The next committed play isn't ready yet: everything after it waits, and so does the outcome.
     if (head && !head.play) return;
     if (head?.play) {
       waiting.shift();
       start(head.play);
-    } else if (reached)
-      announce(reached, lastLines > 0 ? Math.max(0, timing.settle - timing.lineStep) : 0);
+    } else if (reached) announce(reached, Math.max(0, settledAt - nowUnits()));
   }
 
   function start({ lines, endpoint }: NarratedPlay): void {
@@ -136,15 +138,16 @@ export function createScoreNarration(
     if (!admitted.accepted) {
       scheduler.cancel(scope);
       sink.summarise(endpoint);
-      next(0);
+      next();
       return;
     }
+    if (lines.length) settledAt = at + (lines.length - 1) * timing.lineStep + timing.settle;
     current = scope;
     scheduler.seal(scope);
     scheduler.observe(scope, () => {
       if (mine !== epoch || current !== scope) return;
       current = null;
-      next(lines.length);
+      next();
     });
   }
 
@@ -182,7 +185,7 @@ export function createScoreNarration(
   function release(slot: NarrationSlot, play: NarratedPlay): void {
     if (slot.epoch !== epoch || slot.play) return;
     slot.play = { lines: [...play.lines], endpoint: play.endpoint };
-    if (!current) next(0);
+    if (!current) next();
   }
 
   return {

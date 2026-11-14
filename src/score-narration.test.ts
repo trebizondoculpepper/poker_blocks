@@ -208,4 +208,13 @@ describe("score narration on the visual-event scheduler (#547)", () => {
     expect(narration.presenting).toBe(false);
     expect(idles()).toBe(1);
   });
+
+  it("keeps the last tint's settle time across an empty play (#800 review)", () => {
+    const { log, narration, advance } = narrating();
+    narration.narrate(play([line("a", 1)]));
+    narration.narrate(play([]));
+    advance(1000);
+    // Line a was due at 0 ms; its tint settles 6 units (400 ms) later, empty play or not.
+    expect(log).toEqual(["10:line a", "400:outcome"]);
+  });
 });
