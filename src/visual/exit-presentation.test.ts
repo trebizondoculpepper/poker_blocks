@@ -238,4 +238,15 @@ describe("block exits on the shared scheduler (#549)", () => {
     expect(v.released).toHaveBeenCalledOnce();
     expect(exits.active).toBe(0);
   });
+
+  it("still releases the visual, and fails its scope, when an exit can't start", () => {
+    const { scheduler, exits, advance } = shared();
+    const v = visual();
+    exits.start(snapshot, v, { steps: [{ effects: [{ effect: "no-such-effect" }] }] });
+    advance(16);
+    expect(v.root.parent).toBeNull();
+    expect(v.released).toHaveBeenCalledOnce();
+    expect(exits.active).toBe(0);
+    expect(scheduler.counts.active).toBe(0);
+  });
 });

@@ -210,7 +210,15 @@ visualHandlers.register("block.exit", (payload, context): "done" | EffectHandle 
   const { id } = payload as { id: number };
   const pending = (context.services as BlockExitServices).blockExits.take(id);
   if (!pending) return "done";
-  const exit = new Exit(pending.snapshot, pending.visual, pending.sequence, pending.reducedMotion);
+  let exit: Exit;
+  try {
+    exit = new Exit(pending.snapshot, pending.visual, pending.sequence, pending.reducedMotion);
+  } catch (error) {
+    // An exit that can't start (an unknown effect) still lets its block go, then fails its scope.
+    pending.visual.root.removeFromParent();
+    pending.visual.release();
+    throw error;
+  }
   if (exit.done) return "done";
   let last = context.scheduledAtMs;
   return {

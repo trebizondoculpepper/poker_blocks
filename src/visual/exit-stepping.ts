@@ -5,13 +5,9 @@
  * for code that has no frame loop. Exits are started at once, as they would be on the next frame.
  */
 import { createVisualScheduler } from "../visual-events/scheduler";
-import {
-  createExitPresenter,
-  type ExitPresenter,
-  type ExitSequence,
-  type ExitSnapshot,
-  type ExitVisual,
-} from "./exit-presentation";
+// The entry point that registers every exit effect, so stepped exits play them (#1035 review).
+import { createExitPresenter } from "./exit-effects";
+import type { ExitPresenter, ExitSequence, ExitSnapshot, ExitVisual } from "./exit-presentation";
 
 export function createSteppedExits(reducedMotion: () => boolean = () => false) {
   let presenter: ExitPresenter | null = null;
