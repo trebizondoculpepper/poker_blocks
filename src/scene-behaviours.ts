@@ -107,6 +107,10 @@ export type SceneHost = {
       show(config: SceneTraits["devCrystalComparison"]): void;
       hide(): void;
     };
+    devFlameBench: {
+      show(config: SceneTraits["devFlameBench"]): void;
+      hide(): void;
+    };
     devEffectAudition: { show(config: SceneTraits["devEffectAudition"]): void; hide(): void };
     devWordCubeRoom: {
       show(config: SceneTraits["devWordCubeRoom"]): void;
@@ -542,6 +546,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("devCrystalComparison", {
     enter: ({ services }, config) => services.devCrystalComparison.show(config),
     exit: ({ services }) => services.devCrystalComparison.hide(),
+  });
+  behaviours.register("devFlameBench", {
+    enter: ({ services }, config) => services.devFlameBench.show(config),
+    exit: ({ services }) => services.devFlameBench.hide(),
   });
   // The smoke/dust audition room's note (#466), a development-only service.
   behaviours.register("devEffectAudition", {

@@ -55,6 +55,7 @@ import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
 import type { ProfilerRoom } from "./tools/profiler/room";
 import { createRenderGate } from "./render-gate";
 import type { CrystalComparisonRoom } from "./tools/crystal-comparison/room";
+import type { FlameBenchRoom } from "./tools/flame-bench/room";
 import { createBinView, type BinView } from "./bin-view";
 import { createSelectionBadge, type SelectionBadge } from "./selection-badge";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
@@ -172,6 +173,7 @@ type TraitContext = {
     devContainedProof: ShopBalanceEditor;
     devProfiler: ProfilerRoom;
     devCrystalComparison: CrystalComparisonRoom;
+    devFlameBench: FlameBenchRoom;
     devWordCubeRoom: WordCubeRoom;
     devEffectAudition: { show(config: { hint: string }): void; hide(): void; dispose(): void };
     dialogs: SceneHost["services"]["dialogs"];
@@ -214,6 +216,11 @@ const devProfiler: ProfilerRoom = import.meta.env.DEV
     };
 const devCrystalComparison: CrystalComparisonRoom = import.meta.env.DEV
   ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host, {
+      reducedMotion: () => run.reducedMotion,
+    })
+  : { show() {}, hide() {}, dispose() {} };
+const devFlameBench: FlameBenchRoom = import.meta.env.DEV
+  ? (await import("./tools/flame-bench/room")).createFlameBenchRoom(host, {
       reducedMotion: () => run.reducedMotion,
     })
   : { show() {}, hide() {}, dispose() {} };
@@ -320,6 +327,7 @@ const traitContext: TraitContext = {
     devContainedProof,
     devProfiler,
     devCrystalComparison,
+    devFlameBench,
     devWordCubeRoom,
     devEffectAudition,
     // Every dialog a scene composes goes to the game's presenter and, in development, to the
@@ -589,6 +597,7 @@ if (import.meta.hot) {
     devContainedProof.dispose();
     devProfiler.dispose();
     devCrystalComparison.dispose();
+    devFlameBench.dispose();
     devWordCubeRoom.dispose();
     devEffectAudition.dispose();
     devDialogRoom.dispose();

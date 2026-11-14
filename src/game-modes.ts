@@ -135,6 +135,8 @@ export type SceneTraits = {
   };
   /** Developer tool: switch a fixed crystal collection between optics backends (dev17, #524). */
   devCrystalComparison: DevCrystalComparisonConfig;
+  /** Developer tool: tunable flame previews side by side (dev21, #1025). */
+  devFlameBench: DevFlameBenchConfig;
   /**
    * Developer tool: the menu block audition room (dev13, #303). Each item becomes a word cube
    * made by the real creator; activating one shows its action rather than running it.
@@ -384,6 +386,14 @@ export type DevCrystalComparisonConfig = {
   seed: number;
 };
 
+export type DevFlameBenchConfig = {
+  backTo: string;
+  /** The materials shown side by side, first on the left; each needs tunable contents. */
+  previews: readonly string[];
+  /** The standard-deck card every preview wears, so only the material differs. */
+  card: number;
+};
+
 export type DevDialogRoomConfig = {
   backTo: string;
   /** Seconds each dialog shows before the next. */
@@ -596,6 +606,7 @@ export const sceneDefinitions = [
         { name: "contained-proof", traits: {} },
         { name: "profiler", traits: {} },
         { name: "crystal-comparison", traits: {} },
+        { name: "flame-bench", traits: {} },
         { name: "menu-blocks", traits: {} },
         { name: "dialogs", traits: {} },
         {
@@ -1433,6 +1444,33 @@ const gameModes: GameMode[] = [
             save: { key: "poker-blocks.dev20-run" },
             console: { name: "dev20" },
             restartable: { param: "restart" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // The Flame Bench (#1025, #1008): the regular and aggressive flames and the accepted
+          // lantern composition side by side, each tuned on its own.
+          id: "dev21",
+          scenes: composeScenes("dev21", [
+            {
+              scenes: ["flame-bench"],
+              traits: {
+                devFlameBench: {
+                  backTo: "game",
+                  previews: ["fire", "aggressiveFlame", "flameLantern"],
+                  card: 0,
+                },
+              },
+            },
+          ]),
+          startScene: "flame-bench",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [],
+          traits: {
+            onLoad: "scene",
+            save: { key: "poker-blocks.dev21-run" },
+            console: { name: "dev21" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,

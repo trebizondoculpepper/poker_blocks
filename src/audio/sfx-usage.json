@@ -81,13 +81,14 @@
     "files": {}
   },
   "action.denied": {
-    "uses": 11,
+    "uses": 12,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 2,
       "game-run-controller.ts": 1,
       "purchase-refusals.ts": 1,
       "scene-traits/dev-bench-panel.ts": 2,
       "table-input.ts": 4,
+      "tools/flame-bench/room.ts": 1,
       "traits/menu-action.ts": 1
     }
   },
@@ -236,7 +237,7 @@
     }
   },
   "ui.click": {
-    "uses": 43,
+    "uses": 49,
     "files": {
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 3,
@@ -249,6 +250,7 @@
       "tools/contained-proof/room.ts": 4,
       "tools/crystal-comparison/room.ts": 4,
       "tools/dialog-room.ts": 1,
+      "tools/flame-bench/room.ts": 6,
       "tools/object-browser.ts": 1,
       "tools/profiler/room.ts": 5,
       "tools/shop-balance-editor.ts": 6,
@@ -287,10 +289,11 @@
     }
   },
   "view.rotate": {
-    "uses": 3,
+    "uses": 4,
     "files": {
       "game-modes.ts": 1,
       "tools/crystal-comparison/room.ts": 1,
+      "tools/flame-bench/room.ts": 1,
       "tools/object-browser.ts": 1
     }
   },
