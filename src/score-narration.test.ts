@@ -321,3 +321,36 @@ describe("events shown alongside narrated lines (#919)", () => {
     expect(scheduler.counts.active).toBe(0);
   });
 });
+
+describe("events shown alongside an action that narrates no score (#920)", () => {
+  const events = (...labels: string[]) =>
+    labels.map((label) => ({ handler: "test.narration.beside", payload: label }));
+
+  it("starts them at once, in committed order, without waiting for a play still narrating", () => {
+    besideLog.length = 0;
+    const { log, narration, advance, scheduler } = narrating();
+    narration.narrate(play([line("a", 1), line("b", 1), line("c", 1)]));
+    advance(20);
+    const at = Math.round(scheduler.nowMs);
+    narration.alongside(events("d1", "d1", "d2"));
+    advance(10);
+    // Repeated activations of one item each keep their own event.
+    expect(besideLog).toEqual([`${at}:d1`, `${at}:d1`, `${at}:d2`]);
+    advance(3000);
+    // The play's narration is timed as before, and doesn't wait for them.
+    expect(log).toEqual(["10:line a", "140:line b", "270:line c", "670:outcome"]);
+    expect(narration.presenting).toBe(false);
+  });
+
+  it("does nothing for none, and cancels them on a reset", () => {
+    besideCancels = 0;
+    const { narration, advance, scheduler } = narrating();
+    narration.alongside([]);
+    expect(scheduler.counts.scopes).toBe(0);
+    narration.alongside(events("d1"));
+    advance(100);
+    narration.reset();
+    expect(besideCancels).toBe(1);
+    expect(scheduler.counts.active).toBe(0);
+  });
+});

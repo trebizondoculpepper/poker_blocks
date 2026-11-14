@@ -200,8 +200,9 @@ export function createPlayPresenter(options: {
   /** These rule sources' rules just fired, as their outcome is shown (#81). */
   activated(sourceIds: readonly string[]): void;
   /**
-   * What the activation's host shows alongside its scored line (#919), captured as the play
-   * commits: an item's activation label, or null when the host shows nothing for it.
+   * What the activation's host shows alongside it, captured as its action commits: beside its
+   * scored line (#919), or as a discard's rules fire (#920). An item's activation label, or null
+   * when the host shows nothing for it.
    */
   alongside?(activation: RuleActivation): AlongsideEvent | null;
   /** Draw replacements into the model now, unshown (#775); returns them for a later reveal. */
@@ -508,11 +509,14 @@ export function createPlayPresenter(options: {
     discard(sources) {
       const session = game();
       if (!sources.length || !session.discard(sources.map(({ block }) => block.id))) return false;
+      // What each activation's host shows alongside it, captured as the discard commits, before
+      // the rack redraws (a discard can grant or use up an item) (#920).
+      const activations = session.lastDiscardActivations;
+      const alongside = activations.flatMap((activation) => options.alongside?.(activation) ?? []);
       hand.settle(sources);
       options.rackChanged();
-      options.activated([
-        ...new Set(session.lastDiscardActivations.map(({ sourceId }) => sourceId)),
-      ]);
+      options.activated([...new Set(activations.map(({ sourceId }) => sourceId))]);
+      narration.alongside(alongside);
       hand.remove(sources);
       hand.sync(session.state.hand);
       options.deselect(sources.map(({ block }) => block.id));
