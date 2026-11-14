@@ -8,7 +8,7 @@ import { pokerIdentity } from "../../cards";
 import * as THREE from "three";
 import type { CardBlock } from "../../cards";
 import type { MaterialDefinition } from "../../materials";
-import { createBlockAppearance } from "../../visual/block-appearance";
+import { createBlockAppearance, disposeMaterialTextures } from "../../visual/block-appearance";
 import { cardFaceArt } from "../../visual/face-art";
 import { cosmeticRandom, createBlockEffects } from "../../visual/block-effects";
 import type { ProfiledObject } from "./cases";
@@ -49,17 +49,21 @@ export function tableBlock(card: CardBlock, definition: MaterialDefinition): Pro
         effect.dispose();
       }
       appearance.geometry.dispose();
-      appearance.textures.forEach((texture) => texture.dispose());
+      // A texture shared with other blocks stays for them (#662).
+      appearance.textures.forEach((texture) => {
+        if (!texture.userData.shared) texture.dispose();
+      });
       new Set([...appearance.materials, ...(appearance.boardMaterials ?? [])]).forEach((material) =>
         material.dispose(),
       );
+      // An extra's own texture copy is freed; a shared one stays for its other users (#662).
+      disposeMaterialTextures(
+        (appearance.extras ?? []).flatMap((extra) =>
+          ([] as THREE.Material[]).concat(extra.material),
+        ),
+      );
       for (const extra of appearance.extras ?? [])
-        for (const material of ([] as THREE.Material[]).concat(extra.material)) {
-          // An extra's own texture copy is freed; a shared one (marked) stays for its other users.
-          const map = (material as THREE.MeshStandardMaterial).map;
-          if (map && !map.userData.shared) map.dispose();
-          material.dispose();
-        }
+        for (const material of ([] as THREE.Material[]).concat(extra.material)) material.dispose();
       edges.geometry.dispose();
       (edges.material as THREE.LineBasicMaterial).dispose();
     },
