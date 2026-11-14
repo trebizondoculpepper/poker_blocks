@@ -456,3 +456,25 @@ describe("a contained block tells its contents from its shell (#672 review)", ()
     water.extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
   });
 });
+
+describe("container and contents shown independently (#1024)", () => {
+  it("hides the faces and shell parts without hiding the contents, and back", async () => {
+    const { setContainedVisibility, containedParts } = await import("./contained");
+    const { faces, extras } = build("fire");
+    const block = new THREE.Mesh(geometry, [...faces]);
+    block.add(...extras);
+    const { shell, contents } = containedParts(block);
+    expect(contents.length).toBeGreaterThan(0);
+    expect(shell.length).toBeGreaterThan(0);
+    setContainedVisibility(block, { container: false, contents: true });
+    expect(faces.every((material) => !material.visible)).toBe(true);
+    expect(shell.every((part) => !part.visible)).toBe(true);
+    expect(contents.every((part) => part.visible)).toBe(true);
+    setContainedVisibility(block, { container: true, contents: false });
+    expect(faces.every((material) => material.visible)).toBe(true);
+    expect(contents.every((part) => !part.visible)).toBe(true);
+    // Another block of the same material is untouched: its materials are its own.
+    expect(build("fire").faces.every((material) => material.visible)).toBe(true);
+    extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+  });
+});

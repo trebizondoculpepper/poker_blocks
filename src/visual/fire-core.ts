@@ -10,6 +10,8 @@
 import * as THREE from "three";
 import { additiveLight } from "./additive-light";
 import { containedContents } from "./contained";
+import { tunableEffects } from "./tunable-effects";
+import type { ParameterSchema } from "../parameter-schema";
 
 const vertexShader = /* glsl */ `
   varying vec3 vLocal;
@@ -258,4 +260,59 @@ containedContents.register("flame", (boundary, raw) => {
   for (const [key, rgb] of Object.entries(palette))
     (uniforms[key]!.value as THREE.Color).setRGB(...rgb);
   return { meshes: [core], capabilities: {} };
+});
+
+/** The flame's complete defaults: the regular fire block's own flame (#743, #744, #745). */
+export const flameDefaults: Required<Omit<FlameConfig, "palette">> & {
+  palette: typeof flamePalette;
+} = {
+  scale: 1,
+  brightness: 1,
+  baseOffset: flameBaseOffset,
+  palette: flamePalette,
+  height: 1,
+  speed: 1,
+  haze: 1,
+  extinction: flameExtinction,
+};
+
+const number = (
+  label: string,
+  path: (string | number)[],
+  min: number,
+  max: number,
+  step = 0.01,
+): ParameterSchema => ({ kind: "number", label, path, min, max, step });
+
+/** Each palette colour's red, green and blue, 0 to 1 (the shader's own colour range). */
+const paletteChannels = (key: keyof typeof flamePalette, label: string) =>
+  Object.fromEntries(
+    (["red", "green", "blue"] as const).map((channel, index) => [
+      `${key}${channel[0]!.toUpperCase()}${channel.slice(1)}`,
+      number(`${label} ${channel}`, ["palette", key, index], 0, 1),
+    ]),
+  );
+
+/**
+ * The flame's tunable parameters (#1024, doc/audition-followups.md, "Flame Bench"). Ranges come
+ * from what the handler above accepts, not approved tuning: size up to the interior (the handler
+ * caps the box at 1 / 0.96), height up to the headroom at the lowest base ((1 + 1) / 1.35; a
+ * higher base trims it further), haze 0 to 1 (clamped), extinction never negative. Brightness and
+ * speed have no limit in the handler; their ranges bracket the aggressive flame's 1.5 and 1.6.
+ * Smoke is the haze edge: the flame has no separate smoke to control.
+ */
+tunableEffects.register("flame", {
+  defaults: flameDefaults,
+  parameters: {
+    scale: number("Size", ["scale"], 0.25, 1 / 0.96),
+    height: number("Height", ["height"], 0.25, 2 / 1.35),
+    baseOffset: number("Base below centre", ["baseOffset"], 0, 1),
+    brightness: number("Brightness", ["brightness"], 0, 3, 0.05),
+    speed: number("Motion speed", ["speed"], 0, 3, 0.05),
+    haze: number("Smoky edge", ["haze"], 0, 1),
+    extinction: number("Absorption", ["extinction"], 0, 4, 0.05),
+    ...paletteChannels("ember", "Edge colour"),
+    ...paletteChannels("mid", "Middle colour"),
+    ...paletteChannels("core", "Core colour"),
+  },
 });

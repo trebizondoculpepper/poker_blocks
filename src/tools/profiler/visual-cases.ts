@@ -19,6 +19,7 @@ import {
   materialDefinitions,
   type MaterialDefinition,
 } from "../../materials";
+import { containedParts } from "../../visual/contained";
 import { createSteppedExits } from "../../visual/exit-stepping";
 import { resolvedExit } from "../../visual/exit-defaults";
 import { createWordCube } from "../../word-cube";
@@ -86,8 +87,8 @@ function repeatingExit(definition: MaterialDefinition, seed: number): ProfiledOb
         root: mesh,
         // The composition's own split: what it marked as contents fades; everything else of the
         // block (its faces and the shell's inner layers and gloss) is shell.
-        shell: [mesh, ...mesh.children.filter((child) => !child.userData.containedContents)],
-        contents: mesh.children.filter((child) => child.userData.containedContents),
+        shell: [mesh, ...containedParts(mesh).shell],
+        contents: containedParts(mesh).contents,
         release: () => block.dispose(),
       },
       sequence,
