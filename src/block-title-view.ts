@@ -342,6 +342,9 @@ export function createBlockTitles(parent: () => HTMLElement, floor: DanceFloor):
     frame() {
       views.forEach((view) => view.frame());
     },
+    mounted() {
+      return [...views].map(({ config }) => ({ text: config.text, scale: config.scale }));
+    },
     dispose() {
       [...views].forEach((view) => view.dispose());
     },

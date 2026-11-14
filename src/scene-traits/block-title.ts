@@ -65,6 +65,8 @@ export type BlockTitles = {
   retune(tuning: BlockTitleTuning): void;
   show(config: BlockTitleConfig): () => void;
   frame(): void;
+  /** The titles mounted now, for the debug snapshot (#987): read-only, plain data. */
+  mounted(): { text: string; scale: number }[];
   dispose(): void;
 };
 
