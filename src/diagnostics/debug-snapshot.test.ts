@@ -91,12 +91,25 @@ describe("debug snapshot (#987)", () => {
         passiveRack: [createPassiveBlock(ordinaryPassives()[0]!.id, "passive.1")],
       }),
       titles: () => [{ text: "Poker Blocks", scale: 1 }],
-      actions: () => ({ recording: false, entries: [] }),
+      actions: () => ({
+        recording: true,
+        entries: Array.from({ length: 75 }, (_, i) => ({
+          at: i,
+          frame: i,
+          source: "input",
+          event: `e${i}`,
+          detail: "",
+        })),
+      }),
     });
-    const { sections } = registry.snapshot();
+    const snapshot = registry.snapshot();
+    const { sections } = snapshot;
     expect(sections.scenes).toEqual({ status: "ok", data: { stack: ["game"] } });
     expect(sections.titles).toEqual({ status: "ok", data: [{ text: "Poker Blocks", scale: 1 }] });
     expect(sections.scheduler).toEqual({ status: "unavailable" });
+    const actions = sections.actions as { data: { newestFirst: { event: string }[] } };
+    expect(actions.data.newestFirst[0]!.event).toBe("e74");
+    expect(snapshot.truncated).toContain("actions.newestFirst: 75 items");
     expect(sections.model.status).toBe("ok");
     expect(sections.passives.status).toBe("ok");
     expect(JSON.stringify(game.state)).toBe(before);

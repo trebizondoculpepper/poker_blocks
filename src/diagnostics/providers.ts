@@ -65,8 +65,8 @@ export function registerSnapshotProviders(
     registry.register("titles", () => sources.titles()),
     registry.register("actions", () => {
       const { recording, entries } = sources.actions();
-      // Newest last; the bound keeps the most recent if the log is long.
-      return { recording, entries: entries.slice(-50) };
+      // Newest first: the bounded serializer keeps the most recent and reports how many it cut.
+      return { recording, newestFirst: [...entries].reverse() };
     }),
   ];
   return () => leave.forEach((unregister) => unregister());
