@@ -139,6 +139,9 @@ export function createEffectTuning(preset: EffectPreset): EffectTuning {
 export const serializeEffectSettings = (settings: EffectSettings): string =>
   JSON.stringify(settings, null, 2);
 
+/** A pasted value as text for a diagnostic, never through its own (untrusted) conversion. */
+const describe = (value: unknown): string => JSON.stringify(value) ?? typeof value;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -157,11 +160,11 @@ export function parseEffectSettings(
     return fail("not JSON");
   }
   if (!isRecord(raw)) return fail("not a settings record");
-  if (raw.format !== effectSettingsFormat) return fail(`unknown format ${String(raw.format)}`);
+  if (raw.format !== effectSettingsFormat) return fail(`unknown format ${describe(raw.format)}`);
   if (raw.version !== effectSettingsVersion)
-    return fail(`unsupported version ${String(raw.version)}`);
+    return fail(`unsupported version ${describe(raw.version)}`);
   if (typeof raw.effect !== "string" || !tunableEffects.has(raw.effect))
-    return fail(`unknown effect ${String(raw.effect)}`);
+    return fail(`unknown effect ${describe(raw.effect)}`);
   if (typeof raw.preset !== "string") return fail("missing preset handle");
   if (!isRecord(raw.parameters)) return fail("missing parameters");
   const problems = parameterProblems(tunableEffects.get(raw.effect).parameters, raw.parameters);

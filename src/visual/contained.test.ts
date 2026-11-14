@@ -466,15 +466,16 @@ describe("container and contents shown independently (#1024)", () => {
     const { shell, contents } = containedParts(block);
     expect(contents.length).toBeGreaterThan(0);
     expect(shell.length).toBeGreaterThan(0);
+    const other = build("fire");
     setContainedVisibility(block, { container: false, contents: true });
+    // Another block of the same material is untouched: its materials are its own.
+    expect(other.faces.every((material) => material.visible)).toBe(true);
     expect(faces.every((material) => !material.visible)).toBe(true);
     expect(shell.every((part) => !part.visible)).toBe(true);
     expect(contents.every((part) => part.visible)).toBe(true);
     setContainedVisibility(block, { container: true, contents: false });
     expect(faces.every((material) => material.visible)).toBe(true);
     expect(contents.every((part) => !part.visible)).toBe(true);
-    // Another block of the same material is untouched: its materials are its own.
-    expect(build("fire").faces.every((material) => material.visible)).toBe(true);
-    extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+    [...extras, ...other.extras].forEach((mesh) => (mesh.material as THREE.Material).dispose());
   });
 });

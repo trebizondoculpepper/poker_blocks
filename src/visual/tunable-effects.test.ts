@@ -107,6 +107,8 @@ describe("tunable effects (#1024)", () => {
     (a.config() as { speed: number }).speed = 3;
     expect(a.values().speed).toBe(0.2);
     expect(flameDefaults.palette.ember[0]).toBe(0.5);
+    expect(Object.isFrozen(flameDefaults.palette.ember)).toBe(true);
+    expect(Object.isFrozen(flameDefaults)).toBe(true);
   });
 
   it("refuses a preset outside its descriptors rather than clamping it silently", () => {
@@ -161,6 +163,7 @@ describe("Copy Settings (#1024)", () => {
     expect(parseEffectSettings(text({ format: "other" })).problems).toHaveLength(1);
     expect(parseEffectSettings(text({ version: 2 })).problems).toEqual(["unsupported version 2"]);
     expect(parseEffectSettings(text({ effect: "nothing" })).problems).toHaveLength(1);
+    expect(parseEffectSettings('{"format":{"toString":null}}').problems).toHaveLength(1);
     const unknown = parseEffectSettings(text({ parameters: { ...good.parameters, glow: 1 } }));
     expect(unknown).toEqual({ settings: null, problems: ['unknown parameter "glow"'] });
     expect(parseEffectSettings(text({ parameters: { scale: 5 } })).problems).toHaveLength(1);

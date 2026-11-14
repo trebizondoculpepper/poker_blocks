@@ -263,18 +263,23 @@ containedContents.register("flame", (boundary, raw) => {
 });
 
 /** The flame's complete defaults: the regular fire block's own flame (#743, #744, #745). */
-export const flameDefaults: Required<Omit<FlameConfig, "palette">> & {
-  palette: typeof flamePalette;
-} = {
+export const flameDefaults: Readonly<Required<Omit<FlameConfig, "palette">>> & {
+  readonly palette: Readonly<typeof flamePalette>;
+} = Object.freeze({
   scale: 1,
   brightness: 1,
   baseOffset: flameBaseOffset,
-  palette: flamePalette,
+  // Its own frozen copy of the palette: changing the defaults can never change production.
+  palette: Object.freeze({
+    ember: Object.freeze([...flamePalette.ember]) as Rgb,
+    mid: Object.freeze([...flamePalette.mid]) as Rgb,
+    core: Object.freeze([...flamePalette.core]) as Rgb,
+  }),
   height: 1,
   speed: 1,
   haze: 1,
   extinction: flameExtinction,
-};
+});
 
 const number = (
   label: string,
