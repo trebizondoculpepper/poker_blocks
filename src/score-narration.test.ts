@@ -164,4 +164,21 @@ describe("score narration on the visual-event scheduler (#547)", () => {
     scheduler.update(60_140, true);
     expect(log).toEqual(["10:line a", "150:line b"]);
   });
+
+  it("drops a failed play's remaining lines once its summary shows (#800 review)", () => {
+    const { log, endpoints, narration, advance, shown } = narrating({
+      limits: { maxEffectMs: 50 },
+    });
+    narration.narrate({
+      lines: [line("a", 1), line("b", 1), line("c", 1)],
+      endpoint: { score: 3, outcome: "playing" },
+    });
+    // One frame stalls past the effect limit while line a is active.
+    advance(10);
+    advance(500, 500);
+    advance(1000);
+    expect(endpoints).toEqual(["summary 3", "outcome 3 playing"]);
+    expect(log.filter((entry) => entry.includes("line"))).toEqual(["10:line a"]);
+    expect(shown()).toBe(1);
+  });
 });

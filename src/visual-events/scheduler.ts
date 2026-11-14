@@ -274,6 +274,11 @@ export function createVisualScheduler(
     if (scope.state !== "pending" || scope.cancelling || scope.generation !== generation) return;
     scope.failure ??= reason;
     runFallback(scope, reason);
+    // The summary replaces the scope's presentation: what had yet to start never does, so it
+    // cannot show its part a second time on top of the summary (#800 review).
+    if (scope.config.fallback)
+      for (const entry of Array.from(scope.events))
+        if (entry.state === "pending") finishEntry(entry);
   };
 
   /** Settle a scope once everything it owns has settled, then its parent may settle. */
