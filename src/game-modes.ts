@@ -660,6 +660,14 @@ export const sceneDefinitions = [
         },
       },
       shopStock: { source: "shop" },
+      // Laser guide to the dragged offer's preferred target, or a red X when it can't be
+      // bought (#924; doc/presentation-contracts.md, "Laser target-guide controller").
+      dropTargetGuide: {
+        provider: "shopOffers",
+        // One beam scale for every target, so the small BUY box's beams match the rack's.
+        accept: { shape: "rectangle", colour: 0x65f4dd, beamScale: 400 },
+        refuse: { shape: "cross", colour: 0xff3344, beamScale: 400 },
+      },
       // The deck counter opens the run's card inventory from the shop too (#472).
       deckPanel: { opens: "openDeck" },
       runInPlay: {},
