@@ -1,0 +1,96 @@
+/* The Flame Bench (dev21, src/tools/flame-bench/room.ts, #1025). */
+.flame-bench {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(220px, 1fr) minmax(0, 1fr);
+  background: #15110ef5;
+  color: #f4f0e8;
+  font:
+    14px system-ui,
+    sans-serif;
+  user-select: text;
+}
+.flame-bench[hidden] {
+  display: none;
+}
+.flame-bench a {
+  color: inherit;
+}
+.flame-bench-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #2a1f18;
+}
+.flame-bench-header h1 {
+  margin: 0;
+  font-size: 19px;
+}
+.flame-bench-view {
+  display: flex;
+  gap: 8px;
+}
+.flame-bench-stage {
+  position: relative;
+  min-height: 0;
+}
+.flame-bench-stage:focus-visible {
+  outline: 2px solid #f0b060;
+  outline-offset: -2px;
+}
+.flame-bench-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.flame-bench-panels {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(240px, 1fr);
+  overflow: auto;
+  border-top: 1px solid #ffffff1a;
+}
+.flame-bench-panel {
+  padding: 10px 14px;
+  border-right: 1px solid #ffffff1a;
+  min-width: 0;
+}
+.flame-bench-panel h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.flame-bench-panel fieldset {
+  margin: 0 0 8px;
+  border: 1px solid #ffffff26;
+}
+.flame-bench-parameters label {
+  display: grid;
+  grid-template-columns: 1fr;
+  margin: 2px 0 6px;
+}
+.flame-bench-parameters input[type="range"] {
+  width: calc(100% - 4em);
+  vertical-align: middle;
+}
+.flame-bench-actions {
+  display: flex;
+  gap: 8px;
+}
+.flame-bench-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font:
+    12px ui-monospace,
+    monospace;
+}
+@media (max-width: 720px) {
+  .flame-bench-panels {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+  }
+}
