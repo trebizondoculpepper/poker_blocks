@@ -9,6 +9,7 @@
  * sided die's 1-6, 2-5 and 3-4) without any die-specific code.
  */
 import * as THREE from "three";
+import type { PrepassReference } from "./visual/appearance-prepass";
 import { Registry } from "./core/registry";
 import type { PassivePalette } from "./passives";
 
@@ -255,6 +256,8 @@ export type PassiveVisual = {
    * attach them to the token mesh; `dispose` releases them.
    */
   extras?: readonly (THREE.Mesh | THREE.Points)[];
+  /** Passes its look needs before its host's render (#970): its block appearance's, if any. */
+  prepasses?: readonly PrepassReference[];
   dispose(): void;
 };
 

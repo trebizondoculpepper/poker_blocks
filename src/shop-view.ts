@@ -16,6 +16,7 @@ import { Registry } from "./core/registry";
 import type { CardBlock } from "./cards";
 import type { PassiveBlock } from "./passives";
 import { createBlockAppearance, disposeMaterialTextures } from "./visual/block-appearance";
+import { createPrepassContext, type PrepassReference } from "./visual/appearance-prepass";
 import { createMaterialise } from "./visual/materialise";
 import type { DragSource, Point } from "./drag-drop";
 import { returnToSource, stop as stopReturn, take } from "./return-to-source";
@@ -56,7 +57,12 @@ export type ShopView = {
   dispose(): void;
 };
 
-type OfferCube = { cube: THREE.Object3D; dispose(): void };
+type OfferCube = {
+  cube: THREE.Object3D;
+  /** Passes its look needs before the shop's render (#970). */
+  prepasses?: readonly PrepassReference[];
+  dispose(): void;
+};
 
 /** How the shop draws and names one kind of offer (#67); the rules are in src/offer-kinds.ts. */
 export type OfferView<Block extends OfferBlock> = {
@@ -132,6 +138,7 @@ function passiveCube(block: PassiveBlock): OfferCube {
   mesh.add(new THREE.LineSegments(visual.edges, edgeMaterial));
   return {
     cube: mesh,
+    prepasses: visual.prepasses,
     dispose: () => {
       visual.dispose();
       edgeMaterial.dispose();
@@ -158,6 +165,7 @@ function cardCube(block: CardBlock): OfferCube {
   for (const extra of appearance.extras ?? []) mesh.add(extra);
   return {
     cube: mesh,
+    prepasses: appearance.prepasses,
     dispose: () => {
       appearance.geometry.dispose();
       for (const texture of appearance.textures) texture.dispose();
@@ -273,6 +281,8 @@ export function createShopView(
   scene.add(keyLight);
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 50);
   camera.position.z = 15;
+  // The shop's own prepass context (#970): its renderer's targets, for the offers it shows.
+  const prepasses = createPrepassContext();
   const renderer = new THREE.WebGLRenderer({
     alpha: true,
     antialias: true,
@@ -330,8 +340,17 @@ export function createShopView(
     if (wasEntering) onEntranceDone();
   }
 
+  /** An offer's cube, holding its look's prepasses in the shop's context until disposed (#970). */
   function makeCube(offer: ShopOffer): { cube: THREE.Object3D; dispose(): void } {
-    return offerViews.get(offer.kind).cube(offer.block);
+    const made = offerViews.get(offer.kind).cube(offer.block);
+    const release = prepasses.require(made.prepasses ?? []);
+    return {
+      cube: made.cube,
+      dispose: () => {
+        release();
+        made.dispose();
+      },
+    };
   }
 
   const contains = (element: HTMLElement | null, x: number, y: number) => {
@@ -566,6 +585,14 @@ export function createShopView(
       sign.style.opacity = String(clamp01((landedAt - elapsed) / 350));
       if (elapsed >= landedAt) finishEntrance();
     }
+    prepasses.render({
+      renderer,
+      scene,
+      camera,
+      hide: scene,
+      delta: 0,
+      reducedMotion: reducedMotion(),
+    });
     renderer.render(scene, camera);
   }
 
@@ -644,6 +671,7 @@ export function createShopView(
     frame,
     dispose: () => {
       clear();
+      prepasses.dispose();
       reflections.dispose();
       renderer.dispose();
       renderer.domElement.remove();
