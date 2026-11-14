@@ -1,3 +1,4 @@
+import type { DropTargetGuideConfig } from "./visual/drop-target-guide";
 import type { BlockTitleConfig } from "./scene-traits/block-title";
 import type { SpringAnchorSettings } from "./traits/spring-anchor";
 import type { DragSourceConfig, DropTargetConfig } from "./drag-drop";
@@ -94,6 +95,8 @@ export type SceneTraits = {
   attractBackground: Record<never, never>;
   /** Reusable, scaled music-reactive words made of letter blocks. */
   blockTitle: BlockTitleConfig;
+  /** Laser guides to where a drag is guided, or a red X when it would be refused (#922). */
+  dropTargetGuide: DropTargetGuideConfig;
   /**
    * The room and table are drawn while this scene is in front. The title does not compose it,
    * so no table appears there (#147); every scene played on the table does.
