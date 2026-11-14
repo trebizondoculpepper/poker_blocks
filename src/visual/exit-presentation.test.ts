@@ -1,11 +1,9 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
-import {
-  createExitRunner,
-  exitEffects,
-  type ExitContext,
-  type ExitVisual,
-} from "./exit-presentation";
+import { exitEffects, type ExitContext, type ExitVisual } from "./exit-presentation";
+import { createSteppedExits } from "./exit-stepping";
+import { createExitPresenter, type ExitPresenter } from "./exit-presentation";
+import { createVisualScheduler, visualHandlers } from "../visual-events/scheduler";
 
 // A stand-in effect: runs for `seconds`, logging what happens to it (and any update after it
 // has finished, which the runner must never send).
@@ -47,7 +45,7 @@ const snapshot = { blockId: "b1", cell: { x: 0, y: 0, z: 0 } as never };
 describe("block exit presentation (#439)", () => {
   it("runs steps in order and a step's effects in parallel, then removes and releases the visual", () => {
     log.length = 0;
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     const v = visual();
     runner.start(snapshot, v, {
       steps: [{ effects: [timed("a", 0.2), timed("b", 0.4)] }, { effects: [timed("c", 0.1)] }],
@@ -68,7 +66,7 @@ describe("block exit presentation (#439)", () => {
 
   it("caps every step, so an effect can never make an exit linger", () => {
     log.length = 0;
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     const v = visual();
     runner.start(snapshot, v, { steps: [{ effects: [timed("slow", 99)], maxSeconds: 0.5 }] });
     runner.update(0.6);
@@ -78,7 +76,7 @@ describe("block exit presentation (#439)", () => {
 
   it("gives each effect its target: the whole block, its shell or its contents", () => {
     contexts.length = 0;
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     const v = visual();
     runner.start(snapshot, v, {
       steps: [
@@ -94,7 +92,7 @@ describe("block exit presentation (#439)", () => {
 
   it("passes reduced motion to effects", () => {
     contexts.length = 0;
-    const runner = createExitRunner(() => true);
+    const runner = createSteppedExits(() => true);
     runner.start(snapshot, visual(), { steps: [{ effects: [timed("r", 0.1)] }] });
     expect(contexts[0]!.reducedMotion).toBe(true);
     runner.dispose();
@@ -102,7 +100,7 @@ describe("block exit presentation (#439)", () => {
 
   it("cancels one exit at once, and disposing the runner cancels the rest, each cleaned up once", () => {
     log.length = 0;
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     const [one, two] = [visual(), visual()];
     runner.start(snapshot, one, { steps: [{ effects: [timed("x", 5)] }] });
     runner.start({ blockId: "b2" }, two, { steps: [{ effects: [timed("y", 5)] }] });
@@ -118,7 +116,7 @@ describe("block exit presentation (#439)", () => {
   });
 
   it("ends at once with no steps, still releasing the visual", () => {
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     const v = visual();
     runner.start(snapshot, v, { steps: [] });
     expect(v.released).toHaveBeenCalledTimes(1);
@@ -127,7 +125,7 @@ describe("block exit presentation (#439)", () => {
 
   it("stops updating a parallel effect once it finishes, while the longer one runs on (#477 review)", () => {
     log.length = 0;
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start(snapshot, visual(), {
       steps: [{ effects: [timed("short", 0.1), timed("long", 1)] }],
     });
@@ -136,5 +134,136 @@ describe("block exit presentation (#439)", () => {
     expect(log).not.toContain("short:finish");
     runner.dispose();
     expect(log.filter((entry) => entry === "short:dispose")).toHaveLength(1);
+  });
+});
+
+describe("block exits on the shared scheduler (#549)", () => {
+  /** A real scheduler on injected time, presenting exits through its `blockExits` service. */
+  function shared(limits: Parameters<typeof createVisualScheduler>[0] = {}) {
+    let exits: ExitPresenter | null = null;
+    const scheduler = createVisualScheduler({
+      ...limits,
+      services: {
+        get blockExits() {
+          return exits!.blockExits;
+        },
+      },
+    });
+    exits = createExitPresenter(scheduler);
+    let real = 1000;
+    scheduler.update(real, true);
+    const advance = (ms: number) => scheduler.update((real += ms), true);
+    return { scheduler, exits, advance };
+  }
+
+  it("registers its handler on the shared scheduler", () => {
+    expect(visualHandlers.has("block.exit")).toBe(true);
+  });
+
+  it("starts on the next update and runs on the presentation clock, each exit in its own scope", () => {
+    log.length = 0;
+    const { scheduler, exits, advance } = shared();
+    const [one, two] = [visual(), visual()];
+    exits.start(snapshot, one, { steps: [{ effects: [timed("one", 0.2)] }] });
+    exits.start({ ...snapshot, blockId: "b2" }, two, { steps: [{ effects: [timed("two", 0.5)] }] });
+    // Nothing runs until the scheduler dispatches it.
+    expect(log).toEqual([]);
+    expect(exits.active).toBe(2);
+    advance(16);
+    expect(log).toEqual(["one:start", "two:start"]);
+    // Time since the exit was due counts, including the frame that started it.
+    advance(200);
+    expect(log).toContain("one:dispose");
+    expect(one.root.parent).toBeNull();
+    expect(two.root.parent).toBe(two.parent);
+    expect(exits.active).toBe(1);
+    advance(400);
+    expect(two.released).toHaveBeenCalledOnce();
+    expect(exits.active).toBe(0);
+    expect(scheduler.counts.active).toBe(0);
+  });
+
+  it("releases an exit cancelled before it starts, without running its effects", () => {
+    log.length = 0;
+    const { exits, advance } = shared();
+    const v = visual();
+    exits.start(snapshot, v, { steps: [{ effects: [timed("never", 1)] }] });
+    exits.cancel(snapshot.blockId);
+    advance(100);
+    expect(log).toEqual([]);
+    expect(v.root.parent).toBeNull();
+    expect(v.released).toHaveBeenCalledOnce();
+    expect(exits.active).toBe(0);
+  });
+
+  it("is cancelled cleanly when the scene's generation is disposed, releasing each visual once", () => {
+    log.length = 0;
+    const { scheduler, exits, advance } = shared();
+    const [running, waiting] = [visual(), visual()];
+    exits.start(snapshot, running, { steps: [{ effects: [timed("running", 1)] }] });
+    advance(100);
+    exits.start({ ...snapshot, blockId: "b2" }, waiting, { steps: [{ effects: [timed("w", 1)] }] });
+    scheduler.disposeGeneration();
+    advance(100);
+    expect(log).toEqual(["running:start", "running:finish", "running:dispose"]);
+    for (const v of [running, waiting]) {
+      expect(v.root.parent).toBeNull();
+      expect(v.released).toHaveBeenCalledOnce();
+    }
+    expect(exits.active).toBe(0);
+  });
+
+  it("lets the block simply go when the scheduler can't admit its exit", () => {
+    log.length = 0;
+    const { exits } = shared({ limits: { pendingGlobal: 1 } });
+    const [first, v] = [visual(), visual()];
+    exits.start(snapshot, first, { steps: [{ effects: [timed("first", 1)] }] });
+    // The one pending place is taken, so this exit is refused.
+    exits.start({ ...snapshot, blockId: "b2" }, v, { steps: [{ effects: [timed("refused", 1)] }] });
+    expect(log).toEqual([]);
+    expect(v.root.parent).toBeNull();
+    expect(v.released).toHaveBeenCalledOnce();
+    expect(first.root.parent).toBe(first.parent);
+    expect(exits.active).toBe(1);
+  });
+
+  it("finishes an exit that outlasts the scheduler's time limit, and still releases it once", () => {
+    log.length = 0;
+    const { exits, advance } = shared({ limits: { maxEffectMs: 500 } });
+    const v = visual();
+    exits.start(snapshot, v, { steps: [{ effects: [timed("slow", 10)], maxSeconds: 10 }] });
+    advance(16);
+    advance(600);
+    expect(log).toEqual(["slow:start", "slow:finish", "slow:dispose"]);
+    expect(v.released).toHaveBeenCalledOnce();
+    expect(exits.active).toBe(0);
+  });
+
+  it("still releases the visual, and fails its scope, when an exit can't start", () => {
+    const { scheduler, exits, advance } = shared();
+    const v = visual();
+    log.length = 0;
+    exits.start(snapshot, v, {
+      steps: [{ effects: [timed("made", 1), { effect: "no-such-effect" }] }],
+    });
+    advance(16);
+    // The effect already made is finished and released too (#1035 review).
+    expect(log).toEqual(["made:start", "made:finish", "made:dispose"]);
+    expect(v.root.parent).toBeNull();
+    expect(v.released).toHaveBeenCalledOnce();
+    expect(exits.active).toBe(0);
+    expect(scheduler.counts.active).toBe(0);
+  });
+
+  it("holds no settled scopes once a stepped exit has gone, however often exits repeat (#1035 review)", () => {
+    const stepped = createSteppedExits();
+    for (let k = 0; k < 5; k++) {
+      stepped.start({ ...snapshot, blockId: `b${k}` }, visual(), {
+        steps: [{ effects: [timed(`r${k}`, 0.1)] }],
+      });
+      stepped.update(0.2);
+      expect(stepped.active).toBe(0);
+      expect(stepped.scheduler.counts.scopes).toBe(0);
+    }
   });
 });

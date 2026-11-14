@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
-import { createExitRunner, type ExitVisual } from "./exit-presentation";
+import { type ExitVisual } from "./exit-presentation";
+import { createSteppedExits } from "./exit-stepping";
 import { confettiDefaults, maxFragments, shredDefaults, splinterDefaults } from "./exit-fragments";
 
 function visual(): ExitVisual {
@@ -12,7 +13,7 @@ function visual(): ExitVisual {
 }
 const fragments = (v: ExitVisual) => v.root.children.slice(1) as THREE.Mesh[];
 const start = (v: ExitVisual, effect: string, config: object = {}, reduced = false) => {
-  const runner = createExitRunner(() => reduced);
+  const runner = createSteppedExits(() => reduced);
   runner.start({ blockId: "b" }, v, { steps: [{ effects: [{ effect, config }] }] });
   return runner;
 };
@@ -77,7 +78,7 @@ describe("shred and splinter (#443)", () => {
 
   it("emits only from its configured target: a solid block's empty contents throw nothing (#513 review)", () => {
     const v = visual();
-    const runner = createExitRunner();
+    const runner = createSteppedExits();
     runner.start({ blockId: "b" }, v, {
       steps: [{ effects: [{ effect: "shred", target: "contents" }] }],
     });
@@ -85,7 +86,7 @@ describe("shred and splinter (#443)", () => {
     runner.update(0.016);
     expect(runner.active).toBe(0);
     const shell = visual();
-    const other = createExitRunner();
+    const other = createSteppedExits();
     other.start({ blockId: "c" }, shell, {
       steps: [{ effects: [{ effect: "shred", target: "shell" }] }],
     });
