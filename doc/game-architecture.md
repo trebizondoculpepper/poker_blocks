@@ -1690,3 +1690,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## D12 replacement compatibility
 
 [Dice replacement](dice-replacement.md) preserves the former slot’s opaque saved definition handle while changing configured sides/shape/display to D12. Registered builders and existing save codecs own behavior; no die-name migration branch or generic identity check is introduced.
+
+## Score narration completion holds
+
+[Completion-scope research](research/score-narration-completion.md) and [the scheduler interface](visual-event-interface.md#narration-completion-holds-999) define required tail scopes separately from narration spacing, removing a second presenter-owned deadline ledger. Effects report bounded completion on the shared clock; reset owns cancellation across all scopes. This is a target for #999, not a claim of shipped replacement.
