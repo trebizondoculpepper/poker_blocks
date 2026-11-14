@@ -179,6 +179,10 @@ export function createFlameBenchRoom(
     );
     for (const extra of appearance.extras ?? [])
       ([] as THREE.Material[]).concat(extra.material).forEach((used) => used.dispose());
+    // Extras own geometry of their own too (the flame's box): free each once, never the block's.
+    new Set((appearance.extras ?? []).map((extra) => extra.geometry)).forEach(
+      (owned) => owned !== appearance.geometry && owned.dispose(),
+    );
     preview.built = undefined;
   }
 
