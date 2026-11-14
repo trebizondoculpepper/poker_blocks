@@ -142,4 +142,20 @@ describe("appearance prepasses (#969)", () => {
     release();
     expect(log.slice(5)).toEqual(["dispose rear#2"]);
   });
+
+  it("holds nothing in any context when a later context can't take a requirement (#1040 review)", () => {
+    const log: string[] = [];
+    const board = createPrepassContext(stubs(log));
+    // The hand's registry can't make the pass: its creation throws.
+    const failing = new Registry<AppearancePrepass>("failing prepass");
+    failing.register("stub", {
+      create() {
+        throw new Error("no target");
+      },
+    });
+    const hand = createPrepassContext(failing);
+    expect(() => prepassRequirements([board, hand]).require([stub("rear")])).toThrow("no target");
+    expect(board.size).toBe(0);
+    expect(log).toEqual(["create rear#1", "dispose rear#1"]);
+  });
 });

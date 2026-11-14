@@ -122,7 +122,14 @@ export type PrepassContext = ReturnType<typeof createPrepassContext>;
 export function prepassRequirements(contexts: readonly PrepassContext[]): PrepassRequirements {
   return {
     require(references) {
-      const releases = contexts.map((context) => context.require(references));
+      const releases: (() => void)[] = [];
+      try {
+        for (const context of contexts) releases.push(context.require(references));
+      } catch (error) {
+        // A context that can't take it leaves nothing held in the ones before it (#1040 review).
+        releases.forEach((release) => release());
+        throw error;
+      }
       return () => releases.forEach((release) => release());
     },
   };
