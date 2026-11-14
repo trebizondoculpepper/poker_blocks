@@ -552,3 +552,7 @@ Stage-won Visit shop appears below the reward ledger only after all reward rows 
 ## Shop Continue presentation
 
 The shop Continue action is a fixed Paper word cube in the existing bottom-right exit area, not purchasable stock. See [Continue presentation](shop-continue-block.md).
+
+## Passive lifecycle and persistent progress
+
+Scoring passives can declare multiple lifecycle actions: once before any rows score, per scored row at a declared scoring hook, and once after all rows score. Resolve rack instances left to right within each hook, without moving actions between phases. Each passive instance can retain its own counters or other state, with an explicit reset/lifetime policy; Dice rolls once per operation and reuses that value per row. See [the lifecycle/state contract](passive-lifecycle-state.md). [Could It Be Magic Now?](experiments/could-it-be-magic-now.md) is a provisional four-play Magic conversion experiment, not normal-shop content.

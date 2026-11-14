@@ -21,3 +21,5 @@ Results belong beside the brief or in linked versioned artifacts, with hardware/
 ## Balance rationale
 
 [Passive power progression](../passive-balance.md) explains the purpose of the planned bench: try abstract reproducible situations, observe how provisional rules feel and behave, then use evidence to inform wider testing and later balance/certification decisions.
+
+- [Could It Be Magic Now?](could-it-be-magic-now.md): provisional persistent four-play counter and post-reaction Magic conversion, with magician-cabinet visual audition.
