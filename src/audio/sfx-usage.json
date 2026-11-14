@@ -236,13 +236,13 @@
     }
   },
   "ui.click": {
-    "uses": 44,
+    "uses": 43,
     "files": {
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 3,
       "game-modes.ts": 2,
       "game-run-controller.ts": 1,
-      "menus.ts": 4,
+      "menus.ts": 3,
       "scene-traits/dev-bench-panel.ts": 1,
       "settings-panel.ts": 7,
       "tools/block-designer.ts": 3,

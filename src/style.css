@@ -595,12 +595,6 @@ body,
   letter-spacing: 0.16em;
 }
 
-.menu-buttons {
-  display: grid;
-  gap: 10px;
-  margin-top: 8px;
-}
-
 /* The session seed on the win and lose screens, with a copy button (#134). */
 .menu-seed {
   display: flex;
@@ -650,7 +644,6 @@ body,
   border-bottom-color: #f6f0e3;
 }
 
-.menu-buttons button,
 .menu-row button {
   min-height: 44px;
   padding: 10px 14px;
@@ -664,22 +657,15 @@ body,
   cursor: pointer;
 }
 
-.menu-buttons > button:first-child:not([hidden]),
 .menu-row button:first-child {
   background: #9ce6d7;
   color: #10202b;
 }
 
-.menu-buttons button:hover,
-.menu-buttons button:focus-visible,
 .menu-row button:hover,
 .menu-row button:focus-visible {
   outline: 2px solid #f6f0e3;
   outline-offset: 2px;
-}
-
-.menu-buttons [hidden] {
-  display: none;
 }
 
 /* The title's choices as word cubes (#529): the block-menu stage fills this box. */
@@ -1360,11 +1346,6 @@ body,
 .dev-hud-style-audition button[aria-checked="true"] {
   background: #f6f0e3;
   color: #111;
-}
-
-/* Hidden while the New Game confirmation stands alone (#197). */
-.menu-buttons[hidden] {
-  display: none;
 }
 
 /* The in-run deck view (#175): a read-only list of the deck by rank. */
