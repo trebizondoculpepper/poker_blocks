@@ -197,4 +197,47 @@ describe("the Tween.js presentation service (#562)", () => {
     expect(settled).toEqual(["cancelled"]);
     expect(tweens.size).toBe(0);
   });
+
+  it("advances only its own tween from a handle, so a throwing callback stays with its owner", () => {
+    const tweens = createTweenService();
+    const calm = recorder(4);
+    const first = tweens.start(calm.spec, 0);
+    const second = tweens.start(
+      {
+        from: { x: 0 },
+        to: { x: 1 },
+        durationUnits: 4,
+        apply: () => {
+          throw new Error("broken presentation");
+        },
+      },
+      0,
+    );
+    expect(first.update(unitMs)).toBe("running");
+    expect(calm.applied.at(-1)).toBeCloseTo(2.5);
+    expect(() => second.update(unitMs)).toThrow("broken presentation");
+  });
+
+  it("refuses a tween started from a cancellation callback during disposal", () => {
+    const tweens = createTweenService();
+    let restarted: ReturnType<typeof tweens.start> | null = null;
+    tweens.start(
+      {
+        from: { x: 0 },
+        to: { x: 1 },
+        durationUnits: 4,
+        apply: () => {},
+        settled: () => {
+          restarted = tweens.start(
+            { from: { x: 0 }, to: { x: 1 }, durationUnits: 1, apply: () => {} },
+            0,
+          );
+        },
+      },
+      0,
+    );
+    tweens.dispose();
+    expect(restarted!.state).toBe("cancelled");
+    expect(tweens.size).toBe(0);
+  });
 });

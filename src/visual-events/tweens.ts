@@ -63,7 +63,7 @@ export function createTweenService() {
   let lastUpdate = -Infinity;
   let disposed = false;
 
-  /** Advance every tween to `nowMs`, once per timestamp, however many handles ask. */
+  /** Advance every tween to `nowMs`, for a caller that drives the service directly. */
   function update(nowMs: number): void {
     if (disposed || nowMs <= lastUpdate) return;
     lastUpdate = nowMs;
@@ -117,8 +117,11 @@ export function createTweenService() {
         get values() {
           return values;
         },
+        // Advances only this tween, so a throwing callback fails its own scheduler scope and
+        // never another effect's (#1019 review). Tween.js computes from elapsed time, so a later
+        // service-wide `update` at the same timestamp changes nothing.
         update(now) {
-          update(now);
+          if (!disposed && state === "running") tween.update(now);
           return state === "running" ? "running" : "finished";
         },
         cancel,
@@ -132,8 +135,10 @@ export function createTweenService() {
     },
     /** Cancel every tween; this service starts nothing more, and late calls do nothing. */
     dispose(): void {
-      for (const cancel of Array.from(live)) cancel();
+      // Disposed first: a tween started from a cancellation callback is refused, not leaked
+      // (#1019 review).
       disposed = true;
+      for (const cancel of Array.from(live)) cancel();
     },
   };
 }
