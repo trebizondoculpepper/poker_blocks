@@ -24,10 +24,12 @@ const play = (lines: readonly NarratedLine[], score = 0): NarratedPlay => ({
 function narrating(limits: Parameters<typeof createVisualScheduler>[0] = {}) {
   const log: string[] = [];
   const endpoints: string[] = [];
+  const lates: number[] = [];
   let shown = 0;
   const sink = {
-    line(entry: NarratedLine) {
+    line(entry: NarratedLine, lateMs: number) {
       shown += entry.points;
+      lates.push(lateMs);
       log.push(`${Math.round(scheduler.nowMs)}:line ${entry.blockIds.join()}`);
     },
     summarise({ score }: NarratedEndpoint) {
@@ -53,7 +55,16 @@ function narrating(limits: Parameters<typeof createVisualScheduler>[0] = {}) {
   const advance = (ms: number, step = 10) => {
     for (let t = 0; t < ms; t += step) scheduler.update((real += step), true);
   };
-  return { log, endpoints, narration, scheduler, advance, shown: () => shown, idles: () => idles };
+  return {
+    log,
+    endpoints,
+    narration,
+    scheduler,
+    advance,
+    shown: () => shown,
+    idles: () => idles,
+    lates,
+  };
 }
 
 describe("score narration on the visual-event scheduler (#547)", () => {
@@ -216,5 +227,12 @@ describe("score narration on the visual-event scheduler (#547)", () => {
     advance(1000);
     // Line a was due at 0 ms; its tint settles 6 units (400 ms) later, empty play or not.
     expect(log).toEqual(["10:line a", "400:outcome"]);
+  });
+
+  it("tells a line how late it started, so its visuals keep the scope's clock (#800 review)", () => {
+    const { narration, scheduler, lates } = narrating();
+    narration.narrate(play([line("a", 1)]));
+    scheduler.update(2000, true); // a one-second stall before the line dispatches
+    expect(lates).toEqual([1000]);
   });
 });

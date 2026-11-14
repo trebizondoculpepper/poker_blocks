@@ -165,10 +165,12 @@ export function createPlayPresenter(options: {
 
   /** What narration shows through, each line as it was captured when its play committed. */
   const sink: ScoreNarrationSink = {
-    line({ blockIds, sourceIds, points }) {
-      field.tint(blockIds, frameNow);
+    line({ blockIds, sourceIds, points }, lateMs) {
+      // Started as of its scheduled time, so its tint has settled when the outcome shows.
+      const startedAt = frameNow - lateMs;
+      field.tint(blockIds, startedAt);
       options.activated(sourceIds);
-      field.activate(sourceIds, frameNow);
+      field.activate(sourceIds, startedAt);
       const sound = magnitudeSfxFor(points);
       if (sound) playSfx(sound, { jitter: 0 });
       shownScore += points;

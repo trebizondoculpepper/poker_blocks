@@ -38,8 +38,12 @@ export type NarratedPlay = { lines: readonly NarratedLine[]; endpoint: NarratedE
 
 /** What narration shows through: the play presenter supplies it as a scheduler service. */
 export type ScoreNarrationSink = {
-  /** Show one line: tint its blocks, pulse its sources, play its sound, add its points. */
-  line(line: NarratedLine): void;
+  /**
+   * Show one line: tint its blocks, pulse its sources, play its sound, add its points. `lateMs`
+   * is how far past its scheduled time it started, so its visuals keep the scope's clock rather
+   * than restarting late (#800 review).
+   */
+  line(line: NarratedLine, lateMs: number): void;
   /** Show a play's captured score at once, without narrating (the summary fallback). */
   summarise(endpoint: NarratedEndpoint): void;
   /** Announce the captured outcome of the last play narrated. */
@@ -61,7 +65,7 @@ const sinkOf = (services: unknown) => (services as ScoreNarrationServices).score
 /** A line: shown when it starts, then held for one step so the next play waits its turn. */
 visualHandlers.register("score.line", (payload, context) => {
   const { line, stepUnits } = payload as { line: NarratedLine; stepUnits: number };
-  sinkOf(context.services).line(line);
+  sinkOf(context.services).line(line, Math.max(0, context.nowMs - context.scheduledAtMs));
   const until = context.scheduledAtMs + stepUnits * unitMs;
   const effect: EffectHandle = {
     update: (nowMs) => (nowMs >= until ? "finished" : "running"),
