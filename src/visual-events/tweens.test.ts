@@ -240,4 +240,27 @@ describe("the Tween.js presentation service (#562)", () => {
     expect(restarted!.state).toBe("cancelled");
     expect(tweens.size).toBe(0);
   });
+
+  it("cancels every tween on disposal even when a settlement callback throws, then reports it", () => {
+    const tweens = createTweenService();
+    const throwing = tweens.start(
+      {
+        from: { x: 0 },
+        to: { x: 1 },
+        durationUnits: 4,
+        apply: () => {},
+        settled: () => {
+          throw new Error("broken settlement");
+        },
+      },
+      0,
+    );
+    const later = recorder(4);
+    const after = tweens.start(later.spec, 0);
+    expect(() => tweens.dispose()).toThrow("broken settlement");
+    expect(throwing.state).toBe("cancelled");
+    expect(after.state).toBe("cancelled");
+    expect(later.settled).toEqual(["cancelled"]);
+    expect(tweens.size).toBe(0);
+  });
 });

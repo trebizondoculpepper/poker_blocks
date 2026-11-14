@@ -138,7 +138,16 @@ export function createTweenService() {
       // Disposed first: a tween started from a cancellation callback is refused, not leaked
       // (#1019 review).
       disposed = true;
-      for (const cancel of Array.from(live)) cancel();
+      // Every tween is cancelled even when a settlement callback throws; the first error is
+      // reported once all are released (#1019 review).
+      let failure: { error: unknown } | null = null;
+      for (const cancel of Array.from(live))
+        try {
+          cancel();
+        } catch (error) {
+          failure ??= { error };
+        }
+      if (failure) throw failure.error;
     },
   };
 }
