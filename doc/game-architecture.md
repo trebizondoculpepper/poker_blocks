@@ -1686,3 +1686,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Debug snapshot command
 
 [Read-only debug snapshot](debug-snapshot.md) defines the development console report, registered bounded providers, model/presentation ownership summaries, explicit clipboard fallback and no-side-effect guarantees. It is diagnostic evidence, not an import format or replay system (#987).
+
+## Owner audition follow-ups (2026-11-14)
+
+[Audition follow-ups](audition-followups.md) records the Flame Bench, searchable object browser/listening access, passive artwork and observed material defects. [Calm Water refinements](calm-water-refinements.md) now separates rotation-excited highlight ripples from continuing internal refraction and defines one configured water/bubble foundation for later adoption. These are documented targets; runtime delivery and visual acceptance are separate.
