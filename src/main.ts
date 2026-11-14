@@ -38,7 +38,11 @@ import { createOverlays, type Overlays } from "./overlays";
 import { createDialogPresenter } from "./block-menu/block-menus";
 import { createPresentationClock, type PresentationClock } from "./presentation-clock";
 import { createPassiveRack, type RackLabelServices } from "./passive-rack";
-import { createPlayPresenter, type PlayPresenter } from "./play-presenter";
+import {
+  createPlayPresenter,
+  type PlayPresenter,
+  type PresentedActionServices,
+} from "./play-presenter";
 import { createBlockViews, type BlockViews } from "./rendered-blocks";
 import { blockMenuMotion, gameModeRegistry } from "./game-modes";
 import { createGameRunController, type GameRunController } from "./game-run-controller";
@@ -403,9 +407,14 @@ shopView.render([], false);
 const visualServices: ScoreNarrationServices &
   ActivationLabelServices &
   RackLabelServices &
+  PresentedActionServices &
   RewardLedgerServices = {
   get scoreNarration() {
     return presenter.narration;
+  },
+  // Plays' flights and discards' dissolves (#548).
+  get presentedActions() {
+    return presenter.presentedActions;
   },
   // The stage-won ledger's count-up (#950).
   get rewardLedger() {
@@ -433,7 +442,6 @@ const presenter: PlayPresenter = createPlayPresenter({
   rackChanged: () => run.rackChanged(),
   activated: (sourceIds) => sourceIds.forEach((id) => passiveRackView.activate(id)),
   alongside: (activation) => passiveRackView.labelFor(activation),
-  refill: () => run.refillHand(),
   drawReplacements: () => run.drawReplacements(),
   save: () => run.autosave(),
   decided: (outcome, now) => run.decided(outcome, now),

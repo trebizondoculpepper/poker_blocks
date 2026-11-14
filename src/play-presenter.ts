@@ -14,6 +14,7 @@ import { landingSounds } from "./attachment-sound";
 import { getMaterialDefinition, materialOf } from "./materials";
 import * as THREE from "three";
 import { playSfx } from "./audio/sfx";
+import type { SoundEffectId } from "./audio/sfx-registry";
 import type { CameraViewService } from "./camera-view";
 import { roundOutcome, type RoundOutcome } from "./dealer";
 import { tweenValue } from "./easing";
@@ -35,7 +36,58 @@ import {
   type NarrationSlot,
   type ScoreNarrationSink,
 } from "./score-narration";
-import type { VisualScheduler } from "./visual-events/scheduler";
+import {
+  unitMs,
+  visualHandlers,
+  type EffectHandle,
+  type ScopeHandle,
+  type VisualScheduler,
+} from "./visual-events/scheduler";
+
+/**
+ * A committed play's or discard's animation, run as an effect on the shared visual-event
+ * scheduler (#548; doc/visual-event-interface.md, "Migration order and acceptance", step 3). Its
+ * meshes stay with the presenter that captured them; the event's payload names it by an opaque id.
+ */
+export type PresentedAction = {
+  /** Advance to `elapsed` seconds after it started, by `delta`: true while it still runs. */
+  step(elapsed: number, delta: number): boolean;
+  /** Stop without completing it (a reset or a scene exit): release what it holds. */
+  cancel(): void;
+};
+
+/** The presenter's actions, as the scheduler's `presentedActions` service. */
+export type PresentedActionServices = {
+  presentedActions: { take(id: number): PresentedAction | null };
+};
+
+/** The longest step one frame advances an action: the frame loop's own clamp. */
+const maxStepSeconds = 0.05;
+
+visualHandlers.register("presenter.action", (payload, context): "done" | EffectHandle => {
+  const { id } = payload as { id: number };
+  const action = (context.services as PresentedActionServices).presentedActions.take(id);
+  if (!action) return "done";
+  let last = context.nowMs;
+  let live = true;
+  return {
+    update(nowMs) {
+      if (!live) return "finished";
+      const delta = Math.min(Math.max(0, (nowMs - last) / 1000), maxStepSeconds);
+      last = nowMs;
+      live = action.step((nowMs - context.scheduledAtMs) / 1000, delta);
+      return live ? "running" : "finished";
+    },
+    cancel() {
+      if (!live) return;
+      live = false;
+      action.cancel();
+    },
+    dispose() {
+      live = false;
+    },
+  };
+});
 
 type Materialise = ReturnType<typeof createMaterialise>;
 
@@ -60,7 +112,6 @@ type Flight = {
 type Playing = {
   /** One flight per block played: a single block, or a line in selection order. */
   flights: Flight[];
-  startedAt: number;
   /** This play's scored lines, captured when it committed: later plays may commit first. */
   lines: readonly PassiveScoredLine[];
   /** Where this play left the stage when it committed: its score and outcome (#547). */
@@ -69,6 +120,10 @@ type Playing = {
   slot: NarrationSlot;
   /** Every running dissolve, for clean-up. */
   effects: Materialise[];
+  /** The replacements the model drew when this play committed, shown once it has landed. */
+  drawn: readonly CardBlock[];
+  /** The sounds its landing makes, decided from the field it committed to. */
+  landingSounds: readonly SoundEffectId[];
 };
 
 /** A discard being shown. */
@@ -90,8 +145,13 @@ export type PlayPresenter = {
   play(sources: readonly RenderedBlock[], candidate: Candidate): boolean;
   /** Discard blocks as one discard; false when the rules refuse. */
   discard(sources: readonly RenderedBlock[]): boolean;
-  /** Advance the flights and dissolves by one frame. */
+  /** Advance per-frame presentation (hand draw-ins); plays and discards run on the scheduler. */
   update(now: number, delta: number): void;
+  /**
+   * Where the shared visual-event scheduler finds the plays and discards it runs (#548): its
+   * `presenter.action` handler reaches it as the `presentedActions` service.
+   */
+  readonly presentedActions: PresentedActionServices["presentedActions"];
   /**
    * Where the shared visual-event scheduler shows score narration (#547): its handlers reach it
    * as the `scoreNarration` service.
@@ -144,8 +204,6 @@ export function createPlayPresenter(options: {
    * commits: an item's activation label, or null when the host shows nothing for it.
    */
   alongside?(activation: RuleActivation): AlongsideEvent | null;
-  /** The hand has room again: draw replacements. */
-  refill(): void;
   /** Draw replacements into the model now, unshown (#775); returns them for a later reveal. */
   drawReplacements(): readonly CardBlock[];
   /** A safe point to save the run. */
@@ -163,6 +221,38 @@ export function createPlayPresenter(options: {
    */
   let playing: Playing[] = [];
   let discarding: Discarding[] = [];
+  /** Actions committed and waiting for their effect to start, by the id their event carries. */
+  const waiting = new Map<number, PresentedAction>();
+  /** Each running action's scope, until it settles or a reset cancels it. */
+  const actionScopes = new Set<ScopeHandle>();
+  let nextActionId = 0;
+  /** While a reset cancels every action: they are dropped, not completed. */
+  let resetting = false;
+
+  /**
+   * Run an action's animation on the shared scheduler, from now, in a scope of its own: plays and
+   * discards overlap freely and never wait for one another. Not admitted, it completes at once.
+   */
+  function present(action: PresentedAction): void {
+    const events = options.visualEvents;
+    const id = ++nextActionId;
+    waiting.set(id, action);
+    const scope = events.createScope(null);
+    const admitted = events.schedule(scope, {
+      handler: "presenter.action",
+      payload: { id },
+      dueUnits: events.nowMs / unitMs,
+    });
+    if (!admitted.accepted) {
+      events.cancel(scope);
+      waiting.delete(id);
+      action.step(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+      return;
+    }
+    actionScopes.add(scope);
+    events.seal(scope);
+    events.observe(scope, () => actionScopes.delete(scope));
+  }
   let shownScore = game().state.round.score;
   /** The latest frame's time, which tints and pulses started by narration are timed from. */
   let frameNow = 0;
@@ -209,8 +299,8 @@ export function createPlayPresenter(options: {
     });
   }
 
-  function updatePlay(action: Playing, now: number, delta: number): void {
-    const elapsed = (now - action.startedAt) / 1000;
+  /** Advance a play's flights: true while it still runs, false once it has landed. */
+  function updatePlay(action: Playing, elapsed: number, delta: number): boolean {
     const reduced = options.reducedMotion();
     for (const flight of action.flights) {
       const flying = elapsed - flight.delay;
@@ -246,7 +336,7 @@ export function createPlayPresenter(options: {
         ({ delay, target }) => delay + (target ? handoverAt + handoverSeconds + 0.05 : 1),
       ),
     );
-    if (elapsed < lasts) return;
+    if (elapsed < lasts) return true;
     playing = playing.filter((other) => other !== action);
     action.effects.forEach((effect) => effect.finish());
     for (const flight of action.flights) {
@@ -274,32 +364,29 @@ export function createPlayPresenter(options: {
       }
     }
     options.moved();
-    // The softer material where each block meets the structure decides its sound (#232).
-    const placed = game().state.field;
-    const landed = action.flights.flatMap(
-      (flight) => placed.find(({ block }) => block.id === flight.source.block.id) ?? [],
-    );
-    for (const id of landingSounds(landed, placed, (block) =>
-      getMaterialDefinition(materialOf(block)),
-    ))
-      playSfx(id);
+    // Its landing sounds, as captured when it committed (#1033 review).
+    for (const id of action.landingSounds) playSfx(id);
     announceScore(action);
     cameraView.scheduleCameraMove();
-    options.refill();
+    // Model first: its replacements were drawn when it committed; only their reveal waits.
+    hand.drawIn(action.drawn, game().state.hand);
     options.save();
+    return false;
   }
 
-  function updateDiscard(action: Discarding, _now: number, delta: number): void {
+  /** Advance a discard's dissolves: true while they run, false once its replacements show. */
+  function updateDiscard(action: Discarding, delta: number): boolean {
     // Finished when its own dissolves have (#775): their clock, not a wall-clock second, so
     // reduced motion's short fade doesn't wait and a slow frame can't reveal replacements early.
     const running = action.effects.map((effect) => effect.update(delta));
-    if (running.some(Boolean)) return;
+    if (running.some(Boolean)) return true;
     discarding = discarding.filter((other) => other !== action);
     action.sources.forEach((source) => views.dispose(source));
     // Only this discard's own replacements, drawn when it committed: another action finishing
     // can't reveal them, and they can't reveal another's.
     hand.drawIn(action.drawn, game().state.hand);
     options.save();
+    return false;
   }
 
   return {
@@ -348,6 +435,10 @@ export function createPlayPresenter(options: {
       options.deselect(ids);
       hand.remove(sources);
       hand.sync(game().state.hand);
+      // Model first (#775, #1033 review): the play's replacements are drawn as it commits, so no
+      // presentation timing or cancellation decides whether they enter the hand.
+      const drawn = options.drawReplacements();
+      hand.sync(game().state.hand);
       // The cameras use different projections. Match each hand cube's screen position and
       // apparent size in the board view, then let the assembly carry it as it wobbles.
       cameraView.handCamera.updateWorldMatrix(true, false);
@@ -386,13 +477,29 @@ export function createPlayPresenter(options: {
           handedOver: false,
         };
       });
-      playing.push({
+      const action: Playing = {
         flights,
-        startedAt: performance.now(),
         effects: [],
         lines: game().lastScoredLines,
         endpoint: { score: game().state.round.score, outcome: roundOutcome(game().state) },
         slot: narration.reserve(),
+        drawn,
+        // The softer material where each block meets the structure decides its sound (#232),
+        // from the field this play committed to.
+        landingSounds: landingSounds(landed, next.field, (block) =>
+          getMaterialDefinition(materialOf(block)),
+        ),
+      };
+      playing.push(action);
+      present({
+        step: (elapsed, delta) => updatePlay(action, elapsed, delta),
+        // A reset drops it; any other cancellation (an effect that ran too long) lands it at
+        // once, so its narration slot, landing and replacements still complete (#1033 review).
+        cancel: () => {
+          if (!resetting) return void updatePlay(action, Infinity, Infinity);
+          playing = playing.filter((other) => other !== action);
+          action.effects.forEach((effect) => effect.finish());
+        },
       });
       playSfx("card.place.fly");
       options.changed();
@@ -422,20 +529,40 @@ export function createPlayPresenter(options: {
       // appearance waits until the discarded cards have dissolved.
       const drawn = options.drawReplacements();
       hand.sync(session.state.hand);
-      discarding.push({ sources: [...sources], effects, drawn });
+      const action: Discarding = { sources: [...sources], effects, drawn };
+      discarding.push(action);
+      present({
+        step: (_elapsed, delta) => updateDiscard(action, delta),
+        cancel: () => {
+          action.effects.forEach((effect) => effect.finish());
+          // Not a reset: its dissolves are done, so its replacements are revealed now.
+          if (!resetting) return void updateDiscard(action, 0);
+          discarding = discarding.filter((other) => other !== action);
+        },
+      });
       playSfx("card.discard");
       options.changed();
       return true;
     },
     narration: sink,
+    presentedActions: {
+      take(id) {
+        const action = waiting.get(id) ?? null;
+        waiting.delete(id);
+        return action;
+      },
+    },
     update(now, delta) {
       frameNow = now;
       hand.updateDrawIns(delta);
-      // Finishing reassigns the lists (filter), so iterating the current ones is safe.
-      for (const action of playing) updatePlay(action, now, delta);
-      for (const action of discarding) updateDiscard(action, now, delta);
     },
     reset() {
+      // Every action's effect is cancelled with its scope; one not yet started is dropped.
+      resetting = true;
+      for (const scope of Array.from(actionScopes)) options.visualEvents.cancel(scope);
+      resetting = false;
+      actionScopes.clear();
+      waiting.clear();
       playing = [];
       discarding = [];
       narration.reset();
