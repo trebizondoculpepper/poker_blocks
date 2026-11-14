@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import * as THREE from "three";
 import { describe, expect, it } from "vite-plus/test";
 import { experimentalMaterials, materialDefinitions } from "../materials";
+import type { MaterialDefinition } from "../materials";
 import { createSettler } from "./filled-vessel";
 
 const config = { settleSeconds: 1, traceSeconds: 4 };
@@ -49,8 +50,15 @@ describe("filled vessel (#227)", () => {
     for (const material of experimentalMaterials) {
       expect(gameplay.has(material.id)).toBe(false);
       expect(material).not.toHaveProperty("shop");
-      expect(material).not.toHaveProperty("scoringModifier");
       expect(material).not.toHaveProperty("handReward");
+      // An experiment never adds scoring of its own: only an audition look (#466) carries its
+      // production parent's scoring unchanged, as the design requires.
+      if (material.scoringModifier !== undefined) {
+        const parent = (materialDefinitions as readonly MaterialDefinition[]).find(
+          ({ materialFamily }) => materialFamily === material.materialFamily,
+        );
+        expect(material.scoringModifier).toEqual(parent?.scoringModifier);
+      }
     }
   });
 });

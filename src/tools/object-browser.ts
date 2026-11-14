@@ -1,3 +1,6 @@
+import { releaseStatusPresentation, type ReleaseStatusPresentation } from "../release-status";
+import { playSfx } from "../audio/sfx";
+import { createPreviewRotation } from "./preview-rotation";
 import { cardFaceArt, type CardFaceOptions } from "../visual/face-art";
 import { rankFaceDefinitions } from "../visual/rank-faces";
 /**
@@ -12,7 +15,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { soundEffects } from "../audio/sfx-registry";
 import usage from "../audio/sfx-usage.json";
-import { standardDeck } from "../cards";
+import { standardDeck, pokerIdentity } from "../cards";
 import { gameModeFor, modeLink } from "../game-modes";
 import {
   experimentalMaterials,
@@ -34,6 +37,8 @@ type BrowsedObject = {
   name: string;
   /** A note under the name (an experiment, a retired passive). */
   note?: string;
+  /** Its release status's public presentation (#813, #923): a list badge and page lines, if any. */
+  status?: ReleaseStatusPresentation;
   properties: unknown;
   /** A model to turn in the preview, or nothing for objects without one (a sound). */
   preview?: (size: number) => { object: THREE.Object3D; dispose(): void };
@@ -60,11 +65,12 @@ function materialPage(
     id,
     name,
     note,
+    status: releaseStatusPresentation(definition.id, definition.releaseStatus),
     // The caller says what the page shows: the material's definition unless told otherwise.
     properties: page.properties ?? definition,
     preview(size) {
       const appearance = createBlockAppearance(
-        cardFaceArt(card.traits.identity, { face: definition.cardFace, ...options }),
+        cardFaceArt(pokerIdentity(card), { face: definition.cardFace, ...options }),
         definition,
         size,
       );
@@ -100,7 +106,7 @@ function rankStylePages(): BrowsedObject[] {
   );
   return rankFaceDefinitions.flatMap(({ rank, styles }) =>
     Object.keys(styles ?? {}).flatMap((style) => {
-      const card = standardDeck.find(({ traits }) => traits.identity.rank === rank)!;
+      const card = standardDeck.find((card) => pokerIdentity(card).rank === rank)!;
       return auditioned.flatMap((definition) =>
         [undefined, style].map((rankStyle) =>
           materialPage(
@@ -142,6 +148,7 @@ const categories: readonly Category[] = [
           id,
           name: definition.name,
           note: definition.retired ? "Retired: never offered" : undefined,
+          status: releaseStatusPresentation(definition.id, definition.releaseStatus),
           properties: definition,
           preview(size) {
             const visual = createPassiveVisual(
@@ -185,7 +192,12 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       <h2 data-browser="name"></h2>
       <p class="object-browser-id" data-browser="id"></p>
       <p class="object-browser-note" data-browser="note"></p>
+      <p class="object-browser-status-line" data-browser="status"></p>
       <div class="object-browser-preview" data-browser="preview"></div>
+      <div class="object-browser-view" data-browser="view">
+        <button type="button" data-browser="auto">Auto rotate</button>
+        <button type="button" data-browser="reset">Reset view</button>
+      </div>
       <table class="object-browser-properties"><tbody data-browser="properties"></tbody></table>
     </article>`;
   host.append(root);
@@ -209,11 +221,22 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
   let shown: { object: THREE.Object3D; dispose(): void } | null = null;
   let frame = 0;
 
+  // The preview's pose (#746): turntable until dragged, then wherever the drag leaves it. It
+  // belongs to the browser, not the entry, so switching entries keeps the view.
+  const rotation = createPreviewRotation(
+    {},
+    { turn: () => playSfx("view.rotate"), click: () => playSfx("ui.click") },
+    camera,
+  );
+  part("auto").addEventListener("click", () => rotation.autoRotate());
+  part("reset").addEventListener("click", () => rotation.reset());
+  let unmountRotation: (() => void) | null = null;
+  let lastTime: number | null = null;
+
   function spin(time: number): void {
-    if (shown) {
-      shown.object.rotation.y = time / 1600;
-      shown.object.rotation.x = -0.35 + Math.sin(time / 2300) * 0.15;
-    }
+    const seconds = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
+    rotation.update(seconds, shown?.object ?? null);
     renderer.render(scene, camera);
     frame = requestAnimationFrame(spin);
   }
@@ -225,9 +248,15 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       shown = null;
     }
     part("preview").hidden = !object.preview;
+    part("view").hidden = !object.preview;
     if (!object.preview) return;
     shown = object.preview(2.2);
     scene.add(shown.object);
+    // A new entry: any drag in progress ends (its handlers are replaced), the pose stays.
+    if (unmountRotation) {
+      unmountRotation();
+      unmountRotation = rotation.mount(part("preview"));
+    }
   }
 
   /** The properties as rows: nested objects flatten to dotted paths. */
@@ -273,11 +302,17 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       }),
     );
     part("list").replaceChildren(
-      ...objects.map(({ id, name }) => {
+      ...objects.map(({ id, name, status }) => {
         const item = document.createElement("li");
         const link = document.createElement("a");
         link.href = `#${category.id}/${id}`;
         link.textContent = name;
+        if (status?.badge) {
+          const badge = document.createElement("span");
+          badge.className = "object-browser-status";
+          badge.textContent = status.badge;
+          link.append(" ", badge);
+        }
         link.classList.toggle("is-current", id === object.id);
         item.append(link);
         return item;
@@ -287,6 +322,8 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     part("id").textContent = `${category.id}/${object.id}`;
     part("note").textContent = object.note ?? "";
     part("note").hidden = !object.note;
+    part("status").textContent = (object.status?.lines ?? []).join("\n");
+    part("status").hidden = !object.status?.lines.length;
     showPreview(object);
     showProperties(object.properties);
   }
@@ -302,15 +339,22 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       root.hidden = false;
       window.addEventListener("hashchange", route);
       route();
+      unmountRotation?.();
+      unmountRotation = rotation.mount(part("preview"));
+      lastTime = null;
       frame = requestAnimationFrame(spin);
     },
     hide() {
       root.hidden = true;
       window.removeEventListener("hashchange", route);
       cancelAnimationFrame(frame);
+      unmountRotation?.();
+      unmountRotation = null;
     },
     dispose() {
       cancelAnimationFrame(frame);
+      unmountRotation?.();
+      unmountRotation = null;
       window.removeEventListener("hashchange", route);
       shown?.dispose();
       environment.dispose();

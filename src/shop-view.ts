@@ -1,11 +1,13 @@
-import { cardFaceArt } from "./visual/face-art";
+import type { DropGuideProvider } from "./visual/drop-target-guide";
+import { blockName, blockFaceArt } from "./block-presentation";
+import { inspectBlock } from "./traits/inspectable";
+import { acquiredBonusDescriptor } from "./modifier-registers";
 import { cardLook } from "./card-look";
 import { createScatterPlacer } from "./shop-scatter";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { clamp01, easeInOutCubic, lerp } from "./easing";
 import { playSfx } from "./audio/sfx";
-import { cardName } from "./cards";
 import { addExtras, createPassiveVisual } from "./passive-visual";
 import { passiveAppearance, passiveDefinitions } from "./passives";
 import type { ShopOffer } from "./shop-stock";
@@ -18,6 +20,7 @@ import { createMaterialise } from "./visual/materialise";
 import type { DragSource, Point } from "./drag-drop";
 import { returnToSource, stop as stopReturn, take } from "./return-to-source";
 import "./shop-view.css";
+import { blockOutline } from "./visual/block-outline";
 
 type DisplayedOffer = {
   offer: ShopOffer;
@@ -42,6 +45,11 @@ export type ShopView = {
    * right now, or null reason when it would succeed. Null when nothing is being dragged.
    */
   dragVerdict(): { targets: readonly HTMLElement[]; reason: string | null } | null;
+  /**
+   * The drag guide's provider for the offer being dragged (#924): its preferred target, if the
+   * shop shows it, and the live verdict. Empty while no offer is dragged.
+   */
+  readonly guideProvider: DropGuideProvider;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
   burnUnsold(reducedMotion: boolean): Promise<void>;
   frame(): void;
@@ -66,6 +74,12 @@ export type OfferView<Block extends OfferBlock> = {
    * be installed. A target the shop doesn't show (no rack) is skipped.
    */
   dropTargets: readonly ("buy" | "rack")[];
+  /**
+   * The one of `dropTargets` the drag guide points to (#924; doc/presentation-contracts.md,
+   * "Laser target-guide controller"): BUY for a card, the rack for a rack item. Guidance only;
+   * every listed target still accepts the drop.
+   */
+  preferredTarget: "buy" | "rack";
 };
 
 const offerViews = new Registry<OfferView<OfferBlock>>("offer view");
@@ -105,18 +119,18 @@ function passiveCube(block: PassiveBlock): OfferCube {
 function cardCube(block: CardBlock): OfferCube {
   const look = cardLook(block);
   const appearance = createBlockAppearance(
-    cardFaceArt(block.traits.identity, { face: look.cardFace }),
+    blockFaceArt(block, {
+      face: look.cardFace,
+      bonus: acquiredBonusDescriptor(block),
+    }),
     look,
     1.35,
   );
   const mesh = new THREE.Mesh(appearance.geometry, appearance.materials);
-  const edgeGeometry = new THREE.EdgesGeometry(appearance.geometry);
-  const edgeMaterial = new THREE.LineBasicMaterial({
-    color: appearance.edgeColor,
-    transparent: appearance.edgeOpacity < 1,
-    opacity: appearance.edgeOpacity,
-  });
-  mesh.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
+  const outline = blockOutline(appearance);
+  const edgeGeometry = outline.geometry;
+  const edgeMaterial = outline.material as THREE.LineBasicMaterial;
+  mesh.add(outline);
   for (const extra of appearance.extras ?? []) mesh.add(extra);
   return {
     cube: mesh,
@@ -142,12 +156,13 @@ function cardCube(block: CardBlock): OfferCube {
 
 registerOfferView<CardBlock>("card", {
   cube: cardCube,
-  name: (block) => cardName(block.traits.identity),
-  describe: (block) => block.traits.inspectable?.inspect() ?? cardName(block.traits.identity),
+  name: (block) => blockName(block),
+  describe: (block) => inspectBlock(block) ?? blockName(block),
   className: "is-card",
   purchaseDescription: "BUY to add to the deck",
   flightTarget: "deck",
   dropTargets: ["buy"],
+  preferredTarget: "buy",
 });
 
 registerOfferView<PassiveBlock>("passive", {
@@ -158,6 +173,7 @@ registerOfferView<PassiveBlock>("passive", {
   purchaseDescription: "BUY or the passive rack to install it",
   flightTarget: "rack",
   dropTargets: ["buy", "rack"],
+  preferredTarget: "rack",
 });
 
 // A transmogrifier (#388): an Items-rack item, shown as its passive token until its own look
@@ -170,6 +186,7 @@ registerOfferView<PassiveBlock>("transmogrifier", {
   purchaseDescription: "BUY or the Items rack to keep it",
   flightTarget: "rack",
   dropTargets: ["buy", "rack"],
+  preferredTarget: "rack",
 });
 
 // The Nothingifier (#156): an Items-rack item, drawn as its empty dotted cube.
@@ -181,6 +198,7 @@ registerOfferView<PassiveBlock>("nothingifier", {
   purchaseDescription: "BUY or the Items rack to keep it",
   flightTarget: "rack",
   dropTargets: ["buy", "rack"],
+  preferredTarget: "rack",
 });
 
 /** Shop stock is drawn with the same real cube appearances as cards and installed passives. */
@@ -594,6 +612,15 @@ export function createShopView(
     buyTarget,
     dragSource,
     dragVerdict: () => guidance && { targets: [...guidance.targets], reason: guidance.reason },
+    guideProvider: {
+      preferred: () =>
+        dragging ? dropTargets[offerViews.get(dragging.entry.offer.kind).preferredTarget] : [],
+      refusal: () => {
+        if (!dragging) return null;
+        const { offer } = dragging.entry;
+        return verdict(offer.block.id, offerKind(offer).destination)?.reason ?? null;
+      },
+    },
     render,
     burnUnsold,
     frame,

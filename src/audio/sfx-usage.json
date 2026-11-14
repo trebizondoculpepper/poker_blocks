@@ -81,12 +81,12 @@
     "files": {}
   },
   "action.denied": {
-    "uses": 10,
+    "uses": 11,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 2,
       "game-run-controller.ts": 1,
-      "menus.ts": 1,
       "purchase-refusals.ts": 1,
+      "scene-traits/dev-bench-panel.ts": 2,
       "table-input.ts": 4,
       "traits/menu-action.ts": 1
     }
@@ -175,9 +175,9 @@
     }
   },
   "shop.stock.land": {
-    "uses": 2,
+    "uses": 3,
     "files": {
-      "audio/sfx-registry.ts (placeholder)": 1,
+      "audio/sfx-registry.ts (placeholder)": 2,
       "shop-view.ts": 1
     }
   },
@@ -185,6 +185,12 @@
     "uses": 1,
     "files": {
       "game-run-controller.ts": 1
+    }
+  },
+  "block.open": {
+    "uses": 1,
+    "files": {
+      "opaque-opening.ts": 1
     }
   },
   "celebration.pop": {
@@ -230,28 +236,30 @@
     }
   },
   "ui.click": {
-    "uses": 43,
+    "uses": 44,
     "files": {
       "attract-tuning-panel.ts": 1,
       "audio/sfx-registry.ts (placeholder)": 3,
       "game-modes.ts": 2,
       "game-run-controller.ts": 1,
-      "menus.ts": 5,
+      "menus.ts": 4,
+      "scene-traits/dev-bench-panel.ts": 1,
       "settings-panel.ts": 7,
       "tools/block-designer.ts": 3,
       "tools/contained-proof/room.ts": 4,
       "tools/crystal-comparison/room.ts": 4,
       "tools/dialog-room.ts": 1,
+      "tools/object-browser.ts": 1,
       "tools/profiler/room.ts": 5,
       "tools/shop-balance-editor.ts": 6,
       "traits/menu-action.ts": 1
     }
   },
   "ui.hover": {
-    "uses": 4,
+    "uses": 3,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
-      "menus.ts": 2,
+      "menus.ts": 1,
       "traits/menu-action.ts": 1
     }
   },
@@ -279,10 +287,11 @@
     }
   },
   "view.rotate": {
-    "uses": 2,
+    "uses": 3,
     "files": {
       "game-modes.ts": 1,
-      "tools/crystal-comparison/room.ts": 1
+      "tools/crystal-comparison/room.ts": 1,
+      "tools/object-browser.ts": 1
     }
   },
   "reward.coin": {

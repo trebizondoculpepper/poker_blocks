@@ -18,6 +18,8 @@ export const modeTraitRules: TraitRules = {
   shop: (rules, shop) => ({
     ...rules,
     stockShop: (state, random, round) => shopPreviewState(state, state.coins, random, shop, round),
+    // The plain configuration it is built from, for exports to record (#934).
+    policies: { ...rules.policies, stockShop: { shop } },
   }),
 };
 

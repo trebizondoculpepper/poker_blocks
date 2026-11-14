@@ -1,3 +1,6 @@
+import type { GameRun } from "./game-run";
+import type { ReplayCommand, ScenarioDefinition, ScenarioSession } from "./dev-scenario";
+import type { DeckBuilderStep } from "./deck-builder";
 /**
  * Run setup: the ordered steps a game mode applies when a game run is created.
  *
@@ -32,6 +35,17 @@ export type RunSetupStepConfigs = {
   };
   /** Every card is made of this one material: how a mode shows a visual experiment (#227). */
   uniformMaterialDeck: { material: BlockMaterial };
+  /** A mode's own starting deck: ordered deck-builder operations (doc/deck-builders.md, #827). */
+  deckBuilder: { operations: readonly DeckBuilderStep[] };
+  /**
+   * A Dev scenario (#901): prepares a trial session from a scenario definition, off to the side,
+   * through buildScenario. The composed mode or controller supplies the definition.
+   */
+  devScenario: {
+    scenario: ScenarioDefinition;
+    /** A fresh ID the requesting controller allocated: same-seed trials still differ. */
+    trialId: string;
+  };
   /** The run begins on a structure holding one block of every material. */
   materialSample: Record<never, never>;
   /** Testing only: about `share` of the deck is destructible by the given causes. */
@@ -54,6 +68,13 @@ export type RunSetupStep = {
 export type RunDeck = {
   deck: readonly CardBlock[];
   seed?: number;
+  /**
+   * The deck-builder operations a `deckBuilder` step dealt from (#827). Saved with the run, so
+   * Continue rebuilds from these rather than from a mode configuration edited since.
+   */
+  recipe?: readonly DeckBuilderStep[];
+  /** A saved run's recipe, passed back on Continue: restoration input, never another step's output. */
+  savedRecipe?: readonly DeckBuilderStep[];
 };
 
 /** What a `start` pass hands to the next step: the run's rules, its deck and its snapshot. */
@@ -61,6 +82,26 @@ export type RunStartContext = {
   rules: RunRules;
   deck: RunDeck;
   snapshot: RunSnapshot;
+  /**
+   * A prepared session a step built off to the side (#901;
+   * doc/experiments/trial-session-adoption.md): its run, rules, identity universe, own random
+   * stream and provenance, to be adopted together. Not flattened to the snapshot alone.
+   */
+  prepared?: PreparedSession;
+};
+
+/** A prepared trial session and its provenance, as a setup step hands it to the adopting host. */
+export type PreparedSession = ScenarioSession & {
+  run: GameRun;
+  provenance: {
+    trialId: string;
+    scenarioVersion: number;
+    seed: number;
+    /** The hydrated starting state: configured fixture state. */
+    initialSnapshot: RunSnapshot;
+    /** The ordinary commands replayed after it: effects caused by actions. */
+    actionLog: readonly ReplayCommand[];
+  };
 };
 
 /**
@@ -124,7 +165,17 @@ export class RunSetupRegistry {
     context: RunStartContext,
     services: RunSetupServices,
   ): RunStartContext {
-    return this.pass("start", steps, context, services);
+    const result = this.pass("start", steps, context, services);
+    // A prepared session is adopted whole (#901): a later start step that changed the snapshot
+    // would be silently lost, so that composition is a configuration error.
+    const prepared = [result.prepared ?? []].flat();
+    if (
+      prepared.some(({ run }) => JSON.stringify(result.snapshot) !== JSON.stringify(run.snapshot()))
+    )
+      throw new Error(
+        "a start step after a prepared session changed the run's start and would be lost",
+      );
+    return result;
   }
 
   /** Apply one pass over the declared steps, in declaration order. */

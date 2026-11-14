@@ -5,7 +5,7 @@ import { createActionLog } from "./action-log";
 import { describe, expect, it } from "vite-plus/test";
 import { SceneManager, SceneTraitRegistry } from "./scenes";
 import { sceneBehaviours, type SceneHost } from "./scene-behaviours";
-import { gameModeFor, type SceneTraits } from "./game-modes";
+import { gameDialogs, gameModeFor, type SceneTraits } from "./game-modes";
 import type { HudPanel } from "./hud-panels";
 import type { ShopOffer } from "./shop-stock";
 
@@ -130,6 +130,7 @@ function recordingHost() {
         show: ({ backends }) => void calls.push(`crystal:show:${backends.join(",")}`),
         hide: () => void calls.push("crystal:hide"),
       },
+      devEffectAudition: { show: () => undefined, hide: () => undefined },
       devWordCubeRoom: {
         show: ({ items }) => void calls.push(`cubes:show:${items.length}`),
         hide: () => void calls.push("cubes:hide"),
@@ -154,10 +155,14 @@ function recordingHost() {
       rack: {
         viewEntered: (entered, capacity) => void calls.push(`rack:${entered}:${capacity}`),
       },
+      dropTargetGuides: {
+        create: () => ({ frame: () => undefined, dispose: () => undefined, showing: () => [] }),
+      },
       shop: {
         buyTarget: {} as HTMLElement,
         dragSource: { pick: () => null, begin: () => {}, move: () => {}, end: () => {} },
         dragVerdict: () => null,
+        guideProvider: { preferred: () => [], refusal: () => null },
         render: (offers: readonly ShopOffer[], visible: boolean) =>
           calls.push(`shop:${visible}:${offers.length}`),
         burnUnsold: () => Promise.resolve(),
@@ -165,12 +170,21 @@ function recordingHost() {
         dispose: () => undefined,
       },
       run: {
+        committedState: () => ({
+          field: [],
+          round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
+        }),
+        lastScoring: () => ({ field: [], lines: [] }),
+        sessionProvenance: () => null,
+        requestSession: (request) => ({ ok: false, requestId: request.requestId, diagnostics: [] }),
         hasSave: () => false,
         rackCapacity: () => 5,
         seed: () => 4242,
         shopStock: () => [{ kind: "card", block: {} as never }],
         deckBlocks: () => [],
+        inventory: () => [],
         dispatch: (action) => void calls.push(`action:${action}`),
+        onCommitted: () => () => undefined,
         reducedMotion: false,
         runStats: () => ({
           roundsCompleted: 2,
@@ -185,14 +199,18 @@ function recordingHost() {
           balance: 5,
         }),
       },
+      presentationClock: {
+        hold: () => {
+          calls.push("presentation:hold");
+          return () => void calls.push("presentation:release");
+        },
+      },
       overlays: {
-        showMenu: (label, choices) =>
-          void calls.push(`menu:${label}:${choices.map(({ id }) => id).join(",")}`),
+        showMenu: (label) => void calls.push(`menu:${label}`),
         hideMenu: () => void calls.push("menu:hide"),
         showSettings: () => void calls.push("settings:show"),
         hideSettings: () => void calls.push("settings:hide"),
-        showGameOver: (stats, choices) =>
-          void calls.push(`gameOver:${stats.totalScore}:${choices.map(({ id }) => id).join(",")}`),
+        showGameOver: (stats) => void calls.push(`gameOver:${stats.totalScore}`),
         hideGameOver: () => void calls.push("gameOver:hide"),
         // Two arguments only: a stage result never carries the seed (#164).
         showStageWon: (...args: unknown[]) => {
@@ -210,8 +228,13 @@ function recordingHost() {
       cameraView: { beginShopEntrance: () => void calls.push("camera:shopEntrance") },
       audio: {
         setMusicFilter: (kind) => void calls.push(`filter:${kind}`),
-        playStageMusic: (pool) => void calls.push(`stageMusic:${pool}`),
-        playCue: (cue) => void calls.push(`cue:${cue}`),
+        // The plan each operation selects from: what a play scene's music chose.
+        playStageMusic: (operations) =>
+          void calls.push(
+            `stageMusic:${operations.map(({ config }) => (config as { plan?: string } | undefined)?.plan ?? "").join(",")}`,
+          ),
+        playCue: (operations) => void calls.push(`cue:${operations.map(({ op }) => op).join(",")}`),
+        resumeTable: () => void calls.push("musicResume"),
       },
       version: "1.2.3",
       sound: (id) => void calls.push(`sound:${id}`),
@@ -472,21 +495,54 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toEqual(["stageWon:hide"]);
   });
 
-  it("shows the game over screen with the run's totals and its items, and hides it on exit (#90)", () => {
+  it("shows the game over screen with the run's totals, its choices below, and hides both (#90)", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
-    const items = [
-      { id: "again", label: "Again" },
-      { id: "leave", label: "Leave" },
-    ];
-    scenes.register(scene("lost", { gameOverScreen: { items }, musicCue: { cue: "windDown" } }));
+    scenes.register(
+      scene("lost", {
+        resultMenu: {
+          information: "runStats",
+          showAfter: "statsReady",
+          dialog: gameDialogs.gameOver,
+        },
+        musicCue: { operations: [{ op: "windDown" }] },
+      }),
+    );
     scenes.register(scene("next", {}));
 
     scenes.switchTo("lost");
-    expect(calls).toEqual(["gameOver:900:again,leave", "cue:windDown"]);
+    expect(calls).toEqual([
+      "gameOver:900",
+      "dialog:add:Game over",
+      "choices:newRun,quitToTitle",
+      "cue:windDown",
+    ]);
     calls.length = 0;
     scenes.switchTo("next");
-    expect(calls).toEqual(["gameOver:hide"]);
+    expect(calls).toEqual(["dialog:remove:Game over", "gameOver:hide"]);
+  });
+
+  it("takes a result menu's choices away while covered and brings them back once (#949)", () => {
+    const { host, calls } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(
+      scene("lost", {
+        resultMenu: {
+          information: "runStats",
+          showAfter: "statsReady",
+          dialog: gameDialogs.gameOver,
+        },
+      }),
+    );
+    scenes.register(scene("over", {}));
+    scenes.switchTo("lost");
+    calls.length = 0;
+    scenes.push("over");
+    expect(calls).toEqual(["dialog:remove:Game over"]);
+    calls.length = 0;
+    scenes.pop();
+    // Shown again, without showing the stats a second time.
+    expect(calls).toEqual(["dialog:add:Game over", "choices:newRun,quitToTitle"]);
   });
 
   it("marks the host with the scene in front again after a pushed scene pops (#35)", () => {
@@ -520,6 +576,22 @@ describe("scene traits own their behaviour", () => {
       "show:coins",
       "show:shopExit",
     ]);
+  });
+
+  it("takes the shop exit away while the shop is covered and restores it once (#780)", () => {
+    const { host, calls, shown } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("shop", { coinsPanel: {}, shopExit: { label: "Leave" } }));
+    scenes.register(scene("pause", {}));
+    scenes.switchTo("shop");
+    calls.length = 0;
+    scenes.push("pause");
+    expect(calls).toEqual(["hide:shopExit"]);
+    // Other panels stay on show behind the cover.
+    expect([...shown]).toEqual(["coins"]);
+    calls.length = 0;
+    scenes.pop();
+    expect(calls).toEqual(["show:shopExit"]);
   });
 
   it("composes any subset of panels, leaving the others unchanged", () => {
@@ -614,21 +686,32 @@ describe("the pause menu's scene traits (#87)", () => {
     // Opening it also ends any drag under way on the table (#124).
     expect(calls).toEqual([
       "table:true",
-      "menu:Paused:resume,openSettings,quitToTitle",
+      "menu:Paused",
+      "dialog:add:Paused",
+      "choices:resume,openSettings,quitToTitle",
       "footer:1.2.3:Get source code,Report a bug",
       "gestures:cancel",
+      // The board under the menu shows a frozen pose while it is open (#530).
+      "presentation:hold",
       "filter:lowpass",
     ]);
     calls.length = 0;
     scenes.pop();
-    expect(calls).toEqual(["filter:null", "footer:hide", "menu:hide", "table:false"]);
+    expect(calls).toEqual([
+      "filter:null",
+      "presentation:release",
+      "footer:hide",
+      "dialog:remove:Paused",
+      "menu:hide",
+      "table:false",
+    ]);
   });
 
   it("leaves out Quit to title over the title screen", () => {
     const { scenes, calls } = stack();
     scenes.switchTo(title.id);
     scenes.push(pause.id);
-    expect(calls).toContain("menu:Paused:resume,openSettings");
+    expect(calls).toContain("choices:resume,openSettings");
   });
 
   it("Settings over the pause menu swaps to the high-pass, and Back restores the low-pass", () => {
@@ -638,8 +721,12 @@ describe("the pause menu's scene traits (#87)", () => {
     calls.length = 0;
     scenes.push(settings.id);
     expect(calls).toEqual([
+      // Covered by Settings, the pause choices leave until it is in front again (#530).
+      "dialog:remove:Paused",
       "table:true",
       "settings:show",
+      "dialog:add:Settings",
+      "choices:back",
       "gestures:cancel",
       "filter:highpass",
       "sound:ui.settings.enter",
@@ -650,11 +737,15 @@ describe("the pause menu's scene traits (#87)", () => {
       // Leaving Settings plays its own sound.
       "sound:ui.settings.exit",
       "filter:null",
+      "dialog:remove:Settings",
       "settings:hide",
       // Settings does not compose `tableBackground`: the pause menu under it already drew the
       // table, and a scene pushed over one must not turn it off on the way out.
       "table:false",
-      "menu:Paused:resume,openSettings,quitToTitle",
+      "menu:Paused",
+      // Back in front, the pause choices are drawn again.
+      "dialog:add:Paused",
+      "choices:resume,openSettings,quitToTitle",
       // The pause panel's footer comes back with the panel it belongs to.
       "footer:1.2.3:Get source code,Report a bug",
       "filter:lowpass",

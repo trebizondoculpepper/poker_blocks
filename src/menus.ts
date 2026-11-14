@@ -49,8 +49,8 @@ export type Menus = {
   /** The footer of the panel in front: the version, then links out (#129). */
   showPanelFooter(links: readonly PanelLink[], version: string): void;
   hidePanelFooter(): void;
-  /** Show a menu of choices (the pause menu) over whatever is in front. */
-  showMenu(label: string, choices: readonly MenuChoice[]): void;
+  /** Show a menu screen (the pause menu) over whatever is in front; its choices are a block menu. */
+  showMenu(label: string): void;
   hideMenu(): void;
   /** Show or hide the Settings panel, over whatever is in front. */
   showSettings(): void;
@@ -58,7 +58,7 @@ export type Menus = {
   /** Close the title and settings screens, back to the game. */
   closeAll(): void;
   /** The run is lost: show how it went, with a button for each choice (#90). */
-  showGameOver(stats: RunStats, choices: readonly MenuChoice[], seed: number | null): void;
+  showGameOver(stats: RunStats, seed: number | null): void;
   hideGameOver(): void;
   /**
    * A stage is won: show "Stage Won" and count the reward rows in one by one, then offer
@@ -84,13 +84,12 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   const pauseMenu = overlay("pause-screen", "Paused");
   pauseMenu.panel.insertAdjacentHTML(
     "beforeend",
-    `<div class="menu-buttons" data-menu="choices"></div>`,
+    `<div class="block-menu-host" data-menu="items"></div>`,
   );
 
   const settingsScreen = overlay("settings-screen", "Settings");
   const settingsPanel = createSettingsPanel(settingsScreen.panel, initial, {
     onChange: (next) => callbacks.onSettingsChange(next),
-    onBack: () => callbacks.onAction("back"),
   });
 
   const gameOver = overlay("game-over-screen", "Game over");
@@ -103,7 +102,7 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
        <div><dt>Highest scoring round</dt><dd data-run="bestRoundScore"></dd></div>
        <div><dt>Blocks played</dt><dd data-run="blocksPlayed"></dd></div>
      </dl>
-     <div class="menu-buttons" data-menu="game-over-choices"></div>
+     <div class="block-menu-host" data-menu="items"></div>
      <div class="menu-seed" data-menu="game-over-seed" hidden></div>`,
   );
 
@@ -132,7 +131,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   /** The footer currently shown, so hiding removes exactly that one. */
   let shownFooter: HTMLElement | null = null;
   const titleItems = find<HTMLDivElement>(title.panel, "items");
-  const choices = find<HTMLDivElement>(pauseMenu.panel, "choices");
 
   function open(screen: HTMLElement): void {
     title.root.hidden = screen !== title.root;
@@ -273,43 +271,12 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     uncover(settingsScreen.root);
   }
 
-  /** A menu button: choosing it plays its sound and dispatches its id as an action. */
-  function choiceButton(choice: MenuChoice): HTMLButtonElement {
-    const { id, label, sfx, disabled } = choice;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.menu = id;
-    button.textContent = label;
-    disableWithHint(button, choice);
-    button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
-    button.addEventListener("click", () => {
-      if (disabled) return playSfx("action.denied");
-      playSfx(sfx ?? "ui.click");
-      callbacks.onAction(id);
-    });
-    return button;
-  }
-
-  /**
-   * A disabled item stays visible and focusable, greyed out, with its hint on hover and for
-   * screen readers (`aria-disabled`, not `disabled`, so the hint still shows).
-   */
-  function disableWithHint(
-    button: HTMLButtonElement,
-    { disabled, disabledHint }: Pick<MenuChoice, "disabled" | "disabledHint">,
-  ): void {
-    button.setAttribute("aria-disabled", String(Boolean(disabled)));
-    button.title = disabled ? (disabledHint ?? "") : "";
-  }
-
   /** The pause menu: one button per choice, each dispatching its id as an action. */
-  function showMenu(label: string, menuChoices: readonly MenuChoice[]): void {
+  function showMenu(label: string): void {
     pauseMenu.root.setAttribute("aria-label", label);
-    choices.replaceChildren(...menuChoices.map(choiceButton));
     if (pauseMenu.root.hidden) cover(pauseMenu.root);
     pauseMenu.root.hidden = false;
     settingsButton.hidden = true;
-    choices.querySelector<HTMLElement>("button")?.focus();
   }
 
   function hideMenu(): void {
@@ -326,7 +293,6 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
   for (const button of host.querySelectorAll<HTMLButtonElement>(".menu-panel button")) {
     button.addEventListener("pointerenter", () => playSfx("ui.hover", { volume: 0.5 }));
   }
-  const gameOverChoices = find<HTMLDivElement>(gameOver.panel, "game-over-choices");
   const gameOverSeed = find<HTMLDivElement>(gameOver.panel, "game-over-seed");
 
   /** The game over screen: the run's totals, and one button per choice. */
@@ -353,15 +319,11 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     into.append(label, copy);
   }
 
-  function showGameOver(
-    stats: RunStats,
-    gameOverItems: readonly MenuChoice[],
-    seed: number | null,
-  ): void {
+  /** The game over screen: the run's totals and seed; its choices are a block menu (#949). */
+  function showGameOver(stats: RunStats, seed: number | null): void {
     for (const cell of gameOver.panel.querySelectorAll<HTMLElement>("[data-run]")) {
       cell.textContent = String(stats[cell.dataset.run as keyof RunStats]);
     }
-    gameOverChoices.replaceChildren(...gameOverItems.map(choiceButton));
     showSeed(gameOverSeed, seed);
     open(gameOver.root);
   }
@@ -457,7 +419,9 @@ export function createMenus(host: HTMLElement, initial: Settings, callbacks: Men
     panelHeadingHost: () => overlayInFront()?.querySelector<HTMLElement>(".menu-panel") ?? host,
     showTitle,
     hideTitle,
-    choicesHost: () => titleItems,
+    // The block-menu host of the screen in front: its scene's dialog trait draws its choices there.
+    choicesHost: () =>
+      overlayInFront()?.querySelector<HTMLElement>('[data-menu="items"]') ?? titleItems,
     choose,
     showPanelFooter,
     hidePanelFooter,

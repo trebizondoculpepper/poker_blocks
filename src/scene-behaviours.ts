@@ -2,13 +2,14 @@ import { beatShapes } from "./dance/beat-shapes";
 import { danceCycles } from "./dance/dance-floor";
 import type { TuningControl } from "./attract-tuning-panel";
 import { blockTitle, type BlockTitles } from "./scene-traits/block-title";
+import { dropTargetGuide, type DropTargetGuides } from "./scene-traits/drop-target-guide";
 /**
  * The behaviour each scene trait installs (see doc/game-architecture.md, "Trait").
  * `screen` marks the host with the scene in front, for styling and tests; `pausesBelow`
  * stops the scenes underneath a pop-up or menu taking input or updates; the HUD panel traits
  * show and hide one panel each; `dropTarget` and `dragSource` allow drops and pick-ups;
- * `shopStock` shows and hides the shop's stock; `gameOverScreen` shows the run's totals and
- * choices; `musicCue` plays a music cue on entering; `devManualBlockDestroyer` (testing only)
+ * `shopStock` shows and hides the shop's stock; `resultMenu` shows a result's information and,
+ * once its presentation has settled, its choices; `musicCue` plays a music cue on entering; `devManualBlockDestroyer` (testing only)
  * destroys a double-clicked table block.
  *
  * Each trait brings its own behaviour, so a scene composes the panels and permissions it
@@ -17,11 +18,15 @@ import { blockTitle, type BlockTitles } from "./scene-traits/block-title";
 import type { SelectionBadge } from "./selection-badge";
 import type { BinView } from "./bin-view";
 import { devDropInspector } from "./scene-traits/dev-drop-inspector";
+import { devTrialReadouts } from "./scene-traits/dev-trial-readouts";
+import { devBenchPanel } from "./scene-traits/dev-bench-panel";
 import { actionHistory, type ActionWatch } from "./scene-traits/action-history";
+import { committedEventSounds } from "./scene-traits/committed-event-sounds";
 import type { ActionLog } from "./action-log";
 import { firstPlayPrompt, type FirstPlayTable } from "./scene-traits/first-play-prompt";
-import type { MenuCondition, MenuItem, SceneTraits } from "./game-modes";
+import type { DialogConfig, MenuCondition, SceneTraits } from "./game-modes";
 import type { DialogHandlers } from "./block-menu/block-menus";
+import type { PresentationClock } from "./presentation-clock";
 import type { AudioService } from "./audio-service";
 import type { CameraViewService } from "./camera-view";
 import type { Overlays } from "./overlays";
@@ -35,6 +40,7 @@ import {
   type BlockDestroyerBoard,
 } from "./scene-traits/dev-manual-block-destroyer";
 import { SceneTraitRegistry } from "./scenes";
+import { Registry } from "./core/registry";
 import type { DeckView } from "./deck-view";
 import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
 import { devHudStyleAudition, hudStyle } from "./scene-traits/hud-style";
@@ -60,6 +66,8 @@ export type SceneHost = {
     };
     /** Whether the room and table are drawn while a scene composing `tableBackground` is in front. */
     renderer: Pick<TableRenderer, "tableEntered" | "handEntered">;
+    /** The playfield's presentation clock, held while a pausing scene covers it (#530). */
+    presentationClock: Pick<PresentationClock, "hold">;
     hud: Pick<HudPanels, "show" | "hide">;
     /** The bin: shown while a scene composing `discardBin` or `sellBin` is on the stack (#278). */
     bin: Pick<BinView, "discardBinEntered" | "sellBinEntered">;
@@ -74,6 +82,8 @@ export type SceneHost = {
       | "enableBoardGestures"
     >;
     shop: ShopView;
+    /** Drag target guides on the scene host's overlay (#922). */
+    dropTargetGuides: DropTargetGuides;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
     rack: { viewEntered(entered: boolean, capacity: number): void };
     /** The read-only deck view (#175). */
@@ -97,6 +107,7 @@ export type SceneHost = {
       show(config: SceneTraits["devCrystalComparison"]): void;
       hide(): void;
     };
+    devEffectAudition: { show(config: SceneTraits["devEffectAudition"]): void; hide(): void };
     devWordCubeRoom: {
       show(config: SceneTraits["devWordCubeRoom"]): void;
       hide(): void;
@@ -116,7 +127,13 @@ export type SceneHost = {
       | "rackCapacity"
       | "shopStock"
       | "deckBlocks"
+      | "committedState"
+      | "requestSession"
+      | "sessionProvenance"
+      | "lastScoring"
+      | "inventory"
       | "dispatch"
+      | "onCommitted"
       | "hasSave"
       | "runStats"
       | "seed"
@@ -142,7 +159,7 @@ export type SceneHost = {
     >;
     /** The build's version, shown in a panel's footer (`src/version.ts`). */
     version: string;
-    audio: Pick<AudioService, "setMusicFilter" | "playStageMusic" | "playCue">;
+    audio: Pick<AudioService, "setMusicFilter" | "playStageMusic" | "playCue" | "resumeTable">;
     /** Play a registered sound effect (src/audio/sfx.ts). */
     sound(id: SoundEffectId): void;
   };
@@ -167,20 +184,6 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     inRun: () => runScenes > 0,
     hasSave: (context) => context.services.run.hasSave(),
   };
-  /**
-   * The items a menu shows: those whose `when` holds right now. An item whose `enabledWhen`
-   * fails stays, disabled, carrying its hint.
-   */
-  const itemsToShow = (
-    context: Context,
-    items: readonly MenuItem[],
-  ): (MenuItem & { disabled: boolean })[] =>
-    items
-      .filter(({ when }) => !when || menuConditions[when](context))
-      .map((item) => ({
-        ...item,
-        disabled: Boolean(item.enabledWhen) && !menuConditions[item.enabledWhen!](context),
-      }));
   behaviours.register("runInPlay", {
     enter() {
       runScenes++;
@@ -204,7 +207,15 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("roundPanel", panel<Context, "round">("round"));
   behaviours.register("deckPanel", panel<Context, "deck">("deck"));
   behaviours.register("coinsPanel", panel<Context, "coins">("coins"));
-  behaviours.register("shopExit", panel<Context, "shopExit">("shopExit"));
+  // The shop exit's presenter (a live cube, #780) leaves while another scene covers the shop and
+  // a fresh one mounts when it resumes, so nothing of it runs or activates underneath (#780 review).
+  const shopExit = panel<Context, "shopExit">("shopExit");
+  behaviours.register("shopExit", {
+    ...shopExit,
+    cover: (context: Context) => shopExit.exit(context),
+    resume: (context: Context, config: HudPanelConfigs["shopExit"]) =>
+      shopExit.enter(context, config),
+  });
   // The shop's stock is shown, and its offers can be dragged to BUY (#277), while it's in front.
   const stockSources = new WeakMap<object, () => void>();
   behaviours.register("shopStock", {
@@ -219,6 +230,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
   });
   behaviours.register("blockTitle", blockTitle<Context>());
+  // A laser guide over where a drag is guided to, or a red X when it would be refused (#922).
+  behaviours.register("dropTargetGuide", dropTargetGuide<Context>());
   behaviours.register("attractBackground", {
     // Start the attract sequence as the scene enters; stop it on exit so the table is the only
     // thing drawn during play (#147).
@@ -324,12 +337,20 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.bin.sellBinEntered(false),
   });
   behaviours.register("deckView", {
-    // Read-only: it shows the deck and its Back button goes back; it never changes the deck.
-    enter: ({ services }) =>
-      services.deckView.show(services.run.deckBlocks(), () => {
-        services.sound("ui.back");
-        services.run.dispatch("back");
-      }),
+    // Read-only: the run's inventory (#472), every live card marked with where it is; its Back
+    // button goes back. It never changes the run.
+    enter({ services }) {
+      const records = services.run.inventory();
+      const where = new Map(records.map(({ card, icon, label }) => [card, { icon, label }]));
+      services.deckView.show(
+        records.map(({ card }) => card),
+        () => {
+          services.sound("ui.back");
+          services.run.dispatch("back");
+        },
+        (card) => where.get(card),
+      );
+    },
     exit: ({ services }) => services.deckView.hide(),
   });
   behaviours.register("devAttractTuning", {
@@ -521,6 +542,11 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     enter: ({ services }, config) => services.devCrystalComparison.show(config),
     exit: ({ services }) => services.devCrystalComparison.hide(),
   });
+  // The smoke/dust audition room's note (#466), a development-only service.
+  behaviours.register("devEffectAudition", {
+    enter: ({ services }, config) => services.devEffectAudition.show(config),
+    exit: ({ services }) => services.devEffectAudition.hide(),
+  });
   behaviours.register("devContainedProof", {
     enter: ({ services }, { backTo }) => services.devContainedProof.show(backTo),
     exit: ({ services }) => services.devContainedProof.hide(),
@@ -529,33 +555,108 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     enter: ({ services }, { backTo }) => services.devBlockDesigner.show(backTo),
     exit: ({ services }) => services.devBlockDesigner.hide(),
   });
+  /** Show a dialog's choices through the dialogs service; returns its removal. */
+  const mountDialog = (context: Context, config: DialogConfig): (() => void) =>
+    context.services.dialogs.add(
+      {
+        ...config,
+        // Choices whose `when` fails are left out altogether, as the text menus did.
+        items: config.items.filter(({ when }) => !when || menuConditions[when](context)),
+      },
+      {
+        onAction: (action) => context.services.overlays.choose(action),
+        availability: (item) =>
+          item.enabledWhen ? menuConditions[item.enabledWhen](context) : true,
+      },
+    );
+
+  /**
+   * Result screens' information, by provider name (doc/result-menus.md, "Reusable controllers
+   * and completion"): what a result menu shows above its choices.
+   */
+  const resultInformation = new Registry<{
+    show(context: Context): void;
+    hide(context: Context): void;
+  }>("result information");
+  resultInformation.register("runStats", {
+    show: ({ services }) =>
+      services.overlays.showGameOver(services.run.runStats(), services.run.seed()),
+    hide: ({ services }) => services.overlays.hideGameOver(),
+  });
+  /**
+   * When a result menu's choices may appear, by completion name: each calls `ready` once its
+   * presentation has settled and returns a cancel, so a scene that leaves first never mounts them.
+   */
+  const resultCompletions = new Registry<(context: Context, ready: () => void) => () => void>(
+    "result completion",
+  );
+  // The run's stats are written as the screen shows: they are ready at once.
+  resultCompletions.register("statsReady", (_context, ready) => {
+    ready();
+    return () => {};
+  });
+  /** Each result menu's live state, by its trait config. */
+  const resultMenus = new WeakMap<
+    object,
+    { ready: boolean; cancel: () => void; remove: (() => void) | null }
+  >();
+  const unmountResult = (config: object) => {
+    const state = resultMenus.get(config);
+    state?.remove?.();
+    if (state) state.remove = null;
+  };
+  behaviours.register("resultMenu", {
+    enter(context, config) {
+      resultInformation.get(config.information).show(context);
+      const state = { ready: false, cancel: () => {}, remove: null as (() => void) | null };
+      resultMenus.set(config, state);
+      state.cancel = resultCompletions.get(config.showAfter)(context, () => {
+        // Exactly once, and only while this entry is still the live one.
+        if (state.ready || resultMenus.get(config) !== state) return;
+        state.ready = true;
+        state.remove = mountDialog(context, config.dialog);
+      });
+    },
+    cover: (_context, config) => unmountResult(config),
+    resume(context, config) {
+      const state = resultMenus.get(config);
+      if (state?.ready && !state.remove) state.remove = mountDialog(context, config.dialog);
+    },
+    exit(context, config) {
+      const state = resultMenus.get(config);
+      state?.cancel();
+      unmountResult(config);
+      resultMenus.delete(config);
+      resultInformation.get(config.information).hide(context);
+    },
+  });
+
   // Each dialog is its own trait with its own data; all of them hand that data to the dialogs
   // service while their scene is on the stack, so none needs code of its own.
   for (const name of [
     "titleMenuDialog",
     "newGameDialog",
     "pauseDialog",
+    "settingsDialog",
     "stageWonDialog",
     "gameOverDialog",
   ] as const) {
     const shown = new WeakMap<object, () => void>();
     const show = (context: Context, config: SceneTraits[typeof name]) => {
       shown.get(config)?.();
-      const { services } = context;
-      shown.set(
-        config,
-        services.dialogs.add(config, {
-          onAction: (action) => services.overlays.choose(action),
-          availability: (item) =>
-            item.enabledWhen ? menuConditions[item.enabledWhen](context) : true,
-        }),
-      );
+      shown.set(config, mountDialog(context, config));
     };
     behaviours.register(name, {
       enter: show,
       // Back in front after a scene over it (Settings, the new-game confirmation) closed.
       resume: show,
       exit: (_context, config) => {
+        shown.get(config)?.();
+        shown.delete(config);
+      },
+      // Covered by another scene (pause over the title): its choices leave until it is in front
+      // again, so they never show through a panel-free menu over it (#530 review).
+      cover: (_context, config) => {
         shown.get(config)?.();
         shown.delete(config);
       },
@@ -574,13 +675,15 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.devObjectBrowser.hide(),
   });
   behaviours.register("devDropInspector", devDropInspector<Context>());
+  behaviours.register("devTrialReadouts", devTrialReadouts<Context>());
+  behaviours.register("devBenchPanel", devBenchPanel<Context>());
   behaviours.register("actionHistory", actionHistory<Context>());
   behaviours.register("devManualBlockDestroyer", devManualBlockDestroyer<Context>());
   behaviours.register("hudStyle", hudStyle<Context>());
   behaviours.register("devHudStyleAudition", devHudStyleAudition<Context>());
   behaviours.register("menu", {
-    enter(context, { label, items }) {
-      context.services.overlays.showMenu(label, itemsToShow(context, items));
+    enter(context, { label }) {
+      context.services.overlays.showMenu(label);
     },
     // Back in front after Settings closed over it.
     resume(context, config) {
@@ -590,12 +693,6 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       context.services.overlays.hideMenu();
     },
   });
-  behaviours.register("gameOverScreen", {
-    enter({ services }, { items }) {
-      services.overlays.showGameOver(services.run.runStats(), items, services.run.seed());
-    },
-    exit: ({ services }) => services.overlays.hideGameOver(),
-  });
   behaviours.register("stageWonScreen", {
     enter({ services }, { next }) {
       const reward = services.run.stageReward();
@@ -604,10 +701,15 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.overlays.hideStageWon(),
   });
   behaviours.register("musicCue", {
-    enter: ({ services }, { cue }) => services.audio.playCue(cue),
+    enter: ({ services }, { operations }) => services.audio.playCue(operations),
+  });
+  behaviours.register("musicResume", {
+    enter: ({ services }, { operations }) => services.audio.resumeTable(operations),
   });
   // A play scene starts its own music as it comes in front; covering and uncovering it (the
   // pause menu) neither restarts nor changes it.
+  // Each committed fact's configured sound, for plays and discards alike (#755).
+  behaviours.register("committedEventSounds", committedEventSounds<Context>());
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });
@@ -622,7 +724,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     },
   });
   behaviours.register("musicTrack", {
-    enter: ({ services }, { pool }) => services.audio.playStageMusic(pool),
+    enter: ({ services }, { operations }) => services.audio.playStageMusic(operations),
   });
   behaviours.register("titleScreen", {
     enter(context) {
@@ -664,11 +766,19 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       return true;
     },
   });
+  /** Each pausing scene's hold on the presentation clock, by its trait config. */
+  const presentationHolds = new WeakMap<object, () => void>();
   behaviours.register("pausesBelow", {
     // A scene that stops input below it also ends any gesture already under way there, so a
     // drag begun before Escape can't play a card behind the menu (#124).
-    enter(context, { input }) {
-      if (input) context.services.input.cancelGestures();
+    enter(context, config) {
+      if (config.input) context.services.input.cancelGestures();
+      if (config.presentation)
+        presentationHolds.set(config, context.services.presentationClock.hold());
+    },
+    exit(_context, config) {
+      presentationHolds.get(config)?.();
+      presentationHolds.delete(config);
     },
     blocksBelow(_context, config, operation) {
       return config[operation];

@@ -1,3 +1,4 @@
+import { blockName } from "../block-presentation";
 /**
  * The console's commands, and running a line, as in simulation_of_boring_things: a line
  * that starts with a command's name runs Quake-style (`music style-noir`); anything else is
@@ -5,7 +6,7 @@
  * The app is reached only through `ConsoleHost`, so this module is pure but for what the
  * host does.
  */
-import { cardName, type CardBlock } from "../cards";
+import { type CardBlock } from "../cards";
 import type { GameRun } from "../game-run";
 import { splitStatements, tokenise } from "./command-line";
 
@@ -38,6 +39,8 @@ export type ConsoleHost = {
   musicNow(): string | null;
   playMusic(id: string): void;
   stopMusic(): void;
+  /** Print a line later, after the command returned (an asynchronous result). */
+  say(text: string, tone: "output" | "error"): void;
   /** Clear the console's screen. */
   clear(): void;
   history(): readonly string[];
@@ -60,9 +63,9 @@ const fail = (text: string): never => {
 };
 
 const cards = (blocks: readonly CardBlock[]): string =>
-  blocks.length ? blocks.map((b) => cardName(b.traits.identity)).join(", ") : "(none)";
+  blocks.length ? blocks.map((b) => blockName(b)).join(", ") : "(none)";
 
-export const COMMANDS: readonly ConsoleCommand[] = [
+const commands: ConsoleCommand[] = [
   {
     name: "help",
     usage: "[command]",
@@ -129,8 +132,7 @@ export const COMMANDS: readonly ConsoleCommand[] = [
       const field = host.game().state.field;
       if (!field.length) return "(empty)";
       return field.map(
-        ({ block, cell }) =>
-          `  ${cardName(block.traits.identity)}  (${cell.x}, ${cell.y}, ${cell.z})`,
+        ({ block, cell }) => `  ${blockName(block)}  (${cell.x}, ${cell.y}, ${cell.z})`,
       );
     },
   },
@@ -243,7 +245,24 @@ export const COMMANDS: readonly ConsoleCommand[] = [
   },
 ];
 
+export const COMMANDS: readonly ConsoleCommand[] = commands;
 const COMMAND_BY_NAME = new Map(COMMANDS.map((c) => [c.name, c]));
+
+/**
+ * Add a command composed by its owner (a development-only tool, #987); the returned function
+ * removes it. A name already taken is an error.
+ */
+export function registerConsoleCommand(command: ConsoleCommand): () => void {
+  if (COMMAND_BY_NAME.has(command.name))
+    throw new Error(`Console command "${command.name}" exists`);
+  commands.push(command);
+  COMMAND_BY_NAME.set(command.name, command);
+  return () => {
+    const at = commands.indexOf(command);
+    if (at >= 0) commands.splice(at, 1);
+    if (COMMAND_BY_NAME.get(command.name) === command) COMMAND_BY_NAME.delete(command.name);
+  };
+}
 
 /**
  * The command a statement runs: the longest command name whose words the statement starts

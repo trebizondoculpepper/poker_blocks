@@ -1,14 +1,27 @@
+import { inspectBlock } from "./traits/inspectable";
 /**
- * The in-run deck view (#175): a read-only overlay listing every block in the run's deck,
- * in rank order from 2 to Ace, with each rank's suit and material variants grouped under it.
- * Hover, focus or tap on a block shows its details. It never changes the deck.
+ * The in-run card view (#175, #472): a read-only overlay listing the run's cards in rank order
+ * from 2 to Ace, each rank's suit and material variants grouped under it, each with a marker
+ * saying where it is (deck, hand, table or discard). Hover, focus or tap on a block shows its
+ * details and location. It never changes the run.
  */
 import { ranks, type CardBlock } from "./cards";
+import { blockChip } from "./block-presentation";
 import { getMaterialDefinition, materialOf } from "./materials";
 
+/** Where a listed card is: its marker and its description. */
+export type CardLocation = { icon: string; label: string };
+
 export type DeckView = {
-  /** Show these blocks; `close` is called by the Back button. */
-  show(blocks: readonly CardBlock[], close: () => void): void;
+  /**
+   * Show these blocks, each with where it is if `locationOf` says; `close` is called by the
+   * Back button.
+   */
+  show(
+    blocks: readonly CardBlock[],
+    close: () => void,
+    locationOf?: (block: CardBlock) => CardLocation | undefined,
+  ): void;
   hide(): void;
   /** Showing: a stage's outcome waits until it closes (#175). */
   readonly isOpen: boolean;
@@ -17,14 +30,20 @@ export type DeckView = {
 /** Display order: 2 to 10, the court cards, then the Ace. */
 export const deckRankOrder = [...ranks.slice(1), ranks[0]];
 
-/** The deck grouped by rank, in display order; empty ranks are left out. */
+/** The label of the group for blocks with no rank (rankless actives, #893), listed last. */
+export const ranklessGroup = "Other";
+
+/**
+ * The deck grouped by rank, in display order; empty ranks are left out. A block with no rank/suit
+ * value provider joins the last group rather than being given a rank.
+ */
 export function groupDeckByRank(
   blocks: readonly CardBlock[],
 ): { rank: string; blocks: CardBlock[] }[] {
-  return deckRankOrder
+  return [...deckRankOrder, ranklessGroup]
     .map((rank) => ({
       rank,
-      blocks: blocks.filter((block) => block.traits.identity.rank === rank),
+      blocks: blocks.filter((block) => (block.traits.identity?.rank ?? ranklessGroup) === rank),
     }))
     .filter(({ blocks: group }) => group.length > 0);
 }
@@ -32,8 +51,8 @@ export function groupDeckByRank(
 /** What a block shows when inspected: the same details as hovering it in play. */
 export function deckBlockDetails(block: CardBlock): string {
   return (
-    block.traits.inspectable?.inspect() ??
-    `${block.traits.identity.rank}${block.traits.identity.suit.symbol} · ${getMaterialDefinition(materialOf(block)).name}`
+    inspectBlock(block) ??
+    `${blockChip(block).text} · ${getMaterialDefinition(materialOf(block)).name}`
   );
 }
 
@@ -42,15 +61,15 @@ export function createDeckView(host: HTMLElement): DeckView {
   root.className = "deck-view";
   root.setAttribute("role", "dialog");
   root.setAttribute("aria-modal", "true");
-  root.setAttribute("aria-label", "Your deck");
+  root.setAttribute("aria-label", "Your cards");
   root.hidden = true;
   host.append(root);
 
   return {
-    show(blocks, close) {
+    show(blocks, close, locationOf = () => undefined) {
       const heading = document.createElement("h2");
       heading.className = "deck-view-heading";
-      heading.textContent = `YOUR DECK · ${blocks.length}`;
+      heading.textContent = `YOUR CARDS · ${blocks.length}`;
       const details = document.createElement("p");
       details.className = "deck-view-details";
       details.setAttribute("aria-live", "polite");
@@ -68,11 +87,21 @@ export function createDeckView(host: HTMLElement): DeckView {
           const chip = document.createElement("button");
           chip.type = "button";
           chip.className = "deck-view-block";
-          const { rank, suit } = block.traits.identity;
-          chip.textContent = `${rank}${suit.symbol}`;
-          chip.style.color = suit.color;
+          const face = blockChip(block);
+          chip.textContent = face.text;
+          const location = locationOf(block);
+          if (location) {
+            const marker = document.createElement("span");
+            marker.className = "deck-view-location";
+            marker.textContent = location.icon;
+            marker.setAttribute("aria-hidden", "true");
+            chip.append(marker);
+          }
+          chip.style.color = face.color ?? "";
           chip.dataset.material = materialOf(block);
-          const text = deckBlockDetails(block);
+          const text = location
+            ? `${deckBlockDetails(block)}\n${location.label[0]!.toUpperCase()}${location.label.slice(1)}`
+            : deckBlockDetails(block);
           chip.setAttribute("aria-label", text);
           const reveal = () => (details.textContent = text);
           chip.addEventListener("pointerenter", reveal);

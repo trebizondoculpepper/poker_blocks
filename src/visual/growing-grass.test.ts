@@ -61,7 +61,7 @@ function vessel() {
     }
     return out;
   };
-  return { run, blades, rotation, normal, boundary, mesh };
+  return { run, blades, rotation, normal, boundary, mesh, surface };
 }
 
 describe("growing grass (#358)", () => {
@@ -100,20 +100,21 @@ describe("growing grass (#358)", () => {
     }
   });
 
-  it("is destroyed by turning the block, then grows again after stillness, but not on an unsettled top", () => {
+  it("keeps its blades through a turn, which restarts the clock for new growth only (#765)", () => {
     const v = vessel();
-    v.run(8);
-    expect(v.blades().length).toBeGreaterThan(0);
+    v.run(6);
+    const before = v.blades().length;
+    expect(before).toBeGreaterThan(0);
     v.rotation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
     v.run(1 / 30);
-    expect(v.blades()).toHaveLength(0);
-    // The surface hasn't settled toward the block's new up yet: no grass, however long.
+    expect(v.blades()).toHaveLength(before);
+    // The top hasn't settled toward the block's new up: no new blades, however long.
     v.run(8);
-    expect(v.blades()).toHaveLength(0);
-    // Settled: world up in the block's space is now -z.
+    expect(v.blades()).toHaveLength(before);
+    // Settled (world up in the block's space is now -z): new growth resumes.
     v.normal.set(0, 0, -1);
     v.run(1);
-    expect(v.blades().length).toBeGreaterThan(0);
+    expect(v.blades().length).toBeGreaterThan(before);
   });
 
   it("ignores jitter below the turn tolerance", () => {
@@ -160,17 +161,40 @@ describe("growing grass (#358)", () => {
     expect(blades[0]!.base.distanceTo(blades[1]!.base)).toBeGreaterThan(1e-6);
   });
 
-  it("keeps blades rooted on the top while it is still settling (#419 review)", () => {
+  it("keeps each blade where it grew while the soil moves under it (#765)", () => {
     const v = vessel();
-    // Settled enough to grow, but still 15° from level, then easing the rest of the way.
     v.normal.set(Math.sin(0.26), Math.cos(0.26), 0);
     v.run(7);
-    expect(v.blades().length).toBeGreaterThan(0);
+    const grown = v.blades();
+    expect(grown.length).toBeGreaterThan(0);
     v.normal.set(0, 1, 0);
     v.run(1 / 30);
-    for (const { base, tip } of v.blades()) {
-      expect(Math.abs(base.y)).toBeLessThan(1e-5);
-      expect(tip.y).toBeGreaterThan(0);
-    }
+    const after = v.blades();
+    // Every blade still shown has its root exactly where it grew: the level top didn't pull it
+    // onto itself. (Some on the low side are now wholly under the soil, and have gone.)
+    expect(after.length).toBeGreaterThan(0);
+    for (const { base } of after)
+      expect(grown.some((before) => before.base.distanceTo(base) < 1e-6)).toBe(true);
+    expect(after.some(({ base }) => Math.abs(base.y) > 1e-3)).toBe(true);
+  });
+
+  it("retires a blade only when all of it is buried, and reuses its slot (#765)", () => {
+    const v = vessel();
+    v.run(12);
+    expect(v.blades()).toHaveLength(config.count);
+    const shortest = Math.min(...v.blades().map(({ tip }) => tip.y));
+    // Soil over the bases but below every tip: partly buried blades all stay.
+    v.surface.height = (shortest / 2) * v.boundary.volumeScale;
+    v.run(1 / 30);
+    expect(v.blades()).toHaveLength(config.count);
+    // Over every tip: all of them are buried and go.
+    const top = Math.max(...v.blades().map(({ tip }) => tip.y)) * 1.05;
+    v.surface.height = top * v.boundary.volumeScale;
+    v.run(1 / 30);
+    expect(v.blades()).toHaveLength(0);
+    // The freed slots grow again on the new top once it has been still.
+    v.run(6);
+    expect(v.blades().length).toBeGreaterThan(0);
+    for (const { base } of v.blades()) expect(base.y).toBeCloseTo(top, 5);
   });
 });

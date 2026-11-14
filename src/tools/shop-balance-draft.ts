@@ -8,7 +8,7 @@ import {
 import { defaultShop } from "../game-modes";
 import { materialDefinitions, type MaterialDefinition } from "../materials";
 import { passiveFrequencies, validateWeightCurve, type WeightCurve } from "../offer-weights";
-import { passiveDefinitions, type PassiveDefinition } from "../passives";
+import { ordinaryPassives, passiveDefinitions, type PassiveDefinition } from "../passives";
 import { materialsNamedBy } from "../offer-eligibility";
 import { validateShopStock } from "../shop-stock-config";
 
@@ -54,11 +54,10 @@ export function currentShopBalanceDraft(): ShopBalanceDraft {
         shop ? { basePrice: shop.basePrice, weights: copyCurve(shop.weights) } : null,
       ]),
     ),
+    // Normal-shop balance: the passives the ordinary catalogue admits (provisional trials have
+    // none, doc/release-status.md).
     passives: Object.fromEntries(
-      passiveDefinitions.names().map((id) => {
-        const shop = passiveDefinitions.get(id).shop;
-        return [id, shop ? { ...shop } : null];
-      }),
+      ordinaryPassives().map(({ id, shop }) => [id, shop ? { ...shop } : null]),
     ),
     frequencies: Object.fromEntries(
       passiveFrequencies.names().map((id) => [id, copyCurve(passiveFrequencies.get(id))]),
@@ -152,7 +151,7 @@ export function validateShopBalanceDraft(draft: ShopBalanceDraft): DraftError[] 
         add(`${path}.weights`, message);
   }
 
-  const passiveIds = passiveDefinitions.names();
+  const passiveIds = ordinaryPassives().map(({ id }) => id);
   if (!keysMatch(draft.passives, passiveIds))
     add("passives", "Passive IDs must match the current definitions");
   for (const id of passiveIds) {

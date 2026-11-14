@@ -28,7 +28,19 @@ import { cellKey, faceNormal, faces } from "./traits/attachable";
 export type HandlerRef = { id: string; config: unknown };
 
 /** One reaction on a material's definition. */
-export type Reaction = { when: HandlerRef; results: readonly HandlerRef[] };
+export type Reaction = {
+  when: HandlerRef;
+  results: readonly HandlerRef[];
+  /**
+   * When in a play it resolves (doc/material-phases.md, "Authored phases and shared ownership"):
+   * `placement` for an explicitly placement-timed interaction, resolved before scoring (the
+   * approved Air/flame upgrade); omitted, `afterScore`, with the other reactions.
+   */
+  timing?: string;
+};
+
+/** A reaction's timing: its own, or after scoring. */
+export const reactionTiming = (reaction: Reaction) => reaction.timing ?? "afterScore";
 
 /** Whether a block's face neighbours (from the snapshot) set off a reaction. */
 export type ReactionMatcher = (
@@ -63,13 +75,22 @@ function resultHandler(id: string): ReactionResult {
   return reactionResults.get(id);
 }
 
+/**
+ * Whether a card is of the same material family as `material` (#819, #856 review): a derived
+ * look such as an audition variant reacts as its substance does. In normal play every family is
+ * its material's own, so this is the material itself.
+ */
+const sameFamily = (card: CardBlock, material: BlockMaterial) =>
+  getMaterialDefinition(materialOf(card)).materialFamily ===
+  getMaterialDefinition(material).materialFamily;
+
 // A neighbour made of a given material and, optionally, holding a given state bonus (hot water
 // is water with the "heated" bonus, #367).
 reactionMatchers.register("neighbour-state", (_block, neighbours, config) => {
   const { material, stateBonus } = config as { material: BlockMaterial; stateBonus: string };
   return neighbours.some(
     (neighbour) =>
-      materialOf(neighbour) === material && neighbour.traits.stateBonus?.id === stateBonus,
+      sameFamily(neighbour, material) && neighbour.traits.stateBonus?.id === stateBonus,
   );
 });
 
@@ -89,7 +110,7 @@ reactionMatchers.register("neighbour-material", (block, neighbours, config) => {
   if (unlessState.includes(block.traits.stateBonus?.id ?? "")) return false;
   if (unlessNeighbour.some(({ id, config }) => matcher(id)(block, neighbours, config)))
     return false;
-  return neighbours.some((neighbour) => materialOf(neighbour) === material);
+  return neighbours.some((neighbour) => sameFamily(neighbour, material));
 });
 
 // A neighbour whose material is a source of heat (#383): flame, or any material declaring `heat`.

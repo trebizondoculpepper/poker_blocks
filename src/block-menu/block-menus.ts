@@ -26,9 +26,7 @@ import { springAnchor, type SpringAnchorSettings } from "../traits/spring-anchor
 import type { Availability } from "../traits/availability";
 import { createCubeStage, type StageCube, type StageOptions } from "./cube-stage";
 import { choiceActions, focusAfter, isBackKey } from "./choice-keys";
-
-/** The distance between neighbouring buttons' fixed points. */
-const spacing = 1.7;
+import { cubeSpacing as spacing } from "./menu-sizing";
 
 /** Each button's fixed point: a single centred row. */
 export function rowPositions(count: number): THREE.Vector3[] {
@@ -96,6 +94,9 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
     let cubes: StageCube[] = [];
     list.replaceChildren();
     list.setAttribute("aria-label", dialog.title);
+    // The dialog's own presentation: its panel treatment, read by the stylesheet, and its sizing.
+    host.dataset.panel = dialog.presentation?.panel ?? "readable";
+    stage.setSizing(dialog.presentation?.sizing);
     caption.textContent = "";
     const byAction = new Map<
       string,
@@ -243,20 +244,27 @@ export type DialogHandlers = {
  * starting focus. Escape is the scene's own key action, not the dialog's. It names no dialog or action.
  */
 export function createDialogPresenter(host: () => HTMLElement, options: BlockMenuOptions) {
-  let menus: ReturnType<typeof createBlockMenus> | null = null;
-  let message: HTMLParagraphElement | null = null;
+  /** One block-menu layer per host: each menu screen draws its choices in its own place. */
+  const layers = new Map<
+    HTMLElement,
+    { menus: ReturnType<typeof createBlockMenus>; message: HTMLParagraphElement }
+  >();
+  const layerFor = (into: HTMLElement) => {
+    const existing = layers.get(into);
+    if (existing) return existing;
+    const message = document.createElement("p");
+    message.className = "block-menu-message";
+    message.setAttribute("aria-live", "assertive");
+    into.before(message);
+    const layer = { menus: createBlockMenus(into, options), message };
+    layers.set(into, layer);
+    return layer;
+  };
   return {
     add(dialog: DialogConfig, handlers: DialogHandlers): () => void {
-      if (!menus) {
-        const into = host();
-        menus = createBlockMenus(into, options);
-        message = document.createElement("p");
-        message.className = "block-menu-message";
-        message.setAttribute("aria-live", "assertive");
-        into.before(message);
-      }
-      message!.textContent = dialog.message ?? "";
-      message!.hidden = !dialog.message;
+      const { menus, message } = layerFor(host());
+      message.textContent = dialog.message ?? "";
+      message.hidden = !dialog.message;
       const shown = menus.show(dialog, { onAction: (action) => handlers.onAction(action) });
       for (const item of dialog.items)
         shown.setAvailability(item.action, {
@@ -267,13 +275,15 @@ export function createDialogPresenter(host: () => HTMLElement, options: BlockMen
       else shown.focusFirst();
       return () => {
         shown.hide();
-        if (message?.textContent === (dialog.message ?? "")) message.hidden = true;
+        if (message.textContent === (dialog.message ?? "")) message.hidden = true;
       };
     },
     dispose(): void {
-      message?.remove();
-      menus?.dispose();
-      menus = null;
+      for (const { menus, message } of layers.values()) {
+        message.remove();
+        menus.dispose();
+      }
+      layers.clear();
     },
   };
 }

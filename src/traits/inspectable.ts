@@ -1,6 +1,7 @@
 import { defineTrait } from "../core/trait";
 import type { CardBlock } from "../cards";
 import { availability } from "./availability";
+import { Registry } from "../core/registry";
 
 export type InspectableTrait = {
   inspect(): string;
@@ -10,8 +11,20 @@ export function inspectable(description: string): InspectableTrait {
   return { inspect: () => description };
 }
 
+/**
+ * Live description providers (#751): each adds its own lines from the card's current state after
+ * the card's ordinary description, in registration order. Hosts never ask which apply.
+ */
+export const inspectionProviders = new Registry<(block: CardBlock) => readonly string[]>(
+  "inspection provider",
+);
+
+/** A card's full description: its own, then every provider's lines. Null when it has none. */
 export function inspectBlock(block: CardBlock): string | null {
-  return block.traits.inspectable?.inspect() ?? null;
+  const own = block.traits.inspectable?.inspect();
+  if (own === undefined) return null;
+  const lines = inspectionProviders.names().flatMap((name) => inspectionProviders.get(name)(block));
+  return [own, ...lines].join("\n");
 }
 
 /**

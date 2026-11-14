@@ -68,10 +68,10 @@ describe("field view", () => {
       activation: { effect: { id: "pulse", colour: "#ff5500" }, sfx: "material.activate.wood" },
     };
     const sevenHearts = standardDeck.find(
-      ({ traits }) => traits.identity.rank === "7" && traits.identity.suit.name === "hearts",
+      ({ traits }) => traits.identity!.rank === "7" && traits.identity!.suit.name === "hearts",
     )!;
     const sevenClubs = standardDeck.find(
-      ({ traits }) => traits.identity.rank === "7" && traits.identity.suit.name === "clubs",
+      ({ traits }) => traits.identity!.rank === "7" && traits.identity!.suit.name === "clubs",
     )!;
     const materialCard: CardBlock = {
       ...sevenHearts,

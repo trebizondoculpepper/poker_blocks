@@ -1,3 +1,4 @@
+import type { DeckBuilderStep } from "./deck-builder";
 import {
   attachPlayfield,
   playSteps,
@@ -9,6 +10,8 @@ import { resetRoundState } from "./round-end";
 import { clearField, removeCardForRun } from "./card-ownership";
 // Registers the spawn-beyond-pair reaction result (#425).
 import "./pair-spawn";
+// Registers the opaque container's opening, run by the play's opening phase (#930).
+import "./opaque-opening";
 // Registers cooking's stage-end reset (#372).
 import "./cooking";
 // Registers the `trigger-block` rule command (#433).
@@ -51,13 +54,19 @@ import {
 import {
   crossingCells,
   beforeTotalPhase,
+  numberActivations,
   resolvePassiveRules,
   withOperationCounter,
   scoreFieldWithPassives,
   type PassiveScoredLine,
   type RuleActivation,
 } from "./passive-effects";
-import { commitCommands, type CommandTarget } from "./rule-commands";
+import {
+  commitCommands,
+  commitCommandsWithOutcomes,
+  sourcedTarget,
+  type CommandTarget,
+} from "./rule-commands";
 import type { RandomCursor } from "./random";
 import {
   ActionContext,
@@ -99,6 +108,8 @@ export type RunSnapshot = {
   rewarded?: { stage: string; reward: StageReward };
   /** The seed a run setup step dealt this run's deck from, so Continue rebuilds the same deck. */
   seed?: number;
+  /** The deck-builder recipe the deck was dealt from, if a `deckBuilder` step dealt it (#827). */
+  deckRecipe?: readonly DeckBuilderStep[];
   /**
    * The session's random seed and how far its sequence had reached, so Continue resumes the
    * same sequence rather than replaying it (#134).
@@ -124,12 +135,15 @@ export class GameRun {
   private runStats: RunStats = emptyRunStats;
   private readonly passiveEvents = new PassiveEventQueue();
   private scoredLines: PassiveScoredLine[] = [];
+  /** The field as the last play scored it, before any after-score step changed it (#904). */
+  private scoringField: GameState["field"] = [];
   /** The rules that fired during the last discard, in the order they resolved (#81). */
   private discardActivations: RuleActivation[] = [];
   private discardEvents: readonly GameEvent[] = [];
   private rewarded: { stage: string; reward: StageReward } | null = null;
   private randomCursor: RandomCursor | undefined;
   private runSeed: number | undefined;
+  private deckRecipe: readonly DeckBuilderStep[] | undefined;
   /** The stage (round:phase) whose final stage.won or stage.lost has been emitted. */
   private decidedStage: string | null = null;
   /** Rewinds the session's random stream when an action rolls back (#657); none in tests. */
@@ -139,6 +153,7 @@ export class GameRun {
   /** Bumped by every committed action: the version a captured fact describes. */
   private version = 0;
   private lastFacts: readonly EventEnvelope[] = [];
+  private readonly committedListeners = new Set<(facts: readonly EventEnvelope[]) => void>();
   /** The action resolving now, if any: every drain and command inside it shares its budget. */
   private activeAction: { context: ActionContext; phase: string; batchId: string | null } | null =
     null;
@@ -157,8 +172,8 @@ export class GameRun {
     this.random = random;
     const setup = config.stage(1, "stage-1");
     this.activeDealer = dealers.get(setup.dealer);
-    const dealt = this.activeDealer.startGame(cards, random);
-    this.currentState = this.activeDealer.startStage(dealt, setup, random);
+    // One stage start, so the opening deck is shuffled once and the hand is its top (#551).
+    this.currentState = this.activeDealer.startGame(cards, random, setup);
     this.passiveEvents.syncRack(this.currentState.passiveRack);
     this.lifecycle("stage.started");
   }
@@ -186,6 +201,7 @@ export class GameRun {
     session.runStats = snapshot.stats ?? emptyRunStats;
     session.rewarded = snapshot.rewarded ?? null;
     session.runSeed = snapshot.seed;
+    session.deckRecipe = snapshot.deckRecipe;
     session.randomCursor = snapshot.random;
     session.actions = ActionLedger.restore(snapshot.actions);
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
@@ -199,6 +215,28 @@ export class GameRun {
   /** Let failed actions rewind the session's random stream with them (#657). */
   attachRandomCheckpoints(checkpoints: RandomCheckpoints): void {
     this.randomCheckpoints = checkpoints;
+  }
+
+  /**
+   * Hear every committed action's facts, in order, once it has committed (#755). A rolled-back or
+   * invalid action publishes nothing. Returns a function that stops listening.
+   */
+  onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void {
+    this.committedListeners.add(listener);
+    return () => this.committedListeners.delete(listener);
+  }
+
+  /** One listener's error never stops another hearing the facts, nor reaches the action. */
+  private publish(facts: readonly EventEnvelope[]): void {
+    for (const listener of Array.from(this.committedListeners)) {
+      try {
+        listener(facts);
+      } catch (error) {
+        queueMicrotask(() => {
+          throw error;
+        });
+      }
+    }
   }
 
   /** The facts the last committed action recorded, in order, each in its envelope (#657). */
@@ -237,6 +275,9 @@ export class GameRun {
       // The stage the action resolves in, fixed now: every fact it records carries it.
       { stage: this.stageContext, round: this.currentRound },
     );
+    // Facts are published only once the action has committed, outside the transaction, so no
+    // presentation listener can run inside it or roll it back (doc/game-events.md, #755).
+    let published: readonly EventEnvelope[] | null = null;
     try {
       this.activeAction = { context: action, phase: kind, batchId: null };
       // Everything evaluated inside the action is charged to its budget (#661 review).
@@ -251,6 +292,7 @@ export class GameRun {
       this.version++;
       this.lastFacts = action.facts;
       this.lastFailure = null;
+      published = action.facts;
       return result;
     } catch (error) {
       // Everything back as it was: the run's own fields, the queued events and the stream.
@@ -261,6 +303,8 @@ export class GameRun {
       this.lastFailure = error instanceof Error ? error : new Error(String(error));
       this.activeAction = null;
       return null;
+    } finally {
+      if (published) this.publish(published);
     }
   }
 
@@ -284,6 +328,8 @@ export class GameRun {
     // Each fact names the fact it answered, from the parent the queue kept as it queued it
     // (#661 review); a fact from an earlier drain of this action is found the same way.
     for (const event of delivered) {
+      if (event.blockId && event.reaction)
+        this.playReactions?.push({ blockId: event.blockId, ...event.reaction });
       const cause = this.passiveEvents.parentOf(event);
       // A working-value capability belongs to the mutable phase, never to the recorded fact.
       const fact: GameEvent = { ...event };
@@ -374,6 +420,11 @@ export class GameRun {
   }
 
   /** Final results from the last play, shared by the stage total and presentation. */
+  /** The field the last play scored, captured before its after-score steps (#904). */
+  get lastScoringField(): GameState["field"] {
+    return this.scoringField;
+  }
+
   get lastScoredLines(): readonly PassiveScoredLine[] {
     return this.scoredLines;
   }
@@ -459,6 +510,7 @@ export class GameRun {
       stats: this.runStats,
       ...(this.rewarded ? { rewarded: this.rewarded } : {}),
       ...(this.runSeed === undefined ? {} : { seed: this.runSeed }),
+      ...(this.deckRecipe === undefined ? {} : { deckRecipe: this.deckRecipe }),
       ...(this.randomCursor === undefined ? {} : { random: this.randomCursor }),
       actions: this.actions.state,
     };
@@ -717,6 +769,7 @@ export class GameRun {
     },
     update: (state: GameState) => void (run.currentState = state),
     grantUnownedPassive: () => run.grantUnownedPassive(),
+    random: () => run.random(),
   }))(this);
 
   /** A passive instance id no installed passive has: `passive.<n>`, from the rack size up. */
@@ -738,8 +791,14 @@ export class GameRun {
     return [{ type: "passive.installed", blockId: id }];
   }
 
-  /** The reactions the last play set off, in field order, for presentation (#366). */
+  /**
+   * The material changes the last play committed, in delivery order, for presentation (#366):
+   * every delivered fact carrying a `reaction`, whoever caused it (a material reaction, or a
+   * rack item's conversion, #988), so the presenter redraws each changed block.
+   */
   lastReactions: readonly AppliedReaction[] = [];
+  /** The play being resolved collects its delivered material changes here. */
+  private playReactions: AppliedReaction[] | null = null;
   /** The aggregate rules that changed the last play's total, for presentation. */
   lastTotalActivations: readonly RuleActivation[] = [];
   /** The steps the composed playfield controllers attached, for the run's lifetime. */
@@ -752,7 +811,11 @@ export class GameRun {
    */
   play(action: PlayAction, actionId?: string): GameState | null {
     if (!this.inStage) return null;
-    return this.transact("play", actionId, (context) => this.resolvePlay(action, context));
+    try {
+      return this.transact("play", actionId, (context) => this.resolvePlay(action, context));
+    } finally {
+      this.playReactions = null;
+    }
   }
 
   /**
@@ -765,22 +828,37 @@ export class GameRun {
     // A group names its primary card first; one that doesn't is refused, so every fact names
     // what was actually placed (#695 review).
     if (action.cardIds?.length && action.cardIds[0] !== action.cardId) return null;
-    const next = this.activeDealer.play(this.currentState, action);
+    // Placed, not scored (#925): the phases below resolve first, then the run scores once.
+    const next = this.activeDealer.place(this.currentState, action);
     if (!next) return null;
-    // Captured: listeners receive these IDs, and must not change the play (#682 review).
-    const placed = captured(action.cardIds?.length ? [...action.cardIds] : [action.cardId]);
+    // The placed identities in placement order. An opening replacement (#926) puts the revealed
+    // identity in its wrapper's place, so every later phase sees it once; each fact receives a
+    // captured copy, so listeners can't change the play (#682 review).
+    const order = [...(action.cardIds?.length ? action.cardIds : [action.cardId])];
+    const placedSet = new Set(order);
+    const placed = () => captured([...order]);
     const phases = this.playPhases;
     const steps: PlayStepContext = {
       target: this.commandTarget,
-      placed: new Set(placed),
+      placed: placedSet,
+      placedOrder: order,
+      replacePlaced(from, to) {
+        const at = order.indexOf(from);
+        if (at < 0) throw new Error(`replacePlaced: "${from}" was not placed this play`);
+        if (placedSet.has(to)) throw new Error(`replacePlaced: "${to}" is already placed`);
+        order[at] = to;
+        placedSet.delete(from);
+        placedSet.add(to);
+      },
       pending: [],
       reactions: [],
     };
-    // The score before this play: the dealer's next state is not the base the play's points add to.
+    const reactions: AppliedReaction[] = [];
+    this.playReactions = reactions;
+    // The score before this play, which the scoring phase adds the play's points to. Placement
+    // scores nothing, so placement and pre-score steps see the score as it was (#682, #925).
     const scoreBefore = this.currentState.round.score;
-    // The dealer's result already holds a provisional score; until the scoring phase applies the
-    // committed one, placement and pre-score steps see the score as it was (#682 review).
-    this.currentState = { ...next, round: { ...next.round, score: scoreBefore } };
+    this.currentState = next;
 
     // 1. Placement: the batch once, then each block in placement order.
     const batchId = `${context.actionId}:play`;
@@ -789,7 +867,7 @@ export class GameRun {
     // them, and a rollback can't be undone by a shared nested object (#682 review).
     const placedBlocks = () =>
       captured(
-        placed.flatMap(
+        order.flatMap(
           (id) => this.currentState.field.find(({ block }) => block.id === id)?.block ?? [],
         ),
       );
@@ -797,7 +875,7 @@ export class GameRun {
     this.passiveEvents.emit({
       type: "play.placed",
       blockId: action.cardId,
-      cardIds: placed,
+      cardIds: placed(),
       blocks: blocksNow,
     });
     for (const block of blocksNow)
@@ -808,19 +886,36 @@ export class GameRun {
       });
     this.drainPhase(context, "placement", batchId);
 
-    // 2. Before score: its configured steps (countdown deductions record pending triggers).
-    this.passiveEvents.emit({ type: "play.beforeScore", cardIds: placed, blocks: placedBlocks() });
+    // 2. Opening: each placed block's registered opening, in placement order, before any material
+    //    phase (#926; doc/game-events.md, "Resolve opening/replacement").
+    this.runSteps(phases.opening ?? [], steps, context, "opening", batchId);
+
+    // 3. Before score: its configured steps (countdown deductions record pending triggers).
+    this.passiveEvents.emit({
+      type: "play.beforeScore",
+      cardIds: placed(),
+      blocks: placedBlocks(),
+    });
     this.drainPhase(context, "beforeScore", batchId);
     this.runSteps(phases.beforeScore, steps, context, "beforeScore", batchId);
 
     // 3. Score the resolved field; the pure scorer is unchanged. Each line, then all, then the
     //    total applied once.
+    // Each committed line's activations numbered under this action, so a line scored again by
+    // a later play gets new IDs (#858 review).
+    this.scoringField = this.currentState.field;
     this.scoredLines = scoreFieldWithPassives(
       this.currentState.field,
       this.currentState.passiveRack,
       undefined,
       this.random,
-    );
+    ).map((scored) => ({
+      ...scored,
+      activations: numberActivations(
+        scored.activations,
+        `${context.actionId}:line:${scored.blockIds.join(",")}`,
+      ),
+    }));
     const gained = this.scoredLines.reduce((sum, line) => sum + line.points, 0);
     // Each line with the score context the `scored-line` selector reads, then all lines; their
     // hooks and follow-ups resolve before the total is applied.
@@ -853,7 +948,7 @@ export class GameRun {
     this.drainPhase(context, "score", batchId, aggregate);
     this.lastTotalActivations = aggregate;
     const total = { value: Math.max(0, Math.round(working)) };
-    this.runStats = recordPlay(this.runStats, total.value, placed.length);
+    this.runStats = recordPlay(this.runStats, total.value, order.length);
     this.currentState = {
       ...this.currentState,
       round: { ...this.currentState.round, score: scoreBefore + total.value },
@@ -862,15 +957,16 @@ export class GameRun {
     this.drainPhase(context, "score", batchId);
 
     // 4. After score: its configured steps (reactions, then pending detonations).
-    this.passiveEvents.emit({ type: "play.afterScore", cardIds: placed, blocks: placedBlocks() });
+    this.passiveEvents.emit({ type: "play.afterScore", cardIds: placed(), blocks: placedBlocks() });
     this.drainPhase(context, "afterScore", batchId);
     this.runSteps(phases.afterScore, steps, context, "afterScore", batchId);
-    this.lastReactions = steps.reactions;
+    this.lastReactions = reactions;
+    this.playReactions = null;
 
     // 5. Settle: the stage outcome, then play.completed last, both in the settle phase and batch.
     this.activeAction = { ...this.activeAction!, phase: "settle", batchId };
     this.announceOutcome();
-    this.passiveEvents.emit({ type: "play.completed", blockId: action.cardId, cardIds: placed });
+    this.passiveEvents.emit({ type: "play.completed", blockId: order[0], cardIds: placed() });
     this.drainPhase(context, "settle", batchId);
     return this.currentState;
   }
@@ -926,11 +1022,25 @@ export class GameRun {
       event.working?.read() ?? 0,
     );
     event.working?.write(value);
-    activations.push(...fired);
-    return commitCommands(
-      fired.flatMap(({ commands }) => commands),
-      this.commandTarget,
+    // Each activation's commands commit in order, and what they actually did joins its outcomes
+    // (a grant, or an explicit nothing); then each is numbered within its action (#483).
+    const events: GameEvent[] = [];
+    const committed = fired.map((activation) => {
+      const result = commitCommandsWithOutcomes(
+        activation.commands,
+        sourcedTarget(this.commandTarget, block.id),
+      );
+      events.push(...result.events);
+      return { ...activation, outcomes: [...activation.outcomes, ...result.outcomes] };
+    });
+    activations.push(
+      ...numberActivations(
+        committed,
+        this.activeAction?.context.actionId ?? "action",
+        activations.length,
+      ),
     );
+    return events;
   }
 
   /**
@@ -1005,7 +1115,7 @@ export class GameRun {
   /** Refill up to the dealer's hand size, appending new cards after the survivors. */
   refillHand(): CardBlock[] {
     if (!this.inStage) return [];
-    const result = this.activeDealer.refillHand(this.currentState, this.random);
+    const result = this.activeDealer.refillHand(this.currentState);
     this.currentState = result.state;
     return result.drawn;
   }
@@ -1068,28 +1178,48 @@ export class GameRun {
     // settled again, rather than progressing past it and losing the payout (#740 review). A
     // loss with nothing to pay settles nothing, and still proceeds.
     if (this.settlementFailed) return false;
-    if (outcome === "lost") {
-      this.currentPhase = "over";
-      return true;
-    }
-    this.shopAfter = this.currentPhase as StageKind;
-    this.currentState = this.clearTable(this.currentState);
-    this.currentPhase = shopPosition;
-    // The round's last stage completes the round; no stage is named for it.
-    if (!nextStage(this.shopAfter)) this.runStats = recordRoundComplete(this.runStats);
-    this.lifecycle("shop.entered");
-    this.stockEmptyShop();
-    return true;
+    // The progression itself is one transaction, like a play (doc/outcome-presentation.md,
+    // "Finish the model before presenting it"): its facts publish once it has committed, and a
+    // failure rolls back state and RNG and publishes nothing (#878).
+    return outcome === "lost"
+      ? this.transact("endRun", undefined, () => {
+          // The terminal fact, recorded while the final stage is still the context.
+          this.lifecycle("run.ended", { result: "lost" });
+          this.currentPhase = "over";
+          return true;
+        }) === true
+      : this.transact("enterShop", undefined, () => {
+          this.shopAfter = this.currentPhase as StageKind;
+          this.currentState = this.clearTable(this.currentState);
+          this.currentPhase = shopPosition;
+          // The round's last stage completes the round; no stage is named for it.
+          if (!nextStage(this.shopAfter)) this.runStats = recordRoundComplete(this.runStats);
+          this.lifecycle("shop.entered");
+          this.stockEmptyShop();
+          return true;
+        }) === true;
   }
 
   /** Leave a shop for the next stage, or stage 1 of the next round after a boss. */
-  leaveShop(): boolean {
+  leaveShop(actionId?: string): boolean {
     if (this.currentPhase !== "shop") return false;
+    // One transaction (#878): leaving commits ownership, the next stage's deal and its RNG
+    // together, and records shop.left once; a failure rolls all of it back, publishing nothing.
+    return this.transact("leaveShop", actionId, () => this.resolveLeaveShop()) === true;
+  }
+
+  private resolveLeaveShop(): true {
     const completed = this.shopAfter ?? finalStage;
     const next = nextStage(completed);
     // Each unbought offer's kind says what leaving does with it (borrowed cards go back to the
     // deck). Undefined stock means a later shop generates fresh stock, including after a skip.
     const stock = this.currentState.shopStock ?? [];
+    // What actually left, captured now for presentation (the burn) to present later.
+    const outgoingStock = stock.map(({ kind, block }) => ({ kind, blockId: block.id }));
+    const destination = {
+      round: next ? this.currentRound : this.currentRound + 1,
+      stage: next ?? stageKinds[0],
+    };
     this.currentState = {
       ...stock.reduce(
         (state, offer) => offerKind(offer).unbought(state, offer.block),
@@ -1103,10 +1233,10 @@ export class GameRun {
       this.currentState = resetRoundState(
         discardPileAtRoundEnd[this.config.discardPileAfterShop](this.currentState),
       );
-    this.lifecycle("shop.left");
+    this.lifecycle("shop.left", { outgoingStock, destination });
     if (!next) this.currentRound++;
     this.shopAfter = null;
-    this.startStage(next ?? "stage-1");
+    this.startStage(destination.stage);
     return true;
   }
 

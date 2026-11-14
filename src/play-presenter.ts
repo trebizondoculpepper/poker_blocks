@@ -1,3 +1,4 @@
+import type { CardBlock } from "./cards";
 import { cellKey } from "./traits/attachable";
 /**
  * Play presenter service: shows a play or discard the rules have already accepted. Played
@@ -9,8 +10,6 @@ import { cellKey } from "./traits/attachable";
  * While a play or its scoring is being presented the HUD hides the outcome and the table
  * takes no new gestures.
  */
-import type { SoundEffectId } from "./audio/sfx-registry";
-import type { GameEvent } from "./passives";
 import { landingSounds } from "./attachment-sound";
 import { getMaterialDefinition, materialOf } from "./materials";
 import * as THREE from "three";
@@ -68,8 +67,9 @@ type Playing = {
 /** A discard being shown. */
 type Discarding = {
   sources: RenderedBlock[];
-  startedAt: number;
   effects: Materialise[];
+  /** The replacements the model drew when this discard committed, shown once it has dissolved. */
+  drawn: readonly CardBlock[];
 };
 
 export type PlayPresenter = {
@@ -134,6 +134,8 @@ export function createPlayPresenter(options: {
   activated(sourceIds: readonly string[]): void;
   /** The hand has room again: draw replacements. */
   refill(): void;
+  /** Draw replacements into the model now, unshown (#775); returns them for a later reveal. */
+  drawReplacements(): readonly CardBlock[];
   /** A safe point to save the run. */
   save(): void;
   /** The stage's outcome has been announced. */
@@ -266,13 +268,16 @@ export function createPlayPresenter(options: {
     options.save();
   }
 
-  function updateDiscard(action: Discarding, now: number, delta: number): void {
-    const elapsed = (now - action.startedAt) / 1000;
-    action.effects.forEach((effect) => effect.update(delta));
-    if (elapsed < 1) return;
+  function updateDiscard(action: Discarding, _now: number, delta: number): void {
+    // Finished when its own dissolves have (#775): their clock, not a wall-clock second, so
+    // reduced motion's short fade doesn't wait and a slow frame can't reveal replacements early.
+    const running = action.effects.map((effect) => effect.update(delta));
+    if (running.some(Boolean)) return;
     discarding = discarding.filter((other) => other !== action);
     action.sources.forEach((source) => views.dispose(source));
-    options.refill();
+    // Only this discard's own replacements, drawn when it committed: another action finishing
+    // can't reveal them, and they can't reveal another's.
+    hand.drawIn(action.drawn, game().state.hand);
     options.save();
   }
 
@@ -374,9 +379,6 @@ export function createPlayPresenter(options: {
       const session = game();
       if (!sources.length || !session.discard(sources.map(({ block }) => block.id))) return false;
       hand.settle(sources);
-      // Each committed outcome plays the sound its configuration named; nothing is inferred
-      // from comparing state (#538).
-      for (const sound of committedSounds(session.lastDiscardEvents)) playSfx(sound);
       options.rackChanged();
       options.activated([
         ...new Set(session.lastDiscardActivations.map(({ sourceId }) => sourceId)),
@@ -393,7 +395,11 @@ export function createPlayPresenter(options: {
           reduced: options.reducedMotion(),
         });
       });
-      discarding.push({ sources: [...sources], startedAt: performance.now(), effects });
+      // Model first (#775): the replacements are drawn now, with the discard; only their
+      // appearance waits until the discarded cards have dissolved.
+      const drawn = options.drawReplacements();
+      hand.sync(session.state.hand);
+      discarding.push({ sources: [...sources], effects, drawn });
       playSfx("card.discard");
       options.changed();
       return true;
@@ -425,12 +431,4 @@ export function capturedLine(line: PassiveScoredLine): NarratedLine {
     sourceIds: [...new Set(line.activations.map(({ sourceId }) => sourceId))],
     points: line.points,
   };
-}
-
-/**
- * The sounds a set of committed events names, each once, in first-named order: two passives
- * paying coins in one discard play the coin sound once, as before (#566 review).
- */
-export function committedSounds(events: readonly GameEvent[]): SoundEffectId[] {
-  return [...new Set(events.flatMap(({ sound }) => (sound ? [sound] : [])))];
 }

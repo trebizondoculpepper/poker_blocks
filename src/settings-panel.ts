@@ -1,8 +1,8 @@
 /**
  * The Settings panel (#89): its controls, kept in step with the player's settings. It is a custom
- * panel rather than a menu of items, shown by the Settings scene's `settingsPanel` trait. Back
- * calls `onBack`, which the menus dispatch as the `back` navigation action (a stack pop), so the
- * panel never decides where Back goes.
+ * panel rather than a menu of items, shown by the Settings scene's `settingsPanel` trait. Its Back
+ * is a block menu the scene's `settingsDialog` trait draws in the panel's `items` host (#530); it
+ * dispatches the `back` navigation action (a stack pop), so the panel never decides where Back goes.
  */
 import { playSfx } from "./audio/sfx";
 import type { LayoutSetting, MotionSetting, Settings, ShadowSetting } from "./settings";
@@ -36,7 +36,7 @@ export type SettingsPanel = {
 export function createSettingsPanel(
   panel: HTMLElement,
   initial: Settings,
-  options: { onChange(settings: Settings): void; onBack(): void },
+  options: { onChange(settings: Settings): void },
 ): SettingsPanel {
   let settings = { ...initial };
   panel.insertAdjacentHTML(
@@ -70,7 +70,7 @@ export function createSettingsPanel(
        <legend>Layout</legend>
        ${radios("layout", layoutLabels)}
      </fieldset>
-     <div class="menu-buttons"><button type="button" data-menu="back">Back</button></div>`,
+     <div class="block-menu-host" data-menu="items"></div>`,
   );
   const find = <T extends HTMLElement>(name: string) =>
     panel.querySelector<T>(`[data-menu="${name}"]`)!;
@@ -87,9 +87,6 @@ export function createSettingsPanel(
     options.onChange(settings);
   }
 
-  find("back").addEventListener("click", () => {
-    options.onBack();
-  });
   // Preview the new volume once the slider is released, so dragging is not noisy.
   volume.addEventListener("input", () => change({ volume: Number(volume.value) / 100 }));
   volume.addEventListener("change", () => playSfx("ui.click"));

@@ -10,10 +10,10 @@ function setup() {
     (...args: unknown[]) =>
       void calls.push(args.length ? `${name} ${args.join(" ")}` : name);
   const music = {
-    playTitle: log("playTitle"),
-    switchToRandomStageTrack: log("randomStage"),
-    switchToBossTrack: log("boss"),
-    resumeStage: log("resumeStage"),
+    run: (operations: readonly { op: string; config?: unknown }[]) =>
+      void calls.push(
+        `run ${operations.map(({ op, config }) => `${op}${config ? JSON.stringify(config) : ""}`).join(",")}`,
+      ),
     filter: log("filter"),
     windDown: log("windDown"),
     windUp: log("windUp"),
@@ -36,21 +36,21 @@ function setup() {
   return { audio, calls, gestures, tick: (ms: number) => (clock += ms) };
 }
 
+/** The table scene's configured resume cue (src/game-modes.ts). */
+const resumeCue = [{ op: "resumeTrack", config: { slot: "tableMusic", plan: "stage" } }];
+
 describe("audio service", () => {
-  it("plays the boss loop from the boss pool and a random vibe from the stage pool (#92)", () => {
+  it("runs a play scene's configured music operations (#92, #758)", () => {
     const { audio, calls } = setup();
-    audio.playStageMusic("stage");
-    audio.playStageMusic("boss");
-    audio.playStageMusic("stage");
-    expect(calls).toEqual(["randomStage", "boss", "randomStage"]);
+    audio.playStageMusic([{ op: "selectTrack", config: { plan: "boss" } }]);
+    expect(calls).toEqual(['run selectTrack{"plan":"boss"}']);
   });
 
-  it("plays each scene's music cue, and leaves filtering to the menu scenes (#179)", () => {
+  it("runs each scene's music cue, and leaves filtering to the menu scenes (#179)", () => {
     const { audio, calls } = setup();
-    audio.playCue("title");
-    audio.playCue("resumeTable");
-    audio.playCue("windDown");
-    expect(calls).toEqual(["playTitle", "resumeStage", "windDown"]);
+    audio.playCue([{ op: "windDown" }]);
+    audio.resumeTable(resumeCue);
+    expect(calls).toEqual(["run windDown", 'run resumeTrack{"slot":"tableMusic","plan":"stage"}']);
     calls.length = 0;
     audio.setMusicFilter("lowpass");
     audio.setMusicFilter(null);
@@ -61,14 +61,15 @@ describe("audio service", () => {
     const { audio, calls } = setup();
     audio.enterMode("quiet");
     audio.runStarted();
-    audio.playCue("resumeTable");
+    audio.resumeTable(resumeCue);
+    audio.playStageMusic([{ op: "selectTrack", config: { plan: "stage" } }]);
     expect(calls).toEqual(["windDown", "windDown"]);
 
     calls.length = 0;
     audio.enterMode("ordinary");
     audio.runStarted();
-    audio.playCue("resumeTable");
-    expect(calls).toEqual(["resumeStage"]);
+    audio.resumeTable(resumeCue);
+    expect(calls).toEqual(['run resumeTrack{"slot":"tableMusic","plan":"stage"}']);
   });
 
   it("sets music a little under the effects, and honours the master and channel mutes", () => {

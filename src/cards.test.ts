@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { cardName, ranks, standardDeck, suits } from "./cards";
-import { drawCards } from "./deal";
+import { popCards } from "./deal";
 import { baseDealer } from "./dealer";
 import { toggleBlockSelection } from "./block-trait-behaviours";
 
@@ -9,14 +9,14 @@ describe("standard deck", () => {
     expect(standardDeck).toHaveLength(52);
     expect(
       new Set(
-        standardDeck.map(({ traits: { identity } }) => `${identity.rank}-${identity.suit.name}`),
+        standardDeck.map(({ traits: { identity } }) => `${identity!.rank}-${identity!.suit.name}`),
       ).size,
     ).toBe(52);
     for (const suit of suits) {
       expect(
         standardDeck
-          .filter((block) => block.traits.identity.suit === suit)
-          .map((block) => block.traits.identity.rank),
+          .filter((block) => block.traits.identity!.suit === suit)
+          .map((block) => block.traits.identity!.rank),
       ).toEqual(ranks);
     }
   });
@@ -27,8 +27,8 @@ describe("standard deck", () => {
   });
 
   it("draws a featured block and a distinct six-block hand", () => {
-    const firstDraw = drawCards(standardDeck, 1, () => 0);
-    const secondDraw = drawCards(firstDraw.deck, baseDealer.handSize, () => 0);
+    const firstDraw = popCards(standardDeck, 1);
+    const secondDraw = popCards(firstDraw.deck, baseDealer.handSize);
     expect(firstDraw.cards).toHaveLength(1);
     expect(secondDraw.cards).toHaveLength(6);
     expect(secondDraw.deck).toHaveLength(45);
@@ -46,7 +46,7 @@ describe("standard deck", () => {
     expect(
       toggleBlockSelection(two, {
         ...featured,
-        traits: { identity: featured.traits.identity },
+        traits: { identity: featured.traits.identity! },
       }),
     ).toBe(two);
   });

@@ -43,12 +43,12 @@ export type Overlays = {
   hidePanelFooter(): void;
   closeAll(): void;
   /** The pause menu's panel and the Settings panel, shown by their scenes' traits. */
-  showMenu(label: string, choices: readonly MenuChoice[]): void;
+  showMenu(label: string): void;
   hideMenu(): void;
   showSettings(): void;
   hideSettings(): void;
   /** The game over screen, shown by the game over scene's `gameOverScreen` trait. */
-  showGameOver(stats: RunStats, choices: readonly MenuChoice[], seed: number | null): void;
+  showGameOver(stats: RunStats, seed: number | null): void;
   hideGameOver(): void;
   /**
    * The stage-won pop-up, shown by the stage-won scene's `stageWonScreen` trait (#91). It
@@ -58,6 +58,8 @@ export type Overlays = {
   hideStageWon(): void;
   /** Show the inspection tooltip near a pointer, or hide it with a null label. */
   inspect(label: string | null, clientX?: number, clientY?: number): void;
+  /** The label the tooltip shows now, or null while it is hidden (#751). */
+  inspection(): string | null;
   hideTooltip(): void;
   /** Flash a drop target's red X, shaking it unless motion is reduced. */
   flashRefused(target: HTMLElement): void;
@@ -149,11 +151,11 @@ export function createOverlays(
     showPanelFooter: (links, version) => menus.showPanelFooter(links, version),
     hidePanelFooter: () => menus.hidePanelFooter(),
     closeAll: () => menus.closeAll(),
-    showMenu: (label, choices) => menus.showMenu(label, choices),
+    showMenu: (label) => menus.showMenu(label),
     hideMenu: () => menus.hideMenu(),
     showSettings: () => menus.showSettings(),
     hideSettings: () => menus.hideSettings(),
-    showGameOver: (stats, choices, seed) => menus.showGameOver(stats, choices, seed),
+    showGameOver: (stats, seed) => menus.showGameOver(stats, seed),
     hideGameOver: () => menus.hideGameOver(),
     showStageWon: (reward, next) => menus.showStageWon(reward, next),
     hideStageWon: () => menus.hideStageWon(),
@@ -169,6 +171,9 @@ export function createOverlays(
       const top = clientY - bounds.top + 14;
       tooltip.style.left = `${Math.max(8, Math.min(left, bounds.width - tooltip.offsetWidth - 8))}px`;
       tooltip.style.top = `${Math.max(8, Math.min(top, bounds.height - tooltip.offsetHeight - 8))}px`;
+    },
+    inspection() {
+      return tooltip.hidden ? null : tooltip.textContent;
     },
     hideTooltip() {
       tooltip.hidden = true;

@@ -42,7 +42,7 @@ export type ModeAddress = {
   replace(url: URL): void;
 };
 
-export type ConsoleHostOptions = Omit<ConsoleHost, "clear" | "history">;
+export type ConsoleHostOptions = Omit<ConsoleHost, "clear" | "history" | "say">;
 
 export function consoleHostFor(
   app: ConsoleApp,

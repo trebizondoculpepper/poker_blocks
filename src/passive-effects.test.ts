@@ -9,7 +9,7 @@ import { demoRunRules, sandboxRunRules } from "./run-rules";
 
 const card = (rank: string, suit: string): CardBlock =>
   standardDeck.find(
-    (block) => block.traits.identity.rank === rank && block.traits.identity.suit.name === suit,
+    (block) => block.traits.identity!.rank === rank && block.traits.identity!.suit.name === suit,
   )!;
 const placed = (block: CardBlock, x: number, y = 0): PlacedBlock => ({
   block,

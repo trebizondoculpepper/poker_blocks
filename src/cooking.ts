@@ -1,3 +1,4 @@
+import { blockName } from "./block-presentation";
 /**
  * Cooking (#372): a cookable material lists its doneness steps (`cookable.steps` on its
  * definition, Raw first). A card's step is its `doneness` trait. Each play, a reaction beside a
@@ -6,7 +7,7 @@
  * the table clears it returns to the first step (owner's decision on #372), after the stage's
  * rewards are read (#373). Nothing here names a material.
  */
-import { cardName, type CardBlock } from "./cards";
+import { type CardBlock } from "./cards";
 import type { GameState } from "./game-state";
 import { getMaterialDefinition, materialOf } from "./materials";
 import { reactionResults } from "./reactions";
@@ -31,9 +32,7 @@ export function withDoneness(card: CardBlock, step: number): CardBlock {
     traits: {
       ...card.traits,
       doneness: { step },
-      inspectable: inspectable(
-        `${cardName(card.traits.identity)} · ${material.name} · ${steps.at(step) ?? ""}`,
-      ),
+      inspectable: inspectable(`${blockName(card)} · ${material.name} · ${steps.at(step) ?? ""}`),
     },
   };
 }
@@ -49,11 +48,9 @@ export function withoutDoneness(card: CardBlock): CardBlock {
       ...traits,
       // Back at the first step, which the inspector names too ("· Raw").
       inspectable: inspectable(
-        [
-          cardName(card.traits.identity),
-          material.name,
-          ...[material.cookable?.steps.at(0) ?? []].flat(),
-        ].join(" · "),
+        [blockName(card), material.name, ...[material.cookable?.steps.at(0) ?? []].flat()].join(
+          " · ",
+        ),
       ),
     },
   };

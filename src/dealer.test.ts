@@ -29,7 +29,9 @@ describe("dealer", () => {
     expect(first.field[0].block.id).toBe(state.hand[0].id);
     expect(first.field[0].block.traits.selectable).toBeUndefined();
     expect(state.hand[0].traits.selectable).toEqual({});
-    expect(first.field[0].block.traits.inspectable?.inspect()).toBe("Ace of Spades");
+    expect(first.field[0].block.traits.inspectable?.inspect()).toBe(
+      state.hand[0].traits.inspectable?.inspect(),
+    );
     expect(first.round.movesLeft).toBe(5);
     expect(baseDealer.play(first, { cardId: first.hand[0].id })).toBeNull();
   });
@@ -45,7 +47,7 @@ describe("dealer", () => {
   it("moves a played card from hand to its legal field cell", () => {
     const opening = baseDealer.startGame(standardDeck, () => 0);
     const started = baseDealer.play(opening, { cardId: opening.hand[0].id })!;
-    const state = baseDealer.refillHand(started, () => 0).state;
+    const state = baseDealer.refillHand(started).state;
     const cardId = state.hand[0].id;
     const targetId = state.field[0].block.id;
     const played = baseDealer.play(state, { cardId, targetId, face: "east" })!;
@@ -64,7 +66,7 @@ describe("dealer", () => {
   it("makes a returned field block selectable when it is dealt into a later hand", () => {
     const state = baseDealer.startGame(standardDeck, () => 0);
     const placed = baseDealer.play(state, { cardId: state.hand[0].id })!.field[0].block;
-    const redrawn = baseDealer.refillHand({ ...state, hand: [], deck: [placed] }, () => 0);
+    const redrawn = baseDealer.refillHand({ ...state, hand: [], deck: [placed] });
     expect(redrawn.drawn[0].id).toBe(placed.id);
     expect(redrawn.drawn[0].traits.selectable).toEqual({});
     expect(placed.traits.selectable).toBeUndefined();
@@ -76,7 +78,7 @@ describe("dealer", () => {
     expect(discarded.discardPile).toEqual([state.hand[0]]);
     expect(discarded.hand).toHaveLength(5);
     expect(discarded.round.discardsLeft).toBe(3);
-    const { state: refilled, drawn } = baseDealer.refillHand(discarded, () => 0);
+    const { state: refilled, drawn } = baseDealer.refillHand(discarded);
     expect(drawn).toHaveLength(1);
     expect(refilled.hand).toHaveLength(6);
     expect(refilled.deck).toHaveLength(45);
@@ -104,5 +106,29 @@ describe("dealer", () => {
     expect(game.state).toBe(stateBefore);
     expect(game.refillHand()).toHaveLength(0);
     expect(game.state.hand).toHaveLength(6);
+  });
+});
+
+describe("placing without scoring (#925)", () => {
+  it("places and uses a move but scores nothing; play adds the field's points", () => {
+    const state = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0).state;
+    const ids = state.hand.slice(0, 2).map(({ id }) => id);
+    const action = { cardId: ids[0]!, cardIds: ids };
+    const placed = baseDealer.place(state, action)!;
+    expect(placed.field.map(({ block }) => block.id)).toEqual(ids);
+    expect(placed.hand.map(({ id }) => id)).not.toContain(ids[0]);
+    expect(placed.round.movesLeft).toBe(state.round.movesLeft - 1);
+    expect(placed.round.score).toBe(state.round.score);
+    const played = baseDealer.play(state, action)!;
+    expect(played.field).toEqual(placed.field);
+    expect(played.round.movesLeft).toBe(placed.round.movesLeft);
+    expect(played.round.score).toBeGreaterThanOrEqual(placed.round.score);
+  });
+
+  it("refuses the same plays as before", () => {
+    const state = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0).state;
+    const id = state.hand[0]!.id;
+    expect(baseDealer.place(state, { cardId: id, cardIds: [id, id] })).toBeNull();
+    expect(baseDealer.place(state, { cardId: "nope" })).toBeNull();
   });
 });

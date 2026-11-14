@@ -6,7 +6,7 @@
  * service decides what the music does. Sound effects for game actions are still played
  * with `playSfx` where the action happens (see AGENTS.md, "Every action has a sound").
  */
-import type { MusicController, MusicFilter } from "./audio/music-controller";
+import type { MusicController, MusicFilter, MusicOperation } from "./audio/music-controller";
 import { createModeMusicBehaviours, type ModeMusicBehaviour } from "./mode-music";
 import type { ModeMusicStyle } from "./game-modes";
 import { silencedAudio, type Settings } from "./settings";
@@ -32,14 +32,19 @@ export type AudioService = {
   /** Use a mode's music style (quiet modes stay wound down). */
   enterMode(style: ModeMusicStyle): void;
   /**
-   * A play scene came in front (its `musicTrack` trait): a fresh track from its pool, a random
-   * vibe for a stage or the boss loop, unless the mode keeps its stages quiet.
+   * A play scene came in front (its `musicTrack` trait): its configured operations choose its
+   * music, unless the mode keeps its stages quiet.
    */
-  playStageMusic(pool: StageMusicPool): void;
+  playStageMusic(operations: readonly MusicOperation[]): void;
   /** A run has just been set up; quiet modes wind the music down. */
   runStarted(): void;
-  /** Play a music cue, for a scene's `musicCue` trait. */
-  playCue(cue: MusicCue): void;
+  /** Run a scene's music cue: its configured operations (its `musicCue` trait). */
+  playCue(operations: readonly MusicOperation[]): void;
+  /**
+   * Back to the table's music, as the mode plays it: the scene's configured resume cue (its
+   * `musicResume` trait), or a wind-down in a quiet mode.
+   */
+  resumeTable(operations: readonly MusicOperation[]): void;
   /**
    * Filter the music for the scene in front (its `musicFilter` trait), or clear it: low-pass
    * for the pause menu, high-pass for Settings. The track does not change.
@@ -50,18 +55,6 @@ export type AudioService = {
   /** Listen for the first gesture, which browsers require before audio can play. */
   start(): void;
   dispose(): void;
-};
-
-/** A music cue a scene can play as it enters (its `musicCue` trait). */
-export type MusicCue = "windDown" | "title" | "resumeTable";
-
-/** The pools a play scene's `musicTrack` trait can ask for. */
-export type StageMusicPool = "stage" | "boss";
-
-/** How each pool starts its music: a fresh random vibe, or the boss loop. */
-const stagePools: Record<StageMusicPool, (music: MusicController) => void> = {
-  stage: (music) => music.switchToRandomStageTrack(),
-  boss: (music) => music.switchToBossTrack(),
 };
 
 /** Music sits a little under the sound effects at the same volume setting. */
@@ -80,18 +73,10 @@ export function createAudioService(options: {
   const now = options.now ?? (() => performance.now());
   const modeMusicBehaviours = createModeMusicBehaviours({
     windDown: () => music.windDown(),
-    resumeStage: () => music.resumeStage(),
+    run: (operations) => music.run(operations),
   });
   let modeMusic: ModeMusicBehaviour = modeMusicBehaviours.ordinary;
   let lastZoomSoundAt = -Infinity;
-
-  /** What each music cue does; a scene names one through its `musicCue` trait. */
-  const musicCues: Record<MusicCue, () => void> = {
-    windDown: () => music.windDown(),
-    title: () => music.playTitle(),
-    // Back to the table's music, as the mode plays it (a quiet mode stays wound down).
-    resumeTable: () => modeMusic.resume(),
-  };
 
   const unlock = () => music.unlock();
   let started = false;
@@ -108,15 +93,18 @@ export function createAudioService(options: {
     enterMode(style) {
       modeMusic = modeMusicBehaviours[style];
     },
-    playStageMusic(pool) {
+    playStageMusic(operations) {
       if (!modeMusic.playsStages()) return;
-      stagePools[pool](music);
+      music.run(operations);
     },
     runStarted() {
       modeMusic.settle();
     },
-    playCue(cue) {
-      musicCues[cue]();
+    playCue(operations) {
+      music.run(operations);
+    },
+    resumeTable(operations) {
+      modeMusic.resume(operations);
     },
     setMusicFilter(kind) {
       music.filter(kind);

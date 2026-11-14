@@ -72,7 +72,7 @@ describe("the action budget (#657)", () => {
 
 const card = (rank: string, suit: string): CardBlock =>
   standardDeck.find(
-    (block) => block.traits.identity.rank === rank && block.traits.identity.suit.name === suit,
+    (block) => block.traits.identity!.rank === rank && block.traits.identity!.suit.name === suit,
   )!;
 
 /** A test passive whose trait responds to discards with `respond`. */

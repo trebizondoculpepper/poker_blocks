@@ -50,6 +50,12 @@ export type RunRules = {
    * shop has no stock.
    */
   stockShop?: (state: GameState, random: () => number, round: number) => GameState;
+  /**
+   * Plain-data descriptors of the function-valued policies above, by field name (#934): the
+   * configuration each was built from, so an export can record and compare it. A policy with no
+   * descriptor cannot be verified.
+   */
+  policies?: Readonly<Partial<Record<"stockShop" | "resaleModifiers", unknown>>>;
 };
 
 /** A stage in the round, in order, with the data that is its own. */
@@ -86,16 +92,21 @@ export function targetForStage<Kind extends string>(
  * the base dealer until boss rules exist.
  */
 export const demoRunRules: RunRules = {
-  // Material effects in the documented order: countdowns deduct before scoring; reactions, then
-  // the pending detonations, after it.
+  // Material effects in the documented order: placement-timed reactions (the Air/flame upgrade)
+  // and countdown deductions before scoring; the other reactions, then the pending detonations,
+  // after it.
   playfield: [
+    // Placed blocks open first (#926), before any material step.
+    { id: "openingController", config: {} },
     {
       id: "materialEffectsController",
       config: {
-        beforeScore: ["countdown-deductions"],
+        beforeScore: ["placement-reactions", "countdown-deductions"],
         afterScore: ["reactions", "countdown-detonations"],
       },
     },
+    // After the material steps have drained: the rack's late step (#988).
+    { id: "lateRackStepController", config: {} },
   ],
   stage(round, kind) {
     return {

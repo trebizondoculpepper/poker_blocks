@@ -54,6 +54,8 @@ describe("game modes composed from traits", () => {
       "dev16",
       "dev17",
       "dev18",
+      "dev19",
+      "dev20",
     ]);
   });
 
@@ -65,7 +67,7 @@ describe("game modes composed from traits", () => {
     expect(scene?.traits).toMatchObject({
       attractBackground: {},
       blockTitle: { text: "Poker Blocks", scale: 1 },
-      musicCue: { cue: "title" },
+      musicCue: { operations: [{ op: "selectTrack", config: { plan: "title" } }] },
     });
     expect(scene?.traits).not.toHaveProperty("titleScreen");
   });
@@ -222,19 +224,34 @@ describe("game modes composed from traits", () => {
       sellBin: {},
       passiveRackView: { source: "rack" },
       coinsPanel: {},
-      shopExit: { label: "Continue" },
+      dropTargetGuide: {
+        provider: "shopOffers",
+        // One beam scale for every target, so the small BUY box's beams match the rack's.
+        accept: { shape: "rectangle", colour: 0x65f4dd, beamScale: 400 },
+        refuse: { shape: "cross", colour: 0xff3344, beamScale: 400 },
+      },
+      shopExit: {
+        label: "Continue",
+        presentation: {
+          presenter: "wordCube",
+          config: { material: "paper", description: "Leave the shop for the next stage." },
+        },
+      },
       shopStock: { source: "shop" },
+      deckPanel: { opens: "openDeck" },
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
       shopEntrance: {},
-      musicCue: { cue: "resumeTable" },
+      musicResume: {
+        operations: [{ op: "resumeTrack", config: { slot: "tableMusic", plan: "stage" } }],
+      },
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
     });
     // The title scene owns its own panel, with Continue gated on a save existing.
     expect(traitsOf("game", "title")).toEqual({
       screen: { kind: "title" },
       attractBackground: {},
-      musicCue: { cue: "title" },
+      musicCue: { operations: [{ op: "selectTrack", config: { plan: "title" } }] },
       enterSound: { sfx: "ui.title.enter" },
       exitSound: { sfx: "ui.title.exit" },
       panelFooter: {
@@ -273,13 +290,12 @@ describe("game modes composed from traits", () => {
     expect(traitsOf("game", "game-over")).toEqual({
       screen: { kind: "game-over" },
       tableBackground: {},
-      gameOverScreen: {
-        items: [
-          { id: "newRun", label: "New Run" },
-          { id: "quitToTitle", label: "Main menu", sfx: "ui.back" },
-        ],
+      resultMenu: {
+        information: "runStats",
+        showAfter: "statsReady",
+        dialog: gameDialogs.gameOver,
       },
-      musicCue: { cue: "windDown" },
+      musicCue: { operations: [{ op: "windDown" }] },
     });
   });
 
@@ -338,10 +354,11 @@ describe("game modes composed from traits", () => {
       handView: {},
       selectable: { sources: [{ source: "hand" }, { source: "field" }] },
       discardBin: {},
+      committedEventSounds: {},
       deckPanel: { opens: "openDeck" },
       runInPlay: {},
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
-      musicTrack: { pool: "stage" },
+      musicTrack: { operations: [{ op: "selectTrack", config: { plan: "stage" } }] },
       enterSound: { sfx: "round.start" },
       devManualBlockDestroyer: { cause: "manual" },
     });
@@ -370,13 +387,13 @@ describe("mode music lifecycle", () => {
     const calls: string[] = [];
     const behaviours = createModeMusicBehaviours({
       windDown: () => calls.push("windDown"),
-      resumeStage: () => calls.push("resumeStage"),
+      run: () => calls.push("resumeStage"),
     });
 
     behaviours.quiet.settle();
-    behaviours.quiet.resume();
+    behaviours.quiet.resume([]);
     behaviours.ordinary.settle();
-    behaviours.ordinary.resume();
+    behaviours.ordinary.resume([]);
 
     expect(calls).toEqual(["windDown", "windDown", "resumeStage"]);
     // Ordinary modes let a stage choose its music; quiet modes keep it wound down.

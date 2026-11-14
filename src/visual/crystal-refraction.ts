@@ -70,12 +70,18 @@ export type RefractionPreset = {
   ripple: LookupRipple;
   /** The reflection map: shared and immutable, never disposed by a block. */
   environment: () => THREE.Texture;
+  /**
+   * The drawn outline's opacity, live, when the preset owns it (#796; 0 removes the outline,
+   * reflection is unaffected). Left out, a block keeps its material definition's own edge.
+   */
+  edgeOpacity?: { value: number };
 };
 
 export function createRefractionPreset(preset: {
   settings: RefractionSettings;
   ripple: RippleSettings;
   environment: () => THREE.Texture;
+  edgeOpacity?: number;
 }): RefractionPreset {
   return {
     tuning: Object.fromEntries(
@@ -83,6 +89,7 @@ export function createRefractionPreset(preset: {
     ) as RefractionTuning,
     ripple: createLookupRipple(preset.ripple),
     environment: preset.environment,
+    ...(preset.edgeOpacity !== undefined ? { edgeOpacity: { value: preset.edgeOpacity } } : {}),
   };
 }
 
@@ -184,8 +191,18 @@ refractionPresets.register(
   "calmWater",
   createRefractionPreset({
     settings: calmWaterSettings,
-    ripple: { amplitude: 0.006, period: 10, scale: 1.6 },
+    // One full loop in 0.5–8 s, 8 s by default (#795; doc/calm-water-refinements.md).
+    ripple: {
+      amplitude: 0.006,
+      period: 8,
+      scale: 1.6,
+      periodBounds: { min: 0.5, max: 8, step: 0.5 },
+      // Rippling highlights (#797; doc/calm-water-refinements.md): provisional 0.015.
+      surfaceStrength: 0.015,
+    },
     environment: calmSkyEnvironment,
+    // Faint outlines by default (#796; doc/calm-water-refinements.md): 0 hides them.
+    edgeOpacity: 0.08,
   }),
 );
 
@@ -234,8 +251,18 @@ const vertexShader = /* glsl */ `
   varying vec3 vWorldNormal;
   varying vec4 vCentre;
   varying vec3 vLocal;
+  varying vec3 vLocalNormal;
+  // The local-to-world normal transform (inverse transpose), as columns (#797).
+  varying vec3 vNormalX;
+  varying vec3 vNormalY;
+  varying vec3 vNormalZ;
   void main() {
     vLocal = position;
+    vLocalNormal = normal;
+    mat3 toWorld = transpose(inverse(mat3(modelMatrix)));
+    vNormalX = toWorld[0];
+    vNormalY = toWorld[1];
+    vNormalZ = toWorld[2];
     vec4 world = modelMatrix * vec4(position, 1.0);
     vWorldPosition = world.xyz;
     vWorldNormal = normalize(mat3(modelMatrix) * normal);
@@ -252,8 +279,24 @@ const rearFragment = /* glsl */ `
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
   varying vec4 vCentre;
+  varying vec3 vLocal;
+  varying vec3 vLocalNormal;
+  varying vec3 vNormalX;
+  varying vec3 vNormalY;
+  varying vec3 vNormalZ;
+  ${rippleShiftGlsl}
+  // The facet normal, perturbed by the ripple's height gradient in the face's own tangent plane,
+  // then taken to world space by the inverse transpose. At zero strength: the old normal exactly.
+  vec3 surfaceNormal() {
+    if (rippleSurface <= 0.0) return normalize(vWorldNormal);
+    vec3 local = normalize(vLocalNormal);
+    vec3 g = rippleGradient(vLocal);
+    vec3 tangential = g - dot(g, local) * local;
+    vec3 bent = normalize(local - rippleSurface * tangential);
+    return normalize(mat3(vNormalX, vNormalY, vNormalZ) * bent);
+  }
   void main() {
-    vec3 n = normalize(vWorldNormal);
+    vec3 n = surfaceNormal();
     vec3 v = normalize(cameraPosition - vWorldPosition);
     float incidence = abs(dot(n, v));
     // The facet's normal in view space: its screen direction is where the background shifts.
@@ -282,6 +325,21 @@ const frontFragment = /* glsl */ `
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
   varying vec3 vLocal;
+  varying vec3 vLocalNormal;
+  varying vec3 vNormalX;
+  varying vec3 vNormalY;
+  varying vec3 vNormalZ;
+  ${rippleShiftGlsl}
+  // The facet normal, perturbed by the ripple's height gradient in the face's own tangent plane,
+  // then taken to world space by the inverse transpose. At zero strength: the old normal exactly.
+  vec3 surfaceNormal() {
+    if (rippleSurface <= 0.0) return normalize(vWorldNormal);
+    vec3 local = normalize(vLocalNormal);
+    vec3 g = rippleGradient(vLocal);
+    vec3 tangential = g - dot(g, local) * local;
+    vec3 bent = normalize(local - rippleSurface * tangential);
+    return normalize(mat3(vNormalX, vNormalY, vNormalZ) * bent);
+  }
   const float PI = 3.141592653589793;
 
   vec3 lookUp(vec3 direction) {
@@ -291,15 +349,13 @@ const frontFragment = /* glsl */ `
     return mix(vec3(dot(light, vec3(0.2126, 0.7152, 0.0722))), light, spectral);
   }
 
-  ${rippleShiftGlsl}
-
   vec3 behind(vec2 uv) {
     return texture2D(backgroundMap, clamp(uv, vec2(0.001), vec2(0.999))).rgb;
   }
 
   void main() {
     vec2 uv = gl_FragCoord.xy / screenSize;
-    vec3 n = normalize(vWorldNormal);
+    vec3 n = surfaceNormal();
     vec3 v = normalize(cameraPosition - vWorldPosition);
     float incidence = clamp(abs(dot(n, v)), 0.0, 1.0);
     // The rear facet's shift under this pixel, reused, plus this front facet's own bend.
@@ -330,7 +386,8 @@ export function createRefractionRear(
   const material = new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader: rearFragment,
-    uniforms: { ...captureSlots, ...preset.tuning },
+    // The same ripple uniforms as the front: one surface, lit consistently in both passes.
+    uniforms: { ...captureSlots, ...preset.tuning, ...rippleUniforms(preset.ripple) },
     side: THREE.BackSide,
   });
   const rear = new THREE.Mesh(geometry, material);
