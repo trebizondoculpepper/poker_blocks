@@ -1686,3 +1686,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Debug snapshot command
 
 [Read-only debug snapshot](debug-snapshot.md) defines the development console report, registered bounded providers, model/presentation ownership summaries, explicit clipboard fallback and no-side-effect guarantees. It is diagnostic evidence, not an import format or replay system (#987).
+
+## D12 replacement compatibility
+
+[Dice replacement](dice-replacement.md) preserves the former slot’s opaque saved definition handle while changing configured sides/shape/display to D12. Registered builders and existing save codecs own behavior; no die-name migration branch or generic identity check is introduced.

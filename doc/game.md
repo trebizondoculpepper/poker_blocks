@@ -556,3 +556,7 @@ The shop Continue action is a fixed Paper word cube in the existing bottom-right
 ## Passive lifecycle and persistent progress
 
 Scoring passives can declare multiple lifecycle actions: once before any rows score, per scored row at a declared scoring hook, and once after all rows score. Resolve rack instances left to right within each hook, without moving actions between phases. Each passive instance can retain its own counters or other state, with an explicit reset/lifetime policy; Dice rolls once per operation and reuses that value per row. See [the lifecycle/state contract](passive-lifecycle-state.md). [Could It Be Magic Now?](experiments/could-it-be-magic-now.md) is a provisional four-play Magic conversion experiment, not normal-shop content.
+
+### D12 passive revision
+
+The former D10 passive becomes D12: one uniform 1–12 roll per scoring operation, reused for every scored row at the existing Dice addition hook. Price/unlock initially remain 6 coins/from round 3. [D12 replacement and compatibility](dice-replacement.md) records the stable saved handle and artwork/verification requirements. This is an approved target awaiting separate implementation, not a change to D6/D8/D20.
