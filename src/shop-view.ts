@@ -15,7 +15,7 @@ import { offerKind, type OfferBlock, type OfferDestination } from "./offer-kinds
 import { Registry } from "./core/registry";
 import type { CardBlock } from "./cards";
 import type { PassiveBlock } from "./passives";
-import { createBlockAppearance } from "./visual/block-appearance";
+import { createBlockAppearance, disposeMaterialTextures } from "./visual/block-appearance";
 import { createMaterialise } from "./visual/materialise";
 import type { DragSource, Point } from "./drag-drop";
 import { returnToSource, stop as stopReturn, take } from "./return-to-source";
@@ -142,12 +142,14 @@ function cardCube(block: CardBlock): OfferCube {
         ...(appearance.boardMaterials ?? []),
       ]))
         material.dispose();
-      for (const extra of appearance.extras ?? []) {
-        for (const material of ([] as THREE.Material[]).concat(extra.material)) {
-          (material as THREE.MeshStandardMaterial).map?.dispose();
-          material.dispose();
-        }
-      }
+      // An extra's own texture copy is freed; one shared with every block is not (#662).
+      disposeMaterialTextures(
+        (appearance.extras ?? []).flatMap((extra) =>
+          ([] as THREE.Material[]).concat(extra.material),
+        ),
+      );
+      for (const extra of appearance.extras ?? [])
+        for (const material of ([] as THREE.Material[]).concat(extra.material)) material.dispose();
       edgeGeometry.dispose();
       edgeMaterial.dispose();
     },
