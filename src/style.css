@@ -1701,9 +1701,12 @@ body,
   opacity: 1;
 }
 
-/* The HUD effect overlay (#921, src/visual/hud-overlay.ts): over its host, never under input. */
+/* The HUD effect overlay (#921, src/visual/hud-overlay.ts): over its host, never under input.
+   Above the HUD's drop targets (the frame is 1) and the shop's stock (4), below tooltips (6),
+   as doc/presentation-contracts.md places the laser guides (#924). */
 .hud-overlay {
   position: absolute;
+  z-index: 5;
   inset: 0;
   width: 100%;
   height: 100%;

@@ -2,7 +2,7 @@ import { beatShapes } from "./dance/beat-shapes";
 import { danceCycles } from "./dance/dance-floor";
 import type { TuningControl } from "./attract-tuning-panel";
 import { blockTitle, type BlockTitles } from "./scene-traits/block-title";
-import { dropTargetGuide } from "./scene-traits/drop-target-guide";
+import { dropTargetGuide, type DropTargetGuides } from "./scene-traits/drop-target-guide";
 /**
  * The behaviour each scene trait installs (see doc/game-architecture.md, "Trait").
  * `screen` marks the host with the scene in front, for styling and tests; `pausesBelow`
@@ -80,9 +80,10 @@ export type SceneHost = {
       | "enableDragSource"
       | "enableSelectSource"
       | "enableBoardGestures"
-      | "observeDrag"
     >;
     shop: ShopView;
+    /** Drag target guides on the scene host's overlay (#922). */
+    dropTargetGuides: DropTargetGuides;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
     rack: { viewEntered(entered: boolean, capacity: number): void };
     /** The read-only deck view (#175). */

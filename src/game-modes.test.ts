@@ -224,6 +224,12 @@ describe("game modes composed from traits", () => {
       sellBin: {},
       passiveRackView: { source: "rack" },
       coinsPanel: {},
+      dropTargetGuide: {
+        provider: "shopOffers",
+        // One beam scale for every target, so the small BUY box's beams match the rack's.
+        accept: { shape: "rectangle", colour: 0x65f4dd, beamScale: 400 },
+        refuse: { shape: "cross", colour: 0xff3344, beamScale: 400 },
+      },
       shopExit: {
         label: "Continue",
         presentation: {

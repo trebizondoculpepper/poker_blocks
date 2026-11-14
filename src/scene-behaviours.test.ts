@@ -78,7 +78,6 @@ function recordingHost() {
         sellBinEntered: (entered) => void calls.push(`sellBin:${entered}`),
       },
       input: {
-        observeDrag: () => () => undefined,
         enableDropTarget: ({ target }) => {
           calls.push(`target:${target}:on`);
           return () => void calls.push(`target:${target}:off`);
@@ -156,10 +155,14 @@ function recordingHost() {
       rack: {
         viewEntered: (entered, capacity) => void calls.push(`rack:${entered}:${capacity}`),
       },
+      dropTargetGuides: {
+        create: () => ({ frame: () => undefined, dispose: () => undefined, showing: () => [] }),
+      },
       shop: {
         buyTarget: {} as HTMLElement,
         dragSource: { pick: () => null, begin: () => {}, move: () => {}, end: () => {} },
         dragVerdict: () => null,
+        guideProvider: { preferred: () => [], refusal: () => null },
         render: (offers: readonly ShopOffer[], visible: boolean) =>
           calls.push(`shop:${visible}:${offers.length}`),
         burnUnsold: () => Promise.resolve(),

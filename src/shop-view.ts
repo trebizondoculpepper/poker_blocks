@@ -1,3 +1,4 @@
+import type { DropGuideProvider } from "./visual/drop-target-guide";
 import { blockName, blockFaceArt } from "./block-presentation";
 import { inspectBlock } from "./traits/inspectable";
 import { acquiredBonusDescriptor } from "./modifier-registers";
@@ -44,6 +45,11 @@ export type ShopView = {
    * right now, or null reason when it would succeed. Null when nothing is being dragged.
    */
   dragVerdict(): { targets: readonly HTMLElement[]; reason: string | null } | null;
+  /**
+   * The drag guide's provider for the offer being dragged (#924): its preferred target, if the
+   * shop shows it, and the live verdict. Empty while no offer is dragged.
+   */
+  readonly guideProvider: DropGuideProvider;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
   burnUnsold(reducedMotion: boolean): Promise<void>;
   frame(): void;
@@ -68,6 +74,12 @@ export type OfferView<Block extends OfferBlock> = {
    * be installed. A target the shop doesn't show (no rack) is skipped.
    */
   dropTargets: readonly ("buy" | "rack")[];
+  /**
+   * The one of `dropTargets` the drag guide points to (#924; doc/presentation-contracts.md,
+   * "Laser target-guide controller"): BUY for a card, the rack for a rack item. Guidance only;
+   * every listed target still accepts the drop.
+   */
+  preferredTarget: "buy" | "rack";
 };
 
 const offerViews = new Registry<OfferView<OfferBlock>>("offer view");
@@ -150,6 +162,7 @@ registerOfferView<CardBlock>("card", {
   purchaseDescription: "BUY to add to the deck",
   flightTarget: "deck",
   dropTargets: ["buy"],
+  preferredTarget: "buy",
 });
 
 registerOfferView<PassiveBlock>("passive", {
@@ -160,6 +173,7 @@ registerOfferView<PassiveBlock>("passive", {
   purchaseDescription: "BUY or the passive rack to install it",
   flightTarget: "rack",
   dropTargets: ["buy", "rack"],
+  preferredTarget: "rack",
 });
 
 // A transmogrifier (#388): an Items-rack item, shown as its passive token until its own look
@@ -172,6 +186,7 @@ registerOfferView<PassiveBlock>("transmogrifier", {
   purchaseDescription: "BUY or the Items rack to keep it",
   flightTarget: "rack",
   dropTargets: ["buy", "rack"],
+  preferredTarget: "rack",
 });
 
 // The Nothingifier (#156): an Items-rack item, drawn as its empty dotted cube.
@@ -183,6 +198,7 @@ registerOfferView<PassiveBlock>("nothingifier", {
   purchaseDescription: "BUY or the Items rack to keep it",
   flightTarget: "rack",
   dropTargets: ["buy", "rack"],
+  preferredTarget: "rack",
 });
 
 /** Shop stock is drawn with the same real cube appearances as cards and installed passives. */
@@ -596,6 +612,15 @@ export function createShopView(
     buyTarget,
     dragSource,
     dragVerdict: () => guidance && { targets: [...guidance.targets], reason: guidance.reason },
+    guideProvider: {
+      preferred: () =>
+        dragging ? dropTargets[offerViews.get(dragging.entry.offer.kind).preferredTarget] : [],
+      refusal: () => {
+        if (!dragging) return null;
+        const { offer } = dragging.entry;
+        return verdict(offer.block.id, offerKind(offer).destination)?.reason ?? null;
+      },
+    },
     render,
     burnUnsold,
     frame,

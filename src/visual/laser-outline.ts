@@ -146,7 +146,11 @@ export function createLaserLines(
       uniforms: { ...uniforms, strength: { value: strength } },
       vertexShader: `varying vec3 edgePosition; varying vec3 surfaceNormal; varying vec3 viewDirection;
         void main() { vec4 view = modelViewMatrix * vec4(position,1.0);
-          edgePosition = position; surfaceNormal = normalMatrix * normal; viewDirection = -view.xyz;
+          edgePosition = position; surfaceNormal = normalMatrix * normal;
+          // Towards the eye: from the vertex in a perspective view; straight out of the screen in
+          // an orthographic one (projectionMatrix[3][3] is 1 only there), as the HUD overlay
+          // draws drop guides (#924).
+          viewDirection = projectionMatrix[3][3] == 1.0 ? vec3(0.0, 0.0, 1.0) : -view.xyz;
           gl_Position = projectionMatrix * view; }`,
       // Each edge is a line through the noise: two fixed directions turn its position into
       // texture coordinates, so every edge reads its own line and the corners stay continuous.
