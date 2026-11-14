@@ -78,6 +78,7 @@ function recordingHost() {
         sellBinEntered: (entered) => void calls.push(`sellBin:${entered}`),
       },
       input: {
+        observeDrag: () => () => undefined,
         enableDropTarget: ({ target }) => {
           calls.push(`target:${target}:on`);
           return () => void calls.push(`target:${target}:off`);

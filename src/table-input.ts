@@ -19,6 +19,7 @@ import {
 } from "@dnd-kit/dom";
 import {
   createDragDropManager,
+  type DragLifecycle,
   type DragSource,
   type Point,
   type DragSourceConfig,
@@ -113,6 +114,8 @@ export type TableInput = {
   enableSelectSource(config: { source: string }): () => void;
   /** Register a drag source kind that lives outside the table (the shop's stock, #277). */
   registerDragSource(name: string, source: DragSource): void;
+  /** Follow every drag's lifecycle, for presentation only (#922); returns how to stop. */
+  observeDrag(listener: (event: DragLifecycle) => void): () => void;
   /**
    * Bind the board gestures while a scene shows (the `boardGestures` trait, #275): dragging the
    * structure turns it, a pinch zooms and a two-finger twist turns it, the wheel zooms. Returns
@@ -1096,6 +1099,7 @@ export function createTableInput(options: {
       };
     },
     registerDragSource: (name, source) => dragSourceKinds.register(name, source),
+    observeDrag: (listener) => dragDrop.observe(listener),
     enableBoardGestures: bindBoardGestures,
     fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
     get selection() {
