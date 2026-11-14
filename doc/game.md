@@ -560,3 +560,7 @@ Scoring passives can declare multiple lifecycle actions: once before any rows sc
 ### D12 passive revision
 
 The former D10 passive becomes D12: one uniform 1–12 roll per scoring operation, reused for every scored row at the existing Dice addition hook. Price/unlock initially remain 6 coins/from round 3. [D12 replacement and compatibility](dice-replacement.md) records the stable saved handle and artwork/verification requirements. This is an approved target awaiting separate implementation, not a change to D6/D8/D20.
+
+### Water presentation direction and visual audition corrections
+
+The owner prefers Calm Water-based refraction as the replacement appearance for Water, Hot Water and Boiling Water. They share one configured visual foundation; emission frequency, bubble size and ascent growth vary through configuration. Existing gameplay rules do not change. Highlight ripples are concentric per face, excited by rotation and decay to flat, independently of internal refraction. See [Calm Water refinements](calm-water-refinements.md). [Audition follow-ups](audition-followups.md) records corrected Fire comparisons, grass surface following, and selected passive icons; these are targets rather than accepted runtime appearances.
