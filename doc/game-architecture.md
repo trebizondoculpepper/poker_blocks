@@ -1690,3 +1690,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Owner audition follow-ups (2026-11-14)
 
 [Audition follow-ups](audition-followups.md) records the Flame Bench, searchable object browser/listening access, passive artwork and observed material defects. [Calm Water refinements](calm-water-refinements.md) now separates rotation-excited highlight ripples from continuing internal refraction and defines one configured water/bubble foundation for later adoption. These are documented targets; runtime delivery and visual acceptance are separate.
+
+## Score narration completion holds
+
+[Completion-scope research](research/score-narration-completion.md) and [the scheduler interface](visual-event-interface.md#narration-completion-holds-999) define required tail scopes separately from narration spacing, removing a second presenter-owned deadline ledger. Effects report bounded completion on the shared clock; reset owns cancellation across all scopes. This is a target for #999, not a claim of shipped replacement.
