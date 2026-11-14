@@ -62,6 +62,7 @@ import type { DropTargetGuides } from "./scene-traits/drop-target-guide";
 import { appVersion } from "./version";
 import { createVisualScheduler } from "./visual-events/scheduler";
 import type { ScoreNarrationServices } from "./score-narration";
+import type { RewardLedgerServices } from "./reward-ledger";
 import {
   createActivationLabelLayer,
   type ActivationLabelServices,
@@ -399,9 +400,16 @@ const shopView = createShopView(
 shopView.render([], false);
 // The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
 // these services; the frame loop below advances its clock.
-const visualServices: ScoreNarrationServices & ActivationLabelServices & RackLabelServices = {
+const visualServices: ScoreNarrationServices &
+  ActivationLabelServices &
+  RackLabelServices &
+  RewardLedgerServices = {
   get scoreNarration() {
     return presenter.narration;
+  },
+  // The stage-won ledger's count-up (#950).
+  get rewardLedger() {
+    return overlays.rewardLedger;
   },
   // Item activation labels beside the rack (#919), drawn over the same host the rack is in.
   activationLabels: createActivationLabelLayer(host),
@@ -462,6 +470,7 @@ const overlays: Overlays = createOverlays(host, {
   menus: run.menus,
   // A won or lost stage waits while the deck view is open, like a menu (#175).
   panels: [deckView],
+  visualEvents,
 });
 // Each HUD element goes in its zone of the shared frame (src/hud-layout.ts, #117).
 const hudElements: Record<HudElement, HTMLElement> = {
