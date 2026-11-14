@@ -29,6 +29,7 @@ import { needsLandingHandover } from "./block-trait-behaviours";
 import { createMaterialise } from "./visual/materialise";
 import {
   createScoreNarration,
+  type NarratedEndpoint,
   type NarratedLine,
   type ScoreNarrationSink,
 } from "./score-narration";
@@ -60,6 +61,8 @@ type Playing = {
   startedAt: number;
   /** This play's scored lines, captured when it committed: later plays may commit first. */
   lines: readonly PassiveScoredLine[];
+  /** Where this play left the stage when it committed: its score and outcome (#547). */
+  endpoint: NarratedEndpoint;
   /** Every running dissolve, for clean-up. */
   effects: Materialise[];
 };
@@ -168,13 +171,13 @@ export function createPlayPresenter(options: {
       shownScore += points;
       options.changed();
     },
-    summarise() {
-      shownScore = game().state.round.score;
+    summarise({ score }) {
+      shownScore = score;
       options.changed();
     },
-    decide() {
-      shownScore = game().state.round.score;
-      options.decided(roundOutcome(game().state), frameNow);
+    decide({ score, outcome }) {
+      shownScore = score;
+      options.decided(outcome, frameNow);
       options.changed();
     },
   };
@@ -184,8 +187,8 @@ export function createPlayPresenter(options: {
    * Narrate the lines from the play that just landed, lowest score first, after any play still
    * being narrated: captured now, as plain data, so a later play can't change them.
    */
-  function announceScore(scored: readonly PassiveScoredLine[]): void {
-    narration.narrate(presentationOrder(scored).map(capturedLine));
+  function announceScore(scored: readonly PassiveScoredLine[], endpoint: NarratedEndpoint): void {
+    narration.narrate({ lines: presentationOrder(scored).map(capturedLine), endpoint });
   }
 
   function updatePlay(action: Playing, now: number, delta: number): void {
@@ -262,7 +265,7 @@ export function createPlayPresenter(options: {
       getMaterialDefinition(materialOf(block)),
     ))
       playSfx(id);
-    announceScore(action.lines);
+    announceScore(action.lines, action.endpoint);
     cameraView.scheduleCameraMove();
     options.refill();
     options.save();
@@ -370,6 +373,7 @@ export function createPlayPresenter(options: {
         startedAt: performance.now(),
         effects: [],
         lines: game().lastScoredLines,
+        endpoint: { score: game().state.round.score, outcome: roundOutcome(game().state) },
       });
       playSfx("card.place.fly");
       options.changed();

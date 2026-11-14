@@ -14,6 +14,7 @@
  * - **Fallback:** a narration scope that fails (or can't be admitted) jumps the shown score to the
  *   model's through a direct sink, and the outcome still follows: nothing waits forever.
  */
+import type { RoundOutcome } from "./dealer";
 import {
   unitMs,
   visualFallbacks,
@@ -26,14 +27,23 @@ import {
 /** One scoring line as committed: its blocks, the rule sources that fired, its points. */
 export type NarratedLine = { blockIds: string[]; sourceIds: string[]; points: number };
 
+/**
+ * Where a committed play left the stage, captured when it committed: narration and its
+ * fallback show this, never the live model, which a later play may already have changed.
+ */
+export type NarratedEndpoint = { score: number; outcome: RoundOutcome };
+
+/** A committed play: its lines and its captured endpoint. */
+export type NarratedPlay = { lines: readonly NarratedLine[]; endpoint: NarratedEndpoint };
+
 /** What narration shows through: the play presenter supplies it as a scheduler service. */
 export type ScoreNarrationSink = {
   /** Show one line: tint its blocks, pulse its sources, play its sound, add its points. */
   line(line: NarratedLine): void;
-  /** Show the shown score as the model has it, without narrating (the summary fallback). */
-  summarise(): void;
-  /** Announce the stage's outcome, as the model has it now. */
-  decide(): void;
+  /** Show a play's captured score at once, without narrating (the summary fallback). */
+  summarise(endpoint: NarratedEndpoint): void;
+  /** Announce the captured outcome of the last play narrated. */
+  decide(endpoint: NarratedEndpoint): void;
 };
 
 export type ScoreNarrationServices = { scoreNarration: ScoreNarrationSink };
@@ -61,12 +71,14 @@ visualHandlers.register("score.line", (payload, context) => {
   return effect;
 });
 
-visualHandlers.register("score.outcome", (_payload, context) => {
-  sinkOf(context.services).decide();
+visualHandlers.register("score.outcome", (payload, context) => {
+  sinkOf(context.services).decide(payload as NarratedEndpoint);
   return "done";
 });
 
-visualFallbacks.register("score.summary", ({ services }) => sinkOf(services).summarise());
+visualFallbacks.register("score.summary", ({ services, payload }) =>
+  sinkOf(services).summarise(payload as NarratedEndpoint),
+);
 
 export function createScoreNarration(
   scheduler: Pick<
@@ -77,7 +89,9 @@ export function createScoreNarration(
   timing: ScoreNarrationTiming,
 ) {
   /** Plays committed but not yet narrating, in committed order. */
-  let waiting: NarratedLine[][] = [];
+  let waiting: NarratedPlay[] = [];
+  /** The endpoint of the latest play started: the outcome announced after it. */
+  let reached: NarratedEndpoint | null = null;
   let current: ScopeHandle | null = null;
   let outcome: ScopeHandle | null = null;
   /** Bumped by a reset, so a settling scope from before it starts nothing. */
@@ -88,12 +102,17 @@ export function createScoreNarration(
   function next(lastLines: number): void {
     const play = waiting.shift();
     if (play) start(play);
-    else announce(lastLines > 0 ? Math.max(0, timing.settle - timing.lineStep) : 0);
+    else if (reached)
+      announce(reached, lastLines > 0 ? Math.max(0, timing.settle - timing.lineStep) : 0);
   }
 
-  function start(lines: NarratedLine[]): void {
+  function start({ lines, endpoint }: NarratedPlay): void {
     const mine = epoch;
-    const scope = scheduler.createScope(null, { fallback: "score.summary" });
+    reached = endpoint;
+    const scope = scheduler.createScope(null, {
+      fallback: "score.summary",
+      fallbackPayload: endpoint,
+    });
     const at = nowUnits();
     const admitted = scheduler.scheduleBatch(
       scope,
@@ -106,7 +125,7 @@ export function createScoreNarration(
     // Not admitted: the model's score shows at once, and the outcome still follows.
     if (!admitted.accepted) {
       scheduler.cancel(scope);
-      sink.summarise();
+      sink.summarise(endpoint);
       next(0);
       return;
     }
@@ -119,11 +138,15 @@ export function createScoreNarration(
     });
   }
 
-  function announce(delayUnits: number): void {
+  function announce(endpoint: NarratedEndpoint, delayUnits: number): void {
     const mine = epoch;
     const scope = scheduler.createScope(null);
     outcome = scope;
-    scheduler.schedule(scope, { handler: "score.outcome", dueUnits: nowUnits() + delayUnits });
+    scheduler.schedule(scope, {
+      handler: "score.outcome",
+      payload: endpoint,
+      dueUnits: nowUnits() + delayUnits,
+    });
     scheduler.seal(scope);
     scheduler.observe(scope, () => {
       if (mine === epoch && outcome === scope) outcome = null;
@@ -131,15 +154,15 @@ export function createScoreNarration(
   }
 
   return {
-    /** Narrate a committed play's lines, after any play still narrating. */
-    narrate(lines: readonly NarratedLine[]): void {
+    /** Narrate a committed play's lines and captured endpoint, after any play still narrating. */
+    narrate(play: NarratedPlay): void {
       // A play committed before the outcome showed: the outcome waits for it too.
       if (outcome) {
         const pending = outcome;
         outcome = null;
         scheduler.cancel(pending);
       }
-      waiting.push([...lines]);
+      waiting.push({ lines: [...play.lines], endpoint: play.endpoint });
       if (!current) next(0);
     },
     /** Narration or its outcome is still to come. */
@@ -150,6 +173,7 @@ export function createScoreNarration(
     reset(): void {
       epoch++;
       waiting = [];
+      reached = null;
       for (const scope of [current, outcome]) if (scope) scheduler.cancel(scope);
       current = outcome = null;
     },

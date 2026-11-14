@@ -85,7 +85,12 @@ export type HandlerContext = {
 export type VisualHandler = (payload: unknown, context: HandlerContext) => "done" | EffectHandle;
 
 /** A producer's summary fallback, run once when its scope fails (a timeout, a thrown handler). */
-export type VisualFallback = (failure: { reason: string; services: unknown }) => void;
+export type VisualFallback = (failure: {
+  reason: string;
+  services: unknown;
+  /** The scope's captured fallback payload: what it summarises, never live state. */
+  payload: unknown;
+}) => void;
 
 export const visualHandlers = new Registry<VisualHandler>("visual event handler");
 export const visualFallbacks = new Registry<VisualFallback>("visual fallback");
@@ -97,6 +102,8 @@ export type ScopeConfig = {
   maxEffectMs?: number;
   /** The registered fallback that runs once if the scope fails. */
   fallback?: string;
+  /** Captured data handed to the fallback, so a summary shows what was committed. */
+  fallbackPayload?: unknown;
 };
 
 declare const scopeBrand: unique symbol;
@@ -251,7 +258,11 @@ export function createVisualScheduler(
     if (scope.fallbackRan || !scope.config.fallback) return;
     scope.fallbackRan = true;
     try {
-      fallbacks.get(scope.config.fallback)({ reason, services });
+      fallbacks.get(scope.config.fallback)({
+        reason,
+        services,
+        payload: scope.config.fallbackPayload,
+      });
     } catch (error) {
       scope.failure ??= `fallback failed: ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -505,7 +516,8 @@ export function createVisualScheduler(
         parent: parentScope,
         children: new Set(),
         events: new Set(),
-        config,
+        // The fallback's payload is captured like any event's: plain data, frozen now.
+        config: { ...config, fallbackPayload: capturePayload(config.fallbackPayload ?? null) },
         sealed: false,
         state:
           staleParent ||
@@ -621,6 +633,14 @@ export function createVisualScheduler(
      * Advance the clock by visible elapsed time and dispatch, within the budget. One host calls
      * this; a handler that tried would be refused.
      */
+    /**
+     * The host's visibility changed: the next update rebases the clock rather than counting the
+     * time in between, which a browser that stops animation frames for a hidden tab would
+     * otherwise add in one burst (#800 review).
+     */
+    suspend(): void {
+      lastRealMs = null;
+    },
     update(realNowMs: number, visible: boolean): void {
       if (updating) throw new Error("The visual scheduler cannot be updated from inside a handler");
       if (!visible) {

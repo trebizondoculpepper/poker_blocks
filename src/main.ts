@@ -401,6 +401,8 @@ const visualServices: ScoreNarrationServices = {
   },
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
+// Hidden time never counts as presentation time, even when the browser stops sending frames.
+document.addEventListener("visibilitychange", () => visualEvents.suspend());
 const presenter: PlayPresenter = createPlayPresenter({
   game: () => run.game,
   views: blockViews,
