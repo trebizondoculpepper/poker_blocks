@@ -495,6 +495,9 @@ export function createGameRunController<Context>(options: {
   function takeNextAction(): void {
     if (services.presenter.busy || services.input.dragging) return;
     playSfx("ui.click");
+    // A held result (#946, #1362 review) follows at its gate on its own: the button waits for
+    // it rather than entering the result screen before the gate opens.
+    if (resultHolds.size) return;
     // A won stage moves on through its pop-up, which shows what it paid.
     if (game.inStage && roundOutcome(game.state) === "won") {
       showStageWon();
