@@ -62,12 +62,20 @@ export function createSettlementHandle(
   };
 }
 
-/** A one-shot release continuation: consumed at most once, by the first caller. */
-export type Continuation = { consume(): boolean; readonly consumed: boolean };
+/**
+ * A one-shot release continuation, bound to the gesture (settlement generation) it was answered
+ * for: consumed at most once, by the first caller, and never by another gesture.
+ */
+export type Continuation = {
+  readonly generation: number;
+  consume(): boolean;
+  readonly consumed: boolean;
+};
 
-export function createContinuation(): Continuation {
+export function createContinuation(generation: number): Continuation {
   let consumed = false;
   return {
+    generation,
     get consumed() {
       return consumed;
     },
@@ -157,20 +165,28 @@ dropOutcomeHandlers.register("returnThenAct", ({ config, continuation }, settlem
   return "returned";
 });
 
-/** Dispatch a release outcome to its registered operation. */
+/**
+ * Dispatch a release outcome to its registered operation. An outcome answered for another gesture
+ * is refused before anything is restored or invoked, and the current gesture's settlement is left
+ * untouched for its own outcome.
+ */
 export function dispatchDropOutcome(
   outcome: DropOutcome,
   settlement: SettlementHandle,
 ): DropResult {
+  if (outcome.continuation.generation !== settlement.generation) return "refused";
   return dropOutcomeHandlers.get(outcome.operation)(outcome, settlement);
 }
 
-/** The transitional adapter for an existing boolean target. */
-export function booleanOutcome(accepted: boolean): DropOutcome {
-  return { operation: accepted ? "transfer" : "refuse", continuation: createContinuation() };
+/** The transitional adapter for an existing boolean target, for the gesture `generation`. */
+export function booleanOutcome(accepted: boolean, generation: number): DropOutcome {
+  return {
+    operation: accepted ? "transfer" : "refuse",
+    continuation: createContinuation(generation),
+  };
 }
 
-/** A `returnThenAct` outcome for a target's configured action. */
-export function returnThenAct(config: ReturnThenActConfig): DropOutcome {
-  return { operation: "returnThenAct", config, continuation: createContinuation() };
+/** A `returnThenAct` outcome for a target's configured action, for the gesture `generation`. */
+export function returnThenAct(config: ReturnThenActConfig, generation: number): DropOutcome {
+  return { operation: "returnThenAct", config, continuation: createContinuation(generation) };
 }
