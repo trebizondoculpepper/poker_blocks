@@ -8,7 +8,10 @@ describe("leaving the shop, model first (#880)", () => {
     const done = leaveShop({
       commit: () => (log.push("commit"), true),
       save: () => void log.push("save"),
-      outgoingDone: () => (log.push("wait"), new Promise<void>((r) => (release = r))),
+      outgoingDone: () => (
+        log.push("wait"),
+        new Promise<boolean>((r) => (release = () => r(true)))
+      ),
       current: () => true,
     });
     await Promise.resolve();
@@ -22,7 +25,7 @@ describe("leaving the shop, model first (#880)", () => {
     const navigate = await leaveShop({
       commit: () => false,
       save: () => void log.push("save"),
-      outgoingDone: () => (log.push("wait"), Promise.resolve()),
+      outgoingDone: () => (log.push("wait"), Promise.resolve(true)),
       current: () => true,
     });
     expect(navigate).toBe(false);
@@ -34,8 +37,19 @@ describe("leaving the shop, model first (#880)", () => {
       await leaveShop({
         commit: () => true,
         save: () => {},
-        outgoingDone: () => Promise.resolve(),
+        outgoingDone: () => Promise.resolve(true),
         current: () => false,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not navigate when the outgoing effect was cut short (the player quit)", async () => {
+    expect(
+      await leaveShop({
+        commit: () => true,
+        save: () => {},
+        outgoingDone: () => Promise.resolve(false),
+        current: () => true,
       }),
     ).toBe(false);
   });

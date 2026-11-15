@@ -61,8 +61,11 @@ export type ShopView = {
   readonly guideProvider: DropGuideProvider;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
   burnUnsold(reducedMotion: boolean): Promise<void>;
-  /** The burn in progress, or an already-settled promise when there is none (#880). */
-  outgoingDone(): Promise<void>;
+  /**
+   * When the burn in progress settles (#880): true if it ran to its end, false if it was cleared
+   * away (the scene left, a new run). True at once when nothing is burning.
+   */
+  outgoingDone(): Promise<boolean>;
   /** Draw one frame; `delta` (seconds) advances the stock's ambient motion (#774). */
   frame(delta?: number): void;
   /**
@@ -331,6 +334,8 @@ export function createShopView(
     resolve(): void;
   } | null = null;
   let burnPromise: Promise<void> | null = null;
+  /** Whether the last burn ran to its end, rather than being cleared away (#880). */
+  let burnCompleted = false;
   let entrance: Entrance | null = null;
   const pixelsPerUnit = 50;
   let canvasWidth = 0;
@@ -494,6 +499,7 @@ export function createShopView(
   function burnUnsold(reducedMotion: boolean): Promise<void> {
     finishEntrance();
     if (burnPromise) return burnPromise;
+    burnCompleted = false;
     if (displayed.length === 0) {
       render([], false);
       return Promise.resolve();
@@ -564,6 +570,7 @@ export function createShopView(
         job.lastAt = now;
       }
       if (burn.jobs.every(({ effect }) => effect && !effect.running)) {
+        burnCompleted = true;
         render([], false);
         return;
       }
@@ -721,7 +728,10 @@ export function createShopView(
     guideProvider: shopGuideProvider(() => dragging?.entry.offer ?? null, dropTargets, verdict),
     render,
     burnUnsold,
-    outgoingDone: () => burnPromise ?? Promise.resolve(),
+    outgoingDone() {
+      const running = burnPromise;
+      return running ? running.then(() => burnCompleted) : Promise.resolve(true);
+    },
     frame,
     present(config) {
       presented = config;

@@ -11,8 +11,11 @@ export type ShopLeaveSteps = {
   commit(): boolean;
   /** Save the committed run. */
   save(): void;
-  /** The required outgoing effect the receipt started; resolves when it is done. */
-  outgoingDone(): Promise<void>;
+  /**
+   * The required outgoing effect the receipt started: true when it ran to its end, false when it
+   * was cut short (a quit, a new run), in which case the leave does not navigate.
+   */
+  outgoingDone(): Promise<boolean>;
   /** Whether the run that left is still the current one. */
   current(): boolean;
 };
@@ -21,6 +24,6 @@ export type ShopLeaveSteps = {
 export async function leaveShop(steps: ShopLeaveSteps): Promise<boolean> {
   if (!steps.commit()) return false;
   steps.save();
-  await steps.outgoingDone();
-  return steps.current();
+  const finished = await steps.outgoingDone();
+  return finished && steps.current();
 }
