@@ -118,3 +118,29 @@ describe("fading film is frame-rate independent (#412 review)", () => {
     expect(fadeAfter(240)).toBeLessThanOrEqual(95);
   });
 });
+
+describe("fading film's edge (#1010)", () => {
+  it("gives a texel the surface line crosses a partial strength, not a whole-texel step", () => {
+    const partials = [0.4, 0.42, 0.44, 0.46, 0.48, 0.5, 0.52].map((levelFill) => {
+      const boundary = createInteriorBoundary(geometry, 1, 0.92);
+      const fluid = containedContents.get("levellingFluid")(boundary, {
+        ...fluidConfig,
+        level: levelFill,
+      });
+      const film = containedResidues
+        .get("fadingFilm")
+        .build(boundary, fluid.capabilities, { ...filmConfig, seconds: 1e9 });
+      const frame = { rotation: level, seconds: 0, delta: 0, first: true, reducedMotion: false };
+      fluid.update!(frame);
+      film.update!(frame);
+      const data = (
+        (film.meshes[0]!.material as THREE.ShaderMaterial).uniforms.history!
+          .value as THREE.DataTexture
+      ).image.data as Uint8Array;
+      return [...data].filter((value) => value > 0 && value < 255).length;
+    });
+    // Wherever the line passes within half a texel of a row of centres, that row is partly
+    // covered; before #1010 every texel was either 0 or 255.
+    expect(partials.filter((count) => count > 0).length).toBeGreaterThanOrEqual(2);
+  });
+});
