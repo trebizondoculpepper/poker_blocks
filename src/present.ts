@@ -15,7 +15,6 @@ import { getMaterialDefinition, materialOf, withMaterial } from "./materials";
 import type { StoredPayload } from "./playable-payload";
 import { registerRuleCommand } from "./rule-commands";
 import { faces } from "./traits/attachable";
-import { inspectable } from "./traits/inspectable";
 
 /** The wrapper with no contents yet: what the definition creates, and restores into. */
 function presentShell(id: string): CardBlock {
@@ -26,10 +25,14 @@ function presentShell(id: string): CardBlock {
         active: { definition: "present" },
         // A run-owned active (#928): retired in full when it is consumed.
         owner: { id: "runActive" },
-        label: { name: "Present", symbol: "🎁" },
+        label: {
+          name: "Present",
+          symbol: "🎁",
+          // What inspection says it holds: never what (doc/presents.md, "Opening and scoring").
+          description: "An unknown playable card, wrapped. Playing it opens it in place.",
+        },
         selectable: {},
         attachable: { faces },
-        inspectable: inspectable("Present — an unknown playable card, wrapped"),
       },
     },
     getMaterialDefinition("giftWrap" as never),

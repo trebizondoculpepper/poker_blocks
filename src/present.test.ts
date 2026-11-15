@@ -43,6 +43,22 @@ describe("a Present on winning the round's last stage (#651; doc/presents.md)", 
     expect((payload.components as { material: string }).material).not.toBe("paper");
   });
 
+  it("says it holds an unknown playable card, and never what, even after a save", async () => {
+    const { inspectBlock } = await import("./traits/inspectable");
+    const run = wonRun(stageKinds.at(-1)!);
+    run.claimStageRewards();
+    const [present] = presentsIn(run);
+    const text = inspectBlock(present!)!;
+    expect(text).toContain("An unknown playable card, wrapped");
+    const payload = [present!.traits.opaqueContainer ?? []].flat()[0]!.payload;
+    const { material } = payload.components as { material: string };
+    expect(text.toLowerCase()).not.toContain(` ${material.toLowerCase()} `);
+    const record = JSON.parse(JSON.stringify(toSaveRecord(run.snapshot())));
+    const snapshot = fromSaveRecord(record, standardDeck, dealerRegistry)!;
+    const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, snapshot);
+    expect(inspectBlock(presentsIn(resumed)[0]!)).toContain("An unknown playable card, wrapped");
+  });
+
   it("grants nothing on the earlier stages of the round", () => {
     const run = wonRun(stageKinds[0]!);
     const reward = run.claimStageRewards()!;

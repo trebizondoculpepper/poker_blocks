@@ -1760,6 +1760,12 @@ inspectionProviders.register("weight", (block) => {
   ];
 });
 
+// A labelled object's public description follows its name line, whatever material it wears
+// (#651): configuration on its label, read uniformly.
+inspectionProviders.register("labelDescription", (block) =>
+  [block.traits.label?.description ?? []].flat(),
+);
+
 // Inspection lists a card's base and acquired bonuses after its name (#751).
 inspectionProviders.register("acquiredBonuses", (block) =>
   acquiredBonusLines(block, getMaterialDefinition(materialOf(block)).scoringModifier),
