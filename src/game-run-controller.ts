@@ -974,7 +974,8 @@ export function createGameRunController<Context>(options: {
       services.shop.render(game.state.shopStock ?? [], true);
       updateHud();
       autosave();
-      playSfx("shop.buy");
+      // Its sound is on the committed shop.purchased fact (#756), played by the shop's
+      // committedEventSounds.
       return true;
     },
     followOutcomes(time) {

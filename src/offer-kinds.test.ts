@@ -46,6 +46,23 @@ describe("offer kinds (#67)", () => {
     expect(run.state.shopStock).toEqual([]);
   });
 
+  it("commits one shop.purchased fact carrying the buy sound, and none for a refusal (#756)", () => {
+    const run = shopWithPouch(3);
+    const facts: { type: string; blockId?: string; purchase?: unknown; sound?: string }[] = [];
+    run.onCommitted((batch) => facts.push(...batch.map(({ payload }) => payload as never)));
+    expect(run.buyShopOffer("pouch.1", "passive-rack")).toBeNull();
+    expect(facts).toEqual([]);
+    expect(run.buyShopOffer("pouch.1", "hand")).not.toBeNull();
+    const purchased = facts.filter(({ type }) => type === "shop.purchased");
+    expect(purchased).toEqual([
+      expect.objectContaining({
+        blockId: "pouch.1",
+        purchase: { destination: "hand", price: 2 },
+        sound: "shop.buy",
+      }),
+    ]);
+  });
+
   it("refuses it when the run can't afford it, and says so before the attempt", () => {
     const run = shopWithPouch(1);
     // The shop asks first, so a refusal for want of coins gets its own sound.

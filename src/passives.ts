@@ -106,6 +106,8 @@ export type GameEvent = {
    * committed change of material, captured at commit for every response that presents it.
    */
   transition?: { from: ReactionState; to: ReactionState };
+  /** On `shop.purchased` (#756): where the offer went and the coins it actually cost. */
+  purchase?: { destination: string; price: number };
   /** On `block.materialChanged`: the card as it was, and as it became, captured at commit. */
   snapshots?: { before: CardBlock; after: CardBlock };
   /** On `block.materialChanged`: the target's transition sound, presented by its response. */

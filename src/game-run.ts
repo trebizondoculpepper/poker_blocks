@@ -753,19 +753,30 @@ export class GameRun {
 
   buyShopOffer(id: string, destination: OfferDestination): ShopOffer | null {
     if (this.purchaseVerdict(id, destination)) return null;
-    const offer = this.currentState.shopStock!.find(({ block }) => block.id === id)!;
-    const kind = offerKind(offer);
-    const run = this.offerRun;
-    const price = kind.price(offer.block, run);
-    const received = kind.receive(this.currentState, offer.block, run);
-    if (!received) return null;
-    this.currentState = {
-      ...received,
-      shopStock: received.shopStock?.filter(({ block }) => block.id !== id),
-      coins: received.coins - price,
-    };
-    this.passiveEvents.syncRack(this.currentState.passiveRack);
-    return offer;
+    // A committed action (#756): its purchase fact publishes once it has, and the shop hears it
+    // through its committed-event sounds; nothing plays it inline.
+    return this.transact("buy", undefined, () => {
+      const offer = this.currentState.shopStock!.find(({ block }) => block.id === id)!;
+      const kind = offerKind(offer);
+      const run = this.offerRun;
+      const price = kind.price(offer.block, run);
+      const received = kind.receive(this.currentState, offer.block, run);
+      if (!received) return null;
+      this.currentState = {
+        ...received,
+        shopStock: received.shopStock?.filter(({ block }) => block.id !== id),
+        coins: received.coins - price,
+      };
+      this.passiveEvents.syncRack(this.currentState.passiveRack);
+      // The authoritative purchase fact (doc/game-events.md, "Future ownership/economy"): what
+      // was bought, where it went and what it actually cost.
+      this.lifecycle("shop.purchased", {
+        blockId: id,
+        purchase: { destination, price },
+        sound: "shop.buy",
+      });
+      return offer;
+    });
   }
 
   /** Retire legacy definitions, then fill empty slots while keeping active blocks in order. */

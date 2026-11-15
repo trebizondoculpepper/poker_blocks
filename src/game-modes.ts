@@ -717,6 +717,8 @@ export const sceneDefinitions = [
         },
       },
       shopStock: { source: "shop" },
+      // A committed purchase is heard from its fact (#756).
+      committedEventSounds: {},
       // Items can change a card's material here too: its transition is heard (#539).
       materialChangeSounds: {},
       // Leaving presents its committed receipt (#880): the stock that left burns, with its cue
