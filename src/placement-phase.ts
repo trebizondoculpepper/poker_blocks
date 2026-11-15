@@ -1,0 +1,81 @@
+/**
+ * Placement presentation bound to committed action identities (#1219;
+ * doc/action-presentation-phases.md, "One action record, reserved contributions"). Each committed
+ * action opens its record in the shared action-phase registry (#1218) under the model's own
+ * action ID, as the action is published; a registered producer configured with the fact that
+ * marks a placement reserves that action's pre-scoring contribution there and then. The play
+ * presenter binds its actual flight work to that reservation once the model call has returned,
+ * rather than to a private scope keyed by a local counter.
+ *
+ * - **Configured, not identified.** The producer is a factory configured with the fact type and
+ *   slot it reserves for; nothing here asks what kind of action or block it is.
+ * - **Per-action outcome.** The record's pre-scoring status (finished, cancelled, failed) is the
+ *   action's own pre-score completion; an action with nothing to place reserves nothing, so its
+ *   pre-scoring completes empty.
+ * - **Reset.** A presentation reset ends the registry's generation: every bound flight is
+ *   cancelled once and later lookups for old actions are unavailable.
+ */
+import type { CommittedMetadata } from "./command-codecs";
+import type { EventEnvelope } from "./lifecycle/action";
+import {
+  phaseProducers,
+  type ActionKey,
+  type ActionPhases,
+  type Contribution,
+} from "./visual-events/action-phases";
+
+/** What a committed action's record captures for producers: its facts' types, in order. */
+export type CommittedCapture = { factTypes: readonly string[] };
+
+/** A producer that reserves `slot` for any action whose facts include `fact`. */
+export function factProducer(config: { fact: string; slot: string }) {
+  return {
+    reserve: (captured: unknown) =>
+      (captured as CommittedCapture).factTypes.includes(config.fact) ? { slot: config.slot } : null,
+  };
+}
+
+/** Placement: an action that placed blocks reserves its pre-scoring contribution. */
+export const placementProducer = "placement";
+phaseProducers.register(
+  placementProducer,
+  factProducer({ fact: "play.placed", slot: "preScoring" }),
+);
+
+export type CommittedSource = {
+  onCommitted(
+    listener: (facts: readonly EventEnvelope[], metadata: CommittedMetadata) => void,
+  ): () => void;
+};
+
+/** Feed committed actions into the registry and hand the presenter its placement reservation. */
+export function createPlacementPhase(source: CommittedSource, phases: ActionPhases) {
+  let latest: ActionKey | null = null;
+  const stop = source.onCommitted((facts, metadata) => {
+    const committed = phases.commit(metadata.actionId, {
+      factTypes: facts.map(({ type }) => type),
+    } satisfies CommittedCapture);
+    latest = committed.ok ? committed.key : null;
+  });
+  return {
+    /** The action that committed last, by its captured key; null after a reset. */
+    get latest(): ActionKey | null {
+      return latest;
+    },
+    /** The just-committed action's placement reservation, for the presenter to bind once. */
+    contribution(): Contribution | null {
+      return latest ? phases.contribution(latest, placementProducer) : null;
+    },
+    /** An action's own pre-score completion, or unavailable. */
+    preScoring(key: ActionKey) {
+      return phases.status(key, "preScoring");
+    },
+    reset() {
+      latest = null;
+      phases.reset();
+    },
+    stop,
+  };
+}
+
+export type PlacementPhase = ReturnType<typeof createPlacementPhase>;

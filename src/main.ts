@@ -1,3 +1,5 @@
+import { createPlacementPhase, placementProducer } from "./placement-phase";
+import { createActionPhases } from "./visual-events/action-phases";
 import type { TransitionAudioServices } from "./scene-traits/material-change-sounds";
 import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
@@ -497,6 +499,11 @@ const visualServices: ScoreNarrationServices &
 const visualEvents = createVisualScheduler({ services: visualServices });
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
 document.addEventListener("visibilitychange", () => visualEvents.suspend());
+// Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).
+const placementPhase = createPlacementPhase(
+  run,
+  createActionPhases(visualEvents, { plan: "scoring", producers: [placementProducer] }),
+);
 const presenter: PlayPresenter = createPlayPresenter({
   game: () => run.game,
   views: blockViews,
@@ -517,6 +524,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   save: () => run.autosave(),
   decided: (outcome, now, occurrence) => run.decided(outcome, now, occurrence),
   visualEvents,
+  placementPhase,
 });
 const input: TableInput = createTableInput({
   host,

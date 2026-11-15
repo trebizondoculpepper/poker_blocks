@@ -1,3 +1,5 @@
+import type { PlacementPhase } from "./placement-phase";
+import type { Contribution } from "./visual-events/action-phases";
 import type { CardBlock } from "./cards";
 import { cellKey } from "./traits/attachable";
 /**
@@ -206,6 +208,11 @@ export function createPlayPresenter(options: {
    */
   alongside?(activation: RuleActivation): AlongsideEvent | null;
   /**
+   * Committed action identities for placement (#1219): the just-committed play's reserved
+   * pre-scoring contribution to bind its flight to. Absent: the play runs in its own scope.
+   */
+  placementPhase?: Pick<PlacementPhase, "contribution" | "reset">;
+  /**
    * What the line's host shows with a scored line itself (#1158): its fitted score label, given
    * the line as captured and the line's tint settle in units. Null or absent: nothing.
    */
@@ -239,10 +246,18 @@ export function createPlayPresenter(options: {
    * Run an action's animation on the shared scheduler, from now, in a scope of its own: plays and
    * discards overlap freely and never wait for one another. Not admitted, it completes at once.
    */
-  function present(action: PresentedAction): void {
+  function present(action: PresentedAction, reservation: Contribution | null = null): void {
     const events = options.visualEvents;
     const id = ++nextActionId;
     waiting.set(id, action);
+    // A play bound to its committed action's reservation (#1219): its flight runs as that
+    // action's pre-scoring contribution, correlated by the model's action ID, not this counter.
+    if (reservation) {
+      if (reservation.bind({ handler: "presenter.action", payload: { id }, dueUnits: 0 })) return;
+      waiting.delete(id);
+      action.step(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+      return;
+    }
     const scope = events.createScope(null);
     const admitted = events.schedule(scope, {
       handler: "presenter.action",
@@ -504,16 +519,19 @@ export function createPlayPresenter(options: {
         ),
       };
       playing.push(action);
-      present({
-        step: (elapsed, delta) => updatePlay(action, elapsed, delta),
-        // A reset drops it; any other cancellation (an effect that ran too long) lands it at
-        // once, so its narration slot, landing and replacements still complete (#1033 review).
-        cancel: () => {
-          if (!resetting) return void updatePlay(action, Infinity, Infinity);
-          playing = playing.filter((other) => other !== action);
-          action.effects.forEach((effect) => effect.finish());
+      present(
+        {
+          step: (elapsed, delta) => updatePlay(action, elapsed, delta),
+          // A reset drops it; any other cancellation (an effect that ran too long) lands it at
+          // once, so its narration slot, landing and replacements still complete (#1033 review).
+          cancel: () => {
+            if (!resetting) return void updatePlay(action, Infinity, Infinity);
+            playing = playing.filter((other) => other !== action);
+            action.effects.forEach((effect) => effect.finish());
+          },
         },
-      });
+        options.placementPhase?.contribution() ?? null,
+      );
       playSfx("card.place.fly");
       options.changed();
       return true;
@@ -576,6 +594,8 @@ export function createPlayPresenter(options: {
       // Every action's effect is cancelled with its scope; one not yet started is dropped.
       resetting = true;
       for (const scope of Array.from(actionScopes)) options.visualEvents.cancel(scope);
+      // Bound flights are cancelled with their action records' generation (#1219).
+      options.placementPhase?.reset();
       resetting = false;
       actionScopes.clear();
       waiting.clear();
