@@ -423,6 +423,8 @@ for (const definition of [
       phase: "score.linePower",
       effect: "power-line-score-by-query",
     },
+    ["density"],
+    ["exponential"],
   ),
   // Dense (#1070): a tightly packed field raises each scored row to up to the power 1.3.
   queryTrial(
