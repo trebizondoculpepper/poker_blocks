@@ -1729,3 +1729,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Composable drag-ghost audition (#1054)
 
 [Drag-ghost audition](drag-ghost-audition.md) separates registered appearance endpoints, render-layer transition masks and scheduler-owned gesture timing. A Dev-only room composes those same reusable capabilities with the actual hand/field/input stack; it is not a separate drag implementation. Required wireframe, face-free model and existing blue laser cube styles are independent of Perlin/simple fade and pickup delay/duration. Gesture settings are captured, cancellation owns cleanup and final production adoption waits for owner audition. Runtime targets are #1083/#1084/#1055.
+
+## Captured visual mount reconciliation (#1161)
+
+[The scheduler interface](visual-event-interface.md#captured-snapshots-and-missing-presentation-mounts-1161) defines generation/revision-scoped mount handles, independent pose/appearance channels and commit-side captured projection updates. Delayed effects read presentation transforms only, never live GameRun ownership/material state. Registered missing-target policies either omit cosmetic work, retain an explicitly captured exit snapshot or present a captured required summary, with exactly-once bounded settlement. This supersedes the previously undefined missing-mount reference in #544/#548.
