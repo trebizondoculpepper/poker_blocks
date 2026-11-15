@@ -97,6 +97,17 @@ describe("fitted narration text (#1156; doc/presentation-contracts.md)", () => {
     for (const line of result.lines) expect(line.width).toBeLessThanOrEqual(70 + 1e-9);
   });
 
+  it("keeps operands from lines the wrapped tail displaces, within the line count (#1197)", () => {
+    const text = "Alpha +11 beta gamma delta epsilon zeta eta theta +22 ×33 −44 +55 ×66 iota kappa";
+    const result = fit(text, 80, 52);
+    const shown = result.lines.map(({ text: line }) => line).join(" ");
+    for (const operand of ["+11", "+22", "×33", "−44", "+55", "×66"])
+      expect(shown).toContain(operand);
+    for (const line of result.lines) expect(line.width).toBeLessThanOrEqual(80 + 1e-9);
+    const room = Math.floor(52 / (narrationTextStyle.minPx * narrationTextStyle.lineHeight));
+    expect(result.lines.length).toBeLessThanOrEqual(room);
+  });
+
   it("stays within the height budget when truncated (#1185)", () => {
     const result = fit("a b c d e f g h i j k l m n o p q r s t u v w x y z ".repeat(8), 90, 40);
     expect(result.truncated).toBe(true);
