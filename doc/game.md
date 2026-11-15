@@ -555,7 +555,7 @@ The shop Continue action is a fixed Paper word cube in the existing bottom-right
 
 ## Passive lifecycle and persistent progress
 
-Scoring passives can declare multiple lifecycle actions: once before any rows score, per scored row at a declared scoring hook, and once after all rows score. Resolve rack instances left to right within each hook, without moving actions between phases. Each passive instance can retain its own counters or other state, with an explicit reset/lifetime policy; Dice rolls once per operation and reuses that value per row. See [the lifecycle/state contract](passive-lifecycle-state.md). [Could It Be Magic Now?](experiments/could-it-be-magic-now.md) is a provisional four-play Magic conversion experiment, not normal-shop content.
+Scoring passives can declare multiple lifecycle actions: once before any rows score, per scored row at a declared scoring hook, and once after all rows score. Resolve rack instances left to right within each hook, without moving actions between phases. Each passive instance can retain its own counters or other state, with an explicit reset/lifetime policy; Dice rolls once per operation and reuses that value per row. See [the lifecycle/state contract](passive-lifecycle-state.md). [Could It Be Magic Now?](experiments/could-it-be-magic-now.md) is a provisional four-play Magic conversion experiment whose normal acquisition follows the [passive trial admission policy](release-status.md#normal-run-provisional-passive-trial-1382).
 
 ### D12 passive revision
 
@@ -576,3 +576,11 @@ A framed graph on the room back wall shows cumulative stage score versus scoring
 ## Reporting a bug (#1339)
 
 The home and pause screens offer **Report a bug** beside **Get source code** in their existing footer. Reporting opens a Sentry feedback form so the player can describe a problem without needing a crash. Submitted reports include bounded game/build/browser diagnostics and an optional best-effort game screenshot. Unhandled errors are also reported automatically. Reports can feed linked GitHub issues through configured intake; submission never changes game outcomes. See [the reporting contract](crash-reporting.md) for data handling, failure behavior and setup prerequisites. This is an agreed target, not a claim that integration is already installed.
+
+## Run status viewer (#1337)
+
+The deck-counter entry opens a read-only status screen with **Deck** and **Gameplay Status** tabs. Deck shows all live run cards with location and material, plus shared hover/focus/tap inspection of weight and full bonuses; it does not reveal shuffled draw order or hidden Present contents. Gameplay Status shows round/stage, current/target score and installed modifiers with their descriptions and instance state. See [run status](run-status.md) for ownership, pause/focus, invalidation and verification. This target extends the existing deck view; it does not change gameplay or claim the tabbed implementation has shipped.
+
+## Trying provisional passives in ordinary runs (#1382)
+
+The normal passive acquisition catalogue includes implemented provisional gameplay passives by default, without a toggle. Keep their visible provisional balance warning; this is permission to playtest them, not certification. Existing authored prices, unlock/material requirements, retirement and weights remain. Trials missing offer data receive the explicitly documented reversible initial stock recipe in [release status](release-status.md#normal-run-provisional-passive-trial-1382); other object families retain their own admission policy. This supersedes experiment-only availability statements for these implemented passives, not their scoring rules.

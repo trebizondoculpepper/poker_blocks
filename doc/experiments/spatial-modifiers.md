@@ -1,5 +1,7 @@
 # Spatial-modifier experiment
 
+Availability update (owner, 2026-11-15): implemented provisional gameplay passives may appear in normal runs under [the passive trial admission policy](../release-status.md#normal-run-provisional-passive-trial-1382), without certification. This supersedes older experiment-only availability wording below; experiment semantics and open balance questions remain.
+
 Status: historical hypotheses and reusable experiment protocol. **Owner-directed Dense/Sparse/Light/Heavy defaults are superseded by [the bounded mass/passive contract](../material-mass-and-passives.md) (#1081); implement those four playable profiles without requiring another bench study.** The old formulas below are historical comparison configurations, not the new default scoring rules. Related: #806, broader research #616 and lifecycle research #615. No player-session measurements or balanced production rewards are claimed.
 
 ## Questions and agreed meaning
