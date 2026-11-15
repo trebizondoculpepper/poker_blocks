@@ -49,6 +49,21 @@ export type ExperimentReplay = {
 
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
+/** Plain data as JSON with every object's keys in order: equal values compare equal (#1329). */
+function canonical(value: unknown): string {
+  const sorted = (inner: unknown): unknown =>
+    Array.isArray(inner)
+      ? inner.map(sorted)
+      : typeof inner === "object" && inner !== null
+        ? Object.fromEntries(
+            Object.keys(inner)
+              .sort()
+              .map((key) => [key, sorted((inner as Record<string, unknown>)[key])]),
+          )
+        : inner;
+  return JSON.stringify(sorted(plain(value)));
+}
+
 /** Combine a trial's configuration and record into a replay artifact. */
 export function exportReplay(input: {
   build: string;
@@ -188,7 +203,7 @@ export function verifyReplay(
   const { run, session } = built.trial;
   const start = record.start as StartingProvenance;
   // It must start where the recorded trial started, not merely from the same recipe.
-  if (JSON.stringify(plain(run.snapshot())) !== JSON.stringify(start.snapshot))
+  if (canonical(run.snapshot()) !== canonical(start.snapshot))
     return refuse("the rebuilt trial does not start from the recorded starting snapshot");
   session.random.restore(start.checkpoint);
   let committed: { facts: readonly EventEnvelope[]; metadata: CommittedMetadata }[] = [];
