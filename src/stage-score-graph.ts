@@ -59,7 +59,27 @@ export type StageScoreGraphConfig = {
 export const observedStyle = { colour: "#1f5f8b", width: 4 };
 export const targetStyle = { colour: "#a23b2a", width: 3, dash: [10, 8] };
 
+export const projectionStyle = { colour: "#4f7a3a", width: 3, dash: [3, 7] };
+
 const positive = (value: number) => Number.isFinite(value) && value > 0;
+
+/**
+ * The average-pace projection (#1066; doc/line-goes-up.md, "Score-specific graph configuration and
+ * projection"): from the latest observed point, the pace across every play so far
+ * (`total / playsUsed`, never the latest delta) and where it would first reach the target. Null
+ * before the first play or with nothing scored: no slope, no invented crossing.
+ */
+export function averagePace(
+  series: Pick<GraphSeries, "points" | "targetScore" | "plays">,
+): { slope: number; crossing: number | null; crossingPlay: number | null; beyond: boolean } | null {
+  const last = series.points[series.points.length - 1];
+  if (!last || last.play < 1 || !(last.total > 0)) return null;
+  const slope = last.total / last.play;
+  if (!positive(series.targetScore))
+    return { slope, crossing: null, crossingPlay: null, beyond: false };
+  const crossing = series.targetScore / slope;
+  return { slope, crossing, crossingPlay: Math.ceil(crossing), beyond: crossing > series.plays };
+}
 
 /** The series as plot data: axes, the observed line grown so far, and the target. */
 export function stageGraphPlot(series: GraphSeries, targetHeight = 0.8): PlotData {
@@ -68,6 +88,7 @@ export function stageGraphPlot(series: GraphSeries, targetHeight = 0.8): PlotDat
   const target = positive(series.targetScore) ? series.targetScore : null;
   const top = Math.max(target ?? 0, highest, 1) / targetHeight;
   const points = series.points.map(({ play, total }) => [play, total] as const);
+  const pace = averagePace(series);
   // The newest point, drawn as far as its growth has reached.
   const grown =
     points.length > 1 && series.growth < 1
@@ -92,17 +113,61 @@ export function stageGraphPlot(series: GraphSeries, targetHeight = 0.8): PlotDat
       ticks: [0, ...(target ? [target] : [])].map((value) => ({ value, label: `${value}` })),
     },
     series: [{ points: grown, style: observedStyle, markers: true }],
-    references: target
-      ? [{ axis: "y", value: target, style: targetStyle, label: `Target ${target}` }]
+    references: [
+      ...(target
+        ? [{ axis: "y" as const, value: target, style: targetStyle, label: `Target ${target}` }]
+        : []),
+      // Where the pace reaches the target, or a note at the edge when it would after the last play:
+      // the play axis keeps the stage's allowance, never stretched to fit a prediction.
+      ...(pace?.crossing != null
+        ? [
+            pace.beyond
+              ? {
+                  axis: "x" as const,
+                  value: plays,
+                  style: projectionStyle,
+                  label: "Target beyond available plays",
+                }
+              : {
+                  axis: "x" as const,
+                  value: pace.crossing,
+                  style: projectionStyle,
+                  label: `Target ≈ play ${pace.crossingPlay}`,
+                },
+          ]
+        : []),
+    ],
+    // The pace line from the origin through the latest point to the end of the allowance; the
+    // surface clips it to the plot, so a steep pace never stretches Y (observed totals do that).
+    projections: pace
+      ? [
+          {
+            points: [
+              [0, 0],
+              [plays, pace.slope * plays],
+            ] as const,
+            style: projectionStyle,
+          },
+        ]
       : [],
   };
 }
+
+const round = (value: number) => Math.round(value * 10) / 10;
 
 /** A plain sentence of what the graph shows. */
 export function stageGraphSummary(series: GraphSeries): string {
   const last = series.points[series.points.length - 1] ?? { play: 0, total: 0 };
   const target = positive(series.targetScore) ? `${series.targetScore}` : "unavailable";
-  return `Stage score ${last.total}, target ${target}, after ${last.play} of ${series.plays} plays.`;
+  const pace = averagePace(series);
+  const projected = !pace
+    ? ""
+    : pace.crossing === null
+      ? ` Averaging ${round(pace.slope)} a play.`
+      : pace.beyond
+        ? ` Averaging ${round(pace.slope)} a play: the target would come after the last play.`
+        : ` Averaging ${round(pace.slope)} a play: the target by about play ${pace.crossingPlay}.`;
+  return `Stage score ${last.total}, target ${target}, after ${last.play} of ${series.plays} plays.${projected}`;
 }
 
 /** What the stage graph composes: the run's committed actions and history, and the room. */
