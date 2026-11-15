@@ -37,6 +37,8 @@ import {
 import type { Registry } from "../../core/registry";
 import type { PassRenderer } from "../../visual/render-pass";
 import { useCosmeticRandom } from "../../visual/block-effects";
+import { profilingMotions, recordedMotion, stationary, type MotionReference } from "./motion";
+import { rowKey } from "./motion-description";
 import { useAppearanceClock } from "../../visual/appearance-clock";
 import type { PrepassReference } from "../../visual/appearance-prepass";
 
@@ -185,6 +187,8 @@ export type CaseResult = {
   sampling: ProfilingPhase["sampling"];
   /** The registered host it was drawn in (#712). */
   host: string;
+  /** The motion it was sampled under (#973): stationary, or a declared pose driver. */
+  motion: MotionReference;
   /** Its render pipeline (#764): every sample, the baseline included, rendered through it. */
   pipeline: PipelineRecord;
   baseline: SampleSet;
@@ -200,6 +204,7 @@ export type CaseResult = {
 export type CaseFailure = {
   id: string;
   phase?: string;
+  motion?: MotionReference;
   kind: "error" | "timeout" | "context-lost";
   reason: string;
 };
@@ -284,6 +289,25 @@ export function createProfilerRunner(
   let clockSeconds = 0;
   let clockStep = defaultClockStep;
 
+  /**
+   * The running row's motion (#973): its registered driver's turn at the run-clock time since the
+   * current set started, applied over the pose each object had when the set started. Stationary
+   * leaves it be.
+   */
+  let pose = profilingMotions.get(stationary.driver).create({});
+  let setStartedAt = 0;
+  const resting = new Map<ProfiledObject, THREE.Quaternion>();
+  const turn = new THREE.Quaternion();
+  /**
+   * Start the motion over for a set (#973): the driver's time restarts, from the pose each object
+   * has now, so the set replays the same motion without a jump that pose-fed parts (dust,
+   * fluids) would read as a sudden turn.
+   */
+  const startSet = (objects: readonly ProfiledObject[]) => {
+    setStartedAt = clockSeconds;
+    for (const each of objects) resting.set(each, each.object.quaternion.clone());
+  };
+
   /** The running run's cancel signal, so frame waits can be abandoned when it fires. */
   let signal: AbortSignal | undefined;
 
@@ -356,6 +380,10 @@ export function createProfilerRunner(
   function frame(objects: readonly ProfiledObject[], dt: number): number {
     const start = env.now();
     clockSeconds += dt;
+    // The pose first, so updates (dust, a sloshing fluid) see this frame's turn.
+    pose(clockSeconds - setStartedAt, turn);
+    for (const each of objects)
+      each.object.quaternion.multiplyQuaternions(turn, resting.get(each)!);
     for (const each of objects) each.update?.(dt);
     const { info } = env.renderer;
     const autoReset = info.autoReset;
@@ -395,6 +423,7 @@ export function createProfilerRunner(
     const gpu: number[] = [];
     let spoiled = env.hidden();
     const changesBefore = env.visibilityChanges();
+    startSet(objects);
     let last = env.now();
     let setCounts = rendererCounts();
     for (let i = 0; i < options.frames; i++) {
@@ -468,6 +497,8 @@ export function createProfilerRunner(
         collection.add(one.object);
         made.push(one);
       }
+      // A new collection starts at rest: its first, compiling frame inherits no earlier set's turn.
+      startSet(made);
       check();
     } catch (error) {
       remove(made);
@@ -478,12 +509,14 @@ export function createProfilerRunner(
 
   function remove(objects: readonly ProfiledObject[]): void {
     for (const each of objects) {
+      resting.delete(each);
       each.object.removeFromParent();
       each.dispose();
     }
   }
 
   async function warm(objects: readonly ProfiledObject[], options: RunOptions, check: () => void) {
+    startSet(objects);
     for (let i = 0; i < options.warmupFrames; i++) {
       check();
       await waitFrame();
@@ -500,8 +533,9 @@ export function createProfilerRunner(
     options: RunOptions,
     check: () => void,
     invalidated: string[],
-  ): Promise<CaseResult> {
-    const label = phase ? `${id}:${phase}` : id;
+    /** The row's name for its sets: its case, phase and motion (`rowKey`). */
+    label: string,
+  ): Promise<Omit<CaseResult, "motion">> {
     const counts = options.counts ?? standardCounts;
     // The case's host sets the scene up before anything is built, and is undone after (#712).
     const host = profile.host ?? defaultProfilingHost;
@@ -581,7 +615,7 @@ export function createProfilerRunner(
     label: string,
     counts: readonly number[],
     baselineUnavailable: string | null,
-  ): Promise<Omit<CaseResult, "host" | "pipeline">> {
+  ): Promise<Omit<CaseResult, "host" | "pipeline" | "motion">> {
     // Each count has its own fixed-grid framing (doc/automatic-profiling.md, "Sweep and
     // representative host"): a fixed-viewport collection test, so per-object screen area shrinks
     // as the count grows. The empty baseline is taken once per case, in this case's host.
@@ -674,16 +708,19 @@ export function createProfilerRunner(
       const results: CaseResult[] = [];
       const failures: CaseFailure[] = [];
       const invalidated: string[] = [];
+      // Every phase stationary, then under each motion the case declares, as separate rows (#973).
       const queue = cases.flatMap(([id, profile]) =>
-        (profile.phases ?? [steadyPhase]).map(({ name: phase, sampling }) => ({
-          id,
-          profile,
-          phase,
-          sampling,
-        })),
+        (profile.phases ?? [steadyPhase]).flatMap(({ name: phase, sampling }) =>
+          [stationary, ...(profile.motions ?? [])].map((motion) => ({
+            id,
+            profile,
+            phase,
+            sampling,
+            motion: recordedMotion(motion),
+          })),
+        ),
       );
-      const labelOf = ({ id, phase }: { id: string; phase?: string }) =>
-        phase ? `${id}:${phase}` : id;
+      const labelOf = rowKey;
       const finish = (from: number, ending: Pick<RunResult, "cancelled" | "aborted">) => ({
         results,
         failures,
@@ -721,6 +758,7 @@ export function createProfilerRunner(
         clockSeconds = 0;
         clockStep = options.clockStep ?? defaultClockStep;
         const restoreClock = useAppearanceClock(() => clockSeconds);
+        pose = profilingMotions.get(entry.motion.driver).create(entry.motion.config ?? {});
         try {
           const result = await runCase(
             entry.id,
@@ -729,13 +767,14 @@ export function createProfilerRunner(
             options,
             check,
             invalidated,
+            rowKey(entry),
           );
           // Measured on a lost context: not a result. Recorded, and the run stops here.
           if (lost()) {
             failures.push(contextLostFailure(entry));
             return finish(index + 1, { cancelled: false, aborted: "context-lost" });
           }
-          results.push({ ...result, sampling: entry.sampling });
+          results.push({ ...result, sampling: entry.sampling, motion: entry.motion });
         } catch (error) {
           if (options.signal?.aborted) return finish(index, { cancelled: true, aborted: null });
           if (lost()) {
@@ -746,6 +785,7 @@ export function createProfilerRunner(
           failures.push({
             id: entry.id,
             ...(entry.phase ? { phase: entry.phase } : {}),
+            motion: entry.motion,
             ...(deadline.signal.aborted
               ? {
                   kind: "timeout" as const,
@@ -761,16 +801,22 @@ export function createProfilerRunner(
           stopListening?.();
           restore();
           restoreClock();
+          pose = profilingMotions.get(stationary.driver).create({});
         }
       }
       return finish(queue.length, { cancelled: false, aborted: null });
     },
   };
 
-  function contextLostFailure(entry: { id: string; phase?: string }): CaseFailure {
+  function contextLostFailure(entry: {
+    id: string;
+    phase?: string;
+    motion: MotionReference;
+  }): CaseFailure {
     return {
       id: entry.id,
       ...(entry.phase ? { phase: entry.phase } : {}),
+      motion: entry.motion,
       kind: "context-lost",
       reason: "the WebGL context was lost while this case ran",
     };

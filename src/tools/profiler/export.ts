@@ -18,7 +18,7 @@ export type ProfilerEnvironmentInfo = {
 };
 
 export const profilerMethod = {
-  version: 4,
+  version: 5,
   sets: [
     "baseline (empty collection, once per case in its host, through the case's own pipeline)",
     "each requested count on a fixed square grid, framed for that count (a fixed-viewport collection test)",
@@ -30,6 +30,8 @@ export const profilerMethod = {
   pipeline:
     "each frame times the objects' updates, every declared pass and the main render, inside the CPU time and the GPU query; draw counts add up across the passes (#764)",
   hiddenTab: "a set sampled while the tab was hidden is retaken, then listed as invalidated",
+  motion:
+    "every case is sampled stationary; a case declaring motions is also sampled under each registered pose driver as its own row, the pose restarting with each warm-up and sample set (#973)",
   clock:
     "one presentation clock per run, a fixed step per rendered frame from zero at each case: object updates, passes and self-timed appearance parts (contained contents, flame, ice) all read it; frame time is still measured from wall time (#972)",
   prepasses:
@@ -111,8 +113,9 @@ export const costMeasures = {
 };
 
 /**
- * Read an exported file (#721): version 4 is today's matrix; version 3 is it without the run
- * clock (#972), read with no clock; version 2 is the same matrix from
+ * Read an exported file (#721): version 5 is today's matrix; version 4 is it from before motion
+ * (#973), every row read as stationary; version 3 is also without the run clock (#972), read with
+ * no clock; version 2 is the same matrix from
  * before declared pipelines (#764), every case then drawn by the main render alone, and is read as
  * that; version 1 (fixed one/collection slots) is recognised as an old result and never read as a
  * count-50 sample; anything else is refused, clearly.
@@ -124,19 +127,25 @@ export function readProfilerExport(
   const version = parsed.method?.version;
   if (version === profilerMethod.version)
     return { kind: "current", record: parsed as ProfilerExport };
+  // Before motion (#973) every row was sampled at rest: read as stationary rows.
+  const atRest = (record: ProfilerExport): ProfilerExport => ({
+    ...record,
+    results: record.results.map((result) => ({ ...result, motion: { driver: "stationary" } })),
+  });
+  if (version === 4) return { kind: "current", record: atRest(parsed as ProfilerExport) };
   // Version 3 is the same record from before the run clock (#972): its updates read wall time.
   if (version === 3)
-    return { kind: "current", record: { ...(parsed as ProfilerExport), clock: null } };
+    return { kind: "current", record: atRest({ ...(parsed as ProfilerExport), clock: null }) };
   if (version === 2) {
     const record = parsed as ProfilerExport;
     const mainOnly = { passes: [], passCount: 0, setup: null };
     return {
       kind: "current",
-      record: {
+      record: atRest({
         ...record,
         clock: null,
         results: record.results.map((result) => ({ ...result, pipeline: mainOnly })),
-      },
+      }),
     };
   }
   if (version === 1) return { kind: "legacy", version: 1 };

@@ -6,6 +6,7 @@
 import type * as THREE from "three";
 import { Registry } from "../../core/registry";
 import type { PassReference } from "./pipelines";
+import type { MotionReference } from "./motion";
 import type { PrepassReference } from "../../visual/appearance-prepass";
 
 /** One built object in the profiler's scene. */
@@ -63,6 +64,11 @@ export type ProfilingCase = {
    * main render alone.
    */
   pipeline?: readonly PassReference[];
+  /**
+   * Motions it is also sampled under, each as its own row beside the stationary one (#973): a
+   * look whose parts respond to a turning block declares one. None: stationary only.
+   */
+  motions?: readonly MotionReference[];
   /** Build one object through the production factory, with a fixed seed. */
   create(context: { seed: number; phase?: string }): ProfiledObject | Promise<ProfiledObject>;
 };

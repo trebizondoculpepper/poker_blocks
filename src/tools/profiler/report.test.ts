@@ -25,6 +25,7 @@ const result = (
   unit: { kind, size: 1 },
   sampling: "steady",
   host: "board",
+  motion: { driver: "stationary" },
   pipeline: { passes: [], passCount: 0, setup: 0 },
   baseline: set(0, perObject === null ? null : 0.1, 0.1, 0),
   counts: [1, 10, 50].map((count) => ({

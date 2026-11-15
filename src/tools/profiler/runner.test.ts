@@ -500,7 +500,9 @@ describe("a case that fails on its first frame (#625 review)", () => {
     const runner = createProfilerRunner(env);
     // Recorded as a failure, not thrown: later cases still run (#722).
     const run = await runner.run([["broken", failing]], options);
-    expect(run.failures).toEqual([{ id: "broken", kind: "error", reason: "broken case" }]);
+    expect(run.failures).toEqual([
+      { id: "broken", motion: { driver: "stationary" }, kind: "error", reason: "broken case" },
+    ]);
     expect(under(runner.scene, "profiled")).toBe(0);
     expect(memory.geometries).toBe(0);
   });
@@ -520,7 +522,9 @@ describe("GPU queries stay balanced when rendering fails (#625 review)", () => {
     };
     // Recorded as the case's failure, not thrown (#722); the query is still closed.
     const run = await createProfilerRunner(env).run([["cube", testCase(memory)]], options);
-    expect(run.failures).toEqual([{ id: "cube", kind: "error", reason: "render failed" }]);
+    expect(run.failures).toEqual([
+      { id: "cube", motion: { driver: "stationary" }, kind: "error", reason: "render failed" },
+    ]);
     expect(open).toBe(0);
   });
 
@@ -722,7 +726,12 @@ describe("failure isolation, timeouts and context loss (#722)", () => {
       quick,
     );
     expect(run.failures).toEqual([
-      { id: "broken", kind: "error", reason: "shader failed to compile" },
+      {
+        id: "broken",
+        motion: { driver: "stationary" },
+        kind: "error",
+        reason: "shader failed to compile",
+      },
     ]);
     expect(run.results.map(({ id }) => id)).toEqual(["good"]);
     expect(run.cancelled).toBe(false);
@@ -759,7 +768,9 @@ describe("failure isolation, timeouts and context loss (#722)", () => {
       ],
       { ...quick, timeoutMs: 30 },
     );
-    expect(run.failures).toEqual([{ id: "stuck", kind: "timeout", reason: "exceeded 30 ms" }]);
+    expect(run.failures).toEqual([
+      { id: "stuck", motion: { driver: "stationary" }, kind: "timeout", reason: "exceeded 30 ms" },
+    ]);
     expect(run.results.map(({ id }) => id)).toEqual(["good"]);
     // The factory finally settles after its case gave up: what it made is freed, not leaked.
     finishLate!();
@@ -792,6 +803,7 @@ describe("failure isolation, timeouts and context loss (#722)", () => {
     expect(run.failures).toEqual([
       {
         id: "first",
+        motion: { driver: "stationary" },
         kind: "context-lost",
         reason: "the WebGL context was lost while this case ran",
       },
@@ -1078,5 +1090,122 @@ describe("animation fidelity: one run clock and appearance prepasses (#972)", ()
     expect(run.failures.map(({ id }) => id)).toEqual(["broken"]);
     expect(run.results.map(({ id }) => id)).toEqual(["cube"]);
     expect(under(runner.scene, "profiled")).toBe(0);
+  });
+});
+
+describe("motion rows (#973)", () => {
+  it("samples a case at rest and again under each declared motion, as separate rows", async () => {
+    const { quarterTurns } = await import("./motion");
+    const { env, memory } = fakeEnvironment();
+    const angles = new Map<string, number[]>();
+    let row = "";
+    const turning: ProfilingCase = {
+      ...testCase(memory),
+      motions: [quarterTurns],
+      create(context) {
+        const one = testCase(memory).create(context) as {
+          object: THREE.Object3D;
+          dispose(): void;
+        };
+        return {
+          ...one,
+          update() {
+            const list = angles.get(row) ?? [];
+            const tipped = new THREE.Vector3(0, 1, 0).applyQuaternion(one.object.quaternion);
+            list.push(+Math.atan2(tipped.z, tipped.y).toFixed(4));
+            angles.set(row, list);
+          },
+        };
+      },
+    };
+    const runner = createProfilerRunner(env);
+    const stillRun = await runner.run([["still", testCase(memory)]], options);
+    expect(stillRun.results.map(({ motion }) => motion.driver)).toEqual(["stationary"]);
+    row = "stationary";
+    const first = await runner.run([["cube", turning]], { ...options, counts: [1] });
+    expect(first.results.map(({ id, motion }) => `${id}/${motion.driver}`)).toEqual([
+      "cube/stationary",
+      "cube/quarterTurns",
+    ]);
+    expect(first.results[1]!.motion.tag).toBe("quarter turns");
+    // The stationary row never turned; the motion row did (both rows logged under one name
+    // here, so the motion row's angles are the non-zero ones).
+    const all = angles.get("stationary")!;
+    expect(all.filter((angle) => angle !== 0).length).toBeGreaterThan(0);
+    expect(all.slice(0, 13).every((angle) => angle === 0)).toBe(true);
+    expect(memory.geometries).toBe(0);
+  });
+
+  it("restarts the motion at every warm-up and sample set, from where the block is, never snapping back", async () => {
+    const { quarterTurns } = await import("./motion");
+    const { env, memory } = fakeEnvironment();
+    const turns: number[] = [];
+    const turning: ProfilingCase = {
+      ...testCase(memory),
+      motions: [quarterTurns],
+      create(context) {
+        const one = testCase(memory).create(context) as {
+          object: THREE.Object3D;
+          dispose(): void;
+        };
+        return {
+          ...one,
+          update(dt) {
+            if (!dt) return;
+            const tipped = new THREE.Vector3(0, 1, 0).applyQuaternion(one.object.quaternion);
+            turns.push(+Math.atan2(tipped.z, tipped.y).toFixed(4));
+          },
+        };
+      },
+    };
+    // A big step makes each frame a whole second: turn, hold, turn...
+    await createProfilerRunner(env).run([["cube", turning]], {
+      ...options,
+      counts: [1],
+      warmupFrames: 2,
+      frames: 4,
+      clockStep: 1,
+    });
+    const quarter = +(Math.PI / 2).toFixed(4);
+    const half = +Math.PI.toFixed(4);
+    // Stationary row: 2 warm-up + 4 sampled frames at rest. Motion row: the warm-up turns a
+    // quarter and holds (1 s, 2 s); the sample set replays the same motion from there, with no
+    // jump back: a quarter more and hold, then another (shown as -quarter past half a turn).
+    expect(turns).toEqual([0, 0, 0, 0, 0, 0, quarter, quarter, half, half, -quarter, -quarter]);
+  });
+
+  it("never turns faster than the motion itself across set boundaries (no reset spike for dust)", async () => {
+    const { quarterTurns } = await import("./motion");
+    const { angularSpeed } = await import("../../visual/dust");
+    const { env, memory } = fakeEnvironment();
+    let fastest = 0;
+    const turning: ProfilingCase = {
+      ...testCase(memory),
+      motions: [quarterTurns],
+      create(context) {
+        const one = testCase(memory).create(context) as {
+          object: THREE.Object3D;
+          dispose(): void;
+        };
+        let previous: THREE.Quaternion | null = null;
+        return {
+          ...one,
+          update(dt) {
+            const now = one.object.quaternion.clone();
+            if (previous && dt) fastest = Math.max(fastest, angularSpeed(previous, now, dt));
+            previous = now;
+          },
+        };
+      },
+    };
+    await createProfilerRunner(env).run([["cube", turning]], {
+      ...options,
+      counts: [1],
+      warmupFrames: 30,
+      frames: 60,
+    });
+    // A smoothstep quarter turn over 1 s peaks at 1.5 × (π/2) rad/s; a snap back would be far more.
+    expect(fastest).toBeGreaterThan(1);
+    expect(fastest).toBeLessThanOrEqual(1.5 * (Math.PI / 2) + 1e-6);
   });
 });

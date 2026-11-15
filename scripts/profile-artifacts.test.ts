@@ -18,6 +18,7 @@ const result = (id: string, label = id): CaseResult => ({
   unit: { kind: "block", size: 1 },
   sampling: "steady",
   host: "board",
+  motion: { driver: "stationary" },
   pipeline: { passes: [], passCount: 0, setup: 0 },
   baseline: set(0, 0.1),
   counts: [1, 10, 50].map((count) => ({
@@ -72,11 +73,11 @@ describe("the one-command run's artifacts (#734)", () => {
     const csv = reportCsv(record([result("a", 'Steel, "brushed"')]));
     const lines = csv.trim().split("\n");
     expect(lines[0]).toBe(
-      "case,label,phase,family,host,pipeline,unit,unit_size,count,invalid,gpu_median_ms,gpu_p95_ms,cpu_median_ms,draw_calls,triangles,leaked",
+      "case,label,phase,motion,family,host,pipeline,unit,unit_size,count,invalid,gpu_median_ms,gpu_p95_ms,cpu_median_ms,draw_calls,triangles,leaked",
     );
     expect(lines).toHaveLength(4);
     expect(lines[3]).toBe(
-      'a,"Steel, ""brushed""",,material,board,main render,block,1,50,,0.5,0.5,5,50,600,',
+      'a,"Steel, ""brushed""",,stationary,material,board,main render,block,1,50,,0.5,0.5,5,50,600,',
     );
   });
 

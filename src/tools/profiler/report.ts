@@ -15,6 +15,7 @@
  */
 import type { ProfilerExport } from "./export";
 import { describePipeline } from "./pipeline-description.ts";
+import { displayName, rowKey, type MotionReference } from "./motion-description.ts";
 import type { CaseResult, CountResult } from "./runner";
 
 export type RendererKind = "hardware" | "software" | "unknown";
@@ -30,6 +31,8 @@ export type ReportRow = {
   label: string;
   family: string;
   phase?: string;
+  /** The motion it was sampled under (#973); absent in a record from before motion. */
+  motion?: MotionReference;
   host: string;
   /** Its render pipeline as a person reads it (#764): declared passes, then the main render. */
   pipeline: string;
@@ -103,9 +106,8 @@ const smallest = (counts: readonly CountResult[]): CountResult | null =>
 const ratio = (top: number | null | undefined, bottom: number | null | undefined) =>
   top === null || top === undefined || !bottom ? null : top / bottom;
 
-/** The name the runner gives a case's set when it invalidates it: `<case>[:<phase>]/<set>`. */
-const setName = (result: CaseResult, set: string | number) =>
-  `${result.phase ? `${result.id}:${result.phase}` : result.id}/${set}`;
+/** The name the runner gives a row's set when it invalidates it: `<row key>/<set>`. */
+const setName = (result: CaseResult, set: string | number) => `${rowKey(result)}/${set}`;
 
 function rowOf(result: CaseResult, invalidated: ReadonlySet<string>): ReportRow {
   const top = largest(result.counts);
@@ -122,7 +124,7 @@ function rowOf(result: CaseResult, invalidated: ReadonlySet<string>): ReportRow 
         }
       : { gpu: null, cpu: null };
   const times = (value: number | null) => (value === null ? "n/a" : `×${value.toFixed(1)}`);
-  const name = result.phase ? `${result.label} (${result.phase})` : result.label;
+  const name = displayName(result);
   return {
     invalid,
     baselineInvalid: invalidated.has(setName(result, "baseline")),
@@ -131,6 +133,7 @@ function rowOf(result: CaseResult, invalidated: ReadonlySet<string>): ReportRow 
     label: result.label,
     family: result.family,
     ...(result.phase ? { phase: result.phase } : {}),
+    motion: result.motion,
     host: result.host,
     pipeline: describePipeline(result.pipeline.passes),
     ...(result.baselineUnavailable ? { baselineUnavailable: result.baselineUnavailable } : {}),
@@ -148,7 +151,7 @@ function rowOf(result: CaseResult, invalidated: ReadonlySet<string>): ReportRow 
 
 /** Highest first; a stable sort, so ties keep catalog order. */
 const ms = (n: number | null) => (n === null ? "n/a" : n.toFixed(3));
-const nameOf = (row: ReportRow) => (row.phase ? `${row.label} (${row.phase})` : row.label);
+const nameOf = (row: ReportRow) => displayName(row);
 /** A timing entry: its median, p95 and baseline-relative estimate, in milliseconds. */
 const timing = (row: ReportRow, value: number, p95: number | null, relative: number | null) =>
   `${nameOf(row)}: ${ms(value)} ms (p95 ${ms(p95)}; vs baseline ${ms(relative)})`;
@@ -271,8 +274,7 @@ export function profilerReport(record: ProfilerExport, topN = 10): ProfilerRepor
             ]
           : []),
         ...record.failures.map(
-          ({ id, phase, kind, reason }) =>
-            `${phase ? `${id}:${phase}` : id} failed (${kind}): ${reason}`,
+          (failure) => `${rowKey(failure)} failed (${failure.kind}): ${failure.reason}`,
         ),
         ...(isolated ? [] : ["Not isolated: other rendering may have shared the frames"]),
         ...(mixedHosts
