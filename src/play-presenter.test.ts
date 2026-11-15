@@ -75,7 +75,7 @@ async function presenter(
     changed: noop,
     moved: noop,
     rackChanged: () => void extra.order?.push("rackChanged"),
-    activated: noop,
+    presents: () => false,
     alongside: extra.alongside as never,
     drawReplacements: drawReplacements as never,
     save: noop,
@@ -264,7 +264,7 @@ describe("a play's own committed identity survives its refill's commit (#1244 re
       changed: noop,
       moved: noop,
       rackChanged: noop,
-      activated: noop,
+      presents: () => false,
       drawReplacements: () => {
         // The refill commits: it is now the latest committed action.
         latest = refillKey;
@@ -327,7 +327,7 @@ describe("a revealed payload lands through the handover (#1414)", () => {
       changed: noop,
       moved: noop,
       rackChanged: noop,
-      activated: noop,
+      presents: () => false,
       drawReplacements: () => [],
       save: noop,
       decided: noop,

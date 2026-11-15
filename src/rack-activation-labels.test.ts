@@ -6,6 +6,7 @@ import { scoreFieldWithPassives, type RuleActivation } from "./passive-effects";
 import { createPassiveBlock } from "./passives";
 import { capturedLine } from "./play-presenter";
 import { labelAnchorSpaces, type ActivationLabelPayload } from "./visual/activation-labels";
+import { staggerSpacingUnits } from "./visual-events/stagger";
 import { unitMs } from "./visual-events/scheduler";
 
 const field = standardDeck.slice(0, 5).map((block, x) => ({ block, cell: { x, y: 0, z: 0 } }));
@@ -56,6 +57,31 @@ describe("rack activation labels (#919)", () => {
     expect(anchors.every((anchor) => anchor === "passive.1")).toBe(true);
     // Without a host, a line shows nothing alongside it.
     expect(capturedLine(line!).alongside).toEqual([]);
+  });
+
+  it("starts each activation's label with its own staggered pulse (#540)", () => {
+    const first = createPassiveBlock("d6", "passive.1");
+    const second = createPassiveBlock("d6", "passive.2");
+    const [line] = scoreFieldWithPassives(field, [first, second], undefined, () => 0.99);
+    const hosts = new Map([
+      [first.id, first],
+      [second.id, second],
+    ]);
+    const captured = capturedLine(
+      line!,
+      (activation) => rackActivationLabel(hosts.get(activation.sourceId)!, activation),
+      () => true,
+    );
+    // The rack order the pulses are staggered in, and a label that starts with its own pulse.
+    expect(captured.activationOrder).toEqual(["passive.1", "passive.2"]);
+    const offsets = captured.alongside!.map(({ offsetUnits }) => offsetUnits ?? 0);
+    expect(offsets).toEqual([0, staggerSpacingUnits]);
+    // Nothing staggered: every label starts with its line.
+    const unstaggered = capturedLine(line!, (activation) =>
+      rackActivationLabel(hosts.get(activation.sourceId)!, activation),
+    );
+    expect(unstaggered.activationOrder).toEqual([]);
+    expect(unstaggered.alongside!.every(({ offsetUnits }) => offsetUnits === undefined)).toBe(true);
   });
 
   it("anchors to the rack service's live slot point, or to nothing without a rack", () => {

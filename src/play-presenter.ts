@@ -47,6 +47,12 @@ import {
   type ScoreNarrationSink,
 } from "./score-narration";
 import {
+  captureActivationOrder,
+  createActivationSequences,
+  activationOffsetUnits,
+  lineOriginUnits,
+} from "./rack-activation-presentation";
+import {
   unitMs,
   visualHandlers,
   type EffectHandle,
@@ -144,6 +150,12 @@ type Playing = {
   drawn: readonly CardBlock[];
   /** The sounds its landing makes, decided from the field it committed to. */
   landingSounds: readonly SoundEffectId[];
+  /**
+   * Its installed sources' activation order, captured when it committed (#540). Asked then, at
+   * commit, so an item sold while the play flies keeps its captured slot rather than the play's
+   * sequence closing up around it.
+   */
+  activationSources: readonly string[];
 };
 
 /** A discard being shown. */
@@ -217,8 +229,11 @@ export function createPlayPresenter(options: {
   moved(): void;
   /** The passive rack may have changed (a discard can grant passives). */
   rackChanged(): void;
-  /** These rule sources' rules just fired, as their outcome is shown (#81). */
-  activated(sourceIds: readonly string[]): void;
+  /**
+   * Whether the activation host shows a pulse for this committed source (#540). Asked once, when
+   * the play commits, so a later reorder or removal cannot change an old play's feedback.
+   */
+  presents(this: void, sourceId: string): boolean;
   /**
    * What the activation's host shows alongside it, captured as its action commits: beside its
    * scored line (#919), or as a discard's rules fire (#920). An item's activation label, or null
@@ -293,6 +308,8 @@ export function createPlayPresenter(options: {
   });
   /** Each running action's scope, until it settles or a reset cancels it. */
   const actionScopes = new Set<ScopeHandle>();
+  /** Installed items' staggered activation feedback (#540), cancelled with the run's reset. */
+  const activationSequences = createActivationSequences(options.visualEvents);
   let nextActionId = 0;
   /** While a reset cancels every action: they are dropped, not completed. */
   let resetting = false;
@@ -345,11 +362,12 @@ export function createPlayPresenter(options: {
 
   /** What narration shows through, each line as it was captured when its play committed. */
   const sink: ScoreNarrationSink = {
-    line({ blockIds, sourceIds, points }, lateMs) {
+    line({ blockIds, sourceIds, activationOrder, points }, lateMs, originUnits) {
       // Started as of its scheduled time, so its tint has settled when the outcome shows.
       const startedAt = frameNow - lateMs;
       field.tint(blockIds, startedAt);
-      options.activated(sourceIds);
+      // Each installed item pulses in captured rack order, staggered on the scheduler (#540).
+      activationSequences.present(activationOrder ?? [], originUnits);
       field.activate(sourceIds, startedAt);
       const sound = magnitudeSfxFor(points);
       if (sound) playSfx(sound, { jitter: 0 });
@@ -393,12 +411,19 @@ export function createPlayPresenter(options: {
     }
     narration.release(action.slot, {
       scored: () => completion?.done(),
-      lines: presentationOrder(action.lines).map((line) =>
-        withLineAlongside(
-          capturedLine(line, (activation) => options.alongside?.(activation) ?? null),
-          (captured) => options.lineAlongside?.(captured, narrationTiming.settle) ?? null,
-        ),
-      ),
+      lines: presentationOrder(action.lines).map((line) => {
+        const captured = capturedLine(
+          line,
+          (activation) => options.alongside?.(activation) ?? null,
+          // The order captured when the play committed, not now (#540 review): a source that has
+          // left the rack keeps its slot, so the later pulses keep their captured times.
+          (sourceId) => action.activationSources.includes(sourceId),
+        );
+        return withLineAlongside(
+          { ...captured, activationOrder: action.activationSources },
+          (withLine) => options.lineAlongside?.(withLine, narrationTiming.settle) ?? null,
+        );
+      }),
       endpoint: action.endpoint,
     });
   }
@@ -606,10 +631,11 @@ export function createPlayPresenter(options: {
           landing: block,
         };
       });
+      const lines = game().lastScoredLines;
       const action: Playing = {
         flights,
         effects: [],
-        lines: game().lastScoredLines,
+        lines,
         endpoint: {
           score: game().state.round.score,
           outcome: roundOutcome(game().state),
@@ -622,6 +648,11 @@ export function createPlayPresenter(options: {
         // from the field this play committed to.
         landingSounds: landingSounds(landed, next.field, (block) =>
           getMaterialDefinition(materialOf(block)),
+        ),
+        // Asked now, at commit, so an item sold while the play flies keeps its captured slot.
+        activationSources: captureActivationOrder(
+          lines.flatMap((line) => line.activations.map(({ sourceId }) => sourceId)),
+          { presents: options.presents },
         ),
       };
       playing.push(action);
@@ -648,10 +679,19 @@ export function createPlayPresenter(options: {
       // What each activation's host shows alongside it, captured as the discard commits, before
       // the rack redraws (a discard can grant or use up an item) (#920).
       const activations = session.lastDiscardActivations;
-      const alongside = activations.flatMap((activation) => options.alongside?.(activation) ?? []);
+      const sourceIds = [...new Set(activations.map(({ sourceId }) => sourceId))];
+      const order = captureActivationOrder(sourceIds, { presents: options.presents });
+      const alongside = activations.flatMap((activation) => {
+        const event = options.alongside?.(activation) ?? null;
+        if (!event) return [];
+        // Its label starts with its own pulse, not with the discard (#540).
+        const index = order.indexOf(activation.sourceId);
+        return [index <= 0 ? event : { ...event, offsetUnits: activationOffsetUnits(index) }];
+      });
+      // Its pulses start now, staggered in captured rack order (#540).
+      activationSequences.present(order, lineOriginUnits(options.visualEvents));
       hand.settle(sources);
       options.rackChanged();
-      options.activated([...new Set(activations.map(({ sourceId }) => sourceId))]);
       narration.alongside(alongside);
       hand.remove(sources);
       hand.sync(session.state.hand);
@@ -711,6 +751,8 @@ export function createPlayPresenter(options: {
       waiting.clear();
       playing = [];
       discarding = [];
+      // Installed items' staggered pulses that have not started never do (#540).
+      activationSequences.reset();
       narration.reset();
       // Presentation-wide feedback (a dazzle's glare and afterimages) goes with it (#1294 review).
       options.resetFeedback?.();
@@ -732,17 +774,30 @@ export function withLineAlongside(
 }
 
 /**
- * A scored line as plain data: its blocks and sources by id, its points and, in committed order,
- * what each activation's host shows alongside it (#919).
+ * A scored line as plain data: its blocks and sources by id, the rack order its activations are
+ * staggered in (#540), its points and, in committed order, what each activation's host shows
+ * alongside it (#919).
  */
 export function capturedLine(
   line: PassiveScoredLine,
   alongside: (activation: RuleActivation) => AlongsideEvent | null = () => null,
+  /** Whether the activation host presents a source (#540); absent, nothing is staggered. */
+  presents: (sourceId: string) => boolean = () => false,
 ): NarratedLine {
+  const sourceIds = [...new Set(line.activations.map(({ sourceId }) => sourceId))];
+  const activationOrder = captureActivationOrder(sourceIds, { presents });
+  const label = (activation: RuleActivation): AlongsideEvent | null => {
+    const event = alongside(activation);
+    if (!event) return null;
+    // Its label starts with its own pulse, not with the line (#540).
+    const index = activationOrder.indexOf(activation.sourceId);
+    return index <= 0 ? event : { ...event, offsetUnits: activationOffsetUnits(index) };
+  };
   return {
     blockIds: line.line.blocks.map(({ id }) => id),
-    sourceIds: [...new Set(line.activations.map(({ sourceId }) => sourceId))],
+    sourceIds,
+    activationOrder,
     points: line.points,
-    alongside: line.activations.flatMap((activation) => alongside(activation) ?? []),
+    alongside: line.activations.flatMap((activation) => label(activation) ?? []),
   };
 }

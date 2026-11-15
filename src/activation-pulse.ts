@@ -31,8 +31,14 @@ export type PulseMount = {
 };
 
 export type ActivationPulse = {
-  /** Begin (or restart) the pulse at `now`, in milliseconds. */
-  start(effect: TokenEffectConfig, now: number): void;
+  /**
+   * Begin (or restart) the pulse at `now`, in milliseconds, returning this start's own token: a
+   * repeat restarts the same pulse, so a caller finishing later must check it still owns what is
+   * playing rather than putting back a newer activation (#540 review).
+   */
+  start(effect: TokenEffectConfig, now: number): ActivationStart;
+  /** Whether `start` is the pulse playing now (false once a newer start replaced it). */
+  owns(start: ActivationStart): boolean;
   /** Advance to `now`; at the end the object is put back. */
   frame(now: number, reducedMotion: boolean): void;
   /** End at once and put the object back (the item leaves, the scene exits). */
@@ -41,6 +47,9 @@ export type ActivationPulse = {
   readonly running: boolean;
 };
 
+/** One start of a pulse, so a caller can tell whether it still owns what is playing. */
+export type ActivationStart = { readonly startedAt: number };
+
 /** How long an effect lasts, in milliseconds, so a label shown alongside can last as long. */
 export const pulseMilliseconds = (effect: TokenEffectConfig): number =>
   tokenEffects.get(effect.id).milliseconds;
@@ -48,6 +57,8 @@ export const pulseMilliseconds = (effect: TokenEffectConfig): number =>
 type Playing = {
   effect: TokenEffectConfig;
   startedAt: number;
+  /** The token handed to the caller that started this one. */
+  start: ActivationStart;
   rest: THREE.Vector3;
   /** The scale the pulse last wrote, to tell whether someone else has moved it since. */
   written: THREE.Vector3;
@@ -78,7 +89,9 @@ export function createActivationPulse(mount: PulseMount): ActivationPulse {
         : scale.equals(playing.written)
           ? playing.rest
           : scale.clone();
+      const start: ActivationStart = Object.freeze({ startedAt: now });
       playing = {
+        start,
         effect,
         startedAt: now,
         rest,
@@ -91,7 +104,9 @@ export function createActivationPulse(mount: PulseMount): ActivationPulse {
             intensity: material.emissiveIntensity,
           })),
       };
+      return start;
     },
+    owns: (start) => playing?.start === start,
     frame(now, reducedMotion) {
       if (!playing) return;
       const handler = tokenEffects.get(playing.effect.id);

@@ -27,17 +27,26 @@ import {
 
 /**
  * A visual event shown alongside a line (#919): a registered handler and its captured payload,
- * such as an item's activation label. It starts with its line, in a scope of its own, so it never
- * holds up the next line, the next play or the outcome.
+ * such as an item's activation label, and how far after its line it starts. It starts with its
+ * line (or later), in a scope of its own, so it never holds up the next line, the next play or the
+ * outcome.
  */
-export type AlongsideEvent = { handler: string; payload: unknown };
+export type AlongsideEvent = { handler: string; payload: unknown; offsetUnits?: number };
 
 /** One scoring line as committed: its blocks, the rule sources that fired, its points. */
 export type NarratedLine = {
   blockIds: string[];
   sourceIds: string[];
+  /**
+   * The sources whose activation feedback this line staggers, in the captured rack order (#540).
+   * Omitted or empty: no source of this line presents one.
+   */
+  activationOrder?: readonly string[];
   points: number;
-  /** Shown with this line, in this order, each lasting as long as its own handler says. */
+  /**
+   * Shown with this line, in this order, each lasting as long as its own handler says and starting
+   * `offsetUnits` after the line when it declares one (#540: an activation's own staggered start).
+   */
   alongside?: readonly AlongsideEvent[];
 };
 
@@ -70,11 +79,12 @@ export type NarratedPlay = {
 /** What narration shows through: the play presenter supplies it as a scheduler service. */
 export type ScoreNarrationSink = {
   /**
-   * Show one line: tint its blocks, pulse its sources, play its sound, add its points. `lateMs`
-   * is how far past its scheduled time it started, so its visuals keep the scope's clock rather
-   * than restarting late (#800 review).
+   * Show one line: tint its blocks, play its sound, add its points, and present its sources'
+   * activation feedback (#540) from `originUnits`, the line's own scheduled start on the
+   * presentation clock, staggered in the captured `activationOrder`. `lateMs` is how far past that
+   * time it started, so its tint keeps the scope's clock rather than restarting late (#800 review).
    */
-  line(line: NarratedLine, lateMs: number): void;
+  line(line: NarratedLine, lateMs: number, originUnits: number): void;
   /** Show a play's captured score at once, without narrating (the summary fallback). */
   summarise(endpoint: NarratedEndpoint): void;
   /** Announce the captured outcome of the last play narrated. */
@@ -96,7 +106,11 @@ const sinkOf = (services: unknown) => (services as ScoreNarrationServices).score
 /** A line: shown when it starts, then held for one step so the next play waits its turn. */
 visualHandlers.register("score.line", (payload, context) => {
   const { line, stepUnits } = payload as { line: NarratedLine; stepUnits: number };
-  sinkOf(context.services).line(line, Math.max(0, context.nowMs - context.scheduledAtMs));
+  sinkOf(context.services).line(
+    line,
+    Math.max(0, context.nowMs - context.scheduledAtMs),
+    context.scheduledAtMs / unitMs,
+  );
   const until = context.scheduledAtMs + stepUnits * unitMs;
   const effect: EffectHandle = {
     update: (nowMs) => (nowMs >= until ? "finished" : "running"),
@@ -260,10 +274,11 @@ export function createScoreNarration(
   function showAlongside(lines: readonly NarratedLine[], at: number): void {
     showBesides(
       lines.flatMap((line, index) =>
-        (line.alongside ?? []).map(({ handler, payload }) => ({
+        (line.alongside ?? []).map(({ handler, payload, offsetUnits = 0 }) => ({
           handler,
           payload,
-          dueUnits: at + index * timing.lineStep,
+          // With its line, unless it belongs to something the line staggers (#540).
+          dueUnits: at + index * timing.lineStep + offsetUnits,
         })),
       ),
     );
@@ -339,7 +354,14 @@ export function createScoreNarration(
      */
     alongside(events: readonly AlongsideEvent[]): void {
       const now = nowUnits();
-      showBesides(events.map(({ handler, payload }) => ({ handler, payload, dueUnits: now })));
+      // With the action, unless the event belongs to something the action staggers (#540).
+      showBesides(
+        events.map(({ handler, payload, offsetUnits = 0 }) => ({
+          handler,
+          payload,
+          dueUnits: now + offsetUnits,
+        })),
+      );
     },
     /** Reserve and release at once: a play that is ready as it commits. */
     narrate(play: NarratedPlay): void {
