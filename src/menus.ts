@@ -138,8 +138,14 @@ export function createMenus(
        <div><dt>Total earned</dt><dd data-menu="total"></dd></div>
        <div><dt>Coins</dt><dd data-menu="balance"></dd></div>
      </dl>
-     <div class="block-menu-host" data-menu="items"></div>
 `,
+  );
+  // Visit shop is its own action outside the ledger panel (#1074; doc/result-menus.md, "Stage
+  // Won layout"): a transparent sibling stage below it. Its inspection caption is placed at the
+  // bottom of the viewport by the stylesheet, not in the panel or the cube's row.
+  stageWon.root.insertAdjacentHTML(
+    "beforeend",
+    `<div class="block-menu-host stage-won-action" data-menu="items"></div>`,
   );
 
   const settingsButton = document.createElement("button");

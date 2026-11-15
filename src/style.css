@@ -1693,3 +1693,42 @@ body,
   height: 100%;
   pointer-events: none;
 }
+
+/*
+ * Stage Won layout (#1074; doc/result-menus.md, "Stage Won layout and reusable control
+ * precession"): the ledger panel, then Visit shop as its own larger action below it (1.25 times
+ * the usual stage), then the inspection caption at the bottom of the viewport, above the safe
+ * area. The panel scrolls on short screens rather than pushing the action or caption off.
+ */
+/* Specific enough to hold over the title-block bottom alignment for any overlay. */
+.scene > .menu-overlay.stage-won-screen,
+.menu-overlay.stage-won-screen.stage-won-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 3.6em);
+}
+.stage-won-screen .menu-panel {
+  max-height: calc(100% - min(187.5px, 30vh) - 4em);
+  overflow-y: auto;
+}
+.stage-won-screen .stage-won-action {
+  flex: none;
+  width: min(100%, 520px);
+  height: min(187.5px, 30vh);
+}
+.stage-won-screen .stage-won-action .block-menu-caption {
+  position: fixed;
+  inset: auto max(16px, env(safe-area-inset-right))
+    calc(max(16px, env(safe-area-inset-bottom)) + 4px) max(16px, env(safe-area-inset-left));
+  max-width: 40em;
+  margin: 0 auto;
+  font-size: 15px;
+  line-height: 1.35;
+  color: #f3efe4;
+  text-shadow: 0 1px 3px #000c;
+  opacity: 1;
+  overflow-wrap: anywhere;
+}
