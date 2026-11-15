@@ -36,6 +36,10 @@ describe("material-change sound (#539; doc/presentation-contracts.md)", () => {
     expect(changed).toHaveLength(1);
     expect(changed[0]!.blockId).toBe(card.id);
     expect(changed[0]!.transition?.to.material).toBe("steel");
+    // Both resolved states and both card snapshots are captured at commit.
+    expect(changed[0]!.transition?.from.material).toBe("paper");
+    expect(changed[0]!.snapshots?.before.id).toBe(card.id);
+    expect(changed[0]!.snapshots?.after.traits.material?.kind).toBe("steel");
     // Its cue is the target's, for the scheduled response; nothing plays at commit.
     expect(changed[0]!.transitionSound).toBe(transitionSoundOf("steel"));
     expect(committedSounds(facts)).toEqual([]);

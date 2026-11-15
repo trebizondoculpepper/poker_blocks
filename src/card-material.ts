@@ -1,3 +1,4 @@
+import type { ReactionState } from "./passives";
 import type { ScoringModifier } from "./scoring-modifier";
 /**
  * Permanent per-card material change (#387, split from #384): the model command a
@@ -113,3 +114,40 @@ roundEndResets.register("roundEndMaterial", (state) =>
       );
   }, state),
 );
+
+/** A card's resolved material and state, as a transition fact records it (#539). */
+export function transitionStateOf(card: CardBlock): ReactionState {
+  const stateBonus = [card.traits.stateBonus ?? []].flat()[0]?.id;
+  // A cooking step by its name from the material's own steps ("Raw", "Seared", ...).
+  const step = [card.traits.doneness ?? []]
+    .flat()
+    .map(({ step: index }) => getMaterialDefinition(materialOf(card)).cookable?.steps[index])[0];
+  return {
+    material: materialOf(card),
+    ...(stateBonus ? { stateBonus } : {}),
+    ...(step ? { doneness: step } : {}),
+  };
+}
+
+/** A card anywhere the run holds it. */
+export function findRunCard(state: GameState, cardId: string): CardBlock | undefined {
+  return [
+    ...state.hand,
+    ...state.field.map(({ block }) => block),
+    ...state.deck,
+    ...state.discardPile,
+  ].find(({ id }) => id === cardId);
+}
+
+/**
+ * The committed transition fact's payload (doc/presentation-contracts.md, "Committed transition
+ * fact"): the resolved before/after descriptors and the immutable before/after card snapshots,
+ * captured at the authoritative mutation, so a delayed response never reads newer live state.
+ * The pose is the presentation mount found by `blockId`.
+ */
+export function transitionCapture(before: CardBlock, after: CardBlock) {
+  return {
+    transition: { from: transitionStateOf(before), to: transitionStateOf(after) },
+    snapshots: { before, after },
+  };
+}

@@ -717,6 +717,8 @@ export const sceneDefinitions = [
         },
       },
       shopStock: { source: "shop" },
+      // Items can change a card's material here too: its transition is heard (#539).
+      materialChangeSounds: {},
       // Leaving presents its committed receipt (#880): the stock that left burns, with its cue
       // as the burn starts (only if any left) and the leave cue once it is done.
       shopExitResponse: { burnSound: "shop.stock.burn", leaveSound: "shop.leave" },

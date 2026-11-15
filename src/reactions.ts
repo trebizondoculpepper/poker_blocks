@@ -12,6 +12,7 @@
  * neighbours until the next play. The results are then committed together. Unconfigured pairs
  * do nothing. Nothing here names a material.
  */
+import { findRunCard, transitionCapture } from "./card-material";
 import type { GameEvent } from "./passives";
 import { stateBonuses } from "./state-bonuses";
 import { Registry } from "./core/registry";
@@ -167,7 +168,12 @@ registerRuleCommand<{
   if (transitionSound)
     return [
       { type: "reaction.applied", blockId, reaction: { from: from!, to } },
-      { type: "block.materialChanged", blockId, transition: { from: from!, to }, transitionSound },
+      {
+        type: "block.materialChanged",
+        blockId,
+        ...transitionCapture(findRunCard(before, blockId)!, findRunCard(after, blockId)!),
+        transitionSound,
+      },
     ];
   return [
     {

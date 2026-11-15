@@ -239,6 +239,7 @@ describe("game modes composed from traits", () => {
         },
       },
       shopStock: { source: "shop" },
+      materialChangeSounds: {},
       shopExitResponse: { burnSound: "shop.stock.burn", leaveSound: "shop.leave" },
       shopOfferPresentation: { cycle: "bar", phaseStep: 0.25, bob: 0.03, tiltDegrees: 4 },
       deckPanel: { opens: "openDeck" },

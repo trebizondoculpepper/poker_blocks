@@ -25,7 +25,7 @@ import type { AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
 import { applyRackItem } from "./rack-item-effects";
 import { materialOf, transitionSoundOf, type BlockMaterial } from "./materials";
-import { changeCardMaterial } from "./card-material";
+import { changeCardMaterial, findRunCard, transitionCapture } from "./card-material";
 import type { CardBlock } from "./cards";
 import { resaleValue } from "./resale";
 import { blockCanDestroy, blockDestroySound } from "./block-trait-behaviours";
@@ -1130,23 +1130,15 @@ export class GameRun {
       const next = applyRackItem(before, itemId, cardId);
       if (!next) return null;
       this.currentState = next;
-      const material = (state: GameState) =>
-        [
-          ...state.hand,
-          ...state.field.map(({ block }) => block),
-          ...state.deck,
-          ...state.discardPile,
-        ]
-          .filter(({ id }) => id === cardId)
-          .map(materialOf)[0];
-      const from = material(before);
-      const to = material(next);
-      // Only a real change of material is a transition: its target's sound presents it.
-      if (from && to && from !== to)
+      const from = findRunCard(before, cardId);
+      const to = findRunCard(next, cardId);
+      // Only a real change of material is a transition: its target's sound presents it, and the
+      // fact captures both resolved states and both card snapshots now.
+      if (from && to && materialOf(from) !== materialOf(to))
         this.lifecycle("block.materialChanged", {
           blockId: cardId,
-          transition: { from: { material: from }, to: { material: to } },
-          transitionSound: transitionSoundOf(to),
+          ...transitionCapture(from, to),
+          transitionSound: transitionSoundOf(materialOf(to)),
         });
       return next;
     });
