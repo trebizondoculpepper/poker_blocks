@@ -16,6 +16,7 @@ vi.mock("three", async (original) => {
 vi.mock("../visual/attract-look", () => ({ sparkleEnvironment: () => ({ dispose() {} }) }));
 const added: string[] = [];
 const hidden: [string, boolean][] = [];
+const targeted: [string, boolean][] = [];
 let resumed = 0;
 let covered = 0;
 vi.mock("./control-stage", () => ({
@@ -24,6 +25,7 @@ vi.mock("./control-stage", () => ({
       add: (definition: { id: string }) => (added.push(definition.id), Promise.resolve()),
       remove: (id: string) => void added.splice(added.indexOf(id), 1),
       setHidden: (id: string, value: boolean) => void hidden.push([id, value]),
+      setTargeted: (id: string, value: boolean) => void targeted.push([id, value]),
       hitRegion: () => ({ left: 1, top: 2, width: 3, height: 4 }),
       setReducedMotion: () => {},
       resume: () => void resumed++,
@@ -89,5 +91,20 @@ describe("one shared control group for the shop's controls (#1078)", () => {
     expect(classes.has("presents-block")).toBe(true);
     second.remove();
     expect(classes.has("presents-block")).toBe(false);
+  });
+
+  it("forwards its owner's accepted-drop state to the block (#1364 review)", async () => {
+    const { createControlGroup } = await import("./control-group");
+    const overlay = { classList: { add() {} }, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
+    const group = createControlGroup(overlay as never, () => false);
+    const slot = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 10, height: 10 }) };
+    const sell = group.place(slot as never, { id: "sell", label: "SELL", description: "" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    sell.setTargeted(true);
+    sell.setTargeted(false);
+    expect(targeted).toEqual([
+      ["sell", true],
+      ["sell", false],
+    ]);
   });
 });

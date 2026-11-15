@@ -24,6 +24,8 @@ export type PlacedControl = {
   setHidden(hidden: boolean): void;
   /** The control's current bounds in client px, for flights and drop geometry. */
   hitRegion(): { left: number; top: number; width: number; height: number } | null;
+  /** A drag over its owner would be accepted: the block shows it (#1364 review). */
+  setTargeted(targeted: boolean): void;
   /** Its owner no longer composes it. */
   remove(): void;
 };
@@ -90,6 +92,10 @@ export function createControlGroup(overlay: HTMLElement, reducedMotion: () => bo
           run();
         },
         hitRegion: () => stage?.hitRegion(control.id) ?? null,
+        setTargeted(targeted) {
+          if (!removed) stage?.setTargeted(control.id, targeted);
+          run();
+        },
         remove() {
           if (removed) return;
           removed = true;
