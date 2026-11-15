@@ -91,8 +91,9 @@ export const faceFreeStyle: GhostStyle = {
       depthWrite: false,
     });
     object.add(new THREE.LineSegments(edges, outline));
-    // A shallow clone shares the extra's geometry and material: the source block owns them.
-    for (const extra of appearance.extras ?? []) object.add(extra.clone(false));
+    // A clone shares the extra's geometry and material (the source block owns them) and keeps
+    // its declared render lifecycle, so an animated extra still animates (#1176).
+    for (const extra of appearance.extras ?? []) object.add(cloneWithRenderLifecycle(extra));
     return {
       object,
       prepasses: appearance.prepasses ?? [],
@@ -105,6 +106,26 @@ export const faceFreeStyle: GhostStyle = {
     };
   },
 };
+
+/**
+ * A recursive clone of `source` that keeps each object's own render hooks. three.js copies
+ * transforms, children and references but not `onBeforeRender`/`onAfterRender`, which is where
+ * contained shells, fire cores and world-sized points update their per-object state.
+ */
+export function cloneWithRenderLifecycle<T extends THREE.Object3D>(source: T): T {
+  const clone = source.clone(true) as T;
+  const pairs: [THREE.Object3D, THREE.Object3D][] = [];
+  const walk = (from: THREE.Object3D, to: THREE.Object3D) => {
+    pairs.push([from, to]);
+    from.children.forEach((child, index) => walk(child, to.children[index]));
+  };
+  walk(source, clone);
+  for (const [from, to] of pairs) {
+    to.onBeforeRender = from.onBeforeRender;
+    to.onAfterRender = from.onAfterRender;
+  }
+  return clone;
+}
 
 export type LaserCubeConfig = {
   /** The shared laser preset's colour. */

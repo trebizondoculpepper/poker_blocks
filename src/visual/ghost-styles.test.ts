@@ -107,4 +107,66 @@ describe("drag-ghost appearance styles (#1083; doc/drag-ghost-audition.md)", () 
     }
     for (const spy of shared) expect(spy).not.toHaveBeenCalled();
   });
+
+  it("keeps the extras' render lifecycle and children in face-free clones (#1176)", () => {
+    const look = appearance();
+    const extra = look.extras![0];
+    const child = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshBasicMaterial());
+    extra.add(child);
+    const extraHook = vi.fn();
+    const childHook = vi.fn();
+    extra.onBeforeRender = extraHook;
+    child.onBeforeRender = childHook;
+    const endpoint = ghostStyles.get("faceFree").create({ appearance: look, size: 1 }, {});
+    const [clonedExtra, clonedChild] = meshesIn(endpoint.object);
+    expect(clonedExtra).not.toBe(extra);
+    expect(clonedExtra.onBeforeRender).toBe(extraHook);
+    expect(clonedChild.onBeforeRender).toBe(childHook);
+    expect(clonedChild.geometry).toBe(child.geometry);
+  });
+
+  it("keeps a real contained appearance's per-object hooks on its face-free clone (#1176)", async () => {
+    const { createBlockAppearance } = await import("./block-appearance");
+    const { cardFaceArt } = await import("./face-art");
+    const { standardDeck } = await import("../cards");
+    const { materialPools } = await import("../materials");
+    await Promise.all(
+      ["./filled-vessel", "./glass-shells", "./fire-core", "./fading-film", "./cloud"].map(
+        (path) => import(path),
+      ),
+    );
+    const context = new Proxy(
+      {},
+      { get: (target, key) => (key in target ? Reflect.get(target, key) : () => ({ width: 0 })) },
+    );
+    vi.stubGlobal("document", {
+      createElement: () => ({ width: 0, height: 0, getContext: () => context }),
+    });
+    try {
+      const custard = materialPools
+        .get("registered")()
+        .find(({ id }) => id === "custard")!;
+      const look = createBlockAppearance(
+        cardFaceArt(standardDeck[0]!.traits.identity!),
+        custard,
+        1,
+      );
+      const sources: THREE.Object3D[] = [];
+      for (const extra of look.extras ?? []) extra.traverse((o) => sources.push(o));
+      const hooked = sources.filter(
+        (o) => o.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender,
+      );
+      expect(hooked.length).toBeGreaterThan(0);
+      const endpoint = ghostStyles.get("faceFree").create({ appearance: look, size: 1 }, {});
+      const cloned: THREE.Object3D[] = [];
+      for (const child of endpoint.object.children.slice(1)) child.traverse((o) => cloned.push(o));
+      expect(cloned).toHaveLength(sources.length);
+      sources.forEach((source, index) =>
+        expect(cloned[index].onBeforeRender).toBe(source.onBeforeRender),
+      );
+      endpoint.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
