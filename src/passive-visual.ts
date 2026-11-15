@@ -44,7 +44,22 @@ export type PassiveShape = {
   geometry(): THREE.BufferGeometry;
   /** Vertices that make one face: 6 for a quad (two triangles), 3 for a triangle. */
   verticesPerFace: number;
+  /**
+   * The part of the face texture a face actually shows, as a UV polygon (#1002). Its artwork is
+   * framed along this outline and its label fitted inside it. The whole square when absent.
+   */
+  faceOutline?: FaceOutline;
 };
+
+/** A face's visible region in its texture: UV points (u right, v up), in order. */
+export type FaceOutline = readonly (readonly [number, number])[];
+
+/** The visible part of a face texture under the triangle UVs below. */
+export const triangleFaceOutline: FaceOutline = [
+  [0, 0],
+  [1, 0],
+  [0.5, 1],
+];
 
 export const passiveShapes = new Registry<PassiveShape>("passive shape");
 
@@ -55,12 +70,13 @@ export const defaultPassiveShape = "cube";
 export type PassiveFacePainter = (
   palette: PassivePalette,
   face: PassiveFaceDesign,
+  outline?: FaceOutline,
 ) => THREE.Texture;
 
 /** Each triangular face shows a triangle cut from its face texture. */
 function withTriangleFaceUvs(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   const faces = geometry.getAttribute("position").count / 3;
-  const uvs = Array.from({ length: faces }, () => [0, 0, 1, 0, 0.5, 1]).flat();
+  const uvs = Array.from({ length: faces }, () => triangleFaceOutline.flat()).flat();
   geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   return geometry;
 }
@@ -72,10 +88,12 @@ passiveShapes.register("cube", {
 passiveShapes.register("octahedron", {
   geometry: () => withTriangleFaceUvs(new THREE.OctahedronGeometry(0.72, 0).toNonIndexed()),
   verticesPerFace: 3,
+  faceOutline: triangleFaceOutline,
 });
 passiveShapes.register("icosahedron", {
   geometry: () => withTriangleFaceUvs(new THREE.IcosahedronGeometry(0.76, 0).toNonIndexed()),
   verticesPerFace: 3,
+  faceOutline: triangleFaceOutline,
 });
 passiveShapes.register("d10", { geometry: () => trapezohedronGeometry(), verticesPerFace: 6 });
 
@@ -182,17 +200,83 @@ export function oppositePairOrder(centres: readonly THREE.Vector3[]): number[] {
 }
 
 /** The look every current passive had: its symbol in a framed face, or a pip pattern. */
-export function paintPassiveFace(palette: PassivePalette, face: PassiveFaceDesign): THREE.Texture {
+/**
+ * Where a face's artwork goes, in 256-pixel canvas space (#1002): the outline's points, its
+ * label centre and the radius of the largest circle there that stays inside every edge.
+ */
+export function faceLayout(outline: FaceOutline): {
+  points: { x: number; y: number }[];
+  centre: { x: number; y: number };
+  radius: number;
+} {
+  // Canvas rows run down; a CanvasTexture is flipped, so v = 1 is the canvas's top.
+  const points = outline.map(([u, v]) => ({ x: u * 256, y: (1 - v) * 256 }));
+  const n = points.length;
+  // The incentre for a triangle (vertices weighted by opposite side); the vertex mean otherwise.
+  const side = (i: number) => {
+    const a = points[(i + 1) % n]!;
+    const b = points[(i + 2) % n]!;
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  const weights = n === 3 ? points.map((_, i) => side(i)) : points.map(() => 1);
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  const centre = {
+    x: points.reduce((sum, p, i) => sum + p.x * weights[i]!, 0) / total,
+    y: points.reduce((sum, p, i) => sum + p.y * weights[i]!, 0) / total,
+  };
+  const radius = Math.min(
+    ...points.map((a, i) => {
+      const b = points[(i + 1) % n]!;
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      return Math.abs((b.x - a.x) * (a.y - centre.y) - (a.x - centre.x) * (b.y - a.y)) / length;
+    }),
+  );
+  return { points, centre, radius };
+}
+
+const squareOutline: FaceOutline = [
+  [0, 0],
+  [1, 0],
+  [1, 1],
+  [0, 1],
+];
+
+export function paintPassiveFace(
+  palette: PassivePalette,
+  face: PassiveFaceDesign,
+  outline?: FaceOutline,
+): THREE.Texture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 256;
   const context = canvas.getContext("2d")!;
   context.fillStyle = palette.face;
   context.fillRect(0, 0, 256, 256);
   context.strokeStyle = palette.edge;
-  context.lineWidth = 10;
-  context.strokeRect(12, 12, 232, 232);
-  context.lineWidth = 2;
-  context.strokeRect(24, 24, 208, 208);
+  const { points, centre, radius } = faceLayout(outline ?? squareOutline);
+  /** The outline drawn `inset` pixels in from the face's edges, towards its centre. */
+  const frame = (inset: number, width: number) => {
+    const scale = (radius - inset) / radius;
+    context.lineWidth = width;
+    context.beginPath();
+    points.forEach(({ x, y }, i) => {
+      const px = centre.x + (x - centre.x) * scale;
+      const py = centre.y + (y - centre.y) * scale;
+      if (i === 0) context.moveTo(px, py);
+      else context.lineTo(px, py);
+    });
+    context.closePath();
+    context.stroke();
+  };
+  if (outline) {
+    frame(17, 10);
+    frame(28, 2);
+  } else {
+    // The square face keeps its original frame exactly.
+    context.lineWidth = 10;
+    context.strokeRect(12, 12, 232, 232);
+    context.lineWidth = 2;
+    context.strokeRect(24, 24, 208, 208);
+  }
   context.fillStyle = face.ink ?? palette.ink;
   for (const [x, y] of pipLayouts[face.pips ?? 0] ?? []) {
     context.beginPath();
@@ -203,8 +287,20 @@ export function paintPassiveFace(palette: PassivePalette, face: PassiveFaceDesig
   const label = face.pips ? "" : face.label;
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.font = `bold ${label.length > 2 ? 92 : 116}px system-ui, sans-serif`;
-  context.fillText(label, 128, 131, 206);
+  if (!outline) {
+    // The square face keeps its original lettering exactly.
+    context.font = `bold ${label.length > 2 ? 92 : 116}px system-ui, sans-serif`;
+    context.fillText(label, 128, 131, 206);
+  } else {
+    // Fitted inside the frame: the text's box stays within the inner circle, with a margin.
+    const room = radius - 34;
+    let size = Math.floor(room * 1.25);
+    context.font = `bold ${size}px system-ui, sans-serif`;
+    const width = context.measureText(label).width;
+    if (width > room * 1.6) size = Math.floor((size * room * 1.6) / width);
+    context.font = `bold ${size}px system-ui, sans-serif`;
+    context.fillText(label, centre.x, centre.y + size * 0.04);
+  }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
@@ -324,7 +420,7 @@ function paintedVisual(
   const painted = new Map<string, THREE.Texture>();
   const textureFor = (face: PassiveFaceDesign) => {
     const key = `${face.label}\u0000${face.pips ?? ""}\u0000${face.ink ?? ""}`;
-    const texture = painted.get(key) ?? paint(appearance.palette, face);
+    const texture = painted.get(key) ?? paint(appearance.palette, face, shape.faceOutline);
     painted.set(key, texture);
     return texture;
   };

@@ -157,3 +157,39 @@ describe("adding a token's extras (#630)", () => {
     errors.mockRestore();
   });
 });
+
+describe("face artwork fitted to its shape's outline (#1002)", async () => {
+  const { faceLayout, passiveShapes, triangleFaceOutline } = await import("./passive-visual");
+  it("centres a triangular face's label at its incentre, inside every edge", () => {
+    const { points, centre, radius } = faceLayout(triangleFaceOutline);
+    expect(points).toEqual([
+      { x: 0, y: 256 },
+      { x: 256, y: 256 },
+      { x: 128, y: 0 },
+    ]);
+    expect(centre.x).toBeCloseTo(128, 9);
+    // The incircle touches the bottom edge: centre.y + radius is the bottom.
+    expect(centre.y + radius).toBeCloseTo(256, 6);
+    expect(radius).toBeGreaterThan(60);
+    expect(radius).toBeLessThan(128);
+  });
+
+  it("gives triangle-faced dice their outline, and leaves the cube's square face alone", () => {
+    expect(passiveShapes.get("icosahedron").faceOutline).toBe(triangleFaceOutline);
+    expect(passiveShapes.get("octahedron").faceOutline).toBe(triangleFaceOutline);
+    expect(passiveShapes.get("cube").faceOutline).toBeUndefined();
+  });
+
+  it("hands the painter its shape's outline", () => {
+    const outlines: unknown[] = [];
+    createPassiveVisual(
+      { symbol: "20", palette, shape: "icosahedron" },
+      1,
+      (used, face, outline) => {
+        outlines.push(outline);
+        return painter(used, face);
+      },
+    );
+    expect(new Set(outlines)).toEqual(new Set([triangleFaceOutline]));
+  });
+});
