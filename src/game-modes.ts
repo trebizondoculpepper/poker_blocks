@@ -32,6 +32,7 @@ import { standardGameFlow } from "./standard-game-flow";
 import type { DestructionExitsConfig } from "./scene-traits/destruction-exits";
 import type { StageScoreGraphConfig } from "./stage-score-graph";
 import type { MaterialTransitionsConfig } from "./scene-traits/material-transitions";
+import type { TerminalFieldBurnConfig } from "./scene-traits/terminal-field-burn";
 
 export { standardGameFlow };
 
@@ -242,6 +243,8 @@ export type SceneTraits = {
   materialTransitions: MaterialTransitionsConfig;
   /** Removed table blocks play their exits while this scene is on the stack (#1173). */
   destructionExits: DestructionExitsConfig;
+  /** A decided loss burns the terminal playfield, holding Game Over to its gate (#946). */
+  terminalFieldBurn: TerminalFieldBurnConfig;
   /**
    * The stage's score graph, hung in the room at its configured transform while this scene is on
    * the stack (#1064; doc/line-goes-up.md).
@@ -363,6 +366,9 @@ const playSceneTraits: Partial<SceneTraits> = {
   materialTransitions: { handler: "perlinDissolve", durationUnits: 7.5, reducedDurationUnits: 1.8 },
   // A destroyed table block plays its own exit (#1173; doc/triggered-presentation.md).
   destructionExits: {},
+  // A lost stage's table burns in a cosmetic order once its deciding play has finished; the
+  // music winds down as it starts, and Game Over shows at 80% (doc/loss-field-burn.md, #946).
+  terminalFieldBurn: { lost: { music: [{ op: "windDown" }] } },
   // The stage's score graph (#1064): framed on the back wall, upper right of centre, behind the
   // table and fixed in the room, so the camera sees it in perspective and the cards can pass in
   // front of it. Chosen so it stays wholly on screen with the play camera both wide and portrait

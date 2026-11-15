@@ -107,6 +107,9 @@ import { debugSnapshotCommand } from "./diagnostics/snapshot-command";
 import { registerConsoleCommand } from "./console/commands";
 // Every exit effect registered, so a removed block's recipe can run (#511 review, #1173).
 import { createExitPresenter } from "./visual/exit-effects";
+import { createTerminalBurnRenderer } from "./visual/terminal-burn-renderer";
+import type { TerminalBurnServices } from "./visual/terminal-field-burn";
+import { createTerminalBurnService, type TerminalBurnService } from "./terminal-burn-service";
 import type { BlockExitServices, ExitPresenter } from "./visual/exit-presentation";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -188,6 +191,7 @@ type TraitContext = {
     field: FieldView;
     exits: ExitPresenter;
     actionPhase: PlacementPhase;
+    terminalBurn: TerminalBurnService;
     composeProducer(producer: string): () => void;
     firstPlay: FirstPlayTable;
     actionLog: ActionLog;
@@ -300,6 +304,10 @@ const traitContext: TraitContext = {
     },
     get actionPhase() {
       return placementPhase;
+    },
+    // The loss burn a play scene composes (#946), built with the scheduler below.
+    get terminalBurn() {
+      return terminalBurn;
     },
     composeProducer: (producer) => actionPhases.compose(producer),
     // The stage score graph a stage scene composes (#1064), built with the run below.
@@ -506,7 +514,19 @@ const dazzle = createDazzle(host, cameraView.camera, {
 });
 // The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
 // these services; the frame loop below advances its clock.
-const visualServices: ScoreNarrationServices &
+// The terminal-field burn's renderer (#1212): ghosts of the final table, as detached views.
+const terminalBurnRenderer = createTerminalBurnRenderer({
+  views: {
+    detachedView(block) {
+      const made = blockViews.create(block, cubeSize, "board");
+      blockViews.transfer(made);
+      return made;
+    },
+    release: (view) => blockViews.dispose(view),
+  },
+});
+const visualServices: TerminalBurnServices &
+  ScoreNarrationServices &
   ActivationLabelServices &
   RackLabelServices &
   PresentedActionServices &
@@ -540,6 +560,8 @@ const visualServices: ScoreNarrationServices &
   }),
   // Where a scheduled rocking resume reaches the playfield controller (#783).
   playfieldRocking: rockingRelay,
+  // The terminal-field burn presenter's renderer (#945, #1212).
+  terminalFieldBurn: terminalBurnRenderer,
   // A committed material transition's sound (#539).
   transitionAudio: { play: (id) => playSfx(id) },
   // ...and its look (#1167): the table block, and a detached view of its captured old card.
@@ -576,6 +598,15 @@ const visualServices: ScoreNarrationServices &
   },
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
+// The loss burn (#946): the table's final cards burn as ghosts on the board, reset with the table.
+const terminalBurn = createTerminalBurnService({
+  scheduler: visualEvents,
+  renderer: terminalBurnRenderer,
+  board: cameraView.assembly,
+  field,
+  random: cosmeticRandom,
+  reducedMotion: () => run.reducedMotion,
+});
 // Removed blocks' exits (#1173), presented on that scheduler.
 const exitPresenter = createExitPresenter(visualEvents, () => run.reducedMotion);
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
@@ -606,7 +637,7 @@ const survivorFeedback = createResistanceFeedbackController({
   reducedMotion: () => run.reducedMotion,
 });
 const presenter: PlayPresenter = createPlayPresenter({
-  runScoped: [survivorFeedback],
+  runScoped: [survivorFeedback, terminalBurn],
   game: () => run.game,
   views: blockViews,
   hand,
