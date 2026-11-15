@@ -583,9 +583,11 @@ export function createShopView(
    * not admit the burn's effect, so the run is never left waiting.
    */
   function finishBurn(): void {
+    // Completed, even if the scheduler has just cleared the burn while failing it: the wait,
+    // which reads this when it settles, then lets the run move on.
+    burnCompleted = true;
     if (!burn) return;
     for (const job of burn.jobs) job.effect?.finish();
-    burnCompleted = true;
     render([], false);
   }
 

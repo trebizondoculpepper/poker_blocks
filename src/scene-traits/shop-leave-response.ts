@@ -80,6 +80,12 @@ export function shopExitResponse<
             if (state === "pending") return;
             scopes.delete(scope);
             if (state === "finished") services.sound(config.leaveSound);
+            // The scheduler failed it (a stalled frame past its effect limit): a bounded
+            // summary completes the exit, so the committed leave still moves on and cues.
+            if (state === "failed") {
+              services.shop.finishBurn();
+              services.sound(config.leaveSound);
+            }
           });
           const admitted = visualEvents.schedule(scope, {
             handler: shopBurnHandler,

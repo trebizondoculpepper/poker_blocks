@@ -101,6 +101,16 @@ describe("shopExitResponse on the shared scheduler (#880)", () => {
     ]);
   });
 
+  it("completes the exit as a summary when the scheduler fails the burn (a stalled frame)", () => {
+    const h = harness(1e9);
+    h.leave(["a"]);
+    h.run(1);
+    // A clock jump past the scheduler's effect limit fails the running burn.
+    h.visualEvents.update(1e7, true);
+    expect(h.log).toContain("burn finished at once");
+    expect(h.log.at(-1)).toBe("sound shop.leave");
+  });
+
   it("presents nothing for other facts", () => {
     const h = harness();
     h.run(1);
