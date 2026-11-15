@@ -19,12 +19,15 @@ export const inspectionProviders = new Registry<(block: CardBlock) => readonly s
   "inspection provider",
 );
 
-/** A card's full description: its own, then every provider's lines. Null when it has none. */
+/**
+ * A card's full description: its own, then every provider's lines. A card with no description of
+ * its own still shows its providers' lines (its weight, #1069). Null only when there is nothing.
+ */
 export function inspectBlock(block: CardBlock): string | null {
   const own = block.traits.inspectable?.inspect();
-  if (own === undefined) return null;
   const lines = inspectionProviders.names().flatMap((name) => inspectionProviders.get(name)(block));
-  return [own, ...lines].join("\n");
+  const all = own === undefined ? lines : [own, ...lines];
+  return all.length ? all.join("\n") : null;
 }
 
 /**
