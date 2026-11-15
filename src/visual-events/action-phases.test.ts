@@ -292,4 +292,47 @@ describe("action-correlated presentation phases (#1218; doc/action-presentation-
     expect(contribution.status().state).toBe("cancelled");
     expect(contribution.bind(work("late", 10))).toBe(false);
   });
+
+  it("gives direct summaries the scheduler's services and contains their throws (#1255)", async () => {
+    const seen: unknown[] = [];
+    visualFallbacks.register("test.servicesSummary", ({ services }) => {
+      seen.push(services);
+      throw new Error("summary broke");
+    });
+    const throwing = `test.producer.${++producerCount}`;
+    phaseProducers.register(throwing, {
+      reserve: () => {
+        throw new Error("boom");
+      },
+    });
+    const narration = producer({ slot: "scoring" });
+    const services = { summarySink: "sink" };
+    const scheduler = createVisualScheduler({ services });
+    scheduler.update(0, true);
+    const phases = createActionPhases(scheduler, {
+      plan: "scoring",
+      producers: [throwing, narration],
+      fallback: "test.servicesSummary",
+      services,
+    });
+    const reported = new Promise<unknown>((resolve) => {
+      const previous = globalThis.queueMicrotask;
+      globalThis.queueMicrotask = (callback) =>
+        previous(() => {
+          try {
+            callback();
+          } catch (error) {
+            resolve(error);
+          } finally {
+            globalThis.queueMicrotask = previous;
+          }
+        });
+    });
+    const committed = phases.commit("a1", null);
+    if (!committed.ok) throw new Error(committed.diagnostic);
+    expect(seen).toEqual([services]);
+    expect(committed.diagnostics).toContain(`${throwing}: summary failed: summary broke`);
+    expect(committed.contributions.has(narration)).toBe(true);
+    expect(((await reported) as Error).message).toBe("summary broke");
+  });
 });
