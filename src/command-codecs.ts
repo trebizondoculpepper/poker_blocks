@@ -19,6 +19,8 @@ export type CommandDescriptor = Readonly<{ command: string; version: number; arg
 export type CommandTarget = {
   play(action: PlayAction, actionId?: string): unknown;
   discard(cardIds: readonly string[], actionId?: string): unknown;
+  /** The ordinary refill (#1244): the cards it drew, none when it changed nothing. */
+  refillHand(): readonly unknown[];
 };
 
 export type CommandCodec = {
@@ -70,6 +72,24 @@ commandCodecs.register("discard", {
   },
   execute: (target, args) =>
     target.discard((args as { cardIds: readonly string[] }).cardIds) !== null,
+});
+
+/**
+ * The ordinary hand refill (#1244; doc/experiments/command-journal.md, "Refill is an explicit
+ * separate step"): no arguments. It commits only when it draws; a full hand or an empty deck
+ * records nothing.
+ */
+commandCodecs.register("refillHand", {
+  version: 1,
+  normalize(args) {
+    if (
+      args !== undefined &&
+      (typeof args !== "object" || args === null || Object.keys(args).length)
+    )
+      throw new Error("refillHand takes no arguments");
+    return Object.freeze({});
+  },
+  execute: (target) => target.refillHand().length > 0,
 });
 
 /** Capture a command's descriptor now, before a caller can change its arguments. */
