@@ -25,6 +25,7 @@ import type { ScenarioDefinition, ScenarioRuntime, ScenarioStep } from "../dev-s
 import {
   configurationArtifact,
   copyBenchArtifact,
+  copyStillCurrent,
   replayArtifact,
   replayDisclosure,
   type BenchArtifact,
@@ -156,7 +157,10 @@ export function devBenchPanel<
         build: trustedBuildIdentity ?? "",
       };
       const copy = (artifact: BenchArtifact) => {
+        // A result that arrives after a new trial, or after the panel left, is stale (#1355).
+        const asked = { panel, trial: trialSerial };
         void copyBenchArtifact(artifact, exportSource, navigator.clipboard).then((outcome) => {
+          if (!copyStillCurrent(asked, { panel, trial: trialSerial })) return;
           status = outcome.message;
           playSfx(outcome.ok ? "ui.click" : "action.denied");
           render();
