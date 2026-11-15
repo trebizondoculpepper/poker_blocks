@@ -268,7 +268,11 @@ export function createPlotSurface(
     c.textBaseline = "bottom";
     for (const { text, at, colour } of labels) {
       c.fillStyle = colour;
-      c.fillText(text, at[0], at[1] - 2);
+      // Right-aligned at its end, but never past either edge of the canvas (#1325 review): a
+      // reference near the left (an early crossing) is shifted right until its text fits.
+      const textWidth = c.measureText(text)?.width ?? 0;
+      const x = Math.min(width - 2, Math.max(at[0], textWidth + 2));
+      c.fillText(text, x, at[1] - 2);
     }
     c.fillStyle = config.textColour;
   };

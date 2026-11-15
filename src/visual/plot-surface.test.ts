@@ -210,4 +210,34 @@ describe("plot texture adapter (#1085)", () => {
     expect(surface.available).toBe(true);
     expect(other.sync()).toBe(true);
   });
+
+  it("keeps a reference label near the left edge wholly on the canvas (#1325 review)", () => {
+    const calls: { name: string; args: unknown[] }[] = [];
+    const context = new Proxy(
+      {},
+      {
+        get: (_target, name) =>
+          name === "measureText"
+            ? () => ({ width: 120 })
+            : (...args: unknown[]) => void calls.push({ name: String(name), args }),
+        set: () => true,
+      },
+    ) as unknown as CanvasRenderingContext2D;
+    const surface = createPlotSurface(defaultPlotSurfaceConfig, () => ({
+      width: 0,
+      height: 0,
+      getContext: () => context,
+    }));
+    surface.update({
+      ...score,
+      references: [
+        { axis: "x", value: 0.2, style: { colour: "#000", width: 1 }, label: "Target ≈ play 1" },
+      ],
+    });
+    const label = calls.find(
+      ({ name, args }) => name === "fillText" && args[0] === "Target ≈ play 1",
+    )!;
+    // Its right edge sits at least its own width from the left of the canvas.
+    expect(label.args[1] as number).toBeGreaterThanOrEqual(122);
+  });
 });

@@ -7,7 +7,7 @@ import type { DragSourceConfig, DropTargetConfig } from "./drag-drop";
 import type { DevDropInspectorConfig } from "./scene-traits/dev-drop-inspector";
 import type { DevTrialReadoutsConfig } from "./scene-traits/dev-trial-readouts";
 import type { BenchScenario, DevBenchPanelConfig } from "./scene-traits/dev-bench-panel";
-import { scenarioVersion } from "./dev-scenario";
+import { scenarioVersion, type ScenarioDefinition } from "./dev-scenario";
 import "./trial-modifiers";
 import type { ActionHistoryConfig } from "./scene-traits/action-history";
 import type { FirstPlayPromptConfig } from "./scene-traits/first-play-prompt";
@@ -979,6 +979,58 @@ const trialScenario = (label: string, definitionIds: readonly string[]): BenchSc
     ],
   },
 });
+/**
+ * The real-trigger fixture's table (#1177), by build index: a lone countdown detonator off on its
+ * own; a countdown detonator with a chain detonator behind it; wood, paper and ice neighbours to
+ * destroy; steel and gold neighbours that resist. The rest of the deck is paper.
+ */
+const triggerFixtureScenario: ScenarioDefinition = {
+  version: scenarioVersion,
+  seed: 22,
+  steps: [
+    {
+      capability: "devDeck",
+      config: {
+        steps: [
+          { operation: "standardTemplates" },
+          { operation: "assignUniform", config: { material: "paper" } },
+          {
+            operation: "assignAt",
+            config: {
+              assignments: [
+                { index: 0, material: "devDetonator" },
+                { index: 1, material: "devDetonator" },
+                { index: 2, material: "devChainDetonator" },
+                { index: 3, material: "wood" },
+                { index: 5, material: "steel" },
+                { index: 6, material: "gold" },
+                { index: 7, material: "ice" },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      capability: "devFieldPattern",
+      config: {
+        allowDisconnected: true,
+        placements: [
+          { index: 0, cell: { x: 5, y: 0, z: 0 } },
+          { index: 1, cell: { x: 0, y: 0, z: 0 } },
+          { index: 2, cell: { x: 0, y: 0, z: -1 } },
+          { index: 3, cell: { x: 1, y: 0, z: 0 } },
+          { index: 4, cell: { x: -1, y: 0, z: 0 } },
+          { index: 5, cell: { x: 0, y: 1, z: 0 } },
+          { index: 6, cell: { x: 0, y: 0, z: 1 } },
+          { index: 7, cell: { x: 0, y: 0, z: -2 } },
+        ],
+      },
+    },
+    { capability: "devHand", config: { indices: [10, 11, 12, 13, 14, 15, 16, 17] } },
+  ],
+};
+
 const trialBenchScenarios: readonly BenchScenario[] = [
   trialScenario("Baseline (no trial)", []),
   trialScenario("Dense packing", ["trial-dense-packing"]),
@@ -1561,6 +1613,29 @@ const gameModes: GameMode[] = [
             onLoad: "scene",
             save: { key: "poker-blocks.dev21-run" },
             console: { name: "dev21" },
+            music: { style: "quiet" },
+          },
+        } satisfies GameMode,
+        {
+          // The real-trigger fixture (#1177; doc/triggered-presentation.md, "Developer audition"):
+          // a seeded table of Dev detonators (src/tools/trigger-fixture, installed in development
+          // only) beside ordinary victims and resistant survivors. Make one play: the countdown
+          // detonators go off through the real trigger commands, a chained one follows, ordinary
+          // neighbours exit, steel and gold shudder, and the lone source still explodes.
+          id: "dev22",
+          scenes: composeScenes("dev22", [{ scenes: playScenes, traits: {} }]),
+          startScene: "stage-1",
+          flow: standardGameFlow,
+          navigation: standardNavigation,
+          runSetup: [
+            { step: "sandbox" },
+            { step: "devScenario", scenario: triggerFixtureScenario, trialId: "trigger-fixture" },
+          ],
+          traits: {
+            onLoad: "resume",
+            save: { key: "poker-blocks.dev22-run" },
+            console: { name: "dev22" },
+            restartable: { param: "restart" },
             music: { style: "quiet" },
           },
         } satisfies GameMode,
