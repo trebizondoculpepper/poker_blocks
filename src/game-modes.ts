@@ -352,13 +352,15 @@ const playSceneTraits: Partial<SceneTraits> = {
   committedEventSounds: {},
   // What a card becomes is heard as it changes (#539).
   materialChangeSounds: {},
-  // The stage's score graph (#1064): framed on the back wall, toward the top right, behind the
+  // The stage's score graph (#1064): framed on the back wall, upper right of centre, behind the
   // table and fixed in the room, so the camera sees it in perspective and the cards can pass in
-  // front of it. A reversible starting transform (doc/line-goes-up.md).
+  // front of it. Chosen so it stays wholly on screen with the play camera both wide and portrait
+  // (projected: x 0.03–0.31, y 0.56–0.88 at 1512×792; x 0.11–0.86, y 0.38–0.60 at 390×844).
+  // A reversible starting transform (doc/line-goes-up.md).
   stageScoreGraph: {
     picture: {
-      size: { width: 3.6, height: 2.25 },
-      position: [6.2, 0.3, -10],
+      size: { width: 3.4, height: 2.1 },
+      position: [2.2, 1.0, -10],
       rotation: [0, -0.12, 0],
     },
   },
