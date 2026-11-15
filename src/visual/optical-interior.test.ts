@@ -507,4 +507,23 @@ describe("optical interior capture: review findings (#1289)", () => {
     expect(two.lookup(leaseOne.handle)).toBeNull();
     expect(one.lookup(leaseOne.handle)).not.toBeNull();
   });
+
+  it("clips by the sprite's drawn world size, for either projection", () => {
+    const capture = createInteriorCapture({ maxRegistrations: 2 });
+    const { renderer, draws } = recording();
+    leased(capture.register(volume()));
+    const frame = host(renderer);
+    capture.render(frame);
+    const radius = (draws[0]!.object as THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>)
+      .material.uniforms.radius!.value as THREE.Vector3;
+    // Perspective: three.js draws `worldSize / -z` pixels per half screen, so `0.05 / P[5]` wide.
+    expect(radius.x).toBeCloseTo(0.05 / 2 / frame.camera.projectionMatrix.elements[5]!, 9);
+    const ortho = new THREE.OrthographicCamera(-2, 2, 1, -1, 0.1, 100);
+    ortho.position.set(0, 0, 5);
+    capture.render({ ...frame, camera: ortho });
+    const orthoRadius = (
+      draws[1]!.object as THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>
+    ).material.uniforms.radius!.value as THREE.Vector3;
+    expect(orthoRadius.x).toBeCloseTo(0.05 / 2, 9);
+  });
 });

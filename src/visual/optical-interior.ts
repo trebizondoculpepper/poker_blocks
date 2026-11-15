@@ -471,15 +471,19 @@ export function createInteriorCapture(options: InteriorCaptureOptions = {}) {
     proxy.matrixWorld.copy(source.matrixWorld);
     uniforms.toVolume!.value.copy(volume.matrixWorld).invert().multiply(source.matrixWorld);
     const world = packet.worldSize * source.getWorldScale(scratchScale).y;
+    const projection = host.projectionMatrix.elements;
+    const perspective = projection[11] !== 0;
+    // The sprite's actual world extent as drawn: three.js attenuates a perspective point by depth
+    // alone, so its world size is `world / P[5]` there; an orthographic one is `world` exactly.
+    const extent = perspective ? world / projection[5]! : world;
     const volumeScale = volume.getWorldScale(scratchVolumeScale);
     uniforms.radius!.value.set(
-      world / 2 / volumeScale.x,
-      world / 2 / volumeScale.y,
-      world / 2 / volumeScale.z,
+      extent / 2 / volumeScale.x,
+      extent / 2 / volumeScale.y,
+      extent / 2 / volumeScale.z,
     );
     uniforms.worldSize!.value = world;
-    const projection = host.projectionMatrix.elements;
-    uniforms.attenuate!.value = projection[11] !== 0 ? 1 : 0;
+    uniforms.attenuate!.value = perspective ? 1 : 0;
     uniforms.orthoScale!.value = projection[5]!;
     uniforms.pointScale!.value = tileSize / (2 * rect.w);
     uniforms.map!.value = live.map;
