@@ -1,3 +1,5 @@
+import { dealerRegistry } from "./dealer";
+import { demoRunRules } from "./run-rules";
 import { beatShapes } from "./dance/beat-shapes";
 import { coinEntry } from "./stage-rewards";
 import { danceCycles } from "./dance/dance-floor";
@@ -208,6 +210,8 @@ function recordingHost() {
         dispose: () => undefined,
       },
       run: {
+        scenarioRuntime: () => ({ dealers: dealerRegistry, rules: demoRunRules }),
+        trialStart: () => ({ unavailable: "not a trial" }),
         onDecided: () => () => {},
         committedState: () => ({
           field: [],

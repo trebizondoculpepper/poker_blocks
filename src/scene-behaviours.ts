@@ -146,6 +146,8 @@ export type SceneHost = {
       | "committedState"
       | "requestSession"
       | "sessionProvenance"
+      | "scenarioRuntime"
+      | "trialStart"
       | "lastScoring"
       | "inventory"
       | "dispatch"

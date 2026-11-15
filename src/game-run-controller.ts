@@ -1,3 +1,5 @@
+import type { StartingProvenance } from "./experiment-recorder";
+import type { ScenarioRuntime } from "./dev-scenario";
 import type { CommittedMetadata } from "./command-codecs";
 import { leaveShop } from "./shop-leave";
 import { discardRefusal } from "./discardable";
@@ -179,6 +181,10 @@ export type GameRunController = {
   requestSession(request: SessionRequest): SessionResult;
   /** The active session's provenance when it is an adopted trial; null for an ordinary run. */
   sessionProvenance(): PreparedSession["provenance"] | null;
+  /** The dealers and rules a scenario is built under now, for exporting its configuration (#937). */
+  scenarioRuntime(): ScenarioRuntime;
+  /** The adopted trial's start as captured at adoption, or why none is available (#937). */
+  trialStart(): StartingProvenance | { unavailable: string };
   /**
    * The committed field and round, read-only, for snapshot-scoped measurement (#904). The state is
    * immutable: a reader holds the version it read, never a live reference into a later action.
@@ -603,6 +609,8 @@ export function createGameRunController<Context>(options: {
 
   // One synchronous adoption: stream, rules and card universe first, then the run itself, whose
   // checkpoints now refer to the adopted stream. Old gestures and presentation are cancelled.
+  /** The adopted trial's captured start, or null for an ordinary run (#937). */
+  let trialStart: StartingProvenance | null = null;
   const requestSession = createSessionRequester(sessionHost, (prepared) => {
     services.input.cancelGestures();
     randomizer = prepared.random;
@@ -611,6 +619,15 @@ export function createGameRunController<Context>(options: {
     // A trial is not resumable through the mode's setup: it keeps its provenance and saves
     // nothing over the mode's ordinary save (export is a separate product, #821).
     startRun(prepared.run, { save: () => {}, provenance: prepared.provenance });
+    // Its start, captured as it is adopted and before any player command (#937): the state, the
+    // setup it replayed and the random checkpoint the trial's recorder exports.
+    trialStart = {
+      configuration: null,
+      snapshot: JSON.parse(JSON.stringify(game.snapshot())),
+      ids: {},
+      checkpoint: randomizer.checkpoint(),
+      setup: [...prepared.provenance.actionLog],
+    };
   });
 
   /** Swap in a run (new or resumed) and rebuild the scene from its state. */
@@ -957,6 +974,11 @@ export function createGameRunController<Context>(options: {
     deckBlocks: () => game.state.deck,
     requestSession,
     sessionProvenance: () => activeSession.provenance,
+    scenarioRuntime: () => ({ dealers: dealerRegistry, rules: runRules }),
+    trialStart: () =>
+      activeSession.provenance && trialStart
+        ? trialStart
+        : { unavailable: "this run is not an adopted trial" },
     committedState: () => game.state,
     lastScoring: () => ({ field: game.lastScoringField, lines: game.lastScoredLines }),
     inventory: () => runInventory(game.state),
