@@ -197,3 +197,36 @@ describe("target-state transition cue (#539)", async () => {
     expect(transitionSoundFor({ material: "steel" })).toBe(transitionSoundOf("steel"));
   });
 });
+
+describe("reaction cue from the complete target state (#1132)", async () => {
+  await import("./reactions");
+  const { commitCommands } = await import("./rule-commands");
+  it("keeps a preserved boiled state's cue when a reaction changes the material", () => {
+    const card = {
+      ...standardDeck[0]!,
+      traits: {
+        ...standardDeck[0]!.traits,
+        material: { kind: "water" },
+        stateBonus: { id: "boiled" },
+      },
+    };
+    let state = {
+      ...(emptyField() as object),
+      field: [{ block: card, cell: { x: 0, y: 0, z: 0 } }],
+    };
+    const target = {
+      get state() {
+        return state;
+      },
+      update: (next: typeof state) => void (state = next),
+      grantUnownedPassive: () => [],
+    };
+    const events = commitCommands(
+      [{ id: "transform-block", config: { blockId: card.id, material: "ice" } }],
+      target as never,
+    );
+    const changed = events.find(({ type }) => type === "block.materialChanged");
+    expect(changed?.transition?.to.stateBonus).toBe("boiled");
+    expect(changed?.transitionSound).toBe("reaction.boil");
+  });
+});
