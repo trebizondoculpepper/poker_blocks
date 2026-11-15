@@ -23,6 +23,8 @@ describe("rack activation labels (#919)", () => {
       space: "rack",
       anchor: "passive.1",
       durationUnits: pulseMilliseconds(passiveActivation(die).effect) / unitMs,
+      // Centred over the item (#1157).
+      placement: "overBounds",
     });
   });
 

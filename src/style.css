@@ -1626,6 +1626,8 @@ body,
 /* Transient activation text (#918, src/visual/activation-labels.ts): placed by transform. */
 .activation-labels {
   position: absolute;
+  /* Above the rack (z-index 2) and HUD panels, so over-item labels show over items (#1157). */
+  z-index: 7;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
@@ -1743,4 +1745,10 @@ body,
 }
 .menu-caption-outlet:empty {
   display: none;
+}
+/* Fitted over-item labels (#1157, src/visual/fitted-text.ts): sized by the shared layout. */
+.activation-label.activation-label-fitted {
+  max-width: none;
+  white-space: normal;
+  line-height: normal;
 }
