@@ -193,3 +193,35 @@ describe("face artwork fitted to its shape's outline (#1002)", async () => {
     expect(new Set(outlines)).toEqual(new Set([triangleFaceOutline]));
   });
 });
+
+describe("mass passive artwork (#1009)", async () => {
+  const { faceIcons, iconCluster } = await import("./passive-visual");
+  const { passiveDefinitions } = await import("./passives");
+  await import("./trial-modifiers");
+  const iconOf = (id: string) => passiveDefinitions.get(id).faces?.[0]?.icon;
+
+  it("registers drawn feather and anvil icons", () => {
+    expect(faceIcons.has("feather")).toBe(true);
+    expect(faceIcons.has("anvil")).toBe(true);
+    // Ace Exchange's bin of Aces (#1004).
+    expect(faceIcons.has("aceBin")).toBe(true);
+    expect(passiveDefinitions.get("ace-exchange").faces?.[0]?.icon).toEqual({
+      name: "aceBin",
+      count: 1,
+    });
+    expect(iconCluster(1)).toHaveLength(1);
+    expect(iconCluster(3)).toHaveLength(3);
+  });
+
+  it("gives Light a feather and Heavy an anvil: one for Mean, three for Total", () => {
+    expect(iconOf("trial-light-mean-mass")).toEqual({ name: "feather", count: 1 });
+    expect(iconOf("trial-light-total-mass")).toEqual({ name: "feather", count: 3 });
+    expect(iconOf("trial-heavy-mean-mass")).toEqual({ name: "anvil", count: 1 });
+    expect(iconOf("trial-heavy-total-mass")).toEqual({ name: "anvil", count: 3 });
+    expect(iconOf("light-stack")).toEqual({ name: "feather", count: 3 });
+    expect(iconOf("heavy-stack")).toEqual({ name: "anvil", count: 3 });
+    // Mean and Total stay in the names.
+    expect(passiveDefinitions.get("trial-heavy-mean-mass").name).toMatch(/mean/);
+    expect(passiveDefinitions.get("trial-light-total-mass").name).toMatch(/total/);
+  });
+});

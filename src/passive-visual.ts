@@ -19,7 +19,135 @@ export type PassiveFaceDesign = {
   pips?: number;
   /** This face's artwork colour; its category palette's ink when absent (#1005). */
   ink?: string;
+  /**
+   * A registered drawn icon (`faceIcons`) in place of the label (#1009), shown `count` times
+   * (one, or a tight cluster of three), so its meaning survives any rotation of the token.
+   */
+  icon?: { name: string; count: 1 | 3 };
 };
+
+/** Draws one icon centred at (x, y), `size` pixels across, in the current fill colour. */
+export type FaceIconPainter = (
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  /** The face's colour, for an icon's cut-out parts; the fill colour is its ink. */
+  face: string,
+) => void;
+
+/** Face icons by name: a definition's face artwork names one; nothing asks what a passive is. */
+export const faceIcons = new Registry<FaceIconPainter>("face icon");
+
+// A feather (#1009): a long, narrow vane with notched barbs either side of a quill.
+faceIcons.register("feather", (context, x, y, size) => {
+  const s = size / 2;
+  context.save();
+  context.translate(x, y);
+  context.rotate(-Math.PI / 5);
+  // The vane, top to base: a smooth left edge and a right edge broken by two notches.
+  context.beginPath();
+  context.moveTo(0, -s);
+  context.quadraticCurveTo(s * 0.34, -s * 0.6, s * 0.3, -s * 0.15);
+  context.lineTo(s * 0.12, -s * 0.12);
+  context.lineTo(s * 0.32, 0.05 * s);
+  context.quadraticCurveTo(s * 0.3, s * 0.3, s * 0.22, s * 0.38);
+  context.lineTo(s * 0.06, s * 0.3);
+  context.lineTo(s * 0.12, s * 0.5);
+  context.lineTo(0, s * 0.55);
+  context.lineTo(-s * 0.16, s * 0.48);
+  context.lineTo(-s * 0.08, s * 0.32);
+  context.lineTo(-s * 0.26, s * 0.3);
+  context.quadraticCurveTo(-s * 0.36, -s * 0.4, 0, -s);
+  context.fill();
+  // The quill, running past the vane's base.
+  context.lineWidth = Math.max(2, size * 0.045);
+  context.lineCap = "round";
+  context.strokeStyle = context.fillStyle;
+  context.beginPath();
+  context.moveTo(0, -s * 0.8);
+  context.lineTo(0, s);
+  context.stroke();
+  context.restore();
+});
+
+// An anvil (#1009): a flat face with a horn, a waist and a broad foot.
+faceIcons.register("anvil", (context, x, y, size) => {
+  const s = size / 2;
+  context.save();
+  context.translate(x, y);
+  context.beginPath();
+  context.moveTo(-s * 0.55, -s * 0.45);
+  context.lineTo(s * 0.6, -s * 0.45);
+  context.lineTo(s, -s * 0.5);
+  context.quadraticCurveTo(s * 0.75, -s * 0.12, s * 0.45, -s * 0.1);
+  context.lineTo(s * 0.25, s * 0.05);
+  context.lineTo(s * 0.3, s * 0.45);
+  context.lineTo(s * 0.6, s * 0.65);
+  context.lineTo(-s * 0.6, s * 0.65);
+  context.lineTo(-s * 0.3, s * 0.45);
+  context.lineTo(-s * 0.25, s * 0.05);
+  context.lineTo(-s * 0.55, -s * 0.12);
+  context.closePath();
+  context.fill();
+  context.restore();
+});
+
+// A round bin with two Aces poking out of it (#1004): cards first, so the bin's rim overlaps
+// their lower ends.
+faceIcons.register("aceBin", (context, x, y, size, face) => {
+  const s = size / 2;
+  const ink = context.fillStyle;
+  context.save();
+  context.translate(x, y);
+  const card = (angle: number, dx: number) => {
+    context.save();
+    context.translate(dx, -s * 0.36);
+    context.rotate(angle);
+    const w = s * 0.56;
+    const h = s * 0.84;
+    // Cards in the face's colour with ink edges and letters, so they read on any palette.
+    context.fillStyle = face;
+    context.strokeStyle = ink;
+    context.lineWidth = Math.max(3, size * 0.045);
+    context.beginPath();
+    context.rect(-w / 2, -h / 2, w, h);
+    context.fill();
+    context.stroke();
+    context.fillStyle = ink;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.font = `bold ${Math.round(h * 0.5)}px system-ui, sans-serif`;
+    context.fillText("A", 0, -h * 0.08);
+    context.restore();
+  };
+  card(-0.32, -s * 0.2);
+  card(0.28, s * 0.2);
+  // The bin: a tapered body under an elliptical rim.
+  context.fillStyle = ink;
+  context.beginPath();
+  context.moveTo(-s * 0.62, -s * 0.02);
+  context.lineTo(s * 0.62, -s * 0.02);
+  context.lineTo(s * 0.48, s * 0.82);
+  context.quadraticCurveTo(0, s * 0.98, -s * 0.48, s * 0.82);
+  context.closePath();
+  context.fill();
+  context.beginPath();
+  context.ellipse(0, -s * 0.02, s * 0.66, s * 0.16, 0, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+});
+
+/** Where `count` icons sit around a centre, as offsets in icon sizes: one, or a tight trio. */
+export function iconCluster(count: 1 | 3): readonly (readonly [number, number])[] {
+  return count === 1
+    ? [[0, 0]]
+    : [
+        [-0.42, 0.28],
+        [0.42, 0.28],
+        [0, -0.4],
+      ];
+}
 
 /** A token's look. With no shape it is a cube; with no faces every face shows the symbol. */
 export type PassiveTokenAppearance = {
@@ -283,8 +411,16 @@ export function paintPassiveFace(
     context.arc(x, y, 17, 0, Math.PI * 2);
     context.fill();
   }
-  // A pip face carries no label: its pips are the artwork.
-  const label = face.pips ? "" : face.label;
+  // An icon face draws its registered icon (one, or a cluster of three) in the label's place.
+  if (face.icon) {
+    const { centre: at, radius: room } = faceLayout(outline ?? squareOutline);
+    const size = face.icon.count === 1 ? room * 1.1 : room * 0.62;
+    const paintIcon = faceIcons.get(face.icon.name);
+    for (const [dx, dy] of iconCluster(face.icon.count))
+      paintIcon(context, at.x + dx * size, at.y + dy * size, size, palette.face);
+  }
+  // A pip or icon face carries no label: its pips or icons are the artwork.
+  const label = face.pips || face.icon ? "" : face.label;
   context.textAlign = "center";
   context.textBaseline = "middle";
   if (!outline) {
@@ -419,7 +555,7 @@ function paintedVisual(
   geometry.scale(size, size, size);
   const painted = new Map<string, THREE.Texture>();
   const textureFor = (face: PassiveFaceDesign) => {
-    const key = `${face.label}\u0000${face.pips ?? ""}\u0000${face.ink ?? ""}`;
+    const key = `${face.label}\u0000${face.pips ?? ""}\u0000${face.ink ?? ""}\u0000${face.icon?.name ?? ""}${face.icon?.count ?? ""}`;
     const texture = painted.get(key) ?? paint(appearance.palette, face, shape.faceOutline);
     painted.set(key, texture);
     return texture;

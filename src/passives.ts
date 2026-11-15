@@ -457,6 +457,11 @@ const definitions: PassiveDefinition[] = [
     categoryTrait: { effectCategory: {} },
     name: "Ace Exchange",
     symbol: "AA",
+    // A round bin with two Aces poking out (#1004; doc/audition-followups.md): artwork only.
+    faces: Array.from({ length: 6 }, () => ({
+      label: "AA",
+      icon: { name: "aceBin", count: 1 as const },
+    })),
     description:
       "Discard at least two Aces together to gain one random passive you do not own. Triggers once per qualifying discard; unlimited use.",
     traitId: "passive.event-rules",

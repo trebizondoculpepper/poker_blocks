@@ -9,6 +9,7 @@
  * Curve parameters are configuration, validated when the definition is composed; an unavailable
  * query (no scored field) is a neutral ×1, never an invented value.
  */
+import type { PassiveFaceDesign } from "./passive-visual";
 import { Registry } from "./core/registry";
 import { query } from "./context-queries";
 import type { EventRule, RuleFrame } from "./event-rules";
@@ -385,6 +386,8 @@ function queryTrial(
   values: readonly string[] = [factor.value],
   /** Its scoring operation, for its category colours: a row multiplier unless it raises. */
   operations: readonly ("multiplicative" | "exponential")[] = ["multiplicative"],
+  /** Drawn face artwork in place of the symbol (#1009): an icon, once or as a trio. */
+  icon?: PassiveFaceDesign["icon"],
 ): PassiveDefinition {
   const problems = validateQueryFactor(id, factor);
   if (problems.length) throw new Error(problems.join("\n"));
@@ -395,6 +398,7 @@ function queryTrial(
     lifecycle: { parent: "rackItem" },
     name,
     symbol,
+    ...(icon ? { faces: Array.from({ length: 6 }, () => ({ label: symbol, icon })) } : {}),
     description,
     traitId: "passive.event-rules",
     categoryTrait: { scoringCategory: { operations: [...operations] } },
@@ -456,6 +460,10 @@ for (const definition of [
       params: weightPassives.heavy,
       phase: "score.lineMultiply",
     },
+    ["totalKg"],
+    undefined,
+    // The whole field's total mass: a cluster of three (#1009).
+    { name: "anvil", count: 3 },
   ),
   // Light (#1072): a lighter field scores more, up to ×10 at or below 0.1 kg.
   queryTrial(
@@ -470,6 +478,10 @@ for (const definition of [
       params: weightPassives.light,
       phase: "score.lineMultiply",
     },
+    ["totalKg"],
+    undefined,
+    // The whole field's total mass: a cluster of three (#1009).
+    { name: "feather", count: 3 },
   ),
   queryTrial(
     "trial-dense-packing",
@@ -505,10 +517,11 @@ for (const definition of [
   // Heavy and light (#818), each on the row's scored subset, by mean and by total mass.
   ...(
     [
-      { value: "meanKg", label: "mean" },
-      { value: "totalKg", label: "total" },
+      // Mean shows one object, Total a tight cluster of three (#1009).
+      { value: "meanKg", label: "mean", count: 1 },
+      { value: "totalKg", label: "total", count: 3 },
     ] as const
-  ).flatMap(({ value, label }) => {
+  ).flatMap(({ value, label, count }) => {
     return [
       queryTrial(
         `trial-heavy-${label}-mass`,
@@ -517,6 +530,8 @@ for (const definition of [
         `Multiplies each scored row by up to ×10, more for a heavier ${label} mass of its scored blocks. Provisional trial.`,
         { query: "scoredSubsetMass", value, curve: "heavyLog", params: massTrials.heavy },
         ["meanKg", "totalKg"],
+        undefined,
+        { name: "anvil", count },
       ),
       queryTrial(
         `trial-light-${label}-mass`,
@@ -525,6 +540,8 @@ for (const definition of [
         `Multiplies each scored row by up to ×10, more for a lighter ${label} mass of its scored blocks. Provisional trial.`,
         { query: "scoredSubsetMass", value, curve: "lightInverse", params: massTrials.light },
         ["meanKg", "totalKg"],
+        undefined,
+        { name: "feather", count },
       ),
     ];
   }),
