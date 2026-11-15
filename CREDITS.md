@@ -64,4 +64,4 @@ Notes:
 ## Unresolved
 
 - **Generated audio terms.** The ElevenLabs and Treblo terms that govern redistribution of generated sound effects and music are not recorded in this repository. Record the applicable plan/terms and date before a public distribution.
-- **Repository licence boundary.** `LICENSE` covers the project's own code. Third-party assets keep their own licences as listed above; a distributed build must carry the notices those licences require. No build step currently packages this file or the font licences into `dist/`.
+- **Repository licence boundary.** `LICENSE` covers the project's own code. Third-party assets keep their own licences as listed above; a distributed build must carry the notices those licences require. The website build now copies its artwork/font notices from `public/art-notices/` into `dist/art-notices/`. Packaging this complete credits file and notices into the standalone game remains unresolved.
