@@ -1,0 +1,93 @@
+/**
+ * Paired material masks for optical looks (#1207; doc/presentation-contracts.md, "Committed
+ * transition fact and independent responses"): the refractive and internal-reflection crystals
+ * draw with their own `ShaderMaterial`s, front and rear, whose rear meshes their registered
+ * prepasses capture. These adapters let such a look take part in a paired mask exactly as a
+ * chunk-based look does (`paired-mask.ts`): one block-local domain, seed, clock and progress, and
+ * complementary coverage, so the outgoing look draws precisely where the incoming one does not.
+ *
+ * - **Declared per material.** A crystal's tree mixes custom shaders (front, rear) with chunk
+ *   materials (its print skin, its hand surface). Its assembly declares `materialDeclared`, and
+ *   each material it makes declares its own adapter in `userData.maskAdapter`; the dispatch reads
+ *   that declaration, never a material's class. An undeclared material is an explicit error, never
+ *   a silently unmasked surface.
+ * - **`opticalShader`** patches the custom shader at `main`: the vertex shader passes the world
+ *   position, and the fragment shader decides per view ray, as the chunk adapter does, whether
+ *   this side draws. Under reduced motion it dithers complementary coverage by progress, so the
+ *   opaque optical front never needs transparency or a disabled depth test. Its uniforms are the
+ *   original's own objects plus the mask's: the renderer-owned capture slots a prepass binds are
+ *   shared, never copied, so the masked rear still feeds the registered capture.
+ */
+import * as THREE from "three";
+import { NOISE } from "./materialise";
+import { maskAdapters, type MaskAdapter } from "./paired-mask";
+
+/** Dispatch to the adapter each material declares in `userData.maskAdapter`. */
+export const materialDeclaredAdapter: MaskAdapter = {
+  adapt(material, uniforms, role) {
+    const declared = material.userData.maskAdapter as string | undefined;
+    if (!declared || !maskAdapters.has(declared))
+      throw new Error(
+        `material "${material.name || material.uuid}" declares no registered mask adapter`,
+      );
+    return maskAdapters.get(declared).adapt(material, uniforms, role);
+  },
+};
+
+/** The mask's decision, at the top of a custom fragment shader's `main`. */
+const decide = /* glsl */ `
+  {
+    vec3 matRay = normalize(matWorld - cameraPosition);
+    vec3 matFacing = normalize(cameraPosition - matOrigin);
+    float matAlong = dot(matOrigin - cameraPosition, matFacing) / min(dot(matRay, matFacing), -1e-4);
+    vec3 matHit = cameraPosition + matRay * matAlong;
+    vec3 matLocal = (matFrame * vec4(matHit, 1.0)).xyz;
+    float matCut;
+    float matNoise;
+    if (matReduced < 0.5) {
+      vec3 matAt = matLocal * matFrequency + vec3(0.0, matTime * 0.9, matTime * 0.4);
+      matNoise = clamp(matFbm(matAt) * 1.6 + 0.5, 0.0, 1.0);
+      matCut = mix(-matEdge, 1.0 + matEdge, matProgress);
+    } else {
+      // Reduced motion: a still, fine dither of the same domain, complementary by progress.
+      matNoise = fract(sin(dot(floor(matLocal * 64.0), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+      matCut = matProgress;
+    }
+    if (matOutgoing > 0.5) {
+      if (matNoise <= matCut) discard;
+    } else if (matNoise > matCut) discard;
+  }
+`;
+
+export const opticalShaderAdapter: MaskAdapter = {
+  adapt(original, uniforms, role) {
+    const source = original as THREE.ShaderMaterial;
+    const made = source.clone();
+    made.userData = source.userData;
+    // The original's own uniform objects (capture slots, tuning, ripple), shared, plus the mask's.
+    made.uniforms = {
+      ...source.uniforms,
+      ...uniforms,
+      matOutgoing: { value: role === "outgoing" ? 1 : 0 },
+    };
+    made.vertexShader = `varying vec3 matWorld;\n${source.vertexShader}`.replace(
+      /void main\(\)\s*\{/,
+      "void main() {\n  matWorld = (modelMatrix * vec4(position, 1.0)).xyz;",
+    );
+    made.fragmentShader = `varying vec3 matWorld;
+      uniform float matProgress;
+      uniform float matTime;
+      uniform float matFrequency;
+      uniform float matEdge;
+      uniform float matReduced;
+      uniform float matOutgoing;
+      uniform mat4 matFrame;
+      uniform vec3 matOrigin;
+      ${NOISE}
+      ${source.fragmentShader}`.replace(/void main\(\)\s*\{/, `void main() {${decide}`);
+    return made;
+  },
+};
+
+maskAdapters.register("materialDeclared", materialDeclaredAdapter);
+maskAdapters.register("opticalShader", opticalShaderAdapter);

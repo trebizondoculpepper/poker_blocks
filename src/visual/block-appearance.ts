@@ -35,6 +35,8 @@ import "./growing-grass";
 import "./settling-scoops";
 // Registers the flame contents (#335).
 import "./fire-core";
+// Registers the optical looks' paired-mask adapters (#1207).
+import "./optical-mask";
 
 export type BlockAppearance = {
   geometry: THREE.BufferGeometry;
@@ -1391,6 +1393,14 @@ function crystalV3(context: AssemblyContext): BlockAppearance {
  * Faked background refraction (prototype, src/visual/crystal-refraction.ts), configured by the
  * registered refraction preset its `appearance.refraction` names (#674).
  */
+/** Record on each material the registered mask adapter it supports (#1207, `materialDeclared`). */
+function declareMaskAdapters(
+  byAdapter: Record<string, readonly (THREE.Material | THREE.Material[])[]>,
+) {
+  for (const [adapter, materials] of Object.entries(byAdapter))
+    for (const material of materials.flat()) material.userData.maskAdapter = adapter;
+}
+
 function crystalRefraction(context: AssemblyContext): BlockAppearance {
   const { art, definition, geometry } = context;
   const preset = refractionPresets.get(definition.appearance.refraction ?? "crystal");
@@ -1399,14 +1409,21 @@ function crystalRefraction(context: AssemblyContext): BlockAppearance {
   const print = printSkin(art, definition.appearance, geometry);
   const inHand = surface(texture, definition.appearance, height);
   const front = createRefractionFront(preset, geometry) as unknown as THREE.MeshStandardMaterial;
+  const rear = createRefractionRear(geometry, preset);
+  // Each material declares how it takes part in a paired mask (#1207): the shaders their own.
+  declareMaskAdapters({
+    opticalShader: [front, rear.material],
+    chunkSurface: [inHand, print.skin.material],
+  });
   return {
     ...appearanceBase(
       context,
       [texture, ...[height].filter((value) => value !== undefined), print.texture],
       Array.from({ length: 6 }, () => inHand),
-      [createRefractionRear(geometry, preset), print.skin],
+      [rear, print.skin],
       Array.from({ length: 6 }, () => front),
     ),
+    maskAdapter: "materialDeclared",
     // The preset's own live outline opacity, where it owns one (#796).
     ...(preset.edgeOpacity ? { liveEdgeOpacity: preset.edgeOpacity } : {}),
   };
@@ -1420,14 +1437,20 @@ function crystalInternal(context: AssemblyContext): BlockAppearance {
   const print = printSkin(art, definition.appearance, geometry);
   const inHand = surface(texture, definition.appearance, height);
   const front = createInternalFront() as unknown as THREE.MeshStandardMaterial;
+  const rear = createInternalRear(geometry);
+  declareMaskAdapters({
+    opticalShader: [front, rear.material],
+    chunkSurface: [inHand, print.skin.material],
+  });
   return {
     ...appearanceBase(
       context,
       [texture, ...[height].filter((value) => value !== undefined), print.texture],
       Array.from({ length: 6 }, () => inHand),
-      [createInternalRear(geometry), print.skin],
+      [rear, print.skin],
       Array.from({ length: 6 }, () => front),
     ),
+    maskAdapter: "materialDeclared",
     // Its front reads the inner image this pass captures, in whichever host draws it (#971).
     prepasses: [{ handler: "internalCapture" }],
     // Its table front is a shader: an additive overlay shows it selected, in hand or on the table.
