@@ -66,8 +66,8 @@
     "uses": 3,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
-      "game-run-controller.ts": 1,
-      "game-run.ts": 1
+      "game-run.ts": 1,
+      "traits/destructible.ts": 1
     }
   },
   "block.dazzle_pop": {

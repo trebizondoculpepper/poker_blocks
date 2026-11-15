@@ -50,13 +50,22 @@
 .object-browser-categories a.is-current {
   background: #3d6a96;
 }
-.object-browser-list {
+/* The search and the list it narrows share the index column (#1007). */
+.object-browser-index {
   grid-area: list;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px 8px 0;
+  border-right: 1px solid #2c3d52;
+}
+.object-browser-list {
+  flex: 1;
+  min-height: 0;
   margin: 0;
-  padding: 8px 0;
+  padding: 0 0 8px;
   overflow: auto;
   list-style: none;
-  border-right: 1px solid #2c3d52;
 }
 .object-browser-list a {
   display: block;
@@ -144,10 +153,12 @@
     grid-template-rows: auto auto auto minmax(0, 1fr);
     grid-template-areas: "header" "categories" "list" "page";
   }
+  .object-browser-index {
+    border-right: 0;
+  }
   .object-browser-list {
     display: flex;
     overflow-x: auto;
-    border-right: 0;
   }
 }
 .object-browser-status {
@@ -181,4 +192,28 @@
 .object-browser-action span {
   opacity: 0.8;
   font-size: 0.9em;
+}
+.object-browser-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 8px;
+}
+.object-browser-search label {
+  flex-basis: 100%;
+  font-size: 0.85em;
+}
+.object-browser-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  font: inherit;
+}
+.object-browser-search button {
+  min-height: 44px;
+}
+.object-browser-empty {
+  margin: 0 0 8px;
+  font-style: italic;
 }

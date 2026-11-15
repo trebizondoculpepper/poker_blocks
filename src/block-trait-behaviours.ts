@@ -1,3 +1,4 @@
+import type { SoundEffectId } from "./audio/sfx-registry";
 import type { CardBlock } from "./cards";
 import { countOperation } from "./lifecycle/operations";
 import { attachableBehavior, type Cell, type Face } from "./traits/attachable";
@@ -16,6 +17,8 @@ export type BlockTraitBehavior = {
   canDrag?: (config: unknown, block: CardBlock) => boolean;
   /** Whether this trait protects the block from destruction by `cause` (#437). */
   resists?: (config: unknown, block: CardBlock, cause: string) => boolean;
+  /** The sound its configuration names for a successful destruction (#879), if any. */
+  destroySound?: (config: unknown, block: CardBlock) => SoundEffectId | undefined;
   attachment?: (
     config: unknown,
     block: CardBlock,
@@ -86,6 +89,15 @@ export function blockCanDestroy(block: CardBlock, cause: DestroyCause): boolean 
     allowed = behavior.canDestroy?.(config, block, cause) || allowed;
   });
   return allowed;
+}
+
+/** The destruction response sound the block's traits configure (#879), if any. */
+export function blockDestroySound(block: CardBlock): SoundEffectId | undefined {
+  let sound: SoundEffectId | undefined;
+  eachBehavior(block, (behavior, config) => {
+    sound = behavior.destroySound?.(config, block) ?? sound;
+  });
+  return sound;
 }
 
 /** Whether any of the block's traits protects it from destruction by `cause` (#437). */

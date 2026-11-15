@@ -204,6 +204,19 @@ export function listeningRoomLink(id: string): string {
   return `/sfx.html?sound=${encodeURIComponent(id)}`;
 }
 
+/**
+ * Whether an entry matches a search (#1007; doc/audition-followups.md): a case-insensitive
+ * substring of its display name or its opaque ID. The ID is searched as text, never interpreted.
+ */
+export function matchesSearch(object: { id: string; name: string }, search: string): boolean {
+  const wanted = search.trim().toLocaleLowerCase();
+  return (
+    !wanted ||
+    object.name.toLocaleLowerCase().includes(wanted) ||
+    object.id.toLocaleLowerCase().includes(wanted)
+  );
+}
+
 export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
   const root = document.createElement("section");
   root.className = "object-browser";
@@ -214,7 +227,16 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       <a class="object-browser-back" data-browser="back">Back to the game</a>
     </header>
     <nav class="object-browser-categories" data-browser="categories"></nav>
+    <div class="object-browser-index">
+    <div class="object-browser-search" role="search">
+      <label for="object-browser-search">Search this category</label>
+      <input id="object-browser-search" type="search" autocomplete="off" spellcheck="false"
+        placeholder="Name or ID" data-browser="search" />
+      <button type="button" data-browser="clear">Clear</button>
+    </div>
+    <p class="object-browser-empty" data-browser="empty" role="status" hidden></p>
     <ol class="object-browser-list" data-browser="list"></ol>
+    </div>
     <article class="object-browser-page" data-browser="page">
       <h2 data-browser="name"></h2>
       <p class="object-browser-id" data-browser="id"></p>
@@ -332,6 +354,48 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     );
   }
 
+  /** The category's list, narrowed by the search; the open page and its preview stay put. */
+  let current: { category: Category; objects: BrowsedObject[]; selected: string } | null = null;
+  function renderList(): void {
+    if (!current) return;
+    const { category, objects, selected } = current;
+    const search = part<HTMLInputElement>("search").value;
+    const shown = objects.filter((entry) => matchesSearch(entry, search));
+    part("empty").hidden = shown.length > 0;
+    part("empty").textContent = shown.length
+      ? ""
+      : `No ${category.label.toLowerCase()} match “${search.trim()}”.`;
+    part("clear").hidden = !search;
+    part("list").replaceChildren(
+      ...shown.map(({ id, name, status }) => {
+        const item = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = `#${category.id}/${id}`;
+        link.textContent = name;
+        if (status?.badge) {
+          const badge = document.createElement("span");
+          badge.className = "object-browser-status";
+          badge.textContent = status.badge;
+          link.append(" ", badge);
+        }
+        link.classList.toggle("is-current", id === selected);
+        item.append(link);
+        return item;
+      }),
+    );
+  }
+  part("search").addEventListener("input", renderList);
+  part("search").addEventListener("keydown", (event) => {
+    if ((event as KeyboardEvent).key !== "Escape") return;
+    part<HTMLInputElement>("search").value = "";
+    renderList();
+  });
+  part("clear").addEventListener("click", () => {
+    part<HTMLInputElement>("search").value = "";
+    renderList();
+    part("search").focus();
+  });
+
   /** Show the page for `#category/object`, or the first object of the first category. */
   function route(): void {
     const [categoryId, objectId] = window.location.hash.slice(1).split("/");
@@ -347,23 +411,10 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
         return link;
       }),
     );
-    part("list").replaceChildren(
-      ...objects.map(({ id, name, status }) => {
-        const item = document.createElement("li");
-        const link = document.createElement("a");
-        link.href = `#${category.id}/${id}`;
-        link.textContent = name;
-        if (status?.badge) {
-          const badge = document.createElement("span");
-          badge.className = "object-browser-status";
-          badge.textContent = status.badge;
-          link.append(" ", badge);
-        }
-        link.classList.toggle("is-current", id === object.id);
-        item.append(link);
-        return item;
-      }),
-    );
+    // A search narrows one category: opening another starts it afresh.
+    if (current && current.category !== category) part<HTMLInputElement>("search").value = "";
+    current = { category, objects, selected: object.id };
+    renderList();
     part("name").textContent = object.name;
     part("id").textContent = `${category.id}/${object.id}`;
     part("note").textContent = object.note ?? "";

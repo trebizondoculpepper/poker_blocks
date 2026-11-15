@@ -25,7 +25,7 @@ import type { BlockMaterial } from "./materials";
 import { changeCardMaterial } from "./card-material";
 import type { CardBlock } from "./cards";
 import { resaleValue } from "./resale";
-import { blockCanDestroy } from "./block-trait-behaviours";
+import { blockCanDestroy, blockDestroySound } from "./block-trait-behaviours";
 import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
 import type { GameState, PlacedBlock, PlayAction } from "./game-state";
@@ -378,7 +378,14 @@ export class GameRun {
       // Two correlated facts: the authorized destruction, and the lower-level removal with its
       // reason. Both name the block and share this action's batch.
       const batchId = `${context.actionId}:destroy`;
-      this.passiveEvents.emit({ type: "block.destroyed", blockId, cause });
+      // Its configured destruction response, captured at commit for presentation (#879).
+      const sound = blockDestroySound(placed.block);
+      this.passiveEvents.emit({
+        type: "block.destroyed",
+        blockId,
+        cause,
+        ...(sound ? { sound } : {}),
+      });
       this.passiveEvents.emit({ type: "block.removed", blockId, cause });
       const delivered = this.passiveEvents.drain(
         undefined,
