@@ -284,7 +284,7 @@
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
       "game-modes.ts": 4,
-      "scene-behaviours.ts": 1,
+      "main.ts": 1,
       "tools/profiler/room.ts": 1,
       "tools/shop-balance-editor.ts": 1
     }
