@@ -205,6 +205,11 @@ export function createPlayPresenter(options: {
    * when the host shows nothing for it.
    */
   alongside?(activation: RuleActivation): AlongsideEvent | null;
+  /**
+   * What the line's host shows with a scored line itself (#1158): its fitted score label, given
+   * the line as captured and the line's tint settle in units. Null or absent: nothing.
+   */
+  lineAlongside?(line: NarratedLine, settleUnits: number): AlongsideEvent | null;
   /** Draw replacements into the model now, unshown (#775); returns them for a later reveal. */
   drawReplacements(): readonly CardBlock[];
   /** A safe point to save the run. */
@@ -294,7 +299,10 @@ export function createPlayPresenter(options: {
   function announceScore(action: Playing): void {
     narration.release(action.slot, {
       lines: presentationOrder(action.lines).map((line) =>
-        capturedLine(line, (activation) => options.alongside?.(activation) ?? null),
+        withLineAlongside(
+          capturedLine(line, (activation) => options.alongside?.(activation) ?? null),
+          (captured) => options.lineAlongside?.(captured, narrationTiming.settle) ?? null,
+        ),
       ),
       endpoint: action.endpoint,
     });
@@ -580,6 +588,15 @@ export function createPlayPresenter(options: {
       for (const action of [...playing, ...discarding]) action.effects.forEach((e) => e.finish());
     },
   };
+}
+
+/** The line's own alongside event first, then its activations' (#1158). */
+export function withLineAlongside(
+  line: NarratedLine,
+  own: (line: NarratedLine) => AlongsideEvent | null,
+): NarratedLine {
+  const event = own(line);
+  return event ? { ...line, alongside: [event, ...(line.alongside ?? [])] } : line;
 }
 
 /**
