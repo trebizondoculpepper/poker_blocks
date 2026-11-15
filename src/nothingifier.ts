@@ -50,7 +50,17 @@ export function createNothingifier(
   };
 }
 
-rackItemEffects.register("nothingifier", (state, _item, cardId) => removeCardForRun(state, cardId));
+// The removal is published as a committed fact (#1164 review), so presentation that holds the
+// card (an in-flight mount) hears it rather than reading the live model.
+rackItemEffects.register("nothingifier", (state, _item, cardId) => {
+  const next = removeCardForRun(state, cardId);
+  return (
+    next && {
+      state: next,
+      events: [{ type: "block.removed", blockId: cardId, cause: "nothingifier" }],
+    }
+  );
+});
 
 // One candidate for the shop's item slots, every round.
 itemOfferPools.register("nothingifier", (_round, nextOfferId) => [

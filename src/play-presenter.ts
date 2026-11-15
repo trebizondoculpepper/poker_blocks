@@ -1,4 +1,7 @@
 import { scoringProducer, type PlacementPhase } from "./placement-phase";
+import { createMountRegistry, type MountHandle } from "./visual-events/mount-registry";
+import type { EventEnvelope } from "./lifecycle/action";
+import "./flight-mount-projections";
 import {
   createCompletionAdapter,
   type ActionKey,
@@ -112,6 +115,14 @@ type Flight = {
    * dissolves away while this one dissolves in (transparent blocks only).
    */
   target: RenderedBlock | null;
+  /**
+   * The block's presentation mount (#1164; doc/visual-event-interface.md, "Captured snapshots
+   * and missing presentation mounts"): created at commit with the landing block, kept current
+   * by committed facts, so landing never scans the live model.
+   */
+  mount: MountHandle;
+  /** The block as it was captured landing, to tell a replaced appearance from the original. */
+  landing: CardBlock;
   handedOver: boolean;
 };
 
@@ -218,6 +229,10 @@ export function createPlayPresenter(options: {
    * Committed action identities for placement (#1219): the just-committed play's reserved
    * pre-scoring contribution to bind its flight to. Absent: the play runs in its own scope.
    */
+  /** Committed facts, which keep in-flight blocks' mounts current (#1164). */
+  committed?: {
+    onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void;
+  };
   placementPhase?: Pick<
     PlacementPhase,
     "contribution" | "contributionFor" | "observeAction" | "latest" | "reset"
@@ -246,6 +261,29 @@ export function createPlayPresenter(options: {
   let discarding: Discarding[] = [];
   /** Actions committed and waiting for their effect to start, by the id their event carries. */
   const waiting = new Map<number, PresentedAction>();
+  /** In-flight blocks' mounts (#1164): pose is the captured cell, appearance the latest block. */
+  const flightMounts = createMountRegistry<Cell, CardBlock>();
+  /** Each in-flight block's mount, by its block ID, while it flies. */
+  const flying = () =>
+    new Map(
+      playing.flatMap(({ flights }) =>
+        flights.map(({ landing, mount }) => [landing.id, mount] as const),
+      ),
+    );
+  let correlation = 0;
+  // Committed facts about an in-flight block reach its mount through the registered projection
+  // for that fact (#1164): a material change swaps its appearance, a removal invalidates it.
+  options.committed?.onCommitted((facts) => {
+    const mounts = flying();
+    if (mounts.size === 0) return;
+    for (const { type, payload } of facts) {
+      const blockId = (payload as { blockId?: string }).blockId;
+      const mount = blockId === undefined ? undefined : mounts.get(blockId);
+      // The fact names its projection; one with none registered changes nothing.
+      if (mount)
+        flightMounts.publish({ handler: type, correlation: ++correlation, payload }, mount);
+    }
+  });
   /** Each running action's scope, until it settles or a reset cancels it. */
   const actionScopes = new Set<ScopeHandle>();
   let nextActionId = 0;
@@ -398,7 +436,19 @@ export function createPlayPresenter(options: {
     if (elapsed < lasts) return true;
     playing = playing.filter((other) => other !== action);
     action.effects.forEach((effect) => effect.finish());
+    // Each landing is checked against the flight's own mount first (#1164), kept current by
+    // committed facts: a block removed mid-flight is never adopted into the field at all, and a
+    // changed one is adopted with its latest appearance. Never the live model or the cell.
     for (const flight of action.flights) {
+      const latest = flightMounts.resolve(flight.mount);
+      flightMounts.remove(flight.mount);
+      if (!latest) {
+        // Removed while it flew (the Nothingifier, #156): nothing of it lands.
+        views.dispose(flight.source);
+        // Never adopted: its handover view is released here, not leaked (#1306).
+        if (flight.target) views.dispose(flight.target);
+        continue;
+      }
       if (flight.target) {
         views.dispose(flight.source);
         flight.target.cube.visible = true;
@@ -408,18 +458,10 @@ export function createPlayPresenter(options: {
         // Same look in hand and on the table: the flying block simply stays.
         field.adopt(flight.source, flight.cell);
       }
-    }
-    // A block changed while it flew (a transmogrifier dropped on it mid-flight, #389) lands as
-    // the model has it now, and one removed while it flew (the Nothingifier, #156) doesn't
-    // stay: model first, presentation catches up.
-    for (const flight of action.flights) {
-      const shown = field
-        .blocks()
-        .find(({ cell }) => cell && cellKey(cell) === cellKey(flight.cell));
-      const now = game().state.field.find(({ cell }) => cellKey(cell) === cellKey(flight.cell));
-      if (shown && now?.block !== shown.block) {
-        field.remove(shown.block.id);
-        if (now) field.add(now.block, now.cell);
+      // Changed while it flew (a transmogrifier mid-flight, #389): it lands as last committed.
+      if (latest.appearance !== flight.landing) {
+        field.remove(flight.landing.id);
+        field.add(latest.appearance, flight.cell);
       }
     }
     options.moved();
@@ -548,6 +590,8 @@ export function createPlayPresenter(options: {
           fromScale: source.cube.scale.x,
           target: needsHandover(source) ? field.landing(block, cell) : null,
           handedOver: false,
+          mount: flightMounts.create(cell, block),
+          landing: block,
         };
       });
       const action: Playing = {
@@ -647,6 +691,8 @@ export function createPlayPresenter(options: {
       for (const scope of Array.from(actionScopes)) options.visualEvents.cancel(scope);
       // Bound flights are cancelled with their action records' generation (#1219).
       options.placementPhase?.reset();
+      // Their mounts end with them (#1164 review).
+      flightMounts.resetGeneration();
       resetting = false;
       actionScopes.clear();
       waiting.clear();

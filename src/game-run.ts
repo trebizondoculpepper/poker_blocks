@@ -585,6 +585,26 @@ export class GameRun {
     if (action) this.recordDelivered(action.context, action.phase, delivered, action.batchId);
   }
 
+  /**
+   * The fresh stage history's start as a captured point (#1305): consumers of committed facts see
+   * the reset itself, with its resolved bounds, not only the next scoring play.
+   */
+  private stageHistoryStart(): Omit<GameEvent, "type" | "stage"> {
+    const history = this.currentState.round.history;
+    if (!history) return {};
+    return {
+      stageHistory: {
+        generation: history.generation,
+        plays: history.plays,
+        targetScore: history.targetScore,
+        play: history.start.play,
+        delta: 0,
+        total: history.start.total,
+        reset: true,
+      },
+    };
+  }
+
   /** Once a stage is decided, announce the final stage.won or stage.lost exactly once. */
   private announceOutcome(): void {
     if (!this.inStage || this.decidedStage === this.stageKey) return;
@@ -1113,6 +1133,9 @@ export class GameRun {
         ? {
             stageHistory: {
               generation: history.generation,
+              // The stage's resolved bounds travel with every point (#1305).
+              plays: history.plays,
+              targetScore: history.targetScore,
               play: point.play,
               delta: point.delta,
               total: point.total,
@@ -1481,7 +1504,7 @@ export class GameRun {
     this.currentState = withStageHistory(this.currentState, setup, previous);
     this.currentPhase = kind;
     this.passiveEvents.syncRack(this.currentState.passiveRack);
-    this.lifecycle("stage.started");
+    this.lifecycle("stage.started", this.stageHistoryStart());
   }
 
   /** Return the field to the deck, and the hand as the run's hand policy says. */
