@@ -253,7 +253,15 @@ export function createPlayPresenter(options: {
     // A play bound to its committed action's reservation (#1219): its flight runs as that
     // action's pre-scoring contribution, correlated by the model's action ID, not this counter.
     if (reservation) {
-      if (reservation.bind({ handler: "presenter.action", payload: { id }, dueUnits: 0 })) return;
+      if (reservation.bind({ handler: "presenter.action", payload: { id }, dueUnits: 0 })) {
+        // Its bound work is admitted later, when the gates open. If that fails, the effect never
+        // takes the action: complete it here, as an unadmitted play completes (#1280).
+        reservation.observe(({ state }) => {
+          if (state === "finished" || !waiting.delete(id)) return;
+          if (!resetting) action.step(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+        });
+        return;
+      }
       waiting.delete(id);
       action.step(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
       return;
