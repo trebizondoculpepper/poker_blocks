@@ -1713,3 +1713,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Shared authored mass and bounded field modifiers (#1081)
 
 [Material mass and passives](material-mass-and-passives.md) defines revised per-definition physical recipes, pure contents-derived instance mass, universal mass data sheets/inspection and four bounded whole-field-context passives. Existing registered multiply/power phases own score contributions; committed immutable snapshots supply geometry and total mass. The new target supersedes historical wrapper/component and trial-curve defaults without adding identity checks, a parallel mass map or a density-weighted pivot. Runtime implementation remains #1067–#1073.
+
+## Composable stage score graph (#1082)
+
+[Line Goes Up](line-goes-up.md) defines authoritative persisted per-stage score history and four reusable capabilities: a plain-data 2D plot surface, a positioned world-space framed picture, a committed-score presentation controller, and an explicitly triggered attachment-release effect. Graph placement is scene configuration, not background logic; score-history mutation is model commit work, not a presentation subscription. All finite graph/fall/sound timing uses the shared scheduler. This is an owner-approved target for #1063–#1066, #1080 and #1085–#1087, not a claim these interfaces are already implemented.
