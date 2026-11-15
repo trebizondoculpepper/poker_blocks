@@ -17,7 +17,8 @@
  *   index, command, expected and actual projections (bounded) and a diagnostic.
  */
 import { executeCommand, type CommandDescriptor, type CommittedMetadata } from "./command-codecs";
-import { buildScenario, type ScenarioDefinition, type ScenarioRuntime } from "./dev-scenario";
+import { buildScenario, type ScenarioRuntime } from "./dev-scenario";
+import { importConfiguration, type ExperimentConfiguration } from "./experiment-config";
 import {
   readExperimentRecord,
   readFacts,
@@ -39,7 +40,7 @@ export type ExperimentReplay = {
   /** The exact build that recorded it, as its trusted caller supplied it. */
   build: string;
   /** The configuration artifact (#934) the trial was installed from. */
-  configuration: { scenario: ScenarioDefinition } & Record<string, unknown>;
+  configuration: ExperimentConfiguration;
   record: ExperimentRecord;
   /** Whether it may be verified, and why not. */
   replayable: boolean;
@@ -96,16 +97,30 @@ type Projection = {
   checkpoint: unknown;
 };
 
-const runToken = /\brun\d+:/g;
+const runToken = /^run\d+:/;
 
-/** A step's facts as the record keeps them, with its own action ID and the run token neutral. */
-const normalized = (facts: unknown, actionId: string): unknown =>
-  JSON.parse(
-    JSON.stringify(facts ?? [])
-      .split(actionId)
-      .join("<action>")
-      .replace(runToken, "<run>:"),
-  );
+/**
+ * The declared correlation fields (#1329 review): a fact's own action correlation, which a fresh
+ * run generates afresh. Only their values are normalized (the step's own action ID, mapped by
+ * index, and the run token); every other value, a card ID included, is compared as recorded.
+ */
+const correlationFields = new Set(["actionId", "occurrence"]);
+
+const normalized = (facts: unknown, actionId: string): unknown => {
+  const walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(walk);
+    if (typeof value !== "object" || value === null) return value;
+    return Object.fromEntries(
+      Object.entries(value).map(([key, inner]) => [
+        key,
+        correlationFields.has(key) && typeof inner === "string"
+          ? inner.replace(runToken, "<run>:").split(actionId).join("<action>")
+          : walk(inner),
+      ]),
+    );
+  };
+  return walk(JSON.parse(JSON.stringify(facts ?? [])));
+};
 
 const recordedFacts = (facts: readonly EventEnvelope[]) =>
   facts.map(({ type, phase, sequence, subjectIds, payload }) =>
@@ -145,14 +160,37 @@ export function verifyReplay(
     return refuse(
       `${steps.length} steps exceed the ${options.maxSteps ?? maxReplaySteps} step bound`,
     );
-  const scenario = replay.configuration?.scenario;
-  if (!scenario) return refuse("the configuration holds no scenario to rebuild");
+  // Every step's schema, before anything runs (#1329 review).
+  const malformed = steps.findIndex(
+    (step) =>
+      typeof step?.actionId !== "string" ||
+      step.actionId === "" ||
+      typeof step.command !== "object" ||
+      step.command === null ||
+      typeof (step.command as CommandDescriptor).command !== "string" ||
+      !Array.isArray(step.facts) ||
+      !Number.isFinite(step.awarded) ||
+      !Number.isFinite(step.score),
+  );
+  if (malformed >= 0) return refuse(`step ${malformed} is malformed`);
+  // The configuration artifact, verified against this build and runtime as an import is (#934):
+  // the same generated cards and effective rules, or nothing is rebuilt (#1329 review).
+  const imported = importConfiguration(
+    JSON.stringify(replay.configuration ?? null),
+    options.runtime,
+    options.build,
+  );
+  if (!imported.ok) return refuse(`configuration: ${imported.diagnostics.join("; ")}`);
 
   // The candidate, rebuilt as installed: setup once, then the recorded starting checkpoint.
-  const built = buildScenario(scenario, options.runtime);
+  const built = buildScenario(imported.config.scenario, options.runtime);
   if (!built.ok) return refuse(`the trial could not be rebuilt: ${built.diagnostics.join("; ")}`);
   const { run, session } = built.trial;
-  session.random.restore((record.start as StartingProvenance).checkpoint);
+  const start = record.start as StartingProvenance;
+  // It must start where the recorded trial started, not merely from the same recipe.
+  if (JSON.stringify(plain(run.snapshot())) !== JSON.stringify(start.snapshot))
+    return refuse("the rebuilt trial does not start from the recorded starting snapshot");
+  session.random.restore(start.checkpoint);
   let committed: { facts: readonly EventEnvelope[]; metadata: CommittedMetadata }[] = [];
   const stop = run.onCommitted((facts, metadata) => committed.push({ facts, metadata }));
   try {
