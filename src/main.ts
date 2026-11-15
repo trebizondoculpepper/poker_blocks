@@ -63,7 +63,11 @@ import { createDeckView, type DeckView } from "./deck-view";
 import { createOverlays, type Overlays } from "./overlays";
 import { createDialogPresenter } from "./block-menu/block-menus";
 import { createPresentationClock, type PresentationClock } from "./presentation-clock";
-import { createPassiveRack, type RackLabelServices } from "./passive-rack";
+import {
+  createPassiveRack,
+  type RackLabelServices,
+  type RackPulseHostServices,
+} from "./passive-rack";
 import {
   createPlayPresenter,
   type PlayPresenter,
@@ -538,6 +542,7 @@ const visualServices: TerminalBurnServices &
   ScoreNarrationServices &
   ActivationLabelServices &
   RackLabelServices &
+  RackPulseHostServices &
   PresentedActionServices &
   RewardLedgerServices &
   ShopBurnServices &
@@ -560,6 +565,8 @@ const visualServices: TerminalBurnServices &
   // Item activation labels beside the rack (#919), drawn over the same host the rack is in.
   activationLabels: createActivationLabelLayer(host),
   passiveRack: passiveRackView,
+  // Installed items' staggered activation pulses, drawn on the rack (#540).
+  rackPulses: passiveRackView,
   // Scored lines' projected bounds, for their fitted score labels (#1158).
   fieldLines: createFieldLineAnchors({
     cubes: () => field.blocks().map(({ block, cube }) => ({ id: block.id, object: cube })),
@@ -659,7 +666,8 @@ const presenter: PlayPresenter = createPlayPresenter({
   changed: () => run.updateHud(),
   moved: () => run.showSelection(),
   rackChanged: () => run.rackChanged(),
-  activated: (sourceIds) => sourceIds.forEach((id) => passiveRackView.activate(id)),
+  // Installed items pulse in captured rack order on the shared scheduler (#540).
+  presents: (sourceId) => passiveRackView.presents(sourceId),
   alongside: (activation) => passiveRackView.labelFor(activation),
   lineAlongside: (line, settleUnits) => lineScoreLabel(line, settleUnits),
   drawReplacements: () => run.drawReplacements(),
