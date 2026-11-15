@@ -3,11 +3,173 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0b1020" />
-    <title>Poker Blocks</title>
+    <meta name="theme-color" content="#140d0b" />
+    <meta
+      name="description"
+      content="Poker Blocks: poker solitaire in three dimensions. Build with card blocks, score poker hands along every line."
+    />
+    <title>Poker Blocks: poker solitaire in three dimensions</title>
+    <script>
+      // Old game links (?mode=…, ?room=…) keep opening the game (#1406; doc/game-website.md).
+      if (location.search) location.replace("./game/" + location.search + location.hash);
+    </script>
+    <link rel="stylesheet" href="./src/website/site.css" />
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <a class="skip" href="#play">Skip to Play</a>
+    <!-- site-navigation -->
+    <nav class="site-nav" aria-label="Site">
+      <a href="./index.html">Overview</a><a href="./materials.html">Materials</a
+      ><a href="./modifiers.html">Modifiers</a><a href="./game/">Play game</a>
+    </nav>
+    <!-- /site-navigation -->
+    <header class="hero">
+      <h1 class="rendered-title">
+        <img
+          src="./src/website/art/title.png"
+          width="1600"
+          height="720"
+          alt="Poker Blocks"
+          fetchpriority="high"
+        />
+      </h1>
+      <p class="tagline">Poker solitaire in three dimensions.</p>
+      <a id="play" class="block-button gold" href="./game/">
+        <span class="face">▶ Play Poker Blocks</span>
+      </a>
+      <p class="note">Plays right here in your browser. No download, no sign-up.</p>
+    </header>
+
+    <main>
+      <section class="block-section" aria-labelledby="build">
+        <img
+          class="section-card"
+          src="./src/website/art/wood.png"
+          width="512"
+          height="512"
+          alt=""
+          loading="lazy"
+        />
+        <h2 id="build">Build in three dimensions</h2>
+        <p>
+          Your hand is a row of card blocks. Pick one or more and drag them onto a free face of the
+          structure on the table: on top, beside or underneath what is already there. Turn the
+          structure to see every side and find the best place to build.
+        </p>
+      </section>
+
+      <section class="block-section" aria-labelledby="score">
+        <img
+          class="section-card"
+          src="./src/website/art/paper.png"
+          width="512"
+          height="512"
+          alt=""
+          loading="lazy"
+        />
+        <h2 id="score">Make scoring lines</h2>
+        <p>
+          Every straight row of touching blocks, along any of the three directions, scores as a
+          poker hand. The game picks the strongest hand the row can make. A long row scores its best
+          five cards, not every overlap. After each play the score is explained, line by line: the
+          hand, its base value, what changed it and the total.
+        </p>
+        <div
+          class="hand-row"
+          role="img"
+          aria-label="A row of spade card blocks scoring a royal flush"
+        >
+          <img
+            src="./src/website/art/paper-10.png"
+            width="512"
+            height="512"
+            alt=""
+            loading="lazy"
+          /><img
+            src="./src/website/art/paper-j.png"
+            width="512"
+            height="512"
+            alt=""
+            loading="lazy"
+          /><img
+            src="./src/website/art/paper-q.png"
+            width="512"
+            height="512"
+            alt=""
+            loading="lazy"
+          /><img
+            src="./src/website/art/paper-k.png"
+            width="512"
+            height="512"
+            alt=""
+            loading="lazy"
+          /><img src="./src/website/art/paper.png" width="512" height="512" alt="" loading="lazy" />
+        </div>
+      </section>
+
+      <section class="block-section" aria-labelledby="shape">
+        <img
+          class="section-card"
+          src="./src/website/art/ice.png"
+          width="512"
+          height="512"
+          alt=""
+          loading="lazy"
+        />
+        <h2 id="shape">Shape your strategy</h2>
+        <p>
+          Blocks come in materials, and you can install modifiers on your rack. Each one changes
+          scoring, or what happens on the table, at its own moment, and some only work in the right
+          place or order. Inspect any block or modifier in the game to see exactly what it does.
+        </p>
+      </section>
+
+      <section class="block-section" aria-labelledby="target">
+        <img
+          class="section-card"
+          src="./src/website/art/gold.png"
+          width="512"
+          height="512"
+          alt=""
+          loading="lazy"
+        />
+        <h2 id="target">Reach the target</h2>
+        <p>
+          Each stage gives you a target score and a limited number of plays. Reach it to win the
+          stage, then spend what you earned in the shop to grow your run. Fall short and the run
+          ends.
+        </p>
+      </section>
+
+      <a class="block-button gold again" href="./game/"
+        ><span class="face">▶ Play Poker Blocks</span></a
+      >
+    </main>
+
+    <div class="decorative-cards" aria-hidden="true">
+      <img src="./src/website/art/steel.png" width="512" height="512" alt="" loading="lazy" /><img
+        src="./src/website/art/terracotta.png"
+        width="512"
+        height="512"
+        alt=""
+        loading="lazy"
+      />
+    </div>
+    <footer class="table-edge">
+      <!-- project-footer -->
+      <nav aria-label="Project links" class="links">
+        <a
+          class="block-button steel small"
+          href="https://github.com/trebizondoculpepper/poker_blocks"
+          ><span class="face">Get source code</span></a
+        ><a
+          class="block-button steel small"
+          href="https://github.com/trebizondoculpepper/poker_blocks/issues/new"
+          ><span class="face">Report a bug</span></a
+        >
+      </nav>
+      <p class="art-credit"><a href="./art-notices/NOTICE.txt">Artwork &amp; font notices</a></p>
+      <!-- /project-footer -->
+    </footer>
   </body>
 </html>

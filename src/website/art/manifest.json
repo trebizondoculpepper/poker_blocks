@@ -1,0 +1,66 @@
+{
+  "sourceRevision": "258a47f",
+  "exporter": "src/tools/website-art.ts",
+  "format": "transparent PNG",
+  "lighting": "addAttractLighting / sparkleEnvironment(renderer, 0)",
+  "camera": "Perspective 50 degrees, bounds-fit with 1.14 margin",
+  "renderTime": "static initial frame; prepasses included",
+  "artwork": "title: actual game letter blocks; all other images: actual rank/suit playing-card blocks",
+  "files": {
+    "gold.png": {
+      "sha256": "20584176122b981513535317e4a4b9de868f1b4df3900daf5f0ff5579b9aa7af",
+      "dimensions": [512, 512],
+      "bytes": 96640
+    },
+    "ice.png": {
+      "sha256": "f3ac8ff7def5fa6b39448f85479f695906b7f23ee1ddabb07cbc8f836ebc134f",
+      "dimensions": [512, 512],
+      "bytes": 144123
+    },
+    "paper-10.png": {
+      "sha256": "31bebe679463251d8eb106c4c5e8ca2c1cfc14468f6a103ca33df8447165b01d",
+      "dimensions": [512, 512],
+      "bytes": 24505
+    },
+    "paper-j.png": {
+      "sha256": "f43dcabeaae4882c3a3adf2bfc358130153f90279124ea8f8bfbaa015e57ae41",
+      "dimensions": [512, 512],
+      "bytes": 20815
+    },
+    "paper-k.png": {
+      "sha256": "da5e4db5e00719fc2106c6a0a93a01bd73e3b96a95c67d4c1b9f7dd27d1e800a",
+      "dimensions": [512, 512],
+      "bytes": 22261
+    },
+    "paper-q.png": {
+      "sha256": "946acc3795bd55eab513438f325481e71012e559f71468296788faac3bb36baf",
+      "dimensions": [512, 512],
+      "bytes": 23218
+    },
+    "paper.png": {
+      "sha256": "9d6ea3408a0056e7b187a323e76213c8b72a6ba41d2936edab6dd804a8cd79c6",
+      "dimensions": [512, 512],
+      "bytes": 22232
+    },
+    "steel.png": {
+      "sha256": "fd1a3c45343fd419f701b04a97f4f3f753c1a508d46e3f2251d700c6c65b652e",
+      "dimensions": [512, 512],
+      "bytes": 160468
+    },
+    "terracotta.png": {
+      "sha256": "b85ef5288a6984d4cfa44408c251594a714c71e5c72ac539d93e80a350c6c441",
+      "dimensions": [512, 512],
+      "bytes": 157275
+    },
+    "title.png": {
+      "sha256": "8a4cd6da658997fb4bd35cd38209d510d1fc2038632d69cfeed07ab4a45e3bd7",
+      "dimensions": [1600, 720],
+      "bytes": 613008
+    },
+    "wood.png": {
+      "sha256": "08a5d15e06f32a43796597fe9aad175c4c95cdd6c45da6dc6d715d3bd9cbbbab",
+      "dimensions": [512, 512],
+      "bytes": 145926
+    }
+  }
+}

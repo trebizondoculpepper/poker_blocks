@@ -1804,6 +1804,10 @@ Independent post-score traits use [reserved action contributions and phase compl
 
 The [scheduler terminal-status contract](scheduler-terminal-status.md) keeps full records only for unresolved work and weakly retains terminal status by externally held opaque handles. Cleanup and parent/child accounting precede release; late observation remains truthful without preserving payload, service or listener graphs for an entire session.
 
+## Console reporting and visual diagnostic ownership (#1461)
+
+[Console bug reporting](console-bug-reporting.md) separates a shared manual-report request/controller from developer command adapters. Registered owner-local diagnostic providers correlate model IDs/coordinates with mounts, passive state, scheduler work and inspection bindings under explicit limits, without serializing live render resources or advancing gameplay. Basic capture remains independent of deeper provider coverage.
+
 ## Crash reporting and manual bug feedback (#1339)
 
 [Crash reporting](crash-reporting.md) defines the application-lifetime configured reporting controller, mechanical Sentry transport, registered bounded diagnostics and renderer-owned screenshot capture. Automatic errors and manual feedback share captured release/browser/game context without changing gameplay or blocking input. Reuse the existing home/pause footer Report a bug link to open Sentry feedback; diagnostics remain in Sentry and account-supported automation feeds safe summaries into GitHub. Developer-console composition stays separate. This target includes source audit, primary references, credential boundaries, cancellation/disposal, failure limits and focused delivery verification; no SDK or account integration is claimed by the documentation.

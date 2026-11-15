@@ -93,7 +93,7 @@ Other commands:
 ```sh
 npm run check   # format, lint, and type-check
 npm test        # run tests when added
-npm run build   # production build in dist/
+npm run build   # website in dist/, self-contained game in dist/game/
 npm run preview # inspect the production build
 ```
 
