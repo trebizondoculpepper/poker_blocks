@@ -240,6 +240,8 @@ export function createPlotSurface(
       height - padding.top - padding.bottom,
     );
     c.clip();
+    // Reference labels wait until the clip is released, so they can sit outside the area (#1144).
+    const labels: { text: string; at: [number, number]; colour: string }[] = [];
     // Reference lines, then projections, then what was observed, on top.
     for (const reference of data.references ?? []) {
       const [from, to]: [readonly [number, number], readonly [number, number]] =
@@ -255,18 +257,20 @@ export function createPlotSurface(
       const start = toPlotPixel(config, data, from);
       const end = toPlotPixel(config, data, to);
       line(start, end, reference.style);
-      if (reference.label) {
-        c.fillStyle = reference.style.colour;
-        c.textAlign = "right";
-        c.textBaseline = "bottom";
-        c.fillText(reference.label, end[0], end[1] - 2);
-        c.fillStyle = config.textColour;
-      }
+      if (reference.label)
+        labels.push({ text: reference.label, at: end, colour: reference.style.colour });
     }
     for (const projection of data.projections ?? []) series(data, projection);
     for (const observed of data.series) series(data, observed);
     c.restore();
     c.setLineDash([]);
+    c.textAlign = "right";
+    c.textBaseline = "bottom";
+    for (const { text, at, colour } of labels) {
+      c.fillStyle = colour;
+      c.fillText(text, at[0], at[1] - 2);
+    }
+    c.fillStyle = config.textColour;
   };
 
   return {

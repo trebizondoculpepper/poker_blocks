@@ -118,6 +118,21 @@ describe("plot surface (#1085; doc/line-goes-up.md)", () => {
     expect(texts).toEqual(expect.arrayContaining(["Plays", "Score"]));
   });
 
+  it("draws reference labels outside the line clip, so a vertical reference's shows (#1144)", () => {
+    const { canvas, calls } = recordingCanvas();
+    const surface = createPlotSurface(defaultPlotSurfaceConfig, () => canvas);
+    surface.update({
+      x: { min: 0, max: 6 },
+      y: { min: 0, max: 300 },
+      series: [],
+      references: [{ axis: "x", value: 3, style: { colour: "#c00", width: 1 }, label: "Half" }],
+    });
+    const names = calls.map(({ name, args }) =>
+      name === "fillText" ? `fillText ${args[0]}` : name,
+    );
+    expect(names.indexOf("fillText Half")).toBeGreaterThan(names.lastIndexOf("restore"));
+  });
+
   it("redraws on new data, and draws any series: it holds no score policy", () => {
     const { canvas, calls } = recordingCanvas();
     const surface = createPlotSurface(defaultPlotSurfaceConfig, () => canvas);
