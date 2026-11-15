@@ -22,6 +22,7 @@ import * as THREE from "three";
 import type { DropTarget } from "../drag-drop";
 import { createWordCube, type WordCubeOptions } from "../word-cube";
 import { createPointerRouter } from "./pointer-router";
+import { useStageReflections } from "./cube-stage";
 
 /** Where a control sits, in host CSS px: its centre and its cube's edge. */
 export type ControlLayout = { x: number; y: number; size: number };
@@ -51,6 +52,11 @@ export type ControlStageHost = {
   /** The group's frame loop; injected so tests and covered scenes control it. */
   requestFrame(callback: (nowMs: number) => void): number;
   cancelFrame(handle: number): void;
+  /**
+   * The stage's reflection environment, made on its own renderer: metallic and glossy cubes
+   * reflect it (gold is black without one). The stage disposes it. None: unlit by reflections.
+   */
+  environment?(renderer: unknown): THREE.Texture;
 };
 
 type Mounted = {
@@ -59,6 +65,8 @@ type Mounted = {
   button: HTMLButtonElement;
   stops: (() => void)[];
   region: { left: number; top: number; width: number; height: number } | null;
+  /** Hidden by its composition (its scene covered or gone): not drawn, not hit, no region. */
+  hidden?: boolean;
 };
 
 const corner = new THREE.Vector3();
@@ -134,9 +142,11 @@ export async function createControlStage(
   };
   resize();
 
+  const environment = host.environment?.(renderer) ?? null;
   const mounted: Mounted[] = [];
   const router = createPointerRouter(() => mounted.map(({ cube }) => cube));
-  for (const definition of definitions) {
+  /** Build and mount one control (#1146; added later by composition too, #1078). */
+  const mount = async (definition: ControlDefinition): Promise<void> => {
     const cube = await createWordCube(definition.label, {
       id: `control-${definition.id}`,
       action: definition.action ?? "",
@@ -145,6 +155,7 @@ export async function createControlStage(
       ...(definition.disabledReason ? { disabledReason: definition.disabledReason } : {}),
       ...definition.cube,
     });
+    if (environment) useStageReflections(cube.object, environment);
     scene.add(cube.object);
     const button = document.createElement("button");
     button.type = "button";
@@ -195,8 +206,23 @@ export async function createControlStage(
       cube.block.emit("input.press");
       cube.block.emit("input.release");
     });
+    if (disposed) {
+      entry.stops.forEach((stop) => stop());
+      button.remove();
+      cube.dispose();
+      return;
+    }
     mounted.push(entry);
-  }
+  };
+  let disposed = false;
+  for (const definition of definitions) await mount(definition);
+  /** Release one mounted control's cube, button and listeners. */
+  const unmount = (entry: Mounted) => {
+    entry.stops.forEach((stop) => stop());
+    entry.button.remove();
+    entry.cube.dispose();
+    mounted.splice(mounted.indexOf(entry), 1);
+  };
 
   /** Whether a client point is over the entry's current region. */
   const within = (entry: Mounted, x: number, y: number) => {
@@ -210,6 +236,12 @@ export async function createControlStage(
 
   const place = () => {
     for (const entry of mounted) {
+      entry.cube.object.visible = !entry.hidden;
+      entry.button.hidden = Boolean(entry.hidden);
+      if (entry.hidden) {
+        entry.region = null;
+        continue;
+      }
       const { x, y, size: edge } = entry.definition.layout(size);
       entry.cube.object.position.set(x, -y, 0);
       entry.cube.object.scale.setScalar(edge);
@@ -225,10 +257,15 @@ export async function createControlStage(
 
   let frame: number | null = null;
   let last: number | null = null;
-  let disposed = false;
   const tick = (now: number) => {
     const dt = last === null ? 0 : Math.min(0.1, (now - last) / 1000);
     last = now;
+    // A host laid out after the stage was made (shown later, reflowed) is measured again.
+    if (
+      Math.max(1, host.element.clientWidth) !== size.width ||
+      Math.max(1, host.element.clientHeight) !== size.height
+    )
+      resize();
     for (const { cube } of mounted) cube.block.update(dt);
     place();
     renderer.render(scene, camera);
@@ -299,6 +336,26 @@ export async function createControlStage(
       entry.button.disabled = !enabled;
       entry.cube.block.emit("input.enabled", reason === undefined ? enabled : { enabled, reason });
     },
+    /** The reduced-motion preference changed: every control's motion follows it (#1291). */
+    setReducedMotion(reduced: boolean) {
+      for (const { cube } of mounted) cube.block.emit("motion.reduced", reduced);
+    },
+    /** Add a control a composing owner supplies later (#1078); resolves once it is mounted. */
+    add(definition: ControlDefinition): Promise<void> {
+      return mount(definition).then(() => place());
+    },
+    /** Remove a control its owner no longer composes; its resources are released once. */
+    remove(id: string) {
+      const entry = find(id);
+      if (entry) unmount(entry);
+    },
+    /** Hide or show a control while its owner's scene is covered (#1078). */
+    setHidden(id: string, hidden: boolean) {
+      const entry = find(id);
+      if (!entry) return;
+      entry.hidden = hidden;
+      place();
+    },
     /** Listen for a control's dispatched action; returns an unsubscribe. */
     onAction(listener: (action: string, id: string) => void): () => void {
       const stops = mounted.map((entry) =>
@@ -329,12 +386,8 @@ export async function createControlStage(
       disposed = true;
       if (frame !== null) host.cancelFrame(frame);
       frame = null;
-      for (const entry of mounted) {
-        entry.stops.forEach((stop) => stop());
-        entry.button.remove();
-        entry.cube.dispose();
-      }
-      mounted.length = 0;
+      for (const entry of mounted.slice()) unmount(entry);
+      environment?.dispose();
       renderer.dispose();
       canvas.remove();
     },

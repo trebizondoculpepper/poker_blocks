@@ -1,5 +1,10 @@
-import type { PlacementPhase } from "./placement-phase";
-import type { Contribution } from "./visual-events/action-phases";
+import { scoringProducer, type PlacementPhase } from "./placement-phase";
+import {
+  createCompletionAdapter,
+  type ActionKey,
+  type CompletionAdapter,
+  type Contribution,
+} from "./visual-events/action-phases";
 import type { CardBlock } from "./cards";
 import { cellKey } from "./traits/attachable";
 /**
@@ -120,6 +125,8 @@ type Playing = {
   endpoint: NarratedEndpoint;
   /** Its place in narration order, reserved when it committed (#800 review). */
   slot: NarrationSlot;
+  /** Its committed action's key in the action-phase registry (#1220), when one is composed. */
+  actionKey: ActionKey | null;
   /** Every running dissolve, for clean-up. */
   effects: Materialise[];
   /** The replacements the model drew when this play committed, shown once it has landed. */
@@ -211,7 +218,10 @@ export function createPlayPresenter(options: {
    * Committed action identities for placement (#1219): the just-committed play's reserved
    * pre-scoring contribution to bind its flight to. Absent: the play runs in its own scope.
    */
-  placementPhase?: Pick<PlacementPhase, "contribution" | "reset">;
+  placementPhase?: Pick<
+    PlacementPhase,
+    "contribution" | "contributionFor" | "observeAction" | "latest" | "reset"
+  >;
   /**
    * What the line's host shows with a scored line itself (#1158): its fitted score label, given
    * the line as captured and the line's tint settle in units. Null or absent: nothing.
@@ -320,7 +330,24 @@ export function createPlayPresenter(options: {
    * being narrated: captured now, as plain data, so a later play can't change them.
    */
   function announceScore(action: Playing): void {
+    // The action's scoring contribution completes when narration says its lines and tint tail
+    // have (#1220), through an explicit completion adapter; its post-score contributions open
+    // then. Its outcome waits for its whole required presentation, post-score included.
+    const phase = options.placementPhase;
+    const key = action.actionKey;
+    let completion: CompletionAdapter | null = null;
+    if (phase && key) {
+      const scoring = phase.contributionFor(key, scoringProducer);
+      if (scoring) {
+        completion = createCompletionAdapter();
+        if (!scoring.bind(completion.work)) completion = null;
+      }
+      narration.holdOutcome((release) => {
+        if (!phase.observeAction(key, release)) release();
+      });
+    }
     narration.release(action.slot, {
+      scored: () => completion?.done(),
       lines: presentationOrder(action.lines).map((line) =>
         withLineAlongside(
           capturedLine(line, (activation) => options.alongside?.(activation) ?? null),
@@ -524,6 +551,7 @@ export function createPlayPresenter(options: {
           occurrence: `${game().lastCommittedActionId ?? "play"}:outcome`,
         },
         slot: narration.reserve(),
+        actionKey: options.placementPhase?.latest ?? null,
         drawn,
         // The softer material where each block meets the structure decides its sound (#232),
         // from the field this play committed to.

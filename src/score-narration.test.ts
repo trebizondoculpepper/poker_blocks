@@ -354,3 +354,64 @@ describe("events shown alongside an action that narrates no score (#920)", () =>
     expect(scheduler.counts.active).toBe(0);
   });
 });
+
+describe("per-action scoring completion and the outcome gate (#1220)", () => {
+  it("reports a play scored once its lines and tint tail have settled", () => {
+    const { narration, advance, log } = narrating();
+    const scored: string[] = [];
+    narration.narrate({
+      ...play([line("a", 10), line("b", 20)], 30),
+      scored: () => scored.push("p1"),
+    });
+    advance(200);
+    // Lines shown, but the last line's tint (6 units = 400 ms) hasn't settled yet.
+    expect(scored).toEqual([]);
+    advance(600);
+    expect(scored).toEqual(["p1"]);
+    expect(log.some((entry) => entry.endsWith(":outcome"))).toBe(true);
+  });
+
+  it("reports a play with no lines scored as soon as its empty narration settles", () => {
+    const { narration, advance } = narrating();
+    const scored: string[] = [];
+    narration.narrate({ ...play([], 0), scored: () => scored.push("zero") });
+    advance(20);
+    expect(scored).toEqual(["zero"]);
+  });
+
+  it("reports a summarised play scored: its summary stands in for its lines", () => {
+    const { narration, endpoints } = narrating({
+      limits: { pendingGlobal: 1, pendingPerScope: 1 },
+    });
+    const scored: string[] = [];
+    narration.narrate({ ...play([line("a", 1), line("b", 2)], 3), scored: () => scored.push("s") });
+    expect(endpoints).toContain("summary 3");
+    expect(scored).toEqual(["s"]);
+  });
+
+  it("holds the outcome until every composed hold is released, once", () => {
+    const { narration, advance, log } = narrating();
+    let release: () => void = () => {};
+    narration.holdOutcome((r) => void (release = r));
+    narration.narrate(play([line("a", 5)], 5));
+    advance(1000);
+    expect(log.some((entry) => entry.endsWith(":outcome"))).toBe(false);
+    expect(narration.presenting).toBe(true);
+    release();
+    release();
+    advance(20);
+    expect(log.filter((entry) => entry.endsWith(":outcome"))).toHaveLength(1);
+  });
+
+  it("drops composed holds on a reset, and never reports a reset play scored", () => {
+    const { narration, advance } = narrating();
+    const scored: string[] = [];
+    narration.holdOutcome(() => {});
+    narration.narrate({ ...play([line("a", 5)], 5), scored: () => scored.push("old") });
+    advance(50);
+    narration.reset();
+    advance(1000);
+    expect(scored).toEqual([]);
+    expect(narration.presenting).toBe(false);
+  });
+});

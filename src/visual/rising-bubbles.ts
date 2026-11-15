@@ -1,13 +1,14 @@
 /**
  * Rising bubbles (#353): an inclusion suspended in a liquid. It reads only the contents'
- * published `liquidSurface`, so it knows nothing of water, heat or its container, and ordinary
- * water simply omits it. Hot water uses slow bubbles; boiling water (#354) uses the same
+ * published `volume` (#1230: bounds, surface and world-up rise), so it knows nothing of water,
+ * heat, its container or whether it has one, and ordinary water simply omits it. Hot water uses slow bubbles; boiling water (#354) uses the same
  * handler with faster, busier configuration.
  *
  * - A fixed pool. A bubble is born at a random wet point inside the interior, rises along the
- *   surface's normal (world up, as the liquid levels) at its own speed with a little wobble, and
- *   is retired the moment it reaches the current surface; a dormant bubble waits for a wet place
- *   to be reborn. Walls clamp it, with a margin for its size.
+ *   volume's rise direction (straight up in the world, which under nonuniform scale is not the
+ *   surface's normal) at its own speed with a little wobble, and is retired the moment it reaches
+ *   the current surface or rises out through the bounds; a dormant bubble waits for a wet place to
+ *   be reborn. Walls hold its sway in, with a margin for its size, and it is born only where it fits.
  * - Drawn as soft round points of constant world size under any camera.
  * - Under reduced motion the bubbles hold still.
  *
@@ -57,15 +58,19 @@ export function bubbleTexture(): THREE.DataTexture {
 }
 
 export const risingBubbles: InclusionHandler = {
-  requires: "liquidSurface",
-  build(boundary, { liquidSurface, interior }, raw) {
+  requires: "volume",
+  build(boundary, { volume, interior }, raw) {
     const config = raw as RisingBubblesConfig;
-    const surface = liquidSurface!;
-    const half = boundary.halfSize;
-    const width = half * 2;
-    const limit = half - (config.size * width) / 2;
-    // Local (points) space to block-local space, where the surface is published.
+    // The published volume (#1230): its bounds, surface and world-up rise, whoever publishes it.
+    const { bounds, rise, surface } = volume!;
+    const width = boundary.halfSize * 2;
+    // Local (points) space to block-local space, where the volume is published.
     const toBlock = boundary.volumeScale;
+    // Where a bubble's centre may be: the bounds, in points space, less its own extent.
+    const margin = (config.size * width) / 2;
+    const limit = bounds.max.clone().divideScalar(toBlock).subScalar(margin);
+    const floor = bounds.min.clone().divideScalar(toBlock).addScalar(margin);
+    const fits = limit.x > floor.x && limit.y > floor.y && limit.z > floor.z;
     const count = config.count;
     const positions = new Float32Array(count * 3);
     const alphas = new Float32Array(count * 3);
@@ -76,11 +81,12 @@ export const risingBubbles: InclusionHandler = {
     const probe = new THREE.Vector3();
     const born = (i: number): boolean => {
       // A few tries for a wet place; an empty or nearly empty vessel leaves the bubble resting.
-      for (let attempt = 0; attempt < 6; attempt++) {
+      // A bubble too big for the volume is never born.
+      for (let attempt = 0; fits && attempt < 6; attempt++) {
         probe.set(
-          (random() * 2 - 1) * limit,
-          (random() * 2 - 1) * limit,
-          (random() * 2 - 1) * limit,
+          floor.x + random() * (limit.x - floor.x),
+          floor.y + random() * (limit.y - floor.y),
+          floor.z + random() * (limit.z - floor.z),
         );
         if (!surface.wet(probe.clone().multiplyScalar(toBlock))) continue;
         positions.set([probe.x, probe.y, probe.z], i * 3);
@@ -128,11 +134,12 @@ export const risingBubbles: InclusionHandler = {
     const up = new THREE.Vector3();
     const side = new THREE.Vector3();
     const point = new THREE.Vector3();
+    const held = new THREE.Vector3();
     return {
       meshes: [points],
       update({ delta, seconds, reducedMotion }) {
         if (reducedMotion) return;
-        up.copy(surface.normal);
+        up.copy(rise);
         for (let i = 0; i < count; i++) {
           if (resting[i]! > 0) {
             resting[i] = resting[i]! - delta;
@@ -140,16 +147,22 @@ export const risingBubbles: InclusionHandler = {
             continue;
           }
           point.fromArray(positions, i * 3).addScaledVector(up, speed[i]! * delta);
-          // A gentle sideways sway, across the rising direction.
+          // Rising out through the volume's bounds retires it, as reaching the surface does: a
+          // full volume's top touches its bounds only at its highest point.
+          if (!held.copy(point).clamp(floor, limit).equals(point)) {
+            retire(i);
+            continue;
+          }
+          // A gentle sideways sway, across the rising direction; the walls hold it in.
           side.set(up.y, up.z, up.x).cross(up).normalize();
           point.addScaledVector(
             side,
             Math.cos(seconds * 3 + phase[i]!) * config.wobble * width * delta,
           );
-          point.clampScalar(-limit, limit);
+          point.clamp(floor, limit);
           point.toArray(positions, i * 3);
           // Retired the moment it reaches the current surface.
-          if (!surface.wet(point.clone().multiplyScalar(toBlock))) retire(i);
+          if (!surface.wet(probe.copy(point).multiplyScalar(toBlock))) retire(i);
           else alphas.fill(1, i * 3, i * 3 + 3);
         }
         geometry.attributes.position!.needsUpdate = true;

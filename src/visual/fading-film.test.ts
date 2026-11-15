@@ -22,7 +22,14 @@ function vessel() {
         .value as THREE.DataTexture
     ).image.data as Uint8Array;
   const step = (rotation: THREE.Quaternion, seconds: number, delta: number, first = false) => {
-    const frame = { rotation, seconds, delta, first, reducedMotion: false };
+    const frame = {
+      rotation,
+      seconds,
+      delta,
+      first,
+      reducedMotion: false,
+      toWorld: new THREE.Matrix4().makeRotationFromQuaternion(rotation),
+    };
     fluid.update!(frame);
     film.update!(frame);
   };
@@ -99,11 +106,19 @@ describe("fading film is frame-rate independent (#412 review)", () => {
           (film.meshes[0]!.material as THREE.ShaderMaterial).uniforms.history!
             .value as THREE.DataTexture
         ).image.data as Uint8Array;
-      film.update!({ rotation: level, seconds: 0, delta: 0, first: true, reducedMotion: false });
+      film.update!({
+        rotation: level,
+        seconds: 0,
+        delta: 0,
+        first: true,
+        reducedMotion: false,
+        toWorld: new THREE.Matrix4(),
+      });
       surface.height = -10; // drained: every texel exposed from now on
       for (let frame = 1; frame <= fps; frame++)
         film.update!({
           rotation: level,
+          toWorld: new THREE.Matrix4(),
           seconds: frame / fps,
           delta: 1 / fps,
           first: false,
@@ -130,7 +145,14 @@ describe("fading film's edge (#1010)", () => {
       const film = containedResidues
         .get("fadingFilm")
         .build(boundary, fluid.capabilities, { ...filmConfig, seconds: 1e9 });
-      const frame = { rotation: level, seconds: 0, delta: 0, first: true, reducedMotion: false };
+      const frame = {
+        rotation: level,
+        seconds: 0,
+        delta: 0,
+        first: true,
+        reducedMotion: false,
+        toWorld: new THREE.Matrix4(),
+      };
       fluid.update!(frame);
       film.update!(frame);
       const data = (

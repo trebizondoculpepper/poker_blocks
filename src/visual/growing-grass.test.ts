@@ -42,7 +42,14 @@ function vessel() {
   const run = (duration: number, reducedMotion = false, delta = 1 / 30) => {
     for (let t = 0; t < duration; t += delta) {
       seconds += delta;
-      const frame: ContainedFrame = { seconds, delta, first: false, rotation, reducedMotion };
+      const frame: ContainedFrame = {
+        seconds,
+        delta,
+        first: false,
+        rotation,
+        reducedMotion,
+        toWorld: new THREE.Matrix4().makeRotationFromQuaternion(rotation),
+      };
       grass.update!(frame);
     }
   };

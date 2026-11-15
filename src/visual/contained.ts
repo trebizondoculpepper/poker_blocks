@@ -119,8 +119,46 @@ export type InteriorContribution = {
   include(particles: THREE.Points): () => void;
 };
 
+/**
+ * The volume particles may occupy and the way a buoyant one moves (#1230; doc/optical-interiors.md,
+ * "Full-volume and pooled-bubble composition"), in the boundary's block-local, unscaled space and
+ * live like `LiquidSurface`. `rise` is world up carried back by the inverse of the block's
+ * transform: under nonuniform scale it is not the surface's normal, which is world up's covector.
+ */
+export type InteriorVolume = {
+  readonly bounds: THREE.Box3;
+  readonly rise: THREE.Vector3;
+  readonly surface: LiquidSurface;
+};
+
 /** What contents publish for others to read (#329): only what they genuinely have. */
-export type Capabilities = { liquidSurface?: LiquidSurface; interior?: InteriorContribution };
+export type Capabilities = {
+  liquidSurface?: LiquidSurface;
+  interior?: InteriorContribution;
+  volume?: InteriorVolume;
+};
+
+const linear = new THREE.Matrix3();
+const turned = new THREE.Matrix3();
+
+/**
+ * World up in a block's own space, given its block-local-to-world transform (#1230): `normal`,
+ * the local normal of a level plane (the transpose carries the covector), and `rise`, the local
+ * direction that moves straight up in the world (the inverse carries the vector). Both unit.
+ * A transform that can't be inverted (a zero scale) changes neither and answers false, so a
+ * provider says so rather than claiming a direction it doesn't have.
+ */
+export function worldUpInBlock(
+  toWorld: THREE.Matrix4,
+  normal: THREE.Vector3,
+  rise: THREE.Vector3,
+): boolean {
+  linear.setFromMatrix4(toWorld);
+  if (!(Math.abs(linear.determinant()) > 1e-12)) return false;
+  normal.set(0, 1, 0).applyMatrix3(turned.copy(linear).transpose()).normalize();
+  rise.set(0, 1, 0).applyMatrix3(turned.copy(linear).invert()).normalize();
+  return true;
+}
 
 /**
  * One frame of a contained block (#329 "Lifecycle and ownership"), built once per block per
@@ -136,6 +174,8 @@ export type ContainedFrame = {
   readonly first: boolean;
   /** The block's world rotation this frame. */
   readonly rotation: THREE.Quaternion;
+  /** The block's own (block-local, unscaled) to world transform this frame (#1230). */
+  readonly toWorld: THREE.Matrix4;
   /** The player's reduced-motion setting: drifting parts hold still or calm down (#349). */
   readonly reducedMotion: boolean;
 };
@@ -216,6 +256,43 @@ export function composeContained(
 ): { faces: readonly THREE.Material[]; extras: ContainedPart[] } {
   const shell = containerShells.get(container.shell)(context, container.config);
   const boundary = createInteriorBoundary(context.geometry, context.size, shell.inset);
+  const meshes = composeInterior(boundary, { contents, residue, inclusions }, shell.meshes);
+  const faces = [shell.faces].flat();
+  return {
+    faces: Array.from({ length: 6 }, (_, face) => faces[face % faces.length]!),
+    extras: [...shell.meshes, ...meshes],
+  };
+}
+
+/** What a material's appearance puts inside a boundary: contents, residue and inclusions. */
+export type InteriorConfig = {
+  contents?: ContentsConfig | undefined;
+  residue?: ResidueConfig | undefined;
+  inclusions?: readonly InclusionConfig[] | undefined;
+};
+
+/**
+ * A shell-free interior (#1230; doc/optical-interiors.md, "Full-volume and pooled-bubble
+ * composition"): the same contents, residue and inclusions in the block's whole volume, with no
+ * container shell. The look that owns the block's faces (an optical front) keeps them; these are
+ * its extras, which the block disposes.
+ */
+export function composeShellFree(
+  context: { geometry: THREE.BufferGeometry; size: number },
+  interior: InteriorConfig,
+): ContainedPart[] {
+  return composeInterior(createInteriorBoundary(context.geometry, context.size, 1), interior, []);
+}
+
+/**
+ * Build what lies inside a boundary and run its one frame (#329): contents, then inclusions, then
+ * residue, ticked by whichever of their meshes (or `ticking`, a shell's) draws first.
+ */
+function composeInterior(
+  boundary: InteriorBoundary,
+  { contents, residue, inclusions = [] }: InteriorConfig,
+  ticking: readonly ContainedPart[],
+): ContainedPart[] {
   // No contents is an empty container: the same composition with nothing inside.
   const inside = [contents ?? []]
     .flat()
@@ -240,6 +317,7 @@ export function composeContained(
   // before any part draws, and the rest of that frame it does nothing.
   const updates = parts.flatMap((part) => [part.update ?? []].flat());
   const rotation = new THREE.Quaternion();
+  const toWorld = new THREE.Matrix4();
   let start: number | null = null;
   let last: number | null = null;
   const tick = (mesh: ContainedPart) => {
@@ -251,12 +329,14 @@ export function composeContained(
       delta: last === null ? 0 : Math.min(now - last, 0.1),
       first: last === null,
       rotation: mesh.getWorldQuaternion(rotation),
+      // The block's transform: the part's world transform without the part's own (its scale).
+      toWorld: toWorld.copy(mesh.matrix).invert().premultiply(mesh.matrixWorld),
       reducedMotion: reducedMotion(),
     };
     last = now;
     for (const update of updates) update(frame);
   };
-  for (const mesh of [...shell.meshes, ...meshes]) {
+  for (const mesh of [...ticking, ...meshes]) {
     const previous = mesh.onBeforeRender.bind(mesh);
     mesh.onBeforeRender = (...args) => {
       tick(mesh);
@@ -266,11 +346,7 @@ export function composeContained(
   // The contents' own meshes say so, so an exit can tell them from the shell's inner layers and
   // gloss, which are extras too (#672 review): the shell breaks, the contents fade.
   for (const mesh of meshes) mesh.userData.containedContents = true;
-  const faces = [shell.faces].flat();
-  return {
-    faces: Array.from({ length: 6 }, (_, face) => faces[face % faces.length]!),
-    extras: [...shell.meshes, ...meshes],
-  };
+  return meshes;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { createPlacementPhase, placementProducer } from "./placement-phase";
+import { createPlacementPhase, placementProducer, scoringProducer } from "./placement-phase";
 import { createActionPhases } from "./visual-events/action-phases";
 import type { TransitionAudioServices } from "./scene-traits/material-change-sounds";
 import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
@@ -73,6 +73,8 @@ import { createRenderGate } from "./render-gate";
 import type { CrystalComparisonRoom } from "./tools/crystal-comparison/room";
 import type { FlameBenchRoom } from "./tools/flame-bench/room";
 import { createBinView, type BinView } from "./bin-view";
+import { registerBinControlPresenter } from "./bin-control-presenter";
+import { createControlGroup } from "./block-menu/control-group";
 import { createSelectionBadge, type SelectionBadge } from "./selection-badge";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
@@ -446,6 +448,11 @@ const hand: HandView = createHandView({
   onLayout: () => run.showSelection(),
 });
 run.seedTable();
+// The shop's controls (Buy, Sell) share one control-stage host over the scene (#1078).
+const controlOverlay = document.createElement("div");
+host.append(controlOverlay);
+const shopControls = createControlGroup(controlOverlay, () => run.reducedMotion);
+registerBinControlPresenter(shopControls);
 const shopView = createShopView(
   host,
   passiveRackView.element,
@@ -455,7 +462,7 @@ const shopView = createShopView(
   () => run.deckBlocks().length,
   () => run.reducedMotion,
   (id, destination) => run.game.purchaseVerdict(id, destination),
-  { floor: danceFloor },
+  { floor: danceFloor, controls: shopControls },
 );
 shopView.render([], false);
 // The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
@@ -502,7 +509,10 @@ document.addEventListener("visibilitychange", () => visualEvents.suspend());
 // Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).
 const placementPhase = createPlacementPhase(
   run,
-  createActionPhases(visualEvents, { plan: "scoring", producers: [placementProducer] }),
+  createActionPhases(visualEvents, {
+    plan: "scoring",
+    producers: [placementProducer, scoringProducer],
+  }),
 );
 const presenter: PlayPresenter = createPlayPresenter({
   game: () => run.game,
