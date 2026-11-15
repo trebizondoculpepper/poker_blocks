@@ -62,7 +62,7 @@ function harness() {
     for (const listener of listeners) listener(facts, { actionId } as CommittedMetadata);
     return phase.latest!;
   };
-  return { graph, drawn, commit, commitBare, scored, step, phases, phase };
+  return { graph, drawn, commit, commitBare, scored, step, phases, phase, listeners };
 }
 
 describe("committed-score graph controller (#1087; doc/line-goes-up.md)", () => {
@@ -169,5 +169,34 @@ describe("committed-score graph controller (#1087; doc/line-goes-up.md)", () => 
     scored(key);
     step(200);
     expect(reservation.status()).toEqual({ state: "finished" });
+  });
+
+  it("shows a stage reset at once with its resolved bounds, invalidating old growth (#1305)", () => {
+    const { graph, drawn, commit, scored, step, listeners } = harness();
+    void graph;
+    const key = commit("p1", 1, 40);
+    const reset = [
+      {
+        type: "stage.started",
+        payload: {
+          stageHistory: {
+            generation: 9,
+            plays: 4,
+            targetScore: 300,
+            play: 0,
+            total: 0,
+            delta: 0,
+            reset: true,
+          },
+        },
+      },
+    ] as unknown as EventEnvelope[];
+    for (const listener of listeners) listener(reset, { actionId: "reset" } as CommittedMetadata);
+    const shown = drawn.at(-1)!;
+    expect(shown).toMatchObject({ plays: 4, targetScore: 300, points: [{ play: 0, total: 0 }] });
+    const after = drawn.length;
+    scored(key);
+    step(4 * unitMs + 100);
+    expect(drawn.length).toBe(after);
   });
 });
