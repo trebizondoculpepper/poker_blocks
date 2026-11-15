@@ -1658,7 +1658,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 
 ## Provisional spatial-modifier trials
 
-[The experimental trial contract](experiments/spatial-modifiers.md#provisional-modifier-implementation-contract-814) defines registered snapshot queries, row contribution scope, provisional density/mass/diversity curves, dev controls and reproducibility. These are experiment-only targets, not certified normal-game modifiers. Implementations follow the release-status, physical-mass and deck-builder prerequisites.
+[The experimental trial contract](experiments/spatial-modifiers.md#provisional-modifier-implementation-contract-814) defines registered snapshot queries, row contribution scope, provisional density/mass/diversity curves, dev controls and reproducibility. Their parameters remain provisional, but implemented gameplay passives now enter the normal passive catalogue under [the owner-approved admission policy](release-status.md#normal-run-provisional-passive-trial-1382); they are not certified merely by being offered. Implementations follow the release-status, physical-mass and deck-builder prerequisites.
 
 ## Passive scenario bench and instance settings (#867)
 
@@ -1795,3 +1795,7 @@ The [scheduler terminal-status contract](scheduler-terminal-status.md) keeps ful
 ## Standalone menu controls and shop group layout (#1366)
 
 [The shared menu/control presentation contract](shop-control-blocks.md#standalone-menu-blocks-no-html-enclosure-1364--1366) requires standalone 3D menu blocks with transparent mounting/input wrappers, independently composed form/information and action outlets, and block-local accessible focus feedback. Shop composition puts Buy/Sell/Continue together directly below stock; Home → Settings keeps Back outside the form panel. Scene traits supply anchors/outlets and actions, while the common presenter renders them uniformly. No generic label/scene branching or change to action/drop ownership is authorized. Prior shop-layout summaries describing Continue at bottom-right are superseded for the shop only; other scenes retain their configured layouts. The linked contract records source evidence, delivery boundaries and verification limits.
+
+## Passive trial admission configuration (#1382)
+
+[The normal passive trial policy](release-status.md#normal-run-provisional-passive-trial-1382) changes passive catalogue configuration to admit certified and provisional gameplay definitions without changing generic admission or other families. Explicit authored offer data is required for previously unstocked trials; no release-status branch or global catalogue mutation supplies missing prices. Public provisional descriptions explain experimental balance rather than incorrectly prohibit normal play. Source evidence, initial tuning assumptions and acquisition verification are recorded in the linked contract.

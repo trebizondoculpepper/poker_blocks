@@ -1,5 +1,7 @@
 # Could It Be Magic Now?
 
+Availability update (owner, 2026-11-15): implemented provisional gameplay passives may appear in normal runs under [the passive trial admission policy](../release-status.md#normal-run-provisional-passive-trial-1382), without certification. This supersedes older experiment-only availability wording below; experiment semantics and open balance questions remain.
+
 Agreed provisional passive experiment, #984. Exact title includes the question mark. The name is a song homage; no recording, lyrics or likeness is required. This is a bench experiment, not certified shop content.
 
 ## Model rule
