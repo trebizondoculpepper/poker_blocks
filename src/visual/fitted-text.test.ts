@@ -4,6 +4,7 @@ import {
   fittedTextProvider,
   invalidateWhenFontsReady,
   narrationTextStyle,
+  renderFittedText,
   textLayoutProviders,
   type TextMeasure,
 } from "./fitted-text";
@@ -75,6 +76,45 @@ describe("fitted narration text (#1156; doc/presentation-contracts.md)", () => {
       expect(line.px).toBeGreaterThanOrEqual(narrationTextStyle.minPx);
       expect(line.width).toBeLessThanOrEqual(100 + 1e-9);
     }
+  });
+
+  it("keeps the numeric operand visible when it ellipsizes (#1185)", () => {
+    const text = "Every scoring line in this row is multiplied by the passive ×3";
+    const result = fit(text, 110, 28);
+    expect(result.truncated).toBe(true);
+    const shown = result.lines.map(({ text: line }) => line).join(" ");
+    expect(shown).toContain("×3");
+    expect(shown).toContain("…");
+    for (const line of result.lines) expect(line.width).toBeLessThanOrEqual(110 + 1e-9);
+  });
+
+  it("stays within the height budget when truncated (#1185)", () => {
+    const result = fit("a b c d e f g h i j k l m n o p q r s t u v w x y z ".repeat(8), 90, 40);
+    expect(result.truncated).toBe(true);
+    expect(result.height).toBeLessThanOrEqual(40 + 1e-9);
+  });
+
+  it("renders in the family it measured (#1185)", () => {
+    const rows: { style: Record<string, string>; textContent: string }[] = [];
+    const element = {
+      style: {} as Record<string, string>,
+      setAttribute: () => {},
+      ownerDocument: {
+        createElement: () => {
+          const row = { style: {} as Record<string, string>, textContent: "" };
+          rows.push(row);
+          return row;
+        },
+      },
+      replaceChildren: () => {},
+    } as unknown as HTMLElement;
+    const style = { ...narrationTextStyle, family: "Georgia" };
+    renderFittedText(
+      element,
+      fittedTextProvider.layout({ text: "Pair +10", style, width: 200, height: 80 }, measure),
+      style,
+    );
+    expect(rows.every((row) => row.style.fontFamily === "Georgia")).toBe(true);
   });
 
   it("is deterministic", () => {
