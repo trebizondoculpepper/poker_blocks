@@ -74,7 +74,13 @@ export type PreparedTransition = {
 export type MaterialTransitionHandler = (
   request: MaterialTransitionRequest,
   host: Host,
-) => PreparedTransition | null;
+) => PreparedTransition | typeof notOnTableYet | null;
+
+/**
+ * The block isn't on the table *yet* (still landing): ask again on a later frame. Distinct from
+ * null, which is final (nothing to show, or a look the mask can't pair).
+ */
+export const notOnTableYet: unique symbol = Symbol("not on the table yet");
 
 export const materialTransitionHandlers = new Registry<MaterialTransitionHandler>(
   "material transition",
@@ -86,8 +92,9 @@ export const defaultMaterialTransition = "perlinDissolve";
 materialTransitionHandlers.register(defaultMaterialTransition, (request, host) => {
   const target = host.block(request.blockId);
   const parent = target?.cube.parent;
-  // Not on the table (in the hand, already gone): its new look simply shows.
-  if (!target || !parent) return null;
+  // Not on the table yet (a played block still landing): asked again on a later frame. If it
+  // never arrives (it went to the hand, or is gone), its new look simply shows.
+  if (!target || !parent) return notOnTableYet;
   const { cube } = target;
   const ghost = host.detachedView(request.before);
   // A mount that follows the cube's pose, holding the ghost at the cube's own transform.
@@ -132,18 +139,19 @@ materialTransitionHandlers.register(defaultMaterialTransition, (request, host) =
   const { mask } = made;
   // Still the block's own cube: removed or redrawn since, it can't play.
   const live = () => host.block(request.blockId)?.cube === cube;
+  const hold = () => {
+    if (settled) return false;
+    if (!live()) {
+      free();
+      return false;
+    }
+    follow();
+    return true;
+  };
   return {
-    hold() {
-      if (settled) return false;
-      if (!live()) {
-        free();
-        return false;
-      }
-      follow();
-      return true;
-    },
+    hold,
     play(deltaMs) {
-      if (settled || !this.hold()) return false;
+      if (!hold()) return false;
       if (mask.update(deltaMs / 1000)) return true;
       // Finished: the mask has restored the cube's own look; the ghost goes.
       free();
@@ -188,12 +196,20 @@ export function forgetTransition(id: string): void {
   entry.prepared?.cancel();
 }
 
-/** Prepared once: nothing to show stays nothing, never retried into a late flip. */
+/**
+ * Prepared once it can be: a block not on the table yet is asked about again later (#1358
+ * review), while nothing to show stays nothing, never retried into a late flip.
+ */
 const prepare = (entry: Entry, host: Host) => {
-  if (entry.prepared === undefined)
-    entry.prepared = materialTransitionHandlers.get(entry.handler)(entry.request, host);
-  return entry.prepared;
+  if (entry.prepared !== undefined) return entry.prepared;
+  const made = materialTransitionHandlers.get(entry.handler)(entry.request, host);
+  if (made === notOnTableYet) return notOnTableYet;
+  entry.prepared = made;
+  return made;
 };
+
+/** How long a transition whose phase opened waits for its block to land: 15 units (1 s). */
+const landingWaitUnits = 15;
 
 const hostOf = (services: unknown) => (services as MaterialTransitionServices).materialTransitions;
 
@@ -208,12 +224,16 @@ visualHandlers.register(
     const id = (payload as { request: string }).request;
     const entry = entries.get(id);
     if (!entry || entry.started) return "done";
-    if (!prepare(entry, hostOf(context.services))) return "done";
+    const host = hostOf(context.services);
+    if (!prepare(entry, host)) return "done";
     return {
       update() {
         const current = entries.get(id);
         if (!current || current.started) return "finished";
-        if (current.prepared?.hold()) return "running";
+        // Still landing: built the frame it is on the table, then held.
+        const prepared = prepare(current, host);
+        if (prepared === notOnTableYet) return "running";
+        if (prepared?.hold()) return "running";
         forgetTransition(id);
         return "finished";
       },
@@ -233,14 +253,26 @@ visualHandlers.register(materialTransitionHandler, (payload, context): EffectHan
   const entry = entries.get(id);
   if (!entry) return "done";
   entry.started = true;
-  const prepared = prepare(entry, hostOf(context.services));
-  if (!prepared) {
+  const host = hostOf(context.services);
+  if (!prepare(entry, host)) {
     forgetTransition(id);
     return "done";
   }
+  const deadline = context.scheduledAtMs + unitsToMs(landingWaitUnits);
   let last: number | null = null;
   return {
     update(nowMs) {
+      const prepared = prepare(entry, host);
+      // Its phase opened while the block was still landing: it waits for it, a little.
+      if (prepared === notOnTableYet) {
+        if (nowMs < deadline) return "running";
+        forgetTransition(id);
+        return "finished";
+      }
+      if (!prepared) {
+        forgetTransition(id);
+        return "finished";
+      }
       const delta = last === null ? 0 : nowMs - last;
       last = nowMs;
       if (prepared.play(delta)) return "running";

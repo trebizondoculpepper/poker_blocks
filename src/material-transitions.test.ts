@@ -262,4 +262,40 @@ describe("material transitions (#1167)", () => {
     expect(h.diagnosed[0]).toContain("not shown");
     expect(h.released).toHaveLength(1);
   });
+
+  it("holds each change in its own side's slot when one action changes blocks before and after its score (#1359 review)", () => {
+    const h = harness();
+    h.place(card("a", "water"));
+    h.place(card("b", "water"));
+    h.trait.enter!(h.context as never, settings);
+    h.commit([
+      { change: "a", before: card("a", "ice") },
+      { scored: 1000 },
+      { change: "b", before: card("b", "ice") },
+    ]);
+    h.step(700);
+    // The pre-score change has dissolved; the post-score one is still held behind scoring.
+    expect(h.released.map(({ block }) => block.id)).toEqual(["a"]);
+    // Pre-score (500 ms) is a barrier before scoring (1000 ms); then post-score dissolves.
+    h.step(800);
+    expect(h.released.map(({ block }) => block.id)).toEqual(["a"]);
+    h.step(700);
+    expect(h.released.map(({ block }) => block.id)).toEqual(["a", "b"]);
+  });
+
+  it("waits for a played block still landing, then shows its transition (#1358 review)", () => {
+    const h = harness();
+    h.trait.enter!(h.context as never, settings);
+    h.commit([{ scored: 300 }, { change: "a", before: card("a", "ice") }]);
+    h.step(100);
+    // Not on the table yet: nothing built, nothing given up.
+    expect(h.made).toHaveLength(0);
+    const block = h.place(card("a", "water"));
+    h.step(20);
+    // It landed: held at the old look from that frame.
+    expect(h.made).toHaveLength(1);
+    expect(block.cube.material).not.toBe(h.made[0]!.cube.material);
+    h.step(800);
+    expect(h.released).toEqual([h.made[0]]);
+  });
 });
