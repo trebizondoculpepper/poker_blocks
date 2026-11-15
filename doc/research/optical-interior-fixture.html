@@ -1,0 +1,197 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Interior fixture</title>
+  </head>
+  <body style="margin: 0; background: #222; color: #eee; font: 13px monospace">
+    <pre id="out">running…</pre>
+    <script type="module">
+      import * as THREE from "three";
+      import {
+        createInteriorCapture,
+        interiorClipping,
+        interiorDepthGlsl,
+        setCameraClip,
+      } from "/src/visual/optical-interior.ts";
+      import { createRefractionCapture } from "/src/visual/crystal-refraction.ts";
+      const out = [];
+      const log = (line) => {
+        out.push(line);
+        document.getElementById("out").textContent = out.join("\n");
+      };
+      const renderer = new THREE.WebGLRenderer({ antialias: false });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(640, 360);
+      document.body.appendChild(renderer.domElement);
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x203040);
+      const camera = new THREE.PerspectiveCamera(50, 640 / 360, 0.1, 100);
+      camera.position.set(0, 0.8, 6);
+      camera.lookAt(0, 0, 0);
+      camera.updateMatrixWorld();
+      const disc = (() => {
+        const n = 32,
+          data = new Uint8Array(n * n * 4);
+        for (let y = 0; y < n; y++)
+          for (let x = 0; x < n; x++) {
+            const r = Math.hypot(x + 0.5 - n / 2, y + 0.5 - n / 2) / (n / 2);
+            data.set([255, 255, 255, r > 1 ? 0 : 255], (y * n + x) * 4);
+          }
+        const t = new THREE.DataTexture(data, n, n);
+        t.needsUpdate = true;
+        return t;
+      })();
+      const hide = new THREE.Group();
+      scene.add(hide);
+      function volume(x, colour, positions, size = 0.12) {
+        const group = new THREE.Group();
+        group.position.x = x;
+        group.rotation.y = 0.4;
+        group.scale.set(1, 1.3, 0.8); // nonuniform
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute(
+          "position",
+          new THREE.BufferAttribute(new Float32Array(positions), 3),
+        );
+        const source = new THREE.Points(
+          geometry,
+          new THREE.PointsMaterial({ color: colour, size, map: disc, transparent: true }),
+        );
+        group.add(source);
+        hide.add(group);
+        group.updateMatrixWorld(true);
+        return {
+          volume: group,
+          packet: { source, worldSize: size },
+          clipping: interiorClipping.get("convexCube").create({ halfSize: 0.5 }),
+        };
+      }
+      const randomPositions = (n) =>
+        Array.from({ length: n * 3 }, () => (Math.random() * 2 - 1) * 0.4);
+      const results = {};
+      // 1. Isolation, clipping and coverage.
+      const capture = createInteriorCapture({
+        maxTextureSize: renderer.capabilities.maxTextureSize,
+      });
+      const red = volume(-1.4, 0xff0000, randomPositions(30));
+      const green = volume(1.4, 0x00ff00, randomPositions(30));
+      // A sprite whose centre is inside but whose disc spills past the wall: clipped whole.
+      const spill = volume(0, 0x0000ff, [0.46, 0, 0], 0.2);
+      const leases = [red, green, spill].map((each) => capture.register(each));
+      const frame = { renderer, scene, camera, hide, delta: 0, reducedMotion: false };
+      capture.render(frame);
+      const { atlasEdge, tileSize } = capture.stats();
+      const tilePixels = (lease) => {
+        const tile = lease.tile();
+        if (!tile) return null;
+        const x = Math.round((tile.atlas.x - 0.5 / atlasEdge) * atlasEdge);
+        const y = Math.round((tile.atlas.y - 0.5 / atlasEdge) * atlasEdge);
+        const buffer = new Uint16Array(tileSize * tileSize * 4);
+        renderer.readRenderTargetPixels(capture.textures.target, x, y, tileSize, tileSize, buffer);
+        let covered = 0;
+        const sum = [0, 0, 0];
+        for (let i = 0; i < buffer.length; i += 4) {
+          const a = THREE.DataUtils.fromHalfFloat(buffer[i + 3]);
+          if (a > 0) {
+            covered++;
+            for (let c = 0; c < 3; c++) sum[c] += THREE.DataUtils.fromHalfFloat(buffer[i + c]);
+          }
+        }
+        return { covered, sum: sum.map((v) => +v.toFixed(1)) };
+      };
+      results.red = tilePixels(leases[0]);
+      results.green = tilePixels(leases[1]);
+      results.spill = tilePixels(leases[2]);
+      log("isolation/clipping: " + JSON.stringify(results));
+      log("stats: " + JSON.stringify(capture.stats()));
+      // 2. Depth convention, on the GPU: background depth read back as linear view depth.
+      const wall = new THREE.Mesh(
+        new THREE.PlaneGeometry(40, 40),
+        new THREE.MeshBasicMaterial({ color: 0x808080 }),
+      );
+      wall.position.z = -7; // 13 units in front of the camera along its view (camera at z 6, tilted slightly)
+      scene.add(wall);
+      const refraction = createRefractionCapture("calmWater");
+      refraction.render(frame);
+      const depthProbe = new THREE.ShaderMaterial({
+        uniforms: {
+          depthMap: { value: null },
+          clip: { value: setCameraClip(new THREE.Vector3(), camera) },
+        },
+        vertexShader:
+          "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+        fragmentShader: `uniform sampler2D depthMap; uniform vec3 clip; varying vec2 vUv; ${interiorDepthGlsl}
+          void main(){ gl_FragColor = vec4(interiorViewDepth(texture2D(depthMap, vec2(0.5)).r, clip), 0.0, 0.0, 1.0); }`,
+      });
+      // Find the background target's depth through a front material's slot.
+      const { createRefractionFront, refractionPresets } =
+        await import("/src/visual/crystal-refraction.ts");
+      const front = createRefractionFront(refractionPresets.get("calmWater"));
+      depthProbe.uniforms.depthMap.value = front.uniforms.backgroundDepthMap.value;
+      const probeTarget = new THREE.WebGLRenderTarget(1, 1, { type: THREE.FloatType });
+      const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), depthProbe);
+      renderer.setRenderTarget(probeTarget);
+      renderer.render(quad, new THREE.Camera());
+      renderer.setRenderTarget(null);
+      const value = new Float32Array(4);
+      renderer.readRenderTargetPixels(probeTarget, 0, 0, 1, 1, value);
+      const centre = new THREE.Raycaster();
+      centre.setFromCamera(new THREE.Vector2(0, 0), camera);
+      const hit = centre.intersectObject(wall)[0];
+      const expected = hit.point.clone().applyMatrix4(camera.matrixWorldInverse).z * -1;
+      log(`depth: GPU linear view depth ${value[0].toFixed(3)} vs expected ${expected.toFixed(3)}`);
+      scene.remove(wall);
+      leases.forEach((lease) => lease.release());
+      log("after release: " + JSON.stringify(capture.stats()));
+      // 3. Costs: 1/10/50 volumes of 200 points, all passes.
+      const gl = renderer.getContext();
+      for (const count of [1, 10, 50]) {
+        const many = Array.from({ length: count }, (_, i) =>
+          volume((i % 10) * 0.6 - 2.7, 0xffffff, randomPositions(200), 0.08),
+        );
+        many.forEach(
+          (each) => (each.volume.position.y = Math.floor(i_of(each, many) / 10) * 0.6 - 1.2),
+        );
+        many.forEach((each) => each.volume.updateMatrixWorld(true));
+        const timed = createInteriorCapture({
+          maxTextureSize: renderer.capabilities.maxTextureSize,
+        });
+        const held = many.map((each) => timed.register(each));
+        const run = (withInterior) => {
+          renderer.info.autoReset = false;
+          renderer.info.reset();
+          const start = performance.now();
+          for (let i = 0; i < 60; i++) {
+            refraction.render(frame);
+            if (withInterior) timed.render(frame);
+            renderer.render(scene, camera);
+          }
+          gl.finish();
+          return { ms: (performance.now() - start) / 60, calls: renderer.info.render.calls / 60 };
+        };
+        run(true); // warm
+        const base = run(false);
+        const withInterior = run(true);
+        const stats = timed.stats();
+        log(
+          `${count} volumes: frame ${base.ms.toFixed(2)} ms / ${base.calls} calls without interior; ${withInterior.ms.toFixed(2)} ms / ${withInterior.calls} calls with (tile draws ${stats.draws}, clears ${stats.clears}, atlas ${stats.atlasEdge}px, ${(stats.bytes / 1048576).toFixed(1)} MiB)`,
+        );
+        held.forEach((lease) => lease.release());
+        many.forEach((each) => {
+          hide.remove(each.volume);
+          each.packet.source.geometry.dispose();
+          each.packet.source.material.dispose();
+        });
+        timed.dispose();
+      }
+      function i_of(each, all) {
+        return all.indexOf(each);
+      }
+      log(
+        `drawing buffer ${renderer.getDrawingBufferSize(new THREE.Vector2()).toArray()}, pixel ratio ${renderer.getPixelRatio()}, GPU ${gl.getParameter(gl.RENDERER)}`,
+      );
+      log("done");
+    </script>
+  </body>
+</html>

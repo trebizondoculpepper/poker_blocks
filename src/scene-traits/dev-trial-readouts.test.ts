@@ -109,6 +109,9 @@ describe("the devTrialReadouts trait (#904)", () => {
     state = { field, round };
     for (const listener of listeners) listener([{ type: "x", payload: { score: {} } }] as never);
     expect(panels[0]!.innerHTML).toContain("Row 1");
+    // The play's refill commits next with no facts (#1244): the scored rows stay readable.
+    for (const listener of listeners) listener([] as never);
+    expect(panels[0]!.innerHTML).toContain("Row 1");
     // A discard scores nothing: the panel stops claiming the old rows as this action's.
     for (const listener of listeners) listener([{ type: "x", payload: {} }] as never);
     expect(panels[0]!.innerHTML).toContain("No rows scored yet");
