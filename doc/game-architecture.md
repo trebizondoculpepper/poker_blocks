@@ -1709,3 +1709,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Score narration completion holds
 
 [Completion-scope research](research/score-narration-completion.md) and [the scheduler interface](visual-event-interface.md#narration-completion-holds-999) define required tail scopes separately from narration spacing, removing a second presenter-owned deadline ledger. Effects report bounded completion on the shared clock; reset owns cancellation across all scopes. This is a target for #999, not a claim of shipped replacement.
+
+## Shared authored mass and bounded field modifiers (#1081)
+
+[Material mass and passives](material-mass-and-passives.md) defines revised per-definition physical recipes, pure contents-derived instance mass, universal mass data sheets/inspection and four bounded whole-field-context passives. Existing registered multiply/power phases own score contributions; committed immutable snapshots supply geometry and total mass. The new target supersedes historical wrapper/component and trial-curve defaults without adding identity checks, a parallel mass map or a density-weighted pivot. Runtime implementation remains #1067–#1073.

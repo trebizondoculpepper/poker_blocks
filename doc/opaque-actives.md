@@ -31,3 +31,7 @@ Adopted revealed payloads serialize as run-owned playable instances with their c
 ## Verification and implementation slices
 
 #553 handles rankless capability representation and persistence; #555 shared weighted generator; #554 stored opening and atomic adoption; #497 composes Present using those capabilities; #651 grants it under stage-three reward configuration. Native prerequisites express this order. No generic branch on a material/container name is allowed. Test unopened discard/Continue, fixed generation across exact clone, corrupt/cyclic/duplicate payload rejection, transaction/RNG/ID rollback, first/group placement, multiple independent openings, current-play material/scoring participation, no double inventory and later stage draws. Preserve final-round fallback and no sale/stock behavior from `presents.md`.
+
+## Public mass projection (#1081)
+
+[The mass contract](material-mass-and-passives.md#contents-derived-mass-without-revealing-contents) permits a pure registered provider to resolve a wrapper’s stored playable contents into public numeric mass. Present uses contents mass with no wrapping surcharge. This does not open or adopt the payload and reveals no rank/suit/material descriptor; existing one-level ownership, codec validation and clone semantics remain authoritative.
