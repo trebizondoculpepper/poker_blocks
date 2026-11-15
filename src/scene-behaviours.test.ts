@@ -22,6 +22,17 @@ function recordingHost() {
   const host: SceneHost = {
     host: { dataset: {} } as HTMLElement,
     services: {
+      playfieldRocking: {
+        setRate: () => {},
+        nowMs: () => 0,
+        scheduleResume: () => () => {},
+        observeBoardTurn: () => () => {},
+        observeCarry: () => () => {},
+        onCommitted: () => () => {},
+        fieldMassKg: () => null,
+        reducedMotion: () => false,
+        relay: { attach: () => () => {} },
+      },
       renderer: {
         tableEntered: (entered) => void calls.push(`table:${entered}`),
         handEntered: (entered) => void calls.push(`hand:${entered}`),

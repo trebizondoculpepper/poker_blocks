@@ -20,7 +20,9 @@ export function cardsMass(cards: readonly CardBlock[]): MassAggregate | { unavai
 }
 
 /** Total, count and mean mass of the blocks placed on the field now. */
-export function fieldMass(state: GameState): MassAggregate | { unavailable: string } {
+export function fieldMass(
+  state: Pick<GameState, "field">,
+): MassAggregate | { unavailable: string } {
   return cardsMass(state.field.map(({ block }) => block));
 }
 

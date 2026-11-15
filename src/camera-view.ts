@@ -28,7 +28,11 @@ export type CameraViewService = {
   setZoom(zoom: number): void;
   zoomWithWheel(deltaY: number, deltaMode: number): void;
   zoomWithPinch(startZoom: number, startDistance: number, distance: number): void;
-  changeMotionRate(target: number): void;
+  /**
+   * The automatic rocking rate, as given (#783): the playfield rocking controller eases it, so
+   * this applies it at once. Phase keeps integrating, so a new rate never snaps the pose.
+   */
+  setMotionRate(rate: number): void;
   rotateBy(dx: number, dy: number): void;
   updateRotationCenter(center: Cell): void;
   structureRadius(): number;
@@ -75,9 +79,6 @@ export function createCameraViewService(options: {
   let boardZoom = 1;
   let handBaseY = 0;
   let motionRate = 1;
-  let rateFrom = motionRate;
-  let rateTo = motionRate;
-  let speedChangeAt = performance.now();
   let wobbleTime = 0;
   let manualYaw = 0;
   let manualPitch = 0;
@@ -210,12 +211,8 @@ export function createCameraViewService(options: {
     zoomWithPinch(startZoom, startDistance, distance) {
       setZoom(pinchZoom(startZoom, startDistance, distance));
     },
-    changeMotionRate(target) {
-      const now = performance.now();
-      motionRate = tweenValue(rateFrom, rateTo, (now - speedChangeAt) / 1000, 0.5);
-      rateFrom = motionRate;
-      rateTo = target;
-      speedChangeAt = now;
+    setMotionRate(rate) {
+      motionRate = rate;
     },
     rotateBy(dx, dy) {
       manualYaw += dx * 0.005;
@@ -287,7 +284,6 @@ export function createCameraViewService(options: {
       frameToStructure();
     },
     update(time, delta) {
-      motionRate = tweenValue(rateFrom, rateTo, (time - speedChangeAt) / 1000, 0.5);
       wobbleTime += motionRate * delta;
       applyBoardWobble();
       if (!cameraMove || time < cameraMove.startAt) return;

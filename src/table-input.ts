@@ -116,6 +116,10 @@ export type TableInput = {
   registerDragSource(name: string, source: DragSource): void;
   /** Follow every drag's lifecycle, for presentation only (#922); returns how to stop. */
   observeDrag(listener: (event: DragLifecycle) => void): () => void;
+  /** A board turn began or ended (#783): published by the board gesture owner. */
+  observeBoardTurn(listener: { began(): void; ended(): void }): () => void;
+  /** Hand blocks started or stopped being carried (#783). */
+  observeCarry(listener: (carrying: boolean) => void): () => void;
   /**
    * Bind the board gestures while a scene shows (the `boardGestures` trait, #275): dragging the
    * structure turns it, a pinch zooms and a two-finger twist turns it, the wheel zooms. Returns
@@ -171,8 +175,6 @@ type Drag = {
   lastX: number;
   lastY: number;
 };
-
-const normalMotionRate = 1;
 
 /**
  * The shared lower-screen drop target: Discard for hand cards, Sell while a passive is
@@ -549,7 +551,7 @@ export function createTableInput(options: {
       drag = null;
       dragDrop.hover(null);
       if (hit?.verdict === "reject") hit.target.reject();
-      cameraView.changeMotionRate(normalMotionRate);
+      publishCarry(false);
       suppressClickUntil = performance.now() + 250;
       // Model first (#272): the drop commits now, even while earlier plays are still being
       // shown; their animations and this one catch up with the model.
@@ -635,7 +637,7 @@ export function createTableInput(options: {
       `carrying ${carried} block${carried === 1 ? "" : "s"}${carried > 1 ? " (the dragged one is selected, so the whole selection comes)" : ""}${rules.busy() ? ", while an animation is running" : ""}`,
     );
     for (const rendered of [source, ...group]) options.setDragLayer(rendered.cube, true);
-    cameraView.changeMotionRate(normalMotionRate / 10);
+    publishCarry(true);
     playSfx("card.pickup");
     options.overlays().hideTooltip();
     moveDraggedBlock();
@@ -723,13 +725,19 @@ export function createTableInput(options: {
     if (!boardDragging) return;
     trace("board drag", `ended: ${reason}`);
     boardDragging = false;
-    cameraView.changeMotionRate(normalMotionRate);
+    for (const listener of turnListeners) listener.ended();
     suppressClickUntil = performance.now() + 250;
     canvas.style.cursor = "default";
   }
 
   /** What the trait that bound the board gestures asked to hear about. */
   let boardHandlers: BoardGestureHandlers = {};
+  /** The board turn lifecycle and hand carrying, published to whoever observes (#783). */
+  const turnListeners = new Set<{ began(): void; ended(): void }>();
+  const carryListeners = new Set<(carrying: boolean) => void>();
+  const publishCarry = (carrying: boolean) => {
+    for (const listener of carryListeners) listener(carrying);
+  };
   function bindBoardGestures(handlers: BoardGestureHandlers = {}): () => void {
     boardHandlers = handlers;
     /** Radians per pixel of twist, matched to `rotateBy`'s 0.005 per pixel of drag. */
@@ -762,7 +770,8 @@ export function createTableInput(options: {
             boardDragging = true;
             // Reported to whoever bound the gestures, which decides what it means (#641).
             boardHandlers.turnStarted?.();
-            cameraView.changeMotionRate(0);
+            // The rocking controller owns what a turn does to the rate (#783).
+            for (const listener of turnListeners) listener.began();
             options.overlays().hideTooltip();
           }
           if (!boardDragging) return;
@@ -1100,6 +1109,14 @@ export function createTableInput(options: {
     },
     registerDragSource: (name, source) => dragSourceKinds.register(name, source),
     observeDrag: (listener) => dragDrop.observe(listener),
+    observeBoardTurn(listener) {
+      turnListeners.add(listener);
+      return () => turnListeners.delete(listener);
+    },
+    observeCarry(listener) {
+      carryListeners.add(listener);
+      return () => carryListeners.delete(listener);
+    },
     enableBoardGestures: bindBoardGestures,
     fieldBlockAt: (clientX, clientY) => pickBlock(clientX, clientY, field.blocks())?.block.id,
     get selection() {
