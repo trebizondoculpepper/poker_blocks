@@ -53,7 +53,7 @@ describe("Heavy passive (#1073; doc/material-mass-and-passives.md)", () => {
     expect(JSON.stringify(scored)).not.toContain("multiply-line-score-by-query");
   });
 
-  it("is provisional: never in ordinary stock", () => {
-    expect(ordinaryPassives().map(({ id }) => id)).not.toContain("heavy-stack");
+  it("is provisional, and offered in normal runs (#1393)", () => {
+    expect(ordinaryPassives().map(({ id }) => id)).toContain("heavy-stack");
   });
 });

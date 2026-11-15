@@ -105,7 +105,7 @@ describe("In the Loop (#886)", () => {
     expect(describeActivation(hoop!.activations[0]!)).toBe("^1.2");
   });
 
-  it("is provisional: never in normal shops", () => {
-    expect(ordinaryPassives().map(({ id }) => id)).not.toContain("trial-in-the-loop");
+  it("is provisional, and offered in normal runs (#1393)", () => {
+    expect(ordinaryPassives().map(({ id }) => id)).toContain("trial-in-the-loop");
   });
 });

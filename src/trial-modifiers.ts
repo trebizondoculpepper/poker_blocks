@@ -14,7 +14,7 @@ import { Registry } from "./core/registry";
 import { query } from "./context-queries";
 import type { EventRule, RuleFrame } from "./event-rules";
 import { passiveRuleBuilders, type ParameterSchema } from "./configurable-passive";
-import { passiveDefinitions, type PassiveDefinition } from "./passives";
+import { passiveDefinitions, trialOffer, type PassiveDefinition } from "./passives";
 import { raiseLine, ruleHandlers } from "./rule-handlers";
 import { goldSolid, massKg, massOf } from "./physical-mass";
 import "./packing-density";
@@ -393,8 +393,9 @@ function queryTrial(
   if (problems.length) throw new Error(problems.join("\n"));
   return {
     id,
-    // A trial: experimental catalogues only, never normal shops (doc/release-status.md).
+    // A provisional trial, offered in normal runs with the trial recipe (#1393).
     releaseStatus: { provisional: {} },
+    shop: trialOffer,
     lifecycle: { parent: "rackItem" },
     name,
     symbol,
