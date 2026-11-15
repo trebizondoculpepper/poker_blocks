@@ -677,7 +677,6 @@ export const sceneDefinitions = [
       ...playSceneTraits,
       roundPanel: { stage: "STAGE 1", actions: stageActions },
       musicTrack: { operations: [{ op: "selectTrack", config: { plan: "stage" } }] },
-      enterSound: { sfx: "round.start" },
     },
   },
   {
@@ -686,7 +685,6 @@ export const sceneDefinitions = [
       ...playSceneTraits,
       roundPanel: { stage: "STAGE 2", actions: stageActions },
       musicTrack: { operations: [{ op: "selectTrack", config: { plan: "stage" } }] },
-      enterSound: { sfx: "round.start" },
     },
   },
   {
@@ -695,7 +693,6 @@ export const sceneDefinitions = [
       ...playSceneTraits,
       roundPanel: { stage: "BOSS STAGE", actions: stageActions },
       musicTrack: { operations: [{ op: "selectTrack", config: { plan: "boss" } }] },
-      enterSound: { sfx: "round.start" },
     },
   },
   {
