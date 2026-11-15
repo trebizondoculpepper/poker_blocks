@@ -1747,3 +1747,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Shared narration text layout (#1046)
 
 [Shared fitted narration](presentation-contracts.md#shared-fitted-narration-text-and-over-item-activation-labels-1046) defines one content-independent measured text-block provider and separate registered anchor/placement capabilities for score and passive narration. Passive labels stay centered over projected item bounds; immutable descriptors and existing scheduler/pulse timing remain authoritative. The source audit distinguishes the current above/below captions from the proposed shared fitting capability. Runtime adopters must share the component rather than fork it.
+
+## Triggered presentation and victim responses (#1168)
+
+[Triggered presentation](triggered-presentation.md) resolves the explosion source from existing captured block.triggered occurrences and definition-owned on-trigger presentation responses, including no-neighbour sources and causally delayed true secondary detonations. Victim removal and resistance consume independent registered response bindings; a victim is not automatically another detonation. Finite effects use the shared scheduler and captured-mount policy. The Dev-only real-command fixture grants no normal-game bomb availability. This supersedes treating victim block.removed as the only explosion-origin cue.
