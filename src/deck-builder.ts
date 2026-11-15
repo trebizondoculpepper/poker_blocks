@@ -100,6 +100,26 @@ deckBuilderOperations.register("assignUniform", (context, raw) => {
   return { ...context, cards: context.cards.map((card) => assign(card, definition)) };
 });
 
+// Chosen cards given chosen materials (#1177): a fixture's exact layout, by build index.
+deckBuilderOperations.register("assignAt", (context, raw) => {
+  requireCards(context, "assignAt");
+  const { assignments = [] } = (raw ?? {}) as {
+    assignments?: readonly { index: number; material: string }[];
+  };
+  const byIndex = new Map(
+    assignments.map(({ index, material }) => [index, definitionOf(material)]),
+  );
+  if ([...byIndex.keys()].some((index) => !Number.isInteger(index) || !context.cards[index]))
+    throw new DeckBuilderError("assignAt: every index must name a card already built");
+  return {
+    ...context,
+    cards: context.cards.map((card, index) => {
+      const definition = byIndex.get(index);
+      return definition ? assign(card, definition) : card;
+    }),
+  };
+});
+
 // A pool's materials dealt cyclically across the cards, then the assignments shuffled with the
 // builder's stream: exactly `makeDevDeck`'s semantics and random consumption.
 deckBuilderOperations.register("assignBalanced", (context, raw) => {
