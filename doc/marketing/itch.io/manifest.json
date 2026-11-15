@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-15",
+  "kind": "AI-assisted marketing illustrations, not gameplay screenshots",
+  "tool": "built-in image_gen",
+  "files": {
+    "banner.png": {
+      "dimensions": [2172, 724],
+      "bytes": 1874053,
+      "sha256": "055ea786f7deb70bd2b433bd21f7cca199490da3aaeb65cef1867a92f4ecce41"
+    },
+    "background.png": {
+      "dimensions": [1672, 941],
+      "bytes": 1693671,
+      "sha256": "46a50051ec0b04a3f5d3741eb8aedba35919bec5c7953e83b84105655d1f3622"
+    },
+    "embed-bg.png": {
+      "dimensions": [1672, 941],
+      "bytes": 1809656,
+      "sha256": "899a45d634b2d4fb2b6dac9f985550df0e52eb272bd35f7bf1ff4b2258e4aedb"
+    }
+  }
+}
