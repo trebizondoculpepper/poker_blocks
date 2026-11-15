@@ -87,6 +87,10 @@ Before closing #1113 verify standard, shader/unlit, contained, transparent and r
 
 What an operation does to the selected cards is still to be decided.
 
+## Required-scope result entry (#1389)
+
+[Result scope gating](result-scope-gating.md) removes the remaining legacy result deadlines and presenter-busy inference. A configured controller uses captured terminal facts and required action/exit scopes, with no extra automatic pause, generation-safe cover/resume and cancellation. Preserve the separately documented loss-burn 80-percent gate and optional outgoing tail.
+
 ## Inspectable trait
 
 **Target extension (#751):** [Acquired bonus artwork and inspection](presentation-contracts.md#acquired-bonus-artwork-and-inspection-432-751) defines full live bonus descriptions, separate from the compact face label.
