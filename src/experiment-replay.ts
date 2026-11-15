@@ -232,7 +232,7 @@ export function verifyReplay(
       const outcome = own ? readFacts(own.facts).outcome : null;
       if (outcome && !decided) decided = { result: outcome, index, score: run.state.round.score };
       const field = (["accepted", "facts", "awarded", "score", "checkpoint"] as const).find(
-        (key) => JSON.stringify(expected[key]) !== JSON.stringify(actual[key]),
+        (key) => canonical(expected[key]) !== canonical(actual[key]),
       );
       if (field)
         return {
@@ -253,7 +253,7 @@ export function verifyReplay(
           score: record.outcome.score,
         }
       : null;
-    if (JSON.stringify(recorded) !== JSON.stringify(decided))
+    if (canonical(recorded) !== canonical(decided))
       return {
         verified: false,
         stage: "mismatch",

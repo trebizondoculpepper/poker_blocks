@@ -299,4 +299,25 @@ describe("experiment replay export and verification (#936; doc/experiments/comma
       }),
     ).toMatchObject({ verified: true });
   });
+
+  it("compares each step's facts and checkpoint independently of key order (#1329 review)", () => {
+    const { record } = recordTrial();
+    const reorder = (value: unknown): unknown =>
+      Array.isArray(value)
+        ? value.map(reorder)
+        : typeof value === "object" && value !== null
+          ? Object.fromEntries(
+              Object.entries(value)
+                .reverse()
+                .map(([key, inner]) => [key, reorder(inner)]),
+            )
+          : value;
+    const sorted = reorder(record) as ExperimentRecord;
+    expect(
+      verifyReplay(exportReplay({ build: "b", configuration: configFor("b"), record: sorted }), {
+        build: "b",
+        runtime,
+      }),
+    ).toMatchObject({ verified: true });
+  });
 });
