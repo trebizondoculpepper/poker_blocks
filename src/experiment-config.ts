@@ -42,6 +42,8 @@ export type RulesRecord = {
   discardPileAfterShop: RunRules["discardPileAfterShop"];
   /** The effective stage reward: the rules' own, or the default bonus. */
   stageReward: number;
+  /** The configured non-cash stage grants (#651, #1128): none recorded as an empty list. */
+  stageWonGrants: readonly unknown[];
   rackCapacity?: number;
   /** The effective resolution limits: the rules' own, or the defaults. */
   resolutionLimits: { events: number; operations: number };
@@ -114,6 +116,8 @@ export function recordRules(rules: RunRules, rounds = recordedRounds): RulesReco
     handAtStageEnd: rules.handAtStageEnd,
     discardPileAfterShop: rules.discardPileAfterShop,
     stageReward: rules.stageReward ?? stageCompleteBonus,
+    // A grant changes inventory and draws on the stream, so it is part of what is compared.
+    stageWonGrants: rules.stageWonGrants ?? [],
     // An unlimited rack is recorded by leaving the capacity out.
     rackCapacity: Number.isFinite(rules.rackCapacity) ? rules.rackCapacity : undefined,
     resolutionLimits: rules.resolutionLimits ?? defaultResolutionLimits,
