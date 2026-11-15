@@ -20,9 +20,9 @@
  *   game-time units later (`causalSpacingUnits`). Nothing later reads the field or decides a
  *   detonation: the model already did.
  * - **The effect** (`triggered.explosion`) is one dazzle flash, whose pop is the registered sound
- *   played once by the flash itself, and a finite smoke burst, at an anchor placed at the captured
- *   cell in the board's presentation transform, so it moves with the board and survives the
- *   source's own removal. It runs on the scheduler's clock, ends when its smoke has gone, and
+ *   played once by the flash itself, and a finite smoke burst in world space, both at the captured
+ *   cell resolved through the board's presentation transform as the effect starts, so it is where
+ *   the board now shows that cell and survives the source's own removal. It runs on the scheduler's clock, ends when its smoke has gone, and
  *   cancels or disposes its own resources exactly once. Reduced motion is the dazzle's and the
  *   burst's own softened response.
  */
@@ -207,6 +207,9 @@ export type ExplosionHost = {
   /** Put an object at a cell of the board, moving with it; `remove` takes it away. */
   place(object: THREE.Object3D, cell: Cell): void;
   remove(object: THREE.Object3D): void;
+  /** Put an object in the world (the scene itself), and take it out: smoke rises along world up. */
+  addToWorld(object: THREE.Object3D): void;
+  removeFromWorld(object: THREE.Object3D): void;
   /** One cell's edge, in board units. */
   readonly cubeSize: number;
   /** One dazzle flash at a world point: it plays its registered pop once. */
@@ -226,25 +229,30 @@ export function createExplosion(
   /** When it was scheduled to start: a late frame catches up from here, never restarts. */
   startedAtMs: number,
 ): EffectHandle {
+  // The captured cell, resolved through the board's presentation transform to where it is now.
   const anchor = new THREE.Group();
+  host.place(anchor, request.cell);
+  anchor.updateWorldMatrix(true, false);
+  const at = anchor.getWorldPosition(new THREE.Vector3());
+  host.remove(anchor);
+  // The smoke lives in the world, emitting from there: its puffs rise along world up and stay put
+  // however the board turns afterwards (doc/game-architecture.md, smoke).
   const smoke = createSmokeBurst(
     config.smoke,
     { random: () => host.random(), size: host.cubeSize },
-    new THREE.Vector3(),
+    at,
   );
   let last = startedAtMs;
   let released = false;
   const release = () => {
     if (released) return;
     released = true;
-    host.remove(anchor);
+    host.removeFromWorld(smoke.object);
     smoke.dispose();
   };
   // It pops as it starts, when the scheduler starts it, not a frame later.
-  anchor.add(smoke.object);
-  host.place(anchor, request.cell);
-  anchor.updateWorldMatrix(true, false);
-  host.flash(anchor.getWorldPosition(new THREE.Vector3()), config.pop);
+  host.addToWorld(smoke.object);
+  host.flash(at, config.pop);
   return {
     update(nowMs) {
       if (released) return "finished";

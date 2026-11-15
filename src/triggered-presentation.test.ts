@@ -153,8 +153,10 @@ describe("triggered requests, captured at commit (#1172)", () => {
 function recordingHost(reducedMotion = false) {
   const log: string[] = [];
   const placed = new Set<THREE.Object3D>();
+  const world = new THREE.Group();
   const board = new THREE.Group();
   board.position.set(10, 0, 0);
+  world.add(board);
   const host: ExplosionHost = {
     place(object, cell) {
       object.position.set(cell.x, cell.y, cell.z);
@@ -167,6 +169,14 @@ function recordingHost(reducedMotion = false) {
       placed.delete(object);
       log.push("remove");
     },
+    addToWorld(object) {
+      world.add(object);
+      log.push("world+");
+    },
+    removeFromWorld(object) {
+      world.remove(object);
+      log.push("world-");
+    },
     cubeSize: 1,
     flash(at, look) {
       log.push(`flash ${at.x} ${look.circles}`);
@@ -174,7 +184,7 @@ function recordingHost(reducedMotion = false) {
     reducedMotion: () => reducedMotion,
     random: () => 0.5,
   };
-  return { host, log, placed };
+  return { host, log, placed, world, board };
 }
 
 describe("an explosion effect (#1172)", () => {
@@ -190,8 +200,9 @@ describe("an explosion effect (#1172)", () => {
   it("flashes once at its cell in the board's transform, runs its smoke out, and releases once", () => {
     const { host, log, placed } = recordingHost();
     const effect = createExplosion(request, defaultExplosion, host, 0);
-    // It pops as it starts. The board sits at x 10: the anchor follows its presentation transform.
-    expect(log).toEqual(["place 2", "flash 12 6"]);
+    // It pops as it starts. The board sits at x 10: the cell resolves through its transform, and
+    // the smoke goes into the world there, not under the board.
+    expect(log).toEqual(["place 2", "remove", "world+", "flash 12 6"]);
     expect(effect.update(0)).toBe("running");
     let now = 0;
     let state = "running";
@@ -202,9 +213,21 @@ describe("an explosion effect (#1172)", () => {
     expect(now / 1000).toBeCloseTo(emitAndLife, 0);
     effect.dispose();
     effect.cancel();
-    expect(log.filter((line) => line === "remove")).toHaveLength(1);
+    expect(log.filter((line) => line === "world-")).toHaveLength(1);
     expect(placed.size).toBe(0);
     expect(log.filter((line) => line.startsWith("flash"))).toHaveLength(1);
+  });
+
+  it("keeps its smoke in the world: turning the board afterwards never moves it", () => {
+    const { host, world, board } = recordingHost();
+    const effect = createExplosion(request, defaultExplosion, host, 0);
+    const smoke = world.children.find((child) => child !== board)!;
+    expect(smoke.parent).toBe(world);
+    board.rotation.y = 1;
+    board.updateMatrixWorld(true);
+    expect(smoke.parent).toBe(world);
+    expect(smoke.matrixWorld.equals(new THREE.Matrix4())).toBe(true);
+    effect.dispose();
   });
 
   it("under reduced motion still pops once, softened by the dazzle, and emits no smoke", () => {
@@ -230,7 +253,7 @@ describe("an explosion effect (#1172)", () => {
     effect.cancel();
     effect.dispose();
     expect(effect.update(0)).toBe("finished");
-    expect(log.filter((line) => line === "remove")).toHaveLength(1);
+    expect(log.filter((line) => line === "world-")).toHaveLength(1);
   });
 });
 
@@ -288,7 +311,7 @@ describe("triggered effects in the committed action's post-scoring phase (#1172)
     expect(settled).toBe(false);
     step(4000);
     expect(settled).toBe(true);
-    expect(log.filter((line) => line === "remove")).toHaveLength(2);
+    expect(log.filter((line) => line === "world-")).toHaveLength(2);
   });
 
   it("waits for its own action's scoring before any explosion starts", () => {
@@ -316,7 +339,7 @@ describe("triggered effects in the committed action's post-scoring phase (#1172)
     placement.reset();
     step(2000);
     expect(log.filter((line) => line.startsWith("flash"))).toHaveLength(1);
-    expect(log.filter((line) => line === "remove")).toHaveLength(1);
+    expect(log.filter((line) => line === "world-")).toHaveLength(1);
   });
 
   it("an action with no configured source reserves and presents nothing", () => {

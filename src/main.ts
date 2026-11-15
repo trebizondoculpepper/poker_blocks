@@ -515,6 +515,8 @@ const visualServices: ScoreNarrationServices &
   triggeredEffects: {
     place: (object, cell) => field.placeObject(object, cell),
     remove: (object) => field.removeObject(object),
+    addToWorld: (object) => view.scene.add(object),
+    removeFromWorld: (object) => view.scene.remove(object),
     get cubeSize() {
       return field.cubeSize;
     },
