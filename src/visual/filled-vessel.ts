@@ -27,7 +27,9 @@ import {
   containedLayers,
   containedResidues,
   containerShells,
+  worldUpInBlock,
   type ContentsHandler,
+  type LiquidSurface,
   type ResidueHandler,
   type ShellHandler,
   type InteriorContribution,
@@ -304,18 +306,32 @@ export const levellingFluid: ContentsHandler = (boundary, raw) => {
   const fluid = boundary.volume(look.material, look.layer);
   const settle = createSettler({ settleSeconds: config.settleSeconds, traceSeconds: 1 });
   const unused = new THREE.Vector3();
+  // Published in block-local space: the shader's height is in the volume mesh's own (scaled)
+  // units, so it is scaled out here.
+  const liquidSurface: LiquidSurface = {
+    normal,
+    height: height * boundary.volumeScale,
+    wet: (point) => point.dot(normal) <= height * boundary.volumeScale,
+  };
+  // The same volume capability a shell-free volume publishes (#1230): bounds and world up's rise.
+  const extent = boundary.halfSize * boundary.volumeScale;
+  const bounds = new THREE.Box3(
+    new THREE.Vector3(-extent, -extent, -extent),
+    new THREE.Vector3(extent, extent, extent),
+  );
+  const rise = new THREE.Vector3(0, 1, 0);
+  const level = new THREE.Vector3();
   return {
     meshes: [fluid],
     // Driven by the block's one frame (src/visual/contained.ts), never its own clock.
-    update: ({ rotation, seconds }) => settle(rotation, seconds, normal, unused),
+    update: ({ rotation, seconds, toWorld }) => {
+      settle(rotation, seconds, normal, unused);
+      // The surface eases toward level; what rises goes straight up now.
+      worldUpInBlock(toWorld, level, rise);
+    },
     capabilities: {
-      // Published in block-local space: the shader's height is in the volume mesh's own
-      // (scaled) units, so it is scaled out here.
-      liquidSurface: {
-        normal,
-        height: height * boundary.volumeScale,
-        wet: (point) => point.dot(normal) <= height * boundary.volumeScale,
-      },
+      liquidSurface,
+      volume: { bounds, rise, surface: liquidSurface },
       // The look decides how particles inside it show through it (#742).
       ...(look.interior ? { interior: look.interior } : {}),
     },

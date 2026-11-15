@@ -21,7 +21,14 @@ function field(overrides: Partial<Record<string, unknown>> = {}) {
   let seconds = 0;
   const step = (rotation = new THREE.Quaternion(), reducedMotion = false, delta = 1 / 60) => {
     seconds += delta;
-    const frame: ContainedFrame = { seconds, delta, first: false, rotation, reducedMotion };
+    const frame: ContainedFrame = {
+      seconds,
+      delta,
+      first: false,
+      rotation,
+      reducedMotion,
+      toWorld: new THREE.Matrix4().makeRotationFromQuaternion(rotation),
+    };
     stars.update!(frame);
   };
   return { stars, step, positions: () => attribute("position"), colours: () => attribute("color") };

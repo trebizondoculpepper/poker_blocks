@@ -27,6 +27,8 @@ import "./contained-stars";
 import { giftBox } from "./gift-box";
 // Registers the rising-bubbles inclusion (#353).
 import "./rising-bubbles";
+// The shell-free full volume (#1230): bubbles composed inside an optical front, not a shell.
+import "./full-volume";
 // Registers the growing-grass inclusion (#358).
 import "./growing-grass";
 // Registers the settling scoops contents (#382).
