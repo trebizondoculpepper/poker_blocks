@@ -10,6 +10,7 @@
  */
 import type * as THREE from "three";
 import { Registry } from "../core/registry";
+import { unitMs } from "../visual-events/scheduler";
 import type { ExitEffectInstance } from "./exit-presentation";
 import { createFlash, createShudder, type FlashConfig, type ShudderConfig } from "./flash-shudder";
 
@@ -24,9 +25,19 @@ export type SurvivorResponse = (
 
 export const survivorResponses = new Registry<SurvivorResponse>("survivor response");
 
+/**
+ * Durations are configured in game-time units (1/15 s, #541) and adapted to the existing effects'
+ * seconds here, at the presentation boundary (#1174 review).
+ */
+export type TimedInUnits<T> = Omit<T, "seconds"> & { units?: number };
+const inSeconds = <T extends { seconds?: number }>(config: unknown): T => {
+  const { units, ...rest } = (config ?? {}) as TimedInUnits<T>;
+  return { ...rest, ...(units === undefined ? {} : { seconds: (units * unitMs) / 1000 }) } as T;
+};
+
 survivorResponses.register("flash", (target, config, reduced) =>
-  createFlash([target], config as FlashConfig, reduced),
+  createFlash([target], inSeconds<FlashConfig>(config), reduced),
 );
 survivorResponses.register("shudder", (target, config, reduced) =>
-  createShudder(target, config as ShudderConfig, reduced),
+  createShudder(target, inSeconds<ShudderConfig>(config), reduced),
 );

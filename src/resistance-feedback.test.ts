@@ -121,4 +121,16 @@ describe("resistance feedback (#1174; doc/triggered-presentation.md)", () => {
     step(100);
     expect(overlays(cube)).toBe(0);
   });
+
+  it("reset cancels what is playing and forgets deliveries: a new run's same IDs play again", () => {
+    const { controller, cube, step, resisted } = harness();
+    resisted(steel());
+    step(30);
+    controller.reset();
+    expect(overlays(cube)).toBe(0);
+    expectHome(cube);
+    resisted(steel());
+    step(30);
+    expect(overlays(cube)).toBe(1);
+  });
 });

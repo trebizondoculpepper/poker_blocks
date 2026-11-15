@@ -523,6 +523,7 @@ const placementPhase = createPlacementPhase(
   }),
 );
 const presenter: PlayPresenter = createPlayPresenter({
+  runScoped: [survivorFeedback],
   game: () => run.game,
   views: blockViews,
   hand,

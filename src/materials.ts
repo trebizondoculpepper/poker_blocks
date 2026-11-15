@@ -429,8 +429,8 @@ export const materialDefinitions = [
     appearance: {
       // The approved understated survivor feedback (#441, #1174): a flash and a shudder in place.
       survive: [
-        { response: "flash", config: { colour: 0xffffff, intensity: 0.7, seconds: 0.25 } },
-        { response: "shudder", config: { amplitude: 0.05, seconds: 0.3 } },
+        { response: "flash", config: { colour: 0xffffff, intensity: 0.7, units: 4 } },
+        { response: "shudder", config: { amplitude: 0.05, units: 5 } },
       ],
       pattern: "brushedRivets",
       assembly: "brushedFaces",
@@ -560,8 +560,8 @@ export const materialDefinitions = [
     appearance: {
       // The approved understated survivor feedback (#441, #1174): a flash and a shudder in place.
       survive: [
-        { response: "flash", config: { colour: 0xffffff, intensity: 0.7, seconds: 0.25 } },
-        { response: "shudder", config: { amplitude: 0.05, seconds: 0.3 } },
+        { response: "flash", config: { colour: 0xffffff, intensity: 0.7, units: 4 } },
+        { response: "shudder", config: { amplitude: 0.05, units: 5 } },
       ],
       pattern: "goldFoil",
       assembly: "sixFaces",

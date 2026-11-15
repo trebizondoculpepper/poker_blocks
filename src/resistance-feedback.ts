@@ -138,7 +138,16 @@ export function createResistanceFeedbackController(options: {
       options.scheduler.seal(scope);
     }
   });
+  /** Cancel whatever is still playing and forget what was delivered: the run was replaced. */
+  const reset = () => {
+    scopes.forEach((scope) => options.scheduler.cancel(scope));
+    scopes.clear();
+    mine.forEach((id) => pending.delete(id));
+    mine.clear();
+    seen.clear();
+  };
   return {
+    reset,
     /** Stop listening and cancel whatever is still playing, once. */
     dispose() {
       if (disposed) return;
