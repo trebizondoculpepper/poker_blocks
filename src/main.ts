@@ -250,7 +250,7 @@ const devDialogRoom: DialogRoom = import.meta.env.DEV
   ? (await import("./tools/dialog-room")).createDialogRoom(host, danceFloor)
   : { add: () => () => {}, show() {}, hide() {}, dispose() {} };
 const devObjectBrowser: ShopBalanceEditor = import.meta.env.DEV
-  ? (await import("./tools/object-browser")).createObjectBrowser(host)
+  ? (await import("./tools/object-browser")).createObjectBrowser(host, () => run.reducedMotion)
   : { show() {}, hide() {}, dispose() {} };
 const presentationClock = createPresentationClock();
 const traitContext: TraitContext = {

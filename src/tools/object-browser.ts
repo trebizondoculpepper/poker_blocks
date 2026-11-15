@@ -233,7 +233,11 @@ export function previewEffects(definition: MaterialDefinition, size: number): Bl
   return createBlockEffects(definition.appearance.effects ?? [], { random: cosmeticRandom, size });
 }
 
-export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
+export function createObjectBrowser(
+  host: HTMLElement,
+  /** The player's reduced-motion preference: preview effects emit nothing new under it (#1011). */
+  reducedMotion: () => boolean = () => false,
+): ObjectBrowser {
   const root = document.createElement("section");
   root.className = "object-browser";
   root.hidden = true;
@@ -312,7 +316,8 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     // Ongoing effects read the preview's actual world pose, so turning it releases dust (#1011).
     if (shown) {
       shown.object.updateWorldMatrix(true, false);
-      for (const effect of shown.effects ?? []) effect.update(seconds, shown.object, false);
+      const reduced = reducedMotion();
+      for (const effect of shown.effects ?? []) effect.update(seconds, shown.object, reduced);
     }
     prepasses.render({
       renderer,
@@ -326,18 +331,22 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     frame = requestAnimationFrame(spin);
   }
 
-  function showPreview(object: BrowsedObject): void {
-    if (shown) {
-      releasePrepasses();
-      releasePrepasses = () => {};
-      scene.remove(shown.object);
-      for (const effect of shown.effects ?? []) {
-        effect.object.removeFromParent();
-        effect.dispose();
-      }
-      shown.dispose();
-      shown = null;
+  /** Release the shown preview: its prepasses, its effects and its own resources. */
+  function releasePreview(): void {
+    if (!shown) return;
+    releasePrepasses();
+    releasePrepasses = () => {};
+    scene.remove(shown.object);
+    for (const effect of shown.effects ?? []) {
+      effect.object.removeFromParent();
+      effect.dispose();
     }
+    shown.dispose();
+    shown = null;
+  }
+
+  function showPreview(object: BrowsedObject): void {
+    releasePreview();
     part("preview").hidden = !object.preview;
     part("view").hidden = !object.preview;
     if (!object.preview) return;
@@ -484,7 +493,7 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       unmountRotation = null;
       window.removeEventListener("hashchange", route);
       releasePrepasses();
-      shown?.dispose();
+      releasePreview();
       prepasses.dispose();
       environment.dispose();
       renderer.dispose();
