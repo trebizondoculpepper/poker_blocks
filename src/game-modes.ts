@@ -1,3 +1,4 @@
+import type { ShopOfferPresentationConfig } from "./shop-offer-presentation";
 import type { DropTargetGuideConfig } from "./visual/drop-target-guide";
 import type { BlockTitleConfig } from "./scene-traits/block-title";
 import type { SpringAnchorSettings } from "./traits/spring-anchor";
@@ -88,6 +89,8 @@ export type SceneTraits = {
   passiveRackView: { source: string };
   /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
   shopStock: { source: string };
+  /** The stock dances to the beat and the hovered offer is emphasised (#774). */
+  shopOfferPresentation: Partial<ShopOfferPresentationConfig>;
   /**
    * The blurred card attract sequence is the background while this scene is in front (#147).
    * It is cosmetic: it draws no game state and its randomness is not the session's.
@@ -668,6 +671,8 @@ export const sceneDefinitions = [
         },
       },
       shopStock: { source: "shop" },
+      // Stock dances a bar-long bob/tilt, rippling a quarter beat per offer (#774).
+      shopOfferPresentation: { cycle: "bar", phaseStep: 0.25, bob: 0.03, tiltDegrees: 4 },
       // Laser guide to the dragged offer's preferred target, or a red X when it can't be
       // bought (#924; doc/presentation-contracts.md, "Laser target-guide controller").
       dropTargetGuide: {
