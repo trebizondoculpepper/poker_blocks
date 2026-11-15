@@ -1436,7 +1436,9 @@ function crystalRefraction(context: AssemblyContext): BlockAppearance {
   const rear = createRefractionRear(geometry, preset);
   // Each material declares how it takes part in a paired mask (#1207): the shaders their own.
   declareMaskAdapters({
-    opticalShader: [front, rear.material],
+    opticalShader: [front],
+    // The rear feeds the prepass capture: masked, never faded (#1336 review).
+    opticalCapture: [rear.material],
     chunkSurface: [inHand, print.skin.material],
   });
   return {
@@ -1463,7 +1465,9 @@ function crystalInternal(context: AssemblyContext): BlockAppearance {
   const front = createInternalFront() as unknown as THREE.MeshStandardMaterial;
   const rear = createInternalRear(geometry);
   declareMaskAdapters({
-    opticalShader: [front, rear.material],
+    opticalShader: [front],
+    // The rear feeds the prepass capture: masked, never faded (#1336 review).
+    opticalCapture: [rear.material],
     chunkSurface: [inHand, print.skin.material],
   });
   return {

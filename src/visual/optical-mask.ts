@@ -25,13 +25,19 @@ import { maskAdapters, type MaskAdapter } from "./paired-mask";
 
 /** Dispatch to the adapter each material declares in `userData.maskAdapter`. */
 export const materialDeclaredAdapter: MaskAdapter = {
-  adapt(material, uniforms, role) {
+  // Checked for every material before either look is swapped (#1338 review).
+  refuse(material) {
     const declared = material.userData.maskAdapter as string | undefined;
     if (!declared || !maskAdapters.has(declared))
-      throw new Error(
-        `material "${material.name || material.uuid}" declares no registered mask adapter`,
-      );
-    return maskAdapters.get(declared).adapt(material, uniforms, role);
+      return `material "${material.name || material.uuid}" declares no registered mask adapter`;
+    return maskAdapters.get(declared).refuse?.(material) ?? null;
+  },
+  adapt(material, uniforms, role) {
+    const refused = materialDeclaredAdapter.refuse!(material);
+    if (refused) throw new Error(refused);
+    return maskAdapters
+      .get(material.userData.maskAdapter as string)
+      .adapt(material, uniforms, role);
   },
 };
 
@@ -57,11 +63,11 @@ const decide = /* glsl */ `
 `;
 
 /**
- * A custom-shader adapter whose reduced-motion fade scales `fade`: `gl_FragColor.a` for a look
- * blended by its alpha, the whole premultiplied `gl_FragColor` for additive light, whose colour
- * is added whatever its alpha (#1338 review). The provider declares which.
+ * The custom-shader mask. `fade` is what its reduced-motion crossfade scales (`gl_FragColor.a`
+ * for a displayed look); null for a capture material, whose data a prepass reads and must stay
+ * whole under reduced motion, only the displayed surfaces fading (#1336 review).
  */
-function shaderMaskAdapter(fade: string): MaskAdapter {
+function shaderMaskAdapter(fade: string | null): MaskAdapter {
   return {
     adapt(original, uniforms, role) {
       const source = original as THREE.ShaderMaterial;
@@ -93,6 +99,7 @@ function shaderMaskAdapter(fade: string): MaskAdapter {
       ${source.fragmentShader}`.replace(/void main\(\)\s*\{/, `void main() {${decide}`);
       // The reduced-motion crossfade, as the chunk adapter does it: the incoming look's alpha
       // follows progress (its main's last statement), the outgoing look writes no depth under it.
+      if (fade === null) return made;
       const end = made.fragmentShader.lastIndexOf("}");
       made.fragmentShader = `${made.fragmentShader.slice(0, end)}
       if (matReduced > 0.5 && matOutgoing < 0.5) ${fade} *= matProgress;
@@ -105,12 +112,15 @@ function shaderMaskAdapter(fade: string): MaskAdapter {
 }
 
 export const opticalShaderAdapter = shaderMaskAdapter("gl_FragColor.a");
-/** For premultiplied additive light (`additiveLight`): colour fades with alpha. */
+/** A prepass's capture material (a crystal's rear): masked, never faded. */
+export const opticalCaptureAdapter = shaderMaskAdapter(null);
+/** For premultiplied additive light (`additiveLight`): colour fades with alpha (#1338 review). */
 export const additiveShaderAdapter = shaderMaskAdapter("gl_FragColor");
 
 maskAdapters.register("materialDeclared", materialDeclaredAdapter);
 maskAdapters.register("opticalShader", opticalShaderAdapter);
-// Any other custom ShaderMaterial with a `position` attribute and a `main` (#1209): a laser
-// outline, a custom face shader. The same shared-uniform patch.
+maskAdapters.register("opticalCapture", opticalCaptureAdapter);
+// Any other custom ShaderMaterial with a `position` attribute and a `main` (#1209): a custom
+// face shader. The same shared-uniform patch.
 maskAdapters.register("customShader", opticalShaderAdapter);
 maskAdapters.register("additiveShader", additiveShaderAdapter);

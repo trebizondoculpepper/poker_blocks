@@ -5,7 +5,11 @@ import {
   createRefractionRear,
   refractionPresets,
 } from "./crystal-refraction";
-import { materialDeclaredAdapter, opticalShaderAdapter } from "./optical-mask";
+import {
+  materialDeclaredAdapter,
+  opticalCaptureAdapter,
+  opticalShaderAdapter,
+} from "./optical-mask";
 import { createPairedMask, type PairedMaskUniforms } from "./paired-mask";
 
 const uniforms = (): PairedMaskUniforms => ({
@@ -93,5 +97,40 @@ describe("paired masks for optical looks (#1207)", () => {
     front.onBeforeRender = step;
     const made = opticalShaderAdapter.adapt(front, uniforms(), "incoming");
     expect(made.onBeforeRender).toBe(step);
+  });
+
+  it("keeps a capture material whole under reduced motion (#1336 review)", () => {
+    const rear = createRefractionRear(
+      new THREE.BoxGeometry(1, 1, 1),
+      refractionPresets.get("crystal"),
+    );
+    const reduced = uniforms();
+    reduced.matReduced.value = 1;
+    const made = opticalCaptureAdapter.adapt(
+      rear.material as THREE.Material,
+      reduced,
+      "incoming",
+    ) as THREE.ShaderMaterial;
+    expect(made.fragmentShader).toContain("matRay");
+    expect(made.fragmentShader).not.toContain("*= matProgress");
+    expect(made.transparent).toBe((rear.material as THREE.Material).transparent);
+  });
+
+  it("refuses a pair with an undeclared material before swapping either look (#1338 review)", () => {
+    const declared = new THREE.MeshStandardMaterial();
+    declared.userData.maskAdapter = "chunkSurface";
+    const outgoing = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), declared);
+    const stray = new THREE.MeshBasicMaterial();
+    const incoming = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), stray);
+    const mount = new THREE.Group();
+    mount.add(outgoing, incoming);
+    const result = createPairedMask({
+      mount,
+      outgoing: { root: outgoing, maskAdapter: "materialDeclared" },
+      incoming: { root: incoming, maskAdapter: "materialDeclared" },
+    });
+    expect(result).toMatchObject({ ok: false });
+    expect(outgoing.material).toBe(declared);
+    expect(incoming.material).toBe(stray);
   });
 });
