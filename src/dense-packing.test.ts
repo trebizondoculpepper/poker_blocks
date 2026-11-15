@@ -52,6 +52,12 @@ describe("Dense packing passive (#1070; doc/material-mass-and-passives.md)", () 
     expect(JSON.stringify(scored)).not.toContain("power-line-score-by-query");
   });
 
+  it("wears the exponential scoring colours, since it raises rather than multiplies", () => {
+    expect(createPassiveBlock("dense-packing", "d").traits.scoringCategory).toEqual({
+      operations: ["exponential"],
+    });
+  });
+
   it("is provisional: never in ordinary stock", () => {
     expect(ordinaryPassives().map(({ id }) => id)).not.toContain("dense-packing");
   });
