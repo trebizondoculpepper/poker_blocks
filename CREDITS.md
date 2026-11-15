@@ -33,6 +33,10 @@ The title and card-block images in `src/website/art/*.png` are original project 
 
 Baked lettering follows the material's configured font, including local system fonts where selected (no system font binaries redistributed). The bundled font families/authors/licences are credited above. Their complete notices accompany the website at `public/art-notices/`, linked from every page; existing upstream notices remain beside the font sources. No new external permissions were required for project-owned procedural artwork.
 
+### itch.io marketing illustrations (#1480)
+
+`doc/marketing/itch.io/{background,banner,embed-bg}.png` were prepared for this project with OpenAI's built-in image generation tool on 2026-11-15, referencing the project's rendered title and card-block artwork. Source: the prompts and project-owned reference files recorded in `doc/marketing/itch.io/prompts.json`; project artwork is covered by the repository's GNU GPL v3 licence. They are AI-assisted marketing illustrations, not exact game renders or gameplay screenshots. The banner received a generated edit to remove a bottle; no external image retouching was applied. Prompts, file hashes, actual dimensions and upload guidance are recorded beside them. The project's baked typography/font notices above remain applicable to the reference lettering. These are documentation/marketing assets and are not included in the game or website build.
+
 ### Sound effects
 
 Sampled effects under `src/assets/sfx/` were generated for this project with the ElevenLabs sound-effects API from the prompts in `src/audio/sfx-registry.ts` (`npm run sfx`; see [doc/sound_design.md](doc/sound_design.md)). Effects with a `synth` source are synthesised live from code in this repository. No third-party recordings are shipped. Modifications: trimming/normalisation by the project's SFX pipeline.
