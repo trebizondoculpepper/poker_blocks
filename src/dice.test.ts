@@ -29,7 +29,8 @@ describe("dice passives (#97)", () => {
   const dice = [
     ["d6", 6, "cube", 1, 4],
     ["d8", 8, "octahedron", 2, 5],
-    ["d10", 10, "d10", 3, 6],
+    // The former D10 slot: a true D12 under its stable handle (#1003).
+    ["d10", 12, "dodecahedron", 3, 6],
     ["d20", 20, "icosahedron", 4, 9],
   ] as const;
 
@@ -126,5 +127,49 @@ describe("dice passives (#97)", () => {
       const source = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
       expect(source, file).not.toMatch(/"d(6|8|10|20)"|diceSides/);
     }
+  });
+});
+
+describe("the D12 in the former D10 slot (#1003; doc/dice-replacement.md)", async () => {
+  const { GameRun } = await import("./game-run");
+  const { dealerRegistry } = await import("./dealer");
+  const { demoRunRules } = await import("./run-rules");
+  const { fromSaveRecord, toSaveRecord } = await import("./save");
+
+  it("rolls a uniform 1–12 once per resolution, the same roll on every line", () => {
+    const base = scoreFieldWithPassives(field, []);
+    for (const [draw, roll] of [
+      [0, 1],
+      [0.5, 7],
+      [0.999, 12],
+    ] as const) {
+      const random = sequence(draw);
+      const rolled = scoreFieldWithPassives(field, [die("d10")], undefined, random);
+      expect(random.draws).toBe(1);
+      expect(rolled.map(({ points }, index) => points - base[index]!.points)).toEqual([roll, roll]);
+    }
+  });
+
+  it("is named and described as a D12", () => {
+    const definition = passiveDefinitions.get("d10");
+    expect(definition.name).toBe("D12");
+    expect(definition.description).toContain("1–12");
+  });
+
+  it("restores a saved D10 instance as the D12, keeping its identity and rack place", () => {
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0);
+    const saved = createPassiveBlock("d10", "passive.saved");
+    const run = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, {
+      ...game.snapshot(),
+      state: { ...game.state, passiveRack: [die("d6", 1), saved] },
+    });
+    const json = JSON.parse(JSON.stringify(toSaveRecord(run.snapshot())));
+    const restored = fromSaveRecord(json, standardDeck, dealerRegistry)!.state.passiveRack;
+    expect(restored.map(({ id, definitionId }) => [id, definitionId])).toEqual([
+      ["passive.1", "d6"],
+      ["passive.saved", "d10"],
+    ]);
+    expect(restored[1]!.traits.appearance?.shape).toBe("dodecahedron");
+    expect(restored[1]!.traits.appearance?.faces).toHaveLength(12);
   });
 });
