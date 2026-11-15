@@ -15,6 +15,7 @@ import type { EventRule, RuleFrame } from "./event-rules";
 import { passiveRuleBuilders, type ParameterSchema } from "./configurable-passive";
 import { passiveDefinitions, type PassiveDefinition } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
+import { goldSolid, massKg, massOf } from "./physical-mass";
 import "./packing-density";
 import "./field-mass";
 import "./material-diversity";
@@ -309,12 +310,17 @@ export const massTrials = {
   light: { maximum: 10, referenceKg: 0.2 },
 } as const;
 
+/** The shared gold calibration (doc/material-mass-and-passives.md), not a material lookup. */
+const goldKg = massKg(massOf(goldSolid));
+
 /**
  * Owner-agreed weight passives (#1061; doc/material-mass-and-passives.md): total field mass,
  * eased from ×1 at the neutral mass to ×10 at the cap, multiplied in `score.lineMultiply`.
  */
 export const weightPassives = {
   light: { neutralKg: 1, capKg: 0.1, maximum: 10 },
+  // Heavy (#1073): neutral up to one solid gold block's mass, capped at four.
+  heavy: { neutralKg: goldKg, capKg: 4 * goldKg, maximum: 10 },
 } as const;
 
 /** A provisional row-multiplier passive driven by a context query, validated as composed. */
@@ -349,6 +355,20 @@ function queryTrial(
 }
 
 for (const definition of [
+  // Heavy (#1073): a heavier field scores more, from one gold block's mass up to ×10 at four.
+  queryTrial(
+    "heavy-stack",
+    "Heavy",
+    "⇩",
+    "Multiplies each scored row by up to ×10 the heavier everything in the playfield is: ×1 up to about 19.3 kg (one gold block), ×10 at four gold blocks' mass or more.",
+    {
+      query: "fieldMass",
+      value: "totalKg",
+      curve: "massEaseOut",
+      params: weightPassives.heavy,
+      phase: "score.lineMultiply",
+    },
+  ),
   // Light (#1072): a lighter field scores more, up to ×10 at or below 0.1 kg.
   queryTrial(
     "light-stack",
