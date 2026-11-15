@@ -19,7 +19,12 @@ describe("the gameplay HUD in the frame (#117)", () => {
     expect(zoneOf("discard")).toBe("bottom-left");
     expect(zoneOf("deck")).toBe("bottom-right");
     expect(zoneOf("shopBuy")).toBe("bottom-left");
-    expect(zoneOf("shopExit")).toBe("bottom-right");
+    // The shop's controls share one row, in order Buy, Sell, Continue (#1335).
+    expect(zoneOf("shopExit")).toBe("bottom-left");
+    const row = gameplayHudZones
+      .filter(({ zone }) => zone === "bottom-left")
+      .map(({ element }) => element);
+    expect(row).toEqual(["shopBuy", "discard", "shopExit"]);
   });
 
   it("places each element once, in a real zone", () => {
