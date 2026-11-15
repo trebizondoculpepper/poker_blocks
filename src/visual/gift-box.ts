@@ -229,5 +229,7 @@ export function giftBox({ art, definition, geometry, size }: AssemblyContext): B
     edgeColor: definition.appearance.edge.color,
     edgeOpacity: definition.appearance.edge.opacity,
     extras: [rosette(ribbon, size)],
+    // Its foil is standard material it made itself (#1314).
+    selectionFeedback: { provider: "emissive" },
   };
 }

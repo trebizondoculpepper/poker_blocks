@@ -1,4 +1,5 @@
 import { blockFaceArt } from "./block-presentation";
+import { bindSelectionFeedback, type SelectionBinding } from "./visual/selection-feedback";
 import { acquiredBonusDescriptor } from "./modifier-registers";
 /**
  * The three.js side of every block on screen: a cube built from the block's appearance,
@@ -45,6 +46,8 @@ export type RenderedBlock = {
   rockState?: RockState;
   /** Where the hand layout wants this cube; it glides there each frame. */
   handX?: number;
+  /** Its look's own selection feedback (#1314), released with it. */
+  selection: SelectionBinding;
 };
 
 export type BlockViews = {
@@ -72,6 +75,7 @@ export function createBlockViews(
   function dispose(rendered: RenderedBlock): void {
     held.get(rendered)?.();
     held.delete(rendered);
+    rendered.selection.dispose();
     rendered.cube.removeFromParent();
     all.splice(all.indexOf(rendered), 1);
     rendered.geometry.dispose();
@@ -133,6 +137,7 @@ export function createBlockViews(
         baseY: 0,
         rock: location === "hand" ? randomRock() : null,
         handSlot: null,
+        selection: bindSelectionFeedback(appearance, cube),
       } satisfies RenderedBlock;
       all.push(rendered);
       if (appearance.prepasses?.length && prepasses)
@@ -145,12 +150,10 @@ export function createBlockViews(
       for (const rendered of all.slice()) dispose(rendered);
     },
     highlight(selected) {
-      all.forEach(({ block, materials, edgeMaterial, edgeLook }) => {
+      all.forEach(({ block, selection, edgeMaterial, edgeLook }) => {
         const active = blockHighlighted(block, selected);
-        new Set(materials).forEach((material) => {
-          material.emissive.setHex(0xffffff);
-          material.emissiveIntensity = active ? 0.28 : 0;
-        });
+        // The look's own provider shows it (#1314): no assumption about its materials.
+        selection.setSelected(active);
         // A selected block is outlined (#305): its edges turn the selection colour, fully opaque.
         edgeMaterial.color.setHex(active ? selectionOutline : edgeLook.color);
         edgeMaterial.opacity = active ? 1 : edgeLook.opacity;

@@ -18,6 +18,7 @@ vi.mock("./visual/block-appearance", async (original) => {
       materials: [new THREE.MeshStandardMaterial()],
       edgeColor: 0xffffff,
       edgeOpacity: 1,
+      selectionFeedback: { provider: "emissive" },
       ...declared,
     }),
   };
