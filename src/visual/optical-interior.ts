@@ -270,7 +270,9 @@ type Slot = {
 
 const corner = new THREE.Vector3();
 const scratchScale = new THREE.Vector3();
-const scratchVolumeScale = new THREE.Vector3();
+const toLocal = new THREE.Matrix3();
+const right = new THREE.Vector3();
+const up = new THREE.Vector3();
 const size = new THREE.Vector2();
 const viewProjection = new THREE.Matrix4();
 const crop = new THREE.Matrix4();
@@ -476,11 +478,23 @@ export function createInteriorCapture(options: InteriorCaptureOptions = {}) {
     // The sprite's actual world extent as drawn: three.js attenuates a perspective point by depth
     // alone, so its world size is `world / P[5]` there; an orthographic one is `world` exactly.
     const extent = perspective ? world / projection[5]! : world;
-    const volumeScale = volume.getWorldScale(scratchVolumeScale);
+    // The sprite is a screen-aligned square: half its extent along the camera's right and up.
+    // Carried into the volume's local axes, its reach along axis i is the sum of those two
+    // half-axes' |component i|, whatever the volume's turn or scale.
+    toLocal.setFromMatrix4(volume.matrixWorld).invert();
+    right
+      .setFromMatrixColumn(host.matrixWorld, 0)
+      .normalize()
+      .multiplyScalar(extent / 2);
+    up.setFromMatrixColumn(host.matrixWorld, 1)
+      .normalize()
+      .multiplyScalar(extent / 2);
+    right.applyMatrix3(toLocal);
+    up.applyMatrix3(toLocal);
     uniforms.radius!.value.set(
-      extent / 2 / volumeScale.x,
-      extent / 2 / volumeScale.y,
-      extent / 2 / volumeScale.z,
+      Math.abs(right.x) + Math.abs(up.x),
+      Math.abs(right.y) + Math.abs(up.y),
+      Math.abs(right.z) + Math.abs(up.z),
     );
     uniforms.worldSize!.value = world;
     uniforms.attenuate!.value = perspective ? 1 : 0;

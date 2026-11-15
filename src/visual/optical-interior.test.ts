@@ -456,7 +456,18 @@ describe("interior contributions return their release (#1227)", () => {
     const boundary = createInteriorBoundary(new THREE.BoxGeometry(1, 1, 1), 1, 0.92);
     const bubbles = risingBubbles.build(
       boundary,
-      { liquidSurface: surface, interior: { include: () => release } },
+      {
+        liquidSurface: surface,
+        volume: {
+          bounds: new THREE.Box3().setFromCenterAndSize(
+            new THREE.Vector3(),
+            new THREE.Vector3(0.9, 0.9, 0.9),
+          ),
+          rise: surface.normal,
+          surface,
+        },
+        interior: { include: () => release },
+      },
       { count: 4, rise: 0.3, wobble: 0, size: 0.07, rest: 0.2, colour: 0xffffff, opacity: 0.7 },
     );
     expect(release).not.toHaveBeenCalled();
@@ -525,5 +536,25 @@ describe("optical interior capture: review findings (#1289)", () => {
       draws[1]!.object as THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>
     ).material.uniforms.radius!.value as THREE.Vector3;
     expect(orthoRadius.x).toBeCloseTo(0.05 / 2, 9);
+  });
+
+  it("clips a turned volume by the square sprite's reach along its own axes", () => {
+    const capture = createInteriorCapture();
+    const { renderer, draws } = recording();
+    const each = volume();
+    each.group.rotation.z = Math.PI / 4;
+    each.group.updateMatrixWorld(true);
+    (each.packet as { worldSize: number }).worldSize = 0.2;
+    leased(capture.register(each));
+    const ortho = new THREE.OrthographicCamera(-2, 2, 1, -1, 0.1, 100);
+    ortho.position.set(0, 0, 5);
+    capture.render({ ...host(renderer), camera: ortho });
+    const radius = (draws[0]!.object as THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>)
+      .material.uniforms.radius!.value as THREE.Vector3;
+    // The square's half-width 0.1 along screen x and y, seen 45° turned: 0.1 × (cos + sin).
+    expect(radius.x).toBeCloseTo(0.1 * Math.SQRT2, 9);
+    expect(radius.y).toBeCloseTo(0.1 * Math.SQRT2, 9);
+    // A sprite at local x 0.39 would reach 0.531: past the 0.5 wall, so it is clipped.
+    expect(0.39 + radius.x).toBeGreaterThan(0.5);
   });
 });
