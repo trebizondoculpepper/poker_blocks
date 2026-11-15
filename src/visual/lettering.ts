@@ -45,13 +45,15 @@ export function fitText(
   text: string,
   lettering: Lettering,
   extent = 208,
+  /** A shorter box for the text, when it shares the face with other artwork; square by default. */
+  height = extent,
 ): { lines: string[]; size: number; lineHeight: number } {
   for (let size = 208; size >= 1; size--) {
     g.font = `${lettering.weight} ${size}px ${fontStack(lettering)}`;
     const lines = wrapText(g, text, extent);
     const lineHeight = size * 1.25;
     const fits = lines.every((line) => g.measureText(line).width <= extent);
-    if (fits && lines.length * lineHeight <= extent) return { lines, size, lineHeight };
+    if (fits && lines.length * lineHeight <= height) return { lines, size, lineHeight };
   }
   throw new Error("Text cannot fit on the block face");
 }
