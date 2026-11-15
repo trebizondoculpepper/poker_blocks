@@ -37,7 +37,7 @@ import {
   type StartingProvenance,
 } from "../experiment-recorder";
 import { exportConfiguration } from "../experiment-config";
-import { appVersion } from "../version";
+import { buildIdentityUnavailable, trustedBuildIdentity } from "../build-identity";
 import { createPassiveBlock, passiveDefinitions } from "../passives";
 import type { SceneTraitBehaviour } from "../scenes";
 import type { SessionRequest, SessionResult } from "../session-host";
@@ -152,7 +152,8 @@ export function devBenchPanel<
         scenario: () => appliedScenario,
         runtime: () => run.scenarioRuntime(),
         record: () => recorder?.record() ?? null,
-        build: appVersion,
+        // Never the display version: only a trusted identity, or none (verification unavailable).
+        build: trustedBuildIdentity ?? "",
       };
       const copy = (artifact: BenchArtifact) => {
         void copyBenchArtifact(artifact, exportSource, navigator.clipboard).then((outcome) => {
@@ -188,7 +189,11 @@ export function devBenchPanel<
                 ? start
                 : {
                     ...start,
-                    configuration: exportConfiguration(next, run.scenarioRuntime(), appVersion),
+                    configuration: exportConfiguration(
+                      next,
+                      run.scenarioRuntime(),
+                      trustedBuildIdentity ?? "",
+                    ),
                   };
             },
           });
@@ -263,7 +268,9 @@ export function devBenchPanel<
         exports.className = "dev-bench-exports";
         const disclosure = document.createElement("p");
         disclosure.className = "dev-bench-disclosure";
-        disclosure.textContent = replayDisclosure;
+        disclosure.textContent = trustedBuildIdentity
+          ? replayDisclosure
+          : `${replayDisclosure} ${buildIdentityUnavailable}`;
         exports.append(
           button(configurationArtifact.label, () => copy(configurationArtifact)),
           button(replayArtifact.label, () => copy(replayArtifact)),
