@@ -881,7 +881,8 @@ export function createGameRunController<Context>(options: {
       services.field.remove(blockId);
       updateHud();
       autosave();
-      playSfx("block.destroyed");
+      // Its destruction sound is on the committed block.destroyed fact (#879), played by the
+      // scene's committedEventSounds: removal has no effect of its own to wait for.
       return true;
     },
     seedTable() {

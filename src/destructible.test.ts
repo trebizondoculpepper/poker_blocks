@@ -8,6 +8,8 @@ import { demoRunRules, sandboxRunRules } from "./run-rules";
 import { inspectBlock } from "./traits/inspectable";
 import { blockCanDestroy } from "./block-trait-behaviours";
 import { withDevDestructibleMix } from "./traits/destructible";
+import { committedSounds } from "./scene-traits/committed-event-sounds";
+import type { GameEvent } from "./passives";
 
 describe("the destructible trait", () => {
   it("only lets the causes it names destroy a block", () => {
@@ -56,6 +58,35 @@ describe("GameRun.destroyBlock", () => {
     // Destroyed for good (#659): not in the discard pile, so it can never come back.
     expect(game.state.discardPile).not.toContain(placed.block);
     expect(game.state.round).toMatchObject({ score, movesLeft, discardsLeft });
+  });
+
+  it("carries the block's configured destruction sound on its committed fact, once (#879)", () => {
+    const deck = withDevDestructibleMix(standardDeck, { share: 1, by: ["manual"] });
+    const game = new GameRun(dealerRegistry, sandboxRunRules(demoRunRules), deck, () => 0);
+    game.play({ cardId: game.state.hand[0].id });
+    const facts: GameEvent[] = [];
+    game.onCommitted((batch) => facts.push(...batch.map(({ payload }) => payload as GameEvent)));
+    game.destroyBlock(game.state.field[0].block.id, "manual");
+    expect(facts.find(({ type }) => type === "block.destroyed")?.sound).toBe("block.destroyed");
+    expect(committedSounds(facts)).toEqual(["block.destroyed"]);
+  });
+
+  it("commits no destruction sound when refused, or when the block configures none", () => {
+    const refused = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0);
+    refused.play({ cardId: refused.state.hand[0].id });
+    const facts: GameEvent[] = [];
+    refused.onCommitted((batch) => facts.push(...batch.map(({ payload }) => payload as GameEvent)));
+    expect(refused.destroyBlock(refused.state.field[0].block.id, "manual")).toBeNull();
+    expect(committedSounds(facts)).toEqual([]);
+
+    const quiet = session();
+    const quietFacts: GameEvent[] = [];
+    quiet.onCommitted((batch) =>
+      quietFacts.push(...batch.map(({ payload }) => payload as GameEvent)),
+    );
+    quiet.destroyBlock(quiet.state.field[0].block.id, "manual");
+    expect(quietFacts.some(({ type }) => type === "block.destroyed")).toBe(true);
+    expect(committedSounds(quietFacts)).toEqual([]);
   });
 
   it("refuses blocks that are not on the field or not destructible", () => {
