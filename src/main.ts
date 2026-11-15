@@ -1,3 +1,10 @@
+import {
+  createRockingRelay,
+  rockingResumeHandler,
+  type PlayfieldRockingServices,
+  type RockingSink,
+} from "./playfield-rocking";
+import { fieldMass } from "./field-mass";
 import { setContainedReducedMotion } from "./visual/contained";
 import type { WordCubeRoom } from "./tools/word-cube-room";
 import type { DialogRoom } from "./tools/dialog-room";
@@ -65,7 +72,7 @@ import { gameplayHudZones, type HudElement } from "./hud-layout";
 import { createDropTargetGuide, dropGuideProviders } from "./visual/drop-target-guide";
 import type { DropTargetGuides } from "./scene-traits/drop-target-guide";
 import { appVersion } from "./version";
-import { createVisualScheduler } from "./visual-events/scheduler";
+import { createVisualScheduler, unitMs } from "./visual-events/scheduler";
 import type { ScoreNarrationServices } from "./score-narration";
 import type { RewardLedgerServices } from "./reward-ledger";
 import {
@@ -94,6 +101,8 @@ const bin = createBinView(discardArea);
 const selectionBadge = createSelectionBadge(host);
 const view: TableRenderer = createTableRenderer(host, backgrounds);
 const render = () => view.render(cameraView.camera, cameraView.handCamera);
+// The playfield rocking resume relay (#783): the scheduler's handler reaches the controller here.
+const rockingRelay = createRockingRelay();
 const cameraView: CameraViewService = createCameraViewService({
   host,
   renderers: [view.renderer, view.front],
@@ -144,6 +153,7 @@ type TraitContext = {
     selectionBadge: SelectionBadge;
     renderer: TableRenderer;
     cameraView: CameraViewService;
+    playfieldRocking: PlayfieldRockingServices;
     audio: AudioService;
     hud: HudPanels;
     overlays: Overlays;
@@ -251,6 +261,30 @@ const traitContext: TraitContext = {
     selectionBadge,
     renderer: view,
     cameraView,
+    // The rocking controller's capabilities (#783): wiring only, no policy.
+    playfieldRocking: {
+      setRate: (rate) => cameraView.setMotionRate(rate),
+      nowMs: () => visualEvents.nowMs,
+      scheduleResume(generation, units) {
+        const scope = visualEvents.createScope(null);
+        visualEvents.schedule(scope, {
+          handler: rockingResumeHandler,
+          payload: { generation },
+          dueUnits: visualEvents.nowMs / unitMs + units,
+        });
+        visualEvents.seal(scope);
+        return () => visualEvents.cancel(scope);
+      },
+      observeBoardTurn: (listener) => input.observeBoardTurn(listener),
+      observeCarry: (listener) => input.observeCarry(listener),
+      onCommitted: (listener) => run.onCommitted(() => listener()),
+      fieldMassKg() {
+        const mass = fieldMass(run.committedState());
+        return "unavailable" in mass || mass.count === 0 ? null : mass.totalKg;
+      },
+      reducedMotion: () => run.reducedMotion,
+      relay: rockingRelay,
+    },
     audio,
     hud,
     field,
@@ -417,7 +451,7 @@ const visualServices: ScoreNarrationServices &
   ActivationLabelServices &
   RackLabelServices &
   PresentedActionServices &
-  RewardLedgerServices = {
+  RewardLedgerServices & { playfieldRocking: RockingSink } = {
   get scoreNarration() {
     return presenter.narration;
   },
@@ -432,6 +466,8 @@ const visualServices: ScoreNarrationServices &
   // Item activation labels beside the rack (#919), drawn over the same host the rack is in.
   activationLabels: createActivationLabelLayer(host),
   passiveRack: passiveRackView,
+  // Where a scheduled rocking resume reaches the playfield controller (#783).
+  playfieldRocking: rockingRelay,
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
 // Hidden time never counts as presentation time, even when the browser stops sending frames.

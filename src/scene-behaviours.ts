@@ -1,3 +1,7 @@
+import {
+  createPlayfieldRockingController,
+  type PlayfieldRockingServices,
+} from "./playfield-rocking";
 import { beatShapes } from "./dance/beat-shapes";
 import { danceCycles } from "./dance/dance-floor";
 import type { TuningControl } from "./attract-tuning-panel";
@@ -145,6 +149,8 @@ export type SceneHost = {
       | "stageReward"
     >;
     cameraView: Pick<CameraViewService, "beginShopEntrance">;
+    /** The rocking controller's narrow capabilities (#783). */
+    playfieldRocking: PlayfieldRockingServices;
     overlays: Pick<
       Overlays,
       | "showMenu"
@@ -241,6 +247,23 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.shop.present(null),
     cover: ({ services }) => services.shop.present(null),
     resume: ({ services }, config) => services.shop.present(config),
+  });
+  // Delayed, mass-dependent playfield rocking (#783): the controller owns the policy; the
+  // camera only takes the rate it is given.
+  const rocking = new WeakMap<object, ReturnType<typeof createPlayfieldRockingController>>();
+  behaviours.register("playfieldRockingController", {
+    enter({ services }, config) {
+      const controller = createPlayfieldRockingController(services.playfieldRocking, config);
+      rocking.set(config, controller);
+      controller.enter();
+    },
+    update: (_context, config) => rocking.get(config)?.update(),
+    cover: (_context, config) => rocking.get(config)?.cover(),
+    resume: (_context, config) => rocking.get(config)?.resume(),
+    exit(_context, config) {
+      rocking.get(config)?.exit();
+      rocking.delete(config);
+    },
   });
   behaviours.register("blockTitle", blockTitle<Context>());
   // A laser guide over where a drag is guided to, or a red X when it would be refused (#922).

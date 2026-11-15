@@ -1,3 +1,4 @@
+import type { PlayfieldRockingConfig } from "./playfield-rocking";
 import type { ShopOfferPresentationConfig } from "./shop-offer-presentation";
 import type { DropTargetGuideConfig } from "./visual/drop-target-guide";
 import type { BlockTitleConfig } from "./scene-traits/block-title";
@@ -96,6 +97,11 @@ export type SceneTraits = {
    * It is cosmetic: it draws no game state and its randomness is not the session's.
    */
   attractBackground: Record<never, never>;
+  /**
+   * Automatic rocking pauses after a board turn, eases back in, and runs slower the heavier
+   * the field (#783; doc/playfield-rocking.md). Settings override the documented defaults.
+   */
+  playfieldRockingController: Partial<PlayfieldRockingConfig>;
   /** Reusable, scaled music-reactive words made of letter blocks. */
   blockTitle: BlockTitleConfig;
   /** Laser guides to where a drag is guided, or a red X when it would be refused (#922). */
@@ -315,6 +321,9 @@ const playSceneTraits: Partial<SceneTraits> = {
   selectable: { sources: [{ source: "hand" }, { source: "field" }] },
   discardBin: {},
   committedEventSounds: {},
+  // Rocking waits a second after a turn, eases in over a second, and slows as the field gets
+  // heavier: rate 1 at 5 kg, at most 1.5 (doc/playfield-rocking.md defaults).
+  playfieldRockingController: {},
   deckPanel: { opens: "openDeck" },
   runInPlay: {},
   ...escapeOpensPause,
