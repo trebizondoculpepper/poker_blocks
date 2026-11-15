@@ -25,7 +25,35 @@ import type { RenderedBlock } from "../rendered-blocks";
 import type { SceneTraitBehaviour } from "../scenes";
 import { containedParts } from "../visual/contained";
 import { resolvedExit } from "../visual/exit-defaults";
-import type { ExitPresenter } from "../visual/exit-presentation";
+import type {
+  ExitPresenter,
+  ExitSequence,
+  ExitSnapshot,
+  ExitVisual,
+} from "../visual/exit-presentation";
+import { factProducer, type PlacementPhase } from "../placement-phase";
+import { phaseProducers } from "../visual-events/action-phases";
+import { unitMs, visualHandlers, type EventDescription } from "../visual-events/scheduler";
+
+/**
+ * Victims' exits belong to their action's post-scoring presentation (#1315 review;
+ * doc/triggered-presentation.md: finite victim scopes are the committed action's), so its outcome
+ * waits for them. Reserved only while the controller is mounted (composed on enter).
+ */
+export const destructionExitsProducer = "destructionExits";
+phaseProducers.register(
+  destructionExitsProducer,
+  factProducer({ fact: "block.removed", slot: "postScoring" }),
+);
+
+/** One action's victims' exits, started together when its post-scoring phase opens. */
+visualHandlers.register("destruction.exits", (payload, context) => {
+  for (const work of (payload as { exits: readonly EventDescription[] }).exits) {
+    const admitted = context.schedule({ ...work, dueUnits: context.scheduledAtMs / unitMs });
+    if (!admitted.accepted) console.warn(`a victim's exit was not admitted: ${admitted.reason}`);
+  }
+  return "done";
+});
 
 export type DestructionExitsConfig = Record<never, never>;
 
@@ -46,7 +74,11 @@ export type DestructionExitServices = {
   field: {
     detach(blockId: string): { rendered: RenderedBlock; release(): void } | null;
   };
-  exits: Pick<ExitPresenter, "start" | "dispose">;
+  exits: Pick<ExitPresenter, "start" | "prepare" | "dispose">;
+  /** The committed action's phase record, to bind its victims' exits to (#1315 review). */
+  actionPhase: Pick<PlacementPhase, "latest" | "contributionFor">;
+  /** Compose this controller's producer into the action phases while it is mounted. */
+  composeProducer(producer: string): () => void;
   /** Where a captured block's definition comes from (default: the material registry). */
   definitionOf?(block: CardBlock): MaterialDefinition;
   /** Where a missing recipe is reported (default: the console). */
@@ -58,15 +90,20 @@ export function destructionExits<
 >(): SceneTraitBehaviour<Context, DestructionExitsConfig> {
   let stop: (() => void) | null = null;
   let exits: DestructionExitServices["exits"] | null = null;
+  let uncompose: (() => void) | null = null;
   return {
     enter({ services }) {
       stop?.();
+      uncompose?.();
       exits = services.exits;
+      uncompose = services.composeProducer(destructionExitsProducer);
       const definitionOf = (block: CardBlock) =>
         services.definitionOf?.(block) ?? getMaterialDefinition(materialOf(block));
       const diagnose = (message: string) =>
         services.diagnose ? services.diagnose(message) : console.warn(message);
       stop = services.run.onCommitted((committed) => {
+        const victims: { snapshot: ExitSnapshot; visual: ExitVisual; sequence: ExitSequence }[] =
+          [];
         for (const { type, payload } of committed) {
           if (!removalFacts.has(type)) continue;
           const blockId = removalFacts.get(type)(payload);
@@ -86,21 +123,56 @@ export function destructionExits<
           }
           const { cube } = rendered;
           const parts = containedParts(cube);
-          services.exits.start(
-            {
+          victims.push({
+            snapshot: {
               blockId,
               ...(rendered.cell ? { cell: { ...rendered.cell } } : {}),
               material: definition.id,
             },
-            { root: cube, shell: [cube, ...parts.shell], contents: parts.contents, release },
+            visual: {
+              root: cube,
+              shell: [cube, ...parts.shell],
+              contents: parts.contents,
+              release,
+            },
             sequence,
-          );
+          });
         }
+        // This action's reservation, if it has one (its record committed just before this).
+        const key = services.actionPhase.latest;
+        const contribution =
+          key && services.actionPhase.contributionFor(key, destructionExitsProducer);
+        if (!contribution) {
+          // No action record to join (none composed, or it couldn't be recorded): each plays now.
+          for (const { snapshot, visual, sequence } of victims)
+            services.exits.start(snapshot, visual, sequence);
+          return;
+        }
+        if (!victims.length) {
+          contribution.settleEmpty();
+          return;
+        }
+        const prepared = victims.map(({ snapshot, visual, sequence }) =>
+          services.exits.prepare(snapshot, visual, sequence),
+        );
+        const abandon = () => prepared.forEach((each) => each.abandon());
+        if (
+          !contribution.bind({
+            handler: "destruction.exits",
+            payload: { exits: prepared.map(({ work }) => work) },
+            dueUnits: 0,
+          })
+        )
+          abandon();
+        // Cancelled or failed before the exits started: their blocks still go, released once.
+        else contribution.observe(abandon);
       });
     },
     exit() {
       stop?.();
       stop = null;
+      uncompose?.();
+      uncompose = null;
       // Every exit this scene started ends with it, releasing its block.
       exits?.dispose();
       exits = null;

@@ -240,6 +240,8 @@ export function createFieldView(options: {
       pulses.get(blockId)?.stop();
       pulses.delete(blockId);
       placed.delete(key);
+      // The exit owns it now: a table reset's bulk disposal never frees it under the exit.
+      views.transfer(rendered);
       massCenter = removeCell(massCenter, rendered.cell!);
       if (massCenter.count > 0) options.onCenter(centerOfGravity(massCenter));
       let held = true;

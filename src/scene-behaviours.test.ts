@@ -23,7 +23,9 @@ function recordingHost() {
     host: { dataset: {} } as HTMLElement,
     services: {
       field: { detach: () => null },
-      exits: { start: () => {}, dispose: () => {} },
+      exits: { start: () => {}, prepare: () => ({}) as never, dispose: () => {} },
+      actionPhase: { latest: null, contributionFor: () => null },
+      composeProducer: () => () => {},
       visualEvents: {
         nowMs: 0,
         createScope: () => ({}) as never,

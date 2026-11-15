@@ -1,4 +1,9 @@
-import { createPlacementPhase, placementProducer, scoringProducer } from "./placement-phase";
+import {
+  createPlacementPhase,
+  placementProducer,
+  scoringProducer,
+  type PlacementPhase,
+} from "./placement-phase";
 import { createActionPhases } from "./visual-events/action-phases";
 import type { TransitionAudioServices } from "./scene-traits/material-change-sounds";
 import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
@@ -175,6 +180,8 @@ type TraitContext = {
     hand: HandView;
     field: FieldView;
     exits: ExitPresenter;
+    actionPhase: PlacementPhase;
+    composeProducer(producer: string): () => void;
     firstPlay: FirstPlayTable;
     actionLog: ActionLog;
     actionWatch: ActionWatch;
@@ -284,6 +291,10 @@ const traitContext: TraitContext = {
     get exits() {
       return exitPresenter;
     },
+    get actionPhase() {
+      return placementPhase;
+    },
+    composeProducer: (producer) => actionPhases.compose(producer),
     // The rocking controller's capabilities (#783): wiring only, no policy.
     playfieldRocking: {
       setRate: (rate) => cameraView.setMotionRate(rate),
@@ -522,13 +533,11 @@ const exitPresenter = createExitPresenter(visualEvents, () => run.reducedMotion)
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
 document.addEventListener("visibilitychange", () => visualEvents.suspend());
 // Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).
-const placementPhase = createPlacementPhase(
-  run,
-  createActionPhases(visualEvents, {
-    plan: "scoring",
-    producers: [placementProducer, scoringProducer],
-  }),
-);
+const actionPhases = createActionPhases(visualEvents, {
+  plan: "scoring",
+  producers: [placementProducer, scoringProducer],
+});
+const placementPhase = createPlacementPhase(run, actionPhases);
 const presenter: PlayPresenter = createPlayPresenter({
   game: () => run.game,
   views: blockViews,

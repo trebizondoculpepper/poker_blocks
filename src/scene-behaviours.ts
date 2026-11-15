@@ -2,6 +2,7 @@ import { materialChangeSounds } from "./scene-traits/material-change-sounds";
 import { destructionExits } from "./scene-traits/destruction-exits";
 import type { ExitPresenter } from "./visual/exit-presentation";
 import type { FieldView } from "./field-view";
+import type { PlacementPhase } from "./placement-phase";
 import { shopExitResponse, type ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
   createPlayfieldRockingController,
@@ -160,7 +161,11 @@ export type SceneHost = {
     /** The table, for the destruction-exit controller to take a removed block's cube (#1173). */
     field: Pick<FieldView, "detach">;
     /** The shared block-exit presenter (#1173). */
-    exits: Pick<ExitPresenter, "start" | "dispose">;
+    exits: Pick<ExitPresenter, "start" | "prepare" | "dispose">;
+    /** Committed actions' phase records, for a controller to bind its contribution (#1173). */
+    actionPhase: Pick<PlacementPhase, "latest" | "contributionFor">;
+    /** Compose a controller's producer into the action phases while it is mounted. */
+    composeProducer(producer: string): () => void;
     /** The shared visual-event scheduler, for controller traits' required effects (#880). */
     visualEvents: ShopExitScheduler;
     overlays: Pick<

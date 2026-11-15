@@ -34,6 +34,7 @@ import {
   unitMs,
   visualHandlers,
   type EffectHandle,
+  type EventDescription,
   type ScopeHandle,
   type VisualScheduler,
 } from "../visual-events/scheduler";
@@ -281,6 +282,30 @@ export function createExitPresenter(
       if (admitted.accepted) events.seal(scope);
       else events.cancel(scope);
     },
+    /**
+     * Prepare a block's exit as work for someone else's scope (#1173 review: an action's
+     * post-scoring contribution), rather than a root of its own: `work` is the `block.exit` event
+     * to bind or schedule; `abandon` releases the visual if that work never starts (its scope was
+     * cancelled first). Its visual is the exit's from now on.
+     */
+    prepare(
+      snapshot: ExitSnapshot,
+      visual: ExitVisual,
+      sequence: ExitSequence,
+    ): { work: EventDescription; abandon(): void } {
+      const id = ++nextId;
+      waiting.set(id, { snapshot, visual, sequence, reducedMotion });
+      return {
+        work: { handler: "block.exit", payload: { id }, dueUnits: 0 },
+        abandon() {
+          const unstarted = waiting.get(id);
+          if (!unstarted) return;
+          waiting.delete(id);
+          unstarted.visual.root.removeFromParent();
+          unstarted.visual.release();
+        },
+      };
+    },
     /** End one block's exit now (its cell is reused), cleaning up everything. */
     cancel(blockId: string): void {
       for (const [scope, snapshot] of Array.from(scopes))
@@ -293,6 +318,12 @@ export function createExitPresenter(
     /** End every exit (the scene leaves). */
     dispose(): void {
       for (const scope of Array.from(scopes.keys())) events.cancel(scope);
+      // Prepared exits whose work never started let their blocks go too.
+      for (const [id, unstarted] of Array.from(waiting)) {
+        waiting.delete(id);
+        unstarted.visual.root.removeFromParent();
+        unstarted.visual.release();
+      }
     },
   };
 }
