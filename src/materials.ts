@@ -738,7 +738,15 @@ export const materialDefinitions = [
       height: "iceRelief",
       ink: lightInk,
       edge: { color: 0xd3f7ff, opacity: 0 },
-      geometry: { ...box, scale: 0.985 },
+      // Rougher, less even edges (#1001; doc/audition-followups.md): Meat's registered chopped
+      // geometry, configured far milder so it still reads as a clean ice cube.
+      geometry: {
+        shape: "chopped",
+        segments: 4,
+        radius: 0,
+        scale: 0.985,
+        chop: { cuts: [2, 3], depth: [0.01, 0.04], dent: 0.005 },
+      },
       reliefScale: 3,
       endGrainFaces: noEnds,
     },
