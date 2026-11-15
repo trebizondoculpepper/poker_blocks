@@ -193,6 +193,8 @@ export function verifyReplay(
   session.random.restore(start.checkpoint);
   let committed: { facts: readonly EventEnvelope[]; metadata: CommittedMetadata }[] = [];
   const stop = run.onCommitted((facts, metadata) => committed.push({ facts, metadata }));
+  // The first decided outcome the candidate commits, by step (#1329 review).
+  let decided: { result: "won" | "lost"; index: number; score: number } | null = null;
   try {
     for (const [index, step] of steps.entries()) {
       committed = [];
@@ -212,6 +214,8 @@ export function verifyReplay(
         score: run.state.round.score,
         checkpoint: own?.metadata.checkpoint ?? null,
       };
+      const outcome = own ? readFacts(own.facts).outcome : null;
+      if (outcome && !decided) decided = { result: outcome, index, score: run.state.round.score };
       const field = (["accepted", "facts", "awarded", "score", "checkpoint"] as const).find(
         (key) => JSON.stringify(expected[key]) !== JSON.stringify(actual[key]),
       );
@@ -226,6 +230,24 @@ export function verifyReplay(
           diagnostic: `step ${index} (${command.command}): its ${field} differs`,
         };
     }
+    // The record's final outcome must be the one the journal actually reaches.
+    const recorded = record.outcome
+      ? {
+          result: record.outcome.result,
+          index: steps.findIndex(({ actionId }) => actionId === record.outcome!.actionId),
+          score: record.outcome.score,
+        }
+      : null;
+    if (JSON.stringify(recorded) !== JSON.stringify(decided))
+      return {
+        verified: false,
+        stage: "mismatch",
+        index: decided?.index ?? recorded?.index ?? steps.length,
+        command: "outcome",
+        expected: shown(recorded),
+        actual: shown(decided),
+        diagnostic: "the trial's recorded outcome differs from the one its journal reaches",
+      };
     return { verified: true, steps: steps.length };
   } finally {
     stop();

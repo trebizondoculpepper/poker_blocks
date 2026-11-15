@@ -259,4 +259,17 @@ describe("experiment replay export and verification (#936; doc/experiments/comma
       }),
     ).toMatchObject({ verified: false });
   });
+
+  it("verifies the recorded outcome against the one the journal reaches (#1329 review)", () => {
+    const { record } = recordTrial();
+    expect(record.outcome).toBeNull();
+    const claimed: ExperimentRecord = JSON.parse(JSON.stringify(record));
+    claimed.outcome = { result: "won", actionId: claimed.actions[0]!.actionId, score: 0 };
+    expect(
+      verifyReplay(exportReplay({ build: "b", configuration: configFor("b"), record: claimed }), {
+        build: "b",
+        runtime,
+      }),
+    ).toMatchObject({ verified: false, stage: "mismatch", command: "outcome" });
+  });
 });
