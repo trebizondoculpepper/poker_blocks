@@ -169,7 +169,6 @@ export function createStageScoreGraph(host: StageScoreGraphHost) {
         margin: "-1px",
       });
       summary.setAttribute("role", "img");
-      summary.setAttribute("aria-label", "Stage score graph");
       host.host.append(summary);
       const release = host.compose(graphProducer);
       const controller = createScoreGraphController({
@@ -179,7 +178,11 @@ export function createStageScoreGraph(host: StageScoreGraphHost) {
         sink: {
           draw(series) {
             surface.update(stageGraphPlot(series, config.targetHeight));
-            summary.textContent = stageGraphSummary(series);
+            // The image's accessible name is the summary itself (#1311 review): an `img` role
+            // makes its text presentational, so the label carries it.
+            const words = stageGraphSummary(series);
+            summary.textContent = words;
+            summary.setAttribute("aria-label", `Stage score graph. ${words}`);
           },
         },
       });

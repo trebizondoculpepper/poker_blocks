@@ -112,7 +112,11 @@ describe("the stage graph service (#1064)", () => {
   afterEach(() => void (globalThis.document = original));
 
   function host() {
-    const appended: { removed: boolean; textContent: string }[] = [];
+    const appended: {
+      removed: boolean;
+      textContent: string;
+      attributes: Record<string, string>;
+    }[] = [];
     globalThis.document = {
       createElement: () => {
         const element = {
@@ -120,7 +124,10 @@ describe("the stage graph service (#1064)", () => {
           textContent: "",
           removed: false,
           style: {},
-          setAttribute: () => {},
+          attributes: {} as Record<string, string>,
+          setAttribute(name: string, value: string) {
+            element.attributes[name] = value;
+          },
           remove() {
             element.removed = true;
           },
@@ -165,6 +172,10 @@ describe("the stage graph service (#1064)", () => {
     expect(listening()).toBe(1);
     // Restored without replay: the captured history, drawn at once.
     expect(appended[0]!.textContent).toBe("Stage score 60, target 200, after 1 of 5 plays.");
+    // Its accessible name carries the same words, since an image's text is presentational.
+    expect(appended[0]!.attributes["aria-label"]).toBe(
+      "Stage score graph. Stage score 60, target 200, after 1 of 5 plays.",
+    );
   });
 
   it("releases everything it owns on hide, once, and showing again never doubles up", () => {
