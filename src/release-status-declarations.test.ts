@@ -18,9 +18,10 @@ describe("release-status declarations (#812)", () => {
       expect(resolveReleaseStatus(definition.id, definition.releaseStatus), definition.id).toBe(
         "certified",
       );
+    // The production Present wrapper is the one certified experimental definition (#1129).
     for (const definition of experimentalMaterials)
       expect(resolveReleaseStatus(definition.id, definition.releaseStatus), definition.id).toBe(
-        "provisional",
+        definition.id === "giftWrap" ? "certified" : "provisional",
       );
   });
 
