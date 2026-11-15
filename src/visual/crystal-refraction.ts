@@ -38,6 +38,7 @@ import {
   type LookupRipple,
   type RippleSettings,
 } from "./lookup-ripple";
+import { setCameraClip } from "./optical-interior";
 import { preservingRenderState, type RenderPass } from "./render-pass";
 
 /** The camera layer the rear (offset) pass draws: never the main view. */
@@ -126,6 +127,14 @@ const captureSlots = {
   backgroundMap: { value: null as THREE.Texture | null },
   offsetMap: { value: null as THREE.Texture | null },
   screenSize: { value: new THREE.Vector2(1, 1) },
+  /**
+   * The background's own hardware depth (#1227; doc/optical-interiors.md, "Bounded capture
+   * proposal"): a sampled attachment of the background target already drawn, never a second
+   * full-scene depth render. Read it through `interiorDepthGlsl`'s linear view-depth convention,
+   * with `cameraClip` (near, far, 1 for perspective or 0 for orthographic).
+   */
+  backgroundDepthMap: { value: null as THREE.Texture | null },
+  cameraClip: { value: new THREE.Vector3(0.1, 100, 1) },
 };
 
 const size = new THREE.Vector2();
@@ -137,7 +146,11 @@ const size = new THREE.Vector2();
  * the blocks.
  */
 export function createRefractionCapture(preset: string): RenderPass {
-  const background = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+  const background = new THREE.WebGLRenderTarget(1, 1, {
+    type: THREE.HalfFloatType,
+    // Sampled by optical interiors (#1227): the depth this capture already writes, kept.
+    depthTexture: new THREE.DepthTexture(1, 1),
+  });
   const offsets = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
   return {
     render(frame) {
@@ -151,6 +164,8 @@ export function createRefractionCapture(preset: string): RenderPass {
       captureSlots.backgroundMap.value = background.texture;
       captureSlots.offsetMap.value = offsets.texture;
       captureSlots.screenSize.value.set(width, height);
+      captureSlots.backgroundDepthMap.value = background.depthTexture;
+      setCameraClip(captureSlots.cameraClip.value, camera);
       preservingRenderState(frame, () => {
         // 1. What lies behind the blocks.
         const shown = hide.visible;
@@ -171,8 +186,14 @@ export function createRefractionCapture(preset: string): RenderPass {
       });
     },
     dispose() {
-      for (const slot of [captureSlots.backgroundMap, captureSlots.offsetMap])
-        if (slot.value === background.texture || slot.value === offsets.texture) slot.value = null;
+      const own = [background.texture, offsets.texture, background.depthTexture];
+      for (const slot of [
+        captureSlots.backgroundMap,
+        captureSlots.offsetMap,
+        captureSlots.backgroundDepthMap,
+      ])
+        if (own.includes(slot.value)) slot.value = null;
+      background.depthTexture?.dispose();
       background.dispose();
       offsets.dispose();
     },

@@ -111,15 +111,20 @@ export const risingBubbles: InclusionHandler = {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    // The bubbles own their geometry; it is released with their material, which the block disposes.
-    material.addEventListener("dispose", () => geometry.dispose());
+
     const points = new THREE.Points(geometry, material);
     points.scale.setScalar(boundary.volumeScale);
     points.renderOrder = containedLayers.contentsTransparent;
     points.frustumCulled = false;
     keepWorldSize(points, material, config.size * width);
     // The liquid says how its particles show through it (#742); the bubbles never ask what it is.
-    interior?.include(points);
+    const release = interior?.include(points);
+    // The bubbles own their geometry and their interior registration; both are released with their
+    // material, which the block disposes.
+    material.addEventListener("dispose", () => {
+      release?.();
+      geometry.dispose();
+    });
     const up = new THREE.Vector3();
     const side = new THREE.Vector3();
     const point = new THREE.Vector3();
