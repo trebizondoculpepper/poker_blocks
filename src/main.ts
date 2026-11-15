@@ -233,11 +233,18 @@ const deckView = createDeckView(host);
 const devShopBalanceEditor: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/shop-balance-editor")).createShopBalanceEditor(host)
   : { show() {}, hide() {}, dispose() {} };
+// Developer rooms that draw with WebGL are built only while shown (#1365): a page holds only so
+// many WebGL contexts, and past that the browser drops the table's.
+const lazy = import.meta.env.DEV ? (await import("./tools/lazy-room")).lazyRoom : null;
 const devBlockDesigner: ShopBalanceEditor = import.meta.env.DEV
-  ? (await import("./tools/block-designer")).createBlockDesigner(host)
+  ? await import("./tools/block-designer").then(({ createBlockDesigner }) =>
+      lazy!(() => createBlockDesigner(host)),
+    )
   : { show() {}, hide() {}, dispose() {} };
 const devContainedProof: ShopBalanceEditor = import.meta.env.DEV
-  ? (await import("./tools/contained-proof/room")).createContainedProofRoom(host)
+  ? await import("./tools/contained-proof/room").then(({ createContainedProofRoom }) =>
+      lazy!(() => createContainedProofRoom(host)),
+    )
   : { show() {}, hide() {}, dispose() {} };
 // The frame loop's pause capability, for tools that need the GPU to themselves.
 const renderGate = createRenderGate();
@@ -259,14 +266,14 @@ const devProfiler: ProfilerRoom = import.meta.env.DEV
       showReport() {},
     };
 const devCrystalComparison: CrystalComparisonRoom = import.meta.env.DEV
-  ? (await import("./tools/crystal-comparison/room")).createCrystalComparisonRoom(host, {
-      reducedMotion: () => run.reducedMotion,
-    })
+  ? await import("./tools/crystal-comparison/room").then(({ createCrystalComparisonRoom }) =>
+      lazy!(() => createCrystalComparisonRoom(host, { reducedMotion: () => run.reducedMotion })),
+    )
   : { show() {}, hide() {}, dispose() {} };
 const devFlameBench: FlameBenchRoom = import.meta.env.DEV
-  ? (await import("./tools/flame-bench/room")).createFlameBenchRoom(host, {
-      reducedMotion: () => run.reducedMotion,
-    })
+  ? await import("./tools/flame-bench/room").then(({ createFlameBenchRoom }) =>
+      lazy!(() => createFlameBenchRoom(host, { reducedMotion: () => run.reducedMotion })),
+    )
   : { show() {}, hide() {}, dispose() {} };
 const devEffectAudition = import.meta.env.DEV
   ? (await import("./tools/effect-audition")).createEffectAuditionNote(host)
@@ -284,7 +291,9 @@ const devDialogRoom: DialogRoom = import.meta.env.DEV
   ? (await import("./tools/dialog-room")).createDialogRoom(host, danceFloor)
   : { add: () => () => {}, show() {}, hide() {}, dispose() {} };
 const devObjectBrowser: ShopBalanceEditor = import.meta.env.DEV
-  ? (await import("./tools/object-browser")).createObjectBrowser(host, () => run.reducedMotion)
+  ? await import("./tools/object-browser").then(({ createObjectBrowser }) =>
+      lazy!(() => createObjectBrowser(host, () => run.reducedMotion)),
+    )
   : { show() {}, hide() {}, dispose() {} };
 const presentationClock = createPresentationClock();
 const traitContext: TraitContext = {
