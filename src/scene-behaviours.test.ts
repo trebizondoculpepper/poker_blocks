@@ -168,6 +168,7 @@ function recordingHost() {
         guideProvider: { preferred: () => [], refusal: () => null },
         render: (offers: readonly ShopOffer[], visible: boolean) =>
           calls.push(`shop:${visible}:${offers.length}`),
+        present: () => {},
         burnUnsold: () => Promise.resolve(),
         frame: () => undefined,
         dispose: () => undefined,

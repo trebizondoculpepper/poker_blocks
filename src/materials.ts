@@ -346,6 +346,8 @@ export const materialDefinitions = [
     lifecycle: { parent: "ordinaryCard" },
     // Its scoring material family (doc/experiments/spatial-modifiers.md, #819).
     materialFamily: "wood",
+    // Its transmogrifier costs 5, not the default twice base price (#1058, doc/game.md).
+    transmogrifier: { price: 5 },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
     name: "Wood",
     acoustics: { character: "knocking", hardness: 3, attach: "material.attach.wood" },
