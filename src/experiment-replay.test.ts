@@ -1,0 +1,162 @@
+import { describe, expect, it } from "vite-plus/test";
+import { Registry } from "./core/registry";
+import { baseDealer, type Dealer } from "./dealer";
+import { buildScenario, scenarioVersion, type ScenarioDefinition } from "./dev-scenario";
+import { createExperimentRecorder, type ExperimentRecord } from "./experiment-recorder";
+import { exportReplay, verifyReplay } from "./experiment-replay";
+import type { RunRules } from "./run-rules";
+
+const dealers = new Registry<Dealer>("dealer");
+dealers.register(baseDealer.name, baseDealer);
+const rules: RunRules = {
+  stage: () => ({ dealer: "base", targetScore: 1000, plays: 10, discards: 10 }),
+  handAtStageEnd: "return-to-deck",
+  discardPileAfterShop: "keep-out",
+};
+const runtime = { dealers, rules };
+
+const scenario: ScenarioDefinition = {
+  version: scenarioVersion,
+  seed: 7,
+  steps: [
+    {
+      capability: "devDeck",
+      config: { steps: [{ operation: "standardTemplates" }, { operation: "shuffle" }] },
+    },
+    { capability: "devHand", config: { indices: [0, 1, 2, 3, 4, 5, 6, 7] } },
+  ],
+};
+const configuration = { scenario };
+
+/** A live installed trial, recorded through a play, a refill attempt, a discard, a refill and a reorder. */
+function recordTrial() {
+  const built = buildScenario(scenario, runtime);
+  if (!built.ok) throw new Error(built.diagnostics.join("\n"));
+  const { run, session } = built.trial;
+  const recorder = createExperimentRecorder(
+    {
+      onCommitted: run.onCommitted.bind(run),
+      committedState: () => run.state,
+      lastScoring: () => ({ field: run.lastScoringField, lines: run.lastScoredLines }),
+    },
+    {
+      start: () => ({
+        configuration,
+        snapshot: run.snapshot(),
+        ids: {},
+        checkpoint: session.random.checkpoint(),
+        setup: [],
+      }),
+    },
+  );
+  run.play({ cardId: run.state.hand[0]!.id });
+  run.refillHand();
+  run.discard([run.state.hand[1]!.id, run.state.hand[2]!.id]);
+  run.refillHand();
+  run.reorderHand(0, 3);
+  return { run, session, record: recorder.record() };
+}
+
+describe("experiment replay export and verification (#936; doc/experiments/command-journal.md)", () => {
+  it("exports a replayable artifact and verifies it step by step on the same build", () => {
+    const { record } = recordTrial();
+    const artifact = exportReplay({ build: "build-1", configuration, record });
+    // The first refill drew nothing (the hand was still full), so it is no step at all.
+    expect(record.actions.map(({ kind }) => kind)).toEqual([
+      "play",
+      "discard",
+      "refillHand",
+      "reorderHand",
+    ]);
+    expect(artifact).toMatchObject({ replayable: true, diagnostics: [] });
+    expect(verifyReplay(artifact, { build: "build-1", runtime })).toEqual({
+      verified: true,
+      steps: 4,
+    });
+  });
+
+  it("refuses another build, before rebuilding anything", () => {
+    const artifact = exportReplay({
+      build: "build-1",
+      configuration,
+      record: recordTrial().record,
+    });
+    const verdict = verifyReplay(artifact, { build: "build-2", runtime });
+    expect(verdict).toMatchObject({ verified: false, stage: "refused" });
+    expect((verdict as { diagnostic: string }).diagnostic).toContain("not this build");
+  });
+
+  it("refuses a record that is not replayable, or longer than the bound", () => {
+    const { record } = recordTrial();
+    const incomplete: ExperimentRecord = {
+      ...record,
+      start: { unavailable: "installed mid-session" },
+      completeness: {
+        ...record.completeness,
+        start: { complete: false, reason: "installed mid-session" },
+      },
+    };
+    const notReplayable = verifyReplay(
+      exportReplay({ build: "b", configuration, record: incomplete }),
+      {
+        build: "b",
+        runtime,
+      },
+    );
+    expect(notReplayable).toMatchObject({ stage: "refused" });
+    expect((notReplayable as { diagnostic: string }).diagnostic).toContain("not replayable");
+    expect(
+      verifyReplay(exportReplay({ build: "b", configuration, record }), {
+        build: "b",
+        runtime,
+        maxSteps: 2,
+      }),
+    ).toMatchObject({ stage: "refused", diagnostic: expect.stringContaining("step bound") });
+  });
+
+  it("reports the first mismatch with its step, command and projections", () => {
+    const { record } = recordTrial();
+    const tampered: ExperimentRecord = JSON.parse(JSON.stringify(record));
+    tampered.actions[1]!.score += 5;
+    tampered.actions[2]!.awarded += 9;
+    const verdict = verifyReplay(exportReplay({ build: "b", configuration, record: tampered }), {
+      build: "b",
+      runtime,
+    });
+    expect(verdict).toMatchObject({
+      verified: false,
+      stage: "mismatch",
+      index: 1,
+      command: "discard",
+      diagnostic: "step 1 (discard): its score differs",
+    });
+  });
+
+  it("catches a changed fact, not hidden by normalization", () => {
+    const { record } = recordTrial();
+    const tampered: ExperimentRecord = JSON.parse(JSON.stringify(record));
+    tampered.actions[0]!.facts[0]!.type = "something.else";
+    expect(
+      verifyReplay(exportReplay({ build: "b", configuration, record: tampered }), {
+        build: "b",
+        runtime,
+      }),
+    ).toMatchObject({ stage: "mismatch", index: 0, diagnostic: expect.stringContaining("facts") });
+  });
+
+  it("leaves the live trial exactly as it was", () => {
+    const { run, session, record } = recordTrial();
+    const state = run.state;
+    const mark = session.random.checkpoint();
+    verifyReplay(exportReplay({ build: "b", configuration, record }), { build: "b", runtime });
+    expect(run.state).toBe(state);
+    expect(session.random.checkpoint()).toEqual(mark);
+  });
+
+  it("refuses something that isn't a replay artifact", () => {
+    expect(verifyReplay({ format: "other" }, { build: "b", runtime })).toMatchObject({
+      stage: "refused",
+      diagnostic: "not an experiment replay",
+    });
+  });
+});
