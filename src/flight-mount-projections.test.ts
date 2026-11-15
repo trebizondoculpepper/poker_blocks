@@ -58,4 +58,19 @@ describe("committed facts on in-flight mounts (#1164; doc/visual-event-interface
     );
     expect(mounts.resolve(mount)!.appearance.material).toBe("steel");
   });
+
+  it("follows a reaction's captured look, such as a steak cooking mid-flight (#1303)", () => {
+    const mounts = createMountRegistry<Cell, Card>();
+    const mount = mounts.create({ x: 0, y: 0, z: 0 }, { id: "s", material: "rare" });
+    const after = { id: "s", material: "medium" };
+    mounts.publish(
+      {
+        handler: "reaction.applied",
+        correlation: 1,
+        payload: { blockId: "s", snapshots: { after } },
+      },
+      mount,
+    );
+    expect(mounts.resolve(mount)!.appearance).toEqual(after);
+  });
 });

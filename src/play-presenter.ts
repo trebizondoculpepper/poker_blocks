@@ -445,7 +445,8 @@ export function createPlayPresenter(options: {
       if (!latest) {
         // Removed while it flew (the Nothingifier, #156): nothing of it lands.
         views.dispose(flight.source);
-        if (flight.target) field.remove(flight.target.block.id);
+        // Never adopted: its handover view is released here, not leaked (#1306).
+        if (flight.target) views.dispose(flight.target);
         continue;
       }
       if (flight.target) {

@@ -87,6 +87,9 @@ registerRuleCommand<{ blockId: string; steps?: number; sound?: SoundEffectId }>(
       {
         type: "reaction.applied",
         blockId,
+        // The captured look before and after, so presentation holding the block (an in-flight
+        // mount) can show its new doneness without reading the live field (#1303).
+        snapshots: { before: placed.block, after: cooked },
         reaction: {
           from: { material, doneness: names.at(from) },
           to: { material, doneness: names.at(to) },
