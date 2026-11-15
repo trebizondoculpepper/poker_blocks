@@ -32,7 +32,16 @@ function liquid(height = 0.05): LiquidSurface & { normal: THREE.Vector3; height:
 
 function run(surface: ReturnType<typeof liquid>, frames: number, reducedMotion = false) {
   const boundary = createInteriorBoundary(geometry, 1, 0.92);
-  const bubbles = risingBubbles.build(boundary, { liquidSurface: surface }, config);
+  const extent = boundary.halfSize * boundary.volumeScale;
+  const volume = {
+    bounds: new THREE.Box3().setFromCenterAndSize(
+      new THREE.Vector3(),
+      new THREE.Vector3().setScalar(extent * 2),
+    ),
+    rise: surface.normal,
+    surface,
+  };
+  const bubbles = risingBubbles.build(boundary, { liquidSurface: surface, volume }, config);
   const points = bubbles.meshes[0] as THREE.Points;
   let seconds = 0;
   const step = (delta = 1 / 60) => {
@@ -42,6 +51,7 @@ function run(surface: ReturnType<typeof liquid>, frames: number, reducedMotion =
       delta,
       first: false,
       rotation: new THREE.Quaternion(),
+      toWorld: new THREE.Matrix4(),
       reducedMotion,
     };
     bubbles.update!(frame);
@@ -99,7 +109,7 @@ describe("rising bubbles (#353)", () => {
     );
   });
 
-  it("are refused by contents that publish no liquid surface", async () => {
+  it("are refused by contents that publish no volume", async () => {
     await import("./cloud");
     await import("./filled-vessel");
     expect(() =>
@@ -116,7 +126,7 @@ describe("rising bubbles (#353)", () => {
         undefined,
         [{ effect: "risingBubbles", config }],
       ),
-    ).toThrow(/needs contents that publish liquidSurface/);
+    ).toThrow(/needs contents that publish volume/);
   });
 
   it("release their geometry with their material", () => {

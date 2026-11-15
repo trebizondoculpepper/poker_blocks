@@ -76,6 +76,8 @@ import { createRenderGate } from "./render-gate";
 import type { CrystalComparisonRoom } from "./tools/crystal-comparison/room";
 import type { FlameBenchRoom } from "./tools/flame-bench/room";
 import { createBinView, type BinView } from "./bin-view";
+import { registerBinControlPresenter } from "./bin-control-presenter";
+import { createControlGroup } from "./block-menu/control-group";
 import { createSelectionBadge, type SelectionBadge } from "./selection-badge";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
@@ -449,6 +451,11 @@ const hand: HandView = createHandView({
   onLayout: () => run.showSelection(),
 });
 run.seedTable();
+// The shop's controls (Buy, Sell) share one control-stage host over the scene (#1078).
+const controlOverlay = document.createElement("div");
+host.append(controlOverlay);
+const shopControls = createControlGroup(controlOverlay, () => run.reducedMotion);
+registerBinControlPresenter(shopControls);
 const shopView = createShopView(
   host,
   passiveRackView.element,
@@ -458,7 +465,7 @@ const shopView = createShopView(
   () => run.deckBlocks().length,
   () => run.reducedMotion,
   (id, destination) => run.game.purchaseVerdict(id, destination),
-  { floor: danceFloor },
+  { floor: danceFloor, controls: shopControls },
 );
 shopView.render([], false);
 // Triggered explosions' pops (#1172): one dazzle over the table, seen through its camera.
@@ -668,6 +675,9 @@ frame = requestAnimationFrame(animate);
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    // The shop's shared control stage and its overlay (#1298).
+    shopControls.dispose();
+    controlOverlay.remove();
     unbindScreenshot();
     cancelAnimationFrame(frame);
     cameraView.dispose();

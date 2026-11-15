@@ -62,7 +62,8 @@ visualHandlers.register("ghost.transition", (payload, context): "done" | EffectH
   const gesture = gestures.get(id);
   if (!gesture || gesture.ended || !gesture.decoration) return "done";
   const decoration = gesture.decoration;
-  const start = context.nowMs;
+  // Anchored to the scheduled start, so a late first frame doesn't shorten the fade (#1291).
+  const start = context.scheduledAtMs;
   if (gesture.durationMs <= 0) {
     decoration.setProgress(1);
     return "done";

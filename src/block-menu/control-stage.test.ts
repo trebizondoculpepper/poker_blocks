@@ -254,6 +254,20 @@ describe("grouped 3D control stage (#1146; doc/shop-control-blocks.md)", () => {
     stage.dispose();
   });
 
+  it("measures its host again when it is laid out later", async () => {
+    const h = harness();
+    h.host.clientWidth = 0;
+    h.host.clientHeight = 0;
+    const stage = await createControlStage(h.stageHost, controls);
+    expect(h.canvas.style.width).toBe("1px");
+    h.host.clientWidth = 800;
+    h.host.clientHeight = 400;
+    stage.resume();
+    h.frames.at(-1)!(16);
+    expect(h.canvas.style).toMatchObject({ width: "800px", height: "400px" });
+    stage.dispose();
+  });
+
   it("displays the canvas at the host's CSS size, whatever its drawing buffer (#1191)", async () => {
     const h = harness();
     const stage = await createControlStage(h.stageHost, controls);
