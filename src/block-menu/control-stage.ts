@@ -380,6 +380,11 @@ export async function createControlStage(
       if (frame !== null) host.cancelFrame(frame);
       frame = null;
       router.leave();
+      // One last frame as things stand now, so hidden controls don't linger on the canvas (#1298).
+      if (!disposed) {
+        place();
+        renderer.render(scene, camera);
+      }
     },
     dispose() {
       if (disposed) return;
