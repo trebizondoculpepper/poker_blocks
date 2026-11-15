@@ -22,9 +22,18 @@ export function registerBinControlPresenter(group: Pick<ControlGroup, "place">):
         description: "Drop an installed item here to sell it.",
         cube: { material: "steel", artwork: withMotif({ handler: "dustbin" }), precession: {} },
       });
+      // The drag owner marks an accepted drop on the bin (`is-target`); with the bin's HTML
+      // highlight gone (#1364), the block shows it instead (#1364 review).
+      let targeted = false;
+      const watch = new MutationObserver(() => {
+        const now = element.classList.contains("is-target");
+        if (now !== targeted) control.setTargeted((targeted = now));
+      });
+      watch.observe(element, { attributes: true, attributeFilter: ["class"] });
       return {
         setCovered: (covered) => control.setHidden(covered),
         dispose() {
+          watch.disconnect();
           control.remove();
           slot.remove();
         },

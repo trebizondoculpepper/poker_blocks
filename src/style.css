@@ -1766,6 +1766,20 @@ body,
   pointer-events: none;
 }
 
+/*
+ * A host presenting a control block (#1364; doc/shop-control-blocks.md, "Standalone menu blocks"):
+ * no HTML enclosure of its own, in any state. Its captions and counters stay readable text; its
+ * hover, availability and drop feedback belong to the block. `[class]` lifts it over an owner's
+ * own single-class chrome whichever stylesheet loads later.
+ */
+.presents-block[class],
+.presents-block.is-target[class],
+.presents-block.is-exhausted[class] {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+}
+
 /* The shared control group's overlay (#1078): over the scene, never taking pointer input. */
 .control-group {
   position: absolute;
