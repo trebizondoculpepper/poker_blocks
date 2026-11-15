@@ -1755,3 +1755,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Triggered presentation and victim responses (#1168)
 
 [Triggered presentation](triggered-presentation.md) resolves the explosion source from existing captured block.triggered occurrences and definition-owned on-trigger presentation responses, including no-neighbour sources and causally delayed true secondary detonations. Victim removal and resistance consume independent registered response bindings; a victim is not automatically another detonation. Finite effects use the shared scheduler and captured-mount policy. The Dev-only real-command fixture grants no normal-game bomb availability. This supersedes treating victim block.removed as the only explosion-origin cue.
+
+## Prepared imported-model visuals (#1184)
+
+[Imported models](imported-models.md) defines one maintained headless Blender preparation profile, a renderer-scoped GLTFLoader provider/cache and registered adapters for the existing card/passive visual interfaces. Definitions supply asset/profile/part/fallback configuration; a prepared appearance swap preserves pose through generation-checked mounts. Uniform resource ownership prevents a normal view disposal from deleting cached geometry/textures still in use. Source import, asset selection and actual in-game adoption are distinct evidenced deliverables, with no per-item loader or model-identity branch.
