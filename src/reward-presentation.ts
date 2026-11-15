@@ -24,3 +24,11 @@ rewardPresentations.register("coins", {
   },
   cue: "reward.coin",
 });
+
+// A Present added to the deck (#650; doc/presents.md, "Mixed reward ledger and sound"): a
+// non-cash row after the cash rows, adding nothing to the coin total, with its own cue. It names
+// only what was granted, never the hidden contents.
+rewardPresentations.register("present", {
+  value: () => "Present added",
+  cue: "reward.present",
+});

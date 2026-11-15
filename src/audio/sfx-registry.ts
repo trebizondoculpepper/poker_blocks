@@ -486,6 +486,15 @@ const entries = [
     placeholder: "ui.hover",
   },
   {
+    id: "reward.present",
+    name: "Present added",
+    family: "reward",
+    description:
+      "A Present added row counts in on the stage-won ledger: a wrapped card joins the deck, unopened",
+    // A stand-in until it has audio of its own (#650).
+    placeholder: "reward.coin",
+  },
+  {
     id: "reward.coin",
     name: "Coin",
     family: "reward",

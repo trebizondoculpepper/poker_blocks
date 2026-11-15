@@ -305,9 +305,16 @@
       "tools/object-browser.ts": 1
     }
   },
-  "reward.coin": {
-    "uses": 2,
+  "reward.present": {
+    "uses": 1,
     "files": {
+      "reward-presentation.ts": 1
+    }
+  },
+  "reward.coin": {
+    "uses": 3,
+    "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
       "reward-presentation.ts": 1,
       "table-input.ts": 1
     }
