@@ -133,7 +133,10 @@ const transmissionCapture: InteriorContribution = {
       // Low enough to keep the whole soft disc, not only its rim: the capture is drawn at
       // reduced resolution and softened, where a thin ring all but vanishes.
       each.alphaTest = 0.15;
-      each.onBeforeCompile = (shader) => {
+      // After the particles' own hook (a per-bubble size, #1232), never instead of it.
+      const own = each.onBeforeCompile.bind(each);
+      each.onBeforeCompile = (shader, renderer) => {
+        own(shader, renderer);
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <alphatest_fragment>",
           "#include <alphatest_fragment>\n#ifdef USE_COLOR\nif (dot(vColor.rgb, vec3(1.0)) < 0.01) discard;\n#endif",
