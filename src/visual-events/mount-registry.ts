@@ -109,6 +109,8 @@ export function createMountRegistry<Pose, Appearance>(services: unknown = null) 
       if (channels.includes(lease.channel)) lease.invalidate();
   };
 
+  /** The correlation of the update being published, so a mount it creates starts there. */
+  let publishing = 0;
   const create = (pose: Pose, appearance: Appearance): MountHandle => {
     const handle = `mount:${generation}:${nextId++}` as MountHandle;
     const entry: Entry<Pose, Appearance> = {
@@ -116,7 +118,7 @@ export function createMountRegistry<Pose, Appearance>(services: unknown = null) 
       pose,
       appearance,
       revisions: { pose: 1, appearance: 1 },
-      correlation: 0,
+      correlation: publishing,
       leases: new Set(),
     };
     entries.set(handle, entry);
@@ -240,11 +242,17 @@ export function createMountRegistry<Pose, Appearance>(services: unknown = null) 
         if (!entry || update.correlation <= entry.correlation) return false;
         entry.correlation = update.correlation;
       }
-      mountProjections.get(update.handler)(
-        update.payload,
-        context as MountProjectionContext<unknown, unknown>,
-        target,
-      );
+      const outer = publishing;
+      publishing = update.correlation;
+      try {
+        mountProjections.get(update.handler)(
+          update.payload,
+          context as MountProjectionContext<unknown, unknown>,
+          target,
+        );
+      } finally {
+        publishing = outer;
+      }
       return true;
     },
     /**
@@ -349,7 +357,15 @@ export function guardMountEffect(
       return "done";
     }
   }
-  const effect = options.start();
+  let effect: EffectHandle;
+  try {
+    effect = options.start();
+  } catch (error) {
+    // Nothing was built: release what this guard acquired, then report the failure.
+    lease?.release();
+    snapshot?.release();
+    throw error;
+  }
   let settled = false;
   let retaining = false;
   const finish = () => {

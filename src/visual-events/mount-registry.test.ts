@@ -115,6 +115,54 @@ describe("presentation mount registry (#1163; doc/visual-event-interface.md, #11
   });
 });
 
+describe("mount registry follow-ups (#1181)", () => {
+  it("starts a mount at the correlation of the update that created it", () => {
+    let made: MountHandle | null = null;
+    mountProjections.register("test.create", (_payload, context) => {
+      made = context.create({ x: 0 }, { material: "steel" });
+    });
+    mountProjections.register("test.touch", () => {});
+    const mounts = createMountRegistry<Pose, Look>();
+    mounts.publish({ handler: "test.create", correlation: 5, payload: null });
+    // An older committed update arriving late is refused.
+    expect(mounts.publish({ handler: "test.touch", correlation: 4, payload: null }, made!)).toBe(
+      false,
+    );
+    expect(mounts.publish({ handler: "test.touch", correlation: 6, payload: null }, made!)).toBe(
+      true,
+    );
+    // Outside a publish, a mount starts from zero.
+    const direct = mounts.create({ x: 1 }, { material: "tin" });
+    expect(mounts.publish({ handler: "test.touch", correlation: 1, payload: null }, direct)).toBe(
+      true,
+    );
+  });
+
+  it("releases its lease and snapshot when the effect cannot be built", () => {
+    const mounts = createMountRegistry<Pose, Look>();
+    const handle = mounts.create({ x: 0 }, { material: "steel" });
+    const released = vi.fn();
+    const snapshot = mounts.snapshot(handle, (m) => m.appearance, released);
+    expect(() =>
+      guardMountEffect(mounts, {
+        handle,
+        channel: "appearance",
+        revision: 1,
+        policy: "omit",
+        captured: null,
+        snapshot,
+        services: null,
+        start: () => {
+          throw new Error("no resources");
+        },
+      }),
+    ).toThrow("no resources");
+    expect(released).toHaveBeenCalledTimes(1);
+    // The lease is gone: a replacement notifies no one, and a fresh lease can be taken.
+    expect(mounts.acquire(handle, "appearance")).not.toBeNull();
+  });
+});
+
 describe("missing-mount policies on the shared scheduler (#1163)", () => {
   /** A scheduler with one handler that runs a guarded effect, on an injected clock. */
   function harness(policy: string, services: unknown = {}) {
