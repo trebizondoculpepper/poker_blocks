@@ -1743,6 +1743,19 @@ const materialRegistry = new Map<string, MaterialDefinition>(
 );
 
 /**
+ * Install further definitions, validated as the built-in ones are (#1177): a developer tool's own
+ * fixture definitions, imported only in development so they stay out of the production bundle.
+ * An ID already installed is refused; nothing is replaced.
+ */
+export function installMaterialDefinitions(definitions: readonly MaterialDefinition[]): void {
+  const taken = definitions.filter(({ id }) => materialRegistry.has(id));
+  if (taken.length)
+    throw new Error(`material already installed: ${taken.map(({ id }) => id).join(", ")}`);
+  for (const definition of composeMaterials(definitions))
+    materialRegistry.set(definition.id, definition);
+}
+
+/**
  * The installed definitions, validated as they are composed: a missing or invalid physical mass
  * recipe is an error here, before any query can use it (doc/playfield-rocking.md, #816).
  */
