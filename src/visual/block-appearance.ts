@@ -1379,7 +1379,7 @@ function crystalRefraction(context: AssemblyContext): BlockAppearance {
   const height = heightFor(texture, art, definition.appearance);
   const print = printSkin(art, definition.appearance, geometry);
   const inHand = surface(texture, definition.appearance, height);
-  const front = createRefractionFront(preset) as unknown as THREE.MeshStandardMaterial;
+  const front = createRefractionFront(preset, geometry) as unknown as THREE.MeshStandardMaterial;
   return {
     ...appearanceBase(
       context,
