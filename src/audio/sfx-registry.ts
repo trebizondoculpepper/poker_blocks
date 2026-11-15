@@ -323,6 +323,17 @@ const entries = [
     placeholder: "round.cleared",
   },
   {
+    id: "round.picture_smash",
+    name: "Picture smash",
+    family: "round",
+    description:
+      "The stage's score graph, dropped from its nails on a lost stage, smashes out of sight behind the table",
+    prompt:
+      "A framed glass picture hitting a hard floor and smashing: a short wooden clatter and a bright shatter of breaking glass with small shards tinkling down, slightly distant, no music",
+    durationSeconds: 1.5,
+    placeholder: "block.destroyed",
+  },
+  {
     id: "round.failed",
     name: "Failed",
     family: "round",
