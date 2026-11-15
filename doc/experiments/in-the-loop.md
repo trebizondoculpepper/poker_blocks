@@ -1,5 +1,7 @@
 # In the Loop
 
+Availability update (owner, 2026-11-15): implemented provisional gameplay passives may appear in normal runs under [the passive trial admission policy](../release-status.md#normal-run-provisional-passive-trial-1382), without certification. This supersedes older experiment-only availability wording below; experiment semantics and open balance questions remain.
+
 Provisional passive experiment, owner decisions 2026-11-13 (#882). The exact name is **In the Loop**, not In a Loop. This brief records the agreed gameplay hypothesis; a production detector and certification are not established here. Related research #883, detector architecture #884, query #885 and passive #886 are separate gated slices. Broader unrelated spatial ideas remain parked in #616.
 
 ## Agreed objective and reward
