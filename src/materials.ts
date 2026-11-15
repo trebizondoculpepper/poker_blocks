@@ -9,13 +9,11 @@ import {
   type ReleaseStatusDeclaration,
 } from "./release-status";
 import {
-  airFanHousing,
   cloudFill,
   custardFill,
   darkOilFill,
   flameFill,
   framedGlass,
-  gelatoScoops,
   giftWrapping,
   magicStarsFill,
   massOf,
@@ -28,6 +26,17 @@ import {
   type MassComponent,
   type PhysicalMass,
   validatePhysicalMass,
+  airLitre,
+  cloudMass,
+  emptyVesselMass,
+  fireCardMass,
+  gelatoMass,
+  halfFilledCustardMass,
+  halfFilledEarthMass,
+  hollowSteelMass,
+  magicMass,
+  terracottaShell,
+  waterLitre,
 } from "./physical-mass";
 import type { ChopSettings } from "./visual/chopped-geometry";
 import type { Lettering } from "./visual/lettering";
@@ -385,7 +394,7 @@ export const materialDefinitions = [
   {
     id: "steel",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(solid("steel", 7850)),
+    mass: hollowSteelMass,
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
@@ -422,7 +431,7 @@ export const materialDefinitions = [
   {
     id: "prismatic",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(solid("glass-like crystal", 2500)),
+    mass: massOf(solid("diamond-like crystal", 3500)),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
@@ -550,7 +559,7 @@ export const materialDefinitions = [
     // terracotta. Its look is #358's soil with grass, in a plastic vessel.
     id: "earth",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(plasticShell, soilFill),
+    mass: halfFilledEarthMass,
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
@@ -621,7 +630,7 @@ export const materialDefinitions = [
   {
     id: "terracotta",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(solid("fired clay", 1800)),
+    mass: massOf(terracottaShell),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
@@ -832,7 +841,7 @@ export const materialDefinitions = [
   {
     id: "fire",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(framedGlass, flameFill),
+    mass: fireCardMass,
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
@@ -888,7 +897,7 @@ export const materialDefinitions = [
   {
     id: "custard",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(plasticShell, custardFill),
+    mass: halfFilledCustardMass,
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
@@ -960,7 +969,7 @@ export const materialDefinitions = [
     // gelato card reverts to custard when the round ends. Its look is #382's settling scoops.
     id: "gelato",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(plasticShell, gelatoScoops),
+    mass: gelatoMass,
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Gelato reverts to custard at round end, after rewards.
@@ -1021,7 +1030,7 @@ export const materialDefinitions = [
     // Its look is #336's contained cloud.
     id: "cloud",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(plasticShell, cloudFill),
+    mass: cloudMass,
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Cloud lasts the stage only; expiry removes it, with no reset.
@@ -1057,7 +1066,7 @@ export const materialDefinitions = [
     // refractive optics.
     id: "water",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(plasticShell, waterFill),
+    mass: massOf(waterLitre),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
@@ -1121,7 +1130,7 @@ export const materialDefinitions = [
     // applied by the shared scorer in its documented order. Price: assumed 16 (see #375).
     id: "magic",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(plasticShell, magicStarsFill),
+    mass: magicMass,
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
@@ -1580,7 +1589,7 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     id: "emptyVessel",
     materialFamily: "emptyVessel",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(plasticShell),
+    mass: emptyVesselMass,
     // A prototype: experimental catalogues only (doc/release-status.md, #812).
     releaseStatus: { provisional: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
@@ -1608,7 +1617,7 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     id: "airVent",
     materialFamily: "airVent",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(airFanHousing),
+    mass: massOf(airLitre),
     // A prototype: experimental catalogues only (doc/release-status.md, #812).
     releaseStatus: { provisional: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.

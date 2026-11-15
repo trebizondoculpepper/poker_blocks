@@ -7,26 +7,29 @@ import {
 } from "./materials";
 import { aggregateMass, massKg, validatePhysicalMass } from "./physical-mass";
 
-/** doc/playfield-rocking.md, "Density calibration and full current catalogue". */
+/**
+ * Base materials: doc/material-mass-and-passives.md (#1061, #1067). Experimental constructions
+ * keep their explicit recipes from doc/playfield-rocking.md's catalogue.
+ */
 const catalogue: Record<string, number> = {
   paper: 0.016,
   wood: 0.65,
-  steel: 7.85,
-  prismatic: 2.5,
+  steel: 2.2,
+  prismatic: 3.5,
   gold: 19.32,
-  earth: 0.873,
-  terracotta: 1.8,
+  earth: 0.8,
+  terracotta: 0.8784,
   ice: 0.917,
   meat: 1.05,
-  fire: 0.678165,
-  custard: 0.6255,
-  gelato: 0.083,
-  cloud: 0.04866,
-  water: 0.598,
-  magic: 0.0755,
+  fire: 0.01,
+  custard: 0.5,
+  gelato: 0.5,
+  cloud: 0.002,
+  water: 1,
+  magic: 0.048,
   giftWrap: 0.0635,
-  emptyVessel: 0.048,
-  airVent: 0.15146,
+  emptyVessel: 0.001,
+  airVent: 0.0012,
   emptyLantern: 0.464,
   custardLantern: 1.0415,
   flameLantern: 0.464165,
@@ -115,8 +118,8 @@ describe("field mass query (#816)", () => {
     };
     const mass = fieldMass(state as never);
     expect(mass.count).toBe(2);
-    expect(mass.totalKg).toBeCloseTo(7.85 + 0.65, 9);
-    expect(mass.meanKg).toBeCloseTo(4.25, 9);
+    expect(mass.totalKg).toBeCloseTo(2.2 + 0.65, 9);
+    expect(mass.meanKg).toBeCloseTo(1.425, 9);
     expect(fieldMass({ ...state, field: [] } as never).meanKg).toBeNull();
   });
 });
