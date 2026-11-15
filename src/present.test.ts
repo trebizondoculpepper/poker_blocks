@@ -119,12 +119,12 @@ describe("the certified production Present wrapper (#1151; doc/release-status.md
     const ids = (list: readonly { id: string }[]) => list.map(({ id }) => id);
     expect(ids(materialDefinitions)).not.toContain("giftWrap");
     expect(ids(materialPools.get("gameplay")())).not.toContain("giftWrap");
-    // No other experimental definition changed: the certified ones were already so on main.
+    // Only the wrapper is certified; every other experimental definition stays provisional.
     const certified = experimentalMaterials
       .filter(({ releaseStatus }) => "certified" in releaseStatus)
       .map(({ id }) => id)
       .sort();
-    expect(certified).toEqual(["airVent", "emptyVessel", "giftWrap"]);
+    expect(certified).toEqual(["giftWrap"]);
   });
 
   it("never wraps a Present's payload in gift wrap", () => {

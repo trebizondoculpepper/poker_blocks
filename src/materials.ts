@@ -1618,9 +1618,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     materialFamily: "emptyVessel",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: emptyVesselMass,
-    // Certified (#1129): its public inspection carries no provisional warning. Certification
-    // admits nothing: no catalogue lists it, since it isn't in `materialDefinitions`.
-    releaseStatus: { certified: {} },
+    // A prototype: experimental catalogues only (doc/release-status.md, #812).
+    releaseStatus: { provisional: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
     lifecycle: { parent: "ordinaryCard" },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -1647,9 +1646,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     materialFamily: "airVent",
     // Authored physical mass (doc/playfield-rocking.md, #816).
     mass: massOf(airLitre),
-    // Certified (#1129): its public inspection carries no provisional warning. Certification
-    // admits nothing: no catalogue lists it, since it isn't in `materialDefinitions`.
-    releaseStatus: { certified: {} },
+    // A prototype: experimental catalogues only (doc/release-status.md, #812).
+    releaseStatus: { provisional: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
     lifecycle: { parent: "ordinaryCard" },
     lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
