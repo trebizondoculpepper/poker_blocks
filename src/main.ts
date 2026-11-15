@@ -654,6 +654,9 @@ frame = requestAnimationFrame(animate);
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    // The shop's shared control stage and its overlay (#1298).
+    shopControls.dispose();
+    controlOverlay.remove();
     unbindScreenshot();
     cancelAnimationFrame(frame);
     cameraView.dispose();
