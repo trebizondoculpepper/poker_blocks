@@ -4,9 +4,16 @@ Owner request: a webpage with a prominent near-top launch button, an approachabl
 
 ## Entry and build ownership
 
-Add a lightweight standalone `about.html` page to this repository's existing static build. Keep `index.html` as the playable game so existing bookmarks, query-string mode links, release archives and itch.io entry remain valid. The page's prominent **Play Poker Blocks** link launches `./index.html` in the same browser/tab without creating a fresh seed or destructive reset parameter. Relative paths must work under the deployed repository subpath and local preview. The existing game entry can link to the information page through configured footer/link data; do not replace the playable entry or introduce a client router merely for this page. Making the website the root entry would be a separate reversible hosting decision, not implied here.
+**Owner decision, 2026-11-15 (supersedes the earlier `about.html` plan):** the website is the site's front page and the game lives at **`game/`**.
 
-The build explicitly includes both HTML entries and their bundled assets. Website content must not import the game bootstrap, create a WebGL context or start music just to explain the game. Shared typography/colors and static artwork may be reused with their normal asset ownership/credits. Keep deployment in the existing Pages/release pipeline; no new host/domain/account or external publishing setup. Ensure release packaging retains index.html at the archive root and includes the information page.
+- **GitHub Pages** serves the website at the site root (`index.html`) and the playable game at `game/` (`game/index.html`). The page's prominent **Play Poker Blocks** link opens `./game/` in the same tab, without a fresh seed or reset parameter.
+- **Old links keep working:** a request to the root that carries the game's query string (`mode`, `room`, `restart` and the other game parameters) is forwarded to `game/` with the same query, so existing bookmarks and mode links still open the game. The website itself takes no query parameters.
+- **Release zip and itch.io get the game only,** with the game's `index.html` at the archive root (owner decision): itch.io players land straight in the game. The game is therefore built as a self-contained output (its own assets under `game/`), which the release workflow zips and pushes; the Pages artifact is the website plus that `game/` folder.
+- Relative paths throughout, so both work under the deployed repository subpath, local preview and itch.io.
+
+Website content must not import the game bootstrap, create a WebGL context or start music just to explain the game. Shared typography/colors and static artwork may be reused with their normal asset ownership/credits. Keep deployment in the existing Pages/release pipeline; no new host/domain/account or external publishing setup.
+
+**Look (owner direction):** the page is built from the game's blocks and blocky style: the title, buttons and section headings are blocks in the game's own looks (paper, wood, gold, steel, crystal, baize), drawn with CSS 3D on the page (no WebGL). Motion is gentle and stops under reduced motion.
 
 ## Content and layout
 
