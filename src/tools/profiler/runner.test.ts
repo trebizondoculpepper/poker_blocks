@@ -928,8 +928,15 @@ describe("animation fidelity: one run clock and appearance prepasses (#972)", ()
     // the first, compiling frame advances nothing.
     expect(new Set(steps.filter((dt) => dt > 0))).toEqual(new Set([0.05]));
     // Self-timed parts read the same clock, which only moves forward by those steps.
+    // The first update is the one-object set's compiling frame, after the empty baseline's
+    // warm-up and sampled frames (3 + 10) advanced the clock from zero: 13 steps of 0.05 s.
+    expect(seen[0]).toBeCloseTo(13 * 0.05);
+    // From there it only moves forward, by whole steps, and it does move.
     const diffs = seen.slice(1).map((value, index) => +(value - seen[index]!).toFixed(6));
-    expect(diffs.every((diff) => diff === 0 || diff === 0.05 || diff < 0)).toBe(true);
+    expect(
+      diffs.every((diff) => diff >= 0 && Math.abs(diff / 0.05 - Math.round(diff / 0.05)) < 1e-6),
+    ).toBe(true);
+    expect(diffs.filter((diff) => diff > 0).length).toBeGreaterThan(10);
     // Restored after the run: the game's own clock again.
     expect(appearanceSeconds()).toBeGreaterThanOrEqual(before);
     expect(appearanceSeconds()).not.toBe(seen.at(-1));
@@ -957,6 +964,9 @@ describe("animation fidelity: one run clock and appearance prepasses (#972)", ()
       ],
       options,
     );
+    // Two cases see the same moving clock: each starts from zero, so neither inherits the other's.
+    expect(new Set(a).size).toBeGreaterThan(10);
+    expect(a[0]).toBeCloseTo(13 / 60);
     expect(b).toEqual(a);
   });
 
