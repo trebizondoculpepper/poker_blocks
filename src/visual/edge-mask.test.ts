@@ -54,8 +54,8 @@ describe("paired masks for edges and custom shaders (#1209)", () => {
     expect(meshes.length).toBeGreaterThan(0);
     for (const mesh of meshes) {
       const material = mesh.material as THREE.ShaderMaterial;
-      expect(material.userData.maskAdapter).toBe("customShader");
-      const masked = maskAdapters.get("customShader").adapt(
+      expect(material.userData.maskAdapter).toBe("additiveShader");
+      const masked = maskAdapters.get("additiveShader").adapt(
         material,
         {
           matProgress: { value: 0.5 },
@@ -73,5 +73,27 @@ describe("paired masks for edges and custom shaders (#1209)", () => {
       expect(masked.uniforms.offset).toBe(material.uniforms.offset);
       expect(masked.fragmentShader).toContain("matRay");
     }
+  });
+
+  it("fades additive light's colour, not only its alpha, under reduced motion (#1338 review)", () => {
+    const laser = createLaserOutline(geometry, 0x65f4dd, 1);
+    const reduced = {
+      matProgress: { value: 0 },
+      matTime: { value: 0 },
+      matFrequency: { value: 1 },
+      matEdge: { value: 0.1 },
+      matGlow: { value: new THREE.Color() },
+      matReduced: { value: 1 },
+      matFrame: { value: new THREE.Matrix4() },
+      matOrigin: { value: new THREE.Vector3() },
+    };
+    const additive = maskAdapters
+      .get("additiveShader")
+      .adapt(laser.material, reduced, "incoming") as THREE.ShaderMaterial;
+    expect(additive.fragmentShader).toContain("gl_FragColor *= matProgress");
+    const blended = maskAdapters
+      .get("customShader")
+      .adapt(laser.material, reduced, "incoming") as THREE.ShaderMaterial;
+    expect(blended.fragmentShader).toContain("gl_FragColor.a *= matProgress");
   });
 });

@@ -1315,7 +1315,7 @@ function refractiveCrystal(context: AssemblyContext): BlockAppearance {
   const onTable = clearOnTable(texture, mask, optics, size);
   const fire = createCrystalFire(geometry);
   declareMaskAdapters({
-    customShader: [fire.material as THREE.Material],
+    additiveShader: [fire.material as THREE.Material],
     chunkSurface: [inHand, onTable, print.skin.material],
   });
   return {
@@ -1368,7 +1368,7 @@ function approximateCrystal(context: AssemblyContext): BlockAppearance {
   );
   const facets = createFacetShell(geometry, optics.tint);
   declareMaskAdapters({
-    customShader: [facets.material as THREE.Material],
+    additiveShader: [facets.material as THREE.Material],
     chunkSurface: [inHand, onTable, print.skin.material],
   });
   return {
