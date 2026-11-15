@@ -227,10 +227,17 @@ function scoreLines(
         ];
       }),
     );
-    const result = evaluateLine(
-      line.blocks,
-      (block) => evaluated.get(block.id)!.value - guaranteed.get(block.id)!.amount,
-    );
+    // Contributors are chosen by hand type, then UNMODIFIED points (#1267; doc/game.md, "Hand
+    // value"): material, acquired and passive contributions apply only to the chosen cards.
+    const chosen = evaluateLine(line.blocks);
+    const result = {
+      ...chosen,
+      points:
+        chosen.contributingIds.reduce(
+          (sum, id) => sum + evaluated.get(id)!.value - guaranteed.get(id)!.amount,
+          0,
+        ) * handMultipliers[chosen.hand],
+    };
     // The chosen hand's cards bring their own line rules; a card outside it joins only if its
     // eligibility says so.
     const contributing = line.blocks.filter(({ id }) => result.contributingIds.includes(id));
