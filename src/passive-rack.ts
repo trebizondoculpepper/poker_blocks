@@ -20,7 +20,7 @@ import type { AlongsideEvent } from "./score-narration";
 import {
   labelAnchorSpaces,
   type ActivationLabelPayload,
-  type Point,
+  type AnchorPoint,
 } from "./visual/activation-labels";
 import { unitMs } from "./visual-events/scheduler";
 
@@ -80,8 +80,11 @@ export function passiveActivation(block: PassiveBlock): ActivationConfig {
 
 /** What the rack offers activation labels (#919), as a visual-event service. */
 export type RackLabelAnchors = {
-  /** A live point above an installed item's slot, in its host's CSS pixels; null once it's gone. */
-  anchorOf(sourceId: string): () => Point | null;
+  /**
+   * A live anchor for an installed item, in its host's CSS pixels: a point above its slot and the
+   * slot's projected bounds (#1157); null once it's gone.
+   */
+  anchorOf(sourceId: string): () => AnchorPoint | null;
 };
 export type RackLabelServices = { passiveRack?: RackLabelAnchors };
 
@@ -110,6 +113,8 @@ export function rackActivationLabel(
     space: "rack",
     anchor: block.id,
     durationUnits: pulseMilliseconds(passiveActivation(block).effect) / unitMs,
+    // Centred over the item it describes (#1157).
+    placement: "overBounds",
   };
   return { handler: "activationLabel", payload };
 }
@@ -145,7 +150,7 @@ export function createPassiveRack(host: HTMLElement): {
    */
   labelFor(activation: RuleActivation): AlongsideEvent | null;
   /** Anchors for its labels, by item id (the `rack` anchor space reads these). */
-  anchorOf(sourceId: string): () => Point | null;
+  anchorOf(sourceId: string): () => AnchorPoint | null;
   dispose(): void;
 } {
   const element = document.createElement("aside");
@@ -373,7 +378,13 @@ export function createPassiveRack(host: HTMLElement): {
         const slot = entry.item.getBoundingClientRect();
         // The rack's own host: activation labels are drawn over it (main wires them together).
         const origin = host.getBoundingClientRect();
-        return { x: slot.left + slot.width / 2 - origin.left, y: slot.top - origin.top };
+        const x = slot.left - origin.left;
+        const y = slot.top - origin.top;
+        return {
+          x: x + slot.width / 2,
+          y,
+          bounds: { x, y, width: slot.width, height: slot.height },
+        };
       };
     },
     dispose() {

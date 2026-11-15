@@ -1744,3 +1744,9 @@ body,
 .menu-caption-outlet:empty {
   display: none;
 }
+/* Fitted over-item labels (#1157, src/visual/fitted-text.ts): sized by the shared layout. */
+.activation-label.activation-label-fitted {
+  max-width: none;
+  white-space: normal;
+  line-height: normal;
+}
