@@ -26,6 +26,7 @@ function recordingHost() {
       exits: { start: () => {}, prepare: () => ({}) as never, dispose: () => {} },
       actionPhase: { latest: null, contributionFor: () => null },
       composeProducer: () => () => {},
+      scoreGraph: { show: () => {}, hide: () => {} },
       visualEvents: {
         nowMs: 0,
         createScope: () => ({}) as never,

@@ -3,6 +3,8 @@ import { destructionExits } from "./scene-traits/destruction-exits";
 import type { ExitPresenter } from "./visual/exit-presentation";
 import type { FieldView } from "./field-view";
 import type { PlacementPhase } from "./placement-phase";
+import { stageScoreGraph } from "./scene-traits/stage-score-graph";
+import type { StageScoreGraph } from "./stage-score-graph";
 import { shopExitResponse, type ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
   createPlayfieldRockingController,
@@ -166,6 +168,8 @@ export type SceneHost = {
     actionPhase: Pick<PlacementPhase, "latest" | "contributionFor">;
     /** Compose a controller's producer into the action phases while it is mounted. */
     composeProducer(producer: string): () => void;
+    /** The stage score graph the stage scene composes (#1064). */
+    scoreGraph: Pick<StageScoreGraph, "show" | "hide">;
     /** The shared visual-event scheduler, for controller traits' required effects (#880). */
     visualEvents: ShopExitScheduler;
     overlays: Pick<
@@ -833,6 +837,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // A committed material transition's sound, on the shared scheduler (#539).
   behaviours.register("materialChangeSounds", materialChangeSounds<Context>());
   behaviours.register("destructionExits", destructionExits<Context>());
+  behaviours.register("stageScoreGraph", stageScoreGraph<Context>());
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });

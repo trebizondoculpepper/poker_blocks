@@ -233,6 +233,11 @@ export function createPlayPresenter(options: {
   committed?: {
     onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void;
   };
+  /**
+   * Presentation controllers scoped to the run on screen (#1174 review): reset with it, so a
+   * replaced run's outstanding feedback is cancelled and its deduplication starts afresh.
+   */
+  runScoped?: readonly { reset(): void }[];
   placementPhase?: Pick<
     PlacementPhase,
     "contribution" | "contributionFor" | "observeAction" | "latest" | "reset"
@@ -250,6 +255,8 @@ export function createPlayPresenter(options: {
   decided(outcome: RoundOutcome, now: number, occurrence?: string): void;
   /** The shared visual-event scheduler score narration is queued on (#547). */
   visualEvents: VisualScheduler;
+  /** Clear presentation-wide feedback that outlives any one action, on reset (#1294 review). */
+  resetFeedback?(): void;
 }): PlayPresenter {
   const { views, hand, field, cameraView } = options;
   const game = () => options.game();
@@ -686,6 +693,7 @@ export function createPlayPresenter(options: {
       hand.updateDrawIns(delta);
     },
     reset() {
+      options.runScoped?.forEach((controller) => controller.reset());
       // Every action's effect is cancelled with its scope; one not yet started is dropped.
       resetting = true;
       for (const scope of Array.from(actionScopes)) options.visualEvents.cancel(scope);
@@ -699,6 +707,8 @@ export function createPlayPresenter(options: {
       playing = [];
       discarding = [];
       narration.reset();
+      // Presentation-wide feedback (a dazzle's glare and afterimages) goes with it (#1294 review).
+      options.resetFeedback?.();
       shownScore = game().state.round.score;
     },
     dispose() {

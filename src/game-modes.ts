@@ -30,6 +30,7 @@ import type { Scene } from "./scenes";
 import type { DestroyCause } from "./traits/destructible";
 import { standardGameFlow } from "./standard-game-flow";
 import type { DestructionExitsConfig } from "./scene-traits/destruction-exits";
+import type { StageScoreGraphConfig } from "./stage-score-graph";
 
 export { standardGameFlow };
 
@@ -239,6 +240,11 @@ export type SceneTraits = {
   /** Removed table blocks play their exits while this scene is on the stack (#1173). */
   destructionExits: DestructionExitsConfig;
   /**
+   * The stage's score graph, hung in the room at its configured transform while this scene is on
+   * the stack (#1064; doc/line-goes-up.md).
+   */
+  stageScoreGraph: StageScoreGraphConfig;
+  /**
    * A stage's outcome cue (#881; doc/outcome-presentation.md, "Two distinct result cues"):
    * played once the deciding action's required sequence finishes, before the result scene.
    */
@@ -351,6 +357,18 @@ const playSceneTraits: Partial<SceneTraits> = {
   materialChangeSounds: {},
   // A destroyed table block plays its own exit (#1173; doc/triggered-presentation.md).
   destructionExits: {},
+  // The stage's score graph (#1064): framed on the back wall, upper right of centre, behind the
+  // table and fixed in the room, so the camera sees it in perspective and the cards can pass in
+  // front of it. Chosen so it stays wholly on screen with the play camera both wide and portrait
+  // (projected: x 0.03–0.31, y 0.56–0.88 at 1512×792; x 0.11–0.86, y 0.38–0.60 at 390×844).
+  // A reversible starting transform (doc/line-goes-up.md).
+  stageScoreGraph: {
+    picture: {
+      size: { width: 3.4, height: 2.1 },
+      position: [2.2, 1.0, -10],
+      rotation: [0, -0.12, 0],
+    },
+  },
   // The stage's outcome cues, once its deciding sequence has finished (#881).
   outcomeCues: { won: "round.cleared", lost: "round.failed" },
   // Rocking waits a second after a turn, eases in over a second, and slows as the field gets

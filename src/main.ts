@@ -4,6 +4,10 @@ import {
   scoringProducer,
   type PlacementPhase,
 } from "./placement-phase";
+import { createStageScoreGraph, type StageScoreGraph } from "./stage-score-graph";
+import { triggeredProducer, type TriggeredEffectServices } from "./triggered-presentation";
+import { createDazzle } from "./visual/dazzle";
+import { cosmeticRandom } from "./visual/block-effects";
 import { createActionPhases } from "./visual-events/action-phases";
 import type { TransitionAudioServices } from "./scene-traits/material-change-sounds";
 import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
@@ -89,6 +93,7 @@ import { createDropTargetGuide, dropGuideProviders } from "./visual/drop-target-
 import type { DropTargetGuides } from "./scene-traits/drop-target-guide";
 import { appVersion } from "./version";
 import { createVisualScheduler, unitMs } from "./visual-events/scheduler";
+import { createResistanceFeedbackController, survivorProducer } from "./resistance-feedback";
 import type { ScoreNarrationServices } from "./score-narration";
 import type { RewardLedgerServices } from "./reward-ledger";
 import {
@@ -173,6 +178,7 @@ type TraitContext = {
     renderer: TableRenderer;
     cameraView: CameraViewService;
     playfieldRocking: PlayfieldRockingServices;
+    scoreGraph: StageScoreGraph;
     visualEvents: ShopExitScheduler;
     audio: AudioService;
     hud: HudPanels;
@@ -295,6 +301,10 @@ const traitContext: TraitContext = {
       return placementPhase;
     },
     composeProducer: (producer) => actionPhases.compose(producer),
+    // The stage score graph a stage scene composes (#1064), built with the run below.
+    get scoreGraph() {
+      return scoreGraph;
+    },
     // The rocking controller's capabilities (#783): wiring only, no policy.
     playfieldRocking: {
       setRate: (rate) => cameraView.setMotionRate(rate),
@@ -484,6 +494,11 @@ const shopView = createShopView(
   { floor: danceFloor, controls: shopControls },
 );
 shopView.render([], false);
+// Triggered explosions' pops (#1172): one dazzle over the table, seen through its camera.
+const dazzle = createDazzle(host, cameraView.camera, {
+  random: cosmeticRandom,
+  reducedMotion: () => run.reducedMotion,
+});
 // The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
 // these services; the frame loop below advances its clock.
 const visualServices: ScoreNarrationServices &
@@ -494,7 +509,8 @@ const visualServices: ScoreNarrationServices &
   ShopBurnServices &
   BlockExitServices &
   TransitionAudioServices &
-  FieldLineServices & { playfieldRocking: RockingSink } = {
+  FieldLineServices &
+  TriggeredEffectServices & { playfieldRocking: RockingSink } = {
   get scoreNarration() {
     return presenter.narration;
   },
@@ -526,6 +542,19 @@ const visualServices: ScoreNarrationServices &
   },
   // The shop's outgoing burn, advanced on this scheduler (#880).
   shopBurn: { effect: (startMs) => shopView.burnEffect(startMs) },
+  // Triggered effects at their captured cells, moving with the board (#1172).
+  triggeredEffects: {
+    place: (object, cell) => field.placeObject(object, cell),
+    remove: (object) => field.removeObject(object),
+    addToWorld: (object) => view.scene.add(object),
+    removeFromWorld: (object) => view.scene.remove(object),
+    get cubeSize() {
+      return field.cubeSize;
+    },
+    flash: (at, look) => dazzle.flash(at, { look }),
+    reducedMotion: () => run.reducedMotion,
+    random: cosmeticRandom,
+  },
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
 // Removed blocks' exits (#1173), presented on that scheduler.
@@ -535,10 +564,28 @@ document.addEventListener("visibilitychange", () => visualEvents.suspend());
 // Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).
 const actionPhases = createActionPhases(visualEvents, {
   plan: "scoring",
-  producers: [placementProducer, scoringProducer],
+  producers: [placementProducer, scoringProducer, triggeredProducer, survivorProducer],
 });
 const placementPhase = createPlacementPhase(run, actionPhases);
+// The stage score graph (#1064): hung in the room (never the turning assembly), its producer
+// composed only while a scene shows it.
+const scoreGraph = createStageScoreGraph({
+  source: run,
+  history: () => run.committedState().round.history,
+  phase: placementPhase,
+  compose: (producer) => actionPhases.compose(producer),
+  room: view.scene,
+  host,
+});
+// A blast's survivors answer in place with their declared feedback, after scoring (#1174).
+const survivorFeedback = createResistanceFeedbackController({
+  source: run,
+  phase: placementPhase,
+  mount: (blockId) => field.blocks().find(({ block }) => block.id === blockId)?.cube ?? null,
+  reducedMotion: () => run.reducedMotion,
+});
 const presenter: PlayPresenter = createPlayPresenter({
+  runScoped: [survivorFeedback],
   game: () => run.game,
   views: blockViews,
   hand,
@@ -560,6 +607,8 @@ const presenter: PlayPresenter = createPlayPresenter({
   visualEvents,
   placementPhase,
   committed: run,
+  // A reset takes the explosions' glare and afterimages with it (#1294 review).
+  resetFeedback: () => dazzle.clear(),
 });
 const input: TableInput = createTableInput({
   host,
@@ -659,6 +708,8 @@ const step = (time: number) => {
   cameraView.update(playfield.time, playfield.delta);
   presenter.update(time, delta);
   visualEvents.update(time, document.visibilityState === "visible");
+  scoreGraph.frame();
+  dazzle.update(delta);
   run.followOutcomes(time);
   field.update(playfield.time, run.reducedMotion);
   sceneManager.update(delta);
@@ -679,6 +730,7 @@ frame = requestAnimationFrame(animate);
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    survivorFeedback.dispose();
     // The shop's shared control stage and its overlay (#1298).
     shopControls.dispose();
     controlOverlay.remove();
@@ -695,6 +747,7 @@ if (import.meta.hot) {
     attract.dispose();
     blockTitles.dispose();
     presenter.dispose();
+    dazzle.dispose();
     hand.dispose();
     blockViews.disposeAll();
     field.dispose();

@@ -48,6 +48,7 @@ import { acquiredBonusLines } from "./acquired-bonus-inspection";
 import type { WeightCurve } from "./offer-weights";
 import type { EventRule, RuleCommand } from "./event-rules";
 import type { ResistantTrait } from "./traits/resistant";
+import type { SurvivorResponseStep } from "./visual/survivor-responses";
 import type { Reaction } from "./reactions";
 import { acquiredModifierRules } from "./modifier-registers";
 import { stateBonusRules } from "./state-bonuses";
@@ -208,6 +209,20 @@ export type MaterialDefinition = {
      * the model has already decided it is gone. A material that survives blasts has none.
      */
     exit?: ExitSequence;
+    /**
+     * What a block of this material presents when it is actually triggered (#1172;
+     * doc/triggered-presentation.md): a registered on-trigger presentation response
+     * (src/triggered-presentation.ts) and its configuration, such as an explosion. Independent of
+     * its model `triggerable.responses`; absent, a trigger presents nothing of its own.
+     */
+    onTrigger?: { response: string; config?: unknown };
+    /**
+     * How a block of this look answers a destruction it resisted (#1174;
+     * doc/triggered-presentation.md, "Victim exit and survival feedback are separate
+     * capabilities"): registered survivor responses run on its live visual, in place. An empty
+     * list is a deliberate no-op. A resistant material must declare one or the other.
+     */
+    survive?: readonly SurvivorResponseStep[];
     /**
      * Ongoing effects a block of this look keeps up while it is on the table, such as smoke
      * (#464): each names a registered block effect (src/visual/block-effects.ts) and configures it.
@@ -419,6 +434,11 @@ export const materialDefinitions = [
     scoringModifier: { multiplicative: 1.25 },
     activation: { effect: { id: "pulse", colour: "#93b5d0" }, sfx: "material.activate.steel" },
     appearance: {
+      // The approved understated survivor feedback (#441, #1174): a flash and a shudder in place.
+      survive: [
+        { response: "flash", config: { colour: 0xffffff, intensity: 0.7, units: 4 } },
+        { response: "shudder", config: { amplitude: 0.05, units: 5 } },
+      ],
       pattern: "brushedRivets",
       assembly: "brushedFaces",
       surface: "brushedMetal",
@@ -545,6 +565,11 @@ export const materialDefinitions = [
     activation: { effect: { id: "pulse", colour: "#f3c85e" }, sfx: "material.activate.gold" },
     handReward: { coinsPerCard: 2 },
     appearance: {
+      // The approved understated survivor feedback (#441, #1174): a flash and a shudder in place.
+      survive: [
+        { response: "flash", config: { colour: 0xffffff, intensity: 0.7, units: 4 } },
+        { response: "shudder", config: { amplitude: 0.05, units: 5 } },
+      ],
       pattern: "goldFoil",
       assembly: "sixFaces",
       surface: "polishedMetal",

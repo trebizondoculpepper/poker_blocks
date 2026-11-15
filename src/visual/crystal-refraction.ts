@@ -38,7 +38,13 @@ import {
   type LookupRipple,
   type RippleSettings,
 } from "./lookup-ripple";
-import { setCameraClip } from "./optical-interior";
+import {
+  interiorDepthGlsl,
+  interiorTileGlsl,
+  setCameraClip,
+  type InteriorCapture,
+  type InteriorLease,
+} from "./optical-interior";
 import { preservingRenderState, type RenderPass } from "./render-pass";
 
 /** The camera layer the rear (offset) pass draws: never the main view. */
@@ -287,8 +293,23 @@ const vertexShader = /* glsl */ `
   varying vec3 vNormalX;
   varying vec3 vNormalY;
   varying vec3 vNormalZ;
+  // For a captured interior (#1228): the camera in local space, this point's view depth, and the
+  // local-to-view-depth row, so the fragment can find where its ray leaves the volume.
+  varying vec3 vRayLocal;
+  varying float vViewDepth;
+  varying vec3 vDepthRow;
   void main() {
     vLocal = position;
+    // The viewing ray in local space: from the camera for a perspective projection, the camera's
+    // own forward direction for an orthographic one, whose rays are parallel (#1317 review).
+    vec3 cameraLocal = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz;
+    vec3 forward = -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
+    vRayLocal = projectionMatrix[2][3] != 0.0
+      ? position - cameraLocal
+      : inverse(mat3(modelMatrix)) * forward;
+    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewDepth = -viewPosition.z;
+    vDepthRow = -vec3(modelViewMatrix[0].z, modelViewMatrix[1].z, modelViewMatrix[2].z);
     vLocalNormal = normal;
     mat3 toWorld = transpose(inverse(mat3(modelMatrix)));
     vNormalX = toWorld[0];
@@ -344,6 +365,7 @@ const frontFragment = /* glsl */ `
   uniform float spectral;
   uniform float clarity;
   uniform float reflection;
+
   varying vec3 vWorldPosition;
   varying vec3 vWorldNormal;
   varying vec3 vLocal;
@@ -353,6 +375,46 @@ const frontFragment = /* glsl */ `
   varying vec3 vNormalZ;
   ${rippleShiftGlsl}
   ${faceRippleGlsl}
+  // A captured optical interior (#1228; doc/optical-interiors.md): this block's own tile, bound
+  // per mount, or disabled (0) when it has none, which leaves the look exactly as before.
+  uniform float interiorEnabled;
+  uniform sampler2D interiorColorMap;
+  uniform sampler2D interiorDepthMap;
+  uniform vec4 interiorScreen;
+  uniform vec4 interiorAtlas;
+  uniform vec3 interiorHalf;
+  uniform sampler2D backgroundDepthMap;
+  uniform vec3 cameraClip;
+  varying vec3 vRayLocal;
+  varying float vViewDepth;
+  varying vec3 vDepthRow;
+  ${interiorDepthGlsl}
+  ${interiorTileGlsl}
+  /**
+   * The interior seen at a lookup coordinate, premultiplied with its coverage, or nothing. A
+   * sample counts only if its depth lies on this pixel's ray through the declared volume (between
+   * where it enters, here, and where it leaves) and in front of the opaque scene captured there:
+   * no other volume's particles, nothing behind a wall.
+   */
+  vec4 interiorAt(vec2 lookup) {
+    if (interiorEnabled < 0.5 || !interiorInTile(lookup, interiorScreen)) return vec4(0.0);
+    vec2 tile = interiorTileUv(lookup, interiorScreen, interiorAtlas);
+    vec4 colour = texture2D(interiorColorMap, tile);
+    if (colour.a <= 0.0) return vec4(0.0);
+    float depth = interiorViewDepth(texture2D(interiorDepthMap, tile).r, cameraClip);
+    // Where the ray leaves the box: the nearest far slab along its local direction.
+    vec3 direction = normalize(vRayLocal);
+    // An axis the ray runs along exactly never bounds it.
+    direction = mix(vec3(1e-6), direction, step(1e-6, abs(direction)));
+    vec3 far = (sign(direction) * interiorHalf - vLocal) / direction;
+    float leave = min(far.x, min(far.y, far.z));
+    float exitDepth = vViewDepth + dot(vDepthRow, direction) * max(leave, 0.0);
+    float slack = 1e-3 * vViewDepth;
+    if (depth < vViewDepth - slack || depth > exitDepth + slack) return vec4(0.0);
+    float occluder = interiorViewDepth(texture2D(backgroundDepthMap, clamp(lookup, vec2(0.001), vec2(0.999))).r, cameraClip);
+    if (depth > occluder + slack) return vec4(0.0);
+    return colour;
+  }
   // The highlight normal (#797): the facet's normal bent by this object's concentric rings in its
   // face's own tangent plane, taken to world space by the inverse transpose. Only the reflection
   // reads it; at rest or zero strength it is the flat normal exactly.
@@ -375,6 +437,12 @@ const frontFragment = /* glsl */ `
     return texture2D(backgroundMap, clamp(uv, vec2(0.001), vec2(0.999))).rgb;
   }
 
+  /** What the front transmits at a lookup: any captured interior over the background (#1228). */
+  vec3 composed(vec2 at) {
+    vec4 inside = interiorAt(at);
+    return inside.rgb + behind(at) * (1.0 - inside.a);
+  }
+
   void main() {
     vec2 uv = gl_FragCoord.xy / screenSize;
     // Refraction, incidence and Fresnel keep the flat facet normal (#797).
@@ -388,11 +456,12 @@ const frontFragment = /* glsl */ `
     shift -= viewNormal.xy * frontStrength * (1.0 - incidence);
     // The preset's slow cyclic ripple: the lookup moves, the outline never does.
     shift += rippleShift(vLocal);
-    // Three taps: red bent least, blue most.
+    // Three taps, red bent least and blue most, each the captured interior over what lies behind
+    // at that same lookup, then the clarity tint (#1317 review): both colour the interior too.
     vec3 seen = vec3(
-      behind(uv + shift * (1.0 - dispersion)).r,
-      behind(uv + shift).g,
-      behind(uv + shift * (1.0 + dispersion)).b
+      composed(uv + shift * (1.0 - dispersion)).r,
+      composed(uv + shift).g,
+      composed(uv + shift * (1.0 + dispersion)).b
     ) * vec3(clarity, clarity, 1.0);
     // Only the reflected highlight ripples.
     vec3 reflected = lookUp(reflect(-v, highlightNormal())) * reflection;
@@ -442,6 +511,8 @@ export function createRefractionFront(
       faceRippleSpeed: { value: preset.faceRipple.ringsPerSecond },
       faceRippleHalf: { value: 0.5 },
       environment: { value: preset.environment() },
+      // No interior until a mount binds its tile (#1228).
+      ...interiorUniforms(),
     },
     side: THREE.FrontSide,
   });
@@ -453,4 +524,60 @@ export function createRefractionFront(
         reducedMotion: ripple.clock.reducedMotion,
       }));
   return material;
+}
+
+/** A front's interior uniforms, unbound: disabled, sampling nothing. */
+function interiorUniforms() {
+  return {
+    interiorEnabled: { value: 0 },
+    interiorColorMap: { value: null as THREE.Texture | null },
+    interiorDepthMap: { value: null as THREE.Texture | null },
+    interiorScreen: { value: new THREE.Vector4(0, 0, 1, 1) },
+    interiorAtlas: { value: new THREE.Vector4(0, 0, 1, 1) },
+    interiorHalf: { value: new THREE.Vector3(0.5, 0.5, 0.5) },
+  };
+}
+
+/**
+ * Bind one mount's captured interior to its front (#1228; doc/optical-interiors.md, "Bounded
+ * capture proposal"): explicitly, per displayed block, never by asking what material it is. Each
+ * frame, after its host's capture has rendered, `update` points the front at that lease's tile in
+ * that capture's atlas, or disables the interior when the tile isn't available (not drawn this
+ * frame, stale, released, the capture unavailable), so it never samples another volume's tile.
+ * `halfExtents` is the declared volume, in the front's own local units. `release` disables it.
+ */
+export function bindRefractionInterior(
+  front: THREE.ShaderMaterial,
+  capture: Pick<InteriorCapture, "textures">,
+  lease: Pick<InteriorLease, "tile">,
+  halfExtents: THREE.Vector3,
+) {
+  const uniforms = front.uniforms;
+  let bound = true;
+  const disable = () => {
+    uniforms.interiorEnabled!.value = 0;
+    uniforms.interiorColorMap!.value = null;
+    uniforms.interiorDepthMap!.value = null;
+  };
+  return {
+    update(): boolean {
+      const tile = bound ? lease.tile() : null;
+      const textures = capture.textures;
+      if (!tile || !textures?.depth) {
+        disable();
+        return false;
+      }
+      uniforms.interiorEnabled!.value = 1;
+      uniforms.interiorColorMap!.value = textures.colour;
+      uniforms.interiorDepthMap!.value = textures.depth;
+      uniforms.interiorScreen!.value.copy(tile.screen);
+      uniforms.interiorAtlas!.value.copy(tile.atlas);
+      uniforms.interiorHalf!.value.copy(halfExtents);
+      return true;
+    },
+    release(): void {
+      bound = false;
+      disable();
+    },
+  };
 }
