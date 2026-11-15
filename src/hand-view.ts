@@ -31,6 +31,8 @@ export type HandView = {
   remove(blocks: readonly RenderedBlock[]): void;
   /** Put dragged cubes back in the hand's scene, on the hand's plane. */
   putBack(blocks: readonly RenderedBlock[]): void;
+  /** Whether this block is still the hand's (not played, removed or disposed since). */
+  owns(block: RenderedBlock): boolean;
   /** Match the cubes' slots to the hand order, then lay them out. */
   sync(hand: readonly CardBlock[]): void;
   layout(): void;
@@ -170,6 +172,7 @@ export function createHandView(options: {
     remove(removed) {
       for (const rendered of removed) blocks.splice(blocks.indexOf(rendered), 1);
     },
+    owns: (rendered) => blocks.includes(rendered),
     putBack(returned) {
       for (const rendered of returned) {
         options.scene.add(rendered.cube);

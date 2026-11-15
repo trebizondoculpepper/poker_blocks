@@ -19,6 +19,7 @@
 import { type CollisionDetector, CollisionType, sortCollisions } from "@dnd-kit/abstract";
 import { type DragDropManager as DndKitManager, Draggable, Droppable } from "@dnd-kit/dom";
 import type { RenderedBlock } from "./rendered-blocks";
+import type { DropOutcome } from "./drop-outcomes";
 
 export type DropVerdict = "accept" | "reject";
 
@@ -29,6 +30,12 @@ export type DropTarget = {
   hover(verdict: DropVerdict | null): void;
   /** Take the dropped blocks; true when the rules accept them. */
   drop(carried: readonly RenderedBlock[]): boolean;
+  /**
+   * Answer the release as a typed outcome instead (#1204; doc/drop-settlement.md): a target that
+   * can request its source's return before acting. Omitted, `drop`'s boolean is mapped through
+   * the transitional compatibility adapter.
+   */
+  outcome?(carried: readonly RenderedBlock[], generation: number): DropOutcome;
   /** The blocks were dropped here while it rejected them. */
   reject(): void;
   /** Words for the action-history trace. */
