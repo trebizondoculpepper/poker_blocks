@@ -299,6 +299,22 @@ for (const [index, effect] of ordered.entries()) {
   entries.push({ id: effect.id, row, takes, audition: () => audition(effect, takes, row) });
 }
 
+// Opened at one sound (`?sound=<id>`, #1012): bring its ordinary row into view and focus its play
+// button, without playing it. An unknown id says so instead.
+{
+  const wanted = new URLSearchParams(location.search).get("sound");
+  const message = element("selected-sound-message");
+  const chosen = wanted === null ? undefined : entries.find(({ id }) => id === wanted);
+  if (chosen) {
+    chosen.row.classList.add("selected");
+    chosen.row.scrollIntoView({ block: "center" });
+    chosen.row.querySelector<HTMLButtonElement>(".sound-main")?.focus({ preventScroll: true });
+  } else if (wanted !== null) {
+    message.textContent = `No registered sound is called “${wanted}”.`;
+    message.hidden = false;
+  }
+}
+
 element("play-all").addEventListener("click", async () => {
   stopAll();
   const run = sequence;
