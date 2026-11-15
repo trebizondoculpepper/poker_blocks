@@ -584,3 +584,7 @@ The deck-counter entry opens a read-only status screen with **Deck** and **Gamep
 ## Trying provisional passives in ordinary runs (#1382)
 
 The normal passive acquisition catalogue includes implemented provisional gameplay passives by default, without a toggle. Keep their visible provisional balance warning; this is permission to playtest them, not certification. Existing authored prices, unlock/material requirements, retirement and weights remain. Trials missing offer data receive the explicitly documented reversible initial stock recipe in [release status](release-status.md#normal-run-provisional-passive-trial-1382); other object families retain their own admission policy. This supersedes experiment-only availability statements for these implemented passives, not their scoring rules.
+
+## Game information webpage and title caption
+
+[The game website contract](game-website.md) defines a lightweight explanatory webpage with a prominent launch link and bug/source footer, preserving the playable index entry. The in-game home screen keeps its title/actions/footer but removes the floating “Poker solitaire in three dimensions” subtitle.
