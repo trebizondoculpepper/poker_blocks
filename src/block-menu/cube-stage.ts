@@ -195,6 +195,7 @@ export function createCubeStage(host: HTMLElement, look: StageOptions = {}): Cub
             sfx: item.sfx,
             ...(item.material ? { material: item.material } : {}),
             feedback: { reducedMotion },
+            ...(item.precession ? { precession: { ...item.precession, reducedMotion } } : {}),
             ...options(item, index),
           });
           cube.object.position.copy(positions[index]!);
