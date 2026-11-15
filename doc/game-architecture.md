@@ -1766,3 +1766,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ### Action-correlated presentation phases (#1216)
 
 Independent post-score traits use [reserved action contributions and phase completion](action-presentation-phases.md) on the shared scheduler. A captured generation/action key correlates producer-owned scopes; every required child is reserved before root sealing. Placement/scoring producer adapters publish per-action completion, and result cues wait for the full required root including graph growth. Services retain handles/status, not a second timed queue or gameplay policy.
+
+### Optical interior contributions (#1225)
+
+[Appearance-owned interior capture](optical-interiors.md) composes shell-free volume capabilities with the existing pooled bubbles. Renderer-context registrations own bounded isolated color/depth tiles; the optical front resolves those before outer reflection/print. Shared captures/resources and explicit clipping prevent neighbor leakage without generic material branches or per-block full-scene renders. This prototype extension requires separate implementation and visual/cost evidence.
