@@ -8,10 +8,19 @@
 import type { CardBlock } from "./cards";
 import { mountProjections } from "./visual-events/mount-registry";
 
-mountProjections.register("block.materialChanged", (payload, context, target) => {
+/** Any committed change that captured the block's look after it: the appearance follows it. */
+const adoptCapturedAppearance: Parameters<typeof mountProjections.register>[1] = (
+  payload,
+  context,
+  target,
+) => {
   const after = (payload as { snapshots?: { after?: CardBlock } }).snapshots?.after;
   if (target && after) context.replaceAppearance(target, after);
-});
+};
+
+mountProjections.register("block.materialChanged", adoptCapturedAppearance);
+// A reaction that changed the block's look (cooking's doneness, #1303) carries the same snapshots.
+mountProjections.register("reaction.applied", adoptCapturedAppearance);
 
 mountProjections.register("block.removed", (_payload, context, target) => {
   if (target) context.remove(target);
