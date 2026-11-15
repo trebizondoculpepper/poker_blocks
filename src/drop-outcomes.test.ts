@@ -92,11 +92,11 @@ describe("source-settled drop outcomes (#1203; doc/drop-settlement.md)", () => {
     const outcome = returnThenAct(action({ invoke }), 1);
     // The command re-enters: it dispatches the same outcome again from inside its own invocation.
     invoke.mockImplementation(() => {
-      expect(dispatchDropOutcome(outcome, handle())).toBe("refused");
+      expect(dispatchDropOutcome(outcome, handle())).toBe("settled");
     });
     expect(dispatchDropOutcome(outcome, handle())).toBe("returned");
     // A duplicate release later can't consume it either.
-    expect(dispatchDropOutcome(outcome, handle())).toBe("refused");
+    expect(dispatchDropOutcome(outcome, handle())).toBe("settled");
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 
@@ -114,6 +114,18 @@ describe("source-settled drop outcomes (#1203; doc/drop-settlement.md)", () => {
     expect(fresh.generation).toBe(2);
     expect(fresh.returnToOwner()).toBe(true);
     expect(fresh.returnToOwner()).toBe(false);
+  });
+
+  it("settles a transfer or refusal once; a second dispatch does nothing (#1250)", () => {
+    const { handle } = source();
+    for (const [accepted, first] of [
+      [true, "transferred"],
+      [false, "refused"],
+    ] as const) {
+      const outcome = booleanOutcome(accepted, 1);
+      expect(dispatchDropOutcome(outcome, handle())).toBe(first);
+      expect(dispatchDropOutcome(outcome, handle())).toBe("settled");
+    }
   });
 
   it("never lets a later gesture consume an earlier gesture's outcome (#1239 review)", () => {

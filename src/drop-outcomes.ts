@@ -20,7 +20,11 @@
 import { Registry } from "./core/registry";
 
 /** How a release settled: the source's ownership/presentation path follows from this. */
-export type DropResult = "transferred" | "refused" | "returned";
+/**
+ * How a release settled: the source's ownership/presentation path follows from this. `settled`
+ * means the outcome had already been settled: the source does nothing more (#1250).
+ */
+export type DropResult = "transferred" | "refused" | "returned" | "settled";
 
 /** A gesture-owned settlement capability, supplied by the active source. */
 export type SettlementHandle = {
@@ -115,16 +119,14 @@ export const dropOutcomeHandlers = new Registry<DropOutcomeHandler>("drop outcom
 
 /** The target took the carried group: the source's transfer path follows. */
 dropOutcomeHandlers.register("transfer", ({ continuation }, settlement) => {
-  continuation.consume();
   settlement.close();
-  return "transferred";
+  return continuation.consume() ? "transferred" : "settled";
 });
 
 /** The target refused at release: the source's existing refusal path (and its cue) follows. */
 dropOutcomeHandlers.register("refuse", ({ continuation }, settlement) => {
-  continuation.consume();
   settlement.close();
-  return "refused";
+  return continuation.consume() ? "refused" : "settled";
 });
 
 /** Configuration for `returnThenAct`: the target's action and its owners' responses. */
@@ -150,7 +152,7 @@ dropOutcomeHandlers.register("returnThenAct", ({ config, continuation }, settlem
   // Consumed before anything runs, so a re-entrant command or source callback can't run it again.
   if (!continuation.consume()) {
     settlement.close();
-    return "refused";
+    return "settled";
   }
   if (!settlement.returnToOwner()) {
     action.refused();
