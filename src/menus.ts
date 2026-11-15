@@ -44,6 +44,11 @@ export type Menus = {
   showTitle(): void;
   /** Where the title's block-menu choices are drawn, under its heading. */
   choicesHost(): HTMLElement;
+  /**
+   * Place the in-front screen's action host (#1074): inside its panel, or as its own stage
+   * beside (after) it. Configured by the result menu, never chosen by screen.
+   */
+  placeActions(placement: "inPanel" | "besidePanel"): void;
   /** A choice from a block menu: a title command if one is registered for it, else navigation. */
   choose(action: string): void;
   hideTitle(): void;
@@ -138,14 +143,8 @@ export function createMenus(
        <div><dt>Total earned</dt><dd data-menu="total"></dd></div>
        <div><dt>Coins</dt><dd data-menu="balance"></dd></div>
      </dl>
+     <div class="block-menu-host" data-menu="items"></div>
 `,
-  );
-  // Visit shop is its own action outside the ledger panel (#1074; doc/result-menus.md, "Stage
-  // Won layout"): a transparent sibling stage below it. Its inspection caption is placed at the
-  // bottom of the viewport by the stylesheet, not in the panel or the cube's row.
-  stageWon.root.insertAdjacentHTML(
-    "beforeend",
-    `<div class="block-menu-host stage-won-action" data-menu="items"></div>`,
   );
 
   const settingsButton = document.createElement("button");
@@ -462,6 +461,12 @@ export function createMenus(
     const panel = document.createElement("div");
     panel.className = "menu-panel";
     root.append(panel);
+    // Every screen's caption outlet (#1074): a dialog configured to caption there writes here.
+    const outlet = document.createElement("p");
+    outlet.className = "menu-caption-outlet";
+    outlet.dataset.menu = "caption";
+    outlet.setAttribute("aria-live", "polite");
+    root.append(outlet);
     host.append(root);
     return { root, panel };
   }
@@ -472,6 +477,16 @@ export function createMenus(
     showTitle,
     hideTitle,
     // The block-menu host of the screen in front: its scene's dialog trait draws its choices there.
+    placeActions(placement) {
+      const overlay = overlayInFront();
+      const panel = overlay?.querySelector<HTMLElement>(".menu-panel");
+      const items = overlay?.querySelector<HTMLElement>('[data-menu="items"]');
+      if (!overlay || !panel || !items) return;
+      overlay.dataset.actionHost = placement;
+      // Inside the panel, or its own sibling stage just after it.
+      if (placement === "inPanel") panel.append(items);
+      else panel.after(items);
+    },
     choicesHost: () =>
       overlayInFront()?.querySelector<HTMLElement>('[data-menu="items"]') ?? titleItems,
     choose,

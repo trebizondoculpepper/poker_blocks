@@ -201,7 +201,17 @@ export type SceneTraits = {
    * A result screen (doc/result-menus.md): a registered information provider, and the dialog of
    * choices shown below it once the named completion has settled (#949).
    */
-  resultMenu: { information: string; showAfter: string; dialog: DialogConfig };
+  resultMenu: {
+    information: string;
+    showAfter: string;
+    dialog: DialogConfig;
+    /**
+     * The registered action-host layout and caption outlet it composes (#1074;
+     * doc/result-menus.md): independent references the generic result host resolves.
+     */
+    actionHost?: string;
+    caption?: string;
+  };
   /**
    * Entering this scene runs a music cue: an ordered list of registered music operations naming
    * plan entries and slots (#758; src/audio/music-controller.ts).
@@ -390,6 +400,11 @@ export type DialogConfig = {
 export type DialogPresentation = {
   panel: "none" | "readable";
   sizing?: ReferenceSizingProfile;
+  /**
+   * Where its inspection caption shows (#1074): under its own cubes (`local`, the default) or
+   * in the screen's caption outlet (`outlet`), one visible caption either way.
+   */
+  caption?: "local" | "outlet";
 };
 
 /** Title and confirmation choices: panel-free, at the menu-block audition room's cube size. */
@@ -735,6 +750,9 @@ export const sceneDefinitions = [
         information: "stageReward",
         showAfter: "ledgerFinished",
         dialog: gameDialogs.stageWon,
+        // Visit shop stands on its own below the ledger, its caption at the viewport bottom.
+        actionHost: "besidePanel",
+        caption: "viewportBottom",
       },
       pausesBelow: { input: true, update: true },
     },
