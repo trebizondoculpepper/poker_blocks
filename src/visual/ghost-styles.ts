@@ -121,7 +121,10 @@ export function cloneWithRenderLifecycle<T extends THREE.Object3D>(source: T): T
   };
   walk(source, clone);
   for (const [from, to] of pairs) {
+    // three.js calls each hook on the object being rendered, so the clone is `this`.
+    // oxlint-disable-next-line typescript/unbound-method -- deliberately carrying the hook
     to.onBeforeRender = from.onBeforeRender;
+    // oxlint-disable-next-line typescript/unbound-method -- deliberately carrying the hook
     to.onAfterRender = from.onAfterRender;
   }
   return clone;

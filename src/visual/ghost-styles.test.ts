@@ -120,7 +120,9 @@ describe("drag-ghost appearance styles (#1083; doc/drag-ghost-audition.md)", () 
     const endpoint = ghostStyles.get("faceFree").create({ appearance: look, size: 1 }, {});
     const [clonedExtra, clonedChild] = meshesIn(endpoint.object);
     expect(clonedExtra).not.toBe(extra);
+    // oxlint-disable-next-line typescript/unbound-method -- comparing hook identity only
     expect(clonedExtra.onBeforeRender).toBe(extraHook);
+    // oxlint-disable-next-line typescript/unbound-method -- comparing hook identity only
     expect(clonedChild.onBeforeRender).toBe(childHook);
     expect(clonedChild.geometry).toBe(child.geometry);
   });
@@ -154,6 +156,7 @@ describe("drag-ghost appearance styles (#1083; doc/drag-ghost-audition.md)", () 
       const sources: THREE.Object3D[] = [];
       for (const extra of look.extras ?? []) extra.traverse((o) => sources.push(o));
       const hooked = sources.filter(
+        // oxlint-disable-next-line typescript/unbound-method -- comparing hook identity only
         (o) => o.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender,
       );
       expect(hooked.length).toBeGreaterThan(0);
@@ -162,6 +165,7 @@ describe("drag-ghost appearance styles (#1083; doc/drag-ghost-audition.md)", () 
       for (const child of endpoint.object.children.slice(1)) child.traverse((o) => cloned.push(o));
       expect(cloned).toHaveLength(sources.length);
       sources.forEach((source, index) =>
+        // oxlint-disable-next-line typescript/unbound-method -- comparing hook identity only
         expect(cloned[index].onBeforeRender).toBe(source.onBeforeRender),
       );
       endpoint.dispose();
