@@ -381,6 +381,8 @@ function queryTrial(
   description: string,
   factor: QueryFactorConfig,
   values: readonly string[] = [factor.value],
+  /** Its scoring operation, for its category colours: a row multiplier unless it raises. */
+  operations: readonly ("multiplicative" | "exponential")[] = ["multiplicative"],
 ): PassiveDefinition {
   const problems = validateQueryFactor(id, factor);
   if (problems.length) throw new Error(problems.join("\n"));
@@ -393,7 +395,7 @@ function queryTrial(
     symbol,
     description,
     traitId: "passive.event-rules",
-    categoryTrait: { scoringCategory: { operations: ["multiplicative"] } },
+    categoryTrait: { scoringCategory: { operations: [...operations] } },
     eventRules: queryFactorRules(factor),
     // Its curve's parameters may be adjusted per instance (#876).
     configurable: {
@@ -419,6 +421,8 @@ for (const definition of [
       phase: "score.linePower",
       effect: "power-line-score-by-query",
     },
+    ["density"],
+    ["exponential"],
   ),
   // Heavy (#1073): a heavier field scores more, from one gold block's mass up to ×10 at four.
   queryTrial(
