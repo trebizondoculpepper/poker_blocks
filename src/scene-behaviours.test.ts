@@ -26,7 +26,8 @@ function recordingHost() {
     services: {
       field: { detach: () => null },
       exits: { start: () => {}, prepare: () => ({}) as never, dispose: () => {} },
-      actionPhase: { latest: null, contributionFor: () => null },
+      actionPhase: { latest: null, contributionFor: () => null, observeAction: () => null },
+      terminalBurn: { start: () => ({ onGate: () => () => {} }) },
       composeProducer: () => () => {},
       scoreGraph: { show: () => {}, hide: () => {} },
       visualEvents: {
@@ -213,6 +214,7 @@ function recordingHost() {
         scenarioRuntime: () => ({ dealers: dealerRegistry, rules: demoRunRules }),
         trialStart: () => ({ unavailable: "not a trial" }),
         onDecided: () => () => {},
+        holdResult: () => () => {},
         committedState: () => ({
           field: [],
           round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },

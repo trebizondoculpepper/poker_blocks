@@ -1,6 +1,10 @@
 import { materialChangeSounds } from "./scene-traits/material-change-sounds";
 import { materialTransitions } from "./scene-traits/material-transitions";
 import { destructionExits } from "./scene-traits/destruction-exits";
+import {
+  terminalFieldBurn,
+  type TerminalFieldBurnServices,
+} from "./scene-traits/terminal-field-burn";
 import type { ExitPresenter } from "./visual/exit-presentation";
 import type { FieldView } from "./field-view";
 import type { PlacementPhase } from "./placement-phase";
@@ -154,6 +158,7 @@ export type SceneHost = {
       | "dispatch"
       | "onCommitted"
       | "onDecided"
+      | "holdResult"
       | "hasSave"
       | "runStats"
       | "seed"
@@ -168,7 +173,9 @@ export type SceneHost = {
     /** The shared block-exit presenter (#1173). */
     exits: Pick<ExitPresenter, "start" | "prepare" | "dispose">;
     /** Committed actions' phase records, for a controller to bind its contribution (#1173). */
-    actionPhase: Pick<PlacementPhase, "latest" | "contributionFor">;
+    actionPhase: Pick<PlacementPhase, "latest" | "contributionFor" | "observeAction">;
+    /** The loss burn's service (#946). */
+    terminalBurn: TerminalFieldBurnServices["terminalBurn"];
     /** Compose a controller's producer into the action phases while it is mounted. */
     composeProducer(producer: string): () => void;
     /** The stage score graph the stage scene composes (#1064). */
@@ -841,6 +848,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("materialChangeSounds", materialChangeSounds<Context>());
   behaviours.register("materialTransitions", materialTransitions<Context>());
   behaviours.register("destructionExits", destructionExits<Context>());
+  // A decided loss burns the terminal playfield before Game Over (#946).
+  behaviours.register("terminalFieldBurn", terminalFieldBurn<Context>());
   behaviours.register("stageScoreGraph", stageScoreGraph<Context>());
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),

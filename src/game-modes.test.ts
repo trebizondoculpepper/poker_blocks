@@ -368,6 +368,7 @@ describe("game modes composed from traits", () => {
         reducedDurationUnits: 1.8,
       },
       destructionExits: {},
+      terminalFieldBurn: { lost: { music: [{ op: "windDown" }] } },
       stageScoreGraph: expect.objectContaining({ picture: expect.any(Object) }),
       outcomeCues: { won: "round.cleared", lost: "round.failed" },
       playfieldRockingController: {},
