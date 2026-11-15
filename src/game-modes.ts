@@ -358,8 +358,9 @@ const playSceneTraits: Partial<SceneTraits> = {
   committedEventSounds: {},
   // What a card becomes is heard as it changes (#539).
   materialChangeSounds: {},
-  // ...and seen: its old look dissolves into the new one, 0.5 s (0.12 s reduced; #1167).
-  materialTransitions: { handler: "perlinDissolve", seconds: 0.5, reducedSeconds: 0.12 },
+  // ...and seen, in its action's phase: its old look dissolves into the new one over 7.5 units
+  // (0.5 s; reduced motion 1.8 units; #1167).
+  materialTransitions: { handler: "perlinDissolve", durationUnits: 7.5, reducedDurationUnits: 1.8 },
   // A destroyed table block plays its own exit (#1173; doc/triggered-presentation.md).
   destructionExits: {},
   // The stage's score graph (#1064): framed on the back wall, upper right of centre, behind the
