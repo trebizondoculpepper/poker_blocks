@@ -31,6 +31,10 @@ The base hand size is a tuning value in `src/balance.ts`; another dealer may set
 
 These names and payloads are examples, not a frozen API.
 
+## Quantitative heat and Cloud adjacency (#1384)
+
+[Heat and Cloud](heat-and-cloud.md) defines registered snapshot heat-source contributions, configured Water thresholds and transactional single-source generation. Six-face heating and 26-neighbour random Cloud placement are independently configured capabilities. The source audit identifies the legacy pair-spawn mismatch and the required reusable command/query seams; no material identity branches, duplicate simulation or presentation RNG are authorized. Source ordering/reservations, new-state snapshot visibility, card ownership and scenario verification are explicit.
+
 ## Core runtime
 
 Four small modules under `src/core/` carry the trait pattern. They are independent of cards and of rendering, and none of them knows about a specific trait.
@@ -86,6 +90,10 @@ The appearance's feedback lifetime includes hand-to-board material handover and 
 Before closing #1113 verify standard, shader/unlit, contained, transparent and refractive appearances in all-material Dev4; selected/deselected baselines, repeated calls, independent shared assets, hand/board swap and material replacement, existing outline/lift/count badge, reduced motion and disposal. Supply actual sandbox-load evidence and selection checks; unit tests alone cannot prove that every registered appearance builds or looks correct. No new input lock, presentation timer or gameplay event is needed for this static feedback fix.
 
 What an operation does to the selected cards is still to be decided.
+
+## Captured scoring explanation (#1383)
+
+[Scoring explanation](scoring-explanation.md) requires immutable hand/base/ordered resolved operation/final-point descriptors captured by authoritative scoring and preserved into narration. The shared fitted text component consumes registered pure formatting; it never rescores, reads live gameplay or draws RNG.
 
 ## Required-scope result entry (#1389)
 
