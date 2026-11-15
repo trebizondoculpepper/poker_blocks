@@ -123,6 +123,9 @@ export async function createControlStage(
     size.width = Math.max(1, host.element.clientWidth);
     size.height = Math.max(1, host.element.clientHeight);
     renderer.setSize(size.width, size.height, false);
+    // The drawing buffer follows the pixel ratio; the displayed size is the host's, in CSS px.
+    canvas.style.width = `${size.width}px`;
+    canvas.style.height = `${size.height}px`;
     camera.left = 0;
     camera.right = size.width;
     camera.top = 0;
@@ -163,7 +166,20 @@ export async function createControlStage(
     on("pointerenter", (event) => router.move(cube, event.pointerType));
     on("pointerleave", () => router.leave());
     on("pointerdown", (event) => router.down(cube, event.pointerType));
-    on("pointerup", (event) => router.up(cube, event.pointerType));
+    // A touch keeps implicit capture on the button, so its release may be anywhere: count it as
+    // released on the control only when it is over the control's current region.
+    on("pointerup", (event) =>
+      router.up(within(entry, event.clientX, event.clientY) ? cube : null, event.pointerType),
+    );
+    // Keyboard focus is the hover of keyboard users: lift and describe it as a pointer would.
+    on("focus", () => {
+      cube.block.emit("input.enter");
+      cube.block.emit("input.focus");
+    });
+    on("blur", () => {
+      cube.block.emit("input.blur");
+      cube.block.emit("input.leave");
+    });
     // Keyboard and assistive activation: one press and release, so one action, never a second
     // synthetic click after a pointer press (detail 0 marks a keyboard/assistive click).
     on("click", (event) => {
@@ -173,6 +189,16 @@ export async function createControlStage(
     });
     mounted.push(entry);
   }
+
+  /** Whether a client point is over the entry's current region. */
+  const within = (entry: Mounted, x: number, y: number) => {
+    const region = entry.region;
+    if (!region) return false;
+    const bounds = host.element.getBoundingClientRect();
+    const left = region.left + bounds.left;
+    const top = region.top + bounds.top;
+    return x >= left && x <= left + region.width && y >= top && y <= top + region.height;
+  };
 
   const place = () => {
     for (const entry of mounted) {
@@ -218,6 +244,10 @@ export async function createControlStage(
     /** Each control's root, for composition that needs its transform. */
     object(id: string): THREE.Object3D | null {
       return find(id)?.cube.object ?? null;
+    },
+    /** A control's cube (its block and root), for composition that wires its own traits. */
+    cube(id: string) {
+      return find(id)?.cube ?? null;
     },
     /** The control's current transformed bounds in client CSS px, or null when it has none. */
     hitRegion(id: string) {
