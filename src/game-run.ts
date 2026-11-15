@@ -8,6 +8,7 @@ import {
 import { resetStageState } from "./stage-end";
 import { resetRoundState } from "./round-end";
 import { clearField, removeCardForRun } from "./card-ownership";
+import { expireRetained, retentionsEndingAfter } from "./retention";
 // Registers the spawn-beyond-pair reaction result (#425).
 import "./pair-spawn";
 // Registers the opaque container's opening, run by the play's opening phase (#930).
@@ -1211,7 +1212,11 @@ export class GameRun {
         }) === true
       : this.transact("enterShop", undefined, () => {
           this.shopAfter = this.currentPhase as StageKind;
-          this.currentState = this.clearTable(this.currentState);
+          // The stage (and, after the round's last stage, the round) has ended: rewards are
+          // settled, so its retained cards expire before the table clears (#505).
+          this.currentState = this.clearTable(
+            expireRetained(this.currentState, retentionsEndingAfter(!nextStage(this.shopAfter))),
+          );
           this.currentPhase = shopPosition;
           // The round's last stage completes the round; no stage is named for it.
           if (!nextStage(this.shopAfter)) this.runStats = recordRoundComplete(this.runStats);
