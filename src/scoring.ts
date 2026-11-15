@@ -90,9 +90,10 @@ export function scoreLine(blocks: readonly CardBlock[]): number {
 }
 
 /**
- * Best hand for a line. Lines of 0 or 1 block score 0. A line of 6+ takes the five-card
- * subset with the highest points; on a tie the stronger hand type wins, then the first
- * subset in line order (a provisional rule to confirm, see doc/game.md).
+ * Best hand for a line. Lines of 0 or 1 block score 0. A line of 6+ takes the five-card subset
+ * with the strongest hand type first; among subsets of that type, the one with the highest
+ * points by `valueOf`; then the first in line order (doc/game.md, "Hand value", #1267). Callers
+ * choosing contributors pass unmodified values, so modifiers can't change the selection.
  */
 export function evaluateLine(
   blocks: readonly CardBlock[],
@@ -108,9 +109,11 @@ export function evaluateLine(
   return best!;
 }
 
+/** Poker precedence first, then points; an exact tie keeps the earlier subset (#1267). */
 function isBetter(a: LineEvaluation, b: LineEvaluation): boolean {
-  if (a.points !== b.points) return a.points > b.points;
-  return handOrder.indexOf(a.hand) > handOrder.indexOf(b.hand);
+  const byType = handOrder.indexOf(a.hand) - handOrder.indexOf(b.hand);
+  if (byType !== 0) return byType > 0;
+  return a.points > b.points;
 }
 
 const handOrder = Object.keys(handMultipliers) as HandType[];
