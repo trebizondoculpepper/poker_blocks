@@ -48,6 +48,8 @@ export type RenderedBlock = {
   handX?: number;
   /** Its look's own selection feedback (#1314), released with it. */
   selection: SelectionBinding;
+  /** The paired-mask adapter its look declares (#1167), when it declares one. */
+  maskAdapter?: string;
 };
 
 export type BlockViews = {
@@ -153,6 +155,7 @@ export function createBlockViews(
         rock: location === "hand" ? randomRock() : null,
         handSlot: null,
         selection: bindSelectionFeedback(appearance, cube),
+        ...(appearance.maskAdapter ? { maskAdapter: appearance.maskAdapter } : {}),
       } satisfies RenderedBlock;
       all.push(rendered);
       if (appearance.prepasses?.length && prepasses)

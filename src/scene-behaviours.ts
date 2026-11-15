@@ -1,4 +1,5 @@
 import { materialChangeSounds } from "./scene-traits/material-change-sounds";
+import { materialTransitions } from "./scene-traits/material-transitions";
 import { destructionExits } from "./scene-traits/destruction-exits";
 import type { ExitPresenter } from "./visual/exit-presentation";
 import type { FieldView } from "./field-view";
@@ -838,6 +839,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   // A committed material transition's sound, on the shared scheduler (#539).
   behaviours.register("materialChangeSounds", materialChangeSounds<Context>());
+  behaviours.register("materialTransitions", materialTransitions<Context>());
   behaviours.register("destructionExits", destructionExits<Context>());
   behaviours.register("stageScoreGraph", stageScoreGraph<Context>());
   behaviours.register("enterSound", {

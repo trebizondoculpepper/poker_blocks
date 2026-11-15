@@ -10,6 +10,7 @@ import { createDazzle } from "./visual/dazzle";
 import { cosmeticRandom } from "./visual/block-effects";
 import { createActionPhases } from "./visual-events/action-phases";
 import type { TransitionAudioServices } from "./scene-traits/material-change-sounds";
+import type { MaterialTransitionServices } from "./material-transitions";
 import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
   createRockingRelay,
@@ -513,6 +514,7 @@ const visualServices: ScoreNarrationServices &
   ShopBurnServices &
   BlockExitServices &
   TransitionAudioServices &
+  MaterialTransitionServices &
   FieldLineServices &
   TriggeredEffectServices & { playfieldRocking: RockingSink } = {
   get scoreNarration() {
@@ -540,6 +542,18 @@ const visualServices: ScoreNarrationServices &
   playfieldRocking: rockingRelay,
   // A committed material transition's sound (#539).
   transitionAudio: { play: (id) => playSfx(id) },
+  // ...and its look (#1167): the table block, and a detached view of its captured old card.
+  materialTransitions: {
+    block: (blockId) => field.blocks().find(({ block }) => block.id === blockId) ?? null,
+    detachedView(block) {
+      const made = blockViews.create(block, cubeSize, "board");
+      blockViews.transfer(made);
+      return made;
+    },
+    release: (view) => blockViews.dispose(view),
+    reducedMotion: () => run.reducedMotion,
+    diagnose: (message) => console.warn(message),
+  },
   // Block exits on this scheduler (#549, #1173).
   get blockExits() {
     return exitPresenter.blockExits;

@@ -31,6 +31,7 @@ import type { DestroyCause } from "./traits/destructible";
 import { standardGameFlow } from "./standard-game-flow";
 import type { DestructionExitsConfig } from "./scene-traits/destruction-exits";
 import type { StageScoreGraphConfig } from "./stage-score-graph";
+import type { MaterialTransitionsConfig } from "./scene-traits/material-transitions";
 
 export { standardGameFlow };
 
@@ -237,6 +238,8 @@ export type SceneTraits = {
   enterSound: { sfx: SoundEffectId };
   /** A committed material transition's sound, scheduled on the shared scheduler (#539). */
   materialChangeSounds: Record<never, never>;
+  /** A committed material transition is seen: the old look dissolves into the new (#1167). */
+  materialTransitions: MaterialTransitionsConfig;
   /** Removed table blocks play their exits while this scene is on the stack (#1173). */
   destructionExits: DestructionExitsConfig;
   /**
@@ -355,6 +358,8 @@ const playSceneTraits: Partial<SceneTraits> = {
   committedEventSounds: {},
   // What a card becomes is heard as it changes (#539).
   materialChangeSounds: {},
+  // ...and seen: its old look dissolves into the new one, 0.5 s (0.12 s reduced; #1167).
+  materialTransitions: { handler: "perlinDissolve", seconds: 0.5, reducedSeconds: 0.12 },
   // A destroyed table block plays its own exit (#1173; doc/triggered-presentation.md).
   destructionExits: {},
   // The stage's score graph (#1064): framed on the back wall, upper right of centre, behind the
