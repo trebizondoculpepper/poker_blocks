@@ -10,7 +10,6 @@ import {
 } from "./release-status";
 import {
   darkOilFill,
-  giftWrapping,
   massOf,
   paperShell,
   plasticShell,
@@ -18,6 +17,7 @@ import {
   stainedLantern,
   type PhysicalMass,
   validatePhysicalMass,
+  type MassReading,
   massKg,
   weightLine,
   airLitre,
@@ -1564,8 +1564,12 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     // suit never are (its `cardFace` below).
     id: "giftWrap",
     materialFamily: "giftWrap",
-    // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(giftWrapping),
+    // Contents-derived (#1068; doc/material-mass-and-passives.md): it weighs what it holds, with
+    // no wrapping surcharge, read from the stored descriptor without opening it.
+    mass: {
+      provider: "storedPayload",
+      rule: "Contents-derived: the same mass as the playable card it holds; the wrapping adds nothing.",
+    },
     // A prototype: experimental catalogues only (doc/release-status.md, #812).
     releaseStatus: { provisional: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
@@ -1738,7 +1742,14 @@ inspectionProviders.register("releaseStatus", (block) => {
 
 // Every inspected block shows its weight (#1069; doc/material-mass-and-passives.md), resolved from
 // its current material's authored recipe, the same source the mass queries use.
-inspectionProviders.register("weight", (block) => [weightLine(massKg(cardMassRecipe(block)))]);
+inspectionProviders.register("weight", (block) => {
+  const reading = cardMassReading(block);
+  return [
+    "unavailable" in reading
+      ? `Weight: unavailable (${reading.unavailable})`
+      : weightLine(reading.kg),
+  ];
+});
 
 // Inspection lists a card's base and acquired bonuses after its name (#751).
 inspectionProviders.register("acquiredBonuses", (block) =>
@@ -1822,7 +1833,45 @@ export function makeUniformDeck(material: BlockMaterial): readonly CardBlock[] {
   return standardDeck.map((card) => withMaterial(card, definition));
 }
 
-/** A card's physical mass recipe: its current material's (#816, #1069). */
-export function cardMassRecipe(card: CardBlock): PhysicalMass {
-  return getMaterialDefinition(materialOf(card)).mass;
+/**
+ * Instance-derived mass providers (#1068), by the name a definition's recipe gives. Each resolves
+ * one instance's mass from its own committed state, purely: no zone, identity, RNG or subscription.
+ */
+export const instanceMassProviders = new Registry<
+  (card: CardBlock, config: unknown) => MassReading
+>("instance mass provider");
+
+/** One recipe's mass for this instance: authored, or resolved by its registered provider. */
+function recipeReading(card: CardBlock, recipe: PhysicalMass): MassReading {
+  if (!("provider" in recipe)) return { kg: massKg(recipe) };
+  if (!instanceMassProviders.has(recipe.provider))
+    return { unavailable: `no "${recipe.provider}" mass provider` };
+  return instanceMassProviders.get(recipe.provider)(card, recipe.config);
 }
+
+/**
+ * A card's resolved mass (#816, #1068): its current material's recipe, resolved for this
+ * instance. Scoring, rocking and inspection all read this one source.
+ */
+export function cardMassReading(card: CardBlock): MassReading {
+  return recipeReading(card, getMaterialDefinition(materialOf(card)).mass);
+}
+
+// A wrapper weighs the playable card it stores (#1068): the stored descriptor's material recipe,
+// read without materialising, adopting or revealing it. Payloads hold one level, so a payload
+// whose own recipe is instance-derived is refused rather than followed.
+instanceMassProviders.register("storedPayload", (card) => {
+  const payload = [card.traits.opaqueContainer ?? []].flat()[0]?.payload;
+  if (!payload) return { unavailable: "it holds no stored contents" };
+  const material =
+    (payload.components as { material?: unknown }).material ??
+    materialOf({
+      ...card,
+      traits: {},
+    } as CardBlock);
+  if (typeof material !== "string" || !materialRegistry.has(material as BlockMaterial))
+    return { unavailable: "its stored contents have an unknown material" };
+  const recipe = getMaterialDefinition(material as BlockMaterial).mass;
+  if ("provider" in recipe) return { unavailable: "its stored contents cannot nest" };
+  return { kg: massKg(recipe) };
+});

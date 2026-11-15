@@ -3,6 +3,8 @@ import { standardDeck } from "./cards";
 import { getMaterialDefinition, materialDefinitions, withMaterial } from "./materials";
 import { formatMass, massKg, weightLine } from "./physical-mass";
 import { inspectBlock } from "./traits/inspectable";
+import { devOpaqueContainer } from "./dev-rankless-active";
+import "./playable-payload";
 
 describe("mass formatting (#1069)", () => {
   it("reads in grams below a kilogram and kilograms above, to three significant digits", () => {
@@ -19,6 +21,7 @@ describe("mass formatting (#1069)", () => {
 describe("weight in block inspection (#1069)", () => {
   it("shows every material's resolved weight on an inspected card", () => {
     for (const definition of materialDefinitions) {
+      if ("provider" in definition.mass) continue;
       const card = withMaterial(standardDeck[0]!, definition);
       expect(inspectBlock(card), definition.id).toContain(weightLine(massKg(definition.mass)));
     }
@@ -35,5 +38,19 @@ describe("weight in block inspection (#1069)", () => {
     const { inspectable: _drop, ...traits } = standardDeck[0]!.traits;
     const bare = { ...standardDeck[0]!, traits } as (typeof standardDeck)[0];
     expect(inspectBlock(bare)).toContain("Weight:");
+  });
+
+  it("shows a Present's contents-derived weight without revealing its contents (#1068)", () => {
+    const present = withMaterial(
+      devOpaqueContainer("p", {
+        id: "p.contents",
+        definition: "playableCard",
+        components: { pokerIdentity: { rank: "K", suit: "spades" }, material: "gold" },
+      }),
+      getMaterialDefinition("giftWrap" as never),
+    );
+    const text = inspectBlock(present)!;
+    expect(text).toContain("Weight: 19.3 kg");
+    expect(text).not.toMatch(/gold|spades|\bK\b/i);
   });
 });

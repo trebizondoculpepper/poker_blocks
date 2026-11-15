@@ -69,7 +69,11 @@ function materialPage(
 ): BrowsedObject {
   const { card = sampleCard, options = {}, id = definition.id, name = definition.name } = page;
   // Every material sheet shows its authored mass (#1069), from the definition's own recipe.
-  const weight = weightLine(massKg(definition.mass));
+  // An instance-derived recipe (a Present's, #1068) states its rule: a definition has no instance.
+  const weight =
+    "provider" in definition.mass
+      ? `Weight: ${definition.mass.rule}`
+      : weightLine(massKg(definition.mass));
   return {
     id,
     name,
