@@ -359,6 +359,13 @@ export type MenuBlockItem = {
    * already plays its own (#780).
    */
   sfx?: SoundEffectId | null;
+  /** Ambient three-axis precession for its cube (#1075), with any setting overrides. */
+  precession?: Partial<{
+    rest: [number, number, number];
+    amplitude: [number, number, number];
+    periodUnits: [number, number, number];
+    phase: [number, number, number];
+  }>;
   /** The material its cube is written in; omitted, one is chosen (#780). */
   material?: BlockMaterial;
 };
@@ -495,6 +502,8 @@ export const gameDialogs = {
         label: "Visit shop",
         action: "leaveStage",
         description: "Collect your winnings and go to the shop.",
+        // It gently turns about all three axes, showing its depth (#1057, #1075).
+        precession: {},
       },
     ],
   },

@@ -8,6 +8,7 @@ import { writtenBlock } from "./visual/written-block";
 import { menuAction } from "./traits/menu-action";
 import { interactionFeedback, disabledAppearance } from "./traits/interaction-feedback";
 import { inspectableTrait } from "./traits/inspectable";
+import { ambientPrecession } from "./traits/ambient-precession";
 import { longPressInspect } from "./traits/long-press-inspect";
 
 export type WordCubeOptions = WritingOptions & {
@@ -20,6 +21,8 @@ export type WordCubeOptions = WritingOptions & {
   /** Why it is unavailable, when no live reason comes with `input.enabled` (#462). */
   disabledReason?: string;
   feedback?: Partial<typeof interactionFeedback.defaults>;
+  /** Compose ambient three-axis precession with these settings (#1075); none when absent. */
+  precession?: Partial<typeof ambientPrecession.defaults>;
 };
 
 /** Create one cube. Scene traits own its outer transform, input hit tests and action routing. */
@@ -46,6 +49,8 @@ export async function createWordCube(text: string, options: WordCubeOptions) {
     enabled: options.enabled ?? true,
     ...(options.sfx !== undefined ? { sfx: options.sfx } : {}),
   });
+  // Precession first: it slots its own node in above the feedback node when the art mounts.
+  if (options.precession) block.add(ambientPrecession, options.precession);
   block.add(interactionFeedback, options.feedback);
   block.add(disabledAppearance);
   block.add(inspectableTrait, {
