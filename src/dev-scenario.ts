@@ -323,7 +323,8 @@ devScenarioCapabilities.register("devReplay", {
 // Each replayed command completes as ordinary play does: the hand refills afterward
 // (doc/game.md, the after-action refill), so the next command can name a replacement card.
 const refilled = (resolved: boolean, run: GameRun) => {
-  if (resolved) run.refillHand();
+  // Through the same primitive refill executor a journal's explicit refill step uses (#1244).
+  if (resolved) commandCodecs.get("refillHand").execute(run, {});
   return resolved;
 };
 // The shared primitive executors (#1243), composed explicitly with the setup replay's refill:

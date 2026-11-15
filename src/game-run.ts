@@ -1322,9 +1322,23 @@ export class GameRun {
   /** Refill up to the dealer's hand size, appending new cards after the survivors. */
   refillHand(): CardBlock[] {
     if (!this.inStage) return [];
-    const result = this.activeDealer.refillHand(this.currentState);
-    this.currentState = result.state;
-    return result.drawn;
+    // Its own committed action (#1244; doc/experiments/command-journal.md, "Refill is an explicit
+    // separate step"): state and random checkpoint share the transaction, and the canonical
+    // command publishes with no facts. Drawing nothing (a full hand, an empty deck) is a true
+    // no-op: nothing commits and nothing is published.
+    return (
+      this.transact(
+        "refillHand",
+        undefined,
+        () => {
+          const result = this.activeDealer.refillHand(this.currentState);
+          if (!result.drawn.length) return null;
+          this.currentState = result.state;
+          return result.drawn;
+        },
+        { name: "refillHand", args: {} },
+      ) ?? []
+    );
   }
 
   /**
