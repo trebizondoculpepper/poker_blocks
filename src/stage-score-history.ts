@@ -134,6 +134,7 @@ export function parseStageHistory(value: unknown): StageScoreHistory | null {
       actions.has(entry.actionId) ||
       entry.play !== last.play + 1 ||
       !finiteNonnegative(entry.delta) ||
+      !finiteNonnegative(entry.total) ||
       entry.total !== last.total + entry.delta
     )
       return null;
