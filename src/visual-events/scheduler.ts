@@ -199,6 +199,27 @@ export function createVisualScheduler(
   const order = (a: Entry, b: Entry) => a.dueAtMs - b.dueAtMs || a.sequence - b.sequence;
   let heap = new TinyQueue<Entry>([], order);
   const scopes = new Map<ScopeHandle, Scope>();
+  /**
+   * Terminal statuses only, keyed weakly by handle (#1038; doc/scheduler-terminal-status.md): a
+   * retained handle still reads its real result, but nothing here keeps a scope, its config,
+   * listeners or resources alive, and an unreachable handle's status is collectible.
+   */
+  const terminal = new WeakMap<ScopeHandle, ScopeStatus>();
+  /**
+   * A settled scope leaves the strong record set: its terminal status is installed first (so a
+   * re-entrant status/observe sees it), then its record, configuration and listeners are dropped
+   * and it detaches from its parent, which only waits on pending children.
+   */
+  const recordTerminal = (scope: Scope) => {
+    terminal.set(scope.handle, Object.freeze(statusOf(scope)));
+  };
+  const retire = (scope: Scope) => {
+    scopes.delete(scope.handle);
+    scope.parent?.children.delete(scope);
+    scope.children.clear();
+    scope.listeners.clear();
+    scope.config = {};
+  };
   const entries = new Map<EventHandle, Entry>();
   const active = new Set<Entry>();
   let generation = 0;
@@ -289,8 +310,11 @@ export function createVisualScheduler(
     scope.state = scope.failure ? "failed" : "finished";
     if (scope.failure) scope.diagnostic = scope.failure;
     scope.events.clear();
+    recordTerminal(scope);
     notify(scope);
-    if (scope.parent) settleIfDone(scope.parent);
+    const parent = scope.parent;
+    retire(scope);
+    if (parent) settleIfDone(parent);
   };
 
   const finishEntry = (entry: Entry) => {
@@ -378,10 +402,13 @@ export function createVisualScheduler(
     if (scope.state !== "pending" || !scope.cleaned) return;
     for (const child of scope.children) if (child.state === "pending") return;
     scope.state = "cancelled";
+    recordTerminal(scope);
     notify(scope);
-    if (!scope.parent) return;
-    if (scope.parent.cancelling) completeCancel(scope.parent);
-    else settleIfDone(scope.parent);
+    const parent = scope.parent;
+    retire(scope);
+    if (!parent) return;
+    if (parent.cancelling) completeCancel(parent);
+    else settleIfDone(parent);
   };
 
   const admit = (
@@ -537,6 +564,11 @@ export function createVisualScheduler(
         cleaned: false,
         listeners: new Set(),
       };
+      // Born cancelled (a stale or settled parent): terminal at once, never a strong record.
+      if (scope.state === "cancelled") {
+        recordTerminal(scope);
+        return handle;
+      }
       scopes.set(handle, scope);
       parentScope?.children.add(scope);
       return handle;
@@ -622,13 +654,17 @@ export function createVisualScheduler(
     },
     status(scope: ScopeHandle): ScopeStatus {
       const found = scopes.get(scope);
-      return found ? statusOf(found) : { state: "cancelled", diagnostic: "unknown scope" };
+      if (found) return statusOf(found);
+      const settled = terminal.get(scope);
+      // A copy, so no caller can change another's later answer.
+      return settled ? { ...settled } : { state: "cancelled", diagnostic: "unknown scope" };
     },
     /** Hear a scope settle; an already settled scope is reported once, at once. */
     observe(scope: ScopeHandle, listener: (status: ScopeStatus) => void): () => void {
       const found = scopes.get(scope);
       if (!found || found.state !== "pending") {
-        listener(found ? statusOf(found) : { state: "cancelled", diagnostic: "unknown scope" });
+        const settled = found ? statusOf(found) : terminal.get(scope);
+        listener(settled ? { ...settled } : { state: "cancelled", diagnostic: "unknown scope" });
         return () => {};
       }
       found.listeners.add(listener);
