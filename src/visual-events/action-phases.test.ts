@@ -335,4 +335,23 @@ describe("action-correlated presentation phases (#1218; doc/action-presentation-
     expect(committed.contributions.has(narration)).toBe(true);
     expect(((await reported) as Error).message).toBe("summary broke");
   });
+
+  it("lets its owner observe a contribution's terminal status once (#1280)", () => {
+    const narration = producer({ slot: "scoring" });
+    const graph = producer({ slot: "postScoring" });
+    const { phases, step } = harness([narration, graph]);
+    const committed = phases.commit("a1", null);
+    if (!committed.ok) throw new Error(committed.diagnostic);
+    const failing = vi.fn();
+    const landing = vi.fn();
+    committed.contributions.get(graph)!.observe(failing);
+    committed.contributions.get(narration)!.observe(landing);
+    committed.contributions.get(narration)!.bind(work("n", 10));
+    committed.contributions.get(graph)!.fail("bound work not admitted");
+    step(100);
+    expect(failing).toHaveBeenCalledTimes(1);
+    expect(failing.mock.calls[0]![0]).toMatchObject({ state: "failed" });
+    expect(landing).toHaveBeenCalledTimes(1);
+    expect(landing.mock.calls[0]![0]).toEqual({ state: "finished" });
+  });
 });
