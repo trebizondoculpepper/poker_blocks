@@ -100,11 +100,24 @@ export type PlotSurface = {
   dispose(): void;
 };
 
-/** Where a data point lands on the surface, in pixels (y down), clamped to the plot area. */
+/**
+ * Where a data point lands on the surface, in pixels (y down), clamped to the plot area. Drawn
+ * lines use `toPlotPixel` instead and are clipped, so a segment leaving the area keeps its slope.
+ */
 export function toPixel(
   config: Pick<PlotSurfaceConfig, "width" | "height" | "padding">,
   data: Pick<PlotData, "x" | "y">,
+  point: readonly [number, number],
+): [number, number] {
+  return toPlotPixel(config, data, point, true);
+}
+
+/** Where a data point lands, in pixels (y down): unclamped unless `clamp` is set. */
+export function toPlotPixel(
+  config: Pick<PlotSurfaceConfig, "width" | "height" | "padding">,
+  data: Pick<PlotData, "x" | "y">,
   [x, y]: readonly [number, number],
+  clamp = false,
 ): [number, number] {
   const { left, right, top, bottom } = config.padding;
   const plotWidth = Math.max(1, config.width - left - right);
@@ -112,7 +125,7 @@ export function toPixel(
   const along = (value: number, axis: PlotAxis) => {
     const span = axis.max - axis.min;
     const t = span === 0 ? 0 : (value - axis.min) / span;
-    return Math.min(1, Math.max(0, t));
+    return clamp ? Math.min(1, Math.max(0, t)) : t;
   };
   return [left + along(x, data.x) * plotWidth, top + (1 - along(y, data.y)) * plotHeight];
 }
@@ -157,7 +170,7 @@ export function createPlotSurface(
     stroke(style);
     context!.beginPath();
     points.forEach((point, index) => {
-      const [px, py] = toPixel(config, data, point);
+      const [px, py] = toPlotPixel(config, data, point);
       if (index === 0) context!.moveTo(px, py);
       else context!.lineTo(px, py);
     });
@@ -165,7 +178,7 @@ export function createPlotSurface(
     if (!markers) return;
     context!.fillStyle = style.colour;
     for (const point of points) {
-      const [px, py] = toPixel(config, data, point);
+      const [px, py] = toPlotPixel(config, data, point);
       context!.beginPath();
       context!.arc(px, py, style.width * 1.5, 0, 2 * Math.PI);
       context!.fill();
@@ -198,6 +211,35 @@ export function createPlotSurface(
       line([padding.left - 5, py], [padding.left, py], config.axisStyle);
       c.fillText(label, padding.left - 7, py);
     }
+    // Axis titles in the padding: x centred below its ticks, y turned up the left edge.
+    if (data.x.label) {
+      c.textAlign = "center";
+      c.textBaseline = "bottom";
+      c.fillText(
+        data.x.label,
+        padding.left + (width - padding.left - padding.right) / 2,
+        height - 2,
+      );
+    }
+    if (data.y.label) {
+      c.save();
+      c.translate(4, padding.top + (height - padding.top - padding.bottom) / 2);
+      c.rotate(-Math.PI / 2);
+      c.textAlign = "center";
+      c.textBaseline = "top";
+      c.fillText(data.y.label, 0, 0);
+      c.restore();
+    }
+    // Lines are clipped to the plot area: one leaving it keeps its true slope (#1142).
+    c.save();
+    c.beginPath();
+    c.rect(
+      padding.left,
+      padding.top,
+      width - padding.left - padding.right,
+      height - padding.top - padding.bottom,
+    );
+    c.clip();
     // Reference lines, then projections, then what was observed, on top.
     for (const reference of data.references ?? []) {
       const [from, to]: [readonly [number, number], readonly [number, number]] =
@@ -210,8 +252,8 @@ export function createPlotSurface(
               [reference.value, data.y.min],
               [reference.value, data.y.max],
             ];
-      const start = toPixel(config, data, from);
-      const end = toPixel(config, data, to);
+      const start = toPlotPixel(config, data, from);
+      const end = toPlotPixel(config, data, to);
       line(start, end, reference.style);
       if (reference.label) {
         c.fillStyle = reference.style.colour;
@@ -223,6 +265,7 @@ export function createPlotSurface(
     }
     for (const projection of data.projections ?? []) series(data, projection);
     for (const observed of data.series) series(data, observed);
+    c.restore();
     c.setLineDash([]);
   };
 

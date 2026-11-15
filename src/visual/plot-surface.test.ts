@@ -90,6 +90,34 @@ describe("plot surface (#1085; doc/line-goes-up.md)", () => {
     expect(calls.filter(({ name }) => name === "arc")).toHaveLength(3);
   });
 
+  it("clips a line leaving the plot area rather than bending it, and draws axis titles (#1142)", () => {
+    const { canvas, calls } = recordingCanvas();
+    const config = { ...defaultPlotSurfaceConfig, width: 200, height: 100 };
+    config.padding = { left: 20, right: 10, top: 10, bottom: 20 };
+    const surface = createPlotSurface(config, () => canvas);
+    surface.update({
+      x: { min: 0, max: 6, label: "Plays" },
+      y: { min: 0, max: 300, label: "Score" },
+      series: [],
+      projections: [
+        {
+          points: [
+            [0, 0],
+            [6, 600],
+          ],
+          style: { colour: "#888", width: 2 },
+        },
+      ],
+    });
+    // The far end lies above the area, unclamped: (6, 600) → x 190, y 80 − 2·70 = −60.
+    expect(calls.filter(({ name }) => name === "lineTo").at(-1)!.args).toEqual([190, -60]);
+    // Drawn inside a clip to the plot rectangle.
+    expect(calls.find(({ name }) => name === "rect")!.args).toEqual([20, 10, 170, 70]);
+    expect(calls.some(({ name }) => name === "clip")).toBe(true);
+    const texts = calls.filter(({ name }) => name === "fillText").map(({ args }) => args[0]);
+    expect(texts).toEqual(expect.arrayContaining(["Plays", "Score"]));
+  });
+
   it("redraws on new data, and draws any series: it holds no score policy", () => {
     const { canvas, calls } = recordingCanvas();
     const surface = createPlotSurface(defaultPlotSurfaceConfig, () => canvas);
