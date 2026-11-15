@@ -70,6 +70,25 @@ describe("committed command metadata (#1243; doc/experiments/command-journal.md)
     expect(unavailable[0]).toEqual({ unavailable: expect.stringContaining("no command codec") });
   });
 
+  it("carries the context the action resolved in, deeply frozen (#1243 review)", () => {
+    const run = fresh();
+    const seen = recording(run);
+    const before = run.stageContext;
+    run.forceOutcome("won");
+    run.advance();
+    // The advance commits in the old stage and moves on: its metadata keeps the old stage.
+    const advanced = seen.at(-1)!.metadata;
+    expect(advanced.context.stage).toEqual(before);
+    expect(Object.isFrozen(advanced.context)).toBe(true);
+    if (advanced.context.stage) expect(Object.isFrozen(advanced.context.stage)).toBe(true);
+    const play = fresh();
+    const plays = recording(play);
+    play.play({ cardId: play.state.hand[0]!.id }, "p1");
+    const command = plays[0]!.metadata.command as { args: object };
+    expect(Object.isFrozen(command)).toBe(true);
+    expect(Object.isFrozen(command.args)).toBe(true);
+  });
+
   it("keeps one-argument listeners working", () => {
     const run = fresh();
     const facts: number[] = [];

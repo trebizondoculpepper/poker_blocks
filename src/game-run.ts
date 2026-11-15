@@ -104,6 +104,18 @@ export type RunPositionOutcome = `run.position.${RunPhase}`;
  */
 export type RunFlowOutcome = RunPositionOutcome | "run.stage.won";
 
+/** A deeply frozen plain copy: published metadata can't be changed by any listener (#1243). */
+function deepFrozen<T>(value: T): T {
+  const copy = structuredClone(value);
+  const freeze = (node: unknown) => {
+    if (typeof node !== "object" || node === null || Object.isFrozen(node)) return;
+    Object.values(node).forEach(freeze);
+    Object.freeze(node);
+  };
+  freeze(copy);
+  return copy;
+}
+
 /** Each stage starts its own score history at (0, 0) with its resolved allowance (#1063). */
 const withStageHistory = (
   state: GameState,
@@ -329,12 +341,15 @@ export class GameRun {
     // mutated), restored wholesale if the action fails.
     const saved = Object.fromEntries(Object.entries(this));
     const mark = this.randomCheckpoints?.checkpoint();
+    // The stage the action resolves in, fixed now: every fact it records carries it, and so does
+    // its committed metadata (#1243 review), never the context after the action moved on.
+    const resolvesIn = { stage: this.stageContext, round: this.currentRound };
+    const metadataContext = deepFrozen({ ...resolvesIn, version: this.version });
     const action = new ActionContext(
       id,
       this.version,
       this.config.resolutionLimits ?? defaultResolutionLimits,
-      // The stage the action resolves in, fixed now: every fact it records carries it.
-      { stage: this.stageContext, round: this.currentRound },
+      resolvesIn,
     );
     // Facts are published only once the action has committed, outside the transaction, so no
     // presentation listener can run inside it or roll it back (doc/game-events.md, #755).
@@ -360,13 +375,9 @@ export class GameRun {
         metadata: Object.freeze({
           actionId: id,
           kind,
-          context: Object.freeze({
-            stage: this.stageContext,
-            round: this.currentRound,
-            version: this.version,
-          }),
-          command: descriptor,
-          ...(checkpoint ? { checkpoint: Object.freeze({ ...checkpoint }) } : {}),
+          context: metadataContext,
+          command: deepFrozen(descriptor),
+          ...(checkpoint ? { checkpoint: deepFrozen({ ...checkpoint }) } : {}),
         }),
       };
       return result;
