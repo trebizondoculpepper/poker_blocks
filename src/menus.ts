@@ -104,8 +104,8 @@ export function createMenus(
   const title = overlay("title-screen", "Poker Blocks");
   title.panel.insertAdjacentHTML(
     "beforeend",
-    `<p class="menu-subtitle">Poker solitaire in three dimensions</p>
-     <div class="block-menu-host" data-menu="items"></div>`,
+    // No tagline (#1407; doc/game-website.md): the title and its menu speak for themselves.
+    `<div class="block-menu-host" data-menu="items"></div>`,
   );
 
   // Created before Settings, so Settings opened from it sits on top.
