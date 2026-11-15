@@ -177,6 +177,22 @@
   display: none;
 }
 
+.object-browser-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0 0 10px;
+}
+.object-browser-action a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.object-browser-action span {
+  opacity: 0.8;
+  font-size: 0.9em;
+}
 .object-browser-search {
   display: flex;
   flex-wrap: wrap;
