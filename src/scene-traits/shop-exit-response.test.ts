@@ -15,8 +15,8 @@ function harness() {
         reducedMotion: false,
       },
       shop: {
-        burnUnsold(_reduced: boolean, ids?: readonly string[]) {
-          log.push(`burn ${ids?.join(",")}`);
+        burnUnsold() {
+          log.push("burn");
           return new Promise<void>((resolve) => (release = resolve));
         },
       },
@@ -37,7 +37,7 @@ function harness() {
 }
 
 describe("shopExitResponse (#880)", () => {
-  it("burns exactly the receipt's outgoing stock: burn cue at its start, leave cue when done", async () => {
+  it("burns the receipt's outgoing stock: burn cue at its start, leave cue when done", async () => {
     const h = harness();
     h.publish([
       {
@@ -48,7 +48,7 @@ describe("shopExitResponse (#880)", () => {
         ],
       },
     ]);
-    expect(h.log).toEqual(["sound shop.stock.burn", "burn a,b"]);
+    expect(h.log).toEqual(["sound shop.stock.burn", "burn"]);
     h.release();
     await Promise.resolve();
     await Promise.resolve();
@@ -58,11 +58,21 @@ describe("shopExitResponse (#880)", () => {
   it("plays no burn cue when nothing left, still the leave cue", async () => {
     const h = harness();
     h.publish([{ type: "shop.left", outgoingStock: [] }]);
-    expect(h.log).toEqual(["burn "]);
+    expect(h.log).toEqual(["burn"]);
     h.release();
     await Promise.resolve();
     await Promise.resolve();
     expect(h.log).toContain("sound shop.leave");
+  });
+
+  it("plays no stale leave cue when the scene exits before the burn finishes", async () => {
+    const h = harness();
+    h.publish([{ type: "shop.left", outgoingStock: [{ kind: "card", blockId: "a" }] }]);
+    h.trait.exit!(h.context as never, h.config);
+    h.release();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.log).toEqual(["sound shop.stock.burn", "burn"]);
   });
 
   it("presents nothing for other facts, and stops listening on exit", () => {

@@ -19,31 +19,41 @@ export function shopExitResponse<
         onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void;
         readonly reducedMotion: boolean;
       };
-      shop: { burnUnsold(reducedMotion: boolean, ids?: readonly string[]): Promise<void> };
+      shop: { burnUnsold(reducedMotion: boolean): Promise<void> };
       sound(id: SoundEffectId): void;
     };
   },
 >(): SceneTraitBehaviour<Context, ShopExitResponseConfig> {
   const stops = new WeakMap<object, () => void>();
+  /**
+   * The response lease (doc/outcome-presentation.md, stale-response cancellation): each entry
+   * or exit starts a new generation, and a completion cue plays only for the one it began in.
+   */
+  let generation = 0;
   return {
     enter({ services }, config) {
       stops.get(config)?.();
+      generation += 1;
+      const lease = generation;
       stops.set(
         config,
         services.run.onCommitted((facts) => {
           for (const { payload } of facts) {
             const { outgoingStock } = payload as GameEvent;
             if (!outgoingStock) continue;
-            const ids = outgoingStock.map(({ blockId }) => blockId);
-            if (ids.length) services.sound(config.burnSound);
-            void services.shop
-              .burnUnsold(services.run.reducedMotion, ids)
-              .then(() => services.sound(config.leaveSound));
+            // The shop still shows exactly the stock the receipt captured: nothing can change
+            // it between the commit and here.
+            if (outgoingStock.length) services.sound(config.burnSound);
+            void services.shop.burnUnsold(services.run.reducedMotion).then(() => {
+              // Exited (a new run, a quit) before the burn finished: a stale cue plays nothing.
+              if (lease === generation) services.sound(config.leaveSound);
+            });
           }
         }),
       );
     },
     exit(_context, config) {
+      generation += 1;
       stops.get(config)?.();
       stops.delete(config);
     },
