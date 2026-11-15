@@ -1,0 +1,7 @@
+Poker Blocks is poker solitaire in three dimensions. Your cards are cubes, and every play adds to a structure you can turn and inspect from every angle. Start with a familiar deck of ranks and suits, then build something that could only work in three dimensions.
+
+Make pairs, straights, flushes and more along the structure's three axes. Attach a single card or place a whole line from your hand, looking for positions that improve several poker hands at once. Build above, beside or underneath your existing blocks, and turn the table to spot the connection you missed.
+
+Materials and modifiers give your deck new possibilities. Cards made from wood, steel, ice, gold and other materials bring their own properties, while installed modifiers change scoring and reward different ways of building. Choose combinations that work together, then see what happens when they meet on the table.
+
+Each stage gives you a target score and a limited number of plays. Reach the target, collect your rewards and visit the shop to develop your deck for the next challenge. Play directly in your browser, experiment with different builds and help shape a game whose materials, modifiers and balance are still evolving.
