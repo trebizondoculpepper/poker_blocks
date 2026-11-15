@@ -134,11 +134,13 @@ describe("GameRun progression", () => {
     session.leaveShop();
     expect(session.state.field).toHaveLength(0);
     expect(session.state.hand).toHaveLength(6);
-    expect(session.state.round).toEqual({
+    expect(session.state.round).toMatchObject({
       score: 0,
       targetScore: 20,
       movesLeft: 3,
       discardsLeft: 2,
+      // A fresh stage history (#1063).
+      history: { plays: 3, targetScore: 20, start: { play: 0, total: 0 }, entries: [] },
     });
     expect(new Set(allCards(session.state)).size).toBe(52);
     expect(allCards(session.state)).toHaveLength(52);
