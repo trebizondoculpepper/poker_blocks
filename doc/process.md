@@ -109,6 +109,10 @@ Every open ticket that isn't claimed has exactly one readiness label: `status:re
 - **After merging:** remove the `agent:` label from a finished issue, close it, and tell anyone waiting on it.
 - **Documentation first, always:** a rule or design change is its own PR to `doc/game.md` or `doc/game-architecture.md` (and, where it affects agents or review, `AGENTS.md` and `.coderabbit.yaml`), merged before any implementation starts. The implementing ticket is blocked on the documentation ticket. A behaviour-preserving fix that matches an accurate document cites the section instead of changing it. Example: #537 (service and controller architecture, documentation and review policy) merges before #538 (aligning the code), and #545 before the queue implementation in #546–#549.
 
+### Asset credits
+
+Every PR that adds or replaces a third-party or generated asset (model, texture, font, sound or music) updates [CREDITS.md](../CREDITS.md) in the same PR: title and source URL, author, exact licence and link, any permission evidence, modifications, use and paths, and required notices. Keep upstream licence files and notices beside the asset, never drop an existing notice, and move a pending entry to Shipped only when its files are committed. Unknown provenance is recorded as unresolved, never guessed. Reviewers flag an asset import without a matching CREDITS.md entry.
+
 ### Documented pattern gate
 
 Before implementation starts, the ticket identifies the already merged documentation for the behavioral pattern it will use. The pattern describes the behavior's owner, configuration, lifecycle and composition. Research comes first when evidence or architectural choices are uncertain; it is not required when an existing documented pattern already answers those questions. If the pattern is absent or needs to change, create a documentation/architecture mission and block implementation until that documentation merges. Do not require a fresh research or documentation PR simply to reuse an accurate existing pattern.
