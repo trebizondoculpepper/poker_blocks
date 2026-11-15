@@ -46,7 +46,11 @@ export type CardBlock = {
      * A block without a rank/suit value provider names itself (#893): its public name and a
      * short symbol for compact lists. Never a hint about hidden contents.
      */
-    label?: { name: string; symbol: string };
+    /**
+     * A rankless object's name and symbol, and an optional public description that inspection
+     * adds after its name line whatever material it wears (#651).
+     */
+    label?: { name: string; symbol: string; description?: string };
     /**
      * Its discard behaviour by registered name (#574; src/discardable.ts); ordinary when absent.
      */
