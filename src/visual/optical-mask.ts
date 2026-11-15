@@ -21,7 +21,7 @@
  */
 import * as THREE from "three";
 import { NOISE } from "./materialise";
-import { maskAdapters, type MaskAdapter } from "./paired-mask";
+import { liveUniforms, maskAdapters, type MaskAdapter } from "./paired-mask";
 
 /** Dispatch to the adapter each material declares in `userData.maskAdapter`. */
 export const materialDeclaredAdapter: MaskAdapter = {
@@ -76,12 +76,11 @@ function shaderMaskAdapter(fade: string | null): MaskAdapter {
       // A clone drops the per-draw callback (a face ripple's, which steps its shared uniforms):
       // the masked look keeps it (#1336 review).
       made.onBeforeRender = source.onBeforeRender;
-      // The original's own uniform objects (capture slots, tuning, ripple), shared, plus the mask's.
-      made.uniforms = {
-        ...source.uniforms,
-        ...uniforms,
+      // The original's uniforms read live (capture slots, tuning, ripple, entries replaced at
+      // render time; #1350), plus the mask's own, which the source never gains.
+      made.uniforms = Object.assign(liveUniforms(source.uniforms), uniforms, {
         matOutgoing: { value: role === "outgoing" ? 1 : 0 },
-      };
+      });
       made.vertexShader = `varying vec3 matWorld;\n${source.vertexShader}`.replace(
         /void main\(\)\s*\{/,
         "void main() {\n  matWorld = (modelMatrix * vec4(position, 1.0)).xyz;",

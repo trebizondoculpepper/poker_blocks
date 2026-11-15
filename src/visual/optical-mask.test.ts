@@ -133,4 +133,23 @@ describe("paired masks for optical looks (#1207)", () => {
     expect(outgoing.material).toBe(declared);
     expect(incoming.material).toBe(stray);
   });
+
+  it("validates each part through its own resolved adapter, with no side-level one (#1336 review)", () => {
+    const material = (declared: string) => {
+      const made = new THREE.MeshStandardMaterial();
+      made.userData.maskAdapter = declared;
+      return made;
+    };
+    const outgoing = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material("chunkSurface"));
+    const incoming = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material("chunkSurface"));
+    const mount = new THREE.Group();
+    mount.add(outgoing, incoming);
+    const result = createPairedMask({
+      mount,
+      outgoing: { root: outgoing },
+      incoming: { root: incoming },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) result.mask.cancel();
+  });
 });

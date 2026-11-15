@@ -131,6 +131,125 @@ export const outgoingDrawLate = 1000;
 /** One side of the pair: its root (under the mount) and the adapter its look declared. */
 export type MaskSide = { root: THREE.Object3D; maskAdapter?: string };
 
+/**
+ * A part the mask covers: a mesh or points (animated extras, #1208). Three's own flags, not
+ * instanceof, so a part from another copy of the library still counts. Lines are outlines.
+ */
+const drawnPart = (node: THREE.Object3D) =>
+  Boolean(
+    (node as THREE.Mesh).isMesh ||
+    (node as THREE.Points).isPoints ||
+    // A look's edges (an outline's line segments) follow its coverage too (#1209).
+    (node as THREE.Line).isLine,
+  );
+
+/**
+ * A part's adapter: its material's declaration, else the nearest on it or its ancestors within
+ * the look, else the look's.
+ */
+function adapterOf(node: THREE.Object3D, side: MaskSide): string | undefined {
+  // A builder may declare it on the material it made (its own shader knows what it supports).
+  const material = [(node as THREE.Mesh).material].flat()[0] as THREE.Material | undefined;
+  const own = material?.userData.maskAdapter as string | undefined;
+  if (own) return own;
+  for (let at: THREE.Object3D | null = node; at; at = at.parent) {
+    const declared = at.userData.maskAdapter as string | undefined;
+    if (declared) return declared;
+    if (at === side.root) break;
+  }
+  return side.maskAdapter;
+}
+
+/**
+ * For parts with their own shader (fluids, bubbles, stars, fire, film; #1208): any material with a
+ * `void main()`. Its fragments are kept or discarded by the same shared per-ray noise as the chunk
+ * adapter, with no glowing rim; under reduced motion the incoming side dissolves in by an ordered
+ * dither. A ShaderMaterial's clone **shares its live uniform values**, so a contained simulation
+ * keeps animating while masked, and the source material is never changed.
+ */
+/**
+ * A live view of a source material's uniforms (#1350): reads, including entries the source's owner
+ * replaces or adds at render time, always come from the source; the mask's own uniforms are kept
+ * apart, so the source never gains them.
+ */
+export function liveUniforms(
+  source: Record<string, THREE.IUniform>,
+): Record<string, THREE.IUniform> {
+  const own: Record<string, THREE.IUniform> = {};
+  return new Proxy(source, {
+    get: (target, key) => (key in own ? own[key as string] : Reflect.get(target, key)),
+    set: (_target, key, value) => {
+      own[key as string] = value as THREE.IUniform;
+      return true;
+    },
+    has: (target, key) => key in own || key in target,
+    ownKeys: (target) => [...new Set([...Reflect.ownKeys(target), ...Reflect.ownKeys(own)])],
+    getOwnPropertyDescriptor: (target, key) =>
+      key in own
+        ? { value: own[key as string], writable: true, enumerable: true, configurable: true }
+        : Reflect.getOwnPropertyDescriptor(target, key),
+  });
+}
+
+/*
+ * Points (#1350): the mask is decided per **sprite**, from its vertex position, so a particle
+ * (a bubble, a star) appears or goes whole rather than being cut through; sprites here are a few
+ * pixels across, so no per-pixel coverage is attempted.
+ */
+export const shaderSurfaceAdapter: MaskAdapter = {
+  adapt(original, uniforms, role) {
+    const made = original.clone();
+    made.userData = original.userData;
+    const shared = (original as THREE.ShaderMaterial).uniforms;
+    if (shared) (made as THREE.ShaderMaterial).uniforms = liveUniforms(shared);
+    const before = original.onBeforeCompile.bind(original);
+    const key = original.customProgramCacheKey.bind(original);
+    made.customProgramCacheKey = () => `${key()}|pairedMaskShader:${role}`;
+    const outgoing = role === "outgoing" ? 1 : 0;
+    made.onBeforeCompile = (shader, renderer) => {
+      before(shader, renderer);
+      Object.assign(shader.uniforms, uniforms, { matOutgoing: { value: outgoing } });
+      shader.vertexShader = `varying vec3 matWorld;\n${shader.vertexShader}`.replace(
+        /void main\(\)\s*\{/,
+        `void main() {
+        matWorld = (modelMatrix * vec4(position, 1.0)).xyz;`,
+      );
+      shader.fragmentShader = `varying vec3 matWorld;
+        uniform float matProgress;
+        uniform float matTime;
+        uniform float matFrequency;
+        uniform float matEdge;
+        uniform float matReduced;
+        uniform float matOutgoing;
+        uniform mat4 matFrame;
+        uniform vec3 matOrigin;
+        ${NOISE}
+        ${shader.fragmentShader}`.replace(
+        /void main\(\)\s*\{/,
+        `void main() {
+        float matKeep;
+        if (matReduced < 0.5) {
+          vec3 matRay = normalize(matWorld - cameraPosition);
+          vec3 matFacing = normalize(cameraPosition - matOrigin);
+          float matAlong = dot(matOrigin - cameraPosition, matFacing) / min(dot(matRay, matFacing), -1e-4);
+          vec3 matLocal = (matFrame * vec4(cameraPosition + matRay * matAlong, 1.0)).xyz;
+          vec3 matAt = matLocal * matFrequency + vec3(0.0, matTime * 0.9, matTime * 0.4);
+          matKeep = clamp(matFbm(matAt) * 1.6 + 0.5, 0.0, 1.0);
+        } else {
+          // An ordered 4x4 dither stands in for a fade a custom shader may not support.
+          vec2 matCell = mod(floor(gl_FragCoord.xy), 4.0);
+          matKeep = (matCell.x * 4.0 + mod(matCell.y * 5.0 + matCell.x, 4.0) * 1.0) / 16.0 + 0.03;
+        }
+        float matCut = mix(-matEdge, 1.0 + matEdge, matProgress);
+        if (matOutgoing > 0.5 ? matKeep <= matCut : matKeep > matCut) discard;`,
+      );
+    };
+    return made;
+  },
+};
+
+maskAdapters.register("shaderSurface", shaderSurfaceAdapter);
+
 export type PairedMask = {
   readonly uniforms: PairedMaskUniforms;
   /** Advance by `delta` seconds; false once finished (outgoing hidden, materials restored). */
@@ -173,27 +292,29 @@ export function createPairedMask(options: {
     ["outgoing", outgoing],
     ["incoming", incoming],
   ];
+  // Every drawn part resolves its adapter before anything is touched (#1208): its own declaration
+  // (nearest `userData.maskAdapter` up to the look's root), else the look's. A part with neither,
+  // or naming an unregistered one, is reported rather than left drawn whole.
   for (const [role, side] of sides) {
-    if (!side.maskAdapter)
-      return { ok: false, diagnostic: `${role} look declares no mask adapter` };
-    if (!maskAdapters.has(side.maskAdapter))
-      return {
-        ok: false,
-        diagnostic: `${role} look's mask adapter "${side.maskAdapter}" is not registered`,
-      };
-  }
-  // Every material each side would adapt, checked before either look is touched (#1338 review).
-  for (const [role, side] of sides) {
-    const adapter = maskAdapters.get(side.maskAdapter!);
-    let refused: string | null = null;
+    let problem: string | null = null;
     side.root.traverse((node) => {
-      if (refused || (!(node as THREE.Mesh).isMesh && !(node as THREE.Line).isLine)) return;
-      for (const material of [
-        (node as THREE.Mesh).material as THREE.Material | THREE.Material[],
-      ].flat())
-        refused ??= adapter.refuse?.(material) ?? null;
+      if (problem || !drawnPart(node)) return;
+      const name = adapterOf(node, side);
+      if (!name) problem = `${role} look's ${node.name || node.type} declares no mask adapter`;
+      else if (!maskAdapters.has(name))
+        problem = `${role} look's mask adapter "${name}" is not registered`;
+      else {
+        // Its resolved adapter may refuse a material it can't adapt (#1336, #1338 reviews).
+        const adapter = maskAdapters.get(name);
+        for (const material of [
+          (node as THREE.Mesh).material as THREE.Material | THREE.Material[],
+        ].flat()) {
+          const refused = adapter.refuse?.(material) ?? null;
+          if (refused) problem ??= `${role} look: ${refused}`;
+        }
+      }
     });
-    if (refused) return { ok: false, diagnostic: `${role} look: ${refused}` };
+    if (problem) return { ok: false, diagnostic: problem };
   }
   const uniforms: PairedMaskUniforms = {
     matProgress: { value: 0 },
@@ -212,22 +333,27 @@ export function createPairedMask(options: {
     renderOrder: number;
   }[] = [];
   const clones: THREE.Material[] = [];
+  const incomingParts: THREE.Object3D[] = [];
+  const outgoingLayers: number[] = [];
   for (const [role, side] of sides) {
-    const adapter = maskAdapters.get(side.maskAdapter!);
-    const made = new Map<THREE.Material, THREE.Material>();
-    const adapt = (material: THREE.Material) => {
-      let clone = made.get(material);
-      if (!clone) {
-        clone = adapter.adapt(material, uniforms, role);
-        made.set(material, clone);
-        clones.push(clone);
-      }
-      return clone;
+    const made = new Map<string, Map<THREE.Material, THREE.Material>>();
+    const adapterFor = (name: string) => {
+      const adapter = maskAdapters.get(name);
+      const byMaterial = made.get(name) ?? new Map<THREE.Material, THREE.Material>();
+      made.set(name, byMaterial);
+      return (material: THREE.Material) => {
+        let clone = byMaterial.get(material);
+        if (!clone) {
+          clone = adapter.adapt(material, uniforms, role);
+          byMaterial.set(material, clone);
+          clones.push(clone);
+        }
+        return clone;
+      };
     };
     side.root.traverse((node) => {
-      // three's own flags, not instanceof, so one from another copy of the library still counts.
-      // A look's edges (an outline's line segments) follow its coverage too (#1209).
-      if (!(node as THREE.Mesh).isMesh && !(node as THREE.Line).isLine) return;
+      if (!drawnPart(node)) return;
+      const adapt = adapterFor(adapterOf(node, side)!);
       const object = node as THREE.Mesh;
       const material = object.material as THREE.Material | THREE.Material[];
       swapped.push({
@@ -239,8 +365,11 @@ export function createPairedMask(options: {
       object.material = Array.isArray(material) ? material.map(adapt) : adapt(material);
       // A shadow would show a look whole before it is.
       object.castShadow = false;
-      // The fading incoming look draws over the opaque outgoing one.
-      if (reduced && role === "incoming") object.renderOrder += 1;
+      // The fading incoming look draws over the outgoing one: placed after the loop, above every
+      // outgoing layer (#1338 review).
+      if (role === "incoming") incomingParts.push(object);
+      else if ([material].flat().some(({ transparent }) => transparent))
+        outgoingLayers.push(object.renderOrder);
       // The outgoing look writes no depth while it is faded over (#1264), so it draws after the
       // rest of the opaque scene: geometry behind it is already drawn and can't show through it
       // (#1273). The incoming look still draws over it, in the transparent pass.
@@ -253,6 +382,15 @@ export function createPairedMask(options: {
       )
         object.renderOrder += outgoingDrawLate;
     });
+  }
+  // Under reduced motion the incoming look, shifted as a whole so its own layers keep their order,
+  // draws after the outgoing look's last transparent layer (a crystal's print skin, say), so it
+  // fades over all of it rather than under its artwork (#1338 review). The outgoing opaque parts
+  // draw in the opaque pass before any of it.
+  if (reduced && incomingParts.length) {
+    const lowest = Math.min(...incomingParts.map(({ renderOrder }) => renderOrder));
+    const shift = Math.max(1, Math.max(lowest, ...outgoingLayers) - lowest + 1);
+    for (const part of incomingParts) part.renderOrder += shift;
   }
   const followMount = () => {
     mount.updateWorldMatrix(true, false);

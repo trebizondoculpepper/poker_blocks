@@ -96,4 +96,34 @@ describe("paired masks for edges and custom shaders (#1209)", () => {
       .adapt(laser.material, reduced, "incoming") as THREE.ShaderMaterial;
     expect(blended.fragmentShader).toContain("gl_FragColor.a *= matProgress");
   });
+
+  it("fades the incoming look over every outgoing layer under reduced motion (#1338 review)", () => {
+    const chunk = (transparent: boolean) => {
+      const made = new THREE.MeshStandardMaterial({ transparent });
+      made.userData.maskAdapter = "chunkSurface";
+      return made;
+    };
+    const crystal = new THREE.Mesh(geometry, chunk(false));
+    const skin = new THREE.Mesh(geometry, chunk(true));
+    skin.renderOrder = 20;
+    crystal.add(skin);
+    const paper = new THREE.Mesh(geometry, chunk(false));
+    const print = new THREE.Mesh(geometry, chunk(true));
+    print.renderOrder = 2;
+    paper.add(print);
+    const mount = new THREE.Group();
+    mount.add(crystal, paper);
+    const result = createPairedMask({
+      mount,
+      outgoing: { root: crystal },
+      incoming: { root: paper },
+      reduced: true,
+    });
+    expect(result.ok).toBe(true);
+    // Above the outgoing print skin, its own layers still in order.
+    expect(paper.renderOrder).toBeGreaterThan(20);
+    expect(print.renderOrder - paper.renderOrder).toBe(2);
+    if (result.ok) result.mask.cancel();
+    expect([paper.renderOrder, print.renderOrder, skin.renderOrder]).toEqual([0, 2, 20]);
+  });
 });
