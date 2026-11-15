@@ -124,3 +124,69 @@ describe("placement bound to committed action identities (#1219)", () => {
     expect(producer.reserve({ factTypes: ["play.placed"] })).toBeNull();
   });
 });
+
+describe("scoring completion through the completion adapter (#1220)", () => {
+  it("opens post-score after that action's scoring, and its root only after post-score", async () => {
+    const { createCompletionAdapter, phaseProducers } =
+      await import("./visual-events/action-phases");
+    const { scoringProducer } = await import("./placement-phase");
+    const graph = "test.graph.1220";
+    phaseProducers.register(
+      graph,
+      factProducer({ fact: "score.totalApplied", slot: "postScoring" }),
+    );
+    ran.length = 0;
+    const scheduler = createVisualScheduler();
+    let now = 0;
+    scheduler.update(0, true);
+    const step = (ms: number) => {
+      for (let t = 0; t < ms; t += 10) scheduler.update((now += 10), true);
+    };
+    const committed = source();
+    const phases = createActionPhases(scheduler, {
+      plan: "scoring",
+      producers: [graph, placementProducer, scoringProducer],
+    });
+    const placement = createPlacementPhase(committed, phases);
+    committed.commit("p1", ["play.placed", "score.totalApplied"]);
+    const key = placement.latest!;
+    let rootSettled = false;
+    placement.observeAction(key, () => void (rootSettled = true));
+    // The graph reserved and bound early; it can't start before scoring completes.
+    placement.contributionFor(key, graph)!.bind(flight("graph", 20));
+    placement.contribution()!.bind(flight("flight", 50));
+    step(100);
+    const completion = createCompletionAdapter();
+    expect(placement.contributionFor(key, scoringProducer)!.bind(completion.work)).toBe(true);
+    step(200);
+    expect(ran).toEqual(["flight@start", "flight@end"]);
+    // Narration reports the action scored: post-score opens, then the root settles.
+    completion.done();
+    step(100);
+    expect(ran).toEqual(["flight@start", "flight@end", "graph@start", "graph@end"]);
+    expect(rootSettled).toBe(true);
+  });
+
+  it("fails a scoring contribution whose producer reports failure, without blocking the root", async () => {
+    const { createCompletionAdapter } = await import("./visual-events/action-phases");
+    const { scoringProducer } = await import("./placement-phase");
+    const scheduler = createVisualScheduler();
+    let now = 0;
+    scheduler.update(0, true);
+    const committed = source();
+    const phases = createActionPhases(scheduler, {
+      plan: "scoring",
+      producers: [placementProducer, scoringProducer],
+    });
+    const placement = createPlacementPhase(committed, phases);
+    committed.commit("p1", ["score.totalApplied"]);
+    const key = placement.latest!;
+    const completion = createCompletionAdapter();
+    const scoring = placement.contributionFor(key, scoringProducer)!;
+    scoring.bind(completion.work);
+    completion.failed("narration could not be admitted");
+    for (let t = 0; t < 100; t += 10) scheduler.update((now += 10), true);
+    expect(scoring.status().state).toBe("failed");
+    expect(phases.status(key)).toEqual({ state: "finished" });
+  });
+});

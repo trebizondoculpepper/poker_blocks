@@ -112,6 +112,56 @@ visualHandlers.register("actionPhase.hold", (payload, context): EffectHandle => 
   };
 });
 
+/**
+ * An explicit completion adapter (#1220; doc/action-presentation-phases.md, "Existing work created
+ * before adoption is joined through an explicit completion adapter"): bound as a contribution's
+ * work, its effect runs until the existing producer reports its own work done, or failed.
+ */
+export type CompletionAdapter = {
+  /** The bound work's description: bind the contribution to this. */
+  readonly work: EventDescription;
+  /** The producer's work has completed. */
+  done(): void;
+  /** The producer's work failed: the contribution fails and its summary runs. */
+  failed(reason: string): void;
+};
+
+const completions = new Map<string, { state: "waiting" | "done" | "failed"; reason: string }>();
+let nextCompletion = 0;
+
+visualHandlers.register("actionPhase.completion", (payload): EffectHandle => {
+  const id = (payload as { completion: string }).completion;
+  return {
+    update() {
+      const completion = completions.get(id);
+      if (!completion || completion.state === "done") return "finished";
+      if (completion.state === "failed") throw new Error(completion.reason);
+      return "running";
+    },
+    cancel() {
+      completions.delete(id);
+    },
+    dispose() {
+      completions.delete(id);
+    },
+  };
+});
+
+/** A completion adapter for an existing producer's work. */
+export function createCompletionAdapter(): CompletionAdapter {
+  const id = `completion-${++nextCompletion}`;
+  completions.set(id, { state: "waiting", reason: "" });
+  const settle = (state: "done" | "failed", reason = "") => {
+    const completion = completions.get(id);
+    if (completion?.state === "waiting") completions.set(id, { state, reason });
+  };
+  return {
+    work: { handler: "actionPhase.completion", payload: { completion: id }, dueUnits: 0 },
+    done: () => settle("done"),
+    failed: (reason) => settle("failed", reason),
+  };
+}
+
 type ActionRecord = {
   key: ActionKey;
   root: ScopeHandle;

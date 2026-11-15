@@ -1,4 +1,4 @@
-import { createPlacementPhase, placementProducer } from "./placement-phase";
+import { createPlacementPhase, placementProducer, scoringProducer } from "./placement-phase";
 import { createActionPhases } from "./visual-events/action-phases";
 import type { TransitionAudioServices } from "./scene-traits/material-change-sounds";
 import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
@@ -502,7 +502,10 @@ document.addEventListener("visibilitychange", () => visualEvents.suspend());
 // Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).
 const placementPhase = createPlacementPhase(
   run,
-  createActionPhases(visualEvents, { plan: "scoring", producers: [placementProducer] }),
+  createActionPhases(visualEvents, {
+    plan: "scoring",
+    producers: [placementProducer, scoringProducer],
+  }),
 );
 const presenter: PlayPresenter = createPlayPresenter({
   game: () => run.game,
