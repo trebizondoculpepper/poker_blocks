@@ -528,6 +528,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   decided: (outcome, now, occurrence) => run.decided(outcome, now, occurrence),
   visualEvents,
   placementPhase,
+  committed: run,
 });
 const input: TableInput = createTableInput({
   host,
