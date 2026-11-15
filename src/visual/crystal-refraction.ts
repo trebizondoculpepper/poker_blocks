@@ -22,6 +22,12 @@
  * Limits: crystals do not refract each other (they are not in the capture); where blocks overlap,
  * the nearest rear facet's shift wins; the hand has no captured background.
  */
+import {
+  attachFaceRipple,
+  defaultFaceRipple,
+  faceRippleGlsl,
+  type FaceRippleConfig,
+} from "./face-ripple";
 import * as THREE from "three";
 import { Registry } from "../core/registry";
 import { crystalV3Environment } from "./crystal-v3";
@@ -68,6 +74,8 @@ export type RefractionTuning = { [K in keyof RefractionSettings]: { value: numbe
 export type RefractionPreset = {
   tuning: RefractionTuning;
   ripple: LookupRipple;
+  /** The highlight ripple's configuration (#797), used where the preset owns a surface strength. */
+  faceRipple: FaceRippleConfig;
   /** The reflection map: shared and immutable, never disposed by a block. */
   environment: () => THREE.Texture;
   /**
@@ -80,6 +88,7 @@ export type RefractionPreset = {
 export function createRefractionPreset(preset: {
   settings: RefractionSettings;
   ripple: RippleSettings;
+  faceRipple?: FaceRippleConfig;
   environment: () => THREE.Texture;
   edgeOpacity?: number;
 }): RefractionPreset {
@@ -88,6 +97,7 @@ export function createRefractionPreset(preset: {
       Object.entries(preset.settings).map(([key, value]) => [key, { value }]),
     ) as RefractionTuning,
     ripple: createLookupRipple(preset.ripple),
+    faceRipple: preset.faceRipple ?? defaultFaceRipple,
     environment: preset.environment,
     ...(preset.edgeOpacity !== undefined ? { edgeOpacity: { value: preset.edgeOpacity } } : {}),
   };
@@ -285,18 +295,9 @@ const rearFragment = /* glsl */ `
   varying vec3 vNormalY;
   varying vec3 vNormalZ;
   ${rippleShiftGlsl}
-  // The facet normal, perturbed by the ripple's height gradient in the face's own tangent plane,
-  // then taken to world space by the inverse transpose. At zero strength: the old normal exactly.
-  vec3 surfaceNormal() {
-    if (rippleSurface <= 0.0) return normalize(vWorldNormal);
-    vec3 local = normalize(vLocalNormal);
-    vec3 g = rippleGradient(vLocal);
-    vec3 tangential = g - dot(g, local) * local;
-    vec3 bent = normalize(local - rippleSurface * tangential);
-    return normalize(mat3(vNormalX, vNormalY, vNormalZ) * bent);
-  }
   void main() {
-    vec3 n = surfaceNormal();
+    // Refraction keeps the flat facet normal: the highlight ripple never bends it (#797).
+    vec3 n = normalize(vWorldNormal);
     vec3 v = normalize(cameraPosition - vWorldPosition);
     float incidence = abs(dot(n, v));
     // The facet's normal in view space: its screen direction is where the background shifts.
@@ -330,14 +331,14 @@ const frontFragment = /* glsl */ `
   varying vec3 vNormalY;
   varying vec3 vNormalZ;
   ${rippleShiftGlsl}
-  // The facet normal, perturbed by the ripple's height gradient in the face's own tangent plane,
-  // then taken to world space by the inverse transpose. At zero strength: the old normal exactly.
-  vec3 surfaceNormal() {
-    if (rippleSurface <= 0.0) return normalize(vWorldNormal);
+  ${faceRippleGlsl}
+  // The highlight normal (#797): the facet's normal bent by this object's concentric rings in its
+  // face's own tangent plane, taken to world space by the inverse transpose. Only the reflection
+  // reads it; at rest or zero strength it is the flat normal exactly.
+  vec3 highlightNormal() {
     vec3 local = normalize(vLocalNormal);
-    vec3 g = rippleGradient(vLocal);
-    vec3 tangential = g - dot(g, local) * local;
-    vec3 bent = normalize(local - rippleSurface * tangential);
+    vec3 bent = faceRippleNormal(vLocal, local);
+    if (bent == local) return normalize(vWorldNormal);
     return normalize(mat3(vNormalX, vNormalY, vNormalZ) * bent);
   }
   const float PI = 3.141592653589793;
@@ -355,7 +356,8 @@ const frontFragment = /* glsl */ `
 
   void main() {
     vec2 uv = gl_FragCoord.xy / screenSize;
-    vec3 n = surfaceNormal();
+    // Refraction, incidence and Fresnel keep the flat facet normal (#797).
+    vec3 n = normalize(vWorldNormal);
     vec3 v = normalize(cameraPosition - vWorldPosition);
     float incidence = clamp(abs(dot(n, v)), 0.0, 1.0);
     // The rear facet's shift under this pixel, reused, plus this front facet's own bend.
@@ -371,7 +373,8 @@ const frontFragment = /* glsl */ `
       behind(uv + shift).g,
       behind(uv + shift * (1.0 + dispersion)).b
     ) * vec3(clarity, clarity, 1.0);
-    vec3 reflected = lookUp(reflect(-v, n)) * reflection;
+    // Only the reflected highlight ripples.
+    vec3 reflected = lookUp(reflect(-v, highlightNormal())) * reflection;
     float fresnel = clamp(fresnelBase + (1.0 - fresnelBase) * pow(1.0 - incidence, fresnelPower), 0.0, 1.0);
     gl_FragColor = vec4(mix(seen, reflected, fresnel), 1.0);
     #include <colorspace_fragment>
@@ -395,17 +398,38 @@ export function createRefractionRear(
   return rear;
 }
 
-/** The front faces: the faked refraction of what is behind, with the spectral reflection. */
-export function createRefractionFront(preset: RefractionPreset): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
+/**
+ * The front faces: the faked refraction of what is behind, with the spectral reflection. Given
+ * the block's geometry, a preset that owns a highlight ripple (#797) gives this block its own:
+ * concentric rings its own turns set off, on the preset's presentation clock.
+ */
+export function createRefractionFront(
+  preset: RefractionPreset,
+  geometry?: THREE.BufferGeometry,
+): THREE.ShaderMaterial {
+  const material = new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader: frontFragment,
     uniforms: {
       ...captureSlots,
       ...preset.tuning,
       ...rippleUniforms(preset.ripple),
+      // Flat until a block's own ripple is attached.
+      faceRippleEnvelope: { value: 0 },
+      faceRippleTime: { value: 0 },
+      faceRippleRings: { value: preset.faceRipple.rings },
+      faceRippleSpeed: { value: preset.faceRipple.ringsPerSecond },
+      faceRippleHalf: { value: 0.5 },
       environment: { value: preset.environment() },
     },
     side: THREE.FrontSide,
   });
+  const { ripple } = preset;
+  for (const _surface of [ripple.surface ?? []].flat())
+    if (geometry)
+      attachFaceRipple(material, geometry, preset.faceRipple, () => ({
+        clock: ripple.clock.seconds,
+        reducedMotion: ripple.clock.reducedMotion,
+      }));
+  return material;
 }
