@@ -62,13 +62,23 @@ export function createControlGroup(overlay: HTMLElement, reducedMotion: () => bo
           size: Math.min(box.width, box.height) * (control.fill ?? 0.62),
         };
       };
+      let hidden = false;
       shown.add(control.id);
-      void ready.then((made) => (removed ? undefined : made.add({ ...control, layout }))).then(run);
+      // Mounting is asynchronous: whatever the owner asked meanwhile is applied once it lands
+      // (#1298), so an early hide or removal is never lost or applied out of order.
+      void ready
+        .then((made) => (removed ? undefined : made.add({ ...control, layout })))
+        .then(() => {
+          if (removed) stage?.remove(control.id);
+          else stage?.setHidden(control.id, hidden);
+          run();
+        });
       return {
-        setHidden(hidden) {
-          if (hidden) shown.delete(control.id);
+        setHidden(value) {
+          hidden = value;
+          if (value) shown.delete(control.id);
           else if (!removed) shown.add(control.id);
-          stage?.setHidden(control.id, hidden);
+          stage?.setHidden(control.id, value);
           run();
         },
         hitRegion: () => stage?.hitRegion(control.id) ?? null,

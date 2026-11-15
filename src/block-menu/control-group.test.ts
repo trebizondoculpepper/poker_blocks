@@ -46,12 +46,24 @@ describe("one shared control group for the shop's controls (#1078)", () => {
     buy.setHidden(true);
     sell.setHidden(true);
     expect(covered).toBeGreaterThan(0);
-    expect(hidden).toEqual([
+    expect(hidden.filter(([, value]) => value)).toEqual([
       ["buy", true],
       ["sell", true],
     ]);
     expect(sell.hitRegion()).toEqual({ left: 1, top: 2, width: 3, height: 4 });
     sell.remove();
     expect(added).toEqual(["buy"]);
+  });
+
+  it("applies a hide asked for before mounting finished, once it lands (#1298)", async () => {
+    const { createControlGroup } = await import("./control-group");
+    const overlay = { classList: { add() {} }, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
+    const group = createControlGroup(overlay as never, () => false);
+    const slot = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 10, height: 10 }) };
+    hidden.length = 0;
+    const early = group.place(slot as never, { id: "early", label: "E", description: "" });
+    early.setHidden(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(hidden.filter(([id]) => id === "early").at(-1)).toEqual(["early", true]);
   });
 });
