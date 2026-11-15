@@ -265,6 +265,8 @@ export function profilerReport(record: ProfilerExport, topN = 10): ProfilerRepor
         record.clock
           ? `Presentation clock: fixed step of ${(record.clock.stepSeconds * 1000).toFixed(2)} ms per frame`
           : "Presentation clock: wall time (recorded before #972)",
+        // Reduced motion is its own configuration: say which one this record measured (#974).
+        `Reduced motion: ${record.options.reducedMotion ? "on" : "off"}`,
         ...(record.aborted ? [`Stopped: ${record.aborted}`] : []),
         ...(record.cancelled ? ["Cancelled before every case ran"] : []),
         ...(record.notRun.length ? [`${record.notRun.length} case(s) not run`] : []),

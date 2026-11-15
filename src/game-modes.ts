@@ -127,6 +127,8 @@ export type SceneTraits = {
     warmupFrames?: number;
     seed?: number;
     timeoutMs?: number;
+    /** Sweep under reduced motion, as its own recorded configuration (#974). Default false. */
+    reducedMotion?: boolean;
     /**
      * The catalogs a complete run must cover (#710): each names its provider, a registered
      * profiling coverage family. A missing provider is reported, never treated as covered.

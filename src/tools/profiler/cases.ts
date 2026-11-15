@@ -9,11 +9,22 @@ import type { PassReference } from "./pipelines";
 import type { MotionReference } from "./motion";
 import type { PrepassReference } from "../../visual/appearance-prepass";
 
+/** What every object's update is told each frame: the run's explicit configuration. */
+export type ObjectFrame = { readonly reducedMotion: boolean };
+
 /** One built object in the profiler's scene. */
 export type ProfiledObject = {
   object: THREE.Object3D;
-  /** Advance its normal ambient animation by `dt` seconds of the run's clock. */
-  update?(dt: number): void;
+  /**
+   * Advance its normal ambient animation by `dt` seconds of the run's clock, under the run's
+   * explicit configuration (#974): reduced motion is a separate run, never the player's setting.
+   */
+  update?(dt: number, frame: ObjectFrame): void;
+  /**
+   * Start a transient over from its seeded state (#974): called as every warm-up and sample set
+   * begins, so each set measures the same active window, never an effect that already finished.
+   */
+  reset?(): void;
   /**
    * The appearance prepasses its production host would run before the main render (#969, #972).
    * A case that declares no `pipeline` renders through these, once per frame for the collection.
@@ -69,8 +80,14 @@ export type ProfilingCase = {
    * look whose parts respond to a turning block declares one. None: stationary only.
    */
   motions?: readonly MotionReference[];
-  /** Build one object through the production factory, with a fixed seed. */
-  create(context: { seed: number; phase?: string }): ProfiledObject | Promise<ProfiledObject>;
+  /**
+   * Build one object through the production factory, with a fixed seed, under the run's explicit
+   * configuration from the start (#974 review): an effect fixed at construction is built as the
+   * run asked.
+   */
+  create(
+    context: { seed: number; phase?: string } & ObjectFrame,
+  ): ProfiledObject | Promise<ProfiledObject>;
 };
 
 export const profilingCases = new Registry<ProfilingCase>("profiling case");

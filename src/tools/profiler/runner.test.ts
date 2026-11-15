@@ -1209,3 +1209,142 @@ describe("motion rows (#973)", () => {
     expect(fastest).toBeLessThanOrEqual(1.5 * (Math.PI / 2) + 1e-6);
   });
 });
+
+describe("transient windows and reduced motion as a configuration (#974)", () => {
+  it("starts every object over as each warm-up and sample set begins", async () => {
+    const { env, memory } = fakeEnvironment();
+    let sinceReset = 0;
+    let longest = 0;
+    let resets = 0;
+    const transient: ProfilingCase = {
+      ...testCase(memory),
+      create(context) {
+        const one = testCase(memory).create(context) as {
+          object: THREE.Object3D;
+          dispose(): void;
+        };
+        return {
+          ...one,
+          reset() {
+            resets++;
+            sinceReset = 0;
+          },
+          update(dt) {
+            if (!dt) return;
+            sinceReset++;
+            longest = Math.max(longest, sinceReset);
+          },
+        };
+      },
+    };
+    await createProfilerRunner(env).run([["pulse", transient]], { ...options, counts: [1] });
+    // Never more frames since a reset than one set's own: warm-up (3) and samples (10) each start
+    // the transient over, so no set runs on from the one before.
+    expect(longest).toBe(options.frames);
+    expect(resets).toBeGreaterThanOrEqual(3);
+  });
+
+  it("runs reduced motion as its own configuration: every part sees the run's, never the player's", async () => {
+    const { setContainedReducedMotion, containedContents, composeContained } =
+      await import("../../visual/contained");
+    await import("../../visual/glass-shells");
+    const contained: boolean[] = [];
+    if (!containedContents.has("testRunnerCalm"))
+      containedContents.register("testRunnerCalm", () => ({
+        meshes: [new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial())],
+        capabilities: {},
+        update: ({ reducedMotion }) => void contained.push(reducedMotion),
+      }));
+    const frames: boolean[] = [];
+    const created: boolean[] = [];
+    const { env, memory } = fakeEnvironment();
+    const calm: ProfilingCase = {
+      ...testCase(memory),
+      create(context) {
+        // Built under the run's setting from the start, not only told it at the first update.
+        created.push(context.reducedMotion);
+        const one = testCase(memory).create(context) as {
+          object: THREE.Object3D;
+          dispose(): void;
+        };
+        const { extras } = composeContained(
+          {
+            geometry: new THREE.BoxGeometry(1, 1, 1),
+            size: 1,
+            environment: null,
+            faceTexture: () => new THREE.Texture() as THREE.CanvasTexture,
+            ownSurface: (texture) => new THREE.MeshStandardMaterial({ map: texture }),
+          },
+          { shell: "framedGlass", config: { inset: 0.97 } },
+          { effect: "testRunnerCalm", config: {} },
+        );
+        const part = extras.find((mesh) => mesh.userData.containedContents)!;
+        return {
+          ...one,
+          update(_dt, frame) {
+            frames.push(frame.reducedMotion);
+            part.onBeforeRender(
+              null as never,
+              null as never,
+              null as never,
+              null as never,
+              null as never,
+              null as never,
+            );
+          },
+        };
+      },
+    };
+    // The player has reduced motion on; the run asks for it off, then on.
+    const restorePlayer = setContainedReducedMotion(() => true);
+    try {
+      const off = await createProfilerRunner(env).run([["calm", calm]], {
+        ...options,
+        counts: [1],
+      });
+      expect(off.failures).toEqual([]);
+      expect(new Set(frames)).toEqual(new Set([false]));
+      expect(new Set(contained)).toEqual(new Set([false]));
+      expect(new Set(created)).toEqual(new Set([false]));
+      frames.length = contained.length = created.length = 0;
+      await createProfilerRunner(env).run([["calm", calm]], {
+        ...options,
+        counts: [1],
+        reducedMotion: true,
+      });
+      expect(new Set(frames)).toEqual(new Set([true]));
+      expect(new Set(contained)).toEqual(new Set([true]));
+      expect(new Set(created)).toEqual(new Set([true]));
+      // Afterwards the player's own setting is back in place.
+      const probe: boolean[] = [];
+      const putBack = setContainedReducedMotion(() => false);
+      putBack();
+      const { extras } = composeContained(
+        {
+          geometry: new THREE.BoxGeometry(1, 1, 1),
+          size: 1,
+          environment: null,
+          faceTexture: () => new THREE.Texture() as THREE.CanvasTexture,
+          ownSurface: (texture) => new THREE.MeshStandardMaterial({ map: texture }),
+        },
+        { shell: "framedGlass", config: { inset: 0.97 } },
+        { effect: "testRunnerCalm", config: {} },
+      );
+      contained.length = 0;
+      extras
+        .find((mesh) => mesh.userData.containedContents)!
+        .onBeforeRender(
+          null as never,
+          null as never,
+          null as never,
+          null as never,
+          null as never,
+          null as never,
+        );
+      probe.push(...contained);
+      expect(probe).toEqual([true]);
+    } finally {
+      restorePlayer();
+    }
+  });
+});

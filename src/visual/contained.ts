@@ -135,9 +135,17 @@ export type ContainedFrame = {
 
 let reducedMotion: () => boolean = () => false;
 
-/** Where contained parts read the player's reduced-motion setting; the game wires it (main). */
-export function setContainedReducedMotion(provider: () => boolean): void {
+/**
+ * Where contained parts read the player's reduced-motion setting; the game wires it (main). Returns
+ * how to put back the previous provider, so a host that runs its own explicit configuration (the
+ * profiler, #974) never leaves the player's setting replaced.
+ */
+export function setContainedReducedMotion(provider: () => boolean): () => void {
+  const previous = reducedMotion;
   reducedMotion = provider;
+  return () => {
+    reducedMotion = previous;
+  };
 }
 
 /** A contained part: a mesh, or points (a field of particles, #349). */

@@ -30,6 +30,10 @@ export const profilerMethod = {
   pipeline:
     "each frame times the objects' updates, every declared pass and the main render, inside the CPU time and the GPU query; draw counts add up across the passes (#764)",
   hiddenTab: "a set sampled while the tab was hidden is retaken, then listed as invalidated",
+  transients:
+    "an object that can start over (an exit played on repeat) is reset as every warm-up and sample set begins, so each set measures the same active window (#974)",
+  reducedMotion:
+    "reduced motion is a run option recorded in options.reducedMotion, applied to every update, pass and contained part for the whole run, never read from the player's setting (#974)",
   motion:
     "every case is sampled stationary; a case declaring motions is also sampled under each registered pose driver as its own row, the pose restarting with each warm-up and sample set (#973)",
   clock:
