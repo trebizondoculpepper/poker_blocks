@@ -52,8 +52,15 @@ selectionFeedbackProviders.register("emissive", (appearance, _mount, raw) => {
   let selected = false;
   const apply = (on: boolean) => {
     for (const { material, colour: base, intensity } of baselines) {
-      material.emissive.copy(on ? colour : base);
-      material.emissiveIntensity = on ? intensity + contribution : intensity;
+      // Selected: the authored emission plus the selection's own, added together (#1324), so a
+      // coloured glow keeps its tint. Deselected: exactly the authored baseline.
+      if (on)
+        material.emissive
+          .copy(base)
+          .multiplyScalar(intensity)
+          .add(colour.clone().multiplyScalar(contribution));
+      else material.emissive.copy(base);
+      material.emissiveIntensity = on ? 1 : intensity;
     }
   };
   return {
