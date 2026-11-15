@@ -94,8 +94,8 @@ export function staticPartsBlueprint(
     const mesh = named.get(ref);
     if (!mesh) throw new Error(`${asset.url}: manifest reference "${ref}" not found`);
     // Static hierarchy is baked; a declared part keeps its own transform as its mount.
-    const geometry = mesh.geometry;
-    if (bake) geometry.applyMatrix4(mesh.matrixWorld);
+    // A GLB may reuse one geometry for several meshes: bake a copy, never the shared one (#1259).
+    const geometry = bake ? mesh.geometry.clone().applyMatrix4(mesh.matrixWorld) : mesh.geometry;
     return {
       ref,
       geometry,
@@ -115,6 +115,66 @@ export function staticPartsBlueprint(
   return Object.freeze({ primary, parts: Object.freeze(parts), bounds });
 }
 
+/** The geometry, materials and textures a parsed scene holds. */
+function sceneResources(scene: THREE.Object3D) {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+  scene.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    geometries.add(mesh.geometry);
+    for (const material of [mesh.material].flat()) {
+      materials.add(material);
+      for (const value of Object.values(material))
+        if ((value as THREE.Texture | null)?.isTexture) textures.add(value as THREE.Texture);
+    }
+  });
+  return { geometries, materials, textures };
+}
+
+function disposeTexture(texture: THREE.Texture) {
+  texture.dispose();
+  // A decoded ImageBitmap holds memory of its own until closed.
+  (texture.image as { close?: () => void } | undefined)?.close?.();
+}
+
+/**
+ * Validate and bake a parsed scene, releasing what the blueprint doesn't keep: the originals of
+ * baked geometry and anything outside the manifest; on rejection, everything parsed (#1259).
+ */
+export function prepareBlueprint(
+  parsed: { scene: THREE.Object3D; animations?: readonly unknown[] },
+  asset: ModelAsset,
+): Blueprint {
+  const held = sceneResources(parsed.scene);
+  let blueprint: Blueprint;
+  try {
+    blueprint = staticPartsBlueprint(parsed, asset);
+  } catch (error) {
+    held.geometries.forEach((geometry) => geometry.dispose());
+    held.materials.forEach((material) => material.dispose());
+    held.textures.forEach(disposeTexture);
+    throw error;
+  }
+  const kept = {
+    geometries: new Set<THREE.BufferGeometry>(),
+    materials: new Set<THREE.Material>(),
+  };
+  for (const mesh of [blueprint.primary, ...blueprint.parts]) {
+    kept.geometries.add(mesh.geometry);
+    mesh.materials.forEach((material) => kept.materials.add(material));
+  }
+  const keptTextures = new Set<THREE.Texture>();
+  for (const material of kept.materials)
+    for (const value of Object.values(material))
+      if ((value as THREE.Texture | null)?.isTexture) keptTextures.add(value as THREE.Texture);
+  for (const geometry of held.geometries) if (!kept.geometries.has(geometry)) geometry.dispose();
+  for (const material of held.materials) if (!kept.materials.has(material)) material.dispose();
+  for (const texture of held.textures) if (!keptTextures.has(texture)) disposeTexture(texture);
+  return blueprint;
+}
+
 /** Free everything a blueprint holds, once: geometry, materials, textures and decoded images. */
 export function disposeBlueprint(blueprint: Blueprint): void {
   const textures = new Set<THREE.Texture>();
@@ -126,11 +186,7 @@ export function disposeBlueprint(blueprint: Blueprint): void {
       material.dispose();
     }
   }
-  for (const texture of textures) {
-    texture.dispose();
-    // A decoded ImageBitmap holds memory of its own until closed.
-    (texture.image as { close?: () => void } | undefined)?.close?.();
-  }
+  for (const texture of textures) disposeTexture(texture);
 }
 
 type Entry = {
@@ -169,7 +225,7 @@ export function createModelCache(source: ModelSource = gltfModelSource) {
           result: source
             .fetch(asset.url, abort.signal)
             .then((buffer) => source.parse(buffer))
-            .then((parsed) => staticPartsBlueprint(parsed, asset))
+            .then((parsed) => prepareBlueprint(parsed, asset))
             .then((blueprint) => {
               created.settled = blueprint;
               // Every consumer left while it prepared: dispose the late result, never expose it.
@@ -203,6 +259,8 @@ export function createModelCache(source: ModelSource = gltfModelSource) {
         release() {
           if (released) return;
           released = true;
+          // The cache was disposed: its entries are already released (#1259).
+          if (held.disposed) return;
           held.leases -= 1;
           if (held.leases > 0) return;
           // Last consumer: abort what can be aborted now; a parse in flight is disposed on arrival.
@@ -222,7 +280,10 @@ export function createModelCache(source: ModelSource = gltfModelSource) {
     dispose() {
       for (const [key, entry] of Array.from(entries)) {
         entry.leases = 0;
-        retire(key, entry);
+        entry.disposed = true;
+        if (entries.get(key) === entry) entries.delete(key);
+        entry.abort.abort();
+        if (entry.settled) disposeBlueprint(entry.settled);
       }
     },
   };
