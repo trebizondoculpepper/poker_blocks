@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Interior front fixture</title>
+    <!--
+      Optical interior front composition fixture (#1228; doc/optical-interiors.md). Serve the
+      project (`npx vp dev`) and open /doc/research/optical-interior-front-fixture.html. Calm Water
+      blocks, each with a controlled coloured point interior registered in one interior capture,
+      composed by the shared refractive front. It reads back the canvas with each interior bound
+      and unbound: each block should gain only its own colour (no cross-volume sampling), a block
+      behind an opaque wall gains nothing, and the top/side views both show the interior. It then
+      reports draw calls and CPU frame time for 1, 10 and 50 volumes (gl.finish; indicative only).
+    -->
+  </head>
+  <body style="margin: 0; background: #222; color: #eee; font: 13px monospace">
+    <pre id="out" style="position: absolute; right: 0; top: 0; margin: 8px; max-width: 50%">
+running…</pre>
+    <script type="module">
+      import * as THREE from "three";
+      import { createInteriorCapture, interiorClipping } from "/src/visual/optical-interior.ts";
+      import {
+        createRefractionCapture,
+        createRefractionFront,
+        createRefractionRear,
+        refractionPresets,
+        bindRefractionInterior,
+      } from "/src/visual/crystal-refraction.ts";
+      const out = [];
+      const log = (line) => {
+        out.push(line);
+        document.getElementById("out").textContent = out.join("\n");
+      };
+      const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
+      renderer.setPixelRatio(1);
+      renderer.setSize(800, 450);
+      document.body.appendChild(renderer.domElement);
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x303840);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x333344, 2));
+      const wall = new THREE.Mesh(
+        new THREE.PlaneGeometry(30, 20),
+        new THREE.MeshStandardMaterial({ color: 0x8a8070 }),
+      );
+      wall.position.z = -4;
+      scene.add(wall);
+      const camera = new THREE.PerspectiveCamera(45, 800 / 450, 0.1, 100);
+      const hide = new THREE.Group();
+      scene.add(hide);
+      const preset = refractionPresets.get("calmWater");
+      const geometry = new THREE.BoxGeometry(1, 1, 1);
+      const capture = createInteriorCapture({
+        maxTextureSize: renderer.capabilities.maxTextureSize,
+      });
+      const refraction = createRefractionCapture("calmWater");
+      const blocks = [];
+      function block(x, y, z, colour) {
+        const front = createRefractionFront(preset, geometry);
+        const mesh = new THREE.Mesh(geometry, front);
+        mesh.add(createRefractionRear(geometry, preset));
+        mesh.position.set(x, y, z);
+        mesh.rotation.set(0.3, 0.5, 0);
+        hide.add(mesh);
+        const n = 60,
+          positions = new Float32Array(n * 3);
+        for (let i = 0; i < n * 3; i++) positions[i] = (Math.random() * 2 - 1) * 0.35;
+        const pointsGeometry = new THREE.BufferGeometry();
+        pointsGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        const points = new THREE.Points(
+          pointsGeometry,
+          new THREE.PointsMaterial({ color: colour, size: 0.09 }),
+        );
+        // Never in the main view: only its tile shows it, through the front.
+        points.layers.set(30);
+        mesh.add(points);
+        mesh.updateMatrixWorld(true);
+        const lease = capture.register({
+          volume: mesh,
+          packet: { source: points, worldSize: 0.09 },
+          clipping: interiorClipping.get("convexCube").create({ halfSize: 0.48 }),
+        });
+        const binding = bindRefractionInterior(
+          front,
+          capture,
+          lease,
+          new THREE.Vector3(0.5, 0.5, 0.5),
+        );
+        const entry = { mesh, lease, binding, front, colour };
+        blocks.push(entry);
+        return entry;
+      }
+      const frame = { renderer, scene, camera, hide, delta: 1 / 60, reducedMotion: false };
+      const draw = (bound) => {
+        camera.updateMatrixWorld();
+        refraction.render(frame);
+        capture.render(frame);
+        if (bound) for (const each of blocks) each.binding.update();
+        renderer.render(scene, camera);
+      };
+      const meanInRect = (mesh) => {
+        const box = new THREE.Box3().setFromObject(mesh);
+        const centre = box.getCenter(new THREE.Vector3()).project(camera);
+        const cx = Math.round((centre.x / 2 + 0.5) * 800),
+          cy = Math.round((centre.y / 2 + 0.5) * 450);
+        const gl = renderer.getContext();
+        const pixels = new Uint8Array(30 * 30 * 4);
+        gl.readPixels(cx - 15, cy - 15, 30, 30, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        const sum = [0, 0, 0];
+        for (let i = 0; i < pixels.length; i += 4)
+          for (let c = 0; c < 3; c++) sum[c] += pixels[i + c];
+        return sum.map((v) => v / 900);
+      };
+      const red = block(-1.6, 0, 0, 0xff0000);
+      const green = block(0, 0, 0, 0x00ff00);
+      const blue = block(1.6, 0, 0, 0x0000ff);
+      // A volume behind the opaque wall: its interior must never shine through.
+      const hidden = block(0, 0, -6, 0xffff00);
+      const views = { side: [0, 0.3, 5], top: [0, 5, 1.2] };
+      for (const [name, position] of Object.entries(views)) {
+        camera.position.set(...position);
+        camera.lookAt(0, 0, 0);
+        // Unbound: the fronts show no interior.
+        for (const each of blocks) each.binding.release();
+        draw(false);
+        const before = [red, green, blue].map((each) => meanInRect(each.mesh));
+        // Bound again: each front composes its own tile.
+        for (const each of blocks)
+          each.binding = bindRefractionInterior(
+            each.front,
+            capture,
+            each.lease,
+            new THREE.Vector3(0.5, 0.5, 0.5),
+          );
+        draw(true);
+        const after = [red, green, blue].map((each) => meanInRect(each.mesh));
+        const gains = after.map((rgb, i) => rgb.map((v, c) => +(v - before[i][c]).toFixed(1)));
+        log(
+          `${name}: colour gain per block (r,g,b) red ${JSON.stringify(gains[0])} green ${JSON.stringify(gains[1])} blue ${JSON.stringify(gains[2])}`,
+        );
+      }
+      // Behind the opaque wall its front is depth-tested away, so its tile can't show either.
+      log(
+        `behind the wall: tile drawn ${hidden.lease.tile() !== null} (its front never draws there)`,
+      );
+      log(`stats: ${JSON.stringify(capture.stats())}`);
+      // Costs: 1/10/50 volumes, all passes.
+      for (const each of blocks) {
+        each.binding.release();
+        each.lease.release();
+        hide.remove(each.mesh);
+      }
+      blocks.length = 0;
+      camera.position.set(0, 2, 12);
+      camera.lookAt(0, 0, 0);
+      const gl = renderer.getContext();
+      for (const count of [1, 10, 50]) {
+        for (let i = 0; i < count; i++)
+          block(
+            (i % 10) * 1.2 - 5.4,
+            Math.floor(i / 10) * 1.2 - 2.4,
+            0,
+            [0xff0000, 0x00ff00, 0x0000ff][i % 3],
+          );
+        draw(true);
+        renderer.info.autoReset = false;
+        renderer.info.reset();
+        const start = performance.now();
+        for (let i = 0; i < 30; i++) draw(true);
+        gl.finish();
+        log(
+          `${count} volumes: ${(renderer.info.render.calls / 30).toFixed(0)} draw calls/frame, ${((performance.now() - start) / 30).toFixed(2)} ms/frame CPU (gl.finish), ${capture.stats().draws} tile draws`,
+        );
+        for (const each of blocks) {
+          each.binding.release();
+          each.lease.release();
+          hide.remove(each.mesh);
+        }
+        blocks.length = 0;
+      }
+      camera.position.set(0, 0.3, 5);
+      camera.lookAt(0, 0, 0);
+      [-1.6, 0, 1.6].forEach((x, i) => block(x, 0, 0, [0xff0000, 0x00ff00, 0x0000ff][i]));
+      draw(true);
+      log("done");
+    </script>
+  </body>
+</html>

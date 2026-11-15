@@ -1,4 +1,10 @@
 import { materialChangeSounds } from "./scene-traits/material-change-sounds";
+import { destructionExits } from "./scene-traits/destruction-exits";
+import type { ExitPresenter } from "./visual/exit-presentation";
+import type { FieldView } from "./field-view";
+import type { PlacementPhase } from "./placement-phase";
+import { stageScoreGraph } from "./scene-traits/stage-score-graph";
+import type { StageScoreGraph } from "./stage-score-graph";
 import { shopExitResponse, type ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
   createPlayfieldRockingController,
@@ -154,6 +160,16 @@ export type SceneHost = {
     cameraView: Pick<CameraViewService, "beginShopEntrance">;
     /** The rocking controller's narrow capabilities (#783). */
     playfieldRocking: PlayfieldRockingServices;
+    /** The table, for the destruction-exit controller to take a removed block's cube (#1173). */
+    field: Pick<FieldView, "detach">;
+    /** The shared block-exit presenter (#1173). */
+    exits: Pick<ExitPresenter, "start" | "prepare" | "dispose">;
+    /** Committed actions' phase records, for a controller to bind its contribution (#1173). */
+    actionPhase: Pick<PlacementPhase, "latest" | "contributionFor">;
+    /** Compose a controller's producer into the action phases while it is mounted. */
+    composeProducer(producer: string): () => void;
+    /** The stage score graph the stage scene composes (#1064). */
+    scoreGraph: Pick<StageScoreGraph, "show" | "hide">;
     /** The shared visual-event scheduler, for controller traits' required effects (#880). */
     visualEvents: ShopExitScheduler;
     overlays: Pick<
@@ -820,6 +836,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   // A committed material transition's sound, on the shared scheduler (#539).
   behaviours.register("materialChangeSounds", materialChangeSounds<Context>());
+  behaviours.register("destructionExits", destructionExits<Context>());
+  behaviours.register("stageScoreGraph", stageScoreGraph<Context>());
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });
