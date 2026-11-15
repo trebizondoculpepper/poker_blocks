@@ -83,6 +83,7 @@
 .object-browser-note {
   margin: 0 0 10px;
   color: #f2c14e;
+  white-space: pre-line;
 }
 .object-browser-preview canvas {
   display: block;
