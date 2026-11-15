@@ -27,6 +27,12 @@ Self-hosted Latin regular WOFF2 subsets taken from the corresponding `@fontsourc
 
 Use: lettering on word cubes, card faces and HUD text (`src/assets/fonts/fonts.css`).
 
+### Pre-rendered website artwork
+
+The title and card-block images in `src/website/art/*.png` are original project artwork rendered from [the Poker Blocks source](https://github.com/trebizondoculpepper/poker_blocks), by the project's procedural appearance and typography builders, not AI substitutes or third-party model imports. Licence: the project's [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.html) (`LICENSE`). Preparation: fixed material composition/pose, renderer-local lighting and required prepasses, transparent PNG export with `src/tools/website-art.ts`; no later image retouching. Use: website title, playing-card decorations and royal-flush example. File checksums, dimensions and regeneration instructions are in `src/website/art/manifest.json` and `README.md`.
+
+Baked lettering follows the material's configured font, including local system fonts where selected (no system font binaries redistributed). The bundled font families/authors/licences are credited above. Their complete notices accompany the website at `public/art-notices/`, linked from every page; existing upstream notices remain beside the font sources. No new external permissions were required for project-owned procedural artwork.
+
 ### Sound effects
 
 Sampled effects under `src/assets/sfx/` were generated for this project with the ElevenLabs sound-effects API from the prompts in `src/audio/sfx-registry.ts` (`npm run sfx`; see [doc/sound_design.md](doc/sound_design.md)). Effects with a `synth` source are synthesised live from code in this repository. No third-party recordings are shipped. Modifications: trimming/normalisation by the project's SFX pipeline.

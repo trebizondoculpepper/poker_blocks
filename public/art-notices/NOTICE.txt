@@ -1,0 +1,6 @@
+Poker Blocks website artwork
+
+Rendered locally from the project’s own procedural card, material and title builders. Source and regeneration instructions: https://github.com/trebizondoculpepper/poker_blocks/tree/main/src/website/art
+Project source licence: GNU GPL version 3, https://www.gnu.org/licenses/gpl-3.0.html .
+
+Baked lettering uses the game’s material-selected typefaces, including local system fonts where selected. No system font binaries are redistributed. The game’s bundled Tinos, Roboto and Saira Stencil One families are under SIL OFL 1.1, and Roboto Slab under Apache 2.0; their complete notices accompany this file. Font sources/authors are recorded in CREDITS.md.
