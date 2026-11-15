@@ -40,6 +40,8 @@ export type MaskRole = "outgoing" | "incoming";
 /** A registered adapter: an owned clone of `material` that draws this side of the mask. */
 export type MaskAdapter = {
   adapt(material: THREE.Material, uniforms: PairedMaskUniforms, role: MaskRole): THREE.Material;
+  /** Why it can't adapt `material`, checked for every material before anything is swapped. */
+  refuse?(material: THREE.Material): string | null;
 };
 
 export const maskAdapters = new Registry<MaskAdapter>("mask adapter");
@@ -297,6 +299,16 @@ export function createPairedMask(options: {
       if (!name) problem = `${role} look's ${node.name || node.type} declares no mask adapter`;
       else if (!maskAdapters.has(name))
         problem = `${role} look's mask adapter "${name}" is not registered`;
+      else {
+        // Its resolved adapter may refuse a material it can't adapt (#1336, #1338 reviews).
+        const adapter = maskAdapters.get(name);
+        for (const material of [
+          (node as THREE.Mesh).material as THREE.Material | THREE.Material[],
+        ].flat()) {
+          const refused = adapter.refuse?.(material) ?? null;
+          if (refused) problem ??= `${role} look: ${refused}`;
+        }
+      }
     });
     if (problem) return { ok: false, diagnostic: problem };
   }
