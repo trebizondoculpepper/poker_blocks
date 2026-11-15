@@ -1783,3 +1783,7 @@ The [scheduler terminal-status contract](scheduler-terminal-status.md) keeps ful
 ## Crash reporting and manual bug feedback (#1339)
 
 [Crash reporting](crash-reporting.md) defines the application-lifetime configured reporting controller, mechanical Sentry transport, registered bounded diagnostics and renderer-owned screenshot capture. Automatic errors and manual feedback share captured release/browser/game context without changing gameplay or blocking input. Reuse the existing home/pause footer Report a bug link to open Sentry feedback; diagnostics remain in Sentry and account-supported automation feeds safe summaries into GitHub. Developer-console composition stays separate. This target includes source audit, primary references, credential boundaries, cancellation/disposal, failure limits and focused delivery verification; no SDK or account integration is claimed by the documentation.
+
+## Floating labels on shell-free appearances (#1368)
+
+[Cloud appearance](cloud-appearance.md) defines separately registered glyph-only face parts over ordinary logical card bounds, composable with shell-free volumetric contents. Generic mounts consume declared appearance/interaction/feedback capabilities and never test Cloud/Steam identity or infer hit areas from transparent density. Appearance ownership covers labels, volume ticking, masks and disposal together; removing visible shell artwork does not change logical attachment or model state.
