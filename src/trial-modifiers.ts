@@ -14,7 +14,12 @@ import { Registry } from "./core/registry";
 import { query } from "./context-queries";
 import type { EventRule, RuleFrame } from "./event-rules";
 import { passiveRuleBuilders, type ParameterSchema } from "./configurable-passive";
-import { passiveDefinitions, trialOffer, type PassiveDefinition } from "./passives";
+import {
+  passiveDefinitions,
+  trialOffer,
+  type PassiveDefinition,
+  type PassiveShopBalance,
+} from "./passives";
 import { raiseLine, ruleHandlers } from "./rule-handlers";
 import { goldSolid, massKg, massOf } from "./physical-mass";
 import "./packing-density";
@@ -388,6 +393,7 @@ function queryTrial(
   operations: readonly ("multiplicative" | "exponential")[] = ["multiplicative"],
   /** Drawn face artwork in place of the symbol (#1009): an icon, once or as a trio. */
   icon?: PassiveFaceDesign["icon"],
+  shop: PassiveShopBalance = trialOffer,
 ): PassiveDefinition {
   const problems = validateQueryFactor(id, factor);
   if (problems.length) throw new Error(problems.join("\n"));
@@ -395,7 +401,7 @@ function queryTrial(
     id,
     // A provisional trial, offered in normal runs with the trial recipe (#1393).
     releaseStatus: { provisional: {} },
-    shop: trialOffer,
+    shop,
     lifecycle: { parent: "rackItem" },
     name,
     symbol,
@@ -483,6 +489,7 @@ for (const definition of [
     undefined,
     // The whole field's total mass: a cluster of three (#1009).
     { name: "feather", count: 3 },
+    { ...trialOffer, unlockRound: 3 },
   ),
   queryTrial(
     "trial-dense-packing",

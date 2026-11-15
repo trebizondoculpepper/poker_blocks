@@ -11,6 +11,7 @@ import type { ActivationConfig } from "./activation-pulse";
 import "./visual/chef-toque";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import { passiveFrequencies } from "./offer-weights";
+import { passiveUnlockRound } from "./offer-eligibility";
 import type { BlockMaterial } from "./materials";
 import { Registry } from "./core/registry";
 import { categoryPalette, type PassiveCategoryTraits } from "./passive-categories";
@@ -700,10 +701,12 @@ export function ordinaryPassives(): PassiveDefinition[] {
 export function randomPassiveDefinitions(
   count: number,
   random: () => number,
+  round: number,
   excluded: readonly string[] = [],
 ): PassiveDefinition[] {
   const available = ordinaryPassives()
     .filter(({ id, retired }) => !excluded.includes(id) && !retired)
+    .filter((definition) => round >= passiveUnlockRound(definition))
     // Only what the passive shop could ever offer: an item stocked by its own dedicated slots
     // (a transmogrifier, #388) is made complete there, never granted as a bare passive.
     .filter(({ shop }) =>

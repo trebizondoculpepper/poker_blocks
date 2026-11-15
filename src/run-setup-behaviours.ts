@@ -117,7 +117,7 @@ export function createRunSetupRegistry(
             ...state,
             passiveRack: [
               ...state.passiveRack,
-              ...openingPassives(Math.min(count, room), state, services),
+              ...openingPassives(Math.min(count, room), state, context.snapshot.round, services),
             ],
           },
         },
@@ -160,11 +160,12 @@ export function createRunSetupRegistry(
 function openingPassives(
   count: number,
   state: GameState,
+  round: number,
   services: { random: () => number },
 ): PassiveBlock[] {
   const owned = state.passiveRack.map(({ definitionId }) => definitionId);
   const used = new Set(state.passiveRack.map(({ id }) => id));
-  return randomPassiveDefinitions(count, services.random, owned).map((definition) => {
+  return randomPassiveDefinitions(count, services.random, round, owned).map((definition) => {
     let serial = used.size + 1;
     while (used.has(`passive.${serial}`)) serial++;
     used.add(`passive.${serial}`);

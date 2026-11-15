@@ -72,11 +72,13 @@ describe("configured passive effects", () => {
   });
 
   it("draws distinct starting definitions", () => {
-    const picked = randomPassiveDefinitions(2, () => 0);
+    const picked = randomPassiveDefinitions(2, () => 0, 1);
     expect(picked).toHaveLength(2);
     expect(picked[0].id).not.toBe(picked[1].id);
     expect(picked.every(({ id }) => id !== "do-nothing")).toBe(true);
-    expect(randomPassiveDefinitions(20, () => 0).map(({ id }) => id)).not.toContain("do-nothing");
+    expect(randomPassiveDefinitions(20, () => 0, 1).map(({ id }) => id)).not.toContain(
+      "do-nothing",
+    );
   });
 
   it("replaces a retired passive from an older save with two active blocks", () => {
@@ -95,7 +97,7 @@ describe("configured passive effects", () => {
     expect(restored.state.passiveRack).toHaveLength(2);
     expect(restored.state.passiveRack.map(({ definitionId }) => definitionId)).toEqual([
       "double-line",
-      "quad-line",
+      "woodworker",
     ]);
     expect(restored.state.hand).toEqual(game.state.hand);
   });
