@@ -428,8 +428,8 @@ export function createPlayPresenter(options: {
     announceScore(action);
     cameraView.scheduleCameraMove();
     // Model first: its replacements were drawn when it committed; only their reveal waits.
-    hand.drawIn(action.drawn, game().state.hand);
-    options.save();
+    // From the hand's own committed layout, never the live model (#1165); saved at commit.
+    hand.drawIn(action.drawn);
     return false;
   }
 
@@ -443,8 +443,8 @@ export function createPlayPresenter(options: {
     action.sources.forEach((source) => views.dispose(source));
     // Only this discard's own replacements, drawn when it committed: another action finishing
     // can't reveal them, and they can't reveal another's.
-    hand.drawIn(action.drawn, game().state.hand);
-    options.save();
+    // From the hand's own committed layout, never the live model (#1165); saved at commit.
+    hand.drawIn(action.drawn);
     return false;
   }
 
@@ -503,6 +503,8 @@ export function createPlayPresenter(options: {
       // presentation timing or cancellation decides whether they enter the hand.
       const drawn = options.drawReplacements();
       hand.sync(game().state.hand);
+      // Persistence belongs to the committed action, not its animation finishing (#1165).
+      options.save();
       // The cameras use different projections. Match each hand cube's screen position and
       // apparent size in the board view, then let the assembly carry it as it wobbles.
       cameraView.handCamera.updateWorldMatrix(true, false);
@@ -604,6 +606,7 @@ export function createPlayPresenter(options: {
       // appearance waits until the discarded cards have dissolved.
       const drawn = options.drawReplacements();
       hand.sync(session.state.hand);
+      options.save();
       const action: Discarding = { sources: [...sources], effects, drawn };
       discarding.push(action);
       present({
