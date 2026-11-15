@@ -231,5 +231,7 @@ export function giftBox({ art, definition, geometry, size }: AssemblyContext): B
     extras: [rosette(ribbon, size)],
     // Its foil is standard material it made itself (#1314).
     selectionFeedback: { provider: "emissive" },
+    // Foil and rosette are chunk materials: a paired mask masks them as such (#1167).
+    maskAdapter: "chunkSurface",
   };
 }

@@ -1494,13 +1494,22 @@ function frostedBlock(context: AssemblyContext): BlockAppearance {
   const melt = meltwaterSkin(art, geometry);
   const inHand = surface(texture, definition.appearance, height);
   const onTable = cloudyIce(texture, height, size, definition.appearance.reliefScale);
-  return appearanceBase(
-    context,
-    [texture, ...[height].filter((value) => value !== undefined), print.texture, ...melt.textures],
-    Array.from({ length: 6 }, () => inHand),
-    [melt.skin, print.skin],
-    Array.from({ length: 6 }, () => onTable),
-  );
+  return {
+    ...appearanceBase(
+      context,
+      [
+        texture,
+        ...[height].filter((value) => value !== undefined),
+        print.texture,
+        ...melt.textures,
+      ],
+      Array.from({ length: 6 }, () => inHand),
+      [melt.skin, print.skin],
+      Array.from({ length: 6 }, () => onTable),
+    ),
+    // Physical ice, its meltwater and print: all chunk materials, masked as such (#1167).
+    maskAdapter: "chunkSurface",
+  };
 }
 
 /**
