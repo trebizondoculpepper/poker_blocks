@@ -43,6 +43,8 @@ export type FieldView = {
    * (#167), so input follows the game state, not the animation.
    */
   occupiedCells(): Cell[];
+  /** Whether this block was played and is still flying in (not yet on the table). */
+  arriving(blockId: string): boolean;
   readonly massCenter: MassCenter;
   /** Put a block straight into its cell (a run being rebuilt). */
   add(block: CardBlock, cell: Cell): RenderedBlock;
@@ -222,6 +224,7 @@ export function createFieldView(options: {
     blocks: () => [...placed.values()],
     cells: () => [...placed.values()].map(({ cell }) => cell!),
     occupiedCells: () => [...placed.values(), ...expected.values()].map(({ cell }) => cell!),
+    arriving: (blockId) => [...expected.values()].some(({ block }) => block.id === blockId),
     expect(block, cell) {
       // Invisible meshes are still hit by a raycaster; they are never drawn.
       const cube = new THREE.Mesh(ghostGeometry, ghostMaterial);
