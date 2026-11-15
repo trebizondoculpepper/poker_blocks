@@ -13,6 +13,7 @@ import type { FaceArt } from "./face-art";
 import type { MaterialDefinition } from "../materials";
 import { choppedGeometry, type ChopSettings } from "./chopped-geometry";
 import { createCrystalFire } from "./crystal-fire";
+import { appearanceSeconds } from "./appearance-clock";
 import { composeContained, containedLayers } from "./contained";
 // Registers the plastic shell and the vessel fluid (#330), and the glass shells (#331).
 import "./filled-vessel";
@@ -583,11 +584,11 @@ function meltwaterSkin(
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
-    let last = performance.now();
+    let last = appearanceSeconds();
     let travelled = randomFor(art, "ice", true)();
     material.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
-      const now = performance.now();
-      const seconds = Math.min((now - last) / 1000, 0.1);
+      const now = appearanceSeconds();
+      const seconds = Math.min(now - last, 0.1);
       last = now;
       // World down, in the block's own space, then across this face.
       object.getWorldQuaternion(turned);

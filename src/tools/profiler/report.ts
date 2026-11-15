@@ -258,6 +258,10 @@ export function profilerReport(record: ProfilerExport, topN = 10): ProfilerRepor
       summary: `${statusText} · renderer ${renderer} · GPU timing ${gpuTiming} · ${isolated ? "isolated" : "not isolated"}`,
       coverage: `${available} of ${expected} expected cases available, ${unsupported} unsupported, ${uncovered} uncovered`,
       notes: [
+        // The clock the animation advanced on: a fixed step, or wall time in an older record.
+        record.clock
+          ? `Presentation clock: fixed step of ${(record.clock.stepSeconds * 1000).toFixed(2)} ms per frame`
+          : "Presentation clock: wall time (recorded before #972)",
         ...(record.aborted ? [`Stopped: ${record.aborted}`] : []),
         ...(record.cancelled ? ["Cancelled before every case ran"] : []),
         ...(record.notRun.length ? [`${record.notRun.length} case(s) not run`] : []),

@@ -6,12 +6,18 @@
 import type * as THREE from "three";
 import { Registry } from "../../core/registry";
 import type { PassReference } from "./pipelines";
+import type { PrepassReference } from "../../visual/appearance-prepass";
 
 /** One built object in the profiler's scene. */
 export type ProfiledObject = {
   object: THREE.Object3D;
-  /** Advance its normal ambient animation. */
+  /** Advance its normal ambient animation by `dt` seconds of the run's clock. */
   update?(dt: number): void;
+  /**
+   * The appearance prepasses its production host would run before the main render (#969, #972).
+   * A case that declares no `pipeline` renders through these, once per frame for the collection.
+   */
+  prepasses?: readonly PrepassReference[];
   /** Free only what this object made; shared resources stay. */
   dispose(): void;
 };
@@ -52,8 +58,9 @@ export type ProfilingCase = {
   phases?: readonly ProfilingPhase[];
   /**
    * The production passes its look needs before the main render, in order, as registered
-   * `profilingPasses` references (#764; doc/profiler-render-passes.md); main render only when
-   * omitted.
+   * `profilingPasses` references (#764; doc/profiler-render-passes.md). Declared, it is the whole
+   * pipeline; omitted, the objects' own appearance prepasses are used (#972), and none means the
+   * main render alone.
    */
   pipeline?: readonly PassReference[];
   /** Build one object through the production factory, with a fixed seed. */

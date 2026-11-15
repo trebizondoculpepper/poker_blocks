@@ -44,6 +44,7 @@ describe("profiler export (#619)", () => {
       aborted: null,
       notRun: [],
       gpuTiming: "unavailable",
+      clock: { kind: "fixed-step", stepSeconds: 1 / 60 },
       invalidated: [],
     };
     const exported = profilerExport(
@@ -104,7 +105,9 @@ describe("profiler export (#619)", () => {
     expect(round.coverage.complete).toBe(false);
     expect(round.results[0].unit).toEqual({ kind: "group", size: 4 });
     expect(round.coverage.catalogs[1]).toMatchObject({ catalog: "rack item", installed: false });
-    expect(round.method.version).toBe(3);
+    expect(round.method.version).toBe(4);
+    // The run's presentation clock is recorded with it (#972).
+    expect(round.clock).toEqual({ kind: "fixed-step", stepSeconds: 1 / 60 });
     // No isolation stated: the default is the honest one, that frames may have been shared.
     expect(round.isolation).toBe("shared");
     expect(round.failures).toEqual([{ id: "b", kind: "timeout", reason: "exceeded 120000 ms" }]);
@@ -113,10 +116,13 @@ describe("profiler export (#619)", () => {
 });
 
 describe("export schema versions (#721)", () => {
-  it("reads version 3, recognises version 1 as old results, and refuses anything else", async () => {
+  it("reads version 4, recognises version 1 as old results, and refuses anything else", async () => {
     const { readProfilerExport } = await import("./export");
-    const current = JSON.stringify({ method: { version: 3 }, results: [] });
+    const current = JSON.stringify({ method: { version: 4 }, results: [] });
     expect(readProfilerExport(current).kind).toBe("current");
+    // Version 3 predates the run clock: read with none, never as if it used one (#972).
+    const unclocked = readProfilerExport(JSON.stringify({ method: { version: 3 }, results: [] }));
+    expect(unclocked.kind === "current" && unclocked.record.clock).toBeNull();
     const old = JSON.stringify({ method: { version: 1 }, results: [{ collection: {} }] });
     expect(readProfilerExport(old)).toEqual({ kind: "legacy", version: 1 });
     expect(() => readProfilerExport(JSON.stringify({ method: { version: 9 } }))).toThrow(
@@ -156,6 +162,7 @@ describe("isolation in the exported record (#735 review)", () => {
       notRun: [],
       cancelled: false,
       gpuTiming: "unavailable" as const,
+      clock: { kind: "fixed-step" as const, stepSeconds: 1 / 60 },
       invalidated: [],
     };
     const coverage = {

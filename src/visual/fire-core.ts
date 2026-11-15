@@ -9,6 +9,7 @@
  */
 import * as THREE from "three";
 import { additiveLight } from "./additive-light";
+import { appearanceSeconds } from "./appearance-clock";
 import { containedContents } from "./contained";
 import { tunableEffects } from "./tunable-effects";
 import type { ParameterSchema } from "../parameter-schema";
@@ -195,10 +196,12 @@ export function createFireCore(size: number): THREE.Mesh {
   // How fast the flame moves, as a multiple of the regular flame's (#743).
   material.userData.speed = 1;
   // Each frame: advance the flames and give the shader the camera in the block's own space.
-  const start = performance.now();
+  // Its own start on the shared appearance clock (frame time in the game; a host's explicit
+  // clock when one is installed, #972).
+  const start = appearanceSeconds();
   const turned = new THREE.Quaternion();
   core.onBeforeRender = (_renderer, _scene, camera) => {
-    material.uniforms.time.value = ((performance.now() - start) / 1000) * material.userData.speed;
+    material.uniforms.time.value = (appearanceSeconds() - start) * material.userData.speed;
     core.updateMatrixWorld();
     material.uniforms.cameraLocal.value.setFromMatrixPosition(camera.matrixWorld);
     core.worldToLocal(material.uniforms.cameraLocal.value);

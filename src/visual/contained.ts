@@ -9,6 +9,7 @@
  */
 import * as THREE from "three";
 import { Registry } from "../core/registry";
+import { appearanceSeconds } from "./appearance-clock";
 
 /** Render order inside a contained block (#329): parts ask for a layer, never a number. */
 export const containedLayers = {
@@ -227,7 +228,7 @@ export function composeContained(
   let start: number | null = null;
   let last: number | null = null;
   const tick = (mesh: ContainedPart) => {
-    const now = frameSeconds();
+    const now = appearanceSeconds();
     if (now === last) return;
     start ??= now;
     const frame: ContainedFrame = {
@@ -286,10 +287,4 @@ export function setContainedVisibility(
   for (const face of faces) face.visible = visible.container;
   for (const part of shell) part.visible = visible.container;
   for (const part of contents) part.visible = visible.contents;
-}
-
-/** The current frame's time, in seconds: the same for every block drawn in one frame. */
-function frameSeconds(): number {
-  const time = typeof document === "undefined" ? null : document.timeline?.currentTime;
-  return (typeof time === "number" ? time : performance.now()) / 1000;
 }
