@@ -101,6 +101,11 @@ export type GameEvent = {
   blocks?: readonly CardBlock[];
   /** On `stage.won`: which stage of the round was won. */
   stageKind?: StageKind;
+  /**
+   * On `block.materialChanged` (#539, #479): the card's material (and state) before and after a
+   * committed change of material, captured at commit for every response that presents it.
+   */
+  transition?: { from: ReactionState; to: ReactionState };
   /** On `reaction.applied` (#366): the block's material and state bonus before and after. */
   reaction?: { from: ReactionState; to: ReactionState; sound?: SoundEffectId };
   /** On `block.triggered` (#433): what triggered it, and the chain it is part of. */

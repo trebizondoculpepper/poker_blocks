@@ -20,7 +20,12 @@ import type { ReactionState } from "./passives";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import { changeCardMaterial } from "./card-material";
 import { setCardStateBonus } from "./state-bonuses";
-import { getMaterialDefinition, materialOf, type BlockMaterial } from "./materials";
+import {
+  transitionSoundOf,
+  getMaterialDefinition,
+  materialOf,
+  type BlockMaterial,
+} from "./materials";
 import { commitCommands, registerRuleCommand, type CommandTarget } from "./rule-commands";
 import { cellKey, faceNormal, faces } from "./traits/attachable";
 
@@ -144,19 +149,25 @@ registerRuleCommand<{
     .flat()
     .reduce((current, id) => setCardStateBonus(current, blockId, id) ?? current, changed);
   target.update(after);
-  return after === before
-    ? []
-    : [
-        {
-          type: "reaction.applied",
-          blockId,
-          reaction: {
-            from: from!,
-            to: reactionState(after, blockId)!,
-            ...(sound ? { sound } : {}),
-          },
-        },
-      ];
+  if (after === before) return [];
+  const to = reactionState(after, blockId)!;
+  // A change of material is described by what the card becomes, whatever caused it (#539): the
+  // target's transition sound is its only cue. A state-only change keeps its own reaction sound.
+  const becameMaterial = changed !== before;
+  const cue = becameMaterial ? transitionSoundOf(to.material as BlockMaterial) : sound;
+  return [
+    {
+      type: "reaction.applied",
+      blockId,
+      reaction: { from: from!, to, ...(cue ? { sound: cue } : {}) },
+    },
+    // The committed material-change fact (doc/presentation-contracts.md, "Committed transition
+    // fact"), for every response that presents a change of material. Its sound is presented in
+    // the reaction's own slot, so the fact carries the transition, not a second cue.
+    ...(becameMaterial
+      ? [{ type: "block.materialChanged", blockId, transition: { from: from!, to } }]
+      : []),
+  ];
 });
 
 /** A block's material and state bonus, as a reaction event reports them. */

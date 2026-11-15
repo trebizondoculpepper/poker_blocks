@@ -61,6 +61,8 @@ describe("material reactions (#366)", () => {
         blockId: ice.id,
         from: { material: "ice" },
         to: { material: "wood", stateBonus: "melted" },
+        // The material it became describes the change (#539).
+        sound: "material.attach.wood",
       },
     ]);
   });

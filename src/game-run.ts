@@ -24,7 +24,7 @@ import "./trigger-responses";
 import type { AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
 import { applyRackItem } from "./rack-item-effects";
-import type { BlockMaterial } from "./materials";
+import { materialOf, transitionSoundOf, type BlockMaterial } from "./materials";
 import { changeCardMaterial } from "./card-material";
 import type { CardBlock } from "./cards";
 import { resaleValue } from "./resale";
@@ -1124,9 +1124,32 @@ export class GameRun {
    * an item with none left leaves the rack. Null, changing nothing, when it is refused.
    */
   applyRackItem(itemId: string, cardId: string): GameState | null {
-    const next = applyRackItem(this.currentState, itemId, cardId);
-    if (next) this.currentState = next;
-    return next;
+    // A committed action (#539): its facts publish once it has, so presentation hears them.
+    return this.transact("useItem", undefined, () => {
+      const before = this.currentState;
+      const next = applyRackItem(before, itemId, cardId);
+      if (!next) return null;
+      this.currentState = next;
+      const material = (state: GameState) =>
+        [
+          ...state.hand,
+          ...state.field.map(({ block }) => block),
+          ...state.deck,
+          ...state.discardPile,
+        ]
+          .filter(({ id }) => id === cardId)
+          .map(materialOf)[0];
+      const from = material(before);
+      const to = material(next);
+      // Only a real change of material is a transition: its target's sound presents it.
+      if (from && to && from !== to)
+        this.lifecycle("block.materialChanged", {
+          blockId: cardId,
+          transition: { from: { material: from }, to: { material: to } },
+          sound: transitionSoundOf(to),
+        });
+      return next;
+    });
   }
 
   /** Discard one card, or several as one discard. */
