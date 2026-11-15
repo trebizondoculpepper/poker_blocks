@@ -131,7 +131,7 @@ The first family is `score.magnitude` (#1). Its bands start at 1, 10, 100, 1,000
 | `shop.open`       | The shop opens after a boss stage                                        | generated  |
 | `shop.buy`        | A block is bought                                                        | planned    |
 | `shop.stock.burn` | Unbought stock burns away when leaving the shop                          | registered |
-| `shop.buy.denied` | The player tries to buy something they can't afford                      | stand-in   |
+| `shop.buy.denied` | The player tries to buy something they can't afford                      | generated  |
 | `shop.rack_full`  | An item or passive can't be bought because the Items rack is full (#481) | generated  |
 | `deck.add_block`  | A bought block joins the deck                                            | planned    |
 | `shop.leave`      | The player leaves the shop for the next round                            | planned    |
