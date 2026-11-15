@@ -22,6 +22,7 @@ import * as THREE from "three";
 import type { DropTarget } from "../drag-drop";
 import { createWordCube, type WordCubeOptions } from "../word-cube";
 import { createPointerRouter } from "./pointer-router";
+import { useStageReflections } from "./cube-stage";
 
 /** Where a control sits, in host CSS px: its centre and its cube's edge. */
 export type ControlLayout = { x: number; y: number; size: number };
@@ -51,6 +52,11 @@ export type ControlStageHost = {
   /** The group's frame loop; injected so tests and covered scenes control it. */
   requestFrame(callback: (nowMs: number) => void): number;
   cancelFrame(handle: number): void;
+  /**
+   * The stage's reflection environment, made on its own renderer: metallic and glossy cubes
+   * reflect it (gold is black without one). The stage disposes it. None: unlit by reflections.
+   */
+  environment?(renderer: unknown): THREE.Texture;
 };
 
 type Mounted = {
@@ -134,6 +140,7 @@ export async function createControlStage(
   };
   resize();
 
+  const environment = host.environment?.(renderer) ?? null;
   const mounted: Mounted[] = [];
   const router = createPointerRouter(() => mounted.map(({ cube }) => cube));
   for (const definition of definitions) {
@@ -145,6 +152,7 @@ export async function createControlStage(
       ...(definition.disabledReason ? { disabledReason: definition.disabledReason } : {}),
       ...definition.cube,
     });
+    if (environment) useStageReflections(cube.object, environment);
     scene.add(cube.object);
     const button = document.createElement("button");
     button.type = "button";
@@ -335,6 +343,7 @@ export async function createControlStage(
         entry.cube.dispose();
       }
       mounted.length = 0;
+      environment?.dispose();
       renderer.dispose();
       canvas.remove();
     },
