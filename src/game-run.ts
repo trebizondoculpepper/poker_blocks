@@ -1,3 +1,4 @@
+import { describeCommand, type CommittedMetadata } from "./command-codecs";
 import {
   appendStagePlay,
   legacyStageHistory,
@@ -175,7 +176,9 @@ export class GameRun {
   /** Bumped by every committed action: the version a captured fact describes. */
   private version = 0;
   private lastFacts: readonly EventEnvelope[] = [];
-  private readonly committedListeners = new Set<(facts: readonly EventEnvelope[]) => void>();
+  private readonly committedListeners = new Set<
+    (facts: readonly EventEnvelope[], metadata: CommittedMetadata) => void
+  >();
   /** The action resolving now, if any: every drain and command inside it shares its budget. */
   private activeAction: { context: ActionContext; phase: string; batchId: string | null } | null =
     null;
@@ -255,16 +258,22 @@ export class GameRun {
    * Hear every committed action's facts, in order, once it has committed (#755). A rolled-back or
    * invalid action publishes nothing. Returns a function that stops listening.
    */
-  onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void {
+  /**
+   * Hear each committed action: its ordered facts, and (#1243) its metadata, including the
+   * canonical command it committed. One-argument listeners are unaffected.
+   */
+  onCommitted(
+    listener: (facts: readonly EventEnvelope[], metadata: CommittedMetadata) => void,
+  ): () => void {
     this.committedListeners.add(listener);
     return () => this.committedListeners.delete(listener);
   }
 
   /** One listener's error never stops another hearing the facts, nor reaches the action. */
-  private publish(facts: readonly EventEnvelope[]): void {
+  private publish(facts: readonly EventEnvelope[], metadata: CommittedMetadata): void {
     for (const listener of Array.from(this.committedListeners)) {
       try {
-        listener(facts);
+        listener(facts, metadata);
       } catch (error) {
         queueMicrotask(() => {
           throw error;
@@ -299,10 +308,23 @@ export class GameRun {
     kind: string,
     actionId: string | undefined,
     body: (action: ActionContext) => T | null,
+    command?: { name: string; args: unknown },
   ): T | null {
     // A generated ID is fresh by construction; only a caller's own can be a duplicate.
     const id = actionId ?? this.actions.next(kind);
     if (actionId !== undefined && this.actions.has(id)) return null;
+    // The command as called, captured now, before the caller or the body can change its arguments
+    // (#1243); an action without a codec says so explicitly rather than being silently omitted.
+    let descriptor: CommittedMetadata["command"];
+    try {
+      descriptor = command
+        ? describeCommand(command.name, command.args)
+        : { unavailable: `no command codec for ${kind}` };
+    } catch (error) {
+      descriptor = {
+        unavailable: `${command!.name}: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
     // The run's own fields as they are now (its state is immutable; arrays are replaced, not
     // mutated), restored wholesale if the action fails.
     const saved = Object.fromEntries(Object.entries(this));
@@ -316,7 +338,7 @@ export class GameRun {
     );
     // Facts are published only once the action has committed, outside the transaction, so no
     // presentation listener can run inside it or roll it back (doc/game-events.md, #755).
-    let published: readonly EventEnvelope[] | null = null;
+    let published: { facts: readonly EventEnvelope[]; metadata: CommittedMetadata } | null = null;
     try {
       this.activeAction = { context: action, phase: kind, batchId: null };
       // Everything evaluated inside the action is charged to its budget (#661 review).
@@ -332,7 +354,21 @@ export class GameRun {
       this.lastActionId = id;
       this.lastFacts = action.facts;
       this.lastFailure = null;
-      published = action.facts;
+      const checkpoint = this.randomCheckpoints?.checkpoint();
+      published = {
+        facts: action.facts,
+        metadata: Object.freeze({
+          actionId: id,
+          kind,
+          context: Object.freeze({
+            stage: this.stageContext,
+            round: this.currentRound,
+            version: this.version,
+          }),
+          command: descriptor,
+          ...(checkpoint ? { checkpoint: Object.freeze({ ...checkpoint }) } : {}),
+        }),
+      };
       return result;
     } catch (error) {
       // Everything back as it was: the run's own fields, the queued events and the stream.
@@ -344,7 +380,7 @@ export class GameRun {
       this.activeAction = null;
       return null;
     } finally {
-      if (published) this.publish(published);
+      if (published) this.publish(published.facts, published.metadata);
     }
   }
 
@@ -895,7 +931,10 @@ export class GameRun {
   play(action: PlayAction, actionId?: string): GameState | null {
     if (!this.inStage) return null;
     try {
-      return this.transact("play", actionId, (context) => this.resolvePlay(action, context));
+      return this.transact("play", actionId, (context) => this.resolvePlay(action, context), {
+        name: "play",
+        args: action,
+      });
     } finally {
       this.playReactions = null;
     }
@@ -1196,7 +1235,10 @@ export class GameRun {
   /** Discard from the hand, resolved as one transaction (#657); see `play`. */
   discard(cardIds: string | readonly string[], actionId?: string): GameState | null {
     if (!this.inStage) return null;
-    return this.transact("discard", actionId, (context) => this.resolveDiscard(cardIds, context));
+    return this.transact("discard", actionId, (context) => this.resolveDiscard(cardIds, context), {
+      name: "discard",
+      args: { cardIds: typeof cardIds === "string" ? [cardIds] : cardIds },
+    });
   }
 
   private resolveDiscard(
