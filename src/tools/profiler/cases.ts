@@ -9,11 +9,22 @@ import type { PassReference } from "./pipelines";
 import type { MotionReference } from "./motion";
 import type { PrepassReference } from "../../visual/appearance-prepass";
 
+/** What every object's update is told each frame: the run's explicit configuration. */
+export type ObjectFrame = { readonly reducedMotion: boolean };
+
 /** One built object in the profiler's scene. */
 export type ProfiledObject = {
   object: THREE.Object3D;
-  /** Advance its normal ambient animation by `dt` seconds of the run's clock. */
-  update?(dt: number): void;
+  /**
+   * Advance its normal ambient animation by `dt` seconds of the run's clock, under the run's
+   * explicit configuration (#974): reduced motion is a separate run, never the player's setting.
+   */
+  update?(dt: number, frame: ObjectFrame): void;
+  /**
+   * Start a transient over from its seeded state (#974): called as every warm-up and sample set
+   * begins, so each set measures the same active window, never an effect that already finished.
+   */
+  reset?(): void;
   /**
    * The appearance prepasses its production host would run before the main render (#969, #972).
    * A case that declares no `pipeline` renders through these, once per frame for the collection.

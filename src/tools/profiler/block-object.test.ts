@@ -49,8 +49,8 @@ describe("a profiled table block includes its look's ongoing effects (#653 revie
     const block = tableBlock(standardDeck[0]!, definition);
     const scene = new THREE.Scene();
     scene.add(block.object);
-    block.update?.(0.016);
-    block.update?.(0.016);
+    block.update?.(0.016, { reducedMotion: false });
+    block.update?.(0.016, { reducedMotion: false });
     expect(emitted.parent).toBe(scene);
     expect(updates).toEqual([0.016, 0.016]);
     block.dispose();
@@ -79,5 +79,27 @@ describe("every module-level shared texture is marked (#653 review)", () => {
     const { crystalV3Environment } = await import("../../visual/crystal-v3");
     for (const texture of [bubbleTexture(), facetTexture(), crystalV3Environment()])
       expect(texture.userData.shared).toBe(true);
+  });
+});
+
+describe("a profiled table block runs the run's reduced-motion configuration (#974)", () => {
+  it("hands its effects the setting each frame says, not a fixed one", async () => {
+    const { tableBlock } = await import("./block-object");
+    const seen: boolean[] = [];
+    blockEffects.register("profilerTestCalm", () => ({
+      object: new THREE.Object3D(),
+      update: (_delta, _block, reducedMotion) => void seen.push(reducedMotion),
+      dispose: () => {},
+    }));
+    const base = getMaterialDefinition("paper");
+    const block = tableBlock(standardDeck[0]!, {
+      ...base,
+      appearance: { ...base.appearance, effects: [{ effect: "profilerTestCalm" }] },
+    });
+    new THREE.Scene().add(block.object);
+    block.update?.(0.016, { reducedMotion: true });
+    block.update?.(0.016, { reducedMotion: false });
+    expect(seen).toEqual([true, false]);
+    block.dispose();
   });
 });

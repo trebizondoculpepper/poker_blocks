@@ -20,6 +20,8 @@ export type SweepRequest = {
   warmupFrames: number;
   seed: number;
   timeoutMs: number;
+  /** Run every case under reduced motion: a separate configuration, recorded with it (#974). */
+  reducedMotion: boolean;
 };
 
 /** The trait's serializable configuration. */
@@ -37,6 +39,7 @@ export const defaultSweep: SweepRequest = {
   warmupFrames: 30,
   seed: 527,
   timeoutMs: 120_000,
+  reducedMotion: false,
 };
 
 /** A finished (or partial) sweep, as the trait delivers it. */
@@ -92,6 +95,7 @@ export function createDevProfilerScope<Record>(host: SweepHost<Record>, sinkHost
     warmupFrames: from.warmupFrames ?? defaultSweep.warmupFrames,
     seed: from.seed ?? defaultSweep.seed,
     timeoutMs: from.timeoutMs ?? defaultSweep.timeoutMs,
+    reducedMotion: from.reducedMotion ?? defaultSweep.reducedMotion,
   });
 
   /** Start a sweep in a fresh scope, after the previous one has been cancelled and settled. */

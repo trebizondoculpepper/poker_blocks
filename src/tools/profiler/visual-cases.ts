@@ -74,15 +74,19 @@ for (const definition of allMaterials()) {
 /** One block's exit, played over and over: a fresh block starts as soon as the last has gone. */
 function repeatingExit(definition: MaterialDefinition, seed: number): ProfiledObject {
   const holder = new THREE.Group();
-  const runner = createSteppedExits();
+  // The run's reduced-motion configuration, as its frames say (#974).
+  let reduced = false;
+  const runner = createSteppedExits(() => reduced);
   const sequence = resolvedExit(definition.appearance)!;
   let generation = 0;
+  let playing = "";
   const start = () => {
     const block = tableBlock(standardDeck[(seed + generation) % standardDeck.length]!, definition);
     holder.add(block.object);
     const mesh = block.object as THREE.Mesh;
+    playing = `profile-${seed}-${generation++}`;
     runner.start(
-      { blockId: `profile-${seed}-${generation++}`, material: definition.id },
+      { blockId: playing, material: definition.id },
       {
         root: mesh,
         // The composition's own split: what it marked as contents fades; everything else of the
@@ -97,9 +101,18 @@ function repeatingExit(definition: MaterialDefinition, seed: number): ProfiledOb
   start();
   return {
     object: holder,
-    update(dt) {
+    update(dt, frame) {
+      reduced = frame.reducedMotion;
       runner.update(dt);
       if (runner.active === 0) start();
+    },
+    // Each set measures the same window: the exit in flight is cancelled (releasing its block)
+    // and the first card's exit starts over from the beginning (#974).
+    reset() {
+      runner.cancel(playing);
+      runner.update(0);
+      generation = 0;
+      start();
     },
     dispose: () => runner.dispose(),
   };

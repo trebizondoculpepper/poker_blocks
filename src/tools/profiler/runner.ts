@@ -15,6 +15,7 @@ import {
   defaultProfilingHost,
   oneBlock,
   profilingHosts,
+  type ObjectFrame,
   type ProfiledObject,
   type ProfilingCase,
   type ProfilingPhase,
@@ -40,6 +41,7 @@ import { useCosmeticRandom } from "../../visual/block-effects";
 import { profilingMotions, recordedMotion, stationary, type MotionReference } from "./motion";
 import { rowKey } from "./motion-description";
 import { useAppearanceClock } from "../../visual/appearance-clock";
+import { setContainedReducedMotion } from "../../visual/contained";
 import type { PrepassReference } from "../../visual/appearance-prepass";
 
 /** A small seeded stream (mulberry32): the same numbers for the same seed, run after run. */
@@ -114,6 +116,11 @@ export type RunOptions = {
   timeoutMs?: number;
   /** Retakes allowed for a set spoiled by the tab being hidden. */
   retries?: number;
+  /**
+   * Run the whole sweep under reduced motion (#974): a separate, explicitly recorded
+   * configuration, never the player's setting. Off when omitted.
+   */
+  reducedMotion?: boolean;
   /**
    * Seconds the run's presentation clock advances per rendered frame (#972); 1/60 when omitted.
    * Every update, pass and self-timed appearance part reads this one clock, never wall time.
@@ -288,6 +295,8 @@ export function createProfilerRunner(
    */
   let clockSeconds = 0;
   let clockStep = defaultClockStep;
+  /** The running case's explicit configuration, as every update and pass is told it (#974). */
+  let objectFrame: ObjectFrame = { reducedMotion: false };
 
   /**
    * The running row's motion (#973): its registered driver's turn at the run-clock time since the
@@ -305,6 +314,8 @@ export function createProfilerRunner(
    */
   const startSet = (objects: readonly ProfiledObject[]) => {
     setStartedAt = clockSeconds;
+    // Transients start over, so the set measures their active window from its start (#974).
+    for (const each of objects) each.reset?.();
     for (const each of objects) resting.set(each, each.object.quaternion.clone());
   };
 
@@ -384,14 +395,14 @@ export function createProfilerRunner(
     pose(clockSeconds - setStartedAt, turn);
     for (const each of objects)
       each.object.quaternion.multiplyQuaternions(turn, resting.get(each)!);
-    for (const each of objects) each.update?.(dt);
+    for (const each of objects) each.update?.(dt, objectFrame);
     const { info } = env.renderer;
     const autoReset = info.autoReset;
     info.autoReset = false;
     info.reset();
     env.timer.begin();
     try {
-      pipeline.render({ delta: dt, reducedMotion: false });
+      pipeline.render({ delta: dt, reducedMotion: objectFrame.reducedMotion });
     } finally {
       // A render that throws still closes its query (#625 review).
       env.timer.end();
@@ -758,6 +769,9 @@ export function createProfilerRunner(
         clockSeconds = 0;
         clockStep = options.clockStep ?? defaultClockStep;
         const restoreClock = useAppearanceClock(() => clockSeconds);
+        // Reduced motion is this run's own setting, for every part, never the player's (#974).
+        objectFrame = { reducedMotion: options.reducedMotion ?? false };
+        const restoreReduced = setContainedReducedMotion(() => objectFrame.reducedMotion);
         pose = profilingMotions.get(entry.motion.driver).create(entry.motion.config ?? {});
         try {
           const result = await runCase(
@@ -801,6 +815,7 @@ export function createProfilerRunner(
           stopListening?.();
           restore();
           restoreClock();
+          restoreReduced();
           pose = profilingMotions.get(stationary.driver).create({});
         }
       }

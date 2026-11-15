@@ -136,6 +136,7 @@ export function createProfilerRoom(
       <fieldset data-part="cases"><legend>Cases</legend></fieldset>
       <label>Counts <input data-part="counts" type="text" value="1, 10, 50" /></label>
       <label>Frames per set <input data-part="frames" type="number" min="10" max="2000" value="120" /></label>
+      <label><input data-part="reduced-motion" type="checkbox" /> Reduced motion (a separate configuration)</label>
       <label>Resolution <select data-part="resolution">
         <option value="640x360">640 × 360</option>
         <option value="1280x720" selected>1280 × 720</option>
@@ -360,7 +361,7 @@ export function createProfilerRoom(
     try {
       for (let step = 0; step < previewFrames; step++) {
         if (mine !== previewToken || controller) break;
-        one.update?.(1 / 60);
+        one.update?.(1 / 60, { reducedMotion: false });
         pipeline?.render({ delta: 1 / 60, reducedMotion: false });
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
@@ -396,7 +397,12 @@ export function createProfilerRoom(
     const { counts, frames } = runSettings(value("counts"), value("frames"));
     part<HTMLInputElement>("counts").value = counts.join(", ");
     part<HTMLInputElement>("frames").value = String(frames);
-    await execute(chosen, { counts, frames, warmupFrames: 30, seed: 527 }, expectedCatalogs);
+    const reducedMotion = part<HTMLInputElement>("reduced-motion").checked;
+    await execute(
+      chosen,
+      { counts, frames, warmupFrames: 30, seed: 527, reducedMotion },
+      expectedCatalogs,
+    );
   }
 
   /** Every case the expected catalogs list that has a registered case, in catalog order. */
@@ -576,6 +582,7 @@ export function createProfilerRoom(
                 warmupFrames: request.warmupFrames,
                 seed: request.seed,
                 timeoutMs: request.timeoutMs,
+                reducedMotion: request.reducedMotion,
               },
               request.catalogs,
               signal,
