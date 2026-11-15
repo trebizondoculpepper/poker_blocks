@@ -228,7 +228,14 @@ export function createPairedMask(options: {
       // The outgoing look writes no depth while it is faded over (#1264), so it draws after the
       // rest of the opaque scene: geometry behind it is already drawn and can't show through it
       // (#1273). The incoming look still draws over it, in the transparent pass.
-      if (reduced && role === "outgoing") object.renderOrder += outgoingDrawLate;
+      // Only its opaque parts: a transparent outgoing layer keeps drawing below the incoming
+      // look, which is one step later (#1291).
+      if (
+        reduced &&
+        role === "outgoing" &&
+        ![material].flat().some(({ transparent }) => transparent)
+      )
+        object.renderOrder += outgoingDrawLate;
     });
   }
   const followMount = () => {
