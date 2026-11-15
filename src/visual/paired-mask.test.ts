@@ -170,6 +170,9 @@ describe("paired block-local material masks (#1166; doc/presentation-contracts.m
     });
     if (!result.ok) throw new Error(result.diagnostic);
     expect((old.mesh.material as THREE.Material).transparent).toBe(false);
+    // The outgoing look writes no depth, so a smaller incoming one shows through it (#1264).
+    expect((old.mesh.material as THREE.Material).depthWrite).toBe(false);
+    expect(old.material.depthWrite).toBe(true);
     expect((next.mesh.material as THREE.Material).transparent).toBe(true);
     expect(next.mesh.renderOrder).toBe(1);
     const fragment = compile(next.mesh.material as THREE.Material).fragmentShader;
