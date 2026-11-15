@@ -46,7 +46,7 @@ export function shopExitResponse<
         onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void;
         readonly reducedMotion: boolean;
       };
-      shop: { startBurn(reducedMotion: boolean): void };
+      shop: { startBurn(reducedMotion: boolean): void; finishBurn(): void };
       visualEvents: ShopExitScheduler;
       sound(id: SoundEffectId): void;
     };
@@ -81,10 +81,19 @@ export function shopExitResponse<
             scopes.delete(scope);
             if (state === "finished") services.sound(config.leaveSound);
           });
-          visualEvents.schedule(scope, {
+          const admitted = visualEvents.schedule(scope, {
             handler: shopBurnHandler,
             dueUnits: visualEvents.nowMs / unitMs,
           });
+          if (!admitted.accepted) {
+            // Overloaded: settle the burn at once and cue the leave as its summary, so the run
+            // is never left waiting on an effect nothing will advance.
+            scopes.delete(scope);
+            visualEvents.cancel(scope);
+            services.shop.finishBurn();
+            services.sound(config.leaveSound);
+            continue;
+          }
           visualEvents.seal(scope);
         }
       });

@@ -3,7 +3,7 @@ import { createVisualScheduler } from "../visual-events/scheduler";
 import { shopExitResponse } from "./shop-leave-response";
 
 /** A burn that finishes after `frames` updates, or when cancelled. */
-function harness(frames = 3) {
+function harness(frames = 3, limits?: { pendingGlobal: number }) {
   const log: string[] = [];
   let left = frames;
   const shopBurn = {
@@ -13,7 +13,10 @@ function harness(frames = 3) {
       dispose: () => {},
     }),
   };
-  const visualEvents = createVisualScheduler({ services: { shopBurn } });
+  const visualEvents = createVisualScheduler({
+    services: { shopBurn },
+    ...(limits ? { limits } : {}),
+  });
   let publish: (facts: readonly { payload: unknown }[]) => void = () => {};
   const context = {
     services: {
@@ -24,7 +27,10 @@ function harness(frames = 3) {
         },
         reducedMotion: false,
       },
-      shop: { startBurn: () => void log.push("burn started") },
+      shop: {
+        startBurn: () => void log.push("burn started"),
+        finishBurn: () => void log.push("burn finished at once"),
+      },
       visualEvents,
       sound: (id: string) => void log.push(`sound ${id}`),
     },
@@ -49,6 +55,7 @@ function harness(frames = 3) {
         },
       ]),
     exit: () => trait.exit!(context as never, config),
+    visualEvents,
   };
 }
 
@@ -78,6 +85,20 @@ describe("shopExitResponse on the shared scheduler (#880)", () => {
     h.run(200);
     expect(h.log).toContain("burn cancelled");
     expect(h.log).not.toContain("sound shop.leave");
+  });
+
+  it("settles the burn at once with the leave cue when the scheduler cannot admit it", () => {
+    const h = harness(3, { pendingGlobal: 1 });
+    // Something else already holds the only pending slot.
+    const busy = h.visualEvents.createScope(null);
+    h.visualEvents.schedule(busy, { handler: "shop.burnOutgoing", dueUnits: 1e6 });
+    h.leave(["a"]);
+    expect(h.log).toEqual([
+      "burn started",
+      "sound shop.stock.burn",
+      "burn finished at once",
+      "sound shop.leave",
+    ]);
   });
 
   it("presents nothing for other facts", () => {

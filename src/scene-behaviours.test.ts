@@ -190,6 +190,7 @@ function recordingHost() {
         present: () => {},
         burnEffect: () => ({ update: () => "finished" as const, cancel() {}, dispose() {} }),
         startBurn: () => {},
+        finishBurn: () => {},
         outgoingDone: () => Promise.resolve(true),
         frame: () => undefined,
         dispose: () => undefined,

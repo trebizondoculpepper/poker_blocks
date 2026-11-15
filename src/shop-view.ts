@@ -69,6 +69,8 @@ export type ShopView = {
   burnEffect(): EffectHandle;
   /** Begin burning the displayed (outgoing) offers; `burnEffect` then advances it (#880). */
   startBurn(reducedMotion: boolean): void;
+  /** Settle the outgoing burn at once, as completed: the overload summary (#880). */
+  finishBurn(): void;
   /**
    * When the burn in progress settles (#880): true if it ran to its end, false if it was cleared
    * away (the scene left, a new run). True at once when nothing is burning.
@@ -512,9 +514,12 @@ export function createShopView(
     finishEntrance();
     if (burnPromise) return;
     burnCompleted = false;
+    // Nothing left to burn (all bought): still an exit to wait on, which the scheduled effect
+    // settles on its first update, so the run waits for the exit scope and its cue.
     if (displayed.length === 0) {
-      burnCompleted = true;
-      render([], false);
+      burnPromise = new Promise((resolve) => {
+        burn = { startedAt: null, seconds: 0, reduced: reducedMotion, jobs: [], resolve };
+      });
       return;
     }
     stock.classList.add("is-burning");
@@ -571,6 +576,17 @@ export function createShopView(
     burnCompleted = true;
     render([], false);
     return "finished";
+  }
+
+  /**
+   * Settle the outgoing burn at once, as completed (#880): the summary when the scheduler could
+   * not admit the burn's effect, so the run is never left waiting.
+   */
+  function finishBurn(): void {
+    if (!burn) return;
+    for (const job of burn.jobs) job.effect?.finish();
+    burnCompleted = true;
+    render([], false);
   }
 
   function burnEffect(): EffectHandle {
@@ -764,6 +780,7 @@ export function createShopView(
     render,
     burnEffect,
     startBurn,
+    finishBurn,
     outgoingDone() {
       const running = burnPromise;
       return running ? running.then(() => burnCompleted) : Promise.resolve(true);
