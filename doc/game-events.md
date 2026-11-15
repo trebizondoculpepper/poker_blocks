@@ -76,6 +76,10 @@ An unopened Present composes ordinary discard behavior. Destruction removes a ca
 
 Stage context includes round and configured stage rules. Identifiers remain lookup handles; a trait's registered condition evaluates its configured rule. On a win, reward handlers produce the existing ledger, paid once from the documented balance snapshot; final outcomes and payments are not replayed by Continue. Do not emit a fake new `stage.started` during hydration through a dummy constructor.
 
+## Purchase projection, not a gameplay hook (#1214)
+
+The once-per-success `shop.purchased` record is an immutable action commit projection for configured presentation only. [Its schema, atomic owner, order, capabilities and tests](purchase-presentation.md) distinguish direct recording from model lifecycle dispatch. It is not delivered to gameplay/passive subscribers; the future purchase lifecycle family above remains separately designed. Existing offer-kind definitions configure the captured success cue.
+
 ## Registered context queries
 
 A lifecycle fact and a derived context query are separate capabilities. Use registered pure providers, requested by trait rule configuration, over an explicit immutable snapshot/version and scope. The query interface returns a value or a typed `unavailable` result; it cannot mutate, consume RNG or emit gameplay events. The same snapshot, scope and query configuration returns the same result. Cache within that immutable version; occupancy-dependent caches cannot survive occupancy changes. Never close over a later live `GameRun.state` behind an earlier event.
