@@ -119,6 +119,45 @@ export function rackActivationLabel(
   return { handler: "activationLabel", payload };
 }
 
+const tokenBox = new THREE.Box3();
+const tokenCorner = new THREE.Vector3();
+
+/**
+ * An object's projected bounds through `camera` onto a canvas at `canvas` (client px), relative to
+ * `origin`. Null when it has no geometry.
+ */
+export function projectedBounds(
+  object: THREE.Object3D,
+  camera: THREE.Camera,
+  canvas: { left: number; top: number; width: number; height: number },
+  origin: { left: number; top: number },
+): { x: number; y: number; width: number; height: number } | null {
+  object.updateWorldMatrix(true, true);
+  tokenBox.setFromObject(object);
+  if (tokenBox.isEmpty()) return null;
+  camera.updateMatrixWorld();
+  let left = Infinity;
+  let right = -Infinity;
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (let i = 0; i < 8; i++) {
+    tokenCorner
+      .set(
+        i & 1 ? tokenBox.max.x : tokenBox.min.x,
+        i & 2 ? tokenBox.max.y : tokenBox.min.y,
+        i & 4 ? tokenBox.max.z : tokenBox.min.z,
+      )
+      .project(camera);
+    const x = canvas.left - origin.left + ((tokenCorner.x + 1) / 2) * canvas.width;
+    const y = canvas.top - origin.top + ((1 - tokenCorner.y) / 2) * canvas.height;
+    left = Math.min(left, x);
+    right = Math.max(right, x);
+    top = Math.min(top, y);
+    bottom = Math.max(bottom, y);
+  }
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
 /** A fixed screen-space rack with one Three.js scene for all rotating passive blocks. */
 export function createPassiveRack(host: HTMLElement): {
   element: HTMLElement;
@@ -375,16 +414,18 @@ export function createPassiveRack(host: HTMLElement): {
       return () => {
         const entry = rendered.get(sourceId);
         if (!entry || element.hidden || !entry.item.isConnected) return null;
-        const slot = entry.item.getBoundingClientRect();
         // The rack's own host: activation labels are drawn over it (main wires them together).
         const origin = host.getBoundingClientRect();
-        const x = slot.left - origin.left;
-        const y = slot.top - origin.top;
-        return {
-          x: x + slot.width / 2,
-          y,
-          bounds: { x, y, width: slot.width, height: slot.height },
-        };
+        // The rendered token itself, through the rack's camera, so a label follows it while it
+        // reorders or arrives (#1213), not its static slot.
+        const bounds = projectedBounds(
+          entry.mesh,
+          camera,
+          renderer.domElement.getBoundingClientRect(),
+          origin,
+        );
+        if (!bounds) return null;
+        return { x: bounds.x + bounds.width / 2, y: bounds.y, bounds };
       };
     },
     dispose() {
