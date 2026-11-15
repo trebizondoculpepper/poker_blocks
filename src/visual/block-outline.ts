@@ -19,18 +19,25 @@ export function blockOutline(
   // The outline takes part in a paired mask through the chunk adapter (#1209).
   material.userData.maskAdapter = "chunkSurface";
   const outline = new THREE.LineSegments(new THREE.EdgesGeometry(appearance.geometry), material);
+  // Each material's own depth-write policy, as it first drew here: the outline's own writes depth,
+  // while a paired mask's outgoing clone writes none (#1338 review). Live visibility composes with
+  // that policy and never overrides it.
+  const writesDepth = new WeakMap<THREE.Material, boolean>();
   if (live)
     outline.onBeforeRender = () => {
       // Whatever material it draws with now, a paired mask's clone included, stays live (#1209).
       const current = outline.material as THREE.LineBasicMaterial;
+      if (!writesDepth.has(current)) writesDepth.set(current, current.depthWrite);
+      const policy = writesDepth.get(current)!;
       // A host showing a selection outline (fully opaque) keeps it while selected.
       if (current.userData.selected === true) {
-        current.colorWrite = current.depthWrite = true;
+        current.colorWrite = true;
+        current.depthWrite = policy;
         return;
       }
       current.opacity = live.value;
       current.colorWrite = live.value > 0;
-      current.depthWrite = live.value > 0;
+      current.depthWrite = policy && live.value > 0;
     };
   return outline;
 }

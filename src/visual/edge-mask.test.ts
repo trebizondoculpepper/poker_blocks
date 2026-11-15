@@ -126,4 +126,44 @@ describe("paired masks for edges and custom shaders (#1209)", () => {
     if (result.ok) result.mask.cancel();
     expect([paper.renderOrder, print.renderOrder, skin.renderOrder]).toEqual([0, 2, 20]);
   });
+
+  it("keeps the mask's depth-write policy on a live outline's outgoing clone (#1338 review)", () => {
+    const live = { value: 0.6 };
+    const outline = blockOutline({
+      geometry,
+      edgeColor: 0xffffff,
+      edgeOpacity: 1,
+      liveEdgeOpacity: live,
+    });
+    const draw = () =>
+      outline.onBeforeRender(
+        null as never,
+        null as never,
+        null as never,
+        null as never,
+        null as never,
+        null as never,
+      );
+    draw();
+    expect((outline.material as THREE.Material).depthWrite).toBe(true);
+    const block = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
+    block.add(outline);
+    const other = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial());
+    const mount = new THREE.Group();
+    mount.add(block, other);
+    const result = createPairedMask({
+      mount,
+      outgoing: { root: block, maskAdapter: "chunkSurface" },
+      incoming: { root: other, maskAdapter: "chunkSurface" },
+      reduced: true,
+    });
+    expect(result.ok).toBe(true);
+    draw();
+    const clone = outline.material as THREE.LineBasicMaterial;
+    expect(clone.depthWrite).toBe(false);
+    expect(clone.opacity).toBe(0.6);
+    if (result.ok) result.mask.cancel();
+    draw();
+    expect((outline.material as THREE.Material).depthWrite).toBe(true);
+  });
 });
