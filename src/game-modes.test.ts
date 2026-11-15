@@ -362,7 +362,11 @@ describe("game modes composed from traits", () => {
       discardBin: {},
       committedEventSounds: {},
       materialChangeSounds: {},
-      materialTransitions: { handler: "perlinDissolve", seconds: 0.5, reducedSeconds: 0.12 },
+      materialTransitions: {
+        handler: "perlinDissolve",
+        durationUnits: 7.5,
+        reducedDurationUnits: 1.8,
+      },
       destructionExits: {},
       stageScoreGraph: expect.objectContaining({ picture: expect.any(Object) }),
       outcomeCues: { won: "round.cleared", lost: "round.failed" },
