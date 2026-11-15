@@ -1523,6 +1523,8 @@ function contained(context: AssemblyContext): BlockAppearance {
       [...extras, print.skin],
     ),
     // The front skin draws after the contents and residue, before the gloss (#329 layers).
+    // Its shell faces are chunk materials; its contents and inclusions declare their own (#1208).
+    maskAdapter: "chunkSurface",
     faceLayer: containedLayers.shellFront,
   };
 }

@@ -83,7 +83,10 @@ describe("paired block-local material masks (#1166; doc/presentation-contracts.m
       outgoing: { root: old.root, maskAdapter: "chunkSurface" },
       incoming: { root: next.root },
     });
-    expect(undeclared).toEqual({ ok: false, diagnostic: "incoming look declares no mask adapter" });
+    expect(undeclared).toEqual({
+      ok: false,
+      diagnostic: "incoming look's Mesh declares no mask adapter",
+    });
     const unknown = createPairedMask({
       mount,
       outgoing: { root: old.root, maskAdapter: "test.missing" },
@@ -198,5 +201,122 @@ describe("paired block-local material masks (#1166; doc/presentation-contracts.m
     if (!result.ok) throw new Error(result.diagnostic);
     expect(old.mesh.renderOrder).toBeLessThan(next.mesh.renderOrder);
     result.mask.cancel();
+  });
+
+  describe("contained shells, contents and animated extras (#1208)", () => {
+    /** A contained look: a chunk shell, a custom-shader fluid and animated points declaring theirs. */
+    function containedLook() {
+      const shell = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshPhysicalMaterial());
+      const time = { value: 0 };
+      const fluid = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 0.8, 0.8),
+        new THREE.ShaderMaterial({
+          userData: { maskAdapter: "shaderSurface" },
+          uniforms: { time },
+          vertexShader: "void main() { gl_Position = vec4(position, 1.0); }",
+          fragmentShader: "uniform float time; void main() { gl_FragColor = vec4(time); }",
+        }),
+      );
+      const bubbles = new THREE.Points(
+        new THREE.BufferGeometry(),
+        new THREE.ShaderMaterial({
+          userData: { maskAdapter: "shaderSurface" },
+          transparent: true,
+          vertexShader: "void main() { gl_Position = vec4(position, 1.0); }",
+          fragmentShader: "void main() { gl_FragColor = vec4(1.0); }",
+        }),
+      );
+      const root = new THREE.Group();
+      root.add(shell, fluid, bubbles);
+      const sources = [shell.material, fluid.material, bubbles.material];
+      return { root, shell, fluid, bubbles, time, sources };
+    }
+
+    function containedPair() {
+      const mount = new THREE.Group();
+      const old = containedLook();
+      const next = look(1);
+      const unrelated = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+      mount.add(old.root, next.root, unrelated);
+      const made = createPairedMask({
+        mount,
+        outgoing: { root: old.root, maskAdapter: "chunkSurface" },
+        incoming: { root: next.root, maskAdapter: "chunkSurface" },
+      });
+      if (!made.ok) throw new Error(made.diagnostic);
+      return { mask: made.mask, old, next, unrelated };
+    }
+
+    it("masks every drawn part through its own declared adapter, points included", () => {
+      const { old } = containedPair();
+      for (const part of [old.shell, old.fluid, old.bubbles])
+        expect(old.sources).not.toContain(part.material);
+      const fluid = compile(old.fluid.material as THREE.Material);
+      expect(fluid.fragmentShader).toMatch(/discard/);
+      expect(fluid.uniforms.matProgress).toBeDefined();
+    });
+
+    it("keeps a contained simulation live: the masked clone shares its uniform values", () => {
+      const { old } = containedPair();
+      const clone = old.fluid.material as THREE.ShaderMaterial;
+      old.time.value = 3;
+      expect(clone.uniforms.time!.value).toBe(3);
+      // The source material gains no mask uniforms once compiled.
+      compile(clone);
+      expect((old.sources[1] as THREE.ShaderMaterial).uniforms.matProgress).toBeUndefined();
+    });
+
+    it("leaves unrelated objects alone and restores every part on cancel, repeatably", () => {
+      const first = containedPair();
+      const unrelatedMaterial = first.unrelated.material;
+      first.mask.cancel();
+      expect(first.unrelated.material).toBe(unrelatedMaterial);
+      expect([first.old.shell, first.old.fluid, first.old.bubbles].map((p) => p.material)).toEqual(
+        first.old.sources,
+      );
+      // A second transition over the same parts adapts them afresh.
+      const second = createPairedMask({
+        mount: first.old.root.parent!,
+        outgoing: { root: first.old.root, maskAdapter: "chunkSurface" },
+        incoming: { root: first.next.root, maskAdapter: "chunkSurface" },
+      });
+      expect(second.ok).toBe(true);
+      if (second.ok) second.mask.cancel();
+    });
+
+    it("names an undeclared custom part instead of drawing it whole", () => {
+      const mount = new THREE.Group();
+      const old = look(1);
+      const stray = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial());
+      stray.name = "stray sparks";
+      const next = look(1);
+      next.root.add(stray);
+      mount.add(old.root, next.root);
+      const made = createPairedMask({
+        mount,
+        outgoing: { root: old.root, maskAdapter: "chunkSurface" },
+        incoming: { root: next.root, maskAdapter: "test.unregistered" },
+      });
+      expect(made).toEqual({
+        ok: false,
+        diagnostic: 'incoming look\'s mask adapter "test.unregistered" is not registered',
+      });
+    });
+  });
+
+  describe("live uniforms for masked shader clones (#1350)", () => {
+    it("follows entries the source's owner replaces or adds, and never leaks the mask's", async () => {
+      const { liveUniforms } = await import("./paired-mask");
+      const source: Record<string, THREE.IUniform> = { time: { value: 1 } };
+      const view = liveUniforms(source);
+      source.time = { value: 5 };
+      source.added = { value: 7 };
+      expect(view.time!.value).toBe(5);
+      expect(view.added!.value).toBe(7);
+      Object.assign(view, { matProgress: { value: 0.3 } });
+      expect(view.matProgress!.value).toBe(0.3);
+      expect("matProgress" in source).toBe(false);
+      expect(Object.keys(view)).toEqual(expect.arrayContaining(["time", "added", "matProgress"]));
+    });
   });
 });

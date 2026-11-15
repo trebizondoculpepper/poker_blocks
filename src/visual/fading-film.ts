@@ -122,6 +122,8 @@ export const fadingFilm: ResidueHandler = {
       opacity: { value: config.opacity },
     };
     const material = new THREE.ShaderMaterial({
+      // Masked by its own shader in a paired transition (#1208).
+      userData: { maskAdapter: "shaderSurface" },
       uniforms,
       vertexShader,
       fragmentShader,

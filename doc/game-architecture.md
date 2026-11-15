@@ -1779,3 +1779,7 @@ Independent post-score traits use [reserved action contributions and phase compl
 ### Terminal presentation scope ownership (#1235)
 
 The [scheduler terminal-status contract](scheduler-terminal-status.md) keeps full records only for unresolved work and weakly retains terminal status by externally held opaque handles. Cleanup and parent/child accounting precede release; late observation remains truthful without preserving payload, service or listener graphs for an entire session.
+
+## Crash reporting and manual bug feedback (#1339)
+
+[Crash reporting](crash-reporting.md) defines the application-lifetime configured reporting controller, mechanical Sentry transport, registered bounded diagnostics and renderer-owned screenshot capture. Automatic errors and manual feedback share captured release/browser/game context without changing gameplay or blocking input. Reuse the existing home/pause footer Report a bug link to open Sentry feedback; diagnostics remain in Sentry and account-supported automation feeds safe summaries into GitHub. Developer-console composition stays separate. This target includes source audit, primary references, credential boundaries, cancellation/disposal, failure limits and focused delivery verification; no SDK or account integration is claimed by the documentation.
