@@ -21,7 +21,9 @@ const priceOf = (id: string) =>
 
 describe("transmogrifier items (#388)", () => {
   it("exists for every gameplay material with a price: twice its base price, paper at 2", () => {
-    expect(priceOf("wood")).toBe(6);
+    // Wood's definition sets its own price (#1058, #1076); its card price is unchanged.
+    expect(priceOf("wood")).toBe(5);
+    expect(getMaterialDefinition("wood").shop?.basePrice).toBe(3);
     expect(priceOf("steel")).toBe(8);
     expect(priceOf("ice")).toBe(4);
     expect(priceOf("fire")).toBe(8);
@@ -133,6 +135,23 @@ describe("transmogrifier items (#388)", () => {
     expect(fromSaveRecord(exhausted, standardDeck, dealerRegistry)).toBeNull();
   });
 
+  it("offers new wood transmogrifiers at 5 coins and charges exactly that (#1076)", () => {
+    const wood = transmogrifierWeights(99).find(({ material }) => material === "wood")!;
+    expect(wood.price).toBe(5);
+    const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    const item = createTransmogrifier("wood", "shop.transmogrifier.1", wood.price);
+    const shopWith = (coins: number) =>
+      GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, {
+        ...game.snapshot(),
+        phase: "shop",
+        state: { ...game.state, coins, shopStock: [{ kind: "transmogrifier", block: item }] },
+      });
+    expect(shopWith(4).buyShopOffer(item.id, "passive-rack")).toBeNull();
+    const shop = shopWith(5);
+    expect(shop.buyShopOffer(item.id, "passive-rack")?.block).toBe(item);
+    expect(shop.state.coins).toBe(0);
+  });
+
   it("rebuilds a saved transmogrifier offer exactly", () => {
     const game = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
     const item = createTransmogrifier("gold", "shop.transmogrifier.1", 16);
@@ -201,6 +220,12 @@ describe("transmogrifier resale (#390)", () => {
     expect(resaleValue(createTransmogrifier("steel", "t", 8, 1, 2))).toBe(2);
     expect(resaleValue(createTransmogrifier("paper", "t", 2, 1, 2))).toBe(1);
     expect(resaleValue(createTransmogrifier("prismatic", "t", 24, 1, 2))).toBe(6);
+  });
+
+  it("keeps an owned wood transmogrifier's saved 6-coin price for resale (#1076)", async () => {
+    const { resaleValue } = await import("./resale");
+    expect(resaleValue(createTransmogrifier("wood", "t", 6))).toBe(3);
+    expect(resaleValue(createTransmogrifier("wood", "t", 5))).toBe(2);
   });
 
   it("leaves ordinary passives at half their price", async () => {
