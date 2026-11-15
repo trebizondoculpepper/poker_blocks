@@ -1146,7 +1146,7 @@ export class GameRun {
         this.lifecycle("block.materialChanged", {
           blockId: cardId,
           transition: { from: { material: from }, to: { material: to } },
-          sound: transitionSoundOf(to),
+          transitionSound: transitionSoundOf(to),
         });
       return next;
     });

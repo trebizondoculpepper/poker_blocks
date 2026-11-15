@@ -1,3 +1,4 @@
+import type { TransitionAudioServices } from "./scene-traits/material-change-sounds";
 import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
   createRockingRelay,
@@ -457,7 +458,8 @@ const visualServices: ScoreNarrationServices &
   RackLabelServices &
   PresentedActionServices &
   RewardLedgerServices &
-  ShopBurnServices & { playfieldRocking: RockingSink } = {
+  ShopBurnServices &
+  TransitionAudioServices & { playfieldRocking: RockingSink } = {
   get scoreNarration() {
     return presenter.narration;
   },
@@ -474,6 +476,8 @@ const visualServices: ScoreNarrationServices &
   passiveRack: passiveRackView,
   // Where a scheduled rocking resume reaches the playfield controller (#783).
   playfieldRocking: rockingRelay,
+  // A committed material transition's sound (#539).
+  transitionAudio: { play: (id) => playSfx(id) },
   // The shop's outgoing burn, advanced on this scheduler (#880).
   shopBurn: { effect: (startMs) => shopView.burnEffect(startMs) },
 };

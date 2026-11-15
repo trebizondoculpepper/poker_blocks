@@ -12,6 +12,8 @@
  * neighbours until the next play. The results are then committed together. Unconfigured pairs
  * do nothing. Nothing here names a material.
  */
+import type { GameEvent } from "./passives";
+import { stateBonuses } from "./state-bonuses";
 import { Registry } from "./core/registry";
 import type { CardBlock } from "./cards";
 import type { RuleCommand } from "./event-rules";
@@ -151,22 +153,28 @@ registerRuleCommand<{
   target.update(after);
   if (after === before) return [];
   const to = reactionState(after, blockId)!;
-  // A change of material is described by what the card becomes, whatever caused it (#539): the
-  // target's transition sound is its only cue. A state-only change keeps its own reaction sound.
-  const becameMaterial = changed !== before;
-  const cue = becameMaterial ? transitionSoundOf(to.material as BlockMaterial) : sound;
+  // A material transition (#539): a new material, or a new state that is part of what the card
+  // is (Hot or Boiling Water). Its cue is the target's, whatever caused it, and is presented by
+  // the scheduled transition response, so the reaction carries none of its own for it.
+  const targetState = [to.stateBonus ?? []]
+    .flat()
+    .filter((id) => id !== from?.stateBonus && stateBonuses.has(id))
+    .map((id) => stateBonuses.get(id).transitionSound)
+    .find((cue) => cue !== undefined);
+  const transitionSound =
+    targetState ??
+    (changed !== before ? transitionSoundOf(to.material as BlockMaterial) : undefined);
+  if (transitionSound)
+    return [
+      { type: "reaction.applied", blockId, reaction: { from: from!, to } },
+      { type: "block.materialChanged", blockId, transition: { from: from!, to }, transitionSound },
+    ];
   return [
     {
       type: "reaction.applied",
       blockId,
-      reaction: { from: from!, to, ...(cue ? { sound: cue } : {}) },
+      reaction: { from: from!, to, ...(sound ? { sound } : {}) },
     },
-    // The committed material-change fact (doc/presentation-contracts.md, "Committed transition
-    // fact"), for every response that presents a change of material. Its sound is presented in
-    // the reaction's own slot, so the fact carries the transition, not a second cue.
-    ...(becameMaterial
-      ? [{ type: "block.materialChanged", blockId, transition: { from: from!, to } }]
-      : []),
   ];
 });
 
@@ -241,8 +249,11 @@ export function resolveReactions(
 export function commitReactions(
   target: CommandTarget,
   reactionsFor: (block: CardBlock) => readonly Reaction[] = materialReactions,
+  /** Receives the commands' other facts (block.materialChanged, #539), to publish with them. */
+  facts?: GameEvent[],
 ): AppliedReaction[] {
   const events = commitCommands(resolveReactions(target.state, reactionsFor), target);
+  facts?.push(...events.filter(({ reaction }) => !reaction));
   return events.flatMap(({ blockId, reaction }) =>
     blockId && reaction ? [{ blockId, ...reaction }] : [],
   );

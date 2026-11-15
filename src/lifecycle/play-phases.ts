@@ -59,15 +59,22 @@ playSteps.register("countdown-deductions", (context) => {
 const reactionStep =
   (timing: string): PlayStep =>
   (context) => {
-    const applied = commitReactions(context.target, (block) =>
-      materialReactions(block).filter((reaction) => reactionTiming(reaction) === timing),
+    const facts: GameEvent[] = [];
+    const applied = commitReactions(
+      context.target,
+      (block) => materialReactions(block).filter((reaction) => reactionTiming(reaction) === timing),
+      facts,
     );
     context.reactions.push(...applied);
-    return applied.map(({ blockId, ...reaction }) => ({
-      type: "reaction.applied",
-      blockId,
-      reaction,
-    }));
+    // The reactions' own facts, then the material transitions they caused (#539).
+    return [
+      ...applied.map(({ blockId, ...reaction }) => ({
+        type: "reaction.applied",
+        blockId,
+        reaction,
+      })),
+      ...facts,
+    ];
   };
 // Explicitly placement-timed interactions, before scoring (the approved Air/flame upgrade).
 playSteps.register("placement-reactions", reactionStep("placement"));

@@ -359,6 +359,7 @@ describe("game modes composed from traits", () => {
       selectable: { sources: [{ source: "hand" }, { source: "field" }] },
       discardBin: {},
       committedEventSounds: {},
+      materialChangeSounds: {},
       outcomeCues: { won: "round.cleared", lost: "round.failed" },
       playfieldRockingController: {},
       deckPanel: { opens: "openDeck" },

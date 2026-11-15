@@ -106,6 +106,8 @@ export type GameEvent = {
    * committed change of material, captured at commit for every response that presents it.
    */
   transition?: { from: ReactionState; to: ReactionState };
+  /** On `block.materialChanged`: the target's transition sound, presented by its response. */
+  transitionSound?: SoundEffectId;
   /** On `reaction.applied` (#366): the block's material and state bonus before and after. */
   reaction?: { from: ReactionState; to: ReactionState; sound?: SoundEffectId };
   /** On `block.triggered` (#433): what triggered it, and the chain it is part of. */
