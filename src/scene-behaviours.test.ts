@@ -966,12 +966,13 @@ describe("the shop scene's own arrival (#93)", () => {
   const scenesOf = (name: string) =>
     gameModeFor("game").scenes.find(({ id }) => id === `game/${name}`)!;
 
-  it("plays its sound and camera entrance as it comes in front; a stage plays its start", () => {
+  it("plays its sound and camera entrance as it comes in front; a stage plays no start jingle", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
     for (const name of ["stage-1", "shop"]) scenes.register(scenesOf(name));
     scenes.switchTo(scenesOf("stage-1").id);
-    expect(calls).toContain("sound:round.start");
+    // The stage-start bass motif was withdrawn after the owner's audition (#1257).
+    expect(calls).not.toContain("sound:round.start");
     calls.length = 0;
     scenes.switchTo(scenesOf("shop").id);
     expect(calls).toContain("sound:shop.open");
@@ -1120,5 +1121,20 @@ describe("outcomeCues (#881)", () => {
     behaviour.exit!(context, config);
     decided("won", "won-2");
     expect(sounds).toHaveLength(3);
+  });
+});
+
+describe("no stage-start jingle (#1257; doc/sound_design.md)", () => {
+  it("enters every stage, the boss and a restart without the round.start cue", () => {
+    for (const mode of ["game", "dev2"]) {
+      const scenesOf = (name: string) =>
+        gameModeFor(mode).scenes.find(({ id }) => id === `${mode}/${name}`)!;
+      const { host, calls } = recordingHost();
+      const scenes = new SceneManager(sceneBehaviours(), host);
+      for (const name of ["stage-1", "stage-2", "boss"]) scenes.register(scenesOf(name));
+      for (const name of ["stage-1", "stage-2", "boss", "stage-1"])
+        scenes.switchTo(scenesOf(name).id);
+      expect(calls.filter((call) => call === "sound:round.start")).toEqual([]);
+    }
   });
 });

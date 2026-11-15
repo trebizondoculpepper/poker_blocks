@@ -164,10 +164,8 @@
     }
   },
   "round.start": {
-    "uses": 3,
-    "files": {
-      "game-modes.ts": 3
-    }
+    "uses": 0,
+    "files": {}
   },
   "shop.open": {
     "uses": 2,
