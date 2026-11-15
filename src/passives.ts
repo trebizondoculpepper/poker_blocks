@@ -487,7 +487,9 @@ const definitions: PassiveDefinition[] = [
   // resolution, and the same result is added to every scored line after its zero clamp.
   die({ id: "d6", name: "D6", sides: 6, shape: "cube", unlockRound: 1, basePrice: 4, pips: true }),
   die({ id: "d8", name: "D8", sides: 8, shape: "octahedron", unlockRound: 2, basePrice: 5 }),
-  die({ id: "d10", name: "D10", sides: 10, shape: "d10", unlockRound: 3, basePrice: 6 }),
+  // The former D10 slot is a true D12 (#1003; doc/dice-replacement.md). Its opaque handle stays
+  // `d10`, so saved runs restore the D12 with the same identity.
+  die({ id: "d10", name: "D12", sides: 12, shape: "dodecahedron", unlockRound: 3, basePrice: 6 }),
   die({ id: "d20", name: "D20", sides: 20, shape: "icosahedron", unlockRound: 4, basePrice: 9 }),
 ];
 for (const definition of definitions) passiveDefinitions.register(definition.id, definition);

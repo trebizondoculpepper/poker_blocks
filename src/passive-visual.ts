@@ -225,6 +225,56 @@ passiveShapes.register("icosahedron", {
 });
 passiveShapes.register("d10", { geometry: () => trapezohedronGeometry(), verticesPerFace: 6 });
 
+/** A regular pentagon's corners in UV space, anticlockwise from the top (#1003). */
+export const pentagonFaceOutline: FaceOutline = Array.from({ length: 5 }, (_, corner) => {
+  const angle = Math.PI / 2 + (corner * 2 * Math.PI) / 5;
+  return [0.5 + 0.5 * Math.cos(angle), 0.5 + 0.5 * Math.sin(angle)] as const;
+});
+
+passiveShapes.register("dodecahedron", {
+  geometry: () => withPentagonFaceUvs(new THREE.DodecahedronGeometry(0.74, 0).toNonIndexed()),
+  verticesPerFace: 9,
+  faceOutline: pentagonFaceOutline,
+});
+
+/**
+ * Each pentagonal face (nine vertices, three triangles) shows the regular pentagon cut from its
+ * face texture: its five corners, sorted anticlockwise seen from outside starting nearest the
+ * face's local "up", take the outline's corners in order, so the artwork is never mirrored.
+ */
+function withPentagonFaceUvs(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const positions = geometry.getAttribute("position");
+  const faces = positions.count / 9;
+  const uvs: number[] = [];
+  const at = (index: number) => new THREE.Vector3().fromBufferAttribute(positions, index);
+  for (let face = 0; face < faces; face++) {
+    const points = Array.from({ length: 9 }, (_, vertex) => at(face * 9 + vertex));
+    const corners = points.filter(
+      (point, index) => points.findIndex((other) => other.distanceTo(point) < 1e-6) === index,
+    );
+    const centre = corners.reduce((sum, point) => sum.add(point), new THREE.Vector3());
+    centre.divideScalar(corners.length);
+    const normal = centre.clone().normalize();
+    // A local frame on the face: "up" leans toward world +Y (or +Z on a face that faces it).
+    const reference =
+      Math.abs(normal.y) > 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+    const up = reference.sub(normal.clone().multiplyScalar(reference.dot(normal))).normalize();
+    const right = new THREE.Vector3().crossVectors(up, normal);
+    const angle = (point: THREE.Vector3) => {
+      const offset = point.clone().sub(centre);
+      // Anticlockwise from "up", seen from outside.
+      return (Math.atan2(-offset.dot(right), offset.dot(up)) + 2 * Math.PI) % (2 * Math.PI);
+    };
+    const ordered = [...corners].sort((a, b) => angle(a) - angle(b));
+    for (const point of points) {
+      const corner = ordered.findIndex((candidate) => candidate.distanceTo(point) < 1e-6);
+      uvs.push(...pentagonFaceOutline[corner]!);
+    }
+  }
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  return geometry;
+}
+
 /** A pentagonal trapezohedron: ten kite-shaped faces, each two triangles with quad UVs. */
 function trapezohedronGeometry(): THREE.BufferGeometry {
   // The dual of a pentagonal antiprism: each antiprism vertex becomes one kite face.

@@ -46,6 +46,7 @@ describe("passive token visuals (#125)", () => {
     ["cube", 6],
     ["octahedron", 8],
     ["d10", 10],
+    ["dodecahedron", 12],
     ["icosahedron", 20],
   ])(
     "draws a %s with %i labelled faces, each opposite face summing to count + 1",
@@ -223,5 +224,43 @@ describe("mass passive artwork (#1009)", async () => {
     // Mean and Total stay in the names.
     expect(passiveDefinitions.get("trial-heavy-mean-mass").name).toMatch(/mean/);
     expect(passiveDefinitions.get("trial-light-total-mass").name).toMatch(/total/);
+  });
+});
+
+describe("the dodecahedron's pentagon faces (#1003)", () => {
+  it("maps each pentagonal face onto the pentagon outline, unmirrored", () => {
+    const visual = createPassiveVisual(
+      { symbol: "?", palette, shape: "dodecahedron", faces: numbered(12) },
+      1,
+      painter,
+    );
+    const positions = visual.geometry.getAttribute("position");
+    const uvs = visual.geometry.getAttribute("uv");
+    const point = (i: number) => new THREE.Vector3().fromBufferAttribute(positions, i);
+    for (let face = 0; face < 12; face++) {
+      const first = face * 9;
+      // One pentagon: five distinct corners.
+      const corners = new Set(
+        Array.from({ length: 9 }, (_, k) =>
+          point(first + k)
+            .toArray()
+            .map((n) => n.toFixed(4))
+            .join(),
+        ),
+      );
+      expect(corners.size).toBe(5);
+      for (let triangle = 0; triangle < 3; triangle++) {
+        const [a, b, c] = [0, 1, 2].map((k) => first + triangle * 3 + k);
+        const outward = new THREE.Vector3()
+          .subVectors(point(b!), point(a!))
+          .cross(new THREE.Vector3().subVectors(point(c!), point(a!)));
+        expect(outward.dot(point(a!))).toBeGreaterThan(0);
+        // Anticlockwise in UV space too, so the artwork reads the right way round.
+        const uv = (i: number) => [uvs.getX(i), uvs.getY(i)] as const;
+        const [ua, ub, uc] = [uv(a!), uv(b!), uv(c!)];
+        const area = (ub[0] - ua[0]) * (uc[1] - ua[1]) - (ub[1] - ua[1]) * (uc[0] - ua[0]);
+        expect(area).toBeGreaterThan(0);
+      }
+    }
   });
 });
