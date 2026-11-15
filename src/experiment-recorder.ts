@@ -182,6 +182,14 @@ function startingProvenance(
   return plain(given);
 }
 
+/** What an action's committed facts add up to, read through the registered fact recordings. */
+export function readFacts(facts: readonly EventEnvelope[]) {
+  const entry = { awarded: 0, scored: false, outcome: null as "won" | "lost" | null };
+  for (const fact of facts)
+    if (factRecordings.has(fact.type)) factRecordings.get(fact.type)(fact, entry);
+  return entry;
+}
+
 export function createExperimentRecorder(
   source: RecorderSource,
   options: {
@@ -212,9 +220,7 @@ export function createExperimentRecorder(
   let stop: (() => void) | null = source.onCommitted((facts, metadata) => {
     // A committed command with no facts (a refill, a reorder) is still a step (#1247).
     const state = source.committedState();
-    const entry = { awarded: 0, scored: false, outcome: null as "won" | "lost" | null };
-    for (const fact of facts)
-      if (factRecordings.has(fact.type)) factRecordings.get(fact.type)(fact, entry);
+    const entry = readFacts(facts);
     // Rows count only for an action that scored; otherwise the last scoring is an older play's.
     const scoring = entry.scored ? source.lastScoring() : { field: [], lines: [] };
     const actionId = metadata?.actionId ?? facts[0]?.actionId ?? "unknown";

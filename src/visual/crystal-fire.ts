@@ -64,6 +64,8 @@ const fragmentShader = /* glsl */ `
 /** The fire inside one crystal block; add it as a child of the block's mesh. */
 export function createCrystalFire(geometry: THREE.BufferGeometry): THREE.Mesh {
   const material = new THREE.ShaderMaterial({
+    // Masked by its own shader in a paired transition (#1208).
+    userData: { maskAdapter: "shaderSurface" },
     vertexShader,
     fragmentShader,
     uniforms: {

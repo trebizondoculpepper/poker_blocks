@@ -174,6 +174,8 @@ export const risingBubbles: InclusionHandler = {
     // Each bubble's own size, as a share of the material's (the largest).
     geometry.setAttribute("bubbleScale", new THREE.BufferAttribute(scales, 1));
     const material = new THREE.PointsMaterial({
+      // Masked by its own shader in a paired transition (#1208).
+      userData: { maskAdapter: "shaderSurface" },
       size: largest * width,
       sizeAttenuation: true,
       map: bubbleTexture(),

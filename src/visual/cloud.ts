@@ -107,6 +107,8 @@ containedContents.register("cloud", (boundary, raw) => {
     opacity: { value: 1 },
   };
   const material = new THREE.ShaderMaterial({
+    // Masked by its own shader in a paired transition (#1208).
+    userData: { maskAdapter: "shaderSurface" },
     uniforms,
     vertexShader,
     fragmentShader,
