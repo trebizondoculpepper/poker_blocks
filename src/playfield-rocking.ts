@@ -14,7 +14,8 @@
  * Pure: time is passed in (presentation-clock milliseconds), so it is tested without a clock.
  * It never changes gameplay; phase stays with the camera, which integrates the rate.
  */
-import { unitsToMs, visualHandlers } from "./visual-events/scheduler";
+import { visualHandlers } from "./visual-events/scheduler";
+import { createTweenService, type TweenHandle } from "./visual-events/tweens";
 
 export type PlayfieldRockingConfig = {
   /** The mass rocking at rate 1, kg. */
@@ -48,21 +49,37 @@ export function massRate(totalKg: number | null, config: PlayfieldRockingConfig)
   return Math.min(config.cap, config.referenceKg / Math.max(totalKg, 0.001));
 }
 
-const smooth = (t: number) => {
-  const x = Math.min(1, Math.max(0, t));
-  return x * x * (3 - 2 * x);
-};
-
-/** A value easing from `from` to `to` starting at `at`, over `ms`. */
-type Tween = { from: number; to: number; at: number; ms: number };
-const valueAt = (tween: Tween, now: number) =>
-  tween.from + (tween.to - tween.from) * smooth(tween.ms > 0 ? (now - tween.at) / tween.ms : 1);
-const retarget = (tween: Tween, to: number, now: number, ms: number): Tween => ({
-  from: valueAt(tween, now),
-  to,
-  at: now,
-  ms,
-});
+/**
+ * One finite envelope on the shared interpolation service (doc/playfield-rocking.md): a value
+ * that eases to each new target from wherever it is, interrupting the previous ease.
+ */
+function easedValue(tweens: ReturnType<typeof createTweenService>, initial: number) {
+  let value = initial;
+  let running: TweenHandle | null = null;
+  return {
+    get value() {
+      return value;
+    },
+    to(target: number, units: number, nowMs: number) {
+      running?.cancel();
+      running = tweens.start(
+        {
+          from: { value },
+          to: { value: target },
+          durationUnits: units,
+          easing: "quadInOut",
+          apply: (values) => void (value = values.value!),
+        },
+        nowMs,
+      );
+    },
+    set(target: number) {
+      running?.cancel();
+      running = null;
+      value = target;
+    },
+  };
+}
 
 export type RockingEnvelope = {
   /** The field's total mass changed (null: empty). */
@@ -77,44 +94,44 @@ export type RockingEnvelope = {
   setSuspended(suspended: boolean): void;
   /** The rate now. */
   rate(nowMs: number, reducedMotion: boolean): number;
+  /** Cancel its eases. */
+  dispose(): void;
 };
 
 export function createRockingEnvelope(
   config: PlayfieldRockingConfig,
   initialKg: number | null,
-  nowMs: number,
+  _nowMs: number,
 ): RockingEnvelope {
-  let mass: Tween = { from: 0, to: massRate(initialKg, config), at: nowMs, ms: 0 };
-  let hand: Tween = { from: 1, to: 1, at: nowMs, ms: 0 };
-  /** Board envelope: held at zero, or easing in from when it resumed. */
-  let board: { held: true } | { held: false; from: number } = { held: false, from: -Infinity };
+  const tweens = createTweenService();
+  const mass = easedValue(tweens, massRate(initialKg, config));
+  const hand = easedValue(tweens, 1);
+  /** The board envelope: 0 while held, easing to 1 after a resume. */
+  const board = easedValue(tweens, 1);
   let suspended = false;
   return {
     setMass(totalKg, now) {
-      mass = retarget(mass, massRate(totalKg, config), now, unitsToMs(config.retargetUnits));
+      mass.to(massRate(totalKg, config), config.retargetUnits, now);
     },
     holdForBoard() {
-      board = { held: true };
+      board.set(0);
     },
     resume(now) {
-      board = { held: false, from: now };
+      board.set(0);
+      board.to(1, config.rampUnits, now);
     },
     setHandDrag(dragging, now) {
-      hand = retarget(
-        hand,
-        dragging ? config.handDragFactor : 1,
-        now,
-        unitsToMs(config.handDragUnits),
-      );
+      hand.to(dragging ? config.handDragFactor : 1, config.handDragUnits, now);
     },
     setSuspended(value) {
       suspended = value;
     },
     rate(now, reducedMotion) {
-      if (suspended || reducedMotion || board.held) return 0;
-      const ramp = smooth((now - board.from) / unitsToMs(config.rampUnits));
-      return valueAt(mass, now) * valueAt(hand, now) * ramp;
+      tweens.update(now);
+      if (suspended || reducedMotion) return 0;
+      return mass.value * hand.value * board.value;
     },
+    dispose: () => tweens.dispose(),
   };
 }
 
@@ -186,6 +203,7 @@ export function createPlayfieldRockingController(
   };
   return {
     enter() {
+      envelope.dispose();
       envelope = createRockingEnvelope(config, services.fieldMassKg(), services.nowMs());
       stops = [
         services.relay.attach({
@@ -226,6 +244,7 @@ export function createPlayfieldRockingController(
       cancelPending();
       stops.forEach((stop) => stop());
       stops = [];
+      envelope.dispose();
       // Scenes that don't compose the controller rock at the camera's plain rate.
       services.setRate(1);
     },

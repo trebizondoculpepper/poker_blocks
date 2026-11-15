@@ -31,7 +31,7 @@ describe("rocking envelope", () => {
     const envelope = createRockingEnvelope(config, 5, 0);
     expect(envelope.rate(0, false)).toBe(1);
     envelope.holdForBoard();
-    expect(envelope.rate(10_000, false)).toBe(0);
+    expect(envelope.rate(500, false)).toBe(0);
     envelope.resume(1000);
     expect(envelope.rate(1000, false)).toBe(0);
     const mid = envelope.rate(1000 + second / 2, false);

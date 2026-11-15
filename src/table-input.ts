@@ -792,6 +792,8 @@ export function createTableInput(options: {
             hold.cancel();
             cancelDrag("a second finger touched (a pinch)");
             options.audio.zoomed();
+            // A pinch twists the board too: it holds the automatic rocking (#783).
+            for (const listener of turnListeners) listener.began();
           }
           cameraView.zoomWithPinch(start.zoom, start.distance, distance);
           cameraView.rotateBy((angle - start.angle) * twistPixelsPerDegree, 0);
@@ -799,6 +801,7 @@ export function createTableInput(options: {
           if (last) {
             trace("pinch", `ended at zoom ${cameraView.zoom.toFixed(2)}`);
             pinching = false;
+            for (const listener of turnListeners) listener.ended();
           }
           return { ...start, angle };
         },
