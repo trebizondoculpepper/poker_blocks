@@ -36,103 +36,80 @@ function harness() {
 const labels = (log: { label: string }[]) => log.map(({ label }) => label);
 const starts = (log: { label: string; started: number }[]) =>
   log.map(({ started }) => Math.round(started / unitMs));
+const marks = (names: string[]): StaggerStep[] =>
+  names.map((label) => ({ handler: "mark", payload: { label } }));
 
 describe("a stagger starts its events in order, one spacing apart (#542)", () => {
   it("runs the first immediately and each later one two units after its predecessor", () => {
     const { scheduler, log } = harness();
-    const scope = scheduler.createScope(null);
-    const admitted = staggerEvents(scheduler, scope, 0, [
-      { handler: "mark", payload: { label: "a" } },
-      { handler: "mark", payload: { label: "b" } },
-      { handler: "mark", payload: { label: "c" } },
-    ]);
+    const admitted = staggerEvents(scheduler, null, 0, marks(["a", "b", "c"]));
     expect(admitted.accepted).toBe(true);
-    scheduler.seal(scope);
     // Drive the clock well past the last due time, in uneven steps, as a real frame loop does.
     for (const now of [0, 40, 150, 400, 800]) scheduler.update(now, true);
     expect(labels(log)).toEqual(["a", "b", "c"]);
     expect(starts(log)).toEqual([0, 2, 4]);
-    expect(scheduler.status(scope).state).toBe("finished");
+    if (admitted.accepted) expect(scheduler.status(admitted.scope).state).toBe("finished");
   });
 
   it("takes its spacing from configuration, and the default is the documented two units", () => {
     expect(staggerSpacingUnits).toBe(2);
     const { scheduler, log } = harness();
-    const scope = scheduler.createScope(null);
-    staggerEvents(
-      scheduler,
-      scope,
-      0,
-      [
-        { handler: "mark", payload: { label: "a" } },
-        { handler: "mark", payload: { label: "b" } },
-        { handler: "mark", payload: { label: "c" } },
-      ],
-      { spacingUnits: 5 },
-    );
-    scheduler.seal(scope);
+    staggerEvents(scheduler, null, 0, marks(["a", "b", "c"]), { spacingUnits: 5 });
     for (const now of [0, 200, 500, 900]) scheduler.update(now, true);
     expect(starts(log)).toEqual([0, 5, 10]);
   });
 
+  it("accepts a first-event offset, defaulting to starting immediately", () => {
+    const { scheduler, log } = harness();
+    staggerEvents(scheduler, null, 0, marks(["a", "b"]), { firstUnits: 3 });
+    for (const now of [0, 200, 400, 800]) scheduler.update(now, true);
+    expect(starts(log)).toEqual([3, 5]);
+  });
+
   it("measures from the caller's captured origin, not from the current clock", () => {
     const { scheduler, log } = harness();
-    const scope = scheduler.createScope(null);
     // An action that began at unit 3, bound later: its first event still belongs at unit 3.
-    staggerEvents(scheduler, scope, 3, [
-      { handler: "mark", payload: { label: "a" } },
-      { handler: "mark", payload: { label: "b" } },
-    ]);
-    scheduler.seal(scope);
+    staggerEvents(scheduler, null, 3, marks(["a", "b"]));
     for (const now of [0, 100, 300, 600]) scheduler.update(now, true);
     expect(starts(log)).toEqual([3, 5]);
   });
 
   it("keeps every scheduled start when frames arrive late, rather than compressing", () => {
     const { scheduler, log } = harness();
-    const scope = scheduler.createScope(null);
-    staggerEvents(scheduler, scope, 0, [
-      { handler: "mark", payload: { label: "a" } },
-      { handler: "mark", payload: { label: "b" } },
-      { handler: "mark", payload: { label: "c" } },
-      { handler: "mark", payload: { label: "d" } },
-    ]);
-    scheduler.seal(scope);
+    staggerEvents(scheduler, null, 0, marks(["a", "b", "c", "d"]));
     // The first frame only establishes the clock's baseline; then one very late frame, after which
     // every event is overdue and each still reports the time it was due.
     scheduler.update(0, true);
     scheduler.update(1000, true);
     expect(starts(log)).toEqual([0, 2, 4, 6]);
-    // A single start sound per event, never one per missed frame.
+    // Exactly one start per event, never one per missed frame.
     expect(labels(log)).toEqual(["a", "b", "c", "d"]);
   });
 
   it("lets the sequence overlap: an effect outliving its successor's start still runs", () => {
     const { scheduler, log } = harness();
-    const scope = scheduler.createScope(null);
-    staggerEvents(scheduler, scope, 0, [
+    const admitted = staggerEvents(scheduler, null, 0, [
       { handler: "effect", payload: { label: "long", ms: 500 } },
       { handler: "effect", payload: { label: "short", ms: 50 } },
     ]);
-    scheduler.seal(scope);
     scheduler.update(0, true);
     scheduler.update(200, true);
     // The first is still running when the second starts; the scope waits for the first.
     expect(labels(log)).toEqual(["long", "short"]);
-    expect(scheduler.status(scope).state).toBe("pending");
+    if (admitted.accepted) expect(scheduler.status(admitted.scope).state).toBe("pending");
     scheduler.update(600, true);
-    expect(scheduler.status(scope).state).toBe("finished");
+    if (admitted.accepted) expect(scheduler.status(admitted.scope).state).toBe("finished");
   });
 
-  it("settles its owning scope only after the last child has", () => {
+  it("settles its own scope only after the last child has", () => {
     const { scheduler } = harness();
-    const scope = scheduler.createScope(null);
-    staggerEvents(scheduler, scope, 0, [
+    const admitted = staggerEvents(scheduler, null, 0, [
       { handler: "effect", payload: { label: "a", ms: 10 } },
       { handler: "effect", payload: { label: "b", ms: 10 } },
       { handler: "effect", payload: { label: "c", ms: 100 } },
     ]);
-    scheduler.seal(scope);
+    if (!admitted.accepted) throw new Error("expected admission");
+    const { scope } = admitted;
     scheduler.update(0, true);
     scheduler.update(200, true);
     expect(scheduler.status(scope).state).toBe("pending");
@@ -145,119 +122,154 @@ describe("a stagger starts its events in order, one spacing apart (#542)", () =>
   });
 });
 
-describe("a stagger is admitted whole or not at all (#542)", () => {
-  it("admits nothing when the sequence cannot fit the scope's pending cap", () => {
+describe("a stagger owns a scope of its own (#542)", () => {
+  it("returns a scope that settles without waiting for unrelated work in the parent", () => {
     const { scheduler, log } = harness();
-    // Room for two events, asked for three.
-    const scope = scheduler.createScope(null, { maxPending: 2 });
-    const admitted = staggerEvents(scheduler, scope, 0, [
-      { handler: "mark", payload: { label: "a" } },
-      { handler: "mark", payload: { label: "b" } },
-      { handler: "mark", payload: { label: "c" } },
-    ]);
-    expect(admitted).toMatchObject({ accepted: false });
-    scheduler.seal(scope);
-    for (const now of [0, 200, 400]) scheduler.update(now, true);
-    // Not a half-admitted sequence: nothing ran, and the scope settled clean.
-    expect(log).toEqual([]);
-    expect(scheduler.status(scope).state).toBe("finished");
-  });
-
-  it("rejects an unknown scope instead of admitting work nowhere", () => {
-    const { scheduler, log } = harness();
-    const other = createVisualScheduler();
-    const foreign = other.createScope(null);
-    expect(
-      staggerEvents(scheduler, foreign, 0, [{ handler: "mark", payload: { label: "a" } }]),
-    ).toMatchObject({ accepted: false });
-    scheduler.update(0, true);
-    expect(log).toEqual([]);
-  });
-
-  it("rejects a non-finite or negative spacing, and a non-finite origin", () => {
-    const { scheduler, log } = harness();
-    const scope = scheduler.createScope(null);
-    const steps: StaggerStep[] = [{ handler: "mark", payload: { label: "a" } }];
-    expect(staggerEvents(scheduler, scope, 0, steps, { spacingUnits: -1 })).toMatchObject({
-      accepted: false,
+    const action = scheduler.createScope(null);
+    // Unrelated work composed into the same action scope, outliving the stagger.
+    scheduler.schedule(action, {
+      handler: "effect",
+      payload: { label: "unrelated", ms: 5000 },
+      dueUnits: 0,
     });
-    expect(
-      staggerEvents(scheduler, scope, 0, steps, { spacingUnits: Number.POSITIVE_INFINITY }),
-    ).toMatchObject({ accepted: false });
-    expect(staggerEvents(scheduler, scope, Number.NaN, steps)).toMatchObject({ accepted: false });
-    scheduler.update(0, true);
-    expect(log).toEqual([]);
+    const admitted = staggerEvents(scheduler, action, 0, marks(["s0", "s1"]));
+    if (!admitted.accepted) throw new Error("expected admission");
+    scheduler.seal(action);
+    for (const now of [0, 200, 400]) scheduler.update(now, true);
+    // The stagger's own scope finished, though the action scope holding it is still busy.
+    expect(scheduler.status(admitted.scope).state).toBe("finished");
+    expect(scheduler.status(action).state).toBe("pending");
+    expect(labels(log)).toContain("unrelated");
   });
 
-  it("admits an empty sequence as nothing to do", () => {
-    const { scheduler } = harness();
-    const scope = scheduler.createScope(null);
-    expect(staggerEvents(scheduler, scope, 0, [])).toMatchObject({ accepted: true, handles: [] });
-    scheduler.seal(scope);
+  it("cancelling it stops only its own steps, leaving the parent's other work alone", () => {
+    const { scheduler, log } = harness();
+    const action = scheduler.createScope(null);
+    const other = scheduler.schedule(action, {
+      handler: "effect",
+      payload: { label: "unrelated", ms: 400 },
+      dueUnits: 0,
+    });
+    const admitted = staggerEvents(scheduler, action, 0, marks(["s0", "s1", "s2"]));
+    if (!admitted.accepted) throw new Error("expected admission");
+    scheduler.seal(action);
     scheduler.update(0, true);
-    expect(scheduler.status(scope).state).toBe("finished");
+    expect(labels(log)).toContain("s0");
+    scheduler.cancel(admitted.scope);
+    for (const now of [100, 200, 400, 800]) scheduler.update(now, true);
+    // The stagger's later steps never start; the unrelated effect still settles the action.
+    expect(labels(log)).toEqual(["unrelated", "s0"]);
+    expect(scheduler.status(admitted.scope).state).toBe("cancelled");
+    expect(scheduler.status(action).state).toBe("finished");
+    void other;
+  });
+
+  it("cancels with its parent when the whole action is cancelled", () => {
+    const { scheduler, log } = harness();
+    const action = scheduler.createScope(null);
+    const admitted = staggerEvents(scheduler, action, 0, marks(["s0", "s1", "s2"]));
+    if (!admitted.accepted) throw new Error("expected admission");
+    scheduler.seal(action);
+    scheduler.update(0, true);
+    scheduler.cancel(action);
+    for (const now of [100, 300, 600]) scheduler.update(now, true);
+    expect(labels(log)).toEqual(["s0"]);
+    expect(scheduler.status(admitted.scope).state).toBe("cancelled");
+  });
+
+  it("keeps a stagger visible through its own scope while the parent stays open", () => {
+    const { scheduler } = harness();
+    const action = scheduler.createScope(null);
+    const admitted = staggerEvents(scheduler, action, 0, marks(["a"]));
+    if (!admitted.accepted) throw new Error("expected admission");
+    const seen: string[] = [];
+    scheduler.observe(admitted.scope, (status) => seen.push(status.state));
+    // The parent is deliberately left unsealed: observing the stagger must still settle.
+    scheduler.update(0, true);
+    expect(seen).toEqual(["finished"]);
   });
 });
 
-describe("a stagger cancels and disposes with the scope that owns it (#542)", () => {
-  it("stops the remaining events when its scope is cancelled partway through", () => {
+describe("a stagger is admitted whole or not at all (#542)", () => {
+  it("admits nothing when the sequence cannot fit its scope's pending cap", () => {
     const { scheduler, log } = harness();
-    const scope = scheduler.createScope(null);
-    staggerEvents(scheduler, scope, 0, [
-      { handler: "mark", payload: { label: "a" } },
-      { handler: "mark", payload: { label: "b" } },
-      { handler: "mark", payload: { label: "c" } },
-    ]);
-    scheduler.seal(scope);
-    scheduler.update(0, true);
-    expect(labels(log)).toEqual(["a"]);
-    scheduler.cancel(scope);
-    for (const now of [100, 200, 400, 800]) scheduler.update(now, true);
-    // The two later events never start, and the scope reports cancelled exactly once.
-    expect(labels(log)).toEqual(["a"]);
-    expect(scheduler.status(scope).state).toBe("cancelled");
+    // Room for two events, asked for three.
+    const admitted = staggerEvents(scheduler, null, 0, marks(["a", "b", "c"]), {
+      scope: { maxPending: 2 },
+    });
+    expect(admitted).toMatchObject({ accepted: false });
+    for (const now of [0, 200, 400]) scheduler.update(now, true);
+    // Not a half-admitted sequence: nothing ran.
+    expect(log).toEqual([]);
+    // Nor is an unused pending scope left behind: it was cancelled outright.
+    expect(scheduler.counts.scopes).toBe(0);
+    expect(scheduler.counts.pending).toBe(0);
+    expect(scheduler.counts.entries).toBe(0);
   });
 
-  it("can hold repeated sequences side by side without one cancelling the other", () => {
+  it("rejects an unknown parent instead of admitting work nowhere", () => {
     const { scheduler, log } = harness();
-    const first = scheduler.createScope(null);
-    const second = scheduler.createScope(null);
-    for (const [scope, name] of [
-      [first, "x"],
-      [second, "y"],
-    ] as const) {
-      staggerEvents(scheduler, scope, 0, [
-        { handler: "mark", payload: { label: `${name}0` } },
-        { handler: "mark", payload: { label: `${name}1` } },
-      ]);
-      scheduler.seal(scope);
-    }
+    const foreign = createVisualScheduler().createScope(null);
+    expect(staggerEvents(scheduler, foreign, 0, marks(["a"]))).toMatchObject({ accepted: false });
+    scheduler.update(0, true);
+    expect(log).toEqual([]);
+  });
+
+  it("rejects a non-finite or negative spacing, first offset, or origin", () => {
+    const { scheduler, log } = harness();
+    const steps = marks(["a"]);
+    expect(staggerEvents(scheduler, null, 0, steps, { spacingUnits: -1 })).toMatchObject({
+      accepted: false,
+    });
+    expect(
+      staggerEvents(scheduler, null, 0, steps, { spacingUnits: Number.POSITIVE_INFINITY }),
+    ).toMatchObject({ accepted: false });
+    expect(staggerEvents(scheduler, null, 0, steps, { firstUnits: -1 })).toMatchObject({
+      accepted: false,
+    });
+    expect(staggerEvents(scheduler, null, Number.NaN, steps)).toMatchObject({ accepted: false });
+    scheduler.update(0, true);
+    expect(log).toEqual([]);
+  });
+
+  it("admits an empty sequence as a scope that is already finished", () => {
+    const { scheduler } = harness();
+    const admitted = staggerEvents(scheduler, null, 0, []);
+    if (!admitted.accepted) throw new Error("expected admission");
+    scheduler.update(0, true);
+    expect(scheduler.status(admitted.scope).state).toBe("finished");
+  });
+});
+
+describe("repeated sequences stay independent (#542)", () => {
+  it("runs two staggers side by side without one cancelling the other", () => {
+    const { scheduler, log } = harness();
+    const first = staggerEvents(scheduler, null, 0, marks(["x0", "x1"]));
+    const second = staggerEvents(scheduler, null, 0, marks(["y0", "y1"]));
+    if (!first.accepted || !second.accepted) throw new Error("expected admission");
     for (const now of [0, 100, 200, 400]) scheduler.update(now, true);
     expect(labels(log)).toEqual(["x0", "y0", "x1", "y1"]);
-    expect(scheduler.status(first).state).toBe("finished");
-    expect(scheduler.status(second).state).toBe("finished");
+    expect(scheduler.status(first.scope).state).toBe("finished");
+    expect(scheduler.status(second.scope).state).toBe("finished");
   });
 
-  it("frees a cancelled scope's work when the scheduler's generation is disposed", () => {
+  it("frees a stagger's work when the scheduler's generation is disposed", () => {
     const { scheduler, log } = harness();
-    const scope = scheduler.createScope(null);
-    staggerEvents(scheduler, scope, 0, [
-      { handler: "mark", payload: { label: "a" } },
-      { handler: "mark", payload: { label: "b" } },
-    ]);
-    scheduler.seal(scope);
+    const admitted = staggerEvents(scheduler, null, 0, marks(["a", "b"]));
+    if (!admitted.accepted) throw new Error("expected admission");
     scheduler.disposeGeneration();
     for (const now of [0, 100, 200]) scheduler.update(now, true);
     expect(log).toEqual([]);
-    expect(scheduler.status(scope).state).toBe("cancelled");
+    expect(scheduler.status(admitted.scope).state).toBe("cancelled");
   });
 });
 
 describe("the stagger's start arithmetic is exposed for callers that need it (#542)", () => {
-  it("places step i at the origin plus i spacings, defaulting to the documented spacing", () => {
+  it("places step i at the origin plus the first offset plus i spacings", () => {
     expect(staggeredStartUnits(0, 0)).toBe(0);
     expect(staggeredStartUnits(0, 3)).toBe(6);
     expect(staggeredStartUnits(3, 2)).toBe(7);
-    expect(staggeredStartUnits(0, 2, 5)).toBe(10);
+    expect(staggeredStartUnits(0, 2, 0, 5)).toBe(10);
+    expect(staggeredStartUnits(1, 2, 3)).toBe(8);
   });
 });
