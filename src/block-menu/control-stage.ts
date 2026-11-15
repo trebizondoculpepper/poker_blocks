@@ -237,6 +237,12 @@ export async function createControlStage(
   const tick = (now: number) => {
     const dt = last === null ? 0 : Math.min(0.1, (now - last) / 1000);
     last = now;
+    // A host laid out after the stage was made (shown later, reflowed) is measured again.
+    if (
+      Math.max(1, host.element.clientWidth) !== size.width ||
+      Math.max(1, host.element.clientHeight) !== size.height
+    )
+      resize();
     for (const { cube } of mounted) cube.block.update(dt);
     place();
     renderer.render(scene, camera);

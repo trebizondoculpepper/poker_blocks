@@ -1752,3 +1752,16 @@ body,
   white-space: normal;
   line-height: normal;
 }
+
+/* A bin drawn by a registered presenter (#1078): its cube replaces the icon and label. */
+.discard-area.is-presented .discard-icon,
+.discard-area.is-presented .sell-icon,
+.discard-area.is-presented > .discard-label {
+  display: none;
+}
+.bin-control-cube {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}

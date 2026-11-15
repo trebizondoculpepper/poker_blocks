@@ -73,6 +73,7 @@ import { createRenderGate } from "./render-gate";
 import type { CrystalComparisonRoom } from "./tools/crystal-comparison/room";
 import type { FlameBenchRoom } from "./tools/flame-bench/room";
 import { createBinView, type BinView } from "./bin-view";
+import "./bin-control-presenter";
 import { createSelectionBadge, type SelectionBadge } from "./selection-badge";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";

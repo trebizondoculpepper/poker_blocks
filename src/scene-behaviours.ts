@@ -375,8 +375,10 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     exit: ({ services }) => services.bin.discardBinEntered(false),
   });
   behaviours.register("sellBin", {
-    enter: ({ services }) => services.bin.sellBinEntered(true),
-    exit: ({ services }) => services.bin.sellBinEntered(false),
+    enter: ({ services }, config) =>
+      services.bin.sellBinEntered(true, (config as { presenter?: string }).presenter),
+    exit: ({ services }, config) =>
+      services.bin.sellBinEntered(false, (config as { presenter?: string }).presenter),
   });
   behaviours.register("deckView", {
     // Read-only: the run's inventory (#472), every live card marked with where it is; its Back
