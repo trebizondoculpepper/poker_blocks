@@ -1729,3 +1729,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Composable drag-ghost audition (#1054)
 
 [Drag-ghost audition](drag-ghost-audition.md) separates registered appearance endpoints, render-layer transition masks and scheduler-owned gesture timing. A Dev-only room composes those same reusable capabilities with the actual hand/field/input stack; it is not a separate drag implementation. Required wireframe, face-free model and existing blue laser cube styles are independent of Perlin/simple fade and pickup delay/duration. Gesture settings are captured, cancellation owns cleanup and final production adoption waits for owner audition. Runtime targets are #1083/#1084/#1055.
+
+## Shared narration text layout (#1046)
+
+[Shared fitted narration](presentation-contracts.md#shared-fitted-narration-text-and-over-item-activation-labels-1046) defines one content-independent measured text-block provider and separate registered anchor/placement capabilities for score and passive narration. Passive labels stay centered over projected item bounds; immutable descriptors and existing scheduler/pulse timing remain authoritative. The source audit distinguishes the current above/below captions from the proposed shared fitting capability. Runtime adopters must share the component rather than fork it.
