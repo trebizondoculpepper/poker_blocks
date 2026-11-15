@@ -66,4 +66,28 @@ describe("one shared control group for the shop's controls (#1078)", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(hidden.filter(([id]) => id === "early").at(-1)).toEqual(["early", true]);
   });
+
+  it("marks a host as presenting a block while any of its blocks is placed (#1364)", async () => {
+    const { createControlGroup } = await import("./control-group");
+    const overlay = { classList: { add() {} }, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
+    const group = createControlGroup(overlay as never, () => false);
+    const classes = new Set<string>();
+    const host = {
+      classList: {
+        add: (name: string) => classes.add(name),
+        remove: (name: string) => classes.delete(name),
+      },
+    };
+    const slot = {
+      parentElement: host,
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 10, height: 10 }),
+    };
+    const first = group.place(slot as never, { id: "a", label: "A", description: "" });
+    const second = group.place(slot as never, { id: "b", label: "B", description: "" });
+    expect(classes.has("presents-block")).toBe(true);
+    first.remove();
+    expect(classes.has("presents-block")).toBe(true);
+    second.remove();
+    expect(classes.has("presents-block")).toBe(false);
+  });
 });

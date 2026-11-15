@@ -30,6 +30,8 @@ export type PlacedControl = {
 
 export function createControlGroup(overlay: HTMLElement, reducedMotion: () => boolean) {
   overlay.classList.add("control-group");
+  /** How many placed blocks each host element presents. */
+  const presenting = new WeakMap<HTMLElement, number>();
   let stage: ControlStage | null = null;
   const ready = createControlStage(
     {
@@ -53,6 +55,12 @@ export function createControlGroup(overlay: HTMLElement, reducedMotion: () => bo
     /** Place a control over `slot`; it shows at once unless hidden. */
     place(slot: HTMLElement, control: GroupControl): PlacedControl {
       let removed = false;
+      // The element the slot sits in presents a block now: it shows no HTML chrome of its own
+      // (#1364; doc/shop-control-blocks.md, "Standalone menu blocks"). Counted, so a host keeps
+      // the mark while any of its blocks is placed.
+      const owner = slot.parentElement;
+      if (owner) presenting.set(owner, (presenting.get(owner) ?? 0) + 1);
+      owner?.classList.add("presents-block");
       const layout = () => {
         const box = slot.getBoundingClientRect();
         const origin = overlay.getBoundingClientRect();
@@ -86,6 +94,9 @@ export function createControlGroup(overlay: HTMLElement, reducedMotion: () => bo
           if (removed) return;
           removed = true;
           shown.delete(control.id);
+          const left = owner ? (presenting.get(owner) ?? 1) - 1 : 0;
+          if (owner) presenting.set(owner, left);
+          if (owner && left <= 0) owner.classList.remove("presents-block");
           stage?.remove(control.id);
           run();
         },
