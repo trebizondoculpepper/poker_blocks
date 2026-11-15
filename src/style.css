@@ -1765,3 +1765,14 @@ body,
   height: 100%;
   pointer-events: none;
 }
+
+/* The shared control group's overlay (#1078): over the scene, never taking pointer input. */
+.control-group {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.control-group .control-stage-hit {
+  pointer-events: none;
+}

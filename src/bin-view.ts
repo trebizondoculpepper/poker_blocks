@@ -10,6 +10,8 @@ export type BinView = {
   readonly element: HTMLElement;
   /** A scene composing `discardBin` came to the front, or left (#183). */
   discardBinEntered(entered: boolean): void;
+  /** The sell scene was covered, or resumed: its presenter rests meanwhile (#1078). */
+  sellBinCovered(covered: boolean): void;
   /**
    * A scene composing `sellBin` came to the front, or left: the bin reads Sell, drawn by the
    * registered presenter the scene names, if any (#1078).
@@ -22,7 +24,9 @@ export type BinView = {
 };
 
 /** A registered way of drawing the bin while a composing scene asks for it (#1078). */
-export type BinPresenter = { mount(element: HTMLElement): { dispose(): void } };
+export type BinPresenter = {
+  mount(element: HTMLElement): { setCovered(covered: boolean): void; dispose(): void };
+};
 export const binPresenters = new Registry<BinPresenter>("bin presenter");
 
 export function createBinView(element: HTMLElement): BinView {
@@ -31,7 +35,10 @@ export function createBinView(element: HTMLElement): BinView {
   let carried = false;
   /** Presenters the sell scenes on the stack named, counted; the first one draws the bin. */
   const named: string[] = [];
-  let mounted: { name: string; mount: { dispose(): void } } | null = null;
+  let mounted: {
+    name: string;
+    mount: { setCovered(covered: boolean): void; dispose(): void };
+  } | null = null;
   function present(): void {
     const wanted = named[0] ?? null;
     if (mounted?.name === wanted) return;
@@ -55,6 +62,9 @@ export function createBinView(element: HTMLElement): BinView {
     discardBinEntered(entered) {
       discardScenes = Math.max(0, discardScenes + (entered ? 1 : -1));
       show();
+    },
+    sellBinCovered(covered) {
+      mounted?.mount.setCovered(covered);
     },
     sellBinEntered(entered, presenter) {
       sellScenes = Math.max(0, sellScenes + (entered ? 1 : -1));

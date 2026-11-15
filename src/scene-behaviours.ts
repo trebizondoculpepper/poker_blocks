@@ -76,7 +76,7 @@ export type SceneHost = {
     presentationClock: Pick<PresentationClock, "hold">;
     hud: Pick<HudPanels, "show" | "hide">;
     /** The bin: shown while a scene composing `discardBin` or `sellBin` is on the stack (#278). */
-    bin: Pick<BinView, "discardBinEntered" | "sellBinEntered">;
+    bin: Pick<BinView, "discardBinEntered" | "sellBinEntered" | "sellBinCovered">;
     /** The selection badge shows only while the hand does (#305). */
     selectionBadge: Pick<SelectionBadge, "handEntered">;
     input: Pick<
@@ -379,6 +379,9 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       services.bin.sellBinEntered(true, (config as { presenter?: string }).presenter),
     exit: ({ services }, config) =>
       services.bin.sellBinEntered(false, (config as { presenter?: string }).presenter),
+    // Covered (a menu over the shop), its presenter rests; resumed, it shows again (#1078).
+    cover: ({ services }) => services.bin.sellBinCovered(true),
+    resume: ({ services }) => services.bin.sellBinCovered(false),
   });
   behaviours.register("deckView", {
     // Read-only: the run's inventory (#472), every live card marked with where it is; its Back

@@ -25,7 +25,8 @@ function binElement() {
 describe("bin presenters composed by the sell scene (#1078)", () => {
   it("draws the bin with the scene's presenter while it is on the stack, and only then", () => {
     const dispose = vi.fn();
-    const mount = vi.fn(() => ({ dispose }));
+    const setCovered = vi.fn();
+    const mount = vi.fn(() => ({ dispose, setCovered }));
     binPresenters.register("test.block", { mount });
     const element = binElement();
     const bin = createBinView(element as never);
@@ -35,6 +36,10 @@ describe("bin presenters composed by the sell scene (#1078)", () => {
     expect(mount).toHaveBeenCalledTimes(1);
     expect(element.classes.has("is-presented")).toBe(true);
     expect(bin.selling).toBe(true);
+    // Covered by a menu: the presenter rests, and shows again on resume.
+    bin.sellBinCovered(true);
+    bin.sellBinCovered(false);
+    expect(setCovered.mock.calls).toEqual([[true], [false]]);
     bin.sellBinEntered(false, "test.block");
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(element.classes.has("is-presented")).toBe(false);
