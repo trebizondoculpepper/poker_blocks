@@ -579,3 +579,5 @@ The normal passive acquisition catalogue includes implemented provisional gamepl
 ## Game information webpage and title caption
 
 [The game website contract](game-website.md) defines a lightweight explanatory webpage with a prominent launch link and bug/source footer, preserving the playable index entry. The in-game home screen keeps its title/actions/footer but removes the floating “Poker solitaire in three dimensions” subtitle.
+
+Light's ordinary shop acquisition begins in round four (after round three); its existing total-mass scoring curve is unchanged. See [Light acquisition timing](material-mass-and-passives.md#light-acquisition-timing-1458).
