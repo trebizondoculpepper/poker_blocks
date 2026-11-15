@@ -48,6 +48,7 @@ import {
   type PlotTexture,
 } from "./visual/plot-surface";
 import type * as THREE from "three";
+import { createCueSound, type CueSoundConfig } from "./cue-sound";
 
 /** How the stage scene composes its graph: where it hangs, and its presentation tuning. */
 export type StageScoreGraphConfig = {
@@ -64,6 +65,8 @@ export type StageScoreGraphConfig = {
    * configuration. Left out, it stays hung.
    */
   release?: AttachmentReleaseConfig;
+  /** The sound answering the released picture's impact cue (#1080). Left out, it lands silently. */
+  impactSound?: CueSoundConfig;
 };
 
 export const observedStyle = { colour: "#1f5f8b", width: 4 };
@@ -274,6 +277,9 @@ export function createStageScoreGraph(host: StageScoreGraphHost) {
       const fall = config.release
         ? (() => {
             const releaseProducer = host.compose(pictureReleaseProducer);
+            const sound = config.impactSound
+              ? createCueSound(host.scheduler, config.impactSound)
+              : null;
             const made = createPictureReleaseController({
               source: host.source,
               phase: host.phase,
@@ -281,11 +287,15 @@ export function createStageScoreGraph(host: StageScoreGraphHost) {
               target: { object: picture.object, attachments: picture.attachments },
               config: config.release,
               reducedMotion: host.reducedMotion ?? (() => false),
-              impact: host.impact,
+              impact: (cue) => {
+                sound?.hear();
+                host.impact?.(cue);
+              },
             });
             return {
               dispose() {
                 made.dispose();
+                sound?.dispose();
                 releaseProducer();
               },
             };

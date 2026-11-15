@@ -64,9 +64,9 @@
     }
   },
   "block.destroyed": {
-    "uses": 3,
+    "uses": 4,
     "files": {
-      "audio/sfx-registry.ts (placeholder)": 1,
+      "audio/sfx-registry.ts (placeholder)": 2,
       "game-run.ts": 1,
       "traits/destructible.ts": 1
     }
@@ -154,6 +154,12 @@
     }
   },
   "result.stage_won.enter": {
+    "uses": 1,
+    "files": {
+      "game-modes.ts": 1
+    }
+  },
+  "round.picture_smash": {
     "uses": 1,
     "files": {
       "game-modes.ts": 1
