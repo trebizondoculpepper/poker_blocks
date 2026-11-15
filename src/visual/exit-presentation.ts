@@ -202,6 +202,11 @@ type PendingExit = {
   visual: ExitVisual;
   sequence: ExitSequence;
   reducedMotion: () => boolean;
+  /**
+   * Its owner hears it start, with how to end it, and gets back how to forget it once it ends
+   * (#1315 review): a prepared exit runs in another scope, so its owner can still end it.
+   */
+  started?(cancel: () => void): () => void;
 };
 
 /** The exits waiting to start, as the scheduler's `blockExits` service (#549). */
@@ -223,16 +228,24 @@ visualHandlers.register("block.exit", (payload, context): "done" | EffectHandle 
   // effects already made, then fails its scope.
   const exit = new Exit(pending.snapshot, pending.visual, pending.sequence, pending.reducedMotion);
   if (exit.done) return "done";
+  const forget = pending.started?.(() => exit.cancel()) ?? (() => {});
   let last = context.scheduledAtMs;
   return {
     update(nowMs) {
       exit.update(Math.max(0, (nowMs - last) / 1000));
       last = nowMs;
+      if (exit.done) forget();
       return exit.done ? "finished" : "running";
     },
-    cancel: () => exit.cancel(),
+    cancel: () => {
+      exit.cancel();
+      forget();
+    },
     // Already ended once finished or cancelled; this only guards a handle released otherwise.
-    dispose: () => exit.cancel(),
+    dispose: () => {
+      exit.cancel();
+      forget();
+    },
   };
 });
 
@@ -250,6 +263,8 @@ export function createExitPresenter(
 ) {
   let nextId = 0;
   const waiting = new Map<number, PendingExit>();
+  /** Prepared exits that have started in someone else's scope, by how to end each (#1315 review). */
+  const running = new Map<number, () => void>();
   /** Each exit's scope, with the block it is presenting, until it settles. */
   const scopes = new Map<ScopeHandle, ExitSnapshot>();
   return {
@@ -294,7 +309,16 @@ export function createExitPresenter(
       sequence: ExitSequence,
     ): { work: EventDescription; abandon(): void } {
       const id = ++nextId;
-      waiting.set(id, { snapshot, visual, sequence, reducedMotion });
+      waiting.set(id, {
+        snapshot,
+        visual,
+        sequence,
+        reducedMotion,
+        started(cancel) {
+          running.set(id, cancel);
+          return () => void running.delete(id);
+        },
+      });
       return {
         work: { handler: "block.exit", payload: { id }, dueUnits: 0 },
         abandon() {
@@ -313,11 +337,14 @@ export function createExitPresenter(
     },
     /** How many exits are still waiting or playing. */
     get active(): number {
-      return scopes.size;
+      return scopes.size + running.size;
     },
     /** End every exit (the scene leaves). */
     dispose(): void {
       for (const scope of Array.from(scopes.keys())) events.cancel(scope);
+      // Prepared exits already playing in an action's scope end too, releasing their blocks.
+      for (const cancel of Array.from(running.values())) cancel();
+      running.clear();
       // Prepared exits whose work never started let their blocks go too.
       for (const [id, unstarted] of Array.from(waiting)) {
         waiting.delete(id);
