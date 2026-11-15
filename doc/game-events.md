@@ -101,3 +101,7 @@ Tests must cover ordered multi-placement/opening before material phases; countdo
 ## Presentation payload extensions (#761)
 
 The [material-transition fact](presentation-contracts.md#committed-transition-fact-and-independent-responses-479-539) defines committed `block.materialChanged` snapshots for independent visual/audio controller traits. The [resolved activation contract](presentation-contracts.md#resolved-activation-results-483) carries already evaluated operands/results through scoring, discard and other committed actions. Both inherit this document’s envelope, transaction rollback, scope, ordering and immutable-context rules; neither permits presentation to issue model commands or recompute outcomes. These are additions to implement, not assertions that legacy paths already emit the full payload.
+
+## Command metadata on committed actions (#1237)
+
+[The experiment journal contract](experiments/command-journal.md) extends the committed channel with an immutable second metadata argument for successfully committed canonical commands, including empty-fact mutations. This metadata is not a model lifecycle subscription or a new passive event. Registered command owners/codecs supply arguments; presentation never reconstructs them from facts or diffs.

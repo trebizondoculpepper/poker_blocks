@@ -1766,3 +1766,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ### Action-correlated presentation phases (#1216)
 
 Independent post-score traits use [reserved action contributions and phase completion](action-presentation-phases.md) on the shared scheduler. A captured generation/action key correlates producer-owned scopes; every required child is reserved before root sealing. Placement/scoring producer adapters publish per-action completion, and result cues wait for the full required root including graph growth. Services retain handles/status, not a second timed queue or gameplay policy.
+
+### Authoritative command journal (#1237)
+
+[Committed command metadata and verified replay](experiments/command-journal.md) are model-owned immutable projections. Registered codecs preserve primitive command/refill order, and recorder/replay services consume captured values on isolated candidates. No UI attempt log, live-state inference, second gameplay bus or silent cross-build compatibility.
