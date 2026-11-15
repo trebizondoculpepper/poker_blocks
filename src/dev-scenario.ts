@@ -15,13 +15,14 @@
  * Nothing here knows which room, passive or material a scenario is about: capabilities and
  * replay commands are registries keyed by name.
  */
+import { commandCodecs } from "./command-codecs";
 import type { CardBlock } from "./cards";
 import { configurePassive } from "./configurable-passive";
 import { Registry } from "./core/registry";
 import { buildDeck, type DeckBuilderStep } from "./deck-builder";
 import type { Dealer } from "./dealer";
 import { GameRun, type RunSnapshot } from "./game-run";
-import type { GameState, PlacedBlock, PlayAction } from "./game-state";
+import type { GameState, PlacedBlock } from "./game-state";
 import { Randomizer } from "./random";
 import { withoutSelectable } from "./traits/selectable";
 import { createPassiveBlock, passiveDefinitions, type PassiveBlock } from "./passives";
@@ -325,12 +326,20 @@ const refilled = (resolved: boolean, run: GameRun) => {
   if (resolved) run.refillHand();
   return resolved;
 };
-scenarioReplayCommands.register("play", (run, args) =>
-  refilled(run.play(args as PlayAction) !== null, run),
-);
-scenarioReplayCommands.register("discard", (run, args) =>
-  refilled(run.discard((args as { cardIds: readonly string[] }).cardIds) !== null, run),
-);
+// The shared primitive executors (#1243), composed explicitly with the setup replay's refill:
+// these versioned setup commands keep their after-action refill, the journal's primitives don't.
+const primitive = (command: string) => (run: GameRun, args: unknown) => {
+  const codec = commandCodecs.get(command);
+  let normalized: unknown;
+  try {
+    normalized = codec.normalize(args);
+  } catch {
+    return false;
+  }
+  return refilled(codec.execute(run, normalized), run);
+};
+scenarioReplayCommands.register("play", primitive("play"));
+scenarioReplayCommands.register("discard", primitive("discard"));
 
 /** What building a scenario needs from the game: its dealers and run rules. */
 export type ScenarioRuntime = {
