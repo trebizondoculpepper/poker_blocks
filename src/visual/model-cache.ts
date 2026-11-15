@@ -133,10 +133,10 @@ function sceneResources(scene: THREE.Object3D) {
   return { geometries, materials, textures };
 }
 
-function disposeTexture(texture: THREE.Texture) {
+function disposeTexture(texture: THREE.Texture, closeImage = true) {
   texture.dispose();
-  // A decoded ImageBitmap holds memory of its own until closed.
-  (texture.image as { close?: () => void } | undefined)?.close?.();
+  // A decoded ImageBitmap holds memory of its own until closed, unless a kept texture shares it.
+  if (closeImage) (texture.image as { close?: () => void } | undefined)?.close?.();
 }
 
 /**
@@ -154,7 +154,7 @@ export function prepareBlueprint(
   } catch (error) {
     held.geometries.forEach((geometry) => geometry.dispose());
     held.materials.forEach((material) => material.dispose());
-    held.textures.forEach(disposeTexture);
+    held.textures.forEach((texture) => disposeTexture(texture));
     throw error;
   }
   const kept = {
@@ -172,7 +172,10 @@ export function prepareBlueprint(
   for (const geometry of held.geometries) if (!kept.geometries.has(geometry)) geometry.dispose();
   // Owned resources by object identity, never a table keyed by a kind of material.
   for (const surface of held.materials) if (!kept.materials.has(surface)) surface.dispose();
-  for (const texture of held.textures) if (!keptTextures.has(texture)) disposeTexture(texture);
+  // A released texture's decoded image stays open while a kept texture still draws it (#1265).
+  const keptImages = new Set(Array.from(keptTextures, (texture) => texture.image as unknown));
+  for (const texture of held.textures)
+    if (!keptTextures.has(texture)) disposeTexture(texture, !keptImages.has(texture.image));
   return blueprint;
 }
 
@@ -229,8 +232,10 @@ export function createModelCache(source: ModelSource = gltfModelSource) {
             .then((parsed) => prepareBlueprint(parsed, asset))
             .then((blueprint) => {
               created.settled = blueprint;
+              // The cache shut down while it prepared: free the late result at once (#1265).
+              if (created.disposed) disposeBlueprint(blueprint);
               // Every consumer left while it prepared: dispose the late result, never expose it.
-              if (created.leases === 0) retire(key, created);
+              else if (created.leases === 0) retire(key, created);
               return blueprint;
             })
             .catch((error: unknown) => {

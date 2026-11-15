@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
   createModelCache,
+  prepareBlueprint,
   staticPartsBlueprint,
   type ModelAsset,
   type ModelSource,
@@ -219,6 +220,39 @@ describe("model cache follow-ups (#1259)", () => {
     b.release();
     expect(spy).toHaveBeenCalledTimes(1);
     expect(cache.size).toBe(0);
+  });
+});
+
+describe("model cache shutdown and shared images (#1265)", () => {
+  it("disposes a parse that arrives after the cache shut down", async () => {
+    const { src, fetches, parses } = source();
+    const cache = createModelCache(src);
+    const lease = cache.acquire(asset);
+    fetches[0]!.resolve();
+    await flush();
+    cache.dispose();
+    const parsed = scene();
+    const spy = vi.spyOn(parsed.texture, "dispose");
+    parses[0]!.resolve(parsed);
+    expect(await lease.ready).toBeNull();
+    await flush();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a decoded image open while a kept texture still uses it", async () => {
+    const { scene: root, housing } = scene();
+    const close = vi.fn();
+    const image = { close, width: 1, height: 1 };
+    (housing.material as THREE.MeshStandardMaterial).map!.image = image;
+    // A mesh outside the manifest whose texture shares the same decoded image.
+    const extra = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ map: new THREE.Texture(image as never) }),
+    );
+    extra.name = "unlisted";
+    root.add(extra);
+    prepareBlueprint({ scene: root }, asset);
+    expect(close).not.toHaveBeenCalled();
   });
 });
 
