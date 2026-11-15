@@ -1,4 +1,6 @@
-import type { ReactionState } from "./passives";
+import type { GameEvent, ReactionState } from "./passives";
+import type { SoundEffectId } from "./audio/sfx-registry";
+import { stateBonuses } from "./state-bonuses";
 import type { ScoringModifier } from "./scoring-modifier";
 /**
  * Permanent per-card material change (#387, split from #384): the model command a
@@ -22,7 +24,13 @@ import { roundEndResets } from "./round-end";
  * change clears them from the card and its saved ledger. Each owning module registers its own.
  */
 export const materialScopedStates = new Registry<true>("material-scoped card state");
-import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
+import {
+  getMaterialDefinition,
+  materialOf,
+  transitionSoundOf,
+  withMaterial,
+  type BlockMaterial,
+} from "./materials";
 
 /** What the run remembers about a card beyond its definition: its changed material. */
 export type CardState = {
@@ -149,5 +157,46 @@ export function transitionCapture(before: CardBlock, after: CardBlock) {
   return {
     transition: { from: transitionStateOf(before), to: transitionStateOf(after) },
     snapshots: { before, after },
+  };
+}
+
+/**
+ * The sound of becoming a resolved state (#539): a target state that declares its own transition
+ * sound (Hot or Boiling Water), else the target material's. One resolver for every cause.
+ */
+export function transitionSoundFor(state: ReactionState): SoundEffectId {
+  const own = [state.stateBonus ?? []]
+    .flat()
+    .filter((id) => stateBonuses.has(id))
+    .map((id) => stateBonuses.get(id).transitionSound)
+    .find((sound) => sound !== undefined);
+  return own ?? transitionSoundOf(state.material as BlockMaterial);
+}
+
+/**
+ * The authoritative material change as a committed operation (#539): the new state and the
+ * `block.materialChanged` fact it captured, or null (changing nothing) when refused or already
+ * that material. Every cause that changes a card's material outside a reaction uses this.
+ */
+export function changeMaterialCommitted(
+  state: GameState,
+  cardId: string,
+  material: BlockMaterial,
+): { state: GameState; events: GameEvent[] } | null {
+  const next = changeCardMaterial(state, cardId, material);
+  const before = findRunCard(state, cardId);
+  const after = next && findRunCard(next, cardId);
+  if (!next || !before || !after) return null;
+  const capture = transitionCapture(before, after);
+  return {
+    state: next,
+    events: [
+      {
+        type: "block.materialChanged",
+        blockId: cardId,
+        ...capture,
+        transitionSound: transitionSoundFor(capture.transition.to),
+      },
+    ],
   };
 }

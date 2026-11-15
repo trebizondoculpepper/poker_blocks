@@ -189,3 +189,11 @@ function emptyField() {
     round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
   } as never as { field: { block: unknown; cell: unknown }[] };
 }
+
+describe("target-state transition cue (#539)", async () => {
+  const { transitionSoundFor } = await import("./card-material");
+  it("resolves Boiling Water's own cue whatever the cause, else the material's", () => {
+    expect(transitionSoundFor({ material: "water", stateBonus: "boiled" })).toBe("reaction.boil");
+    expect(transitionSoundFor({ material: "steel" })).toBe(transitionSoundOf("steel"));
+  });
+});

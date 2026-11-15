@@ -23,9 +23,9 @@ import "./triggers";
 import "./trigger-responses";
 import type { AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
-import { applyRackItem } from "./rack-item-effects";
-import { materialOf, transitionSoundOf, type BlockMaterial } from "./materials";
-import { changeCardMaterial, findRunCard, transitionCapture } from "./card-material";
+import { useRackItem } from "./rack-item-effects";
+import type { BlockMaterial } from "./materials";
+import { changeCardMaterial } from "./card-material";
 import type { CardBlock } from "./cards";
 import { resaleValue } from "./resale";
 import { blockCanDestroy, blockDestroySound } from "./block-trait-behaviours";
@@ -1126,20 +1126,13 @@ export class GameRun {
   applyRackItem(itemId: string, cardId: string): GameState | null {
     // A committed action (#539): its facts publish once it has, so presentation hears them.
     return this.transact("useItem", undefined, () => {
-      const before = this.currentState;
-      const next = applyRackItem(before, itemId, cardId);
-      if (!next) return null;
-      this.currentState = next;
-      const from = findRunCard(before, cardId);
-      const to = findRunCard(next, cardId);
-      // Only a real change of material is a transition: its target's sound presents it, and the
-      // fact captures both resolved states and both card snapshots now.
-      if (from && to && materialOf(from) !== materialOf(to))
-        this.lifecycle("block.materialChanged", {
-          blockId: cardId,
-          ...transitionCapture(from, to),
-          transitionSound: transitionSoundOf(materialOf(to)),
-        });
+      // The material-change operation returns its own committed facts (#539): nothing is
+      // inferred from the state afterwards.
+      const used = useRackItem(this.currentState, itemId, cardId);
+      if (!used) return null;
+      this.currentState = used.state;
+      for (const { type, ...fact } of used.events) this.lifecycle(type, fact);
+      const next = used.state;
       return next;
     });
   }

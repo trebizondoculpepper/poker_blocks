@@ -6,20 +6,21 @@
  * changes and no use is spent).
  */
 import { Registry } from "./core/registry";
-import { changeCardMaterial } from "./card-material";
+import { changeMaterialCommitted } from "./card-material";
 import type { GameState } from "./game-state";
-import type { PassiveBlock } from "./passives";
+import type { GameEvent, PassiveBlock } from "./passives";
 
+/** An effect's outcome: the new state, or that and the facts it committed (#539); null refuses. */
 export type RackItemEffect = (
   state: GameState,
   item: PassiveBlock,
   cardId: string,
-) => GameState | null;
+) => GameState | { state: GameState; events: readonly GameEvent[] } | null;
 
 export const rackItemEffects = new Registry<RackItemEffect>("rack item effect");
 
 rackItemEffects.register("transmogrifier", (state, item, cardId) =>
-  changeCardMaterial(state, cardId, item.traits.transmogrifier!.material),
+  changeMaterialCommitted(state, cardId, item.traits.transmogrifier!.material),
 );
 
 /**
@@ -47,21 +48,41 @@ const handlersFor = <T>(item: PassiveBlock, registry: Registry<T>): T[] =>
  * cards, or every effect refuses.
  */
 export function applyRackItem(state: GameState, itemId: string, cardId: string): GameState | null {
+  return useRackItem(state, itemId, cardId)?.state ?? null;
+}
+
+/** Apply a rack item to a card, with the facts its effects committed (#539). */
+export function useRackItem(
+  state: GameState,
+  itemId: string,
+  cardId: string,
+): { state: GameState; events: GameEvent[] } | null {
   const item = state.passiveRack.find(({ id }) => id === itemId);
   if (!item) return null;
   const effects = handlersFor(item, rackItemEffects);
   if (!effects.length) return null;
   let next: GameState | null = state;
-  for (const effect of effects) next = next && effect(next, item, cardId);
+  const events: GameEvent[] = [];
+  for (const effect of effects) {
+    if (!next) break;
+    const outcome = effect(next, item, cardId);
+    if (outcome && "events" in outcome) {
+      next = outcome.state;
+      events.push(...outcome.events);
+    } else next = outcome;
+  }
   if (!next) return null;
   const used = handlersFor(item, rackItemUseHooks).reduce<PassiveBlock | null>(
     (current, hook) => current && hook(current),
     item,
   );
   return {
-    ...next,
-    passiveRack: next.passiveRack.flatMap((held) =>
-      held.id === itemId ? [used ?? []].flat() : [held],
-    ),
+    state: {
+      ...next,
+      passiveRack: next.passiveRack.flatMap((held) =>
+        held.id === itemId ? [used ?? []].flat() : [held],
+      ),
+    },
+    events,
   };
 }
