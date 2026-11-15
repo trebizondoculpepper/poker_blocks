@@ -59,8 +59,12 @@ export type SceneTraits = {
   discardBin: Record<never, never>;
   /** Plays the sound each committed fact names, for plays and discards (#755). */
   committedEventSounds: Record<never, never>;
-  /** The shared lower-left target presents Sell, and accepts installed passives only. */
-  sellBin: Record<never, never>;
+  /**
+   * The shared lower-left target presents Sell, and accepts installed passives only. `presenter`
+   * names a registered bin presenter that draws it while this scene is on the stack (#1078);
+   * none, the bin's own Sell label and icon.
+   */
+  sellBin: { presenter?: string };
   /** The pulsing outline inviting a stage's first play is shown while this scene is on the stack. */
   /**
    * Drop targets in this scene (#273): places dragged blocks can be dropped, each a registered
@@ -702,7 +706,8 @@ export const sceneDefinitions = [
       // The shop keeps the hand in view; its own drop targets handle purchases and sales.
       handView: {},
       selectable: { sources: [{ source: "hand" }, { source: "field" }] },
-      sellBin: {},
+      // The shop's Sell target is a steel control block with a dustbin motif (#1078).
+      sellBin: { presenter: "controlBlock" },
       coinsPanel: {},
       // A fixed paper word cube in the bottom-right exit place, not stock (#780;
       // doc/shop-continue-block.md).
