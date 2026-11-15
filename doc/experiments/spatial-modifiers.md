@@ -1,6 +1,6 @@
 # Spatial-modifier experiment
 
-Status: planned playtest, not implemented. Related: #806, broader research #616 and lifecycle research #615. No player-session measurements or balanced production rewards are claimed.
+Status: historical hypotheses and reusable experiment protocol. **Owner-directed Dense/Sparse/Light/Heavy defaults are superseded by [the bounded mass/passive contract](../material-mass-and-passives.md) (#1081); implement those four playable profiles without requiring another bench study.** The old formulas below are historical comparison configurations, not the new default scoring rules. Related: #806, broader research #616 and lifecycle research #615. No player-session measurements or balanced production rewards are claimed.
 
 ## Questions and agreed meaning
 
@@ -91,7 +91,7 @@ Provide an explicit family on every scored material admitted to the experiment. 
 
 Registered packing query owns bounds/count/capacity and d; registered physical-mass contributions own density × authored volume or composite effective mass; aggregate queries own total/mean for an explicit snapshot scope; registered material-family query owns grouping facts. Scoring modifier traits request these facts and contribute factors through the existing line-finalization registry. Generic scorers/run controllers do not name these modifiers, test release flags or scan material names.
 
-[Physical mass and rocking](../playfield-rocking.md), documentation issue #782, defines the shared nominal volume, real-density references and labelled mixture/fantasy assumptions. #816 implements the shared mass capability/aggregates; #783 consumes it for rocking, while #824 consumes it for weighted-center queries. A card's mass does not change with camera scale or cosmetic shader density. The parked contents-plus-wrapping Present idea #828 does not change today's opaque wrapper policy.
+[Physical mass and rocking](../playfield-rocking.md), documentation issue #782, defines the shared nominal volume, real-density references and labelled mixture/fantasy assumptions. #816 implements the shared mass capability/aggregates; #783 consumes it for rocking, while #824 consumes it for weighted-center queries. A card's mass does not change with camera scale or cosmetic shader density. The owner subsequently approved contents-only Present mass; [the revised mass contract](../material-mass-and-passives.md) supersedes fixed wrapping and the parked extra-wrapping proposal #828.
 
 ### Room controls and exports
 
