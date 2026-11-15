@@ -87,6 +87,10 @@ Before closing #1113 verify standard, shader/unlit, contained, transparent and r
 
 What an operation does to the selected cards is still to be decided.
 
+## Captured scoring explanation (#1383)
+
+[Scoring explanation](scoring-explanation.md) requires immutable hand/base/ordered resolved operation/final-point descriptors captured by authoritative scoring and preserved into narration. The shared fitted text component consumes registered pure formatting; it never rescores, reads live gameplay or draws RNG.
+
 ## Inspectable trait
 
 **Target extension (#751):** [Acquired bonus artwork and inspection](presentation-contracts.md#acquired-bonus-artwork-and-inspection-432-751) defines full live bonus descriptions, separate from the compact face label.
