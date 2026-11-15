@@ -1,3 +1,4 @@
+import { parseStageHistory } from "./stage-score-history";
 import type { DeckBuilderStep } from "./deck-builder";
 import { rewardPresentations } from "./reward-presentation";
 import { coinEntry, ledgerTotal, rewardEffects, type RewardEntry } from "./stage-rewards";
@@ -232,6 +233,13 @@ export function toSaveRecord(snapshot: RunSnapshot, flow: SaveFlow = standardGam
   };
 }
 
+/** A saved stage history, validated; an invalid one fails the whole save (#1063). */
+function savedStageHistory(value: unknown) {
+  const history = parseStageHistory(value);
+  if (!history) throw new Error("bad stage history");
+  return history;
+}
+
 /** Rebuild a snapshot, or null if the record is corrupt, from another version, or inconsistent. */
 export function fromSaveRecord(
   value: unknown,
@@ -355,6 +363,10 @@ export function fromSaveRecord(
         targetScore: number(state.round.targetScore),
         movesLeft: number(state.round.movesLeft),
         discardsLeft: number(state.round.discardsLeft),
+        // Stage history (#1063): validated, never replayed. An invalid one fails the save.
+        ...(state.round.history === undefined
+          ? {}
+          : { history: savedStageHistory(state.round.history) }),
       },
     };
     if (seen.size !== runCards.length) return null;

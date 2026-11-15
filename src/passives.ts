@@ -131,6 +131,11 @@ export type GameEvent = {
    */
   outgoingStock?: readonly { kind: string; blockId: string }[];
   destination?: { round: number; stage: StageKind };
+  /**
+   * On `score.totalApplied` (#1063): the stage history point this commit appended, captured with
+   * the history's generation, so consumers never read live state for it.
+   */
+  stageHistory?: { generation: number; play: number; delta: number; total: number };
   /** On `run.ended` (#878): the run's terminal result. */
   result?: "lost";
 };
