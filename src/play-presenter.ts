@@ -572,6 +572,9 @@ export function createPlayPresenter(options: {
       const boardRay = new THREE.Raycaster();
       const flights = sources.map((source, index): Flight => {
         const { block, cell } = landed[index];
+        // What flew, before it takes the landed identity: an opening (#926) lands a different
+        // block in the wrapper's place, whose look the flying wrapper doesn't have (#1414).
+        const flew = source.block;
         source.block = block;
         source.cube.updateWorldMatrix(true, false);
         const screenPosition = source.cube
@@ -595,7 +598,9 @@ export function createPlayPresenter(options: {
           fromPosition: source.cube.position.clone(),
           fromRotation: source.cube.quaternion.clone(),
           fromScale: source.cube.scale.x,
-          target: needsHandover(source) ? field.landing(block, cell) : null,
+          // A different block landing (a revealed payload) always hands over, as does a look
+          // that changes on landing: the flying cube burns away as the landed one burns in.
+          target: needsHandover(source) || flew.id !== block.id ? field.landing(block, cell) : null,
           handedOver: false,
           mount: flightMounts.create(cell, block),
           landing: block,

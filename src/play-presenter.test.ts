@@ -280,3 +280,65 @@ describe("a play's own committed identity survives its refill's commit (#1244 re
     expect(bound).toEqual(["run1:play#1"]);
   });
 });
+
+describe("a revealed payload lands through the handover (#1414)", () => {
+  it("hands over when the block that lands isn't the one that flew, and not otherwise", async () => {
+    const { createVisualScheduler } = await import("./visual-events/scheduler");
+    const { createPlayPresenter } = await import("./play-presenter");
+    const noop = () => undefined;
+    const cell = { x: 0, y: 0, z: 0 };
+    const neighbour = { x: 1, y: 0, z: 0 };
+    // The model opened the wrapper: its contents stand in its cell; the ace landed as itself.
+    const session = {
+      play: () => ({
+        field: [
+          { block: { id: "ace", traits: {} }, cell: neighbour },
+          { block: { id: "contents", traits: {} }, cell },
+        ],
+      }),
+      lastPlacedOrder: ["ace", "contents"],
+      lastReactions: [],
+      lastScoredLines: [],
+      lastCommittedActionId: "run1:play#1",
+      state: { hand: [], round: { score: 0, targetScore: 10, movesLeft: 3, discardsLeft: 3 } },
+    };
+    const landings: string[] = [];
+    const play = createPlayPresenter({
+      game: () => session as never,
+      views: {} as never,
+      hand: { settle: noop, remove: noop, sync: noop } as never,
+      field: {
+        occupiedCells: () => [],
+        blocks: () => [],
+        expect: noop,
+        landing: (block: { id: string }) => {
+          landings.push(block.id);
+          return { block, cube: new THREE.Group() };
+        },
+      } as never,
+      cameraView: {
+        handCamera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10),
+        camera: new THREE.PerspectiveCamera(50, 1, 0.1, 10),
+      } as never,
+      scene: new THREE.Group(),
+      assembly: new THREE.Group(),
+      reducedMotion: () => false,
+      deselect: noop,
+      changed: noop,
+      moved: noop,
+      rackChanged: noop,
+      activated: noop,
+      drawReplacements: () => [],
+      save: noop,
+      decided: noop,
+      visualEvents: createVisualScheduler({ services: {} }),
+    });
+    const flying = [
+      { block: { id: "ace", traits: {} }, cube: new THREE.Group() },
+      { block: { id: "wrapper", traits: {} }, cube: new THREE.Group() },
+    ];
+    expect(play.play(flying as never, { target: null, face: null } as never)).toBe(true);
+    // Only the wrapper, which lands as a different block, gets the landed look burned in.
+    expect(landings).toEqual(["contents"]);
+  });
+});
