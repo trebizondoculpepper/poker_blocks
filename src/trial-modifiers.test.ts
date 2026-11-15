@@ -110,10 +110,10 @@ describe("heavy and light mass trials (#818)", () => {
     const steel = getMaterialDefinition("steel");
     const line = standardDeck.slice(0, 5).map((card, x) => placed(withMaterial(card, steel), x));
     const base = scoreFieldWithPassives(line, [])[0]!;
-    const scoredKg = 7.85 * base.contributingIds.length;
+    const scoredKg = 2.2 * base.contributingIds.length;
     const mean = scoreFieldWithPassives(line, [createPassiveBlock("trial-heavy-mean-mass", "h")]);
     // Scores round once at the end, so compare ratios rather than rounded products.
-    expect(mean[0]!.points / base.points).toBeCloseTo(heavy(7.85), 2);
+    expect(mean[0]!.points / base.points).toBeCloseTo(heavy(2.2), 2);
     const total = scoreFieldWithPassives(line, [createPassiveBlock("trial-light-total-mass", "l")]);
     expect(total[0]!.points / base.points).toBeCloseTo(light(scoredKg), 2);
   });
