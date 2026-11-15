@@ -765,3 +765,97 @@ describe("the visual-event scheduler (#546)", () => {
     expect(scheduler.counts.pending).toBe(1);
   });
 });
+
+describe("terminal scope ownership (#1038; doc/scheduler-terminal-status.md)", () => {
+  it("drops settled scopes' records, so thousands of actions return to baseline", () => {
+    const { scheduler } = harness();
+    scheduler.update(0, true);
+    const baseline = scheduler.counts.scopes;
+    let now = 0;
+    for (let i = 0; i < 2000; i++) {
+      const root = scheduler.createScope(null);
+      const child = scheduler.createScope(root);
+      scheduler.schedule(child, {
+        handler: "effect",
+        payload: { label: `e${i}`, ms: 10 },
+        dueUnits: 0,
+      });
+      scheduler.seal(child);
+      scheduler.seal(root);
+      // Every other action is cancelled mid-flight.
+      if (i % 2) scheduler.cancel(root);
+      scheduler.update((now += 20), true);
+      scheduler.update((now += 20), true);
+    }
+    expect(scheduler.counts.scopes).toBe(baseline);
+    expect(scheduler.counts.entries).toBe(0);
+    expect(scheduler.counts.active).toBe(0);
+  });
+
+  it("still reports a retained handle's real terminal result", () => {
+    const { scheduler, fallbacks } = harness();
+    scheduler.update(0, true);
+    const finished = scheduler.createScope(null);
+    scheduler.seal(finished);
+    const cancelled = scheduler.createScope(null);
+    scheduler.cancel(cancelled);
+    fallbacks.register("summary", () => {});
+    const failed = scheduler.createScope(null, { fallback: "summary" });
+    scheduler.schedule(failed, { handler: "throws", dueUnits: 0 });
+    scheduler.seal(failed);
+    scheduler.update(10, true);
+    expect(scheduler.status(finished)).toEqual({ state: "finished" });
+    expect(scheduler.status(cancelled)).toEqual({ state: "cancelled" });
+    expect(scheduler.status(failed).state).toBe("failed");
+    // Generation disposal keeps truthful terminal results for retained handles.
+    scheduler.disposeGeneration();
+    expect(scheduler.status(finished)).toEqual({ state: "finished" });
+    expect(scheduler.status(failed).state).toBe("failed");
+  });
+
+  it("reports a terminal handle to a late observer once, at once, and isolates the status", () => {
+    const { scheduler } = harness();
+    scheduler.update(0, true);
+    const scope = scheduler.createScope(null);
+    scheduler.seal(scope);
+    const seen: ScopeStatus[] = [];
+    const stop = scheduler.observe(scope, (status) => seen.push(status));
+    stop();
+    expect(seen).toEqual([{ state: "finished" }]);
+    (seen[0] as { state: string }).state = "cancelled";
+    expect(scheduler.status(scope)).toEqual({ state: "finished" });
+  });
+
+  it("installs the terminal status before observers run, for a re-entrant read", () => {
+    const { scheduler } = harness();
+    scheduler.update(0, true);
+    const scope = scheduler.createScope(null);
+    let during: ScopeStatus | null = null;
+    scheduler.observe(scope, () => {
+      during = scheduler.status(scope);
+    });
+    scheduler.seal(scope);
+    expect(during).toEqual({ state: "finished" });
+  });
+
+  it("refuses a child under a terminal parent without keeping a record of it", () => {
+    const { scheduler } = harness();
+    scheduler.update(0, true);
+    const parent = scheduler.createScope(null);
+    scheduler.seal(parent);
+    const before = scheduler.counts.scopes;
+    const child = scheduler.createScope(parent);
+    expect(scheduler.status(child)).toEqual({ state: "cancelled" });
+    expect(
+      scheduler.schedule(child, { handler: "mark", payload: { label: "x" }, dueUnits: 0 }).accepted,
+    ).toBe(false);
+    expect(scheduler.counts.scopes).toBe(before);
+  });
+
+  it("keeps an unknown handle unknown", () => {
+    const { scheduler } = harness();
+    const other = createVisualScheduler();
+    const foreign = other.createScope(null);
+    expect(scheduler.status(foreign)).toEqual({ state: "cancelled", diagnostic: "unknown scope" });
+  });
+});
