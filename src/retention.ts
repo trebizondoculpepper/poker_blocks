@@ -61,7 +61,11 @@ export function expireRetained(
   const deck = state.deck.filter(keep);
   const discardPile = state.discardPile.filter(keep);
   if (!expired.size) return state;
+  const generated = new Set((state.generatedCards ?? []).map(({ id }) => id));
   const generatedCards = (state.generatedCards ?? []).filter(({ id }) => !expired.has(id));
+  // A run card (starting or bought) is accounted for as gone, so a save still finds every card;
+  // a card made on the field simply leaves, as it always has.
+  const removed = [...expired].filter((id) => !generated.has(id));
   const cardStates = Object.fromEntries(
     Object.entries(state.cardStates ?? {}).filter(([id]) => !expired.has(id)),
   );
@@ -72,6 +76,7 @@ export function expireRetained(
     deck,
     discardPile,
     generatedCards: generatedCards.length ? generatedCards : undefined,
+    ...(removed.length ? { removedCards: [...(state.removedCards ?? []), ...removed] } : {}),
     cardStates: Object.keys(cardStates).length ? cardStates : undefined,
   };
 }

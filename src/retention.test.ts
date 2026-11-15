@@ -70,4 +70,27 @@ describe("retention (#505; doc/clone-reset.md, 'Boundary lifecycle')", () => {
     expect(expireRetained(s, ["stage", "round"])).toBe(s);
     expect(expireRetained(s, [])).toBe(s);
   });
+
+  it("records expired run cards as removed, so a save after expiry still loads", async () => {
+    const { GameRun } = await import("./game-run");
+    const { dealerRegistry } = await import("./dealer");
+    const { demoRunRules } = await import("./run-rules");
+    const { fromSaveRecord, toSaveRecord } = await import("./save");
+    // A run whose deck holds a stage-retained card, as the balanced dev deck can deal.
+    const deck = standardDeck.map((c, i) => (i === 5 ? card(5, "cloud") : c));
+    const game = new GameRun(dealerRegistry, demoRunRules, deck, () => 0.25);
+    const snapshot = game.snapshot();
+    const expired = expireRetained(snapshot.state, ["stage"]);
+    expect(expired.removedCards).toContain(standardDeck[5]!.id);
+    const record = JSON.parse(JSON.stringify(toSaveRecord({ ...snapshot, state: expired })));
+    const restored = fromSaveRecord(record, deck, dealerRegistry);
+    expect(restored).not.toBeNull();
+    const zones = [
+      ...restored!.state.hand,
+      ...restored!.state.deck,
+      ...restored!.state.discardPile,
+      ...restored!.state.field.map(({ block }) => block),
+    ];
+    expect(zones.some(({ id }) => id === standardDeck[5]!.id)).toBe(false);
+  });
 });
