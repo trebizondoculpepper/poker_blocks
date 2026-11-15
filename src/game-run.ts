@@ -11,6 +11,8 @@ import { clearField, removeCardForRun } from "./card-ownership";
 import { expireRetained, resetAtBoundary, retentionsEndingAfter } from "./retention";
 // Registers the spawn-beyond-pair reaction result (#425).
 import "./pair-spawn";
+// The Present and its grant command (#651).
+import "./present";
 // Registers the opaque container's opening, run by the play's opening phase (#930).
 import "./opaque-opening";
 // Registers cooking's stage-end reset (#372).
@@ -559,6 +561,7 @@ export class GameRun {
             this.config.stageReward,
             this.currentPhase as StageKind,
             this.stageContext ?? undefined,
+            this.config.stageWonGrants,
           )
         : [
             ...materialHandRewardEntries(this.currentState),
@@ -792,7 +795,37 @@ export class GameRun {
     update: (state: GameState) => void (run.currentState = state),
     grantUnownedPassive: () => run.grantUnownedPassive(),
     random: () => run.random(),
+    get round() {
+      return run.currentRound;
+    },
+    allocateId: (base: string) => run.freeCardId(base),
   }))(this);
+
+  /**
+   * An ID no card the run holds or has held uses: in a zone, removed, retired, generated or
+   * stored inside a container (#651). `<base>.<n>`, counting up.
+   */
+  private freeCardId(base: string): string {
+    const state = this.currentState;
+    const cards = [
+      ...state.field.map(({ block }) => block),
+      ...state.hand,
+      ...state.deck,
+      ...state.discardPile,
+      ...(state.generatedCards ?? []),
+      ...(state.retiredActives ?? []),
+    ];
+    const taken = new Set([
+      ...cards.map(({ id }) => id),
+      ...cards.flatMap((card) =>
+        [card.traits.opaqueContainer ?? []].flat().map(({ payload }) => payload.id),
+      ),
+      ...(state.removedCards ?? []),
+    ]);
+    let n = 1;
+    while (taken.has(`${base}.${n}`)) n++;
+    return `${base}.${n}`;
+  }
 
   /** A passive instance id no installed passive has: `passive.<n>`, from the rack size up. */
   private freePassiveId(): string {

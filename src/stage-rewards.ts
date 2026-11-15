@@ -1,3 +1,4 @@
+import { stageKinds } from "./run-rules";
 import { Registry } from "./core/registry";
 /**
  * Stage rewards (issue #12): what a won stage pays, as an itemised ledger. Pure: the
@@ -112,6 +113,22 @@ export function entryCoins(entry: RewardEntry): number {
   );
 }
 
+/**
+ * When a configured stage grant applies (#651), by name: each reads the won stage's context and
+ * its configuration, never the stage's identity, dealer or label.
+ */
+export const stageGrantConditions = new Registry<(context: StageContext) => boolean>(
+  "stage grant condition",
+);
+// The round's last stage, by its position in the configured stage order.
+stageGrantConditions.register(
+  "lastStageOfRound",
+  (context) => context.ordinal === stageKinds.length,
+);
+
+/** A configured non-cash grant on a won stage: when it applies, and its ledger entry. */
+export type StageGrant = { when: string; entry: RewardEntry };
+
 /** What a stage win pays out: the rows, and the balance before and after. */
 export type StageReward = { entries: RewardEntry[]; balanceBefore: number; balance: number };
 
@@ -132,6 +149,8 @@ export function stageRewardLedger(
   stage?: StageKind,
   /** The won stage's full context (round, ordinal), for rules that filter on it (#664 review). */
   context?: StageContext,
+  /** Configured non-cash grants, appended after every cash row when they apply (#651). */
+  grants: readonly StageGrant[] = [],
 ): RewardEntry[] {
   const entries: RewardEntry[] = [
     coinEntry("stage.complete", "Stage complete bonus", bonus),
@@ -147,6 +166,10 @@ export function stageRewardLedger(
       : passive.definitionId;
     entries.push(coinEntry(`passive.${passive.definitionId}`, name, coins));
   }
+  // Non-cash grants follow the cash rows (doc/presents.md, "Mixed reward ledger and sound").
+  if (context)
+    for (const grant of grants)
+      if (stageGrantConditions.get(grant.when)(context)) entries.push(grant.entry);
   return entries;
 }
 

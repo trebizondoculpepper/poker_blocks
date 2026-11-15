@@ -24,6 +24,10 @@ export type CommandTarget = {
   random?(): number;
   /** The rack instance whose rule requested these commands, as an opaque handle (#988). */
   readonly source?: string;
+  /** The run's current round, for commands that make something for it (#651). */
+  readonly round?: number;
+  /** A run-unique ID for a new object, from a readable base (#651). */
+  allocateId?(base: string): string;
 };
 
 /** The same target, naming the instance whose rule requested its commands. */

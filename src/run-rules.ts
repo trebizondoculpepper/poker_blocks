@@ -37,6 +37,8 @@ export type RunRules = {
   discardPileAfterShop: "keep-out" | "return-to-deck";
   /** Coins for completing a stage; the stage rewards' default (4) when left out. */
   stageReward?: number;
+  /** Configured non-cash grants on a won stage (#651): none when left out. */
+  stageWonGrants?: readonly import("./stage-rewards").StageGrant[];
   /** How many passives the rack can hold; unlimited when left out. */
   rackCapacity?: number;
   /**
@@ -118,6 +120,35 @@ export const demoRunRules: RunRules = {
   },
   handAtStageEnd: "return-to-deck",
   discardPileAfterShop: "return-to-deck",
+  // A Present on winning each round's last stage (#651; doc/presents.md): one wrapped card, its
+  // contents fixed from the next round's playable-card table, added to the deck.
+  stageWonGrants: [
+    {
+      when: "lastStageOfRound",
+      entry: {
+        source: "stage.present",
+        label: "Present",
+        effects: [
+          {
+            id: "grant",
+            config: {
+              command: {
+                id: "grant-present",
+                config: {
+                  generation: {
+                    distribution: "shopPlayableCards",
+                    progression: "nextRound",
+                    eligibility: "payload",
+                  },
+                },
+              },
+            },
+          },
+        ],
+        presentation: "present",
+      },
+    },
+  ],
 };
 
 /** A number that is never reached or used up (the dev1 sandbox); the HUD shows it as ∞. */
