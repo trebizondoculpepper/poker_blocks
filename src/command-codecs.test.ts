@@ -111,6 +111,14 @@ describe("primitive command executors (#1243)", () => {
     expect(replica.state.hand.length).toBe(original.state.hand.length);
   });
 
+  it("normalizes an empty play group to a single-card play, as the model does (#1276)", () => {
+    const run = fresh();
+    const seen = recording(run);
+    const cardId = run.state.hand[0]!.id;
+    run.play({ cardId, cardIds: [] }, "p1");
+    expect(seen[0]!.metadata.command).toEqual({ command: "play", version: 1, args: { cardId } });
+  });
+
   it("validates arguments and versions", () => {
     expect(() => describeCommand("play", { cardId: 3 })).toThrow("play cardId");
     expect(() => describeCommand("discard", { cardIds: [] })).toThrow("discard cardIds");

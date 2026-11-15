@@ -48,7 +48,11 @@ commandCodecs.register("play", {
     if (typeof action !== "object" || action === null) throw new Error("play needs an action");
     return Object.freeze({
       cardId: text(action.cardId, "play cardId"),
-      ...(action.cardIds === undefined ? {} : { cardIds: ids(action.cardIds, "play cardIds") }),
+      // An empty group is a single-card play, as the model treats it (#1276).
+      ...(action.cardIds === undefined ||
+      (Array.isArray(action.cardIds) && action.cardIds.length === 0)
+        ? {}
+        : { cardIds: ids(action.cardIds, "play cardIds") }),
       ...(action.targetId === undefined
         ? {}
         : { targetId: text(action.targetId, "play targetId") }),
