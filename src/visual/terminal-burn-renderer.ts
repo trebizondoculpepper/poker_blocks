@@ -130,6 +130,9 @@ export function createTerminalBurnRenderer(options: TerminalBurnRendererOptions)
         mask.uniforms.matProgress.value = 1 - materialiseAt(t, timing.durationMs);
         return t >= timing.durationMs;
       };
+      // Whole from the first frame (#1359 review): a new mask starts with this side hidden, and
+      // the scheduler only updates a new effect on the next frame.
+      mask.uniforms.matProgress.value = 1;
       return {
         update(nowMs) {
           if (ghost.freed) return "finished";
