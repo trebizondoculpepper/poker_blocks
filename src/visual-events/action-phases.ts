@@ -26,6 +26,7 @@
 import { Registry } from "../core/registry";
 import {
   unitMs,
+  visualFallbacks,
   visualHandlers,
   type EffectHandle,
   type EventDescription,
@@ -76,7 +77,7 @@ let nextHold = 0;
 visualHandlers.register("actionPhase.hold", (payload, context): EffectHandle => {
   const id = (payload as { hold: string }).hold;
   return {
-    update() {
+    update(nowMs) {
       const hold = holds.get(id);
       if (!hold || hold.state === "done") return "finished";
       if (hold.state === "failed") {
@@ -93,7 +94,8 @@ visualHandlers.register("actionPhase.hold", (payload, context): EffectHandle => 
       const work = hold.work;
       hold.state = "done";
       if (work) {
-        const admitted = context.schedule({ ...work, dueUnits: context.nowMs / unitMs });
+        // Due now, when the gates actually opened, not when the hold started (#1251).
+        const admitted = context.schedule({ ...work, dueUnits: nowMs / unitMs });
         if (!admitted.accepted) throw new Error(`bound work not admitted: ${admitted.reason}`);
       }
       return "finished";
@@ -160,7 +162,13 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
       actionId: string,
       captured: unknown,
     ):
-      | { ok: true; key: ActionKey; contributions: ReadonlyMap<string, Contribution> }
+      | {
+          ok: true;
+          key: ActionKey;
+          contributions: ReadonlyMap<string, Contribution>;
+          /** Contributions that could not be reserved, each summarised once. */
+          diagnostics: readonly string[];
+        }
       | { ok: false; diagnostic: string } {
       const key = { generation, actionId };
       if (records.has(keyOf(key)))
@@ -175,8 +183,29 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
       const root = scheduler.createScope(null);
       const slots = new Map(plan.slots.map((slot) => [slot, scheduler.createScope(root)]));
       const contributions = new Map<string, Contribution>();
+      const diagnostics: string[] = [];
+      /** A contribution that could not be reserved: its summary runs once, now. */
+      const summarise = (producer: string, reason: string) => {
+        diagnostics.push(`${producer}: ${reason}`);
+        if (options.fallback)
+          visualFallbacks.get(options.fallback)({
+            reason,
+            services: null,
+            payload: { producer, captured },
+          });
+      };
       for (const { name, producer } of producers) {
-        const reservation = producer.reserve(captured);
+        // One producer's throw is contained: the collection still closes (#1251).
+        let reservation: Reservation;
+        try {
+          reservation = producer.reserve(captured);
+        } catch (error) {
+          summarise(
+            name,
+            `reserve failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          continue;
+        }
         if (!reservation) continue;
         const slotScope = slots.get(reservation.slot);
         if (!slotScope)
@@ -187,9 +216,13 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
             ? { fallback: options.fallback, fallbackPayload: { producer: name, captured } }
             : {}),
         });
+        // Every earlier slot is a barrier, not only the one before: an empty slot settles at
+        // once and must not let a later one skip past a pending earlier one (#1251).
         const position = plan.slots.indexOf(reservation.slot);
-        const before = position > 0 ? plan.slots[position - 1]! : null;
-        const predecessor = before === null ? null : slots.get(before)!;
+        const earlier = plan.slots.slice(0, Math.max(0, position)).map((slot) => ({
+          slot,
+          scope: slots.get(slot)!,
+        }));
         const previousInChain = reservation.ordered
           ? (chains.get(reservation.ordered) ?? null)
           : null;
@@ -199,10 +232,10 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
           work: null,
           reason: "",
           gates: () => {
-            if (predecessor) {
-              const status = scheduler.status(predecessor);
+            for (const { slot, scope: barrier } of earlier) {
+              const status = scheduler.status(barrier);
               if (status.state === "pending") return "wait";
-              if (status.state !== "finished") return { failed: `${before} ${status.state}` };
+              if (status.state !== "finished") return { failed: `${slot} ${status.state}` };
             }
             if (previousInChain && !terminal(previousInChain)) return "wait";
             return "open";
@@ -210,12 +243,19 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
         };
         const id = `hold-${++nextHold}`;
         holds.set(id, hold);
-        scheduler.schedule(scope, {
+        const admitted = scheduler.schedule(scope, {
           handler: "actionPhase.hold",
           payload: { hold: id },
           dueUnits: scheduler.nowMs / unitMs,
         });
-        scheduler.seal(scope);
+        if (!admitted.accepted) {
+          // Not admitted: nothing holds this contribution, so it is summarised and cancelled
+          // rather than sealed empty as if it had been bound (#1251).
+          holds.delete(id);
+          hold.state = "done";
+          summarise(name, `reservation not admitted: ${admitted.reason}`);
+          scheduler.cancel(scope);
+        } else scheduler.seal(scope);
         const settle = (
           state: Hold["state"],
           work: EventDescription | null = null,
@@ -239,7 +279,7 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
       for (const scope of slots.values()) scheduler.seal(scope);
       scheduler.seal(root);
       records.set(keyOf(key), { key, root, slots, contributions });
-      return { ok: true, key, contributions };
+      return { ok: true, key, contributions, diagnostics };
     },
     /** A producer's reserved contribution, or null for a late producer or stale record. */
     contribution(key: ActionKey, producer: string): Contribution | null {
