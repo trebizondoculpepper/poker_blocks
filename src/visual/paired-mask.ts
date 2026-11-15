@@ -61,6 +61,9 @@ export const chunkSurfaceAdapter: MaskAdapter = {
     // Reduced motion crossfades: only the incoming look fades, over an opaque outgoing one, so the
     // pair never lets the background through (#1240).
     if (uniforms.matReduced.value > 0.5 && role === "incoming") made.transparent = true;
+    // ...and the opaque outgoing look writes no depth meanwhile, so an incoming look smaller than
+    // it (inside it) still fades in over it rather than failing the depth test (#1264).
+    if (uniforms.matReduced.value > 0.5 && role === "outgoing") made.depthWrite = false;
     const outgoing = role === "outgoing" ? 1 : 0;
     made.onBeforeCompile = (shader, renderer) => {
       before(shader, renderer);
