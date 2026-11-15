@@ -209,6 +209,13 @@ export type MaterialDefinition = {
      */
     exit?: ExitSequence;
     /**
+     * What a block of this material presents when it is actually triggered (#1172;
+     * doc/triggered-presentation.md): a registered on-trigger presentation response
+     * (src/triggered-presentation.ts) and its configuration, such as an explosion. Independent of
+     * its model `triggerable.responses`; absent, a trigger presents nothing of its own.
+     */
+    onTrigger?: { response: string; config?: unknown };
+    /**
      * Ongoing effects a block of this look keeps up while it is on the table, such as smoke
      * (#464): each names a registered block effect (src/visual/block-effects.ts) and configures it.
      */

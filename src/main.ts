@@ -1,4 +1,7 @@
 import { createPlacementPhase, placementProducer, scoringProducer } from "./placement-phase";
+import { triggeredProducer, type TriggeredEffectServices } from "./triggered-presentation";
+import { createDazzle } from "./visual/dazzle";
+import { cosmeticRandom } from "./visual/block-effects";
 import { createActionPhases } from "./visual-events/action-phases";
 import type { TransitionAudioServices } from "./scene-traits/material-change-sounds";
 import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
@@ -458,6 +461,11 @@ const shopView = createShopView(
   { floor: danceFloor },
 );
 shopView.render([], false);
+// Triggered explosions' pops (#1172): one dazzle over the table, seen through its camera.
+const dazzle = createDazzle(host, cameraView.camera, {
+  random: cosmeticRandom,
+  reducedMotion: () => run.reducedMotion,
+});
 // The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
 // these services; the frame loop below advances its clock.
 const visualServices: ScoreNarrationServices &
@@ -467,7 +475,8 @@ const visualServices: ScoreNarrationServices &
   RewardLedgerServices &
   ShopBurnServices &
   TransitionAudioServices &
-  FieldLineServices & { playfieldRocking: RockingSink } = {
+  FieldLineServices &
+  TriggeredEffectServices & { playfieldRocking: RockingSink } = {
   get scoreNarration() {
     return presenter.narration;
   },
@@ -495,6 +504,17 @@ const visualServices: ScoreNarrationServices &
   transitionAudio: { play: (id) => playSfx(id) },
   // The shop's outgoing burn, advanced on this scheduler (#880).
   shopBurn: { effect: (startMs) => shopView.burnEffect(startMs) },
+  // Triggered effects at their captured cells, moving with the board (#1172).
+  triggeredEffects: {
+    place: (object, cell) => field.placeObject(object, cell),
+    remove: (object) => field.removeObject(object),
+    get cubeSize() {
+      return field.cubeSize;
+    },
+    flash: (at, look) => dazzle.flash(at, { look }),
+    reducedMotion: () => run.reducedMotion,
+    random: cosmeticRandom,
+  },
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
@@ -504,7 +524,7 @@ const placementPhase = createPlacementPhase(
   run,
   createActionPhases(visualEvents, {
     plan: "scoring",
-    producers: [placementProducer, scoringProducer],
+    producers: [placementProducer, scoringProducer, triggeredProducer],
   }),
 );
 const presenter: PlayPresenter = createPlayPresenter({
@@ -627,6 +647,7 @@ const step = (time: number) => {
   cameraView.update(playfield.time, playfield.delta);
   presenter.update(time, delta);
   visualEvents.update(time, document.visibilityState === "visible");
+  dazzle.update(delta);
   run.followOutcomes(time);
   field.update(playfield.time, run.reducedMotion);
   sceneManager.update(delta);

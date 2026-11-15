@@ -18,14 +18,23 @@
 import type { CommittedMetadata } from "./command-codecs";
 import type { EventEnvelope } from "./lifecycle/action";
 import {
+  projectTriggered,
+  triggeredProducer,
+  triggeredWork,
+  type TriggeredCapture,
+} from "./triggered-presentation";
+import {
   phaseProducers,
   type ActionKey,
   type ActionPhases,
   type Contribution,
 } from "./visual-events/action-phases";
 
-/** What a committed action's record captures for producers: its facts' types, in order. */
-export type CommittedCapture = { factTypes: readonly string[] };
+/**
+ * What a committed action's record captures for producers: its facts' types, in order, and its
+ * triggered presentation requests (#1172), captured now as plain data.
+ */
+export type CommittedCapture = { factTypes: readonly string[] } & TriggeredCapture;
 
 /** A producer that reserves `slot` for any action whose facts include `fact`. */
 export function factProducer(config: { fact: string; slot: string }) {
@@ -59,10 +68,16 @@ export type CommittedSource = {
 export function createPlacementPhase(source: CommittedSource, phases: ActionPhases) {
   let latest: ActionKey | null = null;
   const stop = source.onCommitted((facts, metadata) => {
+    const triggered = projectTriggered(facts);
     const committed = phases.commit(metadata.actionId, {
       factTypes: facts.map(({ type }) => type),
+      triggered,
     } satisfies CommittedCapture);
     latest = committed.ok ? committed.key : null;
+    // Its triggered effects bind now, from the captured requests; they start when its
+    // post-scoring phase opens (#1172).
+    if (committed.ok)
+      phases.contribution(committed.key, triggeredProducer)?.bind(triggeredWork(triggered));
   });
   return {
     /** The action that committed last, by its captured key; null after a reset. */
