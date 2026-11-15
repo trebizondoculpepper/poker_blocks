@@ -29,6 +29,7 @@ import { saveKey } from "./save";
 import type { Scene } from "./scenes";
 import type { DestroyCause } from "./traits/destructible";
 import { standardGameFlow } from "./standard-game-flow";
+import type { DestructionExitsConfig } from "./scene-traits/destruction-exits";
 import type { StageScoreGraphConfig } from "./stage-score-graph";
 
 export { standardGameFlow };
@@ -236,6 +237,8 @@ export type SceneTraits = {
   enterSound: { sfx: SoundEffectId };
   /** A committed material transition's sound, scheduled on the shared scheduler (#539). */
   materialChangeSounds: Record<never, never>;
+  /** Removed table blocks play their exits while this scene is on the stack (#1173). */
+  destructionExits: DestructionExitsConfig;
   /**
    * The stage's score graph, hung in the room at its configured transform while this scene is on
    * the stack (#1064; doc/line-goes-up.md).
@@ -352,6 +355,8 @@ const playSceneTraits: Partial<SceneTraits> = {
   committedEventSounds: {},
   // What a card becomes is heard as it changes (#539).
   materialChangeSounds: {},
+  // A destroyed table block plays its own exit (#1173; doc/triggered-presentation.md).
+  destructionExits: {},
   // The stage's score graph (#1064): framed on the back wall, upper right of centre, behind the
   // table and fixed in the room, so the camera sees it in perspective and the cards can pass in
   // front of it. Chosen so it stays wholly on screen with the play camera both wide and portrait

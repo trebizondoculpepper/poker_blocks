@@ -1,4 +1,9 @@
-import { createPlacementPhase, placementProducer, scoringProducer } from "./placement-phase";
+import {
+  createPlacementPhase,
+  placementProducer,
+  scoringProducer,
+  type PlacementPhase,
+} from "./placement-phase";
 import { createStageScoreGraph, type StageScoreGraph } from "./stage-score-graph";
 import { triggeredProducer, type TriggeredEffectServices } from "./triggered-presentation";
 import { createDazzle } from "./visual/dazzle";
@@ -99,6 +104,9 @@ import { createDiagnosticRegistry } from "./diagnostics/debug-snapshot";
 import { registerSnapshotProviders, snapshotSections } from "./diagnostics/providers";
 import { debugSnapshotCommand } from "./diagnostics/snapshot-command";
 import { registerConsoleCommand } from "./console/commands";
+// Every exit effect registered, so a removed block's recipe can run (#511 review, #1173).
+import { createExitPresenter } from "./visual/exit-effects";
+import type { BlockExitServices, ExitPresenter } from "./visual/exit-presentation";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -177,6 +185,9 @@ type TraitContext = {
     overlays: Overlays;
     hand: HandView;
     field: FieldView;
+    exits: ExitPresenter;
+    actionPhase: PlacementPhase;
+    composeProducer(producer: string): () => void;
     firstPlay: FirstPlayTable;
     actionLog: ActionLog;
     actionWatch: ActionWatch;
@@ -282,6 +293,14 @@ const traitContext: TraitContext = {
     get visualEvents() {
       return visualEvents;
     },
+    // The shared block-exit presenter (#1173), built with the scheduler below.
+    get exits() {
+      return exitPresenter;
+    },
+    get actionPhase() {
+      return placementPhase;
+    },
+    composeProducer: (producer) => actionPhases.compose(producer),
     // The stage score graph a stage scene composes (#1064), built with the run below.
     get scoreGraph() {
       return scoreGraph;
@@ -488,6 +507,7 @@ const visualServices: ScoreNarrationServices &
   PresentedActionServices &
   RewardLedgerServices &
   ShopBurnServices &
+  BlockExitServices &
   TransitionAudioServices &
   FieldLineServices &
   TriggeredEffectServices & { playfieldRocking: RockingSink } = {
@@ -516,6 +536,10 @@ const visualServices: ScoreNarrationServices &
   playfieldRocking: rockingRelay,
   // A committed material transition's sound (#539).
   transitionAudio: { play: (id) => playSfx(id) },
+  // Block exits on this scheduler (#549, #1173).
+  get blockExits() {
+    return exitPresenter.blockExits;
+  },
   // The shop's outgoing burn, advanced on this scheduler (#880).
   shopBurn: { effect: (startMs) => shopView.burnEffect(startMs) },
   // Triggered effects at their captured cells, moving with the board (#1172).
@@ -533,6 +557,8 @@ const visualServices: ScoreNarrationServices &
   },
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
+// Removed blocks' exits (#1173), presented on that scheduler.
+const exitPresenter = createExitPresenter(visualEvents, () => run.reducedMotion);
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
 document.addEventListener("visibilitychange", () => visualEvents.suspend());
 // Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).
