@@ -1,0 +1,286 @@
+/**
+ * Experiment replay export and verification (#936; doc/experiments/command-journal.md,
+ * "Recorder, provenance and verification"). The versioned artifact combines the trusted build
+ * identity, the trial's configuration artifact (#934) and its version-2 command record (#1247).
+ *
+ * - **Checked before anything is built.** Format and version, the exact build (a journal is not
+ *   portable across builds), the record's own replayability (start and commands complete, its
+ *   contents agreeing with its flags) and the step bound. A failure here constructs nothing.
+ * - **Off to the side.** The candidate trial is rebuilt from the configuration's scenario (its
+ *   setup runs once, as installed), its random stream restored to the recorded starting
+ *   checkpoint through the stream's own API, then the recorded player commands run in order
+ *   through the shared primitive executors (`executeCommand`): never the live trial, its scene,
+ *   audio or rewards.
+ * - **Compared step by step.** Accepted, the canonical fact sequence and payloads, awarded points,
+ *   score and the random checkpoint. Only declared correlation fields are normalized: the fresh
+ *   run token and each step's action ID, mapped by index. The first mismatch is reported with its
+ *   index, command, expected and actual projections (bounded) and a diagnostic.
+ */
+import { executeCommand, type CommandDescriptor, type CommittedMetadata } from "./command-codecs";
+import { buildScenario, type ScenarioRuntime } from "./dev-scenario";
+import { importConfiguration, type ExperimentConfiguration } from "./experiment-config";
+import {
+  readExperimentRecord,
+  readFacts,
+  type ExperimentRecord,
+  type RecordedAction,
+  type StartingProvenance,
+} from "./experiment-recorder";
+import type { EventEnvelope } from "./lifecycle/action";
+
+export const experimentReplayFormat = "poker-blocks.experiment-replay";
+export const experimentReplayVersion = 1;
+
+/** The longest journal a verification will run. */
+export const maxReplaySteps = 512;
+
+export type ExperimentReplay = {
+  format: typeof experimentReplayFormat;
+  version: typeof experimentReplayVersion;
+  /** The exact build that recorded it, as its trusted caller supplied it. */
+  build: string;
+  /** The configuration artifact (#934) the trial was installed from. */
+  configuration: ExperimentConfiguration;
+  record: ExperimentRecord;
+  /** Whether it may be verified, and why not. */
+  replayable: boolean;
+  diagnostics: string[];
+};
+
+const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+/** Plain data as JSON with every object's keys in order: equal values compare equal (#1329). */
+function canonical(value: unknown): string {
+  const sorted = (inner: unknown): unknown =>
+    Array.isArray(inner)
+      ? inner.map(sorted)
+      : typeof inner === "object" && inner !== null
+        ? Object.fromEntries(
+            Object.keys(inner)
+              .sort()
+              .map((key) => [key, sorted((inner as Record<string, unknown>)[key])]),
+          )
+        : inner;
+  return JSON.stringify(sorted(plain(value)));
+}
+
+/** Combine a trial's configuration and record into a replay artifact. */
+export function exportReplay(input: {
+  build: string;
+  configuration: ExperimentReplay["configuration"];
+  record: ExperimentRecord;
+}): ExperimentReplay {
+  const read = readExperimentRecord(input.record);
+  const diagnostics = read.ok ? read.diagnostics : [read.diagnostic];
+  if (!input.build) diagnostics.push("no build identity was supplied");
+  return plain({
+    format: experimentReplayFormat,
+    version: experimentReplayVersion,
+    build: input.build,
+    configuration: input.configuration,
+    record: input.record,
+    replayable: read.ok && read.replayable && Boolean(input.build),
+    diagnostics,
+  });
+}
+
+/** How far a mismatch's projections are shown. */
+const shown = (value: unknown) => {
+  const text = JSON.stringify(value) ?? "undefined";
+  return text.length > 2000 ? `${text.slice(0, 2000)}…` : text;
+};
+
+export type ReplayVerdict =
+  | { verified: true; steps: number }
+  | { verified: false; stage: "refused"; diagnostic: string }
+  | {
+      verified: false;
+      stage: "mismatch";
+      index: number;
+      command: string;
+      expected: string;
+      actual: string;
+      diagnostic: string;
+    };
+
+/** One step as compared: what it did, with correlation fields normalized. */
+type Projection = {
+  accepted: boolean;
+  facts: unknown;
+  awarded: number;
+  score: number;
+  checkpoint: unknown;
+};
+
+const runToken = /^run\d+:/;
+
+/**
+ * The declared correlation fields (#1329 review): a fact's own action correlation, which a fresh
+ * run generates afresh. Only their values are normalized (the step's own action ID, mapped by
+ * index, and the run token); every other value, a card ID included, is compared as recorded.
+ */
+const correlationFields = new Set(["actionId", "occurrence"]);
+
+const normalized = (facts: unknown, actionId: string): unknown => {
+  const walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(walk);
+    if (typeof value !== "object" || value === null) return value;
+    return Object.fromEntries(
+      Object.entries(value).map(([key, inner]) => [
+        key,
+        correlationFields.has(key) && typeof inner === "string"
+          ? inner.replace(runToken, "<run>:").split(actionId).join("<action>")
+          : walk(inner),
+      ]),
+    );
+  };
+  return walk(JSON.parse(JSON.stringify(facts ?? [])));
+};
+
+const recordedFacts = (facts: readonly EventEnvelope[]) =>
+  facts.map(({ type, phase, sequence, subjectIds, payload }) =>
+    plain({ type, phase, sequence, subjectIds: [...subjectIds], payload }),
+  );
+
+/** The points a step awarded, read exactly as the recorder reads them. */
+const awardedOf = (facts: readonly EventEnvelope[]) => readFacts(facts).awarded;
+
+/** Verify a replay artifact against this build, off to the side. Mutates nothing live. */
+export function verifyReplay(
+  artifact: unknown,
+  options: { build: string; runtime: ScenarioRuntime; maxSteps?: number },
+): ReplayVerdict {
+  const refuse = (diagnostic: string): ReplayVerdict => ({
+    verified: false,
+    stage: "refused",
+    diagnostic,
+  });
+  const replay = artifact as Partial<ExperimentReplay> | null;
+  if (
+    typeof artifact !== "object" ||
+    artifact === null ||
+    replay?.format !== experimentReplayFormat
+  )
+    return refuse("not an experiment replay");
+  if (replay.version !== experimentReplayVersion)
+    return refuse(`unsupported replay version ${String(replay.version)}`);
+  if (!options.build || replay.build !== options.build)
+    return refuse(`recorded by build ${String(replay.build)}, not this build (${options.build})`);
+  const read = readExperimentRecord(replay.record);
+  if (!read.ok) return refuse(read.diagnostic);
+  if (!read.replayable) return refuse(`not replayable: ${read.diagnostics.join("; ")}`);
+  const record = replay.record as ExperimentRecord;
+  const steps = record.actions;
+  if (steps.length > (options.maxSteps ?? maxReplaySteps))
+    return refuse(
+      `${steps.length} steps exceed the ${options.maxSteps ?? maxReplaySteps} step bound`,
+    );
+  // Every step's schema, before anything runs (#1329 review).
+  const malformed = steps.findIndex(
+    (step) =>
+      typeof step?.actionId !== "string" ||
+      step.actionId === "" ||
+      typeof step.command !== "object" ||
+      step.command === null ||
+      typeof (step.command as CommandDescriptor).command !== "string" ||
+      !Array.isArray(step.facts) ||
+      !Number.isFinite(step.awarded) ||
+      !Number.isFinite(step.score),
+  );
+  if (malformed >= 0) return refuse(`step ${malformed} is malformed`);
+  // The configuration artifact, verified against this build and runtime as an import is (#934):
+  // the same generated cards and effective rules, or nothing is rebuilt (#1329 review).
+  const imported = importConfiguration(
+    JSON.stringify(replay.configuration ?? null),
+    options.runtime,
+    options.build,
+  );
+  if (!imported.ok) return refuse(`configuration: ${imported.diagnostics.join("; ")}`);
+
+  // The candidate, rebuilt as installed: setup once, then the recorded starting checkpoint.
+  const built = buildScenario(imported.config.scenario, options.runtime);
+  if (!built.ok) return refuse(`the trial could not be rebuilt: ${built.diagnostics.join("; ")}`);
+  const { run, session } = built.trial;
+  const start = record.start as StartingProvenance;
+  // It must start where the recorded trial started, not merely from the same recipe.
+  if (canonical(run.snapshot()) !== canonical(start.snapshot))
+    return refuse("the rebuilt trial does not start from the recorded starting snapshot");
+  session.random.restore(start.checkpoint);
+  let committed: { facts: readonly EventEnvelope[]; metadata: CommittedMetadata }[] = [];
+  const stop = run.onCommitted((facts, metadata) => committed.push({ facts, metadata }));
+  // The first decided outcome the candidate commits, by step (#1329 review).
+  let decided: { result: "won" | "lost"; index: number; score: number } | null = null;
+  try {
+    for (const [index, step] of steps.entries()) {
+      committed = [];
+      const command = step.command as CommandDescriptor;
+      let accepted = false;
+      try {
+        accepted = executeCommand(run, command);
+      } catch {
+        // An executor that throws (an invalid recorded argument) did not commit.
+      }
+      const own = committed[0];
+      const expected: Projection = project(step, step.actionId, step.facts, step.awarded);
+      const actual: Projection = {
+        accepted,
+        facts: normalized(own ? recordedFacts(own.facts) : [], own?.metadata.actionId ?? "\u0000"),
+        awarded: own ? awardedOf(own.facts) : 0,
+        score: run.state.round.score,
+        checkpoint: own?.metadata.checkpoint ?? null,
+      };
+      const outcome = own ? readFacts(own.facts).outcome : null;
+      if (outcome && !decided) decided = { result: outcome, index, score: run.state.round.score };
+      const field = (["accepted", "facts", "awarded", "score", "checkpoint"] as const).find(
+        (key) => canonical(expected[key]) !== canonical(actual[key]),
+      );
+      if (field)
+        return {
+          verified: false,
+          stage: "mismatch",
+          index,
+          command: command.command,
+          expected: shown(expected[field]),
+          actual: shown(actual[field]),
+          diagnostic: `step ${index} (${command.command}): its ${field} differs`,
+        };
+    }
+    // The record's final outcome must be the one the journal actually reaches.
+    const recorded = record.outcome
+      ? {
+          result: record.outcome.result,
+          index: steps.findIndex(({ actionId }) => actionId === record.outcome!.actionId),
+          score: record.outcome.score,
+        }
+      : null;
+    if (canonical(recorded) !== canonical(decided))
+      return {
+        verified: false,
+        stage: "mismatch",
+        index: decided?.index ?? recorded?.index ?? steps.length,
+        command: "outcome",
+        expected: shown(recorded),
+        actual: shown(decided),
+        diagnostic: "the trial's recorded outcome differs from the one its journal reaches",
+      };
+    return { verified: true, steps: steps.length };
+  } finally {
+    stop();
+  }
+}
+
+/** A recorded step's projection: it was accepted, with its facts, points, score and checkpoint. */
+function project(
+  step: RecordedAction,
+  actionId: string,
+  facts: RecordedAction["facts"],
+  awarded: number,
+): Projection {
+  return {
+    accepted: true,
+    facts: normalized(facts, actionId),
+    awarded,
+    score: step.score,
+    checkpoint: step.checkpoint ?? null,
+  };
+}

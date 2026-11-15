@@ -17,3 +17,7 @@ Acceptance: reproduce #985 and compare scene-stack versus mounted-view summaries
 ## Evidence, trade-offs and limits
 
 Existing command/host boundaries support adding one registered command rather than special-casing a game mode. A model-only export cannot diagnose a presentation resource that outlives its scene; independent view and scene summaries are therefore required. Registered bounded providers keep resource ownership local and avoid exposing live mutable services. This has not yet reproduced #985, and reports do not promise deterministic replay. Unavailable or truncated evidence must stay explicit. The command is development-only and must remain outside production tool composition.
+
+## Production reporting reuse (#1339)
+
+The development console remains development-only. [Crash reporting](crash-reporting.md) may compose the reusable read-only registry with separately approved production-safe providers; it does not expose the console or serialize arbitrary raw trait state. Crash diagnostics preserve explicit unavailable/truncated sections and are not replayable saves. See that contract for per-event attachment ownership, redaction and the difference between an error-time snapshot and a later screenshot.
