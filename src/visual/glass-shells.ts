@@ -39,7 +39,10 @@ const framedGlass: ShellHandler = ({ geometry, environment, faceTexture, ownSurf
       clearcoatRoughness: 0.02,
       envMap: environment,
       envMapIntensity: config.glass,
-      transparent: true,
+      // Drawn in the contents' own queue, before them (#744): three draws the transparent queue
+      // after the opaque one, so as a transparent layer this sheen was painted over the flame and
+      // added grey light to it, which reads as the flame itself reflecting the scene.
+      transparent: false,
       ...additiveSheen,
       depthWrite: false,
     }),

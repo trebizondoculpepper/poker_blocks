@@ -91,6 +91,10 @@ Before closing #1113 verify standard, shader/unlit, contained, transparent and r
 
 What an operation does to the selected cards is still to be decided.
 
+## Captured scoring explanation (#1383)
+
+[Scoring explanation](scoring-explanation.md) requires immutable hand/base/ordered resolved operation/final-point descriptors captured by authoritative scoring and preserved into narration. The shared fitted text component consumes registered pure formatting; it never rescores, reads live gameplay or draws RNG.
+
 ## Required-scope result entry (#1389)
 
 [Result scope gating](result-scope-gating.md) removes the remaining legacy result deadlines and presenter-busy inference. A configured controller uses captured terminal facts and required action/exit scopes, with no extra automatic pause, generation-safe cover/resume and cancellation. Preserve the separately documented loss-burn 80-percent gate and optional outgoing tail.
@@ -1767,6 +1771,10 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Captured visual mount reconciliation (#1161)
 
 [The scheduler interface](visual-event-interface.md#captured-snapshots-and-missing-presentation-mounts-1161) defines generation/revision-scoped mount handles, independent pose/appearance channels and commit-side captured projection updates. Delayed effects read presentation transforms only, never live GameRun ownership/material state. Registered missing-target policies either omit cosmetic work, retain an explicitly captured exit snapshot or present a captured required summary, with exactly-once bounded settlement. This supersedes the previously undefined missing-mount reference in #544/#548.
+
+## Graphical row narration (#1438)
+
+[World score text](world-score-text.md) extends shared fitted typography with a reusable graphical texture/quad renderer and separate row-world placement. It preserves captured scoring content and scheduler timing, with bounded growth/fade, resource ownership and accessible announcements; no visible DOM caption substitutes for this graphical adopter.
 
 ## Shared narration text layout (#1046)
 

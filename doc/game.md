@@ -371,7 +371,7 @@ The shop opens after each completed stage with **5–9 offers** at rest on the t
 
 **The Nothingifier (#156).** A one-use Items-rack item that removes a card from play for the rest of the run. It is drawn into the same item slots as transmogrifiers, from round 1, at a flat weight of 1 every round (a transmogrifier weighs 4 in its unlock round, falling to 1), and at most once a shop. It costs 4 coins and resells unused for 2. Its price and weight are balance config (`gameTuning.nothingifier`). It looks like an empty cube drawn as thick dots along its edges, a heavier ghost cube with nothing inside. **Using it:** drag it onto a card in the hand or on the table. The card leaves play at once, with no confirmation, and is never dealt again this run, including after Continue; a card on the table leaves a gap and nothing settles. The Nothingifier is then gone for good. A card made on the table during play (a cloud) simply leaves. Removal is not selling: it pays nothing, and it changes no other run.
 
-In landscape, shop stock occupies a compact two-row grid in the table centre. Coins and Settings sit in the top corners, the passive rack at top centre, BUY and SELL at bottom left, the hand at bottom centre, and Continue at bottom right. BUY shows the current deck count and identifies where each offer goes. The stage score, target, moves, discards, and deck gameplay panels are absent because the shop scene does not compose those traits. Controls remain at least 44 pixels high on short landscape screens. Leaving the shop burns unsold offers; reloading while in the shop preserves its remaining stock and purchases.
+In landscape, shop stock occupies a compact two-row grid in the table centre. Coins and Settings sit in the top corners, the passive rack at top centre, the hand in its configured area, and equally sized Buy, Sell and Continue blocks form one row directly below stock. The explanation is centered at the very bottom beneath all content, not below Buy; retain deck count and accessible destination descriptions in the independent information surface. The stage score, target, moves, discards, and deck gameplay panels are absent because the shop scene does not compose those traits. Controls remain at least 44 pixels high on short landscape screens. Leaving the shop burns unsold offers; reloading while in the shop preserves its remaining stock and purchases.
 
 The shop entrance is a separate presentation sequence: a deliberately theatrical **SHOP OPEN** sign descends, blocks appear to be thrown onto the table by an unseen hand, and the camera moves to frame them. The items are at rest before the player interacts with them; the animation does not change stock or purchase rules.
 
@@ -526,7 +526,7 @@ Title and pause menu blocks float over the visible 3D scene with no menu panel/b
 
 ## Certified and provisional content
 
-Certified definitions are approved for normal play subject to ordinary unlock and acquisition rules. Provisional definitions are available only through explicitly composed experimental catalogues. Certification is internal: certified content shows no public certification notice. Bench listings and inspection clearly mark provisional/experimental content through the same registered facet. New packing, mass and material-diversity modifiers remain provisional until an explicit documented certification decision. See [release status](release-status.md); registration or successful experimentation alone is not approval.
+Certified definitions are approved for normal play subject to ordinary unlock and acquisition rules. Implemented provisional gameplay passives are also admitted to the normal passive catalogue by default under the [owner-approved trial policy](release-status.md#normal-run-provisional-passive-trial-1382), without a toggle or blanket certification. They retain their visible Provisional label and experimental-balance explanation in ordinary and bench inspection. Other families, including provisional materials, retain their separately configured admission policy; developer-only fixtures and unimplemented experiments are not made normal content. Certification is internal: certified content shows no public certification notice. Packing, mass and material-diversity passives remain provisional even when available for normal-run trials. See [release status](release-status.md); registration, successful experimentation or ordinary admission alone does not certify a definition.
 
 ## Explicit gameplay lifecycle declarations (#915)
 
@@ -542,7 +542,7 @@ Stage-won Visit shop appears below the reward ledger only after all reward rows 
 
 ## Shop Continue presentation
 
-The shop Continue action is a fixed Paper word cube in the existing bottom-right exit area, not purchasable stock. See [Continue presentation](shop-continue-block.md).
+The shop Continue action is a Paper word cube grouped directly below shop stock with Buy and Sell, in that order, and is not purchasable stock. All three have equal apparent size and no visible HTML enclosure. The explanatory text sits centered at the very bottom of the screen, not beneath Buy. See [the shared shop-control layout](shop-control-blocks.md) for responsive placement and preserved action ownership; it supersedes the old bottom-right shop placement in [Continue presentation](shop-continue-block.md).
 
 ## Passive lifecycle and persistent progress
 
@@ -575,3 +575,7 @@ The deck-counter entry opens a read-only status screen with **Deck** and **Gamep
 ## Trying provisional passives in ordinary runs (#1382)
 
 The normal passive acquisition catalogue includes implemented provisional gameplay passives by default, without a toggle. Keep their visible provisional balance warning; this is permission to playtest them, not certification. Existing authored prices, unlock/material requirements, retirement and weights remain. Trials missing offer data receive the explicitly documented reversible initial stock recipe in [release status](release-status.md#normal-run-provisional-passive-trial-1382); other object families retain their own admission policy. This supersedes experiment-only availability statements for these implemented passives, not their scoring rules.
+
+## Game information webpage and title caption
+
+[The game website contract](game-website.md) defines a lightweight explanatory webpage with a prominent launch link and bug/source footer, preserving the playable index entry. The in-game home screen keeps its title/actions/footer but removes the floating “Poker solitaire in three dimensions” subtitle.
