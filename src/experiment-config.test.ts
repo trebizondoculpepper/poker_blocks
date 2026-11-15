@@ -251,3 +251,25 @@ describe("experiment configuration export (#934)", () => {
     expect(copied).toBe(serializeConfiguration(config));
   });
 });
+
+describe("stage grants in recorded rules (#1128)", () => {
+  it("records an absent grant list as empty and refuses a runtime whose grants differ", () => {
+    const config = exportConfiguration(scenario, runtime, build);
+    expect(config.rules.stageWonGrants).toEqual([]);
+    const granting = {
+      dealers,
+      rules: {
+        ...rules,
+        stageWonGrants: [
+          {
+            when: "lastStageOfRound",
+            entry: { source: "s", label: "Present", effects: [], presentation: "present" },
+          },
+        ],
+      },
+    };
+    const text = serializeConfiguration(config);
+    expect(importConfiguration(text, granting, build)).toMatchObject({ ok: false });
+    expect(importConfiguration(text, runtime, build)).toMatchObject({ ok: true });
+  });
+});
