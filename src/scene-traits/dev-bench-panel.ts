@@ -21,7 +21,23 @@ import {
   type EffectiveSetting,
   type ParameterSchema,
 } from "../configurable-passive";
-import type { ScenarioDefinition, ScenarioStep } from "../dev-scenario";
+import type { ScenarioDefinition, ScenarioRuntime, ScenarioStep } from "../dev-scenario";
+import {
+  configurationArtifact,
+  copyBenchArtifact,
+  replayArtifact,
+  replayDisclosure,
+  type BenchArtifact,
+  type BenchExportSource,
+} from "../bench-export";
+import {
+  createExperimentRecorder,
+  type ExperimentRecorder,
+  type RecorderSource,
+  type StartingProvenance,
+} from "../experiment-recorder";
+import { exportConfiguration } from "../experiment-config";
+import { appVersion } from "../version";
 import { createPassiveBlock, passiveDefinitions } from "../passives";
 import type { SceneTraitBehaviour } from "../scenes";
 import type { SessionRequest, SessionResult } from "../session-host";
@@ -104,13 +120,17 @@ export function devBenchPanel<
   Context extends {
     host: HTMLElement;
     services: {
-      run: { requestSession(request: SessionRequest): SessionResult };
+      run: { requestSession(request: SessionRequest): SessionResult } & RecorderSource & {
+          scenarioRuntime(): ScenarioRuntime;
+          trialStart(): StartingProvenance | { unavailable: string };
+        };
     };
   },
 >(): SceneTraitBehaviour<Context, DevBenchPanelConfig> {
   let panel: HTMLElement | null = null;
   // Per panel lifetime: request and trial counters, the chosen scenario, applied and pending edits.
   let requestId = 0;
+  let recorder: ExperimentRecorder | null = null;
   let trialSerial = 0;
   return {
     enter({ host, services: { run } }, { scenarios }) {
@@ -124,6 +144,23 @@ export function devBenchPanel<
       let applied: Overrides[] = [];
       let pending: Overrides[] = [];
       let status = "Choose a scenario and settings, then Apply.";
+      // The applied trial's scenario and its recorder (#937): exports read only these.
+      let appliedScenario: ScenarioDefinition | null = null;
+      recorder?.dispose();
+      recorder = null;
+      const exportSource: BenchExportSource = {
+        scenario: () => appliedScenario,
+        runtime: () => run.scenarioRuntime(),
+        record: () => recorder?.record() ?? null,
+        build: appVersion,
+      };
+      const copy = (artifact: BenchArtifact) => {
+        void copyBenchArtifact(artifact, exportSource, navigator.clipboard).then((outcome) => {
+          status = outcome.message;
+          playSfx(outcome.ok ? "ui.click" : "action.denied");
+          render();
+        });
+      };
 
       const request = (edits: readonly Overrides[], nextSeed: number) => {
         const { scenario } = scenarios[chosen]!;
@@ -133,15 +170,28 @@ export function devBenchPanel<
           playSfx("action.denied");
           return render();
         }
+        const next = editedScenario(scenario, edits, nextSeed);
         const result = run.requestSession({
           requestId: ++requestId,
           factory: "devScenario",
-          config: {
-            scenario: editedScenario(scenario, edits, nextSeed),
-            trialId: `bench-trial-${++trialSerial}`,
-          },
+          config: { scenario: next, trialId: `bench-trial-${++trialSerial}` },
         });
         if (result.ok) {
+          // A new trial: its own record from here, nothing of the last one's.
+          appliedScenario = next;
+          recorder?.dispose();
+          recorder = createExperimentRecorder(run, {
+            // The captured start, with the configuration artifact this trial was installed from.
+            start: () => {
+              const start = run.trialStart();
+              return "unavailable" in start
+                ? start
+                : {
+                    ...start,
+                    configuration: exportConfiguration(next, run.scenarioRuntime(), appVersion),
+                  };
+            },
+          });
           applied = edits.map((edit) => ({ ...edit }));
           seed = nextSeed;
           status = `${result.provenance.trialId} · seed ${nextSeed}`;
@@ -208,15 +258,28 @@ export function devBenchPanel<
             request(applied, crypto.getRandomValues(new Uint32Array(1))[0]!),
           ),
         );
+        // Exports (#937): each labelled for what it carries; the replay's disclosure beside it.
+        const exports = document.createElement("div");
+        exports.className = "dev-bench-exports";
+        const disclosure = document.createElement("p");
+        disclosure.className = "dev-bench-disclosure";
+        disclosure.textContent = replayDisclosure;
+        exports.append(
+          button(configurationArtifact.label, () => copy(configurationArtifact)),
+          button(replayArtifact.label, () => copy(replayArtifact)),
+          disclosure,
+        );
         const output = document.createElement("p");
         output.className = "dev-bench-status";
         output.setAttribute("role", "status");
         output.textContent = status;
-        panel.append(actions, output);
+        panel.append(actions, exports, output);
       };
       render();
     },
     exit() {
+      recorder?.dispose();
+      recorder = null;
       panel?.remove();
       panel = null;
     },
