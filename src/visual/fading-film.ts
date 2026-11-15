@@ -54,6 +54,13 @@ const fragmentShader = /* glsl */ `
     else if (a.y >= a.z) { face = vLocal.y > 0.0 ? 2.0 : 3.0; uv = vLocal.xz / a.y; }
     else { face = vLocal.z > 0.0 ? 4.0 : 5.0; uv = vLocal.xy / a.z; }
     uv = clamp(uv * 0.5 + 0.5, 0.5 / resolution, 1.0 - 0.5 / resolution);
+    // Smooth texel interpolation (#1010): the hardware's bilinear blend, with each texel's
+    // fraction eased so the coarse grid shows no creases or diamonds. Still one fetch.
+    vec2 texel = uv * resolution + 0.5;
+    vec2 cell = floor(texel);
+    vec2 f = texel - cell;
+    f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    uv = (cell + f - 0.5) / resolution;
     float strength = texture2D(history, vec2(uv.x, (face + uv.y) / 6.0)).r * opacity;
     if (strength < 0.01) discard;
     gl_FragColor = vec4(colour, strength);
@@ -126,6 +133,8 @@ export const fadingFilm: ResidueHandler = {
     const film = boundary.wall(material, "residue");
     // A texel centre on the unit cube, placed on the wall in block-local space.
     const toBlock = boundary.halfSize * 2 * boundary.wallScale;
+    /** One texel's width on the wall, block-local. */
+    const texelWidth = toBlock / n;
     const point = new THREE.Vector3();
     return {
       meshes: [film],
@@ -135,7 +144,15 @@ export const fadingFilm: ResidueHandler = {
           point
             .set(centres[i * 3]!, centres[i * 3 + 1]!, centres[i * 3 + 2]!)
             .multiplyScalar(toBlock);
-          strength[i] = surface.wet(point) ? 65535 : Math.round(strength[i]! * keep);
+          // How much of the texel the contents cover now (#1010): a texel the surface line
+          // crosses is partly wet, by the line's distance from its centre, so the film's edge
+          // follows the surface instead of stepping a whole texel at a time.
+          const above = point.dot(surface.normal) - surface.height;
+          const covered = surface.wet(point)
+            ? 1
+            : Math.min(1, Math.max(0, 0.5 - above / texelWidth));
+          const faded = Math.round(strength[i]! * keep);
+          strength[i] = Math.max(faded, Math.round(covered * 65535));
           shown[i] = strength[i]! >> 8;
         }
         texture.needsUpdate = true;
