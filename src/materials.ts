@@ -1735,17 +1735,18 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
 
 export type BlockMaterial = (typeof materialDefinitions)[number]["id"];
 export const blockMaterials: readonly BlockMaterial[] = materialDefinitions.map(({ id }) => id);
+/** The built-in definitions: the only ones a catalogue or pool lists (#1327 review). */
+const builtInMaterials = composeMaterials([...materialDefinitions, ...experimentalMaterials]);
+/** Every definition that can be looked up: the built-ins, then any a developer tool installed. */
 const materialRegistry = new Map<string, MaterialDefinition>(
-  composeMaterials([...materialDefinitions, ...experimentalMaterials]).map((item) => [
-    item.id,
-    item,
-  ]),
+  builtInMaterials.map((item) => [item.id, item]),
 );
 
 /**
  * Install further definitions, validated as the built-in ones are (#1177): a developer tool's own
  * fixture definitions, imported only in development so they stay out of the production bundle.
- * An ID already installed is refused; nothing is replaced.
+ * They can be looked up by ID, but no catalogue or pool lists them. An ID already installed is
+ * refused; nothing is replaced.
  */
 export function installMaterialDefinitions(definitions: readonly MaterialDefinition[]): void {
   const taken = definitions.filter(({ id }) => materialRegistry.has(id));
@@ -1874,7 +1875,9 @@ const catalogueOf = (definitions: readonly MaterialDefinition[], access: Catalog
   ).map(({ definition }) => definition);
 materialPools.register("gameplay", () => catalogueOf(materialDefinitions, ordinaryCatalogue));
 materialPools.register("registered", () =>
-  catalogueOf([...materialRegistry.values()], experimentalCatalogue),
+  // Built-ins only: a definition installed later (a dev fixture) resolves by ID but is never
+  // dealt by a pool.
+  catalogueOf(builtInMaterials, experimentalCatalogue),
 );
 
 /** Give every standard card one stable visual material for this dev run, from `pool`. */

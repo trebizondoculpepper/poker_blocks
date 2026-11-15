@@ -6,6 +6,7 @@ import type { EventEnvelope } from "../../lifecycle/action";
 import {
   blockMaterials,
   getMaterialDefinition,
+  materialPools,
   materialOf,
   type BlockMaterial,
 } from "../../materials";
@@ -52,8 +53,14 @@ describe("the real-trigger fixture (#1177; doc/triggered-presentation.md)", () =
     expect(
       getMaterialDefinition(devChainDetonatorMaterial as BlockMaterial).triggerCountdown,
     ).toBeUndefined();
-    // Never in the playable catalogue.
+    // Never in the playable catalogue, nor in any pool another mode deals from (#1327 review).
     expect(blockMaterials).not.toContain(devDetonatorMaterial);
+    for (const pool of materialPools.names())
+      expect(
+        materialPools
+          .get(pool)()
+          .map(({ id }) => id),
+      ).not.toContain(devDetonatorMaterial);
     // Installing twice changes nothing.
     expect(() => installTriggerFixture()).not.toThrow();
   });
