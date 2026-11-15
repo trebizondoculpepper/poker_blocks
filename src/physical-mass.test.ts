@@ -8,8 +8,9 @@ import {
 import { aggregateMass, massKg, validatePhysicalMass } from "./physical-mass";
 
 /**
- * Base materials: doc/material-mass-and-passives.md (#1061, #1067). Experimental constructions
- * keep their explicit recipes from doc/playfield-rocking.md's catalogue.
+ * Base materials: doc/material-mass-and-passives.md (#1061, #1067). Experimental variants
+ * that only change the visual vessel inherit their base material's mass; the empty lantern
+ * and dark fluid keep their explicit recipes.
  */
 const catalogue: Record<string, number> = {
   paper: 0.016,
@@ -31,21 +32,21 @@ const catalogue: Record<string, number> = {
   emptyVessel: 0.001,
   airVent: 0.0012,
   emptyLantern: 0.464,
-  custardLantern: 1.0415,
-  flameLantern: 0.464165,
-  waterInLantern: 1.014,
-  cloudInLantern: 0.46466,
-  earthInLantern: 1.289,
-  magicLockLantern: 0.4915,
-  aggressiveFlame: 0.678165,
-  custardFrame: 1.2555,
-  waterInPlastic: 0.598,
-  earthInPlastic: 0.873,
-  hotWaterInPlastic: 0.598,
-  boilingWaterInPlastic: 0.598,
+  custardLantern: 0.5,
+  flameLantern: 0.01,
+  waterInLantern: 1,
+  cloudInLantern: 0.002,
+  earthInLantern: 0.8,
+  magicLockLantern: 0.048,
+  aggressiveFlame: 0.01,
+  custardFrame: 0.5,
+  waterInPlastic: 1,
+  earthInPlastic: 0.8,
+  hotWaterInPlastic: 1,
+  boilingWaterInPlastic: 1,
   darkFluid: 0.543,
-  cloudInPlastic: 0.04866,
-  magicLock: 0.0755,
+  cloudInPlastic: 0.002,
+  magicLock: 0.048,
 };
 
 const all: readonly MaterialDefinition[] = [...materialDefinitions, ...experimentalMaterials];

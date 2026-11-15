@@ -9,21 +9,13 @@ import {
   type ReleaseStatusDeclaration,
 } from "./release-status";
 import {
-  cloudFill,
-  custardFill,
   darkOilFill,
-  flameFill,
-  framedGlass,
   giftWrapping,
-  magicStarsFill,
   massOf,
   paperShell,
   plasticShell,
-  soilFill,
   solid,
   stainedLantern,
-  waterFill,
-  type MassComponent,
   type PhysicalMass,
   validatePhysicalMass,
   airLitre,
@@ -1354,14 +1346,15 @@ function plasticFluidExperiments(): MaterialDefinition[] {
     id: string,
     name: string,
     contents: MaterialDefinition["appearance"]["contents"],
-    fill: MassComponent[],
+    // The base material's recipe: a visual vessel adds no mass (doc/material-mass-and-passives.md).
+    mass: PhysicalMass,
     family: string,
     // Its gameplay parent's full lifecycle (#917 review): an ordinary run card unless given.
     lifecycle: LifecycleDeclaration = { parent: "ordinaryCard" },
   ): MaterialDefinition => ({
     id,
     materialFamily: family,
-    mass: massOf(plasticShell, fill),
+    mass,
     releaseStatus: { provisional: {} },
     lifecycle,
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
@@ -1383,25 +1376,32 @@ function plasticFluidExperiments(): MaterialDefinition[] {
     },
   });
   return [
-    plastic("waterInPlastic", "Water in plastic", clearWater, waterFill, "water"),
+    plastic("waterInPlastic", "Water in plastic", clearWater, massOf(waterLitre), "water"),
     // Earth (#358): slow soil with grass, in plastic and in the lantern; no residue.
-    withInclusions(plastic("earthInPlastic", "Earth in plastic", slowEarth, soilFill, "earth"), [
-      grass,
-    ]),
+    withInclusions(
+      plastic("earthInPlastic", "Earth in plastic", slowEarth, halfFilledEarthMass, "earth"),
+      [grass],
+    ),
     // Hot water (#353): the same water, with very slowly rising bubbles as an inclusion.
     withInclusions(
-      plastic("hotWaterInPlastic", "Hot water in plastic", clearWater, waterFill, "water"),
+      plastic("hotWaterInPlastic", "Hot water in plastic", clearWater, massOf(waterLitre), "water"),
       [slowBubbles],
     ),
     // Boiling water (#354): the same water, with fast bubbles.
     withInclusions(
-      plastic("boilingWaterInPlastic", "Boiling water in plastic", clearWater, waterFill, "water"),
+      plastic(
+        "boilingWaterInPlastic",
+        "Boiling water in plastic",
+        clearWater,
+        massOf(waterLitre),
+        "water",
+      ),
       [fastBubbles],
     ),
-    plastic("darkFluid", "Dark fluid", darkFluid, darkOilFill, "darkFluid"),
+    plastic("darkFluid", "Dark fluid", darkFluid, massOf(plasticShell, darkOilFill), "darkFluid"),
     // Cloud's container appearances keep Cloud's own stage retention (#917 review).
-    plastic("cloudInPlastic", "Cloud in plastic", softCloud, cloudFill, "cloud", cloudLifecycle),
-    plastic("magicLock", "Magic Lock", magicStars, magicStarsFill, "magic"),
+    plastic("cloudInPlastic", "Cloud in plastic", softCloud, cloudMass, "cloud", cloudLifecycle),
+    plastic("magicLock", "Magic Lock", magicStars, magicMass, "magic"),
   ];
 }
 
@@ -1413,7 +1413,8 @@ function glassContainerExperiments(): MaterialDefinition[] {
   const lantern = (
     id: string,
     name: string,
-    fill: MassComponent[],
+    // The base material's recipe: a visual vessel adds no mass (doc/material-mass-and-passives.md).
+    mass: PhysicalMass,
     family: string,
     contents?: MaterialDefinition["appearance"]["contents"],
     residue?: MaterialDefinition["appearance"]["residue"],
@@ -1422,7 +1423,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
   ) => ({
     id,
     materialFamily: family,
-    mass: massOf(stainedLantern, fill),
+    mass,
     releaseStatus: { provisional: {} },
     lifecycle,
     lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
@@ -1445,36 +1446,37 @@ function glassContainerExperiments(): MaterialDefinition[] {
     },
   });
   return [
-    lantern("emptyLantern", "Empty lantern", [], "emptyLantern"),
+    lantern("emptyLantern", "Empty lantern", massOf(stainedLantern), "emptyLantern"),
     lantern(
       "custardLantern",
       "Custard in a lantern",
-      custardFill,
+      halfFilledCustardMass,
       "custard",
       custardContents,
       custardResidue,
     ),
-    lantern("flameLantern", "Flame in a lantern", flameFill, "fire", {
+    lantern("flameLantern", "Flame in a lantern", fireCardMass, "fire", {
       effect: "flame",
       config: {},
     }),
     // Fluid looks (#333): the same levelling fluid, other optics, in either container.
-    lantern("waterInLantern", "Water in a lantern", waterFill, "water", clearWater),
+    lantern("waterInLantern", "Water in a lantern", massOf(waterLitre), "water", clearWater),
     // A contained cloud (#336): the same contents in either container.
     lantern(
       "cloudInLantern",
       "Cloud in a lantern",
-      cloudFill,
+      cloudMass,
       "cloud",
       softCloud,
       undefined,
       cloudLifecycle,
     ),
-    withInclusions(lantern("earthInLantern", "Earth in a lantern", soilFill, "earth", slowEarth), [
-      grass,
-    ]),
+    withInclusions(
+      lantern("earthInLantern", "Earth in a lantern", halfFilledEarthMass, "earth", slowEarth),
+      [grass],
+    ),
     // Magic Lock (#349): the crystal trail's stars, aging white to black, in either container.
-    lantern("magicLockLantern", "Magic Lock (lantern)", magicStarsFill, "magic", magicStars),
+    lantern("magicLockLantern", "Magic Lock (lantern)", magicMass, "magic", magicStars),
     {
       // Aggressive flame (#355): the fire block's own flame, slightly larger and brighter, in the
       // same iron frame. A visual variant only: configuration of the same flame.
@@ -1483,7 +1485,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
       releaseStatus: { provisional: {} },
       // Appearance variant: inherits the ordinary card policy (#917).
       lifecycle: { parent: "ordinaryCard" },
-      mass: massOf(framedGlass, flameFill),
+      mass: fireCardMass,
       lettering: { font: "Saira Stencil One", fallback: "sans-serif", weight: 400 },
       name: "Aggressive flame",
       acoustics: { character: "rattling", hardness: 9, attach: "material.attach.fire" as const },
@@ -1519,7 +1521,7 @@ function glassContainerExperiments(): MaterialDefinition[] {
       releaseStatus: { provisional: {} },
       // Appearance variant: inherits the ordinary card policy (#917).
       lifecycle: { parent: "ordinaryCard" },
-      mass: massOf(framedGlass, custardFill),
+      mass: halfFilledCustardMass,
       lettering: { font: "Roboto", fallback: "sans-serif", weight: 400 },
       name: "Custard in a frame",
       acoustics: { character: "clanking", hardness: 8, attach: "material.attach.fire" as const },
