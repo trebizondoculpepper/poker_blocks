@@ -28,6 +28,7 @@ import { passiveAppearance, createPassiveBlock, passiveDefinitions } from "../pa
 import { createPassiveVisual } from "../passive-visual";
 import { createBlockAppearance, setReflectionEnvironment } from "../visual/block-appearance";
 import { createPrepassContext, type PrepassReference } from "../visual/appearance-prepass";
+import { massKg, weightLine } from "../physical-mass";
 import "./object-browser.css";
 
 export type ObjectBrowser = { show(backTo: string): void; hide(): void; dispose(): void };
@@ -67,10 +68,16 @@ function materialPage(
   } = {},
 ): BrowsedObject {
   const { card = sampleCard, options = {}, id = definition.id, name = definition.name } = page;
+  // Every material sheet shows its authored mass (#1069), from the definition's own recipe.
+  // An instance-derived recipe (a Present's, #1068) states its rule: a definition has no instance.
+  const weight =
+    "provider" in definition.mass
+      ? `Weight: ${definition.mass.rule}`
+      : weightLine(massKg(definition.mass));
   return {
     id,
     name,
-    note,
+    note: note ? `${note}\n${weight}` : weight,
     status: releaseStatusPresentation(definition.id, definition.releaseStatus),
     // The caller says what the page shows: the material's definition unless told otherwise.
     properties: page.properties ?? definition,
