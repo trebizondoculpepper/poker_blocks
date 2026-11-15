@@ -220,4 +220,76 @@ describe("action-correlated presentation phases (#1218; doc/action-presentation-
     expect(seen).toHaveBeenCalledTimes(1);
     expect(seen).toHaveBeenCalledWith({ state: "finished" });
   });
+
+  it("keeps every earlier slot as a barrier when a middle slot is empty (#1251)", () => {
+    const flight = producer({ slot: "preScoring" });
+    const graph = producer({ slot: "postScoring" });
+    // No scoring contribution at all.
+    const { phases, step } = harness([flight, graph]);
+    const committed = phases.commit("a1", null);
+    if (!committed.ok) throw new Error(committed.diagnostic);
+    committed.contributions.get(graph)!.bind(work("graph", 10));
+    committed.contributions.get(flight)!.bind(work("flight", 100));
+    step(300);
+    const at = (label: string) =>
+      Number(trace.find((t) => t.startsWith(`${label}@`))!.split("@")[1]);
+    expect(at("graph")).toBeGreaterThanOrEqual(at("flight") + 100);
+  });
+
+  it("starts bound work when its gates open, not when its hold started (#1251)", () => {
+    const narration = producer({ slot: "scoring" });
+    const graph = producer({ slot: "postScoring" });
+    const { phases, step } = harness([narration, graph]);
+    const committed = phases.commit("a1", null);
+    if (!committed.ok) throw new Error(committed.diagnostic);
+    committed.contributions.get(graph)!.bind(work("graph", 30));
+    step(200);
+    committed.contributions.get(narration)!.bind(work("narration", 10));
+    step(200);
+    // The graph started after narration and still ran its full 30 ms.
+    const started = Number(trace.find((t) => t.startsWith("graph@"))!.split("@")[1]);
+    expect(started).toBeGreaterThanOrEqual(210);
+    expect(trace).toContain("graph!");
+  });
+
+  it("contains a throwing producer and still closes the collection (#1251)", () => {
+    const throwing = `test.producer.${++producerCount}`;
+    phaseProducers.register(throwing, {
+      reserve: () => {
+        throw new Error("boom");
+      },
+    });
+    const narration = producer({ slot: "scoring" });
+    const { phases, step } = harness([throwing, narration]);
+    const committed = phases.commit("a1", { score: 1 });
+    if (!committed.ok) throw new Error(committed.diagnostic);
+    expect(committed.diagnostics).toEqual([`${throwing}: reserve failed: boom`]);
+    expect(summaries).toEqual([{ producer: throwing, captured: { score: 1 } }]);
+    committed.contributions.get(narration)!.bind(work("n", 10));
+    step(100);
+    expect(phases.status(committed.key)).toEqual({ state: "finished" });
+  });
+
+  it("summarises and cancels a reservation the scheduler won't admit (#1251)", () => {
+    const narration = producer({ slot: "scoring" });
+    trace.length = 0;
+    summaries.length = 0;
+    const scheduler = createVisualScheduler({ limits: { pendingGlobal: 1 } });
+    scheduler.update(0, true);
+    // Fill the only pending place.
+    const filler = scheduler.createScope(null);
+    scheduler.schedule(filler, work("filler", 10_000));
+    const phases = createActionPhases(scheduler, {
+      plan: "scoring",
+      producers: [narration],
+      fallback: "test.phaseSummary",
+    });
+    const committed = phases.commit("a1", "x");
+    if (!committed.ok) throw new Error(committed.diagnostic);
+    expect(committed.diagnostics[0]).toContain("reservation not admitted");
+    expect(summaries).toHaveLength(1);
+    const contribution = committed.contributions.get(narration)!;
+    expect(contribution.status().state).toBe("cancelled");
+    expect(contribution.bind(work("late", 10))).toBe(false);
+  });
 });

@@ -34,6 +34,9 @@ function fakeElement(tag = "div") {
     children: [] as unknown[],
     parent: null as { children: unknown[] } | null,
     disabled: false,
+    /** What the browser's :focus-visible would say for the next focus. */
+    focusVisible: true,
+    matches: (selector: string) => selector === ":focus-visible" && element.focusVisible,
     type: "",
     className: "",
     textContent: "",
@@ -208,13 +211,32 @@ describe("grouped 3D control stage (#1146; doc/shop-control-blocks.md)", () => {
     h.buttons[0].fire("pointerdown", { pointerType: "mouse" });
     // The pointer's own hover; what follows must add nothing.
     seen.length = 0;
+    // Focus from a press is not :focus-visible.
+    h.buttons[0].focusVisible = false;
     h.buttons[0].fire("focus");
     h.buttons[0].fire("blur");
     expect(seen).toEqual([]);
     // Keyboard focus afterwards still forwards.
+    h.buttons[0].focusVisible = true;
     h.buttons[0].fire("focus");
     expect(seen).toEqual(["input.enter", "input.focus"]);
     stops.forEach((stop) => stop());
+    stage.dispose();
+  });
+
+  it("treats a touch's late focus as the touch's, whatever order it arrives in (#1241)", async () => {
+    const h = harness();
+    const stage = await createControlStage(h.stageHost, controls);
+    const seen: string[] = [];
+    const stop = stage.cube("a")!.block.on("input.focus", () => void seen.push("focus"));
+    h.buttons[0].fire("pointerdown", { pointerType: "touch" });
+    h.buttons[0].fire("pointerup", { pointerType: "touch", clientX: 210, clientY: 220 });
+    await Promise.resolve();
+    // The browser focuses after the release; it isn't :focus-visible.
+    h.buttons[0].focusVisible = false;
+    h.buttons[0].fire("focus");
+    expect(seen).toEqual([]);
+    stop();
     stage.dispose();
   });
 
