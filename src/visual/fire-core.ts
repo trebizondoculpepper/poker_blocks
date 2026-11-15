@@ -159,6 +159,8 @@ export const flamePalette: { ember: Rgb; mid: Rgb; core: Rgb } = {
 export function createFireCore(size: number): THREE.Mesh {
   const halfSize = (size / 2) * 0.96;
   const material = new THREE.ShaderMaterial({
+    // Masked by its own shader in a paired transition (#1208).
+    userData: { maskAdapter: "shaderSurface" },
     vertexShader,
     fragmentShader,
     uniforms: {
