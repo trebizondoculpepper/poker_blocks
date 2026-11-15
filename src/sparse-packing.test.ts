@@ -37,7 +37,7 @@ describe("Sparse packing passive (#1071; doc/material-mass-and-passives.md)", ()
     expect(JSON.stringify(scored)).not.toContain("power-line-score-by-query");
   });
 
-  it("is provisional: never in ordinary stock", () => {
-    expect(ordinaryPassives().map(({ id }) => id)).not.toContain("sparse-packing");
+  it("is provisional, and offered in normal runs (#1393)", () => {
+    expect(ordinaryPassives().map(({ id }) => id)).toContain("sparse-packing");
   });
 });

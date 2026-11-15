@@ -58,7 +58,7 @@ describe("Dense packing passive (#1070; doc/material-mass-and-passives.md)", () 
     });
   });
 
-  it("is provisional: never in ordinary stock", () => {
-    expect(ordinaryPassives().map(({ id }) => id)).not.toContain("dense-packing");
+  it("is provisional, and offered in normal runs (#1393)", () => {
+    expect(ordinaryPassives().map(({ id }) => id)).toContain("dense-packing");
   });
 });

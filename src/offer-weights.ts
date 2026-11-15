@@ -69,6 +69,11 @@ passiveFrequencies.register("exponentialScoring", [
 ]);
 passiveFrequencies.register("even", [[1, 1]]);
 /**
+ * A provisional gameplay trial's initial, reversible offer weight (#1393; doc/release-status.md,
+ * "Normal-run provisional passive trial"): common from round 1.
+ */
+passiveFrequencies.register("trial", [[1, common]]);
+/**
  * Never drawn into the ordinary passive offers: for items stocked only by their own dedicated
  * shop slots (transmogrifiers, #388).
  */

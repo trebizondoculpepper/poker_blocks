@@ -11,7 +11,7 @@
  */
 import { query } from "./context-queries";
 import { outcomeFormatters, formatNumber } from "./activation-descriptor";
-import { passiveDefinitions, type PassiveDefinition } from "./passives";
+import { passiveDefinitions, trialOffer, type PassiveDefinition } from "./passives";
 import { raiseLine, ruleHandlers } from "./rule-handlers";
 import "./hoop-query";
 
@@ -45,8 +45,9 @@ export const inTheLoopPower = 1.2;
 
 export const inTheLoop: PassiveDefinition = {
   id: "trial-in-the-loop",
-  // Experimental catalogues only, never normal shops (doc/release-status.md).
+  // A provisional trial, offered in normal runs with the trial recipe (#1393).
   releaseStatus: { provisional: {} },
+  shop: trialOffer,
   lifecycle: { parent: "rackItem" },
   name: "In the Loop",
   symbol: "◎",

@@ -67,12 +67,12 @@ releaseStatuses.register("certified", {
 releaseStatuses.register("provisional", {
   descriptor: Object.freeze({
     label: "Provisional",
-    explanation: "Only in explicitly experimental catalogues, never in normal play.",
+    explanation: "Experimental balance: still being tried out, and may change.",
   }),
   presentation: Object.freeze({
     badge: "Provisional",
     lines: Object.freeze([
-      "Status: Provisional — only in experimental catalogues, never in normal play",
+      "Status: Provisional — experimental balance, still being tried out and may change",
     ]),
   }),
   contribute: (contribution, contributions) => contributions.add("provisional", contribution),
@@ -135,6 +135,13 @@ export type CatalogueAccess = Readonly<{ operations: readonly string[] }>;
 
 /** Normal play: the certified admission only. */
 export const ordinaryCatalogue: CatalogueAccess = Object.freeze({ operations: ["certified"] });
+/**
+ * The normal passive catalogue (#1393; doc/release-status.md, "Normal-run provisional passive
+ * trial"): certified and provisional passives alike, by owner decision, for this family only.
+ */
+export const passiveCatalogue: CatalogueAccess = Object.freeze({
+  operations: ["certified", "provisional"],
+});
 /** An explicitly experimental catalogue: both admissions. */
 export const experimentalCatalogue: CatalogueAccess = Object.freeze({
   operations: ["certified", "provisional"],

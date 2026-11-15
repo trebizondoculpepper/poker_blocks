@@ -78,10 +78,10 @@ describe("dense and sparse packing trials (#817)", () => {
     expect(scored[0]!.points).toBe(Math.round(base * sparse(d)));
   });
 
-  it("is provisional: never in normal play's passive catalogue", () => {
+  it("is provisional, and offered in normal runs (#1393)", () => {
     const ordinary = ordinaryPassives().map(({ id }) => id);
-    expect(ordinary).not.toContain("trial-dense-packing");
-    expect(ordinary).not.toContain("trial-sparse-packing");
+    expect(ordinary).toContain("trial-dense-packing");
+    expect(ordinary).toContain("trial-sparse-packing");
   });
 });
 
@@ -118,7 +118,7 @@ describe("heavy and light mass trials (#818)", () => {
     expect(total[0]!.points / base.points).toBeCloseTo(light(scoredKg), 2);
   });
 
-  it("is provisional", () => {
+  it("is provisional, and offered in normal runs (#1393)", () => {
     const ordinary = ordinaryPassives().map(({ id }) => id);
     for (const id of [
       "trial-heavy-mean-mass",
@@ -126,7 +126,7 @@ describe("heavy and light mass trials (#818)", () => {
       "trial-heavy-total-mass",
       "trial-light-total-mass",
     ])
-      expect(ordinary).not.toContain(id);
+      expect(ordinary).toContain(id);
   });
 });
 
@@ -186,7 +186,7 @@ describe("material diversity trial (#819)", () => {
     expect(withThree[0]!.points / baseThree).toBeCloseTo(4, 1);
   });
 
-  it("is provisional", () => {
-    expect(ordinaryPassives().map(({ id }) => id)).not.toContain("trial-material-diversity");
+  it("is provisional, and offered in normal runs (#1393)", () => {
+    expect(ordinaryPassives().map(({ id }) => id)).toContain("trial-material-diversity");
   });
 });
