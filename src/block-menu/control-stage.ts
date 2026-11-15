@@ -172,31 +172,17 @@ export async function createControlStage(
       router.up(within(entry, event.clientX, event.clientY) ? cube : null, event.pointerType),
     );
     // Keyboard focus is the hover of keyboard users: lift and describe it as a pointer would.
-    // A pointer press also focuses the button; that focus is the pointer's, and its own hover
-    // already shows, so only focus that no pointer press caused is forwarded (#1202).
-    let pointerPressed = false;
+    // A pointer or touch press also focuses the button; that focus is the pointer's, whose own
+    // hover already shows. The browser's own `:focus-visible` says which focus is which, whatever
+    // order touch events and focus arrive in (#1202, #1234, #1241).
     let keyboardFocused = false;
-    on("pointerdown", () => {
-      pointerPressed = true;
-    });
-    // A press that moved no focus must not mark the next keyboard focus as the pointer's (#1234).
-    // Focus from a press arrives before its release, so clearing after the release is safe.
-    const pressEnded = () => {
-      queueMicrotask(() => {
-        pointerPressed = false;
-      });
-    };
-    on("pointerup", pressEnded);
-    on("pointercancel", pressEnded);
     on("focus", () => {
-      keyboardFocused = !pointerPressed;
-      pointerPressed = false;
+      keyboardFocused = button.matches(":focus-visible");
       if (!keyboardFocused) return;
       cube.block.emit("input.enter");
       cube.block.emit("input.focus");
     });
     on("blur", () => {
-      pointerPressed = false;
       if (!keyboardFocused) return;
       keyboardFocused = false;
       cube.block.emit("input.blur");
