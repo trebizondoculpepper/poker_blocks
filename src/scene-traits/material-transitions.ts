@@ -56,37 +56,39 @@ export const transitionFacts = new Registry<(payload: unknown) => TransitionFact
 transitionFacts.register("block.materialChanged", (payload) => payload as TransitionFact);
 
 /**
- * A producer reserving the slot before or after a dividing fact, by where the action's first
- * matching fact was committed relative to it (the action's facts are captured in commit order).
+ * Where an action's material transitions sit: before or after its score was applied, by the
+ * position of each transition fact relative to the dividing fact in the action's own committed
+ * facts (captured in commit order). An action without the divider has only a before side.
  */
-function slotByOrder(config: {
-  facts: () => readonly string[];
-  divider: string;
-  before: string;
-  after: string;
-}) {
+const scoreDivider = "score.totalApplied";
+type Side = { slot: string; holds(at: number, divider: number): boolean };
+const sides = {
+  before: { slot: "preScoring", holds: (at, divider) => divider < 0 || at < divider },
+  after: { slot: "postScoring", holds: (at, divider) => divider >= 0 && at > divider },
+} satisfies Record<string, Side>;
+
+/** A producer reserving `side`'s slot when the action has a transition on that side. */
+function sideProducer(side: Side) {
   return {
     reserve(captured: unknown) {
       const types = (captured as CommittedCapture).factTypes;
-      const found = config.facts().flatMap((fact) => [types.indexOf(fact)].filter((at) => at >= 0));
-      if (!found.length) return null;
-      const divider = types.indexOf(config.divider);
-      return { slot: divider >= 0 && Math.min(...found) > divider ? config.after : config.before };
+      const divider = types.indexOf(scoreDivider);
+      const occupied = types.some(
+        (type, at) => transitionFacts.has(type) && side.holds(at, divider),
+      );
+      return occupied ? { slot: side.slot } : null;
     },
   };
 }
 
 /** Reserved while the trait is mounted: an action's transitions belong to its phase record. */
-export const materialTransitionsProducer = "materialTransitions";
-phaseProducers.register(
-  materialTransitionsProducer,
-  slotByOrder({
-    facts: () => transitionFacts.names(),
-    divider: "score.totalApplied",
-    before: "preScoring",
-    after: "postScoring",
+export const materialTransitionsProducers = Object.fromEntries(
+  Object.entries(sides).map(([name, side]) => {
+    const producer = `materialTransitions.${name}`;
+    phaseProducers.register(producer, sideProducer(side));
+    return [producer, side];
   }),
-);
+) as Record<string, Side>;
 
 /** One action's transitions, played together when its slot opens. */
 visualHandlers.register("material.transitions", (payload, context) => {
@@ -131,15 +133,20 @@ export function materialTransitions<
     enter({ services }, config) {
       release(config, services.visualEvents);
       const { visualEvents, actionPhase } = services;
-      const uncompose = services.composeProducer(materialTransitionsProducer);
+      const composed = Object.keys(materialTransitionsProducers).map((producer) =>
+        services.composeProducer(producer),
+      );
+      const uncompose = () => composed.forEach((each) => each());
       const scope = visualEvents.createScope(null);
       // Fresh for each entry, so a new run's restarted event IDs are never taken for old ones.
       const shown = new Set<string>();
       const held = new Set<string>();
       const now = () => visualEvents.nowMs / unitMs;
       const stop = services.run.onCommitted((facts) => {
-        const requests: string[] = [];
-        for (const { eventId, type, payload } of facts) {
+        // Each side's requests: before or after the action's score was applied (#1359 review).
+        const divider = facts.map(({ type }) => type).indexOf(scoreDivider);
+        const bySide = new Map<string, string[]>();
+        for (const [at, { eventId, type, payload }] of facts.entries()) {
           if (!transitionFacts.has(type)) continue;
           const fact = transitionFacts.get(type)(payload);
           const before = fact.snapshots?.before;
@@ -161,35 +168,41 @@ export function materialTransitions<
           });
           if (!holding.accepted)
             console.warn(`a material transition was not held: ${holding.reason}`);
-          requests.push(id);
+          const [producer] = Object.entries(materialTransitionsProducers).find(([, side]) =>
+            side.holds(at, divider),
+          )!;
+          bySide.set(producer, [...(bySide.get(producer) ?? []), id]);
         }
         const key = actionPhase.latest;
-        const contribution = key && actionPhase.contributionFor(key, materialTransitionsProducer);
-        if (!contribution) {
-          // No phase record to join: they play at once.
-          for (const request of requests)
-            visualEvents.schedule(scope, {
-              handler: materialTransitionHandler,
-              payload: { request },
-              dueUnits: now(),
-            });
-          return;
+        for (const producer of Object.keys(materialTransitionsProducers)) {
+          const requests = bySide.get(producer) ?? [];
+          const contribution = key && actionPhase.contributionFor(key, producer);
+          if (!contribution) {
+            // No phase record to join: they play at once.
+            for (const request of requests)
+              visualEvents.schedule(scope, {
+                handler: materialTransitionHandler,
+                payload: { request },
+                dueUnits: now(),
+              });
+            continue;
+          }
+          if (!requests.length) {
+            contribution.settleEmpty();
+            continue;
+          }
+          const abandon = () => requests.forEach(forgetTransition);
+          if (
+            !contribution.bind({
+              handler: "material.transitions",
+              payload: { requests },
+              dueUnits: 0,
+            })
+          )
+            abandon();
+          // Ended before playing (a new run, a cancelled record): nothing is left held.
+          else contribution.observe(abandon);
         }
-        if (!requests.length) {
-          contribution.settleEmpty();
-          return;
-        }
-        const abandon = () => requests.forEach(forgetTransition);
-        if (
-          !contribution.bind({
-            handler: "material.transitions",
-            payload: { requests },
-            dueUnits: 0,
-          })
-        )
-          abandon();
-        // Ended before playing (a new run, a cancelled record): nothing is left held.
-        else contribution.observe(abandon);
       });
       live.set(config, { stop, uncompose, scope, held });
     },
