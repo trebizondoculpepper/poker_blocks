@@ -161,7 +161,7 @@ describe("grouped 3D control stage (#1146; doc/shop-control-blocks.md)", () => {
     const stop = stage.onAction((action, id) => actions.push([action, id]));
     // A pointer press and release on the hit region.
     h.buttons[0].fire("pointerdown", { pointerType: "mouse" });
-    h.buttons[0].fire("pointerup", { pointerType: "mouse" });
+    h.buttons[0].fire("pointerup", { pointerType: "mouse", clientX: 210, clientY: 220 });
     // The browser's click after that pointer press is not a second activation.
     h.buttons[0].fire("click", { detail: 1 });
     // Keyboard activation: one more.
@@ -171,6 +171,38 @@ describe("grouped 3D control stage (#1146; doc/shop-control-blocks.md)", () => {
       ["configured.first", "a"],
     ]);
     stop();
+    stage.dispose();
+  });
+
+  it("does not activate on a touch released off the control (#1191)", async () => {
+    const h = harness();
+    const stage = await createControlStage(h.stageHost, controls);
+    const actions: string[] = [];
+    stage.onAction((action) => actions.push(action));
+    h.buttons[0].fire("pointerdown", { pointerType: "touch" });
+    // The finger slid away: the captured release arrives at the button, but far off it.
+    h.buttons[0].fire("pointerup", { pointerType: "touch", clientX: 600, clientY: 380 });
+    expect(actions).toEqual([]);
+    stage.dispose();
+  });
+
+  it("gives keyboard focus the same lift and description as hover (#1191)", async () => {
+    const h = harness();
+    const stage = await createControlStage(h.stageHost, controls);
+    const seen: string[] = [];
+    const events = ["input.enter", "input.focus", "input.blur", "input.leave"];
+    const stops = events.map((name) => stage.cube("a")!.block.on(name, () => void seen.push(name)));
+    h.buttons[0].fire("focus");
+    h.buttons[0].fire("blur");
+    expect(seen).toEqual(events);
+    stops.forEach((stop) => stop());
+    stage.dispose();
+  });
+
+  it("displays the canvas at the host's CSS size, whatever its drawing buffer (#1191)", async () => {
+    const h = harness();
+    const stage = await createControlStage(h.stageHost, controls);
+    expect(h.canvas.style).toMatchObject({ width: "800px", height: "400px" });
     stage.dispose();
   });
 
