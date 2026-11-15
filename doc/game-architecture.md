@@ -1762,3 +1762,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Prepared imported-model visuals (#1184)
 
 [Imported models](imported-models.md) defines one maintained headless Blender preparation profile, a renderer-scoped GLTFLoader provider/cache and registered adapters for the existing card/passive visual interfaces. Definitions supply asset/profile/part/fallback configuration; a prepared appearance swap preserves pose through generation-checked mounts. Uniform resource ownership prevents a normal view disposal from deleting cached geometry/textures still in use. Source import, asset selection and actual in-game adoption are distinct evidenced deliverables, with no per-item loader or model-identity branch.
+
+### Action-correlated presentation phases (#1216)
+
+Independent post-score traits use [reserved action contributions and phase completion](action-presentation-phases.md) on the shared scheduler. A captured generation/action key correlates producer-owned scopes; every required child is reserved before root sealing. Placement/scoring producer adapters publish per-action completion, and result cues wait for the full required root including graph growth. Services retain handles/status, not a second timed queue or gameplay policy.
