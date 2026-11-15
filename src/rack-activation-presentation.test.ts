@@ -95,6 +95,19 @@ describe("a line's activation order, captured at commit (#540)", () => {
     expect(second! - first!).toBeCloseTo(5 * unitMs, 6);
   });
 
+  it("captures the order before an item can leave, so a later sale cannot close the gaps", () => {
+    // The order is captured while all three are installed...
+    const installed = ["passive.1", "passive.2", "passive.3"];
+    expect(captureActivationOrder(installed, { presents: () => true })).toEqual(installed);
+    // ...and that captured order is what gets scheduled, even though only two remain.
+    const pulses = host(["passive.1", "passive.3"]);
+    const { scheduler, advance } = scheduling(pulses);
+    presentActivationOrder(scheduler, installed, scheduler.nowMs / unitMs);
+    advance(600);
+    const [first, third] = pulses.started.map(({ atMs }) => atMs);
+    expect(third! - first!).toBeCloseTo(2 * staggerSpacingUnits * unitMs, 6);
+  });
+
   it("starts nothing, and creates no scope, when the host presents no source", () => {
     const pulses = host([]);
     const { scheduler } = scheduling(pulses);

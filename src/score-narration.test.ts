@@ -92,6 +92,35 @@ describe("score narration on the visual-event scheduler (#547)", () => {
     expect(narration.presenting).toBe(false);
   });
 
+  it("starts each activation's alongside event after its own staggered pulse (#540)", () => {
+    const { narration, advance } = narrating();
+    // Two installed items pulse 2 units apart, so their labels must not both start with the line.
+    const staggered: NarratedLine = {
+      ...line("a", 10),
+      activationOrder: ["passive.1", "passive.2"],
+      alongside: [
+        { handler: "test.narration.beside", payload: "first" },
+        { handler: "test.narration.beside", payload: "second", offsetUnits: 2 },
+      ],
+    };
+    besideLog.length = 0;
+    narration.narrate(play([staggered]));
+    advance(400);
+    expect(besideLog).toEqual(["0:first", "133:second"]);
+  });
+
+  it("starts a discard's alongside events after their own offsets too (#540)", () => {
+    const { narration, advance } = narrating();
+    besideLog.length = 0;
+    // A discard narrates no score: its labels are shown through `alongside`, not a line.
+    narration.alongside([
+      { handler: "test.narration.beside", payload: "first" },
+      { handler: "test.narration.beside", payload: "second", offsetUnits: 2 },
+    ]);
+    advance(400);
+    expect(besideLog).toEqual(["0:first", "133:second"]);
+  });
+
   it("narrates a later play after the earlier play's scope settles, and announces once", () => {
     const { log, narration, advance } = narrating();
     narration.narrate(play([line("a", 1), line("b", 1)]));

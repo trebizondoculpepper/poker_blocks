@@ -150,6 +150,12 @@ type Playing = {
   drawn: readonly CardBlock[];
   /** The sounds its landing makes, decided from the field it committed to. */
   landingSounds: readonly SoundEffectId[];
+  /**
+   * Its installed sources' activation order, captured when it committed (#540). Asked then, at
+   * commit, so an item sold while the play flies keeps its captured slot rather than the play's
+   * sequence closing up around it.
+   */
+  activationSources: readonly string[];
 };
 
 /** A discard being shown. */
@@ -405,17 +411,19 @@ export function createPlayPresenter(options: {
     }
     narration.release(action.slot, {
       scored: () => completion?.done(),
-      lines: presentationOrder(action.lines).map((line) =>
-        withLineAlongside(
-          // The rack order its pulsing activations are staggered in, captured once here (#540).
-          capturedLine(
-            line,
-            (activation) => options.alongside?.(activation) ?? null,
-            options.presents,
-          ),
-          (captured) => options.lineAlongside?.(captured, narrationTiming.settle) ?? null,
-        ),
-      ),
+      lines: presentationOrder(action.lines).map((line) => {
+        const captured = capturedLine(
+          line,
+          (activation) => options.alongside?.(activation) ?? null,
+          // The order captured when the play committed, not now (#540 review): a source that has
+          // left the rack keeps its slot, so the later pulses keep their captured times.
+          (sourceId) => action.activationSources.includes(sourceId),
+        );
+        return withLineAlongside(
+          { ...captured, activationOrder: action.activationSources },
+          (withLine) => options.lineAlongside?.(withLine, narrationTiming.settle) ?? null,
+        );
+      }),
       endpoint: action.endpoint,
     });
   }
@@ -623,10 +631,11 @@ export function createPlayPresenter(options: {
           landing: block,
         };
       });
+      const lines = game().lastScoredLines;
       const action: Playing = {
         flights,
         effects: [],
-        lines: game().lastScoredLines,
+        lines,
         endpoint: {
           score: game().state.round.score,
           outcome: roundOutcome(game().state),
@@ -639,6 +648,11 @@ export function createPlayPresenter(options: {
         // from the field this play committed to.
         landingSounds: landingSounds(landed, next.field, (block) =>
           getMaterialDefinition(materialOf(block)),
+        ),
+        // Asked now, at commit, so an item sold while the play flies keeps its captured slot.
+        activationSources: captureActivationOrder(
+          lines.flatMap((line) => line.activations.map(({ sourceId }) => sourceId)),
+          { presents: options.presents },
         ),
       };
       playing.push(action);

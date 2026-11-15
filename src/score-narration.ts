@@ -354,7 +354,14 @@ export function createScoreNarration(
      */
     alongside(events: readonly AlongsideEvent[]): void {
       const now = nowUnits();
-      showBesides(events.map(({ handler, payload }) => ({ handler, payload, dueUnits: now })));
+      // With the action, unless the event belongs to something the action staggers (#540).
+      showBesides(
+        events.map(({ handler, payload, offsetUnits = 0 }) => ({
+          handler,
+          payload,
+          dueUnits: now + offsetUnits,
+        })),
+      );
     },
     /** Reserve and release at once: a play that is ready as it commits. */
     narrate(play: NarratedPlay): void {

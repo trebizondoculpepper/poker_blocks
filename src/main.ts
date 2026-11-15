@@ -491,7 +491,8 @@ const run: GameRunController = createGameRunController({
     frame: hudFrame,
   },
 });
-const passiveRackView = createPassiveRack(host);
+// Its pulses run on the shared scheduler's presentation clock, which their starts use (#540).
+const passiveRackView = createPassiveRack(host, { clock: () => visualEvents.nowMs });
 const hand: HandView = createHandView({
   views: blockViews,
   scene: view.handScene,

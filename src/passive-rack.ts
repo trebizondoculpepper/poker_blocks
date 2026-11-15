@@ -166,7 +166,16 @@ export function projectedBounds(
 }
 
 /** A fixed screen-space rack with one Three.js scene for all rotating passive blocks. */
-export function createPassiveRack(host: HTMLElement): {
+export function createPassiveRack(
+  host: HTMLElement,
+  options: {
+    /**
+     * The presentation clock now, in milliseconds: the one the shared scheduler runs on, so a
+     * pulse's scheduled start and the frame advancing it are the same time base (#540 review).
+     */
+    clock(): number;
+  },
+): {
   element: HTMLElement;
   /**
    * A scene composing `passiveRackView` came to the front, or left (#187). The rack is shown,
@@ -389,7 +398,10 @@ export function createPassiveRack(host: HTMLElement): {
     preview(next) {
       place(next ?? order);
     },
+    // The playfield's own time drives the cubes; the pulses run on the presentation clock their
+    // starts were scheduled on, which differs after hidden time or a held scene (#540 review).
     frame(time, reducedMotion) {
+      const pulseTime = options.clock();
       for (const [index, entry] of [...rendered.values()].entries()) {
         const { mesh, targetX, arrivalAt, item } = entry;
         const arrived = arrivalAt === null || time >= arrivalAt || reducedMotion;
@@ -402,7 +414,7 @@ export function createPassiveRack(host: HTMLElement): {
           );
           if (arrivalAt !== null && (reducedMotion || time - arrivalAt >= 360))
             entry.arrivalAt = null;
-          entry.pulse.frame(time, reducedMotion);
+          entry.pulse.frame(pulseTime, reducedMotion);
         }
         const angle = reducedMotion ? 0 : time * 0.00028;
         mesh.rotation.set(
@@ -424,12 +436,21 @@ export function createPassiveRack(host: HTMLElement): {
       // Started after its own interval already ended (a budget-delayed dispatch): nothing shows,
       // rather than a burst of feedback for a moment that is over.
       if (nowMs >= endsAt) return null;
-      entry.pulse.start(activation.effect, fromMs);
+      // A repeat restarts the same pulse, so this start owns it: an earlier effect that settles
+      // later must not put back the activation that replaced it (#540 review).
+      const start = entry.pulse.start(activation.effect, fromMs);
       playSfx(activation.sfx);
+      const stop = () => {
+        if (entry.pulse.owns(start)) entry.pulse.stop();
+      };
       return {
-        update: (at) => (at >= endsAt ? "finished" : "running"),
-        cancel: () => entry.pulse.stop(),
-        dispose: () => entry.pulse.stop(),
+        update: (at) => {
+          if (at < endsAt) return "running";
+          stop();
+          return "finished";
+        },
+        cancel: stop,
+        dispose: stop,
       };
     },
     labelFor(activation) {
