@@ -299,6 +299,7 @@ describe("game modes composed from traits", () => {
         dialog: gameDialogs.gameOver,
       },
       musicCue: { operations: [{ op: "windDown" }] },
+      enterSound: { sfx: "run.lost" },
     });
   });
 
@@ -358,6 +359,7 @@ describe("game modes composed from traits", () => {
       selectable: { sources: [{ source: "hand" }, { source: "field" }] },
       discardBin: {},
       committedEventSounds: {},
+      outcomeCues: { won: "round.cleared", lost: "round.failed" },
       playfieldRockingController: {},
       deckPanel: { opens: "openDeck" },
       runInPlay: {},

@@ -143,6 +143,7 @@ export type SceneHost = {
       | "inventory"
       | "dispatch"
       | "onCommitted"
+      | "onDecided"
       | "hasSave"
       | "runStats"
       | "seed"
@@ -761,6 +762,33 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // The shop's exit response (#880; doc/outcome-presentation.md): it presents the committed
   // shop.left receipt, burning exactly the stock that left, with the configured cues.
   behaviours.register("shopExitResponse", shopExitResponse<Context>());
+  // A stage's outcome cue when its decided outcome arrives (#881): the trait's configuration
+  // names each outcome's sound, so the run controller plays none itself.
+  const outcomeStops = new WeakMap<object, () => void>();
+  /** Response occurrences already presented: a redelivered outcome never plays twice. */
+  const presentedOutcomes = new Set<string>();
+  behaviours.register("outcomeCues", {
+    enter({ services }, config) {
+      outcomeStops.get(config)?.();
+      outcomeStops.set(
+        config,
+        services.run.onDecided(({ outcome, occurrence }) => {
+          const cue = (config as Record<string, SoundEffectId>)[outcome];
+          // Only an outcome with a cue is recorded: a nonterminal one presents nothing.
+          if (!cue || presentedOutcomes.has(occurrence)) return;
+          presentedOutcomes.add(occurrence);
+          // Bounded: only recent occurrences can be redelivered.
+          if (presentedOutcomes.size > 64)
+            presentedOutcomes.delete(presentedOutcomes.values().next().value!);
+          services.sound(cue);
+        }),
+      );
+    },
+    exit(_context, config) {
+      outcomeStops.get(config)?.();
+      outcomeStops.delete(config);
+    },
+  });
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });

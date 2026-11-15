@@ -200,6 +200,7 @@ function recordingHost() {
         dispose: () => undefined,
       },
       run: {
+        onDecided: () => () => {},
         committedState: () => ({
           field: [],
           round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
@@ -1054,5 +1055,40 @@ describe("developer word tuning", () => {
     expect(updates.at(-1)).toMatchObject({ restAngleSpread: 1.5 });
     behaviour.exit!(host, {});
     expect(calls).toContain("attract:tuning-hide");
+  });
+});
+
+describe("outcomeCues (#881)", () => {
+  it("plays the configured cue for each decided outcome, once, and stops on exit", () => {
+    let deliver: (decision: { outcome: "won" | "lost"; occurrence: string }) => void = () => {};
+    const decided = (outcome: "won" | "lost", occurrence = `${outcome}-1`) =>
+      deliver({ outcome, occurrence });
+    const sounds: string[] = [];
+    const context = {
+      services: {
+        run: {
+          onDecided(listener: typeof deliver) {
+            deliver = listener;
+            return () => void (deliver = () => {});
+          },
+        },
+        sound: (id: string) => void sounds.push(id),
+      },
+    } as unknown as SceneHost;
+    const config = { won: "round.cleared", lost: "round.failed" } as const;
+    const behaviour = sceneBehaviours<SceneHost>().get("outcomeCues");
+    behaviour.enter!(context, config);
+    decided("won");
+    decided("lost");
+    // A redelivery of the same committed response plays nothing more.
+    decided("won");
+    expect(sounds).toEqual(["round.cleared", "round.failed"]);
+    // A nonterminal outcome has no cue and is not recorded.
+    deliver({ outcome: "playing" as never, occurrence: "won-3" });
+    decided("won", "won-3");
+    expect(sounds).toEqual(["round.cleared", "round.failed", "round.cleared"]);
+    behaviour.exit!(context, config);
+    decided("won", "won-2");
+    expect(sounds).toHaveLength(3);
   });
 });

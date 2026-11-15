@@ -497,7 +497,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   alongside: (activation) => passiveRackView.labelFor(activation),
   drawReplacements: () => run.drawReplacements(),
   save: () => run.autosave(),
-  decided: (outcome, now) => run.decided(outcome, now),
+  decided: (outcome, now, occurrence) => run.decided(outcome, now, occurrence),
   visualEvents,
 });
 const input: TableInput = createTableInput({
