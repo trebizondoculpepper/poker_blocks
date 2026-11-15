@@ -54,7 +54,13 @@ export type BlockViews = {
   /** Every block on screen, hand and table. */
   readonly all: readonly RenderedBlock[];
   create(block: CardBlock, size: number, location: RenderedBlock["location"]): RenderedBlock;
+  /** Free a block's view, once: a second call does nothing (#1315 review). */
   dispose(rendered: RenderedBlock): void;
+  /**
+   * Hand a block's view over to another owner (an exit, #1173): it leaves the views' own list, so
+   * `disposeAll` and the selection highlight never touch it again, and its new owner disposes it.
+   */
+  transfer(rendered: RenderedBlock): void;
   disposeAll(): void;
   /** Light up the selected blocks that can be selected; dim the rest. */
   highlight(selected: Selection): void;
@@ -72,12 +78,21 @@ export function createBlockViews(
   /** Each shown block's hold on the prepasses its appearance declared. */
   const held = new Map<RenderedBlock, () => void>();
 
+  /** Views already freed: disposing one again does nothing. */
+  const disposed = new WeakSet<RenderedBlock>();
+  const unlist = (rendered: RenderedBlock) => {
+    const index = all.indexOf(rendered);
+    if (index >= 0) all.splice(index, 1);
+  };
+
   function dispose(rendered: RenderedBlock): void {
+    if (disposed.has(rendered)) return;
+    disposed.add(rendered);
     held.get(rendered)?.();
     held.delete(rendered);
     rendered.selection.dispose();
     rendered.cube.removeFromParent();
-    all.splice(all.indexOf(rendered), 1);
+    unlist(rendered);
     rendered.geometry.dispose();
     rendered.textures.forEach((texture) => texture.dispose());
     new Set([...rendered.handMaterials, ...rendered.boardMaterials]).forEach((material) =>
@@ -145,6 +160,7 @@ export function createBlockViews(
       return rendered;
     },
     dispose,
+    transfer: unlist,
     disposeAll() {
       // dispose removes from `all`, so iterate over a copy.
       for (const rendered of all.slice()) dispose(rendered);

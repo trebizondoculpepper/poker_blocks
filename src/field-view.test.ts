@@ -28,6 +28,9 @@ function fakeViews(): BlockViews {
       all.push(rendered);
       return rendered;
     },
+    transfer(rendered) {
+      all.splice(all.indexOf(rendered), 1);
+    },
     dispose(rendered) {
       all.splice(all.indexOf(rendered), 1);
     },

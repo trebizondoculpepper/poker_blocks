@@ -89,3 +89,42 @@ describe("dazzle (#493)", () => {
     expect(defaultDazzle.colours.centre).toBe("#ffffff");
   });
 });
+
+describe("a dazzle cleared by a presentation reset (#1294 review)", () => {
+  it("takes every bloom, afterimage and glare off at once", async () => {
+    const { createDazzle } = await import("./dazzle");
+    const removed: unknown[] = [];
+    const element = () => {
+      const made = {
+        style: {} as Record<string, string>,
+        children: [] as unknown[],
+        append(child: unknown) {
+          made.children.push(child);
+        },
+        remove() {
+          removed.push(made);
+        },
+      };
+      return made;
+    };
+    const original = globalThis.document;
+    globalThis.document = { createElement: element } as unknown as Document;
+    try {
+      const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+      camera.position.set(0, 0, 5);
+      camera.updateMatrixWorld();
+      const dazzle = createDazzle(element() as unknown as HTMLElement, camera, {
+        config: { sound: undefined },
+        random: () => 0.5,
+      });
+      dazzle.flash(new THREE.Vector3(0, 0, 0));
+      for (let i = 0; i < 10; i++) dazzle.update(1 / 60);
+      expect(dazzle.active).toBeGreaterThan(0);
+      dazzle.clear();
+      expect(dazzle.active).toBe(0);
+      expect(removed.length).toBeGreaterThan(0);
+    } finally {
+      globalThis.document = original;
+    }
+  });
+});

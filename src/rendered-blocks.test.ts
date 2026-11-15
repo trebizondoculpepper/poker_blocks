@@ -64,3 +64,23 @@ describe("block views and their appearances' prepasses (#969)", () => {
     ]);
   });
 });
+
+describe("a view freed or handed over (#1315 review)", () => {
+  it("frees a view once, never touching another block, and a handed-over view leaves the list", async () => {
+    const THREE = await import("three");
+    const { createBlockViews } = await import("./rendered-blocks");
+    const { standardDeck } = await import("./cards");
+    const views = createBlockViews({ board: new THREE.Group(), hand: new THREE.Group() });
+    const a = views.create(standardDeck[0]!, 1, "board");
+    const b = views.create(standardDeck[1]!, 1, "board");
+    views.transfer(a);
+    expect(views.all).toEqual([b]);
+    // A table reset's bulk disposal leaves the handed-over view to its owner.
+    views.disposeAll();
+    expect(views.all).toEqual([]);
+    const c = views.create(standardDeck[2]!, 1, "board");
+    views.dispose(a);
+    views.dispose(a);
+    expect(views.all).toEqual([c]);
+  });
+});

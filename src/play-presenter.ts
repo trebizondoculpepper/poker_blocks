@@ -255,6 +255,8 @@ export function createPlayPresenter(options: {
   decided(outcome: RoundOutcome, now: number, occurrence?: string): void;
   /** The shared visual-event scheduler score narration is queued on (#547). */
   visualEvents: VisualScheduler;
+  /** Clear presentation-wide feedback that outlives any one action, on reset (#1294 review). */
+  resetFeedback?(): void;
 }): PlayPresenter {
   const { views, hand, field, cameraView } = options;
   const game = () => options.game();
@@ -705,6 +707,8 @@ export function createPlayPresenter(options: {
       playing = [];
       discarding = [];
       narration.reset();
+      // Presentation-wide feedback (a dazzle's glare and afterimages) goes with it (#1294 review).
+      options.resetFeedback?.();
       shownScore = game().state.round.score;
     },
     dispose() {
