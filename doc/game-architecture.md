@@ -1713,3 +1713,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Shared authored mass and bounded field modifiers (#1081)
 
 [Material mass and passives](material-mass-and-passives.md) defines revised per-definition physical recipes, pure contents-derived instance mass, universal mass data sheets/inspection and four bounded whole-field-context passives. Existing registered multiply/power phases own score contributions; committed immutable snapshots supply geometry and total mass. The new target supersedes historical wrapper/component and trial-curve defaults without adding identity checks, a parallel mass map or a density-weighted pivot. Runtime implementation remains #1067–#1073.
+
+## Configured action hosts and three-axis precession (#1057)
+
+[Result-menu layout and motion](result-menus.md#stage-won-layout-and-reusable-control-precession-1057) defines independently configured information/action/caption hosts and an ambient precession trait on its own transform node. The result controller owns reveal policy; layout, spring displacement, ambient orientation and interaction feedback have separate transform ownership. Caption placement can target the viewport bottom without moving the action into an HTML information panel. Shared clock-driven ambient motion never holds finite presentation scopes open. Runtime targets are #1074/#1075 and shop adoption #1077–#1079.
