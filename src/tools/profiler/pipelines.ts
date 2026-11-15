@@ -7,6 +7,7 @@
  */
 import type * as THREE from "three";
 import { Registry } from "../../core/registry";
+import { appearancePrepasses } from "../../visual/appearance-prepass";
 import {
   preservingRenderState,
   type FrameTime,
@@ -122,3 +123,16 @@ export async function createPipeline(
     dispose,
   };
 }
+
+/**
+ * An appearance's own prepass (#969, #972; src/visual/appearance-prepass.ts) as a profiling pass:
+ * built from the registered production prepass for this pipeline alone, so its targets are this
+ * runner's and are disposed with the case. Config: `{ prepass, config }`, the prepass's own
+ * configuration as JSON text.
+ */
+profilingPasses.register("appearancePrepass", {
+  create(_setup, raw) {
+    const { prepass, config } = raw as { prepass: string; config: string };
+    return appearancePrepasses.get(prepass).create(JSON.parse(config) ?? undefined);
+  },
+});

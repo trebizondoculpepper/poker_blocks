@@ -38,7 +38,7 @@ import type { Registry } from "../../core/registry";
 import type { PassRenderer } from "../../visual/render-pass";
 import { useCosmeticRandom } from "../../visual/block-effects";
 import { useAppearanceClock } from "../../visual/appearance-clock";
-import { createPrepassContext } from "../../visual/appearance-prepass";
+import type { PrepassReference } from "../../visual/appearance-prepass";
 
 /** A small seeded stream (mulberry32): the same numbers for the same seed, run after run. */
 export function seededStream(seed: number): () => number {
@@ -252,10 +252,13 @@ export function createProfilerRunner(
   const collection = new THREE.Group();
   scene.add(collection);
 
-  /** Build a case's declared pipeline in its host, on this runner's renderer, scene and camera. */
-  function preparePipeline(profile: ProfilingCase): Promise<ProfilingPipeline> {
+  /** Build a case's pipeline in its host, on this runner's renderer, scene and camera. */
+  function preparePipeline(
+    profile: ProfilingCase,
+    references: readonly PassReference[] = profile.pipeline ?? [],
+  ): Promise<ProfilingPipeline> {
     return createPipeline(
-      profile.pipeline ?? [],
+      references,
       {
         renderer: env.renderer,
         scene,
@@ -280,13 +283,6 @@ export function createProfilerRunner(
    */
   let clockSeconds = 0;
   let clockStep = defaultClockStep;
-
-  /**
-   * The running case's appearance prepasses (#969, #972): host-owned, on this runner's renderer,
-   * scene and camera, required by each built object as a production host requires them.
-   */
-  let prepasses = createPrepassContext();
-  const releases = new Map<ProfiledObject, () => void>();
 
   /** The running run's cancel signal, so frame waits can be abandoned when it fires. */
   let signal: AbortSignal | undefined;
@@ -367,15 +363,6 @@ export function createProfilerRunner(
     info.reset();
     env.timer.begin();
     try {
-      // The objects' own appearance prepasses, then the case's declared passes and main render.
-      prepasses.render({
-        renderer: env.renderer,
-        scene,
-        camera,
-        hide: collection,
-        delta: dt,
-        reducedMotion: false,
-      });
       pipeline.render({ delta: dt, reducedMotion: false });
     } finally {
       // A render that throws still closes its query (#625 review).
@@ -479,7 +466,6 @@ export function createProfilerRunner(
         const one = await untilAborted(profile.create({ seed: options.seed + index, phase }));
         one.object.position.copy(positions[index]!);
         collection.add(one.object);
-        releases.set(one, prepasses.require(one.prepasses ?? []));
         made.push(one);
       }
       check();
@@ -492,8 +478,6 @@ export function createProfilerRunner(
 
   function remove(objects: readonly ProfiledObject[]): void {
     for (const each of objects) {
-      releases.get(each)?.();
-      releases.delete(each);
       each.object.removeFromParent();
       each.dispose();
     }
@@ -527,7 +511,9 @@ export function createProfilerRunner(
       // Its passes are built once, in its host, and every set renders through them: the
       // baseline too, so it is matched (doc/profiler-render-passes.md, "Timing and baseline").
       const setupStart = env.now();
-      built = await untilAborted(preparePipeline(profile));
+      built = await untilAborted(
+        preparePipeline(profile, await passesOf(profile, phase, options, check)),
+      );
       const setup = env.now() - setupStart;
       pipeline = built;
       const result = await measureCase(
@@ -553,6 +539,31 @@ export function createProfilerRunner(
       built?.dispose();
       undoHost();
     }
+  }
+
+  /**
+   * The passes a case renders through (#764, #972): its declared pipeline, which is complete when
+   * declared; otherwise the appearance prepasses its objects declare, as every production host
+   * requires them. Those are read from one probe object built through the same recipe (and freed
+   * at once), so the whole case, its empty baseline included, renders through one matched pipeline
+   * and a capture runs once a frame, never once per mechanism.
+   */
+  async function passesOf(
+    profile: ProfilingCase,
+    phase: string | undefined,
+    options: RunOptions,
+    check: () => void,
+  ): Promise<readonly PassReference[]> {
+    if (profile.pipeline) return profile.pipeline;
+    const probe = await build(profile, 1, options, phase, check);
+    const declared = probe.flatMap((each) => each.prepasses ?? []);
+    remove(probe);
+    const distinct = new Map(declared.map((reference) => [JSON.stringify(reference), reference]));
+    return [...distinct.values()].map((reference: PrepassReference) => ({
+      handler: "appearancePrepass",
+      // Pass configuration is flat and serializable: the prepass's own config travels as JSON.
+      config: { prepass: reference.handler, config: JSON.stringify(reference.config ?? null) },
+    }));
   }
 
   /** Prepare a registered host on the run's scene; returns how to undo it. */
@@ -710,7 +721,6 @@ export function createProfilerRunner(
         clockSeconds = 0;
         clockStep = options.clockStep ?? defaultClockStep;
         const restoreClock = useAppearanceClock(() => clockSeconds);
-        prepasses = createPrepassContext();
         try {
           const result = await runCase(
             entry.id,
@@ -751,8 +761,6 @@ export function createProfilerRunner(
           stopListening?.();
           restore();
           restoreClock();
-          // The case's prepass targets go with it, whatever happened.
-          prepasses.dispose();
         }
       }
       return finish(queue.length, { cancelled: false, aborted: null });

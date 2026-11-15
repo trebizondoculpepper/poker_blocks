@@ -890,6 +890,12 @@ describe("the leak probe cleans up after itself (#726 review)", () => {
   });
 });
 
+/** Where the shared test prepass reports: the running test's log. */
+let capture: {
+  events: string[];
+  counts: { made: number; disposed: number; config?: unknown };
+} | null = null;
+
 describe("animation fidelity: one run clock and appearance prepasses (#972)", () => {
   it("advances every update and self-timed part by the run's fixed step, never wall time", async () => {
     const { appearanceSeconds } = await import("../../visual/appearance-clock");
@@ -954,18 +960,22 @@ describe("animation fidelity: one run clock and appearance prepasses (#972)", ()
     expect(b).toEqual(a);
   });
 
-  it("runs each object's appearance prepasses inside the timed frame, before the main render", async () => {
+  /** A fake environment whose main renders, GPU query brackets and test prepass are logged. */
+  async function logged() {
     const { appearancePrepasses } = await import("../../visual/appearance-prepass");
     const events: string[] = [];
-    let made = 0;
-    let disposed = 0;
+    const counts: { made: number; disposed: number; config?: unknown } = { made: 0, disposed: 0 };
+    // The registered prepass is shared by every test: it reports to the current one's log.
+    capture = { events, counts };
     if (!appearancePrepasses.has("testRunnerCapture"))
       appearancePrepasses.register("testRunnerCapture", {
-        create: () => {
-          made++;
+        create: (config) => {
+          const log = capture!;
+          log.counts.made++;
+          log.counts.config = config;
           return {
-            render: () => void events.push("prepass"),
-            dispose: () => void disposed++,
+            render: () => void log.events.push("prepass"),
+            dispose: () => void log.counts.disposed++,
           };
         },
       });
@@ -985,27 +995,78 @@ describe("animation fidelity: one run clock and appearance prepasses (#972)", ()
       events.push("end");
       end();
     };
-    const capturing: ProfilingCase = {
+    const capturing = (pipeline?: ProfilingCase["pipeline"]): ProfilingCase => ({
       ...testCase(memory),
+      ...(pipeline ? { pipeline } : {}),
       create(context) {
         const one = testCase(memory).create(context) as {
           object: THREE.Object3D;
           dispose(): void;
         };
-        return { ...one, prepasses: [{ handler: "testRunnerCapture" }] };
+        return { ...one, prepasses: [{ handler: "testRunnerCapture", config: { side: "rear" } }] };
+      },
+    });
+    return {
+      env,
+      memory,
+      events,
+      counts: counts as typeof counts & { config?: unknown },
+      capturing,
+    };
+  }
+
+  it("renders a case's appearance prepasses once a frame inside the timed frame, baseline included", async () => {
+    const { env, memory, events, counts, capturing } = await logged();
+    const run = await createProfilerRunner(env).run([["cube", capturing()]], options);
+    expect(run.failures).toEqual([]);
+    const [result] = run.results;
+    // Recorded as the case's pipeline: one pass for the whole collection, its config intact.
+    expect(result!.pipeline.passes).toEqual([
+      {
+        handler: "appearancePrepass",
+        config: { prepass: "testRunnerCapture", config: JSON.stringify({ side: "rear" }) },
+      },
+    ]);
+    expect(counts.config).toEqual({ side: "rear" });
+    expect(counts.made).toBe(1);
+    expect(counts.disposed).toBe(1);
+    // Every timed frame, the empty baseline's too, runs the prepass between the query's begin and
+    // end and before its one main render: a matched baseline, so relative values stand.
+    const frames = events.join(" ").split("begin ").slice(1);
+    expect(frames.length).toBeGreaterThan(0);
+    for (const frame of frames) expect(frame).toMatch(/^prepass main end/);
+    expect(result!.baselineUnavailable).toBeUndefined();
+    expect(result!.counts[0]!.relative.cpu).not.toBeNull();
+    // The probe that declared it was freed, and nothing is left in the scene.
+    expect(memory.geometries).toBe(0);
+  });
+
+  it("keeps a declared pipeline whole: the appearance's prepass is not run a second time", async () => {
+    const { env, events, counts, capturing } = await logged();
+    const run = await createProfilerRunner(env).run([["cube", capturing([])]], options);
+    expect(run.results[0]!.pipeline.passes).toEqual([]);
+    expect(counts.made).toBe(0);
+    expect(events).not.toContain("prepass");
+  });
+
+  it("frees the probe and fails only that case when its recipe throws", async () => {
+    const { env, memory } = fakeEnvironment();
+    const runner = createProfilerRunner(env);
+    const broken: ProfilingCase = {
+      ...testCase(memory),
+      create: () => {
+        throw new Error("no factory");
       },
     };
-    const run = await createProfilerRunner(env).run([["cube", capturing]], options);
-    expect(run.failures).toEqual([]);
-    // One pass for the whole collection, shared by every object that needs it, then freed.
-    expect(made).toBeGreaterThan(0);
-    expect(disposed).toBe(made);
-    // Every prepass ran between the query's begin and end, before that frame's main render.
-    const frames = events.join(" ").split("begin ").slice(1);
-    const withPass = frames.filter((frame) => frame.includes("prepass"));
-    expect(withPass.length).toBeGreaterThan(0);
-    for (const frame of withPass) expect(frame).toMatch(/^(prepass )+main end/);
-    // The empty baseline needs no capture: no object requires it there.
-    expect(frames.some((frame) => frame.startsWith("main end"))).toBe(true);
+    const run = await runner.run(
+      [
+        ["broken", broken],
+        ["cube", testCase(memory)],
+      ],
+      options,
+    );
+    expect(run.failures.map(({ id }) => id)).toEqual(["broken"]);
+    expect(run.results.map(({ id }) => id)).toEqual(["cube"]);
+    expect(under(runner.scene, "profiled")).toBe(0);
   });
 });

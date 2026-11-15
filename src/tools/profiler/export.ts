@@ -33,7 +33,7 @@ export const profilerMethod = {
   clock:
     "one presentation clock per run, a fixed step per rendered frame from zero at each case: object updates, passes and self-timed appearance parts (contained contents, flame, ice) all read it; frame time is still measured from wall time (#972)",
   prepasses:
-    "each object's appearance prepasses are required in the case's own host-owned prepass context and run every frame inside the CPU time and GPU query, before the declared passes (#972)",
+    "a case declaring no pipeline renders through its objects' appearance prepasses as registered pipeline passes: once per frame, the empty baseline included, inside the CPU time and GPU query; a declared pipeline is complete and never adds them (#972)",
 };
 
 export type ProfilerExport = {
