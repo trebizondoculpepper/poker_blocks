@@ -22,7 +22,7 @@ function cube(label: string, look: string): HTMLElement {
 // The title: one cube per letter, each in its own look, rocking a little out of step.
 for (const word of document.querySelectorAll<HTMLElement>("[data-blocks]")) {
   const looks = (word.dataset.looks ?? "paper").split(" ");
-  [...(word.dataset.blocks ?? "")].forEach((letter, index) => {
+  (word.dataset.blocks ?? "").split("").forEach((letter, index) => {
     const block = cube(letter, looks[index % looks.length]!);
     block.style.setProperty("--delay", `${index * -0.45}s`);
     word.append(block);

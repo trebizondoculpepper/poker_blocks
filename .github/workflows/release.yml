@@ -108,7 +108,7 @@ jobs:
         if: steps.version.outputs.publish != 'skip'
         env:
           POKER_BLOCKS_VERSION: ${{ steps.version.outputs.version }}
-        run: vp build
+        run: vp build --mode game
       - name: Publish the GitHub release with the web build
         if: steps.version.outputs.publish == 'true'
         env:
@@ -116,7 +116,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           zip_name="poker-blocks-v${VERSION}-web.zip"
-          (cd dist && zip -qr "../${zip_name}" .)
+          (cd dist/game && zip -qr "../../${zip_name}" .)
           gh release create "v${VERSION}" "${zip_name}" \
             --target "$(git rev-parse HEAD)" \
             --title "Poker Blocks v${VERSION}" \
@@ -137,4 +137,4 @@ jobs:
           curl -fsSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
           unzip -q butler.zip -d butler
           chmod +x butler/butler
-          ./butler/butler push dist trebizondoculpepper/poker-blocks:html5 --userversion "${VERSION}"
+          ./butler/butler push dist/game trebizondoculpepper/poker-blocks:html5 --userversion "${VERSION}"

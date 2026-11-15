@@ -591,10 +591,6 @@ export const gameDialogs = {
 /** The pause menu: the same menu from the title and from play (#87). */
 const pauseMenu: SceneTraits["menu"] = { label: "Paused" };
 
-/** Where the project lives. Links to it come from here, so the URL is configured once. */
-
-/** The footer links: where the version comes from, the source, and where to report a bug (#129). */
-
 /**
  * The game's block title, on the title and pause menus, as tuned in dev7: a 6 s precession,
  * the two words 67° apart in it, no tilt on the beat, and one quick raised-cosine bump each
