@@ -2,14 +2,15 @@ import { Box3, Color, Mesh, Sphere } from "three";
 import type { Material, Object3D, WebGLProgramParametersWithUniforms } from "three";
 // Adapted from ../shrew_farmer/src/hud/materialise.ts, which was adapted from
 // encabulator/src/toolkit/components/core/views/materialise.ts.
-function materialiseAt(seconds: number, duration: number): number {
+/** The eased sweep at `seconds` of `duration` (shared by paired masks, #1166). */
+export function materialiseAt(seconds: number, duration: number): number {
   if (duration <= 0) return 1;
   const t = Math.min(1, Math.max(0, seconds / duration));
   return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
 /** 3D gradient (Perlin) noise and a few octaves of it, for the shader. */
-const NOISE = `
+export const NOISE = `
 vec3 matHash(vec3 p) {
   p = vec3(
     dot(p, vec3(127.1, 311.7, 74.7)),
@@ -41,9 +42,9 @@ float matFbm(vec3 p) {
 }`;
 
 /** How wide the glowing edge is, as a share of the noise's range. */
-const EDGE = 0.12;
+export const EDGE = 0.12;
 /** How many blobs of noise lie across the thing. */
-const BLOBS = 8;
+export const BLOBS = 8;
 
 /**
  * Make `root` materialise: its meshes boil in from nothing. A field of
