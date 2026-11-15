@@ -18,7 +18,7 @@ export type ProfilerEnvironmentInfo = {
 };
 
 export const profilerMethod = {
-  version: 3,
+  version: 4,
   sets: [
     "baseline (empty collection, once per case in its host, through the case's own pipeline)",
     "each requested count on a fixed square grid, framed for that count (a fixed-viewport collection test)",
@@ -30,6 +30,10 @@ export const profilerMethod = {
   pipeline:
     "each frame times the objects' updates, every declared pass and the main render, inside the CPU time and the GPU query; draw counts add up across the passes (#764)",
   hiddenTab: "a set sampled while the tab was hidden is retaken, then listed as invalidated",
+  clock:
+    "one presentation clock per run, a fixed step per rendered frame from zero at each case: object updates, passes and self-timed appearance parts (contained contents, flame, ice) all read it; frame time is still measured from wall time (#972)",
+  prepasses:
+    "each object's appearance prepasses are required in the case's own host-owned prepass context and run every frame inside the CPU time and GPU query, before the declared passes (#972)",
 };
 
 export type ProfilerExport = {
@@ -38,6 +42,8 @@ export type ProfilerExport = {
   environment: ProfilerEnvironmentInfo;
   options: Omit<RunOptions, "signal">;
   gpuTiming: RunResult["gpuTiming"];
+  /** The run's presentation clock; null in a record from before #972, which used wall time. */
+  clock: RunResult["clock"] | null;
   cancelled: boolean;
   /** Cases that failed or timed out, why the run stopped early, and what never ran (#722). */
   failures: RunResult["failures"];
@@ -73,6 +79,7 @@ export function profilerExport(
     environment,
     options: settings,
     gpuTiming: run.gpuTiming,
+    clock: run.clock,
     cancelled: run.cancelled,
     failures: run.failures,
     aborted: run.aborted,
@@ -104,7 +111,8 @@ export const costMeasures = {
 };
 
 /**
- * Read an exported file (#721): version 3 is today's matrix; version 2 is the same matrix from
+ * Read an exported file (#721): version 4 is today's matrix; version 3 is it without the run
+ * clock (#972), read with no clock; version 2 is the same matrix from
  * before declared pipelines (#764), every case then drawn by the main render alone, and is read as
  * that; version 1 (fixed one/collection slots) is recognised as an old result and never read as a
  * count-50 sample; anything else is refused, clearly.
@@ -116,6 +124,9 @@ export function readProfilerExport(
   const version = parsed.method?.version;
   if (version === profilerMethod.version)
     return { kind: "current", record: parsed as ProfilerExport };
+  // Version 3 is the same record from before the run clock (#972): its updates read wall time.
+  if (version === 3)
+    return { kind: "current", record: { ...(parsed as ProfilerExport), clock: null } };
   if (version === 2) {
     const record = parsed as ProfilerExport;
     const mainOnly = { passes: [], passCount: 0, setup: null };
@@ -123,6 +134,7 @@ export function readProfilerExport(
       kind: "current",
       record: {
         ...record,
+        clock: null,
         results: record.results.map((result) => ({ ...result, pipeline: mainOnly })),
       },
     };

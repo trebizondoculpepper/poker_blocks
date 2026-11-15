@@ -37,6 +37,8 @@ import {
 import type { Registry } from "../../core/registry";
 import type { PassRenderer } from "../../visual/render-pass";
 import { useCosmeticRandom } from "../../visual/block-effects";
+import { useAppearanceClock } from "../../visual/appearance-clock";
+import { createPrepassContext } from "../../visual/appearance-prepass";
 
 /** A small seeded stream (mulberry32): the same numbers for the same seed, run after run. */
 export function seededStream(seed: number): () => number {
@@ -110,8 +112,19 @@ export type RunOptions = {
   timeoutMs?: number;
   /** Retakes allowed for a set spoiled by the tab being hidden. */
   retries?: number;
+  /**
+   * Seconds the run's presentation clock advances per rendered frame (#972); 1/60 when omitted.
+   * Every update, pass and self-timed appearance part reads this one clock, never wall time.
+   */
+  clockStep?: number;
   signal?: AbortSignal;
 };
+
+/** The run's presentation clock (#972): a fixed step per frame, from zero at each case. */
+export type RunClock = { kind: "fixed-step"; stepSeconds: number };
+
+/** The clock step a run uses unless its options say otherwise. */
+export const defaultClockStep = 1 / 60;
 
 export type Distribution = { median: number; p95: number; samples: number };
 
@@ -200,6 +213,8 @@ export type RunResult = {
   /** Cases and phases never started because the run stopped (cancelled or aborted). */
   notRun: string[];
   cancelled: boolean;
+  /** The one presentation clock every case's updates, passes and appearance parts read. */
+  clock: RunClock;
   gpuTiming: "available" | "unavailable";
   /** Sets that stayed spoiled by a hidden tab after every retry. */
   invalidated: string[];
@@ -257,6 +272,21 @@ export function createProfilerRunner(
     render: () => env.renderer.render(scene, camera),
   };
   let pipeline = mainOnly;
+
+  /**
+   * The run's presentation clock (#972; doc/presentation-contracts.md, "Profiler animation
+   * fidelity (#752)"): seconds since the running case started, advanced by a fixed step each
+   * rendered frame. Self-timed appearance parts read it through the appearance clock.
+   */
+  let clockSeconds = 0;
+  let clockStep = defaultClockStep;
+
+  /**
+   * The running case's appearance prepasses (#969, #972): host-owned, on this runner's renderer,
+   * scene and camera, required by each built object as a production host requires them.
+   */
+  let prepasses = createPrepassContext();
+  const releases = new Map<ProfiledObject, () => void>();
 
   /** The running run's cancel signal, so frame waits can be abandoned when it fires. */
   let signal: AbortSignal | undefined;
@@ -329,6 +359,7 @@ export function createProfilerRunner(
    */
   function frame(objects: readonly ProfiledObject[], dt: number): number {
     const start = env.now();
+    clockSeconds += dt;
     for (const each of objects) each.update?.(dt);
     const { info } = env.renderer;
     const autoReset = info.autoReset;
@@ -336,6 +367,15 @@ export function createProfilerRunner(
     info.reset();
     env.timer.begin();
     try {
+      // The objects' own appearance prepasses, then the case's declared passes and main render.
+      prepasses.render({
+        renderer: env.renderer,
+        scene,
+        camera,
+        hide: collection,
+        delta: dt,
+        reducedMotion: false,
+      });
       pipeline.render({ delta: dt, reducedMotion: false });
     } finally {
       // A render that throws still closes its query (#625 review).
@@ -376,7 +416,8 @@ export function createProfilerRunner(
       const now = env.now();
       frames.push(now - last);
       last = now;
-      cpu.push(frame(objects, frames.at(-1)! / 1000));
+      // Wall time is what the frame costs; the presentation advances by the run's fixed step.
+      cpu.push(frame(objects, clockStep));
       if (i === 0) setCounts = rendererCounts();
       gpu.push(...env.timer.poll());
       if (env.hidden() || env.visibilityChanges() !== changesBefore) spoiled = true;
@@ -438,6 +479,7 @@ export function createProfilerRunner(
         const one = await untilAborted(profile.create({ seed: options.seed + index, phase }));
         one.object.position.copy(positions[index]!);
         collection.add(one.object);
+        releases.set(one, prepasses.require(one.prepasses ?? []));
         made.push(one);
       }
       check();
@@ -450,6 +492,8 @@ export function createProfilerRunner(
 
   function remove(objects: readonly ProfiledObject[]): void {
     for (const each of objects) {
+      releases.get(each)?.();
+      releases.delete(each);
       each.object.removeFromParent();
       each.dispose();
     }
@@ -459,7 +503,7 @@ export function createProfilerRunner(
     for (let i = 0; i < options.warmupFrames; i++) {
       check();
       await waitFrame();
-      frame(objects, 1 / 60);
+      frame(objects, clockStep);
     }
     env.timer.poll();
     env.timer.discard();
@@ -633,6 +677,7 @@ export function createProfilerRunner(
         results,
         failures,
         notRun: queue.slice(from).map(labelOf),
+        clock: { kind: "fixed-step" as const, stepSeconds: options.clockStep ?? defaultClockStep },
         gpuTiming: timing(),
         invalidated,
         ...ending,
@@ -661,6 +706,11 @@ export function createProfilerRunner(
         };
         // Cosmetic randomness (stars, bubbles, grass) repeats exactly for a seed (#653 review).
         const restore = useCosmeticRandom(seededStream(options.seed));
+        // One presentation clock from zero for the case, read by every self-timed part (#972).
+        clockSeconds = 0;
+        clockStep = options.clockStep ?? defaultClockStep;
+        const restoreClock = useAppearanceClock(() => clockSeconds);
+        prepasses = createPrepassContext();
         try {
           const result = await runCase(
             entry.id,
@@ -700,6 +750,9 @@ export function createProfilerRunner(
           clearTimeout(timer);
           stopListening?.();
           restore();
+          restoreClock();
+          // The case's prepass targets go with it, whatever happened.
+          prepasses.dispose();
         }
       }
       return finish(queue.length, { cancelled: false, aborted: null });

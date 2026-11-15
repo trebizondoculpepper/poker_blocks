@@ -6,12 +6,18 @@
 import type * as THREE from "three";
 import { Registry } from "../../core/registry";
 import type { PassReference } from "./pipelines";
+import type { PrepassReference } from "../../visual/appearance-prepass";
 
 /** One built object in the profiler's scene. */
 export type ProfiledObject = {
   object: THREE.Object3D;
-  /** Advance its normal ambient animation. */
+  /** Advance its normal ambient animation by `dt` seconds of the run's clock. */
   update?(dt: number): void;
+  /**
+   * The appearance prepasses its production host would run before the main render (#969, #972):
+   * the runner requires them in its own prepass context while the object is built.
+   */
+  prepasses?: readonly PrepassReference[];
   /** Free only what this object made; shared resources stay. */
   dispose(): void;
 };

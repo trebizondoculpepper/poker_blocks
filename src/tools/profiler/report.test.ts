@@ -42,7 +42,8 @@ const record = (
   overrides: Partial<ProfilerExport> = {},
 ): ProfilerExport => ({
   exportedAt: "2026-11-12T00:00:00.000Z",
-  method: { version: 3 } as ProfilerExport["method"],
+  method: { version: 4 } as ProfilerExport["method"],
+  clock: { kind: "fixed-step", stepSeconds: 1 / 60 },
   environment: {
     userAgent: "test",
     gpu: "Apple M3 Max",

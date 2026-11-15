@@ -37,6 +37,8 @@ export function tableBlock(card: CardBlock, definition: MaterialDefinition): Pro
   });
   return {
     object: mesh,
+    // The passes its look needs before the main render, as every production host requires them.
+    prepasses: appearance.prepasses ?? [],
     update(dt) {
       for (const effect of effects) {
         if (!effect.object.parent && mesh.parent) mesh.parent.add(effect.object);

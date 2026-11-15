@@ -889,3 +889,123 @@ describe("the leak probe cleans up after itself (#726 review)", () => {
     expect(run.results[0]!.baseline.counts.calls).toBe(0);
   });
 });
+
+describe("animation fidelity: one run clock and appearance prepasses (#972)", () => {
+  it("advances every update and self-timed part by the run's fixed step, never wall time", async () => {
+    const { appearanceSeconds } = await import("../../visual/appearance-clock");
+    const { env, memory } = fakeEnvironment();
+    const steps: number[] = [];
+    const seen: number[] = [];
+    const clocked: ProfilingCase = {
+      ...testCase(memory),
+      create(context) {
+        const made = testCase(memory).create(context) as {
+          object: THREE.Object3D;
+          dispose(): void;
+        };
+        return {
+          ...made,
+          update(dt) {
+            steps.push(dt);
+            seen.push(appearanceSeconds());
+          },
+        };
+      },
+    };
+    const before = appearanceSeconds();
+    const run = await createProfilerRunner(env).run([["cube", clocked]], {
+      ...options,
+      clockStep: 0.05,
+    });
+    expect(run.clock).toEqual({ kind: "fixed-step", stepSeconds: 0.05 });
+    // Warm-up and samples step by exactly the run's step (the fake's frames are 16 ms or more);
+    // the first, compiling frame advances nothing.
+    expect(new Set(steps.filter((dt) => dt > 0))).toEqual(new Set([0.05]));
+    // Self-timed parts read the same clock, which only moves forward by those steps.
+    const diffs = seen.slice(1).map((value, index) => +(value - seen[index]!).toFixed(6));
+    expect(diffs.every((diff) => diff === 0 || diff === 0.05 || diff < 0)).toBe(true);
+    // Restored after the run: the game's own clock again.
+    expect(appearanceSeconds()).toBeGreaterThanOrEqual(before);
+    expect(appearanceSeconds()).not.toBe(seen.at(-1));
+  });
+
+  it("starts each case's clock at zero, so a case repeats exactly", async () => {
+    const { appearanceSeconds } = await import("../../visual/appearance-clock");
+    const firstSeen = (seen: number[]): ProfilingCase => ({
+      ...testCase({ geometries: 0 }),
+      create(context) {
+        const made = testCase({ geometries: 0 }).create(context) as {
+          object: THREE.Object3D;
+          dispose(): void;
+        };
+        return { ...made, update: () => void seen.push(appearanceSeconds()) };
+      },
+    });
+    const a: number[] = [];
+    const b: number[] = [];
+    const { env } = fakeEnvironment();
+    await createProfilerRunner(env).run(
+      [
+        ["a", firstSeen(a)],
+        ["b", firstSeen(b)],
+      ],
+      options,
+    );
+    expect(b).toEqual(a);
+  });
+
+  it("runs each object's appearance prepasses inside the timed frame, before the main render", async () => {
+    const { appearancePrepasses } = await import("../../visual/appearance-prepass");
+    const events: string[] = [];
+    let made = 0;
+    let disposed = 0;
+    if (!appearancePrepasses.has("testRunnerCapture"))
+      appearancePrepasses.register("testRunnerCapture", {
+        create: () => {
+          made++;
+          return {
+            render: () => void events.push("prepass"),
+            dispose: () => void disposed++,
+          };
+        },
+      });
+    const { env, memory } = fakeEnvironment();
+    const render = env.renderer.render.bind(env.renderer);
+    env.renderer.render = (scene, camera) => {
+      events.push("main");
+      render(scene, camera);
+    };
+    const begin = env.timer.begin.bind(env.timer);
+    const end = env.timer.end.bind(env.timer);
+    env.timer.begin = () => {
+      events.push("begin");
+      begin();
+    };
+    env.timer.end = () => {
+      events.push("end");
+      end();
+    };
+    const capturing: ProfilingCase = {
+      ...testCase(memory),
+      create(context) {
+        const one = testCase(memory).create(context) as {
+          object: THREE.Object3D;
+          dispose(): void;
+        };
+        return { ...one, prepasses: [{ handler: "testRunnerCapture" }] };
+      },
+    };
+    const run = await createProfilerRunner(env).run([["cube", capturing]], options);
+    expect(run.failures).toEqual([]);
+    // One pass for the whole collection, shared by every object that needs it, then freed.
+    expect(made).toBeGreaterThan(0);
+    expect(disposed).toBe(made);
+    // Every prepass ran between the query's begin and end, before that frame's main render.
+    const frames = events.join(" ").split("begin ").slice(1);
+    const withPass = frames.filter((frame) => frame.includes("prepass"));
+    expect(withPass.length).toBeGreaterThan(0);
+    for (const frame of withPass) expect(frame).toMatch(/^(prepass )+main end/);
+    // The empty baseline needs no capture: no object requires it there.
+    expect(frames.some((frame) => frame.startsWith("main end"))).toBe(true);
+  });
+});
