@@ -24,8 +24,13 @@ describe("appearance-owned selection feedback (#1314; doc/game-architecture.md)"
     );
     binding.setSelected(true);
     binding.setSelected(true);
-    expect(hand.emissiveIntensity).toBeCloseTo(0.4 + selectedFaceContribution);
-    expect(board.emissiveIntensity).toBeCloseTo(1 + selectedFaceContribution);
+    // The authored emission plus the selection's, added: a coloured glow keeps its tint (#1324).
+    const expected = new THREE.Color(0x112233).multiplyScalar(0.4);
+    expected.add(new THREE.Color(0xffffff).multiplyScalar(selectedFaceContribution));
+    expect(hand.emissive.r * hand.emissiveIntensity).toBeCloseTo(expected.r);
+    expect(hand.emissive.b * hand.emissiveIntensity).toBeCloseTo(expected.b);
+    expect(hand.emissive.b).toBeGreaterThan(hand.emissive.r);
+    expect(board.emissive.r * board.emissiveIntensity).toBeCloseTo(selectedFaceContribution);
     binding.setSelected(false);
     expect(hand.emissive.getHex()).toBe(0x112233);
     expect(hand.emissiveIntensity).toBe(0.4);
