@@ -748,7 +748,7 @@ export const sceneDefinitions = [
       // The shop's Sell target is a steel control block with a dustbin motif (#1078).
       sellBin: { presenter: "controlBlock" },
       coinsPanel: {},
-      // A fixed paper word cube in the bottom-right exit place, not stock (#780;
+      // A fixed paper word cube in the shop control row after Buy and Sell, not stock (#780, #1335;
       // doc/shop-continue-block.md).
       shopExit: {
         label: "Continue",
