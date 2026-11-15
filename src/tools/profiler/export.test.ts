@@ -17,6 +17,7 @@ const result = (id: string, gpu: number | null, cpu: number): CaseResult => ({
   unit: { kind: "group", size: 4 },
   sampling: "steady",
   host: "board",
+  motion: { driver: "stationary" },
   pipeline: { passes: [], passCount: 0, setup: 0 },
   baseline: set(gpu === null ? null : 0.1, 0.1),
   counts: [1, 10, 50].map((count) => ({
@@ -105,7 +106,7 @@ describe("profiler export (#619)", () => {
     expect(round.coverage.complete).toBe(false);
     expect(round.results[0].unit).toEqual({ kind: "group", size: 4 });
     expect(round.coverage.catalogs[1]).toMatchObject({ catalog: "rack item", installed: false });
-    expect(round.method.version).toBe(4);
+    expect(round.method.version).toBe(5);
     // The run's presentation clock is recorded with it (#972).
     expect(round.clock).toEqual({ kind: "fixed-step", stepSeconds: 1 / 60 });
     // No isolation stated: the default is the honest one, that frames may have been shared.
@@ -116,9 +117,17 @@ describe("profiler export (#619)", () => {
 });
 
 describe("export schema versions (#721)", () => {
-  it("reads version 4, recognises version 1 as old results, and refuses anything else", async () => {
+  it("reads version 5, recognises version 1 as old results, and refuses anything else", async () => {
     const { readProfilerExport } = await import("./export");
-    const current = JSON.stringify({ method: { version: 4 }, results: [] });
+    const current = JSON.stringify({ method: { version: 5 }, results: [] });
+    expect(readProfilerExport(current).kind).toBe("current");
+    // Version 4 predates motion: its rows were all sampled at rest (#973).
+    const before = readProfilerExport(
+      JSON.stringify({ method: { version: 4 }, results: [{ id: "x" }] }),
+    );
+    expect(before.kind === "current" && before.record.results[0]!.motion).toEqual({
+      driver: "stationary",
+    });
     expect(readProfilerExport(current).kind).toBe("current");
     // Version 3 predates the run clock: read with none, never as if it used one (#972).
     const unclocked = readProfilerExport(JSON.stringify({ method: { version: 3 }, results: [] }));

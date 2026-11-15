@@ -5,6 +5,7 @@
  */
 import type { ProfilerExport } from "../src/tools/profiler/export.ts";
 import { profilerReport, type ProfilerReport } from "../src/tools/profiler/report.ts";
+import { displayName } from "../src/tools/profiler/motion-description.ts";
 
 /** What a run was: the tested revision, how it was invoked, and when. */
 export type RunProvenance = { revision: string; command: string; startedAt: string };
@@ -21,6 +22,7 @@ export function reportCsv(record: ProfilerExport): string {
     "case",
     "label",
     "phase",
+    "motion",
     "family",
     "host",
     "pipeline",
@@ -41,6 +43,7 @@ export function reportCsv(record: ProfilerExport): string {
         row.id,
         row.label,
         row.phase ?? "",
+        row.motion?.driver ?? "",
         row.family,
         row.host,
         row.pipeline,
@@ -85,7 +88,7 @@ export function reportHtml(record: ProfilerExport, provenance: RunProvenance): s
   const rows = report.rows
     .map(
       (row) =>
-        `<tr><td>${escape(row.phase ? `${row.label} (${row.phase})` : row.label)}</td><td>${escape(row.family)}</td><td>${escape(row.host)}</td><td>${escape(row.pipeline)}</td><td>${escape(`${row.unit.kind} ×${row.unit.size}`)}</td><td>${row.counts.join(" / ")}</td><td>${row.gpu.map(ms).join(" / ")}</td><td>${row.cpu.map(ms).join(" / ")}</td><td>${row.calls.join(" / ")}</td><td>${row.triangles.join(" / ")}</td><td>${escape(caseNotes(row))}</td></tr>`,
+        `<tr><td>${escape(displayName(row))}</td><td>${escape(row.family)}</td><td>${escape(row.host)}</td><td>${escape(row.pipeline)}</td><td>${escape(`${row.unit.kind} ×${row.unit.size}`)}</td><td>${row.counts.join(" / ")}</td><td>${row.gpu.map(ms).join(" / ")}</td><td>${row.cpu.map(ms).join(" / ")}</td><td>${row.calls.join(" / ")}</td><td>${row.triangles.join(" / ")}</td><td>${escape(caseNotes(row))}</td></tr>`,
     )
     .join("");
   return `<!doctype html>

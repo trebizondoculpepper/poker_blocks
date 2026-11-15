@@ -9,6 +9,7 @@
  * The room's own UI is not redrawn while a run samples: the results table is filled when it ends.
  * Developer-only: production never imports it (src/main.ts).
  */
+import { displayName, rowKey } from "./motion-description";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { playSfx } from "../../audio/sfx";
@@ -271,7 +272,7 @@ export function createProfilerRoom(
         const row = document.createElement("tr");
         row.tabIndex = 0;
         row.append(
-          cell(result.phase ? `${result.label} (${result.phase})` : result.label),
+          cell(displayName(result)),
           cell(result.family),
           // One value per count, in the order run: "1 / 10 / 50".
           cell(result.counts.map(({ count }) => count).join(" / ")),
@@ -510,7 +511,7 @@ export function createProfilerRoom(
         : "Done";
     const notes = [
       outcome.failures.length
-        ? `failed: ${outcome.failures.map(({ id, phase, kind, reason }) => `${phase ? `${id}:${phase}` : id} (${kind}: ${reason})`).join(", ")}`
+        ? `failed: ${outcome.failures.map((failure) => `${rowKey(failure)} (${failure.kind}: ${failure.reason})`).join(", ")}`
         : "",
       outcome.notRun.length ? `not run: ${outcome.notRun.length}` : "",
       outcome.invalidated.length
