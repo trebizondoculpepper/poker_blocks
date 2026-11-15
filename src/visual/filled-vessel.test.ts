@@ -71,8 +71,10 @@ describe("experimental materials in developer decks", () => {
       new Set(deck.map(({ traits }) => traits.material?.kind));
     for (const { id } of experimentalMaterials) expect(kinds(makeDevDeck(7)).has(id)).toBe(false);
     const registered = kinds(makeDevDeck(7, "registered"));
-    for (const { id } of [...materialDefinitions, ...experimentalMaterials])
-      expect(registered.has(id), id).toBe(true);
+    // Every material a plain card can wear; a wrapper's material never is (#1421).
+    const all: readonly MaterialDefinition[] = [...materialDefinitions, ...experimentalMaterials];
+    for (const { id, requires = [] } of all)
+      expect(registered.has(id), id).toBe(requires.length === 0);
     expect(gameModeFor("dev0").runSetup).toContainEqual({
       step: "materialDeck",
       pool: "registered",
