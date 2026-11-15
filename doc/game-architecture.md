@@ -87,6 +87,10 @@ Before closing #1113 verify standard, shader/unlit, contained, transparent and r
 
 What an operation does to the selected cards is still to be decided.
 
+### Appearance-owned scoring feedback (#1392)
+
+[Scoring appearance feedback](scoring-appearance-feedback.md) extends the registered appearance-binding pattern to row tint: providers own compatible channels and authored baselines; generic views publish color/strength without assuming a material class. Independent feedback contributions compose, and failed/disposed bindings cannot interrupt rendering or scheduler settlement.
+
 ## Inspectable trait
 
 **Target extension (#751):** [Acquired bonus artwork and inspection](presentation-contracts.md#acquired-bonus-artwork-and-inspection-432-751) defines full live bonus descriptions, separate from the compact face label.
