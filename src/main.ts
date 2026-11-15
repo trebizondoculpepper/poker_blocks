@@ -1,4 +1,5 @@
 import { createPlacementPhase, placementProducer, scoringProducer } from "./placement-phase";
+import { createStageScoreGraph, type StageScoreGraph } from "./stage-score-graph";
 import { triggeredProducer, type TriggeredEffectServices } from "./triggered-presentation";
 import { createDazzle } from "./visual/dazzle";
 import { cosmeticRandom } from "./visual/block-effects";
@@ -169,6 +170,7 @@ type TraitContext = {
     renderer: TableRenderer;
     cameraView: CameraViewService;
     playfieldRocking: PlayfieldRockingServices;
+    scoreGraph: StageScoreGraph;
     visualEvents: ShopExitScheduler;
     audio: AudioService;
     hud: HudPanels;
@@ -279,6 +281,10 @@ const traitContext: TraitContext = {
     cameraView,
     get visualEvents() {
       return visualEvents;
+    },
+    // The stage score graph a stage scene composes (#1064), built with the run below.
+    get scoreGraph() {
+      return scoreGraph;
     },
     // The rocking controller's capabilities (#783): wiring only, no policy.
     playfieldRocking: {
@@ -530,13 +536,21 @@ const visualEvents = createVisualScheduler({ services: visualServices });
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
 document.addEventListener("visibilitychange", () => visualEvents.suspend());
 // Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).
-const placementPhase = createPlacementPhase(
-  run,
-  createActionPhases(visualEvents, {
-    plan: "scoring",
-    producers: [placementProducer, scoringProducer, triggeredProducer, survivorProducer],
-  }),
-);
+const actionPhases = createActionPhases(visualEvents, {
+  plan: "scoring",
+  producers: [placementProducer, scoringProducer, triggeredProducer, survivorProducer],
+});
+const placementPhase = createPlacementPhase(run, actionPhases);
+// The stage score graph (#1064): hung in the room (never the turning assembly), its producer
+// composed only while a scene shows it.
+const scoreGraph = createStageScoreGraph({
+  source: run,
+  history: () => run.committedState().round.history,
+  phase: placementPhase,
+  compose: (producer) => actionPhases.compose(producer),
+  room: view.scene,
+  host,
+});
 // A blast's survivors answer in place with their declared feedback, after scoring (#1174).
 const survivorFeedback = createResistanceFeedbackController({
   source: run,
@@ -668,6 +682,7 @@ const step = (time: number) => {
   cameraView.update(playfield.time, playfield.delta);
   presenter.update(time, delta);
   visualEvents.update(time, document.visibilityState === "visible");
+  scoreGraph.frame();
   dazzle.update(delta);
   run.followOutcomes(time);
   field.update(playfield.time, run.reducedMotion);
