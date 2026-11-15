@@ -28,6 +28,8 @@ import {
   type MassComponent,
   type PhysicalMass,
   validatePhysicalMass,
+  massKg,
+  weightLine,
 } from "./physical-mass";
 import type { ChopSettings } from "./visual/chopped-geometry";
 import type { Lettering } from "./visual/lettering";
@@ -1723,6 +1725,10 @@ inspectionProviders.register("releaseStatus", (block) => {
   return [...releaseStatusInspection(definition.id, definition.releaseStatus)];
 });
 
+// Every inspected block shows its weight (#1069; doc/material-mass-and-passives.md), resolved from
+// its current material's authored recipe, the same source the mass queries use.
+inspectionProviders.register("weight", (block) => [weightLine(massKg(cardMassRecipe(block)))]);
+
 // Inspection lists a card's base and acquired bonuses after its name (#751).
 inspectionProviders.register("acquiredBonuses", (block) =>
   acquiredBonusLines(block, getMaterialDefinition(materialOf(block)).scoringModifier),
@@ -1803,4 +1809,9 @@ export function makeDevDeck(seed: number, pool = "gameplay"): readonly CardBlock
 export function makeUniformDeck(material: BlockMaterial): readonly CardBlock[] {
   const definition = getMaterialDefinition(material);
   return standardDeck.map((card) => withMaterial(card, definition));
+}
+
+/** A card's physical mass recipe: its current material's (#816, #1069). */
+export function cardMassRecipe(card: CardBlock): PhysicalMass {
+  return getMaterialDefinition(materialOf(card)).mass;
 }

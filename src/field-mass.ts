@@ -7,11 +7,11 @@
  */
 import type { CardBlock } from "./cards";
 import type { GameState } from "./game-state";
-import { getMaterialDefinition, materialOf } from "./materials";
+import { cardMassRecipe } from "./materials";
 import { aggregateMass, type MassAggregate } from "./physical-mass";
 import { contextQueries } from "./context-queries";
 
-const recipeOf = (card: CardBlock) => getMaterialDefinition(materialOf(card)).mass;
+const recipeOf = cardMassRecipe;
 
 /** Total, count and mean mass of the given cards. */
 export function cardsMass(cards: readonly CardBlock[]): MassAggregate {
