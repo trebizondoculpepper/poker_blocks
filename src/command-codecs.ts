@@ -19,6 +19,9 @@ export type CommandDescriptor = Readonly<{ command: string; version: number; arg
 export type CommandTarget = {
   play(action: PlayAction, actionId?: string): unknown;
   discard(cardIds: readonly string[], actionId?: string): unknown;
+  /** Move a hand card or a rack item to another position (#1245): false when refused. */
+  reorderHand(from: number, to: number): boolean;
+  reorderPassive(from: number, to: number): boolean;
   /** Use a rack item on a card (#1246): null when refused. */
   applyRackItem(itemId: string, cardId: string): unknown;
 };
@@ -73,6 +76,41 @@ commandCodecs.register("discard", {
   execute: (target, args) =>
     target.discard((args as { cardIds: readonly string[] }).cardIds) !== null,
 });
+
+const position = (value: unknown, what: string): number => {
+  if (!Number.isSafeInteger(value) || (value as number) < 0)
+    throw new Error(`${what} must be a position`);
+  return value as number;
+};
+
+/** A reorder's validated from/to positions; the model owner checks them against its zone. */
+const reorder = (
+  command: string,
+  run: (target: CommandTarget, from: number, to: number) => boolean,
+): CommandCodec => ({
+  version: 1,
+  normalize(args) {
+    const { from, to } = (args ?? {}) as { from?: unknown; to?: unknown };
+    return Object.freeze({
+      from: position(from, `${command} from`),
+      to: position(to, `${command} to`),
+    });
+  },
+  execute: (target, args) => {
+    const { from, to } = args as { from: number; to: number };
+    return run(target, from, to);
+  },
+});
+
+/** Hand and rack reorders (#1245): a real move commits with no facts; a true no-op records none. */
+commandCodecs.register(
+  "reorderHand",
+  reorder("reorderHand", (target, from, to) => target.reorderHand(from, to)),
+);
+commandCodecs.register(
+  "reorderPassive",
+  reorder("reorderPassive", (target, from, to) => target.reorderPassive(from, to)),
+);
 
 /**
  * Use a rack item on a card (#1246): the item's and card's opaque instance IDs, which the model's
