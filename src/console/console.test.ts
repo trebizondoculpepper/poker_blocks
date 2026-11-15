@@ -5,7 +5,7 @@ import { GameRun } from "../game-run";
 import { demoRunRules } from "../run-rules";
 import { completionsAt, remember, splitStatements, tokenise } from "./command-line";
 import { candidates, registerConsoleCommand, runLine, type ConsoleHost } from "./commands";
-import { debugSnapshotCommand } from "../diagnostics/snapshot-command";
+import { copyToClipboard, debugSnapshotCommand } from "../diagnostics/snapshot-command";
 import { isConsoleKey } from "./console-view";
 
 function fakeHost() {
@@ -37,8 +37,18 @@ function fakeHost() {
 
 describe("debug snapshot (#987)", () => {
   const snapshot = () => ({ schema: 1 as const, takenAt: "t", sections: {}, truncated: [] });
-  const run = async (copies: boolean) => {
-    const leave = registerConsoleCommand(debugSnapshotCommand(snapshot, async () => copies));
+  const run = async (copies: boolean, environment?: { isSecureContext?: boolean }) => {
+    const leave = registerConsoleCommand(
+      debugSnapshotCommand(snapshot, (text) =>
+        copyToClipboard(text, {
+          isSecureContext: true,
+          ...environment,
+          clipboard: {
+            writeText: () => (copies ? Promise.resolve() : Promise.reject(new Error("denied"))),
+          },
+        }),
+      ),
+    );
     try {
       const { text, calls } = fakeHost();
       const printed = text("debug snapshot");
@@ -56,6 +66,14 @@ describe("debug snapshot (#987)", () => {
     const { printed, calls } = await run(true);
     expect(printed).toEqual([JSON.stringify(snapshot())]);
     expect(calls).toContain("output: snapshot copied to the clipboard");
+  });
+  it("explains HTTPS or localhost when the page is not a secure context (#1260)", async () => {
+    const { calls, printed } = await run(true, { isSecureContext: false });
+    // The snapshot itself still prints in full over HTTP.
+    expect(printed).toEqual([JSON.stringify(snapshot())]);
+    expect(calls).toContain(
+      "error: Automatic clipboard copying requires HTTPS or localhost. Select the snapshot text above and copy it manually.",
+    );
   });
   it("says to select the text when the clipboard refuses", async () => {
     const { calls } = await run(false);
