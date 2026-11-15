@@ -94,3 +94,25 @@ describe("retention (#505; doc/clone-reset.md, 'Boundary lifecycle')", () => {
     expect(zones.some(({ id }) => id === standardDeck[5]!.id)).toBe(false);
   });
 });
+
+describe("boundary resets (#506; doc/clone-reset.md, 'Boundary lifecycle')", async () => {
+  const { resetAtBoundary } = await import("./retention");
+  const { materialOf } = await import("./materials");
+
+  it("reverts Gelato to Custard at the round's end, not at an ordinary stage end", () => {
+    const gelato = card(0, "gelato");
+    const s = state({ deck: [gelato] });
+    expect(materialOf(resetAtBoundary(s, ["stage"]).deck[0]!)).toBe("gelato");
+    const after = resetAtBoundary(s, ["stage", "round"]).deck[0]!;
+    expect(materialOf(after)).toBe("custard");
+    // Identity, rank and suit are kept.
+    expect(after.id).toBe(gelato.id);
+    expect(after.traits.identity).toEqual(gelato.traits.identity);
+  });
+
+  it("never asks a non-resettable card, and leaves state alone when nothing is scheduled", () => {
+    const s = state({ hand: [card(1, "wood")], deck: [card(2, "custard")] });
+    expect(resetAtBoundary(s, ["stage", "round"])).toEqual(s);
+    expect(resetAtBoundary(s, [])).toBe(s);
+  });
+});
