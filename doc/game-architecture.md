@@ -87,6 +87,10 @@ Before closing #1113 verify standard, shader/unlit, contained, transparent and r
 
 What an operation does to the selected cards is still to be decided.
 
+## Tabbed run status (#1369)
+
+[Run status](run-status.md) extends the existing deck-entry scene with a registered read-only tab host and independently composed Deck and Gameplay Status providers. Preserve all-live-card inventory queries/location markers, hidden/draw-order boundaries, complete shared inspection and existing pause/close navigation. Owners publish invalidation; generic UI dispatches captured provider content without polling, rescoring or identity branches. The source audit distinguishes existing inventory/inspection from missing tab host/state-publication seams and records small delivery/acceptance boundaries.
+
 ## Inspectable trait
 
 **Target extension (#751):** [Acquired bonus artwork and inspection](presentation-contracts.md#acquired-bonus-artwork-and-inspection-432-751) defines full live bonus descriptions, separate from the compact face label.
@@ -1784,9 +1788,9 @@ The [scheduler terminal-status contract](scheduler-terminal-status.md) keeps ful
 
 [Crash reporting](crash-reporting.md) defines the application-lifetime configured reporting controller, mechanical Sentry transport, registered bounded diagnostics and renderer-owned screenshot capture. Automatic errors and manual feedback share captured release/browser/game context without changing gameplay or blocking input. Reuse the existing home/pause footer Report a bug link to open Sentry feedback; diagnostics remain in Sentry and account-supported automation feeds safe summaries into GitHub. Developer-console composition stays separate. This target includes source audit, primary references, credential boundaries, cancellation/disposal, failure limits and focused delivery verification; no SDK or account integration is claimed by the documentation.
 
-## Tabbed run status (#1369)
+## Floating labels on shell-free appearances (#1368)
 
-[Run status](run-status.md) extends the existing deck-entry scene with a registered read-only tab host and independently composed Deck and Gameplay Status providers. Preserve all-live-card inventory queries/location markers, hidden/draw-order boundaries, complete shared inspection and existing pause/close navigation. Owners publish invalidation; generic UI dispatches captured provider content without polling, rescoring or identity branches. The source audit distinguishes existing inventory/inspection from missing tab host/state-publication seams and records small delivery/acceptance boundaries.
+[Cloud appearance](cloud-appearance.md) defines separately registered glyph-only face parts over ordinary logical card bounds, composable with shell-free volumetric contents. Generic mounts consume declared appearance/interaction/feedback capabilities and never test Cloud/Steam identity or infer hit areas from transparent density. Appearance ownership covers labels, volume ticking, masks and disposal together; removing visible shell artwork does not change logical attachment or model state.
 
 ## Independent table and backdrop composition (#1367)
 
