@@ -233,6 +233,11 @@ export function createPlayPresenter(options: {
   committed?: {
     onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void;
   };
+  /**
+   * Presentation controllers scoped to the run on screen (#1174 review): reset with it, so a
+   * replaced run's outstanding feedback is cancelled and its deduplication starts afresh.
+   */
+  runScoped?: readonly { reset(): void }[];
   placementPhase?: Pick<
     PlacementPhase,
     "contribution" | "contributionFor" | "observeAction" | "latest" | "reset"
@@ -686,6 +691,7 @@ export function createPlayPresenter(options: {
       hand.updateDrawIns(delta);
     },
     reset() {
+      options.runScoped?.forEach((controller) => controller.reset());
       // Every action's effect is cancelled with its scope; one not yet started is dropped.
       resetting = true;
       for (const scope of Array.from(actionScopes)) options.visualEvents.cancel(scope);

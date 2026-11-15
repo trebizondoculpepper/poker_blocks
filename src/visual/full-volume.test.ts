@@ -203,8 +203,16 @@ describe("bubbles in a shell-free full volume (#1230)", () => {
     const { draw, slots, block } = scene();
     for (let i = 0; i < 120; i++) draw();
     const extent = 0.5 * 0.97;
-    // The sprite is drawn at the volume scale, as the points are.
-    const margin = (bubbles.size / 2) * 0.97;
+    // The sprite keeps a world size: its size times the points' world y scale (keepWorldSize).
+    const yScale = new THREE.Vector3().setFromMatrixColumn(block.matrixWorld, 1).length();
+    const worldRadius = (bubbles.size / 2) * 0.97 * yScale;
+    const toLocal = block.matrixWorld.clone().invert();
+    // Points on the sprite's world sphere, in many directions, carried back into the block.
+    const directions = Array.from({ length: 64 }, (_, i) => {
+      const t = Math.acos(1 - (2 * (i + 0.5)) / 64);
+      const f = Math.PI * (1 + Math.sqrt(5)) * i;
+      return new THREE.Vector3(Math.sin(t) * Math.cos(f), Math.cos(t), Math.sin(t) * Math.sin(f));
+    });
     let checked = 0;
     for (let i = 0; i < 60; i++) {
       const before = slots();
@@ -212,8 +220,12 @@ describe("bubbles in a shell-free full volume (#1230)", () => {
       const after = slots();
       after.forEach((p, index) => {
         if (!p) return;
-        for (const axis of [p.x, p.y, p.z])
-          expect(Math.abs(axis)).toBeLessThanOrEqual(extent - margin + 1e-6);
+        const centre = p.clone().applyMatrix4(block.matrixWorld);
+        for (const direction of directions) {
+          const edge = centre.clone().addScaledVector(direction, worldRadius).applyMatrix4(toLocal);
+          for (const axis of [edge.x, edge.y, edge.z])
+            expect(Math.abs(axis)).toBeLessThanOrEqual(extent + 1e-6);
+        }
         // Shown in both frames, with no wobble: it moved straight up in the world.
         const from = before[index];
         if (!from) return;
