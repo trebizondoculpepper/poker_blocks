@@ -41,6 +41,12 @@ describe("fitted narration text (#1156; doc/presentation-contracts.md)", () => {
     expect(result.lines.map(({ text }) => text)).toEqual(["Flush", "+40", "×3 from Steel"]);
   });
 
+  it("never splits a word that fits whole while balancing lines", () => {
+    const result = fit("Extraordinarily big", 200, 200);
+    const words = result.lines.flatMap(({ text }) => text.split(" "));
+    expect(words).toEqual(["Extraordinarily", "big"]);
+  });
+
   it("splits a token too long for a line between graphemes", () => {
     const result = fit("Supercalifragilisticexpialidocious", 80, 200);
     expect(result.lines.length).toBeGreaterThan(1);

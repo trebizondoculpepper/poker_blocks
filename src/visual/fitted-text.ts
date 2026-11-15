@@ -143,8 +143,18 @@ function linesFor(
   const at = (w: number) => paragraphs.flatMap((p) => wrap(p, px, w, measure));
   const widest = at(width);
   if (widest.length > count) return null;
-  let low = 0;
+  // Never narrower than the widest word that fits whole: balancing must not split it.
+  let low = Math.max(
+    0,
+    ...paragraphs.flatMap((p) =>
+      p
+        .split(/\s+/)
+        .map((word) => measure(word, px))
+        .filter((w) => w <= width),
+    ),
+  );
   let high = width;
+  if (at(low).length <= count) return at(low);
   for (let step = 0; step < 24; step++) {
     const mid = (low + high) / 2;
     if (at(mid).length <= count) high = mid;
@@ -175,6 +185,7 @@ export const fittedTextProvider: TextLayoutProvider = {
     if (paragraphs.length === 0)
       return { lines: [], width: 0, height: 0, truncated: false, fullText: text };
     const heightFor = (lines: number, px: number) => lines * px * style.lineHeight;
+    const words = paragraphs.flatMap((p) => p.split(/\s+/).filter(Boolean));
     // The largest base size, at the fewest lines from the preferred count up, that fits.
     let chosen: { lines: string[]; px: number } | null = null;
     // The fewest lines from the preferred count up, each at the largest base size that fits.
@@ -184,6 +195,8 @@ export const fittedTextProvider: TextLayoutProvider = {
       count++
     ) {
       for (let px = style.maxPx; px >= style.minPx; px -= 0.5) {
+        // Splitting a word is the last resort: only at the minimum size.
+        if (px > style.minPx && words.some((word) => measure(word, px) > width)) continue;
         const lines = linesFor(paragraphs, count, px, width, measure);
         if (lines && heightFor(lines.length, px) <= height) {
           chosen = { lines, px };
