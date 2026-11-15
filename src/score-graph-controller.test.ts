@@ -54,7 +54,15 @@ function harness() {
     phase.contributionFor(key, scoringProducer)!.bind(completion.work);
     completion.done();
   };
-  return { graph, drawn, commit, scored, step, phases };
+  /** A scoring commit that carries no captured stage-history point. */
+  const commitBare = (actionId: string) => {
+    const facts = [
+      { type: "score.totalApplied", payload: { amount: 0 } },
+    ] as unknown as EventEnvelope[];
+    for (const listener of listeners) listener(facts, { actionId } as CommittedMetadata);
+    return phase.latest!;
+  };
+  return { graph, drawn, commit, commitBare, scored, step, phases, phase };
 }
 
 describe("committed-score graph controller (#1087; doc/line-goes-up.md)", () => {
@@ -151,5 +159,15 @@ describe("committed-score graph controller (#1087; doc/line-goes-up.md)", () => 
     scored(key);
     step(4 * unitMs + 100);
     expect(drawn.length).toBe(after);
+  });
+
+  it("settles a reservation with no captured history point empty, so the outcome isn't held", () => {
+    const { commitBare, phase, scored, step } = harness();
+    const key = commitBare("bare");
+    const reservation = phase.contributionFor(key, graphProducer)!;
+    // Nothing is ever bound to it; once scoring completes it finishes empty, not at the bound.
+    scored(key);
+    step(20);
+    expect(reservation.status()).toEqual({ state: "finished" });
   });
 });

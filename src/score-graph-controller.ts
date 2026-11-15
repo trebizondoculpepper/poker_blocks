@@ -153,6 +153,11 @@ export function createScoreGraphController(options: {
         // Cancelled or failed before its effect ever started: release its record (#1087 review).
         contribution.observe(() => void growing.delete(id));
     }
+    // A reservation this commit carried no captured history point for settles empty at once, so
+    // it never holds the action's outcome until the bind limit (#1087 review). `settleEmpty`
+    // does nothing to one already bound above.
+    const key: ActionKey | null = options.phase.latest;
+    if (key) options.phase.contributionFor(key, graphProducer)?.settleEmpty();
   });
 
   return {
