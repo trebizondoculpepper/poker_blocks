@@ -14,7 +14,7 @@ import { query } from "./context-queries";
 import type { EventRule, RuleFrame } from "./event-rules";
 import { passiveRuleBuilders, type ParameterSchema } from "./configurable-passive";
 import { passiveDefinitions, type PassiveDefinition } from "./passives";
-import { ruleHandlers } from "./rule-handlers";
+import { raiseLine, ruleHandlers } from "./rule-handlers";
 import { goldSolid, massKg, massOf } from "./physical-mass";
 import "./packing-density";
 import "./field-mass";
@@ -150,6 +150,37 @@ scoreCurves.register("massEaseOut", {
   },
 });
 
+type ExponentRampParams = { neutral: number; cap: number; maximum: number };
+
+/**
+ * Dense and Sparse packing (#1070, #1071): exponent 1 at the neutral packing, `maximum` at the cap,
+ * linear between. The cap may lie either side of the neutral value. Bounded at ×1.3 as an exponent.
+ */
+scoreCurves.register("exponentRamp", {
+  factor: (d, raw) => {
+    const { neutral, cap, maximum } = raw as ExponentRampParams;
+    return 1 + (maximum - 1) * clamp01((d - neutral) / (cap - neutral));
+  },
+  validate: (raw) => {
+    const { neutral, cap, maximum } = (raw ?? {}) as Partial<ExponentRampParams>;
+    return finite(neutral!, cap!, maximum!) &&
+      neutral! >= 0 &&
+      neutral! <= 1 &&
+      cap! >= 0 &&
+      cap! <= 1 &&
+      neutral !== cap &&
+      maximum! >= 1 &&
+      maximum! <= 1.3
+      ? []
+      : ["needs distinct neutral and cap packings in [0, 1] and a maximum exponent from 1 to 1.3"];
+  },
+  parameters: {
+    maximum: { label: "Maximum exponent", path: ["maximum"], min: 1, max: 1.3, step: 0.01 },
+    neutral: { label: "Neutral packing", path: ["neutral"], min: 0, max: 1, step: 0.01 },
+    cap: { label: "Cap packing", path: ["cap"], min: 0, max: 1, step: 0.01 },
+  },
+});
+
 type TierParams = { tiers: readonly { at: number; factor: number }[] };
 
 // The greatest attained tier's factor, ×1 below the first: tiers don't multiply together.
@@ -192,6 +223,11 @@ export type QueryFactorConfig = {
    * trial was saved; weight passives multiply in `score.lineMultiply`.
    */
   phase?: string;
+  /**
+   * The registered effect that applies the factor (#1070): absent, the row multiplier; packing
+   * passives raise the row to the factor as an exponent with `power-line-score-by-query`.
+   */
+  effect?: string;
 };
 
 /** The curve's factor for the query's value on this pass's snapshot: ×1 when unavailable. */
@@ -239,6 +275,14 @@ ruleHandlers.registerEffect<QueryFactorConfig, unknown>(
   },
 );
 
+// The row's working score raised to the curve's value as an exponent (#1070), composed with the
+// row's other powers as material exponents are (doc/material-mass-and-passives.md).
+ruleHandlers.registerEffect<QueryFactorConfig, unknown>(
+  "power-line-score-by-query",
+  (config, _selected, frame) =>
+    raiseLine(frame, queryFactor(config, frame), "power-line-score-by-query"),
+);
+
 /** Everything wrong with a trial's curve configuration (rejected before it can score). */
 export function validateQueryFactor(owner: string, config: QueryFactorConfig): string[] {
   if (!scoreCurves.has(config.curve)) return [`${owner}: unknown curve "${config.curve}"`];
@@ -254,7 +298,7 @@ const queryFactorRules = (factor: QueryFactorConfig): EventRule[] => [
     on: factor.phase ?? "score.beforeLineFinalized",
     select: { id: "scored-line", config: {} },
     where: { id: "query-factor-not-neutral", config: factor },
-    effects: [{ id: "multiply-line-score-by-query", config: factor }],
+    effects: [{ id: factor.effect ?? "multiply-line-score-by-query", config: factor }],
   },
 ];
 
@@ -323,6 +367,12 @@ export const weightPassives = {
   heavy: { neutralKg: goldKg, capKg: 4 * goldKg, maximum: 10 },
 } as const;
 
+/** Owner-agreed packing passives (#1061): exponents on the whole field's packing density. */
+export const packingPassives = {
+  // Dense (#1070): no bonus at or below 70%, exponent 1.3 when fully packed.
+  dense: { neutral: 0.7, cap: 1, maximum: 1.3 },
+} as const;
+
 /** A provisional row-multiplier passive driven by a context query, validated as composed. */
 function queryTrial(
   id: string,
@@ -355,6 +405,21 @@ function queryTrial(
 }
 
 for (const definition of [
+  // Dense (#1070): a tightly packed field raises each scored row to up to the power 1.3.
+  queryTrial(
+    "dense-packing",
+    "Dense",
+    "■",
+    "Raises each scored row to a power of up to 1.3 the more tightly the playfield is packed: no bonus at 70% or less, 1.3 when its bounding box is full.",
+    {
+      query: "packingDensity",
+      value: "density",
+      curve: "exponentRamp",
+      params: packingPassives.dense,
+      phase: "score.linePower",
+      effect: "power-line-score-by-query",
+    },
+  ),
   // Heavy (#1073): a heavier field scores more, from one gold block's mass up to ×10 at four.
   queryTrial(
     "heavy-stack",
