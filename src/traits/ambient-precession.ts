@@ -35,6 +35,8 @@ export const ambientPrecession = defineTrait({
     node.name = "ambientPrecession";
     let inner: THREE.Object3D | null = null;
     let seconds = 0;
+    // Its host may change the preference while it shows (#1291): `motion.reduced` updates it.
+    let reduced = settings.reducedMotion;
     const rest = new THREE.Quaternion();
     const axis = new THREE.Quaternion();
     const euler = new THREE.Euler();
@@ -52,7 +54,7 @@ export const ambientPrecession = defineTrait({
       );
       rest.setFromEuler(euler);
       node.quaternion.copy(rest);
-      if (settings.reducedMotion) return;
+      if (reduced) return;
       for (let i = 0; i < 3; i++) {
         const period = unitsToMs(settings.periodUnits[i]!) / 1000;
         const angle =
@@ -62,6 +64,10 @@ export const ambientPrecession = defineTrait({
       }
     };
 
+    const stopReduced = block.on("motion.reduced", (payload) => {
+      reduced = Boolean(payload);
+      pose();
+    });
     const stopMount = block.on("presentation.mount", (payload) => {
       const target = (payload as PresentationMount).object;
       const parent = target.parent;
@@ -78,10 +84,11 @@ export const ambientPrecession = defineTrait({
 
     return {
       update(dt) {
-        if (!settings.reducedMotion) seconds += Math.max(0, dt);
+        if (!reduced) seconds += Math.max(0, dt);
         pose();
       },
       dispose() {
+        stopReduced();
         stopMount();
         const parent = node.parent;
         if (inner && parent) {

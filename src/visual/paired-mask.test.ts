@@ -175,9 +175,28 @@ describe("paired block-local material masks (#1166; doc/presentation-contracts.m
     expect(old.material.depthWrite).toBe(true);
     expect((next.mesh.material as THREE.Material).transparent).toBe(true);
     expect(next.mesh.renderOrder).toBe(1);
+    // The depthless outgoing look draws after the opaque scene (#1273).
+    expect(old.mesh.renderOrder).toBe(1000);
     const fragment = compile(next.mesh.material as THREE.Material).fragmentShader;
     expect(fragment).toContain("matReduced > 0.5 && matOutgoing < 0.5");
     result.mask.cancel();
     expect(next.mesh.renderOrder).toBe(0);
+    expect(old.mesh.renderOrder).toBe(0);
+  });
+
+  it("keeps a transparent outgoing layer below the incoming look (#1291)", () => {
+    const mount = new THREE.Group();
+    const old = look(1, true);
+    const next = look(1);
+    mount.add(old.root, next.root);
+    const result = createPairedMask({
+      mount,
+      outgoing: { root: old.root, maskAdapter: "chunkSurface" },
+      incoming: { root: next.root, maskAdapter: "chunkSurface" },
+      reduced: true,
+    });
+    if (!result.ok) throw new Error(result.diagnostic);
+    expect(old.mesh.renderOrder).toBeLessThan(next.mesh.renderOrder);
+    result.mask.cancel();
   });
 });

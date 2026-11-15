@@ -22,6 +22,9 @@ import { createMaterialise } from "./visual/materialise";
 import type { DragSource, Point } from "./drag-drop";
 import { returnToSource, stop as stopReturn, take } from "./return-to-source";
 import "./shop-view.css";
+import { createControlStage, type ControlStage } from "./block-menu/control-stage";
+import { withMotif } from "./visual/motif-face-art";
+import { sparkleEnvironment } from "./visual/attract-look";
 import { blockOutline } from "./visual/block-outline";
 import type { DanceFloor } from "./dance/dance-floor";
 import {
@@ -285,10 +288,56 @@ export function createShopView(
   const buyTarget = document.createElement("div");
   buyTarget.className = "shop-buy-target";
   buyTarget.setAttribute("aria-label", "Buy offer");
+  // The Buy control is a 3D block (#1077; doc/shop-control-blocks.md): a gold cube with BUY and a
+  // coin motif, on the shared control stage. The contextual line and deck counter stay as text.
   buyTarget.innerHTML =
-    "<strong>BUY</strong><span>Cards to deck · Passives to rack</span><small></small>";
+    '<div class="shop-buy-cube"></div><span>Cards to deck · Passives to rack</span><small></small>';
   host.append(stock, buyTarget);
-  const flightTargets = { deck: buyTarget.querySelector("small")!, rack: rack ?? buyTarget };
+  const buyCubeHost = buyTarget.querySelector<HTMLElement>(".shop-buy-cube")!;
+  let buyStage: ControlStage | null = null;
+  let buyVisible = false;
+  let disposed = false;
+  void createControlStage(
+    {
+      element: buyCubeHost,
+      createRenderer: () => new THREE.WebGLRenderer({ alpha: true, antialias: true }),
+      requestFrame: (callback) => requestAnimationFrame(callback),
+      cancelFrame: (handle) => cancelAnimationFrame(handle),
+      // The menu cubes' studio look, so the gold reads as gold.
+      environment: (stageRenderer) => sparkleEnvironment(stageRenderer as THREE.WebGLRenderer, 0),
+    },
+    [
+      {
+        id: "buy",
+        label: "BUY",
+        description: "Drop an offer here to buy it: cards go to your deck, passives to the rack.",
+        layout: ({ width, height }) => ({
+          x: width / 2,
+          y: height / 2,
+          size: Math.min(width, height) * 0.62,
+        }),
+        cube: {
+          material: "gold",
+          artwork: withMotif({ handler: "coin" }),
+          precession: { reducedMotion: reducedMotion() },
+        },
+      },
+    ],
+  ).then((stage) => {
+    if (disposed) return stage.dispose();
+    buyStage = stage;
+    if (buyVisible) stage.resume();
+  });
+  /** The Buy cube's current bounds: where purchases fly to (its explicit destination anchor). */
+  const buyDestination = {
+    getBoundingClientRect: () => {
+      const region = buyStage?.hitRegion("buy");
+      return region
+        ? new DOMRect(region.left, region.top, region.width, region.height)
+        : buyCubeHost.getBoundingClientRect();
+    },
+  } as HTMLElement;
+  const flightTargets = { deck: buyDestination, rack: rack ?? buyTarget };
   /** The elements an offer may be dropped on to buy it, by the names views give them. */
   const dropTargets = { buy: [buyTarget], rack: [rack ?? []].flat() };
   const sign = document.createElement("div");
@@ -451,6 +500,9 @@ export function createShopView(
 
   function render(offers: readonly ShopOffer[], visible: boolean, animateEntrance = false): void {
     stock.hidden = buyTarget.hidden = renderer.domElement.hidden = !visible;
+    buyVisible = visible;
+    if (visible) buyStage?.resume();
+    else buyStage?.cover();
     buyTarget.querySelector("small")!.textContent = `DECK ${deckSize()}`;
     clear();
     stock.replaceChildren();
@@ -794,6 +846,12 @@ export function createShopView(
     frame,
     present(config) {
       presented = config;
+      // The scene's own lifecycle: covered (null) rests the Buy cube, resumed restarts it (#1291).
+      if (config === null) buyStage?.cover();
+      else if (buyVisible) {
+        buyStage?.setReducedMotion(reducedMotion());
+        buyStage?.resume();
+      }
       for (const entry of displayed) {
         entry.presentation.present(config);
         // A fresh provider starts from the offer's real input state: focus and hover don't
@@ -809,6 +867,8 @@ export function createShopView(
       renderer.dispose();
       renderer.domElement.remove();
       stock.remove();
+      disposed = true;
+      buyStage?.dispose();
       buyTarget.remove();
       sign.remove();
       skip.remove();

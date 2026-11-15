@@ -198,10 +198,10 @@
   pointer-events: none;
 }
 
-.shop-buy-target strong {
-  color: var(--hud-accent, #9ce6d7);
-  font-size: 18px;
-  letter-spacing: 0.1em;
+.shop-buy-cube {
+  position: relative;
+  width: 72px;
+  height: 72px;
 }
 
 .shop-buy-target small {
@@ -262,8 +262,9 @@
     padding: 4px;
     font-size: 8px;
   }
-  .shop-buy-target strong {
-    font-size: 13px;
+  .shop-buy-cube {
+    width: 48px;
+    height: 48px;
   }
   .shop-buy-target small {
     font-size: 9px;

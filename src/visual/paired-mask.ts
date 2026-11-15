@@ -123,6 +123,9 @@ export const chunkSurfaceAdapter: MaskAdapter = {
 
 maskAdapters.register("chunkSurface", chunkSurfaceAdapter);
 
+/** How much later than the opaque scene the depthless outgoing look draws (#1273). */
+export const outgoingDrawLate = 1000;
+
 /** One side of the pair: its root (under the mount) and the adapter its look declared. */
 export type MaskSide = { root: THREE.Object3D; maskAdapter?: string };
 
@@ -222,6 +225,17 @@ export function createPairedMask(options: {
       object.castShadow = false;
       // The fading incoming look draws over the opaque outgoing one.
       if (reduced && role === "incoming") object.renderOrder += 1;
+      // The outgoing look writes no depth while it is faded over (#1264), so it draws after the
+      // rest of the opaque scene: geometry behind it is already drawn and can't show through it
+      // (#1273). The incoming look still draws over it, in the transparent pass.
+      // Only its opaque parts: a transparent outgoing layer keeps drawing below the incoming
+      // look, which is one step later (#1291).
+      if (
+        reduced &&
+        role === "outgoing" &&
+        ![material].flat().some(({ transparent }) => transparent)
+      )
+        object.renderOrder += outgoingDrawLate;
     });
   }
   const followMount = () => {

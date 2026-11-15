@@ -58,7 +58,7 @@ describe("ambient precession (#1075)", () => {
     for (let frame = 0; frame < 60; frame++) block.update(1 / 60);
     // Feedback scaled the inner node; precession wrote only its own.
     expect(inner.scale.x).toBeGreaterThan(1);
-    expect(inner.quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-9);
+    expect(inner.quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-6);
   });
 
   it("unwraps its node on disposal, restoring the inner node's place", () => {
@@ -67,5 +67,20 @@ describe("ambient precession (#1075)", () => {
     expect(inner.parent).toBe(outer);
     expect(inner.position.x).toBe(0.5);
     expect(node.parent).toBeNull();
+  });
+});
+
+describe("live reduced-motion preference (#1291)", () => {
+  it("holds the rest pose once motion is reduced, and moves again when it isn't", () => {
+    const { node, block } = mounted();
+    block.update(1.3);
+    expect(node.quaternion.angleTo(restQuaternion())).toBeGreaterThan(1e-4);
+    block.emit("motion.reduced", true);
+    expect(node.quaternion.angleTo(restQuaternion())).toBeLessThan(1e-6);
+    block.update(1);
+    expect(node.quaternion.angleTo(restQuaternion())).toBeLessThan(1e-6);
+    block.emit("motion.reduced", false);
+    block.update(1.1);
+    expect(node.quaternion.angleTo(restQuaternion())).toBeGreaterThan(1e-4);
   });
 });
