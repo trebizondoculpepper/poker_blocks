@@ -29,6 +29,7 @@ import { createPassiveVisual } from "../passive-visual";
 import { createBlockAppearance, setReflectionEnvironment } from "../visual/block-appearance";
 import { createPrepassContext, type PrepassReference } from "../visual/appearance-prepass";
 import { massKg, weightLine } from "../physical-mass";
+import { cosmeticRandom, createBlockEffects, type BlockEffect } from "../visual/block-effects";
 import "./object-browser.css";
 
 export type ObjectBrowser = { show(backTo: string): void; hide(): void; dispose(): void };
@@ -49,6 +50,11 @@ type BrowsedObject = {
   preview?: (size: number) => {
     object: THREE.Object3D;
     prepasses?: readonly PrepassReference[];
+    /**
+     * Its look's ongoing effects (dust, smoke, #1011), built as the table builds them: they live
+     * in the preview's world space and are driven by the preview object's real pose each frame.
+     */
+    effects?: readonly BlockEffect[];
     dispose(): void;
   };
 };
@@ -94,9 +100,11 @@ function materialPage(
         appearance.boardMaterials ?? appearance.materials,
       );
       for (const extra of appearance.extras ?? []) cube.add(extra);
+      const effects = previewEffects(definition, size);
       return {
         object: cube,
         prepasses: appearance.prepasses,
+        effects,
         dispose() {
           appearance.geometry.dispose();
           appearance.textures.forEach((texture) => texture.dispose());
@@ -217,6 +225,14 @@ export function matchesSearch(object: { id: string; name: string }, search: stri
   );
 }
 
+/**
+ * A preview's ongoing appearance effects (#1011): built from the definition's own `effects`
+ * through the shared registry, exactly as the table builds them. Nothing here names an effect.
+ */
+export function previewEffects(definition: MaterialDefinition, size: number): BlockEffect[] {
+  return createBlockEffects(definition.appearance.effects ?? [], { random: cosmeticRandom, size });
+}
+
 export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
   const root = document.createElement("section");
   root.className = "object-browser";
@@ -271,7 +287,7 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
   camera.position.set(0, 1.6, 6.2);
   camera.lookAt(0, 0, 0);
   const environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
-  let shown: { object: THREE.Object3D; dispose(): void } | null = null;
+  let shown: ReturnType<NonNullable<BrowsedObject["preview"]>> | null = null;
   // The preview's prepasses, on this renderer's own targets (#971).
   const prepasses = createPrepassContext();
   let releasePrepasses = () => {};
@@ -293,6 +309,11 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     const seconds = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
     rotation.update(seconds, shown?.object ?? null);
+    // Ongoing effects read the preview's actual world pose, so turning it releases dust (#1011).
+    if (shown) {
+      shown.object.updateWorldMatrix(true, false);
+      for (const effect of shown.effects ?? []) effect.update(seconds, shown.object, false);
+    }
     prepasses.render({
       renderer,
       scene,
@@ -310,6 +331,10 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       releasePrepasses();
       releasePrepasses = () => {};
       scene.remove(shown.object);
+      for (const effect of shown.effects ?? []) {
+        effect.object.removeFromParent();
+        effect.dispose();
+      }
       shown.dispose();
       shown = null;
     }
@@ -320,6 +345,7 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     shown = preview;
     releasePrepasses = prepasses.require(preview.prepasses ?? []);
     scene.add(shown.object);
+    for (const effect of shown.effects ?? []) scene.add(effect.object);
     // A new entry: any drag in progress ends (its handlers are replaced), the pose stays.
     if (unmountRotation) {
       unmountRotation();
