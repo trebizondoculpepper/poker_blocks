@@ -38,6 +38,11 @@ import { createCameraViewService, type CameraViewService } from "./camera-view";
 import { createConsoleHost } from "./console-host";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import { createFieldView, type FieldView } from "./field-view";
+import {
+  createFieldLineAnchors,
+  lineScoreLabel,
+  type FieldLineServices,
+} from "./field-line-labels";
 import { createHandView, type HandView } from "./hand-view";
 import { createHudPanels, type HudPanels } from "./hud-panels";
 // Registers the word-cube HUD action presenter (#780).
@@ -459,7 +464,8 @@ const visualServices: ScoreNarrationServices &
   PresentedActionServices &
   RewardLedgerServices &
   ShopBurnServices &
-  TransitionAudioServices & { playfieldRocking: RockingSink } = {
+  TransitionAudioServices &
+  FieldLineServices & { playfieldRocking: RockingSink } = {
   get scoreNarration() {
     return presenter.narration;
   },
@@ -474,6 +480,13 @@ const visualServices: ScoreNarrationServices &
   // Item activation labels beside the rack (#919), drawn over the same host the rack is in.
   activationLabels: createActivationLabelLayer(host),
   passiveRack: passiveRackView,
+  // Scored lines' projected bounds, for their fitted score labels (#1158).
+  fieldLines: createFieldLineAnchors({
+    cubes: () => field.blocks().map(({ block, cube }) => ({ id: block.id, object: cube })),
+    camera: () => cameraView.camera,
+    canvas: view.renderer.domElement,
+    host,
+  }),
   // Where a scheduled rocking resume reaches the playfield controller (#783).
   playfieldRocking: rockingRelay,
   // A committed material transition's sound (#539).
@@ -499,6 +512,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   rackChanged: () => run.rackChanged(),
   activated: (sourceIds) => sourceIds.forEach((id) => passiveRackView.activate(id)),
   alongside: (activation) => passiveRackView.labelFor(activation),
+  lineAlongside: (line, settleUnits) => lineScoreLabel(line, settleUnits),
   drawReplacements: () => run.drawReplacements(),
   save: () => run.autosave(),
   decided: (outcome, now, occurrence) => run.decided(outcome, now, occurrence),
