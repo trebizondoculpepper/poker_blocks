@@ -61,6 +61,9 @@ export const opticalShaderAdapter: MaskAdapter = {
     const source = original as THREE.ShaderMaterial;
     const made = source.clone();
     made.userData = source.userData;
+    // A clone drops the per-draw callback (a face ripple's, which steps its shared uniforms):
+    // the masked look keeps it (#1336 review).
+    made.onBeforeRender = source.onBeforeRender;
     // The original's own uniform objects (capture slots, tuning, ripple), shared, plus the mask's.
     made.uniforms = {
       ...source.uniforms,

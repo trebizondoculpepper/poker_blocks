@@ -86,4 +86,12 @@ describe("paired masks for optical looks (#1207)", () => {
     if (result.ok) result.mask.cancel();
     expect(crystal.material).toBe(front);
   });
+
+  it("keeps the source's per-draw callback, so a ripple keeps stepping (#1336 review)", () => {
+    const front = createRefractionFront(refractionPresets.get("crystal"));
+    const step = () => {};
+    front.onBeforeRender = step;
+    const made = opticalShaderAdapter.adapt(front, uniforms(), "incoming");
+    expect(made.onBeforeRender).toBe(step);
+  });
 });
