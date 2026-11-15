@@ -337,7 +337,9 @@ const entries = [
     name: "Start",
     family: "round",
     description: "A new stage begins: the field is cleared and a fresh hand is dealt",
-    prompt: "A soft card-shuffle riffle followed by a gentle bright chime, a fresh start",
+    // Bass-guitar outcome family (#1013, #1031): Cleared's slap-bass timbre, an opening motif.
+    prompt:
+      "Short solo funky slap bass guitar riff, same warm studio tone as a confident slap bass lick: a quick bouncy rising four-note opening phrase ending on an expectant held note, let's go, neither triumphant nor sad, no drums, no other instruments",
     durationSeconds: 1.2,
   },
   {
