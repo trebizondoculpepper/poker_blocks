@@ -1,3 +1,4 @@
+import { leaveShop } from "./shop-leave";
 import { discardRefusal } from "./discardable";
 import type { GameState } from "./game-state";
 import type { PreparedSession } from "./run-setup";
@@ -473,16 +474,18 @@ export function createGameRunController<Context>(options: {
     const leavingShop = game.inShop;
     if (leavingShop) shopExitPending = true;
     try {
+      // Model first (doc/outcome-presentation.md, #880): see src/shop-leave.ts.
       if (leavingShop) {
         const session = game;
-        if (session.state.shopStock?.length) playSfx("shop.stock.burn");
-        await shop.burnUnsold(reducedMotion);
-        // A different run may have been started while the old shop was dissolving.
-        if (game !== session) return;
-      }
-      const moved = leavingShop ? game.leaveShop() : game.advance();
-      if (!moved) return;
-      if (leavingShop) playSfx("shop.leave");
+        const proceed = await leaveShop({
+          commit: () => Boolean(session.leaveShop()),
+          save: autosave,
+          // The shop's exit response started this burn from the receipt; this only waits on it.
+          outgoingDone: () => shop.outgoingDone(),
+          current: () => game === session,
+        });
+        if (!proceed) return;
+      } else if (!game.advance()) return;
       // advance() may have ended the run (TypeScript still has the pre-call narrowing).
       if ((game.phase as RunPhase) === "over") {
         endRun();

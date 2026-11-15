@@ -1,3 +1,4 @@
+import { shopExitResponse, type ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
   createPlayfieldRockingController,
   type PlayfieldRockingServices,
@@ -151,6 +152,8 @@ export type SceneHost = {
     cameraView: Pick<CameraViewService, "beginShopEntrance">;
     /** The rocking controller's narrow capabilities (#783). */
     playfieldRocking: PlayfieldRockingServices;
+    /** The shared visual-event scheduler, for controller traits' required effects (#880). */
+    visualEvents: ShopExitScheduler;
     overlays: Pick<
       Overlays,
       | "showMenu"
@@ -755,6 +758,9 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // pause menu) neither restarts nor changes it.
   // Each committed fact's configured sound, for plays and discards alike (#755).
   behaviours.register("committedEventSounds", committedEventSounds<Context>());
+  // The shop's exit response (#880; doc/outcome-presentation.md): it presents the committed
+  // shop.left receipt, burning exactly the stock that left, with the configured cues.
+  behaviours.register("shopExitResponse", shopExitResponse<Context>());
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });
