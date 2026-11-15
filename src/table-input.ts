@@ -47,6 +47,7 @@ const holdLabelLift = 110;
 import { blockCanDrag, blockCursor, toggleBlockSelection } from "./block-trait-behaviours";
 import type { Selection } from "./traits/selectable";
 import { moveItem } from "./zones";
+import { settleHandRelease } from "./hand-release";
 
 /** What the input asks of the run. */
 export type TableRules = {
@@ -362,6 +363,8 @@ export function createTableInput(options: {
   });
   let selected: Selection = new Set();
   let drag: Drag | null = null;
+  /** Each released hand gesture's settlement generation (#1204). */
+  let settlementGeneration = 0;
   /** Whether the board is being turned by a drag (use-gesture, #275). */
   let boardDragging = false;
   /** Whether two fingers are pinching (use-gesture, #275). */
@@ -573,21 +576,18 @@ export function createTableInput(options: {
   ): void {
     const carried = [activeDrag.source, ...activeDrag.group];
     for (const rendered of carried) options.setDragLayer(rendered.cube, false);
-    // A drop target that accepted takes the blocks itself (#273, #274), in play order.
-    const accepted = hit?.verdict === "accept" ? hit.target.drop(ordered) : false;
-    const blocks = carried.length;
-    trace(
-      accepted ? `dropped on ${hit!.name}` : hit ? "refused" : "returned",
-      `${blocks} block${blocks === 1 ? "" : "s"}${hit ? ` at ${hit.name}` : ""}`,
+    // The hand's adoption of source-settled outcomes (#1204; src/hand-release.ts).
+    settleHandRelease(
+      {
+        owns: (block) => hand.owns(block),
+        putBack: (blocks) => hand.putBack(blocks),
+        layout: () => hand.layout(),
+        sfx: (id) => playSfx(id),
+        trace,
+        canPlay: () => rules.canPlay(),
+      },
+      { carried, ordered, hit, drop, generation: ++settlementGeneration },
     );
-    if (!accepted) {
-      // A drop the rules refuse (or any drop with no plays left) is denied; a drop on
-      // empty space just returns the block to the hand.
-      const refused = drop && (hit !== null || !rules.canPlay());
-      playSfx(refused ? "action.denied" : "card.drag.return");
-      hand.putBack([activeDrag.source, ...activeDrag.group]);
-      hand.layout();
-    }
   }
 
   // ----- The hand drag, run by dnd-kit (#282) -----
