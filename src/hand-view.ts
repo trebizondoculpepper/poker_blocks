@@ -37,7 +37,12 @@ export type HandView = {
   /** Deal a new stage's hand, each card drawing in. */
   deal(hand: readonly CardBlock[]): void;
   /** Cards just drawn (left to right): add their cubes, re-slot, and draw them in in turn. */
-  drawIn(drawn: readonly CardBlock[], hand: readonly CardBlock[]): void;
+  /**
+   * Reveal replacements drawn at commit. Only those still in the hand's committed layout show
+   * (#1165): one a later move has played or moved isn't revealed as obsolete. `hand` defaults to
+   * that committed layout; a caller at commit time may pass the hand it just committed.
+   */
+  drawIn(drawn: readonly CardBlock[], hand?: readonly CardBlock[]): void;
   /** Finish any draw-in on these cubes now, before another dissolve takes them over. */
   settle(blocks: readonly RenderedBlock[]): void;
   /** The selected hand cubes, in hand order. */
@@ -143,7 +148,13 @@ export function createHandView(options: {
     options.onLayout();
   }
 
+  /**
+   * The hand as last committed and synced (#1165): the presentation's own layout, which a delayed
+   * reveal uses instead of reading the live model.
+   */
+  let committed: readonly CardBlock[] = [];
   function sync(hand: readonly CardBlock[]): void {
+    committed = hand;
     modelSize = hand.length;
     blocks.forEach((rendered) => (rendered.handSlot = hand.indexOf(rendered.block)));
     layout();
@@ -177,11 +188,14 @@ export function createHandView(options: {
       });
       layout();
     },
-    drawIn(drawn, hand) {
-      const replacements = drawn.map((block) => {
+    drawIn(drawn, hand = committed) {
+      const present = new Set(hand.map(({ id }) => id));
+      const shown = new Set(blocks.map(({ block }) => block.id));
+      const replacements = drawn.flatMap((block) => {
+        if (!present.has(block.id) || shown.has(block.id)) return [];
         const rendered = create(block);
         blocks.push(rendered);
-        return rendered;
+        return [rendered];
       });
       // Also closes the gap when the deck has run out and nothing was drawn.
       sync(hand);
