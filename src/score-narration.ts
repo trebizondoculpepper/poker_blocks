@@ -56,7 +56,16 @@ export type NarratedEndpoint = {
 };
 
 /** A committed play: its lines and its captured endpoint. */
-export type NarratedPlay = { lines: readonly NarratedLine[]; endpoint: NarratedEndpoint };
+export type NarratedPlay = {
+  lines: readonly NarratedLine[];
+  endpoint: NarratedEndpoint;
+  /**
+   * This play's scoring presentation has completed (#1220; doc/action-presentation-phases.md):
+   * its lines and its tint tail have settled, or its captured summary showed instead. Called at
+   * most once, never after a reset. Its owner releases the action's scoring contribution.
+   */
+  scored?: () => void;
+};
 
 /** What narration shows through: the play presenter supplies it as a scheduler service. */
 export type ScoreNarrationSink = {
@@ -164,14 +173,21 @@ export function createScoreNarration(
     } else gate();
   }
 
+  /**
+   * Holds the composition adds on the outcome (#1220): an action's full required presentation,
+   * including its post-score contributions. Counted per epoch, so a reset drops them.
+   */
+  let external = 0;
+
   /** Announce the captured outcome once narration is drained and every hold has settled. */
   function gate(): void {
-    if (current || outcome || waiting.length > 0 || holds.size > 0 || !reached) return;
+    if (current || outcome || waiting.length > 0 || holds.size > 0 || external > 0 || !reached)
+      return;
     announce(reached);
   }
 
   /** Declare a scored play's tint tail, from its last line's start to that tint settling. */
-  function hold(lastLineUnits: number): void {
+  function hold(lastLineUnits: number, settled: () => void): void {
     const mine = epoch;
     const scope = scheduler.createScope(null);
     const admitted = scheduler.schedule(scope, {
@@ -182,19 +198,27 @@ export function createScoreNarration(
     // Not admitted: nothing to wait for, so the outcome isn't held up by it.
     if (!admitted.accepted) {
       scheduler.cancel(scope);
+      settled();
       return;
     }
     holds.add(scope);
     scheduler.seal(scope);
     scheduler.observe(scope, () => {
       if (mine !== epoch || !holds.delete(scope)) return;
+      settled();
       gate();
     });
   }
 
-  function start({ lines, endpoint }: NarratedPlay): void {
+  function start({ lines, endpoint, scored }: NarratedPlay): void {
     const mine = epoch;
     reached = endpoint;
+    // The play's scoring completes when both its lines and its tint tail have settled.
+    let parts = lines.length ? 2 : 1;
+    const part = () => {
+      if (mine !== epoch || --parts > 0) return;
+      scored?.();
+    };
     const scope = scheduler.createScope(null, {
       fallback: "score.summary",
       fallbackPayload: endpoint,
@@ -212,16 +236,19 @@ export function createScoreNarration(
     if (!admitted.accepted) {
       scheduler.cancel(scope);
       sink.summarise(endpoint);
+      // The captured summary stands in for the lines: scoring is complete (#1220).
+      scored?.();
       next();
       return;
     }
     showAlongside(lines, at);
     current = scope;
-    if (lines.length) hold(at + (lines.length - 1) * timing.lineStep);
+    if (lines.length) hold(at + (lines.length - 1) * timing.lineStep, part);
     scheduler.seal(scope);
     scheduler.observe(scope, () => {
       if (mine !== epoch || current !== scope) return;
       current = null;
+      part();
       next();
     });
   }
@@ -298,7 +325,7 @@ export function createScoreNarration(
   /** The reserved play is ready: narrate it in its committed place. */
   function release(slot: NarrationSlot, play: NarratedPlay): void {
     if (slot.epoch !== epoch || slot.play) return;
-    slot.play = { lines: [...play.lines], endpoint: play.endpoint };
+    slot.play = { lines: [...play.lines], endpoint: play.endpoint, scored: play.scored };
     if (!current) next();
   }
 
@@ -318,9 +345,26 @@ export function createScoreNarration(
     narrate(play: NarratedPlay): void {
       release(reserve(), play);
     },
+    /**
+     * Hold the outcome until `register`'s release is called (#1220): an action's full required
+     * root. The release is idempotent and ignored after a reset.
+     */
+    holdOutcome(register: (release: () => void) => void): void {
+      const mine = epoch;
+      let released = false;
+      external++;
+      register(() => {
+        if (released || mine !== epoch) return;
+        released = true;
+        external--;
+        gate();
+      });
+    },
     /** Narration or its outcome is still to come. */
     get presenting(): boolean {
-      return current !== null || waiting.length > 0 || outcome !== null || holds.size > 0;
+      return (
+        current !== null || waiting.length > 0 || outcome !== null || holds.size > 0 || external > 0
+      );
     },
     /** Stop narrating: nothing queued is shown, and nothing settling starts more. */
     reset(): void {
@@ -331,6 +375,7 @@ export function createScoreNarration(
       waiting = [];
       reached = null;
       holds = new Set();
+      external = 0;
       current = outcome = null;
       for (const scope of owned) if (scope) scheduler.cancel(scope);
     },

@@ -42,6 +42,13 @@ phaseProducers.register(
   factProducer({ fact: "play.placed", slot: "preScoring" }),
 );
 
+/** Scoring (#1220): an action whose score total was applied reserves its scoring contribution. */
+export const scoringProducer = "scoring";
+phaseProducers.register(
+  scoringProducer,
+  factProducer({ fact: "score.totalApplied", slot: "scoring" }),
+);
+
 export type CommittedSource = {
   onCommitted(
     listener: (facts: readonly EventEnvelope[], metadata: CommittedMetadata) => void,
@@ -65,6 +72,14 @@ export function createPlacementPhase(source: CommittedSource, phases: ActionPhas
     /** The just-committed action's placement reservation, for the presenter to bind once. */
     contribution(): Contribution | null {
       return latest ? phases.contribution(latest, placementProducer) : null;
+    },
+    /** A producer's reservation for an action, or null (#1220). */
+    contributionFor(key: ActionKey, producer: string): Contribution | null {
+      return phases.contribution(key, producer);
+    },
+    /** Hear an action's full required root settle; null when it is unavailable (#1220). */
+    observeAction(key: ActionKey, listener: () => void) {
+      return phases.observe(key, null, listener);
     },
     /** An action's own pre-score completion, or unavailable. */
     preScoring(key: ActionKey) {
