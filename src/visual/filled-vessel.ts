@@ -89,6 +89,8 @@ export const fluidLooks = new Registry<FluidLook>("fluid look");
 fluidLooks.register("opaqueFluid", (surface, raw) => {
   const { fill, surface: top } = raw as { fill: number; surface: number };
   const material = new THREE.ShaderMaterial({
+    // Masked by its own shader in a paired transition (#1208).
+    userData: { maskAdapter: "shaderSurface" },
     uniforms: {
       ...surface,
       fill: { value: new THREE.Color(fill) },
@@ -386,6 +388,8 @@ export const wallTrace: ResidueHandler = {
     };
     const trace = boundary.wall(
       new THREE.ShaderMaterial({
+        // Masked by its own shader in a paired transition (#1208).
+        userData: { maskAdapter: "shaderSurface" },
         uniforms,
         vertexShader: fluidVertex,
         fragmentShader: traceFragment,
