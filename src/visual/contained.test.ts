@@ -304,6 +304,21 @@ describe("the flame as contents (#335)", () => {
     }
   });
 
+  it("is never painted over by the frame's glass sheen (#744)", () => {
+    // renderOrder sorts within a queue only, so a transparent sheen drew after the flame whatever
+    // order it held and added grey light to it, which reads as the flame reflecting the scene.
+    const { extras } = build("fire");
+    const sheen = extras.filter(
+      ({ renderOrder, material }) =>
+        renderOrder === containedLayers.gloss &&
+        [material].flat().some((one) => one.userData.reflective === true),
+    );
+    expect(sheen.length).toBeGreaterThan(0);
+    for (const mesh of sheen)
+      for (const one of [mesh.material].flat()) expect(one.transparent).toBe(false);
+    extras.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+  });
+
   it("no container code names it (comments aside)", async () => {
     const { readFileSync } = await import("node:fs");
     const code = (file: string) =>
