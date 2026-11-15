@@ -183,6 +183,43 @@ describe("block exits on the shared scheduler (#549)", () => {
     expect(scheduler.counts.active).toBe(0);
   });
 
+  it("ends a prepared exit playing in another scope when the presenter is disposed (#1315 review)", () => {
+    log.length = 0;
+    const { scheduler, exits, advance } = shared();
+    const v = visual();
+    const { work } = exits.prepare(snapshot, v, { steps: [{ effects: [timed("long", 5)] }] });
+    // Someone else's scope runs it (an action's post-scoring contribution).
+    const scope = scheduler.createScope(null);
+    scheduler.schedule(scope, { ...work, dueUnits: scheduler.nowMs / (1000 / 15) });
+    scheduler.seal(scope);
+    advance(16);
+    expect(log).toContain("long:start");
+    expect(exits.active).toBe(1);
+    exits.dispose();
+    expect(v.released).toHaveBeenCalledOnce();
+    expect(v.root.parent).toBeNull();
+    expect(exits.active).toBe(0);
+    advance(16);
+    expect(v.released).toHaveBeenCalledOnce();
+  });
+
+  it("forgets a prepared exit once it finishes, and releases one abandoned before it starts", () => {
+    log.length = 0;
+    const { scheduler, exits, advance } = shared();
+    const done = visual();
+    const { work } = exits.prepare(snapshot, done, { steps: [{ effects: [timed("short", 0.1)] }] });
+    const scope = scheduler.createScope(null);
+    scheduler.schedule(scope, { ...work, dueUnits: scheduler.nowMs / (1000 / 15) });
+    scheduler.seal(scope);
+    advance(16);
+    advance(200);
+    expect(done.released).toHaveBeenCalledOnce();
+    expect(exits.active).toBe(0);
+    const abandoned = visual();
+    exits.prepare({ ...snapshot, blockId: "b3" }, abandoned, { steps: [] }).abandon();
+    expect(abandoned.released).toHaveBeenCalledOnce();
+  });
+
   it("releases an exit cancelled before it starts, without running its effects", () => {
     log.length = 0;
     const { exits, advance } = shared();
