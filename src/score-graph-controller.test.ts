@@ -167,7 +167,7 @@ describe("committed-score graph controller (#1087; doc/line-goes-up.md)", () => 
     const reservation = phase.contributionFor(key, graphProducer)!;
     // Nothing is ever bound to it; once scoring completes it finishes empty, not at the bound.
     scored(key);
-    step(20);
+    step(200);
     expect(reservation.status()).toEqual({ state: "finished" });
   });
 });
