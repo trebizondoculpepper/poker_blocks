@@ -1,3 +1,4 @@
+import type { CommittedMetadata } from "./command-codecs";
 import { leaveShop } from "./shop-leave";
 import { discardRefusal } from "./discardable";
 import type { GameState } from "./game-state";
@@ -110,7 +111,9 @@ export type GameRunController = {
    * Hear each committed action's facts, from whichever run is current (#755). Presentation
    * controller traits subscribe here; returns a function that stops listening.
    */
-  onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void;
+  onCommitted(
+    listener: (facts: readonly EventEnvelope[], metadata: CommittedMetadata) => void,
+  ): () => void;
   /** The mode being played. */
   readonly mode: GameMode;
   readonly settings: Settings;
@@ -254,12 +257,14 @@ export function createGameRunController<Context>(options: {
   // Every run this controller holds publishes its committed facts to the same listeners (#755).
   /** Who hears a stage's decided outcome (#881). */
   const decidedListeners = new Set<(decision: DecidedOutcome) => void>();
-  const committedListeners = new Set<(facts: readonly EventEnvelope[]) => void>();
+  const committedListeners = new Set<
+    (facts: readonly EventEnvelope[], metadata: CommittedMetadata) => void
+  >();
   const adopt = (run: GameRun): GameRun => {
-    run.onCommitted((facts) => {
+    run.onCommitted((facts, metadata) => {
       // A replaced run is no longer the one on screen: its facts present nothing.
       if (run !== game) return;
-      for (const listener of Array.from(committedListeners)) listener(facts);
+      for (const listener of Array.from(committedListeners)) listener(facts, metadata);
     });
     return run;
   };
