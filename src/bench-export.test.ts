@@ -123,4 +123,12 @@ describe("bench export controls (#937)", () => {
     expect(outcome.ok).toBe(false);
     expect(outcome.message).toMatch(/can't be replayed/);
   });
+
+  it("drops a copy result once a newer trial was requested or the panel left (#1355)", async () => {
+    const { copyStillCurrent } = await import("./bench-export");
+    const panel = {};
+    expect(copyStillCurrent({ panel, trial: 2 }, { panel, trial: 2 })).toBe(true);
+    expect(copyStillCurrent({ panel, trial: 2 }, { panel, trial: 3 })).toBe(false);
+    expect(copyStillCurrent({ panel, trial: 2 }, { panel: null, trial: 2 })).toBe(false);
+  });
 });

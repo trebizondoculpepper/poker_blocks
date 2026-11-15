@@ -103,3 +103,14 @@ export async function copyBenchArtifact(
   }
   return { ok: made.notes.length === 0, message: [artifact.copied, ...made.notes].join("\n") };
 }
+
+/**
+ * Whether a copy's result may still be shown (#1355): only if the panel it was asked from is
+ * still the panel, and no newer trial has been requested since.
+ */
+export function copyStillCurrent<P>(
+  asked: { panel: P; trial: number },
+  now: { panel: P; trial: number },
+): boolean {
+  return asked.panel === now.panel && asked.trial === now.trial;
+}
