@@ -356,6 +356,13 @@ export async function createControlStage(
       entry.hidden = hidden;
       place();
     },
+    /**
+     * Show that a drag over the control's owner would be accepted (#1364 review): the block's own
+     * hover lift, since the owner's HTML highlight is gone. The owner decides; this only shows it.
+     */
+    setTargeted(id: string, targeted: boolean) {
+      find(id)?.cube.block.emit(targeted ? "input.enter" : "input.leave");
+    },
     /** Listen for a control's dispatched action; returns an unsubscribe. */
     onAction(listener: (action: string, id: string) => void): () => void {
       const stops = mounted.map((entry) =>
