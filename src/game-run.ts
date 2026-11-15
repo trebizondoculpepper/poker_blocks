@@ -877,7 +877,7 @@ export class GameRun {
       Math.min(targetSize, this.rackCapacity) - this.currentState.passiveRack.length,
     );
     const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
-    for (const definition of randomPassiveDefinitions(missing, this.random, owned)) {
+    for (const definition of randomPassiveDefinitions(missing, this.random, this.round, owned)) {
       this.installPassive(createPassiveBlock(definition.id, this.freePassiveId()));
     }
   }
@@ -933,7 +933,7 @@ export class GameRun {
   /** Install one random passive the rack doesn't hold; the event it causes, if any. */
   private grantUnownedPassive(): GameEvent[] {
     const owned = this.currentState.passiveRack.map(({ definitionId }) => definitionId);
-    const chosen = randomPassiveDefinitions(1, this.random, owned)[0];
+    const chosen = randomPassiveDefinitions(1, this.random, this.round, owned)[0];
     if (!chosen) return [];
     const id = this.freePassiveId();
     // A full rack refuses it: nothing was installed, so nothing is reported (#566 review).

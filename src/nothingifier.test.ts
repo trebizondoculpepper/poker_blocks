@@ -161,7 +161,7 @@ describe("the Nothingifier in the shop (#156)", () => {
   it("is never granted or offered as a bare passive", async () => {
     const { randomPassiveDefinitions } = await import("./passives");
     for (const roll of [0, 0.25, 0.5, 0.75, 0.999])
-      for (const definition of randomPassiveDefinitions(3, () => roll))
+      for (const definition of randomPassiveDefinitions(3, () => roll, 10))
         expect(definition.id).not.toBe("nothingifier");
   });
 });
