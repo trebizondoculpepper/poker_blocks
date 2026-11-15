@@ -1626,6 +1626,8 @@ body,
 /* Transient activation text (#918, src/visual/activation-labels.ts): placed by transform. */
 .activation-labels {
   position: absolute;
+  /* Above the rack (z-index 2) and HUD panels, so over-item labels show over items (#1157). */
+  z-index: 7;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
