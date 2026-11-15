@@ -101,3 +101,38 @@ describe("playing a Present from the hand (#1270)", () => {
     expect(resumed.state.field.map(({ block }) => block.id)).toEqual(["contents.1"]);
   });
 });
+
+describe("the certified production Present wrapper (#1151; doc/release-status.md)", () => {
+  it("shows no provisional warning on the stage-three Present's inspection", async () => {
+    const { inspectBlock } = await import("./traits/inspectable");
+    const run = wonRun(stageKinds.at(-1)!);
+    run.claimStageRewards();
+    const text = inspectBlock(presentsIn(run)[0]!)!.toLowerCase();
+    expect(text).not.toContain("provisional");
+    expect(text).not.toContain("experimental");
+  });
+
+  it("is certified, yet stays out of every normal material catalogue", async () => {
+    const { getMaterialDefinition, materialDefinitions, materialPools, experimentalMaterials } =
+      await import("./materials");
+    expect(getMaterialDefinition("giftWrap" as never).releaseStatus).toEqual({ certified: {} });
+    const ids = (list: readonly { id: string }[]) => list.map(({ id }) => id);
+    expect(ids(materialDefinitions)).not.toContain("giftWrap");
+    expect(ids(materialPools.get("gameplay")())).not.toContain("giftWrap");
+    // Only the wrapper is certified; every other experimental definition stays provisional.
+    const certified = experimentalMaterials
+      .filter(({ releaseStatus }) => "certified" in releaseStatus)
+      .map(({ id }) => id)
+      .sort();
+    expect(certified).toEqual(["giftWrap"]);
+  });
+
+  it("never wraps a Present's payload in gift wrap", () => {
+    for (let round = 0; round < 6; round++) {
+      const run = wonRun(stageKinds.at(-1)!);
+      run.claimStageRewards();
+      const payload = [presentsIn(run)[0]!.traits.opaqueContainer ?? []].flat()[0]!.payload;
+      expect((payload.components as { material: string }).material).not.toBe("giftWrap");
+    }
+  });
+});
