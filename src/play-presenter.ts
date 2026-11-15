@@ -422,7 +422,10 @@ export function createPlayPresenter(options: {
       // reacted block still landing is drawn as the model has it when it lands.
       // A block on screen is redrawn; one not on screen is added only if nothing is in or
       // expected in its cell (a new block), so a card still in flight lands as before.
-      const landingIds = new Set(ids);
+      // What actually landed, by position: an opening (#926) puts the revealed card in its
+      // wrapper's place, so the played source's own ID may no longer be on the table (#1270).
+      const placedOrder = game().lastPlacedOrder;
+      const landingIds = new Set(placedOrder);
       const known = new Set(field.occupiedCells().map(cellKey));
       for (const { blockId } of game().lastReactions) {
         const now = next.field.find(({ block }) => block.id === blockId);
@@ -437,8 +440,10 @@ export function createPlayPresenter(options: {
       ))
         playSfx(sound);
       hand.settle(sources);
-      // The cards just played, wherever reactions left them in the field's order.
-      const landed = next.field.filter(({ block }) => landingIds.has(block.id));
+      // The cards just played, in placement order, so each lines up with the source that played it.
+      const landed = placedOrder.flatMap(
+        (id) => next.field.find(({ block }) => block.id === id) ?? [],
+      );
       // The field knows these cells now, so a drop made before they land is tested against them.
       for (const { block, cell } of landed) field.expect(block, cell);
       options.deselect(ids);
