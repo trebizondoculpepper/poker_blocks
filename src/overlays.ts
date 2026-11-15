@@ -64,6 +64,8 @@ export type Overlays = {
    * seed: the seed belongs to the final result screen only (#164).
    */
   showStageWon(reward: StageReward): void;
+  /** Place the in-front result screen's action host: in its panel or beside it (#1074). */
+  placeActions(placement: "inPanel" | "besidePanel"): void;
   /** Hear this showing's reward ledger finish, once (#951): its result menu's completion. */
   whenLedgerFinished(ready: () => void): () => void;
   hideStageWon(): void;
@@ -180,6 +182,7 @@ export function createOverlays(
     showGameOver: (stats, seed) => menus.showGameOver(stats, seed),
     hideGameOver: () => menus.hideGameOver(),
     showStageWon: (reward) => menus.showStageWon(reward),
+    placeActions: (placement) => menus.placeActions(placement),
     whenLedgerFinished: (ready) => menus.whenLedgerFinished(ready),
     hideStageWon: () => menus.hideStageWon(),
     inspect(label, clientX = 0, clientY = 0) {

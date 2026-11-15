@@ -1693,3 +1693,54 @@ body,
   height: 100%;
   pointer-events: none;
 }
+
+/*
+ * Result action hosts and caption outlets (#1074; doc/result-menus.md, "Stage Won layout and
+ * reusable control precession"), keyed by what a result menu composes, never by screen. Applied
+ * only while the overlay shows, so `[hidden]` still hides it.
+ *
+ * `besidePanel`: the panel, then the action as its own transparent stage 1.25 times the usual
+ * height (bounded on short screens), above the overlay's wash. The panel scrolls rather than
+ * push the action or the caption off screen.
+ */
+.scene > .menu-overlay[data-action-host="besidePanel"]:not([hidden]),
+.menu-overlay[data-action-host="besidePanel"]:not([hidden]):not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-bottom: calc(max(16px, env(safe-area-inset-bottom)) + 3.6em);
+}
+.menu-overlay[data-action-host="besidePanel"] .menu-panel {
+  max-height: calc(100% - min(187.5px, 30vh) - 4em);
+  overflow-y: auto;
+}
+.menu-overlay[data-action-host="besidePanel"] > [data-menu="items"] {
+  position: relative;
+  z-index: 5;
+  flex: none;
+  width: min(100%, 520px);
+  height: min(187.5px, 30vh);
+}
+
+/* The caption outlet: at the viewport bottom above the safe area, over the wash; empty, unseen. */
+.menu-caption-outlet {
+  position: fixed;
+  z-index: 6;
+  inset: auto max(16px, env(safe-area-inset-right))
+    calc(max(16px, env(safe-area-inset-bottom)) + 4px) max(16px, env(safe-area-inset-left));
+  max-width: 40em;
+  margin: 0 auto;
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.35;
+  text-align: center;
+  color: #f3efe4;
+  text-shadow: 0 1px 3px #000c;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.menu-caption-outlet:empty {
+  display: none;
+}

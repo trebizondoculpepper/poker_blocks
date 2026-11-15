@@ -171,6 +171,7 @@ export type SceneHost = {
       | "hideStageWon"
       | "showPanelFooter"
       | "hidePanelFooter"
+      | "placeActions"
     >;
     /** The build's version, shown in a panel's footer (`src/version.ts`). */
     version: string;
@@ -651,6 +652,27 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   resultCompletions.register("ledgerFinished", ({ services }, ready) =>
     services.overlays.whenLedgerFinished(ready),
   );
+  /**
+   * Result action-host layouts and caption outlets, by name (#1074; doc/result-menus.md): each
+   * configures the screen's generic host; a result names which it composes.
+   */
+  const resultActionHosts = new Registry<(context: Context) => void>("result action host");
+  resultActionHosts.register("inPanel", ({ services }) =>
+    services.overlays.placeActions("inPanel"),
+  );
+  resultActionHosts.register("besidePanel", ({ services }) =>
+    services.overlays.placeActions("besidePanel"),
+  );
+  const resultCaptions = new Registry<(dialog: DialogConfig) => DialogConfig>("result caption");
+  resultCaptions.register("local", (dialog) => dialog);
+  resultCaptions.register("viewportBottom", (dialog) => ({
+    ...dialog,
+    presentation: { panel: "readable", ...dialog.presentation, caption: "outlet" },
+  }));
+  /** The result's dialog with its configured caption outlet. */
+  const resultDialog = (config: SceneTraits["resultMenu"]) =>
+    resultCaptions.get(config.caption ?? "local")(config.dialog);
+
   /** Each result menu's live state, by its trait config. */
   const resultMenus = new WeakMap<
     object,
@@ -664,19 +686,20 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   behaviours.register("resultMenu", {
     enter(context, config) {
       resultInformation.get(config.information).show(context);
+      resultActionHosts.get(config.actionHost ?? "inPanel")(context);
       const state = { ready: false, cancel: () => {}, remove: null as (() => void) | null };
       resultMenus.set(config, state);
       state.cancel = resultCompletions.get(config.showAfter)(context, () => {
         // Exactly once, and only while this entry is still the live one.
         if (state.ready || resultMenus.get(config) !== state) return;
         state.ready = true;
-        state.remove = mountDialog(context, config.dialog);
+        state.remove = mountDialog(context, resultDialog(config));
       });
     },
     cover: (_context, config) => unmountResult(config),
     resume(context, config) {
       const state = resultMenus.get(config);
-      if (state?.ready && !state.remove) state.remove = mountDialog(context, config.dialog);
+      if (state?.ready && !state.remove) state.remove = mountDialog(context, resultDialog(config));
     },
     exit(context, config) {
       const state = resultMenus.get(config);

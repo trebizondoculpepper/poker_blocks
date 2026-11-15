@@ -158,8 +158,9 @@ function recordingHost() {
         hide: () => void calls.push("cubes:hide"),
       },
       dialogs: {
-        add: ({ title, items }, handlers) => {
+        add: ({ title, items, presentation }, handlers) => {
           calls.push(`dialog:add:${title}`);
+          if (presentation?.caption) calls.push(`caption:${presentation.caption}`);
           calls.push(
             `choices:${items.map((item) => (handlers.availability(item) ? item.action : `${item.action}(disabled)`)).join(",")}`,
           );
@@ -258,6 +259,7 @@ function recordingHost() {
         hideTitle: () => void calls.push("title:hide"),
         showPanelFooter: (links, version) =>
           void calls.push(`footer:${version}:${links.map(({ label }) => label).join(",")}`),
+        placeActions: (placement: string) => void calls.push(`actions:${placement}`),
         hidePanelFooter: () => void calls.push("footer:hide"),
       },
       cameraView: { beginShopEntrance: () => void calls.push("camera:shopEntrance") },
@@ -536,12 +538,17 @@ describe("scene traits own their behaviour", () => {
     scenes.switchTo("table");
     scenes.push("reward");
     // The ledger counts in; no choice is offered yet, not even a hidden one.
-    expect(calls).toEqual(["stageWon:5"]);
+    expect(calls).toEqual(["stageWon:5", "actions:inPanel"]);
     finishLedger();
-    expect(calls).toEqual(["stageWon:5", "dialog:add:Stage won", "choices:leaveStage"]);
+    expect(calls).toEqual([
+      "stageWon:5",
+      "actions:inPanel",
+      "dialog:add:Stage won",
+      "choices:leaveStage",
+    ]);
     // Finishing again offers nothing more.
     finishLedger();
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4);
     calls.length = 0;
     scenes.switchTo("table");
     expect(calls).toEqual(["dialog:remove:Stage won", "stageWon:hide"]);
@@ -568,6 +575,28 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toEqual([]);
   });
 
+  it("composes its configured action host and caption outlet (#1074)", () => {
+    const { host, calls, finishLedger } = recordingHost();
+    const scenes = new SceneManager(sceneBehaviours(), host);
+    scenes.register(scene("table", {}));
+    scenes.register(
+      scene("reward", {
+        resultMenu: {
+          information: "stageReward",
+          showAfter: "ledgerFinished",
+          dialog: gameDialogs.stageWon,
+          actionHost: "besidePanel",
+          caption: "viewportBottom",
+        },
+      }),
+    );
+    scenes.switchTo("table");
+    scenes.push("reward");
+    expect(calls).toContain("actions:besidePanel");
+    finishLedger();
+    expect(calls).toContain("caption:outlet");
+  });
+
   it("shows the game over screen with the run's totals, its choices below, and hides both (#90)", () => {
     const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
@@ -586,6 +615,7 @@ describe("scene traits own their behaviour", () => {
     scenes.switchTo("lost");
     expect(calls).toEqual([
       "gameOver:900",
+      "actions:inPanel",
       "dialog:add:Game over",
       "choices:newRun,quitToTitle",
       "cue:windDown",

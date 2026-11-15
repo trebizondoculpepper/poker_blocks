@@ -98,6 +98,8 @@ export function createBlockMenus(host: HTMLElement, options: BlockMenuOptions) {
     host.dataset.panel = dialog.presentation?.panel ?? "readable";
     stage.setSizing(dialog.presentation?.sizing);
     caption.textContent = "";
+    // One visible caption: the screen's outlet shows it instead when the dialog says so.
+    caption.hidden = dialog.presentation?.caption === "outlet";
     const byAction = new Map<
       string,
       { button: HTMLButtonElement; cube?: StageCube; latest?: Availability }
@@ -265,7 +267,18 @@ export function createDialogPresenter(host: () => HTMLElement, options: BlockMen
       const { menus, message } = layerFor(host());
       message.textContent = dialog.message ?? "";
       message.hidden = !dialog.message;
-      const shown = menus.show(dialog, { onAction: (action) => handlers.onAction(action) });
+      const into = host();
+      const outlet = into
+        .closest(".menu-overlay")
+        ?.querySelector<HTMLElement>('[data-menu="caption"]');
+      if (outlet) outlet.textContent = "";
+      const shown = menus.show(dialog, {
+        onAction: (action) => handlers.onAction(action),
+        // A dialog captioned in the screen's outlet writes its inspection there (#1074).
+        ...(dialog.presentation?.caption === "outlet" && outlet
+          ? { onInspect: (text: string) => (outlet.textContent = text) }
+          : {}),
+      });
       for (const item of dialog.items)
         shown.setAvailability(item.action, {
           enabled: item.enabled !== false && handlers.availability(item),
@@ -275,6 +288,7 @@ export function createDialogPresenter(host: () => HTMLElement, options: BlockMen
       else shown.focusFirst();
       return () => {
         shown.hide();
+        if (outlet) outlet.textContent = "";
         if (message.textContent === (dialog.message ?? "")) message.hidden = true;
       };
     },
