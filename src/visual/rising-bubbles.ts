@@ -17,6 +17,8 @@
 import * as THREE from "three";
 import { cosmeticRandom } from "./block-effects";
 import { containedInclusions, containedLayers, type InclusionHandler } from "./contained";
+import type { ParameterSchema } from "../parameter-schema";
+import { tunableEffects } from "./tunable-effects";
 import { keepWorldSize } from "./world-sized-points";
 
 export type RisingBubblesConfig = {
@@ -26,8 +28,19 @@ export type RisingBubblesConfig = {
   rise: number;
   /** Sideways wobble, in interior widths. */
   wobble: number;
-  /** A bubble's size, as a fraction of the interior's width. */
+  /**
+   * Bubbles born a second across the pool (#1232): independent of `count`, which only caps how
+   * many are alive at once. Left out, each bubble is simply reborn after its own rest (Hot and
+   * Boiling Water). 0 emits none, and the inclusion builds nothing.
+   */
+  frequency?: number;
+  /** A bubble's size at birth, as a fraction of the interior's width. */
   size: number;
+  /**
+   * Its size on reaching the surface (#1232): it grows (or shrinks) with its share of the ascent
+   * from where it was born. Left out, it keeps `size`.
+   */
+  endSize?: number;
   /** Seconds a bubble waits, on average, before it is born again. */
   rest: number;
   /** Its colour (hex) and opacity. */
@@ -61,24 +74,73 @@ export const risingBubbles: InclusionHandler = {
   requires: "volume",
   build(boundary, { volume, interior }, raw) {
     const config = raw as RisingBubblesConfig;
+    // Emitting none, it is nothing at all: no pool, no geometry, no update (#1232).
+    const rate = config.frequency ?? Number.POSITIVE_INFINITY;
+    // A whole number of bubbles: a tuned or imported fractional pool is rounded down (#1304 review).
+    const count = Math.max(0, Math.floor(config.count));
+    if (!(rate > 0) || count < 1) return { meshes: [] };
+    const endSize = config.endSize ?? config.size;
+    // The walls keep room for the largest a bubble gets.
+    const largest = Math.max(config.size, endSize);
     // The published volume (#1230): its bounds, surface and world-up rise, whoever publishes it.
     const { bounds, rise, surface } = volume!;
     const width = boundary.halfSize * 2;
     // Local (points) space to block-local space, where the volume is published.
     const toBlock = boundary.volumeScale;
     // Where a bubble's centre may be: the bounds, in points space, less its own extent.
-    const margin = (config.size * width) / 2;
-    const limit = bounds.max.clone().divideScalar(toBlock).subScalar(margin);
-    const floor = bounds.min.clone().divideScalar(toBlock).addScalar(margin);
-    const fits = limit.x > floor.x && limit.y > floor.y && limit.z > floor.z;
-    const count = config.count;
+    // The sprite keeps a world size (`keepWorldSize`: its size times the points' world y scale), so
+    // under a nonuniform or turned block its local extent differs per axis: a world sphere of that
+    // radius, carried back into points space, reaches `radius × |row i of the inverse|` along axis i.
+    const limit = new THREE.Vector3();
+    const floor = new THREE.Vector3();
+    const margin = new THREE.Vector3();
+    const linear = new THREE.Matrix3();
+    let fits = false;
+    const fit = (toWorld: THREE.Matrix4) => {
+      linear.setFromMatrix4(toWorld).multiplyScalar(toBlock);
+      const e = linear.elements;
+      // The world radius: half the world size, as keepWorldSize scales it (column y's length).
+      const radius = ((largest * width) / 2) * Math.hypot(e[3]!, e[4]!, e[5]!);
+      if (!(Math.abs(linear.determinant()) > 1e-12)) return;
+      const inverse = linear.invert().elements;
+      // Column-major: row i of the inverse is (e[i], e[i + 3], e[i + 6]).
+      margin.set(
+        radius * Math.hypot(inverse[0]!, inverse[3]!, inverse[6]!),
+        radius * Math.hypot(inverse[1]!, inverse[4]!, inverse[7]!),
+        radius * Math.hypot(inverse[2]!, inverse[5]!, inverse[8]!),
+      );
+      limit.copy(bounds.max).divideScalar(toBlock).sub(margin);
+      floor.copy(bounds.min).divideScalar(toBlock).add(margin);
+      fits = limit.x > floor.x && limit.y > floor.y && limit.z > floor.z;
+    };
+    fit(new THREE.Matrix4());
     const positions = new Float32Array(count * 3);
     const alphas = new Float32Array(count * 3);
     const speed = new Float32Array(count);
     const phase = new Float32Array(count);
     const resting = new Float32Array(count);
+    // Each bubble's ascent (#1232): how far it has risen, how far it can rise from its birth, and
+    // its drawn size as a share of the largest.
+    const risen = new Float32Array(count);
+    const ascent = new Float32Array(count);
+    const scales = new Float32Array(count).fill(config.size / largest);
     const random = cosmeticRandom;
     const probe = new THREE.Vector3();
+    const block = new THREE.Vector3();
+    /** How far a bubble born at `from` (points space) can rise: to the surface or the bounds. */
+    const ascentFrom = (from: THREE.Vector3): number => {
+      const { normal, height } = surface;
+      const climb = normal.dot(rise);
+      let reach = climb > 1e-6 ? (height / toBlock - normal.dot(from)) / climb : Infinity;
+      for (const axis of ["x", "y", "z"] as const) {
+        const step = rise[axis];
+        if (Math.abs(step) > 1e-9)
+          reach = Math.min(reach, ((step > 0 ? limit[axis] : floor[axis]) - from[axis]) / step);
+      }
+      return Math.max(reach, 1e-6);
+    };
+    // Births the rate allows, carried between frames and capped at the pool.
+    let tokens = 0;
     const born = (i: number): boolean => {
       // A few tries for a wet place; an empty or nearly empty vessel leaves the bubble resting.
       // A bubble too big for the volume is never born.
@@ -88,8 +150,11 @@ export const risingBubbles: InclusionHandler = {
           floor.y + random() * (limit.y - floor.y),
           floor.z + random() * (limit.z - floor.z),
         );
-        if (!surface.wet(probe.clone().multiplyScalar(toBlock))) continue;
+        if (!surface.wet(block.copy(probe).multiplyScalar(toBlock))) continue;
         positions.set([probe.x, probe.y, probe.z], i * 3);
+        risen[i] = 0;
+        ascent[i] = ascentFrom(probe);
+        scales[i] = config.size / largest;
         speed[i] = config.rise * width * (0.6 + 0.8 * random());
         phase[i] = random() * Math.PI * 2;
         return true;
@@ -106,8 +171,10 @@ export const risingBubbles: InclusionHandler = {
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     // Per-bubble brightness through vertex colour: a resting bubble is black, so invisible.
     geometry.setAttribute("color", new THREE.BufferAttribute(alphas, 3));
+    // Each bubble's own size, as a share of the material's (the largest).
+    geometry.setAttribute("bubbleScale", new THREE.BufferAttribute(scales, 1));
     const material = new THREE.PointsMaterial({
-      size: config.size * width,
+      size: largest * width,
       sizeAttenuation: true,
       map: bubbleTexture(),
       color: config.colour,
@@ -117,12 +184,16 @@ export const risingBubbles: InclusionHandler = {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace("void main() {", "attribute float bubbleScale;\nvoid main() {")
+        .replace("gl_PointSize = size;", "gl_PointSize = size * bubbleScale;");
+    };
     const points = new THREE.Points(geometry, material);
     points.scale.setScalar(boundary.volumeScale);
     points.renderOrder = containedLayers.contentsTransparent;
     points.frustumCulled = false;
-    keepWorldSize(points, material, config.size * width);
+    keepWorldSize(points, material, largest * width);
     // The liquid says how its particles show through it (#742); the bubbles never ask what it is.
     const release = interior?.include(points);
     // The bubbles own their geometry and their interior registration; both are released with their
@@ -137,16 +208,30 @@ export const risingBubbles: InclusionHandler = {
     const held = new THREE.Vector3();
     return {
       meshes: [points],
-      update({ delta, seconds, reducedMotion }) {
+      update({ delta, seconds, reducedMotion, toWorld }) {
+        // Where a whole bubble fits under this frame's transform.
+        fit(toWorld);
         if (reducedMotion) return;
         up.copy(rise);
+        // The rate's births this frame, never more than the pool holds (an unset rate is unbounded).
+        const gain = rate * delta;
+        tokens = Math.min(count, tokens + (gain > 0 ? gain : 0));
         for (let i = 0; i < count; i++) {
-          if (resting[i]! > 0) {
-            resting[i] = resting[i]! - delta;
-            if (resting[i]! <= 0 && !born(i)) resting[i] = config.rest;
+          if (resting[i]! > 0) resting[i] = resting[i]! - delta;
+          if (resting[i]! > 0 || alphas[i * 3]! === 0) {
+            // Dormant: born once its rest is over and the rate allows one.
+            if (resting[i]! > 0 || tokens < 1) continue;
+            if (born(i)) {
+              tokens -= 1;
+              alphas.fill(1, i * 3, i * 3 + 3);
+            } else resting[i] = config.rest;
             continue;
           }
           point.fromArray(positions, i * 3).addScaledVector(up, speed[i]! * delta);
+          // Its share of the ascent sets its size, clamped at the surface.
+          risen[i] = risen[i]! + speed[i]! * delta;
+          const progress = Math.min(1, risen[i]! / ascent[i]!);
+          scales[i] = (config.size + (endSize - config.size) * progress) / largest;
           // Rising out through the volume's bounds retires it, as reaching the surface does: a
           // full volume's top touches its bounds only at its highest point.
           if (!held.copy(point).clamp(floor, limit).equals(point)) {
@@ -162,14 +247,55 @@ export const risingBubbles: InclusionHandler = {
           point.clamp(floor, limit);
           point.toArray(positions, i * 3);
           // Retired the moment it reaches the current surface.
-          if (!surface.wet(probe.copy(point).multiplyScalar(toBlock))) retire(i);
-          else alphas.fill(1, i * 3, i * 3 + 3);
+          if (!surface.wet(block.copy(point).multiplyScalar(toBlock))) retire(i);
         }
         geometry.attributes.position!.needsUpdate = true;
         geometry.attributes.color!.needsUpdate = true;
+        geometry.attributes.bubbleScale!.needsUpdate = true;
       },
     };
   },
 };
 
 containedInclusions.register("risingBubbles", risingBubbles);
+
+const number = (
+  label: string,
+  path: string[],
+  min: number,
+  max: number,
+  step = 0.01,
+): ParameterSchema => ({ kind: "number", label, path, min, max, step });
+
+/** Rising bubbles' tunable defaults (#1232): a hot-water-like pool with gentle growth. */
+export const risingBubblesDefaults: Required<RisingBubblesConfig> = Object.freeze({
+  count: 24,
+  frequency: 6,
+  rise: 0.12,
+  wobble: 0.02,
+  size: 0.05,
+  endSize: 0.1,
+  rest: 0.4,
+  colour: 0xeaf6ff,
+  opacity: 0.75,
+});
+
+/**
+ * Its schema-owned controls (#1232; doc/optical-interiors.md, "Full-volume and pooled-bubble
+ * composition"): pool, rate, sizes, motion and look, each with its units and finite range, for a
+ * bench to tune and Copy Settings to export. Live particle state is never a setting.
+ */
+tunableEffects.register("risingBubbles", {
+  defaults: risingBubblesDefaults,
+  parameters: {
+    count: number("Pool size (bubbles)", ["count"], 0, 96, 1),
+    frequency: number("Emission (bubbles a second)", ["frequency"], 0, 60, 0.5),
+    size: number("Size at birth (interior widths)", ["size"], 0.01, 0.3),
+    endSize: number("Size at the surface (interior widths)", ["endSize"], 0.01, 0.3),
+    rise: number("Rise (interior widths a second)", ["rise"], 0, 1.5),
+    wobble: number("Wobble (interior widths)", ["wobble"], 0, 0.2, 0.005),
+    rest: number("Rest between bubbles (seconds)", ["rest"], 0, 4, 0.05),
+    colour: number("Colour (hex)", ["colour"], 0, 0xffffff, 1),
+    opacity: number("Opacity", ["opacity"], 0, 1),
+  },
+});
