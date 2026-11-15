@@ -87,6 +87,10 @@ Before closing #1113 verify standard, shader/unlit, contained, transparent and r
 
 What an operation does to the selected cards is still to be decided.
 
+## Tabbed run status (#1369)
+
+[Run status](run-status.md) extends the existing deck-entry scene with a registered read-only tab host and independently composed Deck and Gameplay Status providers. Preserve all-live-card inventory queries/location markers, hidden/draw-order boundaries, complete shared inspection and existing pause/close navigation. Owners publish invalidation; generic UI dispatches captured provider content without polling, rescoring or identity branches. The source audit distinguishes existing inventory/inspection from missing tab host/state-publication seams and records small delivery/acceptance boundaries.
+
 ### Appearance-owned scoring feedback (#1392)
 
 [Scoring appearance feedback](scoring-appearance-feedback.md) extends the registered appearance-binding pattern to row tint: providers own compatible channels and authored baselines; generic views publish color/strength without assuming a material class. Independent feedback contributions compose, and failed/disposed bindings cannot interrupt rendering or scheduler settlement.
