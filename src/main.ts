@@ -431,6 +431,10 @@ for (const modeId of gameModeRegistry.names()) {
 // The shared HUD frame (#116), over the back canvas; the run lays it out from settings (#119).
 const hudFrame = createHudFrame(host);
 const storage = browserStorage();
+// The real-trigger fixture's Dev material (#1177), installed only in development.
+await (import.meta.env.DEV
+  ? import("./tools/trigger-fixture/fixture").then((fixture) => fixture.installTriggerFixture())
+  : Promise.resolve());
 const run: GameRunController = createGameRunController({
   host,
   storage,
