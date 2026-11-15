@@ -175,6 +175,34 @@ function ellipsize(
   return parts.join("").trimEnd() + ellipsis;
 }
 
+/** A token carrying a number: an operand such as +40, ×3 or 1,200 that must stay visible. */
+const numeric = (token: string) => /\d/.test(token);
+
+/**
+ * Ellipsize the remainder of a truncated text, but never drop a numeric operand (doc: "Never
+ * omit the numeric operand"): the words are cut, the numbers in what was cut are kept after the
+ * ellipsis. Content-independent: any token with a digit counts.
+ */
+function ellipsizeKeepingNumbers(
+  text: string,
+  px: number,
+  width: number,
+  measure: (t: string, px: number) => number,
+) {
+  const tokens = text.split(/\s+/).filter(Boolean);
+  if (measure(text, px) <= width) return text;
+  for (let keep = tokens.length - 1; keep >= 0; keep--) {
+    const shown = tokens.slice(0, keep);
+    const numbers = tokens.slice(keep).filter(numeric);
+    const suffix = numbers.length ? ` ${numbers.join(" ")}` : "";
+    const candidate = `${shown.join(" ")}${ellipsis}${suffix}`.trimStart();
+    if (measure(candidate, px) <= width) return candidate;
+  }
+  const numbers = tokens.filter(numeric);
+  // Not even the operands fit beside an ellipsis: the operands win over the words.
+  return numbers.length ? `${ellipsis}${numbers.join(" ")}` : ellipsize(text, px, width, measure);
+}
+
 export const fittedTextProvider: TextLayoutProvider = {
   layout({ text, style, width, height }, measureWith) {
     const measure = (t: string, px: number) => measureWith(t, px, style);
@@ -215,7 +243,12 @@ export const fittedTextProvider: TextLayoutProvider = {
       const all = paragraphs.flatMap((p) => wrap(p, px, width, measure));
       const kept = all.slice(0, room);
       if (all.length > room || kept.some((line) => measure(line, px) > width)) {
-        kept[kept.length - 1] = ellipsize(all.slice(room - 1).join(" "), px, width, measure);
+        kept[kept.length - 1] = ellipsizeKeepingNumbers(
+          all.slice(room - 1).join(" "),
+          px,
+          width,
+          measure,
+        );
         truncated = true;
       }
       chosen = { lines: kept, px };
@@ -240,7 +273,7 @@ export const fittedTextProvider: TextLayoutProvider = {
     // Line growth must not overflow the rectangle: fall back to the base size if it would.
     const grown = fitted.reduce((sum, line) => sum + line.px * style.lineHeight, 0);
     const lines =
-      grown <= height || truncated
+      grown <= height
         ? fitted
         : chosen.lines.map((line) => ({
             text: line,
@@ -319,6 +352,8 @@ export function renderFittedText(element: HTMLElement, fitted: FittedText, style
       row.textContent = line.text;
       row.style.fontSize = `${line.px}px`;
       row.style.fontWeight = String(style.weight);
+      // The family that was measured, unless the profile inherits the host's.
+      if (style.family !== "inherit") row.style.fontFamily = style.family;
       row.style.lineHeight = String(style.lineHeight);
       row.style.letterSpacing = `${line.letterSpacingPx}px`;
       row.style.whiteSpace = "nowrap";
