@@ -1,0 +1,25 @@
+# Captured row scoring explanation (#1383 / #1266)
+
+The owner expects row narration to identify the poker hand, its unmodified base, the modifiers that actually apply in order, and final row points. “Line” plus a number is insufficient. Preserve the shared fitted rectangular multiline text and existing narration/pulse timing; minor presentation timing inaccuracies are acceptable, but scores, input and result progression must remain correct.
+
+## Capture once, at authoritative scoring
+
+Each scored-row result carries an immutable serializable explanation: chosen hand's display descriptor, contributing card handles, unmodified base points (the selected contributors' ordinary rank total at the poker hand multiplier), ordered applied scoring operations with captured source description/resolved numerical values, and final row points. Include material/state/acquired and passive operations that actually affected this row, in the scorer's phase and rack order. Non-contributing cards retain their documented eligibility; do not invent an activation for a rule that did not run. Explicit row-presence effects are included when actually applied.
+
+Poker precedence chooses hand type, then greatest unmodified points selects among that type, with stable first-subset ties, as already agreed in game.md (#1267). Modifiers never alter that selection. The explanation describes that existing outcome; it cannot choose a different higher-modified subset or sum overlapping hands.
+
+Capture operation contributions where registered rule handlers resolve them, using existing activation outcomes. Do not reconstruct operations by diffing totals, inspect a modifier/material name in generic code or execute a rule again for text. A Dice/random operation reports the already resolved value, never draws again. Before-row/once-per-play setup can supply captured state used by row operations; do not falsely claim that setup rerolled for every row. Operations that do not alter row arithmetic may retain their separate activation label without being printed as a fake multiplier.
+
+## Presentation and payload boundary
+
+The committed scoring result owns explanation data; capture/adaptation carries it unchanged into the scheduled NarratedLine payload. A registered pure formatter maps those descriptors to the existing shared text-block content. Show the hand and base, then ordered operations and final points in readable lines. Content is independent of placement/fitting: reuse the existing scoring narration anchor and measured justified/scaled text layout, no second caption renderer. Passive over-item narration remains its own configured anchor using the same text component.
+
+The formatter knows operation semantics through registered descriptors/handlers, not source identities or a side table of material names. Unknown/absent older payload details are explicitly unavailable; never invent a hand/modifier explanation from current live state. Existing bounded summary fallback may retain final points while diagnosing unavailable detail. New authoritative payloads must include the full explanation; the fallback is compatibility/failure handling, not acceptance of generic “Line” narration for new scores.
+
+Delayed presentation reads no live GameRun values, does not rescore or consume model RNG, and cannot change scoring or commands. New plays, material changes, source removal and rack rearrangement cannot change an earlier explanation. Preserve action order, cancellation/reset, scope settlement and sounds; this is no timing rewrite or animation gate.
+
+## Evidence and delivery
+
+Source audit at `d925ff33`: `src/scoring.ts:LineEvaluation` already exposes chosen hand/contributors/points and deterministic subset selection. `src/passive-effects.ts:RuleActivation` captures sourceDescription and resolved outcomes; `PassiveScoredLine` has activations. `src/play-presenter.ts:capturedLine` currently narrows this to block/source IDs, points and alongside events; `src/score-narration.ts:NarratedLine` consequently lacks the explanation. Preserve these seams and extend capture rather than adding later scoring calls. Existing outcomes are evidence for resolved operations, not proof that an unmodified-base field is currently available at every phase.
+
+Deliver one focused scoring/capture schema change first, with deterministic tests, then #1266's text adoption over the captured descriptor. If those boundaries expose another independently deliverable change, implementer chooses the workable split. Verify full-house precedence over a higher-modified lower hand, same-type unmodified ties, excluded vs row-presence materials, state/acquired bonuses, multiple operations and exponent ordering, random value reuse, multiple rows, removed/replaced sources and later plays. Compare captured base/operations/final against the scorer's actual execution without a second run. Browser evidence must show the real hand/base/breakdown/final text, fitted legibly and synchronized with existing feedback. Unit tests alone cannot prove layout quality.
