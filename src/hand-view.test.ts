@@ -145,3 +145,26 @@ describe("hand view", () => {
     expect(rendered.cube.position.z).toBe(0);
   });
 });
+
+describe("revealing captured replacements (#1165; doc/visual-event-interface.md)", () => {
+  it("reveals from the hand's committed layout, without being handed the live model", () => {
+    const { hand } = setup();
+    hand.deal(cards.slice(0, 4));
+    const drawn = cards[4]!;
+    // Committed: the replacement is in the hand now; its reveal waits.
+    hand.sync([...cards.slice(0, 4), drawn]);
+    hand.drawIn([drawn]);
+    expect(hand.blocks.map(({ block }) => block.id)).toContain(drawn.id);
+  });
+
+  it("omits a replacement a later move has already taken out of the hand", () => {
+    const { hand } = setup();
+    hand.deal(cards.slice(0, 4));
+    const drawn = cards[4]!;
+    hand.sync([...cards.slice(0, 4), drawn]);
+    // A later valid play took the replacement before its reveal: it is no longer committed.
+    hand.sync(cards.slice(0, 4));
+    hand.drawIn([drawn]);
+    expect(hand.blocks.map(({ block }) => block.id)).not.toContain(drawn.id);
+  });
+});
