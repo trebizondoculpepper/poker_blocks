@@ -115,14 +115,28 @@ fluidLooks.register("opaqueFluid", (surface, raw) => {
 const transmissionCapture: InteriorContribution = {
   include(particles) {
     const { material: held } = particles;
-    for (const each of Array.isArray(held) ? held : Array.of(held)) {
+    const materials = Array.isArray(held) ? held : Array.of(held);
+    // What the registration changes, so its release puts it all back (#1227).
+    const before = materials.map((each) => ({
+      transparent: each.transparent,
+      blending: each.blending,
+      depthWrite: each.depthWrite,
+      alphaTest: each.alphaTest,
+      // Its own hook, if it had one (three.js's default lives on the prototype).
+      hook: Object.getOwnPropertyDescriptor(each, "onBeforeCompile"),
+    }));
+    const renderOrder = particles.renderOrder;
+    for (const each of materials) {
       each.transparent = false;
       each.blending = THREE.NormalBlending;
       each.depthWrite = true;
       // Low enough to keep the whole soft disc, not only its rim: the capture is drawn at
       // reduced resolution and softened, where a thin ring all but vanishes.
       each.alphaTest = 0.15;
-      each.onBeforeCompile = (shader) => {
+      // After the particles' own hook (a per-bubble size, #1232), never instead of it.
+      const own = each.onBeforeCompile.bind(each);
+      each.onBeforeCompile = (shader, renderer) => {
+        own(shader, renderer);
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <alphatest_fragment>",
           "#include <alphatest_fragment>\n#ifdef USE_COLOR\nif (dot(vColor.rgb, vec3(1.0)) < 0.01) discard;\n#endif",
@@ -131,6 +145,19 @@ const transmissionCapture: InteriorContribution = {
       each.needsUpdate = true;
     }
     particles.renderOrder = containedLayers.contentsOpaque;
+    let registered = true;
+    return () => {
+      if (!registered) return;
+      registered = false;
+      materials.forEach((each, index) => {
+        const { hook, ...state } = before[index]!;
+        Object.assign(each, state);
+        if (hook) Object.defineProperty(each, "onBeforeCompile", hook);
+        else Reflect.deleteProperty(each, "onBeforeCompile");
+        each.needsUpdate = true;
+      });
+      particles.renderOrder = renderOrder;
+    };
   },
 };
 

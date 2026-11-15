@@ -112,18 +112,35 @@ export function createScoreGraphController(options: {
     // Any fact carrying a captured stage-history point (today, score.totalApplied's).
     for (const { payload } of facts) {
       const point = (
-        payload as { stageHistory?: { generation: number; play: number; total: number } }
+        payload as {
+          stageHistory?: {
+            generation: number;
+            plays?: number;
+            targetScore?: number;
+            play: number;
+            total: number;
+            reset?: boolean;
+          };
+        }
       ).stageHistory;
       if (!point) continue;
-      // A new stage: its own series from zero; nothing of the old one draws again.
-      if (point.generation !== generation || !series) {
+      // A new stage: its own series from its start, with the resolved bounds the point carries
+      // (#1305); nothing of the old one draws again, and pending old growth is invalidated.
+      if (point.generation !== generation || !series || point.reset) {
         generation = point.generation;
+        epoch++;
+        const start = point.reset ? point : { play: 0, total: 0 };
         series = Object.freeze({
-          plays: 0,
-          targetScore: 0,
-          points: [{ play: 0, total: 0 }],
+          plays: point.plays ?? series?.plays ?? 0,
+          targetScore: point.targetScore ?? series?.targetScore ?? 0,
+          points: Object.freeze([{ play: start.play, total: start.total }]),
           growth: 1,
         });
+        // The reset itself is shown at once: the fresh history, no growth.
+        if (point.reset) {
+          options.sink.draw(series);
+          continue;
+        }
       }
       series = Object.freeze({
         ...series,

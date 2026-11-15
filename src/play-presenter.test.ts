@@ -211,3 +211,72 @@ describe("a discard's activation labels (#920)", () => {
     expect(shown).toEqual(["x:0", "x:2"]);
   });
 });
+
+describe("a play's own committed identity survives its refill's commit (#1244 review)", () => {
+  it("binds the play's flight, key and outcome to the play, not the refill committed after it", async () => {
+    const { createVisualScheduler } = await import("./visual-events/scheduler");
+    const { createPlayPresenter } = await import("./play-presenter");
+    const noop = () => undefined;
+    // The model: the play commits, then its refill commits as an action of its own.
+    let lastCommittedActionId = "run1:play#1";
+    const playKey = { generation: 1, actionId: "run1:play#1" };
+    const refillKey = { generation: 1, actionId: "run1:refillHand#2" };
+    let latest = playKey;
+    const bound: string[] = [];
+    const contributionOf = (key: typeof playKey) => ({
+      bind: () => (bound.push(key.actionId), true),
+      observe: () => noop,
+    });
+    const placementPhase = {
+      get latest() {
+        return latest;
+      },
+      contribution: () => contributionOf(latest),
+      contributionFor: () => null,
+      observeAction: () => false,
+      reset: noop,
+    };
+    const session = {
+      play: () => ({ field: [] }),
+      lastPlacedOrder: [],
+      lastReactions: [],
+      lastScoredLines: [],
+      get lastCommittedActionId() {
+        return lastCommittedActionId;
+      },
+      state: { hand: [], round: { score: 0, targetScore: 10, movesLeft: 3, discardsLeft: 3 } },
+    };
+    const scheduler = createVisualScheduler({ services: {} });
+    const decided: (string | undefined)[] = [];
+    const play = createPlayPresenter({
+      game: () => session as never,
+      views: {} as never,
+      hand: { settle: noop, remove: noop, sync: noop } as never,
+      field: { occupiedCells: () => [], blocks: () => [], expect: noop } as never,
+      cameraView: {
+        handCamera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10),
+        camera: new THREE.PerspectiveCamera(50, 1, 0.1, 10),
+      } as never,
+      scene: new THREE.Group(),
+      assembly: new THREE.Group(),
+      reducedMotion: () => false,
+      deselect: noop,
+      changed: noop,
+      moved: noop,
+      rackChanged: noop,
+      activated: noop,
+      drawReplacements: () => {
+        // The refill commits: it is now the latest committed action.
+        latest = refillKey;
+        lastCommittedActionId = "run1:refillHand#2";
+        return [];
+      },
+      save: noop,
+      decided: (_outcome, _now, occurrence) => void decided.push(occurrence),
+      visualEvents: scheduler,
+      placementPhase: placementPhase as never,
+    });
+    expect(play.play([] as never, { target: null, face: null } as never)).toBe(true);
+    expect(bound).toEqual(["run1:play#1"]);
+  });
+});

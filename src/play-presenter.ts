@@ -445,7 +445,8 @@ export function createPlayPresenter(options: {
       if (!latest) {
         // Removed while it flew (the Nothingifier, #156): nothing of it lands.
         views.dispose(flight.source);
-        if (flight.target) field.remove(flight.target.block.id);
+        // Never adopted: its handover view is released here, not leaked (#1306).
+        if (flight.target) views.dispose(flight.target);
         continue;
       }
       if (flight.target) {
@@ -540,6 +541,13 @@ export function createPlayPresenter(options: {
       options.deselect(ids);
       hand.remove(sources);
       hand.sync(game().state.hand);
+      // The play's own committed identity, captured before its refill commits as an action of its
+      // own (#1244): its reservation, record key and outcome occurrence are the play's.
+      const committed = {
+        key: options.placementPhase?.latest ?? null,
+        contribution: options.placementPhase?.contribution() ?? null,
+        occurrence: `${game().lastCommittedActionId ?? "play"}:outcome`,
+      };
       // Model first (#775, #1033 review): the play's replacements are drawn as it commits, so no
       // presentation timing or cancellation decides whether they enter the hand.
       const drawn = options.drawReplacements();
@@ -593,10 +601,10 @@ export function createPlayPresenter(options: {
         endpoint: {
           score: game().state.round.score,
           outcome: roundOutcome(game().state),
-          occurrence: `${game().lastCommittedActionId ?? "play"}:outcome`,
+          occurrence: committed.occurrence,
         },
         slot: narration.reserve(),
-        actionKey: options.placementPhase?.latest ?? null,
+        actionKey: committed.key,
         drawn,
         // The softer material where each block meets the structure decides its sound (#232),
         // from the field this play committed to.
@@ -616,7 +624,7 @@ export function createPlayPresenter(options: {
             action.effects.forEach((effect) => effect.finish());
           },
         },
-        options.placementPhase?.contribution() ?? null,
+        committed.contribution,
       );
       playSfx("card.place.fly");
       options.changed();
