@@ -100,4 +100,15 @@ describe("terminalFieldBurn (#946)", () => {
     h.decide("lost", "a1:outcome");
     expect(h.log).toEqual([]);
   });
+
+  it("burns a later run's loss even when its action IDs repeat an earlier run's (#1362 review)", () => {
+    const h = harness();
+    h.decide("lost", "auto:6:outcome");
+    h.settle[0]!();
+    // A new run enters its play scene anew; its action IDs restart.
+    h.trait.exit!({ services: h.services } as never, h.config);
+    h.trait.enter!({ services: h.services } as never, h.config);
+    h.decide("lost", "auto:6:outcome");
+    expect(h.log.filter((entry) => entry === "hold")).toHaveLength(2);
+  });
 });

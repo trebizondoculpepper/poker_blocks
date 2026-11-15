@@ -288,6 +288,11 @@ export function createGameRunController<Context>(options: {
   let gameOverAt: number | null = null;
   /** Outstanding result holds (#946); cleared with the table. */
   const resultHolds = new Set<object>();
+  /**
+   * Whether a controller has held the decided result: then its release, not the fixed delay, says
+   * when the result follows (#1362 review), so Game Over can enter at the burn's 80% gate.
+   */
+  let resultGated = false;
   let shopExitPending = false;
   const systemMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
@@ -465,6 +470,7 @@ export function createGameRunController<Context>(options: {
   /** Remove every block from the scene and put the board and camera back at the start. */
   function resetTable(): void {
     resultHolds.clear();
+    resultGated = false;
     services.views.disposeAll();
     services.field.clear();
     services.hand.clear();
@@ -1016,6 +1022,7 @@ export function createGameRunController<Context>(options: {
     holdResult() {
       const hold = {};
       resultHolds.add(hold);
+      resultGated = true;
       return () => void resultHolds.delete(hold);
     },
     followOutcomes(time) {
@@ -1024,12 +1031,15 @@ export function createGameRunController<Context>(options: {
       if (services.overlays.isOpen) return;
       // Held for a controller's required work (#946): it follows once every hold is released.
       if (resultHolds.size) return;
-      if (stageWonAt !== null && stageWonAt <= time && !presenter.busy) {
+      const due = (at: number | null) => at !== null && (resultGated || at <= time);
+      if (due(stageWonAt) && !presenter.busy) {
         stageWonAt = null;
+        resultGated = false;
         showStageWon();
       }
-      if (gameOverAt !== null && gameOverAt <= time && !presenter.busy) {
+      if (due(gameOverAt) && !presenter.busy) {
         gameOverAt = null;
+        resultGated = false;
         if (game.advance()) endRun();
       }
     },

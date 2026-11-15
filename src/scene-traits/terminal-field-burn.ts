@@ -45,10 +45,12 @@ export function terminalFieldBurn<
   Context extends { services: TerminalFieldBurnServices },
 >(): SceneTraitBehaviour<Context, TerminalFieldBurnConfig> {
   const stops = new WeakMap<object, () => void>();
-  const presented = new Set<string>();
   return {
     enter({ services }, config) {
       stops.get(config)?.();
+      // Fresh on each entry: a new run (which enters its play scene anew) restarts action IDs, so
+      // an earlier run's occurrence must never suppress its loss (#1362 review).
+      const presented = new Set<string>();
       const stop = services.run.onDecided(({ outcome, occurrence }) => {
         const response = config[outcome];
         if (!response || presented.has(occurrence)) return;
