@@ -25,13 +25,19 @@ import { maskAdapters, type MaskAdapter } from "./paired-mask";
 
 /** Dispatch to the adapter each material declares in `userData.maskAdapter`. */
 export const materialDeclaredAdapter: MaskAdapter = {
-  adapt(material, uniforms, role) {
+  // Checked for every material before either look is swapped (#1338 review).
+  refuse(material) {
     const declared = material.userData.maskAdapter as string | undefined;
     if (!declared || !maskAdapters.has(declared))
-      throw new Error(
-        `material "${material.name || material.uuid}" declares no registered mask adapter`,
-      );
-    return maskAdapters.get(declared).adapt(material, uniforms, role);
+      return `material "${material.name || material.uuid}" declares no registered mask adapter`;
+    return maskAdapters.get(declared).refuse?.(material) ?? null;
+  },
+  adapt(material, uniforms, role) {
+    const refused = materialDeclaredAdapter.refuse!(material);
+    if (refused) throw new Error(refused);
+    return maskAdapters
+      .get(material.userData.maskAdapter as string)
+      .adapt(material, uniforms, role);
   },
 };
 
@@ -56,25 +62,31 @@ const decide = /* glsl */ `
   }
 `;
 
-export const opticalShaderAdapter: MaskAdapter = {
-  adapt(original, uniforms, role) {
-    const source = original as THREE.ShaderMaterial;
-    const made = source.clone();
-    made.userData = source.userData;
-    // A clone drops the per-draw callback (a face ripple's, which steps its shared uniforms):
-    // the masked look keeps it (#1336 review).
-    made.onBeforeRender = source.onBeforeRender;
-    // The original's own uniform objects (capture slots, tuning, ripple), shared, plus the mask's.
-    made.uniforms = {
-      ...source.uniforms,
-      ...uniforms,
-      matOutgoing: { value: role === "outgoing" ? 1 : 0 },
-    };
-    made.vertexShader = `varying vec3 matWorld;\n${source.vertexShader}`.replace(
-      /void main\(\)\s*\{/,
-      "void main() {\n  matWorld = (modelMatrix * vec4(position, 1.0)).xyz;",
-    );
-    made.fragmentShader = `varying vec3 matWorld;
+/**
+ * The custom-shader mask. `fade` is what its reduced-motion crossfade scales (`gl_FragColor.a`
+ * for a displayed look); null for a capture material, whose data a prepass reads and must stay
+ * whole under reduced motion, only the displayed surfaces fading (#1336 review).
+ */
+function shaderMaskAdapter(fade: string | null): MaskAdapter {
+  return {
+    adapt(original, uniforms, role) {
+      const source = original as THREE.ShaderMaterial;
+      const made = source.clone();
+      made.userData = source.userData;
+      // A clone drops the per-draw callback (a face ripple's, which steps its shared uniforms):
+      // the masked look keeps it (#1336 review).
+      made.onBeforeRender = source.onBeforeRender;
+      // The original's own uniform objects (capture slots, tuning, ripple), shared, plus the mask's.
+      made.uniforms = {
+        ...source.uniforms,
+        ...uniforms,
+        matOutgoing: { value: role === "outgoing" ? 1 : 0 },
+      };
+      made.vertexShader = `varying vec3 matWorld;\n${source.vertexShader}`.replace(
+        /void main\(\)\s*\{/,
+        "void main() {\n  matWorld = (modelMatrix * vec4(position, 1.0)).xyz;",
+      );
+      made.fragmentShader = `varying vec3 matWorld;
       uniform float matProgress;
       uniform float matTime;
       uniform float matFrequency;
@@ -85,17 +97,24 @@ export const opticalShaderAdapter: MaskAdapter = {
       uniform vec3 matOrigin;
       ${NOISE}
       ${source.fragmentShader}`.replace(/void main\(\)\s*\{/, `void main() {${decide}`);
-    // The reduced-motion crossfade, as the chunk adapter does it: the incoming look's alpha
-    // follows progress (its main's last statement), the outgoing look writes no depth under it.
-    const end = made.fragmentShader.lastIndexOf("}");
-    made.fragmentShader = `${made.fragmentShader.slice(0, end)}
-      if (matReduced > 0.5 && matOutgoing < 0.5) gl_FragColor.a *= matProgress;
+      // The reduced-motion crossfade, as the chunk adapter does it: the incoming look's alpha
+      // follows progress (its main's last statement), the outgoing look writes no depth under it.
+      if (fade === null) return made;
+      const end = made.fragmentShader.lastIndexOf("}");
+      made.fragmentShader = `${made.fragmentShader.slice(0, end)}
+      if (matReduced > 0.5 && matOutgoing < 0.5) ${fade} *= matProgress;
     }${made.fragmentShader.slice(end + 1)}`;
-    if (uniforms.matReduced.value > 0.5 && role === "incoming") made.transparent = true;
-    if (uniforms.matReduced.value > 0.5 && role === "outgoing") made.depthWrite = false;
-    return made;
-  },
-};
+      if (uniforms.matReduced.value > 0.5 && role === "incoming") made.transparent = true;
+      if (uniforms.matReduced.value > 0.5 && role === "outgoing") made.depthWrite = false;
+      return made;
+    },
+  };
+}
+
+export const opticalShaderAdapter = shaderMaskAdapter("gl_FragColor.a");
+/** A prepass's capture material (a crystal's rear): masked, never faded. */
+export const opticalCaptureAdapter = shaderMaskAdapter(null);
 
 maskAdapters.register("materialDeclared", materialDeclaredAdapter);
 maskAdapters.register("opticalShader", opticalShaderAdapter);
+maskAdapters.register("opticalCapture", opticalCaptureAdapter);
