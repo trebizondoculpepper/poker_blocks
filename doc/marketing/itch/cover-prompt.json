@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-15",
+  "tool": "built-in image_gen",
+  "referenceRevision": "ee831cb",
+  "references": [
+    "src/website/art/title.png",
+    "src/website/art/steel.png",
+    "src/website/art/ice.png",
+    "src/website/art/wood.png",
+    "src/website/art/gold.png"
+  ],
+  "prompt": "Use case: ads-marketing. Create ONE polished Poker Blocks game COVER image, landscape aspect ratio exactly 630:500 (1.26:1), intended final export 630x500 pixels and legible as a small itch.io thumbnail. Input 1 is the game's actual two-row rendered block title: a supporting logo insert, preserve its exact lettering 'Poker' over 'Blocks', letter order/case and distinct wood, pearly rainbow crystal, paper, ice, riveted steel, gold and terracotta material cubes. Make this title the large central hero, sharply legible, taking about 80% of image width with safe margins. Remaining inputs are visual references for genuine game card BLOCKS: steel J clubs, icy 10 spades, wooden K hearts, gold Q diamonds. Have 5 or 6 such chunky three-dimensional playing-card cubes whizzing and tumbling in an energetic loose orbital sweep around the title, with a few sweeping curved amber and pale icy-blue motion trails, subtle directional blur only on trails/back edges; rank/suit faces remain recognisable. Dynamic depth: a small distant card at top, larger cards near lower corners, no block or streak obscures any logo letter. Only the title uses alphabet letter blocks; all other cubes must be playing-card ranks and suits. Background: deep dark emerald and walnut tones of a warmly lit card room, abstracted and softly vignetted so the title pops, no detailed furniture competing with it. Bright tactile 3D game-art look; inviting, playful and kinetic, not a flat casino poster. Compose for the near-square crop from the start, with the whole title and key card faces inside a 7% inset. No slogan, extra text, UI, badges, watermark, flat cards, chips, dice, people, alcohol or contact sheet. Output a single finished opaque image.",
+  "export": "Native imagegen output resampled with macOS sips --resampleHeightWidth 500 630 to meet the owner's exact 630×500 upload dimensions. No compositing or retouching."
+}

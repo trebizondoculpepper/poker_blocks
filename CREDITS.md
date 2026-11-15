@@ -35,6 +35,8 @@ Baked lettering follows the material's configured font, including local system f
 
 ### itch.io marketing illustrations (#1480)
 
+The additional `doc/marketing/itch/cover.png` (#1486) uses the same project-owned reference artwork and built-in image generation tool, with steel and ice card renders also supplied. Its prompt and provenance are in `cover-prompt.json`. It was resampled with macOS `sips` to the requested 630 × 500 pixels, without compositing or retouching; the original three illustrations below were not resampled. This cover is also a marketing illustration, not a gameplay screenshot. The same project licence and reference lettering notices apply.
+
 `doc/marketing/itch/{background,banner,embed-bg}.png` were prepared for this project with OpenAI's built-in image generation tool on 2026-11-15, referencing the project's rendered title and card-block artwork. Source: the prompts and project-owned reference files recorded in `doc/marketing/itch/prompts.json`; project artwork is covered by the repository's GNU GPL v3 licence. They are AI-assisted marketing illustrations, not exact game renders or gameplay screenshots. The banner received a generated edit to remove a bottle; no external image retouching was applied. Prompts, file hashes, actual dimensions and upload guidance are recorded beside them. The project's baked typography/font notices above remain applicable to the reference lettering. These are documentation/marketing assets and are not included in the game or website build.
 
 ### Sound effects

@@ -1,5 +1,7 @@
 # Poker Blocks itch.io artwork
 
+[cover.png](cover.png) is the **630 × 500** itch.io cover requested in #1486: the block title surrounded by flying playing-card blocks and motion trails. Generated with built-in `image_gen`, then resampled to the exact requested dimensions using macOS `sips`; no compositing or retouching. Its source references and complete prompt are in [cover-prompt.json](cover-prompt.json), with its hash in the manifest. [description.txt](description.txt) contains four paragraphs of ready-to-paste page copy based on `doc/game.md`.
+
 Prepared 2026-11-15 for #1480 using the built-in `image_gen` tool, with the project's actual rendered logo, wood king and gold queen as visual references. These are AI-assisted marketing illustrations, **not gameplay screenshots or exact game renders**. The website's original render assets remain unchanged.
 
 | File                             | Actual dimensions | Theme editor slot                                                             |

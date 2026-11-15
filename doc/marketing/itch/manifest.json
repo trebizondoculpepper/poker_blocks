@@ -17,6 +17,11 @@
       "dimensions": [1672, 941],
       "bytes": 1809656,
       "sha256": "899a45d634b2d4fb2b6dac9f985550df0e52eb272bd35f7bf1ff4b2258e4aedb"
+    },
+    "cover.png": {
+      "dimensions": [630, 500],
+      "bytes": 504935,
+      "sha256": "03cf11d20f26ad5c6af8de684c8bf5bf16e8d305eacc993ba8a3aa2088abd2f1"
     }
   }
 }
