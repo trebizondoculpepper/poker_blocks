@@ -168,4 +168,16 @@ describe("resistance feedback (#1174; doc/triggered-presentation.md)", () => {
     step(30);
     expect(overlays(cube)).toBe(1);
   });
+
+  it("dispose ends feedback already playing, restoring the visual (#1319)", () => {
+    const { controller, cube, step, resisted } = harness();
+    resisted(steel());
+    step(30);
+    expect(overlays(cube)).toBe(1);
+    controller.dispose();
+    expect(overlays(cube)).toBe(0);
+    expectHome(cube);
+    step(100);
+    expectHome(cube);
+  });
 });
