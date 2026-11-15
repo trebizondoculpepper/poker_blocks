@@ -14,6 +14,8 @@ The base hand size is a tuning value in `src/balance.ts`; another dealer may set
 
 ## Agreed principles
 
+Random passive acquisition uses the definition-owned unlock and current-round context described in [the normal-run passive acquisition contract](release-status.md#normal-run-provisional-passive-trial-1382) (#1474). The shared selector applies eligibility uniformly; run setup, rack filling and rule-command grants supply context without choosing behavior by passive identity.
+
 - Composability takes priority when designing game mechanics.
 - A block is defined by data and configured trait instances. Block types do not own behavior code.
 - Behavior code lives in reusable traits. Each trait instance carries configuration for its block.
