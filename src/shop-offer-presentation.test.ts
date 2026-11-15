@@ -16,6 +16,7 @@ function setup(order = 0, beat = 1) {
   const floor = createDanceFloor(beatAt(beat), () => reduced);
   const model = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
   const offer = createOfferPresentation(model, { id: `offer-${order}`, order, floor });
+  offer.present({});
   const feedback = model.parent!;
   const dance = feedback.parent!;
   const settle = (busy = false, frames = 120) => {
@@ -76,15 +77,15 @@ describe("shop offer presentation (#774)", () => {
   it("enlarges only the hovered offer and returns on leave, with one hover sound", () => {
     const a = setup(0);
     const b = setup(1);
-    a.offer.block.emit("input.enter");
-    a.offer.block.emit("input.focus");
+    a.offer.input("input.enter");
+    a.offer.input("input.focus");
     a.settle();
     b.settle();
     expect(a.feedback.scale.x).toBeCloseTo(1.04, 3);
     expect(b.feedback.scale.x).toBeCloseTo(1, 5);
     expect(played).toEqual(["ui.hover"]);
-    a.offer.block.emit("input.leave");
-    a.offer.block.emit("input.blur");
+    a.offer.input("input.leave");
+    a.offer.input("input.blur");
     a.settle();
     expect(a.feedback.scale.x).toBeCloseTo(1, 4);
   });
@@ -92,7 +93,7 @@ describe("shop offer presentation (#774)", () => {
   it("gives no hover emphasis while busy", () => {
     const { offer, feedback, settle } = setup();
     offer.update(0, true, false);
-    offer.block.emit("input.enter");
+    offer.input("input.enter");
     settle(true);
     expect(feedback.scale.x).toBeCloseTo(1, 5);
     expect(played).toEqual([]);
@@ -104,6 +105,19 @@ describe("shop offer presentation (#774)", () => {
     const before = dance.position.y;
     floor.update();
     expect(dance.position.y).toBe(before);
-    expect(offer.block.listens("input.enter")).toBe(false);
+  });
+
+  it("rests and leaves the floor when the controller stops presenting, rejoining once", () => {
+    const { offer, dance, feedback, settle } = setup();
+    offer.input("input.enter");
+    settle();
+    offer.present(null);
+    expect(dance.position.y).toBe(0);
+    expect(feedback.scale.x).toBe(1);
+    settle();
+    expect(dance.position.y).toBe(0);
+    offer.present({});
+    settle();
+    expect(dance.position.y).toBeCloseTo(0.03, 3);
   });
 });

@@ -239,6 +239,7 @@ describe("game modes composed from traits", () => {
         },
       },
       shopStock: { source: "shop" },
+      shopOfferPresentation: { cycle: "bar", phaseStep: 0.25, bob: 0.03, tiltDegrees: 4 },
       deckPanel: { opens: "openDeck" },
       runInPlay: {},
       enterSound: { sfx: "shop.open" },

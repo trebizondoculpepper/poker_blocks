@@ -88,78 +88,111 @@ export const interactionStateProvider = defineTrait({
 export type OfferPresentation = {
   /** The layout/action root the shop view positions. */
   readonly root: THREE.Group;
-  readonly block: Block;
+  /** Forward a normalised input event (`input.enter`, `input.focus`, ...) while presented. */
+  input(type: string): void;
+  /**
+   * Join the dance floor and wear hover feedback with this configuration, or with null leave
+   * the floor and rest. The scene's `shopOfferPresentation` controller trait decides this.
+   */
+  present(config: Partial<ShopOfferPresentationConfig> | null): void;
   /** Advance the ambient layers; `busy` while an action owns the offer's pose. */
   update(dt: number, busy: boolean, reducedMotion: boolean): void;
   dispose(): void;
 };
 
+/**
+ * One offer's layered mounts. The view owns the layers; participation (dance floor, feedback
+ * traits) is attached only while the composed controller trait presents the stock.
+ */
 export function createOfferPresentation(
   model: THREE.Object3D,
-  options: {
-    id: string;
-    order: number;
-    floor: Pick<DanceFloor, "join">;
-    config?: Partial<ShopOfferPresentationConfig>;
-  },
+  options: { id: string; order: number; floor: Pick<DanceFloor, "join"> },
 ): OfferPresentation {
-  const config = { ...shopOfferPresentationDefaults, ...options.config };
   const root = new THREE.Group();
   const dance = new THREE.Group();
   const feedback = new THREE.Group();
   root.add(dance);
   dance.add(feedback);
   feedback.add(model);
-
-  const block = new Block(options.id);
-  block.add(interactionStateProvider);
-  block.add(interactionFeedback, config.feedback);
   const materials = new Set<THREE.Material>();
   model.traverse((child) => {
     for (const material of [(child as THREE.Mesh).material ?? []].flat()) materials.add(material);
   });
-  block.emit("presentation.mount", {
-    object: feedback,
-    materials: [...materials],
-  } satisfies PresentationMount);
 
-  let phase = 0;
-  let energy = 0;
-  const leave = options.floor.join({
-    cycle: config.cycle,
-    offset: options.order * config.phaseStep,
-    dance(move) {
-      phase = move.phase;
-      energy = move.energy;
-    },
-  });
-
+  type Participation = {
+    block: Block;
+    config: ShopOfferPresentationConfig;
+    leave(): void;
+    phase: number;
+    energy: number;
+    available?: boolean;
+  };
+  let live: Participation | null = null;
   let weight = 0;
-  let available: boolean | undefined;
-  const feedbackSettings = block.settingsOf(interactionFeedback)!;
-  const tilt = THREE.MathUtils.degToRad(config.tiltDegrees);
+
+  function rest(): void {
+    dance.position.y = 0;
+    dance.rotation.z = 0;
+    feedback.position.set(0, 0, 0);
+    feedback.scale.setScalar(1);
+    weight = 0;
+  }
+
+  function present(settings: Partial<ShopOfferPresentationConfig> | null): void {
+    if (live) {
+      live.leave();
+      live.block.dispose();
+      live = null;
+      rest();
+    }
+    if (!settings) return;
+    const config = { ...shopOfferPresentationDefaults, ...settings };
+    const block = new Block(options.id);
+    block.add(interactionStateProvider);
+    block.add(interactionFeedback, config.feedback);
+    block.emit("presentation.mount", {
+      object: feedback,
+      materials: [...materials],
+    } satisfies PresentationMount);
+    const participation: Participation = { block, config, leave: () => {}, phase: 0, energy: 0 };
+    participation.leave = options.floor.join({
+      cycle: config.cycle,
+      offset: options.order * config.phaseStep,
+      dance(move) {
+        participation.phase = move.phase;
+        participation.energy = move.energy;
+      },
+    });
+    live = participation;
+  }
+
   return {
     root,
-    block,
+    input(type) {
+      live?.block.emit(type);
+    },
+    present,
     update(dt, busy, reducedMotion) {
-      if (available !== !busy) {
-        available = !busy;
-        block.emit("presentation.available", available);
+      if (!live) return;
+      const { block, config } = live;
+      if (live.available !== !busy) {
+        live.available = !busy;
+        block.emit("presentation.available", live.available);
       }
-      feedbackSettings.reducedMotion = reducedMotion;
+      block.settingsOf(interactionFeedback)!.reducedMotion = reducedMotion;
       const target = busy || reducedMotion ? 0 : 1;
       weight = reducedMotion
         ? 0
         : weight + (target - weight) * (1 - Math.exp(-config.response * Math.max(0, dt)));
-      const amount = energy * weight;
-      const angle = phase * Math.PI * 2;
+      const amount = live.energy * weight;
+      const angle = live.phase * Math.PI * 2;
       dance.position.y = Math.sin(angle) * config.bob * amount;
-      dance.rotation.z = Math.sin(angle + Math.PI / 2) * tilt * amount;
+      dance.rotation.z =
+        Math.sin(angle + Math.PI / 2) * THREE.MathUtils.degToRad(config.tiltDegrees) * amount;
       block.update(dt);
     },
     dispose() {
-      leave();
-      block.dispose();
+      present(null);
       feedback.remove(model);
     },
   };

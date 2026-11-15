@@ -63,6 +63,11 @@ export type ShopView = {
   burnUnsold(reducedMotion: boolean): Promise<void>;
   /** Draw one frame; `delta` (seconds) advances the stock's ambient motion (#774). */
   frame(delta?: number): void;
+  /**
+   * Present the stock's dance and hover emphasis with this configuration, or rest it (null).
+   * Called by the scene's `shopOfferPresentation` controller trait (#774).
+   */
+  present(config: Partial<ShopOfferPresentationConfig> | null): void;
   dispose(): void;
 };
 
@@ -256,10 +261,7 @@ export function createShopView(
   /** Why buying would be refused now, without buying (`GameRun.purchaseVerdict`, #499). */
   verdict: (id: string, destination: OfferDestination) => { reason: string } | null,
   /** The shared dance floor and the stock's presentation configuration (#774). */
-  presentation: {
-    floor: Pick<DanceFloor, "join">;
-    config?: Partial<ShopOfferPresentationConfig>;
-  },
+  presentation: { floor: Pick<DanceFloor, "join"> },
 ): ShopView {
   const stock = document.createElement("section");
   stock.className = "shop-stock";
@@ -312,6 +314,8 @@ export function createShopView(
   // same studio room for itself.
   const reflections = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
   const displayed: DisplayedOffer[] = [];
+  /** The configuration the scene's controller trait presents the stock with, or null. */
+  let presented: Partial<ShopOfferPresentationConfig> | null = null;
   let burn: {
     startedAt: number;
     seconds: number;
@@ -366,8 +370,8 @@ export function createShopView(
       id: offer.block.id,
       order,
       floor: presentation.floor,
-      config: presentation.config,
     });
+    layered.present(presented);
     return {
       cube: layered.root,
       presentation: layered,
@@ -380,9 +384,9 @@ export function createShopView(
   }
 
   /** Forward the offer's real pointer and focus to its interaction-state provider (#774). */
-  function followInput(item: HTMLElement, block: OfferPresentation["block"]): void {
+  function followInput(item: HTMLElement, offer: OfferPresentation): void {
     const forward = (dom: string, type: string) =>
-      item.addEventListener(dom, () => block.emit(type));
+      item.addEventListener(dom, () => offer.input(type));
     forward("pointerenter", "input.enter");
     forward("pointerleave", "input.leave");
     forward("pointercancel", "input.leave");
@@ -468,7 +472,7 @@ export function createShopView(
       item.append(slot, label, tooltip);
       const cube = makeCube(offer, order);
       cube.cube.rotation.set(-0.34, 0.48, 0);
-      followInput(item, cube.presentation.block);
+      followInput(item, cube.presentation);
       scene.add(cube.cube);
       displayed.push({ offer, item, slot, ...cube });
       stock.append(item);
@@ -716,6 +720,10 @@ export function createShopView(
     render,
     burnUnsold,
     frame,
+    present(config) {
+      presented = config;
+      for (const entry of displayed) entry.presentation.present(config);
+    },
     dispose: () => {
       clear();
       prepasses.dispose();
