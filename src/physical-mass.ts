@@ -157,6 +157,18 @@ export function aggregateMass<T>(
   return { totalKg, count: scope.length, meanKg: scope.length ? totalKg / scope.length : null };
 }
 
+/**
+ * A mass for people to read (#1069; doc/material-mass-and-passives.md): grams below 1 kg,
+ * kilograms otherwise, to at most three significant digits. Calculations keep full precision.
+ */
+export function formatMass(kg: number): string {
+  const [value, unit] = kg < 1 ? [kg * 1000, "g"] : [kg, "kg"];
+  return `${Number(value.toPrecision(3))} ${unit}`;
+}
+
+/** The inspection line for a resolved mass: weight, colloquially, though the data is mass. */
+export const weightLine = (kg: number): string => `Weight: ${formatMass(kg)}`;
+
 /** Magic: three times the shared Paper calibration, with no container surcharge. */
 export const magicMass = effective(
   3 * massKg(massOf(paperShell)),

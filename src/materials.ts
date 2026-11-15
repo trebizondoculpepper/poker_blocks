@@ -19,6 +19,7 @@ import {
   validatePhysicalMass,
   type MassReading,
   massKg,
+  weightLine,
   airLitre,
   cloudMass,
   emptyVesselMass,
@@ -1737,6 +1738,17 @@ export function scoringEligibilityOf(block: CardBlock): string {
 inspectionProviders.register("releaseStatus", (block) => {
   const definition = getMaterialDefinition(materialOf(block));
   return [...releaseStatusInspection(definition.id, definition.releaseStatus)];
+});
+
+// Every inspected block shows its weight (#1069; doc/material-mass-and-passives.md), resolved from
+// its current material's authored recipe, the same source the mass queries use.
+inspectionProviders.register("weight", (block) => {
+  const reading = cardMassReading(block);
+  return [
+    "unavailable" in reading
+      ? `Weight: unavailable (${reading.unavailable})`
+      : weightLine(reading.kg),
+  ];
 });
 
 // Inspection lists a card's base and acquired bonuses after its name (#751).
