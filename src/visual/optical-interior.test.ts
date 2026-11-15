@@ -464,3 +464,47 @@ describe("interior contributions return their release (#1227)", () => {
     expect(release).toHaveBeenCalledOnce();
   });
 });
+
+describe("optical interior capture: review findings (#1289)", () => {
+  it("places a tile by this frame's transforms, even before the host has updated them", () => {
+    const capture = createInteriorCapture();
+    const { renderer, draws } = recording();
+    const each = volume(0);
+    const lease = leased(capture.register(each));
+    const frame = host(renderer);
+    capture.render(frame);
+    const before = lease.tile()!.screen.clone();
+    // Moved, with no matrix update: the capture must still see it where it is now.
+    each.group.position.x = 1;
+    capture.render(frame);
+    const after = lease.tile()!.screen;
+    expect(after.x).toBeGreaterThan(before.x);
+    expect(draws[1]!.object.matrixWorld.elements[12]).toBeCloseTo(1);
+  });
+
+  it("a released lease's handle never answers for the slot's next registration", () => {
+    const capture = createInteriorCapture({ maxRegistrations: 1 });
+    const { renderer } = recording();
+    const frame = host(renderer);
+    const first = leased(capture.register(volume()));
+    first.release();
+    leased(capture.register(volume(0.5)));
+    capture.render(frame);
+    expect(capture.lookup(first.handle)).toBeNull();
+  });
+
+  it("a handle is only ever valid in the capture that issued it", () => {
+    const one = createInteriorCapture();
+    const two = createInteriorCapture();
+    const a = recording();
+    const b = recording();
+    const leaseOne = leased(one.register(volume()));
+    const leaseTwo = leased(two.register(volume()));
+    one.render(host(a.renderer));
+    two.render(host(b.renderer));
+    expect(leaseOne.handle).toMatchObject({ slot: 0, generation: leaseTwo.handle.generation });
+    expect(one.lookup(leaseTwo.handle)).toBeNull();
+    expect(two.lookup(leaseOne.handle)).toBeNull();
+    expect(one.lookup(leaseOne.handle)).not.toBeNull();
+  });
+});

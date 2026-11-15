@@ -115,8 +115,12 @@ export type InteriorRegistration = {
   readonly clipping: InteriorClipping;
 };
 
-/** A tile handle: valid while its slot and the capture's context keep these generations. */
+/**
+ * A tile handle: valid only in the capture that issued it (`owner`, opaque), while its slot and
+ * that capture's context keep these generations.
+ */
 export type InteriorTileHandle = {
+  readonly owner: symbol;
   readonly slot: number;
   readonly generation: number;
   readonly context: number;
@@ -369,15 +373,20 @@ export function createInteriorCapture(options: InteriorCaptureOptions = {}) {
     });
   };
 
-  const handleOf = (index: number): InteriorTileHandle => ({
+  // This capture's own token: another capture's handle, or an older capture's, is never its own.
+  const owner = Symbol("interior capture");
+
+  const handleOf = (index: number, generation: number): InteriorTileHandle => ({
+    owner,
     slot: index,
-    generation: slots[index]!.generation,
+    generation,
     context,
   });
 
   const lookup = (handle: InteriorTileHandle): InteriorTileTransform | null => {
     const slot = slots[handle.slot];
     if (
+      handle.owner !== owner ||
       !slot?.registration ||
       unavailable ||
       handle.context !== context ||
@@ -436,6 +445,9 @@ export function createInteriorCapture(options: InteriorCaptureOptions = {}) {
     const proxy = slot.proxy!;
     const source = packet.source;
     if (!shown(source)) return;
+    // This frame's placement, whether or not the host has drawn its scene yet.
+    volume.updateWorldMatrix(true, false);
+    source.updateWorldMatrix(true, false);
     const rect = interiorScreenRect(
       clipping.bounds,
       volume.matrixWorld,
@@ -517,9 +529,10 @@ export function createInteriorCapture(options: InteriorCaptureOptions = {}) {
       let held = true;
       return {
         get handle() {
-          return handleOf(index);
+          // Its own registration's generation: after release it stays stale, whoever reuses the slot.
+          return handleOf(index, generation);
         },
-        tile: () => (held ? lookup(handleOf(index)) : null),
+        tile: () => (held ? lookup(handleOf(index, generation)) : null),
         release() {
           if (!held) return;
           held = false;
