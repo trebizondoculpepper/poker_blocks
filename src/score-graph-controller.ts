@@ -103,11 +103,12 @@ export function createScoreGraphController(options: {
   };
 
   const stop = options.source.onCommitted((facts) => {
-    for (const { type, payload } of facts) {
+    // Any fact carrying a captured stage-history point (today, score.totalApplied's).
+    for (const { payload } of facts) {
       const point = (
         payload as { stageHistory?: { generation: number; play: number; total: number } }
       ).stageHistory;
-      if (type !== "score.totalApplied" || !point) continue;
+      if (!point) continue;
       // A new stage: its own series from zero; nothing of the old one draws again.
       if (point.generation !== generation || !series) {
         generation = point.generation;
