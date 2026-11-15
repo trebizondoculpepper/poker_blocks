@@ -295,12 +295,18 @@ const vertexShader = /* glsl */ `
   varying vec3 vNormalZ;
   // For a captured interior (#1228): the camera in local space, this point's view depth, and the
   // local-to-view-depth row, so the fragment can find where its ray leaves the volume.
-  varying vec3 vCameraLocal;
+  varying vec3 vRayLocal;
   varying float vViewDepth;
   varying vec3 vDepthRow;
   void main() {
     vLocal = position;
-    vCameraLocal = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz;
+    // The viewing ray in local space: from the camera for a perspective projection, the camera's
+    // own forward direction for an orthographic one, whose rays are parallel (#1317 review).
+    vec3 cameraLocal = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz;
+    vec3 forward = -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
+    vRayLocal = projectionMatrix[2][3] != 0.0
+      ? position - cameraLocal
+      : inverse(mat3(modelMatrix)) * forward;
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
     vViewDepth = -viewPosition.z;
     vDepthRow = -vec3(modelViewMatrix[0].z, modelViewMatrix[1].z, modelViewMatrix[2].z);
@@ -379,7 +385,7 @@ const frontFragment = /* glsl */ `
   uniform vec3 interiorHalf;
   uniform sampler2D backgroundDepthMap;
   uniform vec3 cameraClip;
-  varying vec3 vCameraLocal;
+  varying vec3 vRayLocal;
   varying float vViewDepth;
   varying vec3 vDepthRow;
   ${interiorDepthGlsl}
@@ -397,7 +403,7 @@ const frontFragment = /* glsl */ `
     if (colour.a <= 0.0) return vec4(0.0);
     float depth = interiorViewDepth(texture2D(interiorDepthMap, tile).r, cameraClip);
     // Where the ray leaves the box: the nearest far slab along its local direction.
-    vec3 direction = normalize(vLocal - vCameraLocal);
+    vec3 direction = normalize(vRayLocal);
     // An axis the ray runs along exactly never bounds it.
     direction = mix(vec3(1e-6), direction, step(1e-6, abs(direction)));
     vec3 far = (sign(direction) * interiorHalf - vLocal) / direction;
@@ -431,6 +437,12 @@ const frontFragment = /* glsl */ `
     return texture2D(backgroundMap, clamp(uv, vec2(0.001), vec2(0.999))).rgb;
   }
 
+  /** What the front transmits at a lookup: any captured interior over the background (#1228). */
+  vec3 composed(vec2 at) {
+    vec4 inside = interiorAt(at);
+    return inside.rgb + behind(at) * (1.0 - inside.a);
+  }
+
   void main() {
     vec2 uv = gl_FragCoord.xy / screenSize;
     // Refraction, incidence and Fresnel keep the flat facet normal (#797).
@@ -444,15 +456,13 @@ const frontFragment = /* glsl */ `
     shift -= viewNormal.xy * frontStrength * (1.0 - incidence);
     // The preset's slow cyclic ripple: the lookup moves, the outline never does.
     shift += rippleShift(vLocal);
-    // Three taps: red bent least, blue most.
+    // Three taps, red bent least and blue most, each the captured interior over what lies behind
+    // at that same lookup, then the clarity tint (#1317 review): both colour the interior too.
     vec3 seen = vec3(
-      behind(uv + shift * (1.0 - dispersion)).r,
-      behind(uv + shift).g,
-      behind(uv + shift * (1.0 + dispersion)).b
+      composed(uv + shift * (1.0 - dispersion)).r,
+      composed(uv + shift).g,
+      composed(uv + shift * (1.0 + dispersion)).b
     ) * vec3(clarity, clarity, 1.0);
-    // The captured interior over what lies behind, at the same bent lookup, before the reflection.
-    vec4 inside = interiorAt(uv + shift);
-    seen = inside.rgb + seen * (1.0 - inside.a);
     // Only the reflected highlight ripples.
     vec3 reflected = lookUp(reflect(-v, highlightNormal())) * reflection;
     float fresnel = clamp(fresnelBase + (1.0 - fresnelBase) * pow(1.0 - incidence, fresnelPower), 0.0, 1.0);

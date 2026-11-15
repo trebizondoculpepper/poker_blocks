@@ -20,13 +20,22 @@ describe("a refractive front composes its own captured interior (#1228)", () => 
     expect(front.uniforms.interiorColorMap!.value).toBeNull();
     // The interior resolves over the transmitted background, before the reflection mix.
     const shader = front.fragmentShader;
-    expect(shader.indexOf("interiorAt(uv + shift)")).toBeGreaterThan(-1);
-    expect(shader.indexOf("interiorAt(uv + shift)")).toBeLessThan(
+    // Each dispersed tap composes interior over background before clarity (#1317 review).
+    for (const tap of [
+      "composed(uv + shift * (1.0 - dispersion))",
+      "composed(uv + shift)",
+      "composed(uv + shift * (1.0 + dispersion))",
+    ])
+      expect(shader).toContain(tap);
+    expect(shader.indexOf("composed(uv + shift)")).toBeGreaterThan(-1);
+    expect(shader.indexOf("composed(uv + shift)")).toBeLessThan(
       shader.indexOf("mix(seen, reflected"),
     );
     // It validates depth against the volume's ray interval and the opaque scene.
     expect(shader).toContain("depth > exitDepth");
     expect(shader).toContain("depth > occluder");
+    // The ray follows the projection: parallel for an orthographic camera (#1317 review).
+    expect(front.vertexShader).toContain("projectionMatrix[2][3] != 0.0");
   });
 
   it("binds its own lease's tile and atlas each frame, and disables itself when there is none", () => {
