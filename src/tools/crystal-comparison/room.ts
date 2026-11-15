@@ -410,6 +410,8 @@ export function createCrystalComparisonRoom(
       (backdrop.material as THREE.Material).dispose();
       backdrop.geometry.dispose();
       renderer.dispose();
+      // Release the WebGL context itself: a page may hold only so many (#1365).
+      renderer.forceContextLoss();
       root.remove();
     },
   };
