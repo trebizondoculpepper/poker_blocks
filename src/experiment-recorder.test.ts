@@ -274,4 +274,34 @@ describe("version-2 records: committed commands and starting provenance (#1247)"
       draws: expect.any(Number),
     });
   });
+
+  it("refuses provenance without its configuration artifact or starting snapshot (#1318 review)", () => {
+    const missing = trial({
+      start: () => ({ ...provenance(), configuration: undefined, snapshot: undefined }) as never,
+    }).recorder.record();
+    expect(missing.start).toEqual({ unavailable: expect.stringContaining("configuration") });
+    const noSnapshot = trial({
+      start: () => ({ ...provenance(), snapshot: null }),
+    }).recorder.record();
+    expect(noSnapshot.start).toEqual({ unavailable: expect.stringContaining("snapshot") });
+  });
+
+  it("offers an imported record for replay only when its contents agree with its flags", () => {
+    const hollow = {
+      format: "poker-blocks.experiment-record",
+      version: 2,
+      completeness: { start: { complete: true }, commands: { complete: true } },
+    };
+    const read = readExperimentRecord(hollow);
+    expect(read).toMatchObject({ ok: true, replayable: false });
+    expect((read as { diagnostics: string[] }).diagnostics).toEqual(
+      expect.arrayContaining([expect.stringContaining("no usable starting provenance")]),
+    );
+    const { run, recorder } = trial({ start: provenance });
+    run.play({ cardId: run.state.hand[0]!.id });
+    const stale = recorder.record();
+    stale.actions[0]!.command = { unavailable: "edited" };
+    expect(readExperimentRecord(stale)).toMatchObject({ replayable: false });
+    expect(readExperimentRecord(recorder.record())).toMatchObject({ replayable: true });
+  });
 });

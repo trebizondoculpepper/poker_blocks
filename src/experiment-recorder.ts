@@ -168,7 +168,13 @@ function startingProvenance(
     };
   }
   if ("unavailable" in given) return { unavailable: String(given.unavailable) };
-  const { checkpoint, ids, setup } = given;
+  const { checkpoint, ids, setup, configuration, snapshot } = given;
+  // Without its configuration artifact and starting snapshot the trial can't be rebuilt (#1318
+  // review): a provider that can't supply them says so, rather than being taken as complete.
+  if (configuration === undefined || configuration === null)
+    return { unavailable: "the starting provenance has no configuration artifact" };
+  if (snapshot === undefined || snapshot === null)
+    return { unavailable: "the starting provenance has no starting snapshot" };
   if (!Number.isFinite(checkpoint?.state) || !Number.isFinite(checkpoint?.draws))
     return { unavailable: "the starting random checkpoint is missing or not finite" };
   if (typeof ids !== "object" || ids === null || !Array.isArray(setup))
@@ -300,11 +306,37 @@ export function readExperimentRecord(value: unknown): ReadRecord {
       ? [`commands incomplete from step ${commands.from}: ${commands.reason}`]
       : []),
   ];
+  // The flags are claims: an imported record is replayable only if its contents agree (#1318
+  // review): a starting provenance actually present, every action carrying a command.
+  const provenance = record.start as
+    | Partial<StartingProvenance>
+    | { unavailable: string }
+    | undefined;
+  const startPresent =
+    typeof provenance === "object" &&
+    provenance !== null &&
+    !("unavailable" in provenance) &&
+    provenance.configuration != null &&
+    provenance.snapshot != null &&
+    Number.isFinite(provenance.checkpoint?.state) &&
+    Number.isFinite(provenance.checkpoint?.draws) &&
+    typeof provenance.ids === "object" &&
+    Array.isArray(provenance.setup);
+  if (!startPresent) diagnostics.push("the record holds no usable starting provenance");
+  const actions = Array.isArray(record.actions) ? record.actions : null;
+  if (!actions) diagnostics.push("the record holds no action list");
+  const uncovered = (actions ?? []).findIndex(
+    (step) =>
+      typeof step?.command !== "object" || step.command === null || "unavailable" in step.command,
+  );
+  if (uncovered >= 0) diagnostics.push(`step ${uncovered} carries no command`);
   return {
     ok: true,
     version: 2,
     record: plain(value),
-    replayable: Boolean(start?.complete && commands?.complete),
-    diagnostics,
+    replayable: Boolean(
+      start?.complete && commands?.complete && startPresent && actions && uncovered < 0,
+    ),
+    diagnostics: [...new Set(diagnostics)],
   };
 }
