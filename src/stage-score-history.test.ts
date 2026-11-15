@@ -49,9 +49,11 @@ describe("stage score history (#1063; doc/line-goes-up.md)", () => {
     run.onCommitted((published) => facts.push(...published));
     run.play({ cardId: run.state.hand[0].id }, "a1");
     const applied = facts.find(({ type }) => type === "score.totalApplied");
-    const { generation, entries } = run.state.round.history!;
+    const { generation, entries, plays, targetScore } = run.state.round.history!;
     expect((applied!.payload as { stageHistory?: unknown }).stageHistory).toEqual({
       generation,
+      plays,
+      targetScore,
       play: 1,
       delta: entries[0].delta,
       total: entries[0].total,

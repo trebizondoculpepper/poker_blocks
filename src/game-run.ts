@@ -585,6 +585,26 @@ export class GameRun {
     if (action) this.recordDelivered(action.context, action.phase, delivered, action.batchId);
   }
 
+  /**
+   * The fresh stage history's start as a captured point (#1305): consumers of committed facts see
+   * the reset itself, with its resolved bounds, not only the next scoring play.
+   */
+  private stageHistoryStart(): Omit<GameEvent, "type" | "stage"> {
+    const history = this.currentState.round.history;
+    if (!history) return {};
+    return {
+      stageHistory: {
+        generation: history.generation,
+        plays: history.plays,
+        targetScore: history.targetScore,
+        play: history.start.play,
+        delta: 0,
+        total: history.start.total,
+        reset: true,
+      },
+    };
+  }
+
   /** Once a stage is decided, announce the final stage.won or stage.lost exactly once. */
   private announceOutcome(): void {
     if (!this.inStage || this.decidedStage === this.stageKey) return;
@@ -1113,6 +1133,9 @@ export class GameRun {
         ? {
             stageHistory: {
               generation: history.generation,
+              // The stage's resolved bounds travel with every point (#1305).
+              plays: history.plays,
+              targetScore: history.targetScore,
               play: point.play,
               delta: point.delta,
               total: point.total,
@@ -1237,16 +1260,22 @@ export class GameRun {
    */
   applyRackItem(itemId: string, cardId: string): GameState | null {
     // A committed action (#539): its facts publish once it has, so presentation hears them.
-    return this.transact("useItem", undefined, () => {
-      // The material-change operation returns its own committed facts (#539): nothing is
-      // inferred from the state afterwards.
-      const used = useRackItem(this.currentState, itemId, cardId);
-      if (!used) return null;
-      this.currentState = used.state;
-      for (const { type, ...fact } of used.events) this.lifecycle(type, fact);
-      const next = used.state;
-      return next;
-    });
+    return this.transact(
+      "useItem",
+      undefined,
+      () => {
+        // The material-change operation returns its own committed facts (#539): nothing is
+        // inferred from the state afterwards.
+        const used = useRackItem(this.currentState, itemId, cardId);
+        if (!used) return null;
+        this.currentState = used.state;
+        for (const { type, ...fact } of used.events) this.lifecycle(type, fact);
+        const next = used.state;
+        return next;
+      },
+      // Its canonical command (#1246): captured as called, published only if the use commits.
+      { name: "applyRackItem", args: { itemId, cardId } },
+    );
   }
 
   /** Discard one card, or several as one discard. */
@@ -1293,9 +1322,23 @@ export class GameRun {
   /** Refill up to the dealer's hand size, appending new cards after the survivors. */
   refillHand(): CardBlock[] {
     if (!this.inStage) return [];
-    const result = this.activeDealer.refillHand(this.currentState);
-    this.currentState = result.state;
-    return result.drawn;
+    // Its own committed action (#1244; doc/experiments/command-journal.md, "Refill is an explicit
+    // separate step"): state and random checkpoint share the transaction, and the canonical
+    // command publishes with no facts. Drawing nothing (a full hand, an empty deck) is a true
+    // no-op: nothing commits and nothing is published.
+    return (
+      this.transact(
+        "refillHand",
+        undefined,
+        () => {
+          const result = this.activeDealer.refillHand(this.currentState);
+          if (!result.drawn.length) return null;
+          this.currentState = result.state;
+          return result.drawn;
+        },
+        { name: "refillHand", args: {} },
+      ) ?? []
+    );
   }
 
   /**
@@ -1305,8 +1348,21 @@ export class GameRun {
   reorderHand(from: number, to: number): boolean {
     const hand = moveItem(this.currentState.hand, from, to);
     if (!hand) return false;
-    this.currentState = { ...this.currentState, hand };
-    return true;
+    // A move to where it already is changes nothing: valid, but no committed step (#1245).
+    if (from === to) return true;
+    // One committed action with no facts (#1245; doc/experiments/command-journal.md): its
+    // canonical command is published, so a journal can replay it.
+    return (
+      this.transact(
+        "reorderHand",
+        undefined,
+        () => {
+          this.currentState = { ...this.currentState, hand };
+          return true;
+        },
+        { name: "reorderHand", args: { from, to } },
+      ) !== null
+    );
   }
 
   /**
@@ -1319,9 +1375,20 @@ export class GameRun {
     if (this.currentPhase === "over") return false;
     const passiveRack = moveItem(this.currentState.passiveRack, from, to);
     if (!passiveRack) return false;
-    this.currentState = { ...this.currentState, passiveRack };
-    this.passiveEvents.syncRack(passiveRack);
-    return true;
+    if (from === to) return true;
+    // Committed like a hand reorder (#1245): the rack order later responses follow is replayable.
+    return (
+      this.transact(
+        "reorderPassive",
+        undefined,
+        () => {
+          this.currentState = { ...this.currentState, passiveRack };
+          this.passiveEvents.syncRack(passiveRack);
+          return true;
+        },
+        { name: "reorderPassive", args: { from, to } },
+      ) !== null
+    );
   }
 
   /**
@@ -1437,7 +1504,7 @@ export class GameRun {
     this.currentState = withStageHistory(this.currentState, setup, previous);
     this.currentPhase = kind;
     this.passiveEvents.syncRack(this.currentState.passiveRack);
-    this.lifecycle("stage.started");
+    this.lifecycle("stage.started", this.stageHistoryStart());
   }
 
   /** Return the field to the deck, and the hand as the run's hand policy says. */

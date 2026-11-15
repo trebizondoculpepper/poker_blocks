@@ -112,7 +112,8 @@ registerRuleCommand<{
     .get(select.id)(trigger, target.state, select.config)
     .flatMap((block): GameEvent[] => {
       if (blockResists(block, cause))
-        return [{ type: "block.resisted", blockId: block.id, trigger, cause }];
+        // The survivor as captured (#1174): presentation answers from this, not the live field.
+        return [{ type: "block.resisted", blockId: block.id, trigger, cause, survivor: block }];
       const next = removalModes.get(removal)(target.state, block.id);
       if (!next) return [];
       target.update(next);

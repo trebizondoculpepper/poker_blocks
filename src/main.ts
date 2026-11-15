@@ -87,6 +87,7 @@ import { createDropTargetGuide, dropGuideProviders } from "./visual/drop-target-
 import type { DropTargetGuides } from "./scene-traits/drop-target-guide";
 import { appVersion } from "./version";
 import { createVisualScheduler, unitMs } from "./visual-events/scheduler";
+import { createResistanceFeedbackController, survivorProducer } from "./resistance-feedback";
 import type { ScoreNarrationServices } from "./score-narration";
 import type { RewardLedgerServices } from "./reward-ledger";
 import {
@@ -533,10 +534,18 @@ const placementPhase = createPlacementPhase(
   run,
   createActionPhases(visualEvents, {
     plan: "scoring",
-    producers: [placementProducer, scoringProducer, triggeredProducer],
+    producers: [placementProducer, scoringProducer, triggeredProducer, survivorProducer],
   }),
 );
+// A blast's survivors answer in place with their declared feedback, after scoring (#1174).
+const survivorFeedback = createResistanceFeedbackController({
+  source: run,
+  phase: placementPhase,
+  mount: (blockId) => field.blocks().find(({ block }) => block.id === blockId)?.cube ?? null,
+  reducedMotion: () => run.reducedMotion,
+});
 const presenter: PlayPresenter = createPlayPresenter({
+  runScoped: [survivorFeedback],
   game: () => run.game,
   views: blockViews,
   hand,
@@ -557,6 +566,7 @@ const presenter: PlayPresenter = createPlayPresenter({
   decided: (outcome, now, occurrence) => run.decided(outcome, now, occurrence),
   visualEvents,
   placementPhase,
+  committed: run,
   // A reset takes the explosions' glare and afterimages with it (#1294 review).
   resetFeedback: () => dazzle.clear(),
 });
@@ -679,6 +689,7 @@ frame = requestAnimationFrame(animate);
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    survivorFeedback.dispose();
     // The shop's shared control stage and its overlay (#1298).
     shopControls.dispose();
     controlOverlay.remove();
