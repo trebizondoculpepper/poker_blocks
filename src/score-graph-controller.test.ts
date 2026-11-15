@@ -54,7 +54,7 @@ function harness() {
     phase.contributionFor(key, scoringProducer)!.bind(completion.work);
     completion.done();
   };
-  return { graph, drawn, commit, scored, step };
+  return { graph, drawn, commit, scored, step, phases };
 }
 
 describe("committed-score graph controller (#1087; doc/line-goes-up.md)", () => {
@@ -122,5 +122,34 @@ describe("committed-score graph controller (#1087; doc/line-goes-up.md)", () => 
       { play: 0, total: 0 },
       { play: 1, total: 5 },
     ]);
+  });
+
+  it("releases a growth whose reservation is cancelled before it starts (#1087 review)", async () => {
+    const { pendingGrowths } = await import("./score-graph-controller");
+    const { commit, phases } = harness();
+    const before = pendingGrowths();
+    const key = commit("p1", 1, 10);
+    expect(pendingGrowths()).toBe(before + 1);
+    expect(key).not.toBeNull();
+    // A reset cancels the record (its scoring never completed): the growth record goes too.
+    phases.reset();
+    expect(pendingGrowths()).toBe(before);
+  });
+
+  it("never draws growth from before a restore over the restored history (#1087 review)", () => {
+    const { graph, drawn, commit, scored, step } = harness();
+    const key = commit("p1", 1, 40);
+    graph.show({
+      generation: 1,
+      plays: 4,
+      targetScore: 100,
+      start: { play: 0, total: 0 },
+      complete: true,
+      entries: [],
+    });
+    const after = drawn.length;
+    scored(key);
+    step(4 * unitMs + 100);
+    expect(drawn.length).toBe(after);
   });
 });

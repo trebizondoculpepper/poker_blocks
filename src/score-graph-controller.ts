@@ -76,6 +76,9 @@ type Source = {
   ): () => void;
 };
 
+/** Growth records still held, for diagnostics and tests. */
+export const pendingGrowths = () => growing.size;
+
 export function createScoreGraphController(options: {
   source: Source;
   phase: Pick<PlacementPhase, "latest" | "contributionFor">;
@@ -88,7 +91,10 @@ export function createScoreGraphController(options: {
   let generation: number | null = null;
 
   /** Draw a stage's captured history at once (entry, restore): no growth, no replay. */
+  /** Bumped by `show`: growth started before a restore never draws over it (#1087 review). */
+  let epoch = 0;
   const show = (history: StageScoreHistory) => {
+    epoch++;
     generation = history.generation;
     series = Object.freeze({
       plays: history.plays,
@@ -128,6 +134,7 @@ export function createScoreGraphController(options: {
       const contribution = key && options.phase.contributionFor(key, graphProducer);
       const captured = series;
       const mine = generation;
+      const mineEpoch = epoch;
       if (!contribution) {
         options.sink.draw({ ...captured, growth: 1 });
         continue;
@@ -137,12 +144,14 @@ export function createScoreGraphController(options: {
         sink: options.sink,
         series: captured,
         durationMs,
-        live: () => generation === mine,
+        live: () => generation === mine && epoch === mineEpoch,
       });
       if (!contribution.bind({ handler: "graph.grow", payload: { growth: id }, dueUnits: 0 })) {
         growing.delete(id);
         options.sink.draw({ ...captured, growth: 1 });
-      }
+      } else
+        // Cancelled or failed before its effect ever started: release its record (#1087 review).
+        contribution.observe(() => void growing.delete(id));
     }
   });
 
