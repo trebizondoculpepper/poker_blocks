@@ -121,4 +121,16 @@ describe("drag-ghost gesture timing (#1084; doc/drag-ghost-audition.md)", () => 
     expect(second.current).toBe(true);
     expect(second.settings.delayUnits).toBe(7);
   });
+
+  it("anchors the fade to its scheduled start, so a late frame doesn't shorten it (#1291)", () => {
+    const scheduler = createVisualScheduler();
+    scheduler.update(0, true);
+    const { made, decorate } = stub();
+    const timing = createGhostTiming(scheduler, decorate);
+    timing.began("card", settings({ delayUnits: 3, durationUnits: 6 }));
+    // One late frame well past the due time: progress reflects the scheduled start.
+    scheduler.update(3 * unitMs + 3 * unitMs, true);
+    scheduler.update(3 * unitMs + 3 * unitMs + 1, true);
+    expect(made[0]!.progress.at(-1)).toBeCloseTo(0.5, 1);
+  });
 });

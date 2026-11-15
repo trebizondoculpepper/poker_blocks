@@ -846,6 +846,12 @@ export function createShopView(
     frame,
     present(config) {
       presented = config;
+      // The scene's own lifecycle: covered (null) rests the Buy cube, resumed restarts it (#1291).
+      if (config === null) buyStage?.cover();
+      else if (buyVisible) {
+        buyStage?.setReducedMotion(reducedMotion());
+        buyStage?.resume();
+      }
       for (const entry of displayed) {
         entry.presentation.present(config);
         // A fresh provider starts from the offer's real input state: focus and hover don't

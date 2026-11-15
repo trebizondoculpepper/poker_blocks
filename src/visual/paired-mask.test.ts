@@ -183,4 +183,20 @@ describe("paired block-local material masks (#1166; doc/presentation-contracts.m
     expect(next.mesh.renderOrder).toBe(0);
     expect(old.mesh.renderOrder).toBe(0);
   });
+
+  it("keeps a transparent outgoing layer below the incoming look (#1291)", () => {
+    const mount = new THREE.Group();
+    const old = look(1, true);
+    const next = look(1);
+    mount.add(old.root, next.root);
+    const result = createPairedMask({
+      mount,
+      outgoing: { root: old.root, maskAdapter: "chunkSurface" },
+      incoming: { root: next.root, maskAdapter: "chunkSurface" },
+      reduced: true,
+    });
+    if (!result.ok) throw new Error(result.diagnostic);
+    expect(old.mesh.renderOrder).toBeLessThan(next.mesh.renderOrder);
+    result.mask.cancel();
+  });
 });

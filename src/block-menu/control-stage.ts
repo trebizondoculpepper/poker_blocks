@@ -307,6 +307,10 @@ export async function createControlStage(
       entry.button.disabled = !enabled;
       entry.cube.block.emit("input.enabled", reason === undefined ? enabled : { enabled, reason });
     },
+    /** The reduced-motion preference changed: every control's motion follows it (#1291). */
+    setReducedMotion(reduced: boolean) {
+      for (const { cube } of mounted) cube.block.emit("motion.reduced", reduced);
+    },
     /** Listen for a control's dispatched action; returns an unsubscribe. */
     onAction(listener: (action: string, id: string) => void): () => void {
       const stops = mounted.map((entry) =>
