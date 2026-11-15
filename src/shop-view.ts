@@ -1,3 +1,4 @@
+import { unitsToMs, type EffectHandle } from "./visual-events/scheduler";
 import type { DropGuideProvider } from "./visual/drop-target-guide";
 import { blockName, blockFaceArt } from "./block-presentation";
 import { inspectBlock } from "./traits/inspectable";
@@ -60,7 +61,14 @@ export type ShopView = {
    */
   readonly guideProvider: DropGuideProvider;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
-  burnUnsold(reducedMotion: boolean): Promise<void>;
+  /**
+   * The outgoing stock's burn as a shared-scheduler effect (#880; doc/game-architecture.md,
+   * "Today's scheduling"): it advances on the presentation clock it is given, staggered in
+   * game-time units, and finishes when every offer has burned. Cancelling finishes it at once.
+   */
+  burnEffect(): EffectHandle;
+  /** Begin burning the displayed (outgoing) offers; `burnEffect` then advances it (#880). */
+  startBurn(reducedMotion: boolean): void;
   /**
    * When the burn in progress settles (#880): true if it ran to its end, false if it was cleared
    * away (the scene left, a new run). True at once when nothing is burning.
@@ -322,7 +330,8 @@ export function createShopView(
   /** The configuration the scene's controller trait presents the stock with, or null. */
   let presented: Partial<ShopOfferPresentationConfig> | null = null;
   let burn: {
-    startedAt: number;
+    /** The presentation time (ms) of its first update, the burn's start. */
+    startedAt: number | null;
     seconds: number;
     reduced: boolean;
     jobs: {
@@ -495,33 +504,84 @@ export function createShopView(
     frame();
   }
 
-  /** Stagger the unsold offers' Perlin burn-out across roughly 1.5 seconds. */
-  function burnUnsold(reducedMotion: boolean): Promise<void> {
+  /** The burn's timing, in game-time units (#880): one offer, several, or reduced motion. */
+  const burnUnits = { single: 22.5, several: 15.75, reduced: 6, stagger: 6.75 };
+
+  /** Start burning every displayed offer; the burn advances only through `advanceBurn`. */
+  function startBurn(reducedMotion: boolean): void {
     finishEntrance();
-    if (burnPromise) return burnPromise;
+    if (burnPromise) return;
     burnCompleted = false;
     if (displayed.length === 0) {
+      burnCompleted = true;
       render([], false);
-      return Promise.resolve();
+      return;
     }
     stock.classList.add("is-burning");
     buyTarget.hidden = true;
-    const seconds = reducedMotion ? 0.4 : displayed.length === 1 ? 1.5 : 1.05;
-    const stagger = reducedMotion || displayed.length === 1 ? 0 : 0.45 / (displayed.length - 1);
+    const seconds =
+      unitsToMs(
+        reducedMotion
+          ? burnUnits.reduced
+          : displayed.length === 1
+            ? burnUnits.single
+            : burnUnits.several,
+      ) / 1000;
+    const stagger =
+      reducedMotion || displayed.length === 1
+        ? 0
+        : unitsToMs(burnUnits.stagger) / (displayed.length - 1);
     burnPromise = new Promise((resolve) => {
       burn = {
-        startedAt: performance.now(),
+        startedAt: null,
         seconds,
         reduced: reducedMotion,
         jobs: displayed.map((entry, index) => ({
           entry,
-          delay: index * stagger * 1000,
+          delay: index * stagger,
           lastAt: 0,
         })),
         resolve,
       };
     });
-    return burnPromise;
+  }
+
+  /** Advance the burn to presentation time `now` (ms): finished once every offer has burned. */
+  function advanceBurn(now: number): "running" | "finished" {
+    if (!burn) return "finished";
+    burn.startedAt ??= now;
+    for (const job of burn.jobs) {
+      if (now < burn.startedAt + job.delay) continue;
+      if (!job.effect) {
+        job.entry.item.classList.add("is-burning");
+        job.entry.cube.traverse((part) => {
+          if (part instanceof THREE.LineSegments) part.visible = false;
+        });
+        job.effect = createMaterialise(job.entry.cube, {
+          seconds: burn.seconds,
+          reduced: burn.reduced,
+          out: true,
+        });
+        job.lastAt = now;
+      }
+      job.effect.update((now - job.lastAt) / 1000);
+      job.lastAt = now;
+    }
+    if (!burn.jobs.every(({ effect }) => effect && !effect.running)) return "running";
+    burnCompleted = true;
+    render([], false);
+    return "finished";
+  }
+
+  function burnEffect(): EffectHandle {
+    return {
+      update: advanceBurn,
+      // Cut short (the scene left, a new run): the offers go at once, not completed.
+      cancel: () => {
+        if (burn) render([], false);
+      },
+      dispose: () => {},
+    };
   }
 
   /**
@@ -550,31 +610,6 @@ export function createShopView(
     // Coins, rack space or stock may change mid-drag: the verdict follows them (#499).
     refreshGuidance();
     clearRack();
-    if (burn) {
-      const now = performance.now();
-      for (const job of burn.jobs) {
-        if (now < burn.startedAt + job.delay) continue;
-        if (!job.effect) {
-          job.entry.item.classList.add("is-burning");
-          job.entry.cube.traverse((part) => {
-            if (part instanceof THREE.LineSegments) part.visible = false;
-          });
-          job.effect = createMaterialise(job.entry.cube, {
-            seconds: burn.seconds,
-            reduced: burn.reduced,
-            out: true,
-          });
-          job.lastAt = now;
-        }
-        job.effect.update((now - job.lastAt) / 1000);
-        job.lastAt = now;
-      }
-      if (burn.jobs.every(({ effect }) => effect && !effect.running)) {
-        burnCompleted = true;
-        render([], false);
-        return;
-      }
-    }
     const bounds = host.getBoundingClientRect();
     const width = Math.max(1, Math.round(bounds.width));
     const height = Math.max(1, Math.round(bounds.height));
@@ -727,7 +762,8 @@ export function createShopView(
     dragVerdict: () => guidance && { targets: [...guidance.targets], reason: guidance.reason },
     guideProvider: shopGuideProvider(() => dragging?.entry.offer ?? null, dropTargets, verdict),
     render,
-    burnUnsold,
+    burnEffect,
+    startBurn,
     outgoingDone() {
       const running = burnPromise;
       return running ? running.then(() => burnCompleted) : Promise.resolve(true);

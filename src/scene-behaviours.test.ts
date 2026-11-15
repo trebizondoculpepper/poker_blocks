@@ -22,6 +22,14 @@ function recordingHost() {
   const host: SceneHost = {
     host: { dataset: {} } as HTMLElement,
     services: {
+      visualEvents: {
+        nowMs: 0,
+        createScope: () => ({}) as never,
+        schedule: () => ({ accepted: false as const, reason: "test" }),
+        seal: () => true,
+        observe: () => () => {},
+        cancel: () => {},
+      },
       playfieldRocking: {
         setRate: () => {},
         nowMs: () => 0,
@@ -180,7 +188,8 @@ function recordingHost() {
         render: (offers: readonly ShopOffer[], visible: boolean) =>
           calls.push(`shop:${visible}:${offers.length}`),
         present: () => {},
-        burnUnsold: () => Promise.resolve(),
+        burnEffect: () => ({ update: () => "finished" as const, cancel() {}, dispose() {} }),
+        startBurn: () => {},
         outgoingDone: () => Promise.resolve(true),
         frame: () => undefined,
         dispose: () => undefined,

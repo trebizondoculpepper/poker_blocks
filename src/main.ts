@@ -1,3 +1,4 @@
+import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
   createRockingRelay,
   rockingResumeHandler,
@@ -154,6 +155,7 @@ type TraitContext = {
     renderer: TableRenderer;
     cameraView: CameraViewService;
     playfieldRocking: PlayfieldRockingServices;
+    visualEvents: ShopExitScheduler;
     audio: AudioService;
     hud: HudPanels;
     overlays: Overlays;
@@ -261,6 +263,9 @@ const traitContext: TraitContext = {
     selectionBadge,
     renderer: view,
     cameraView,
+    get visualEvents() {
+      return visualEvents;
+    },
     // The rocking controller's capabilities (#783): wiring only, no policy.
     playfieldRocking: {
       setRate: (rate) => cameraView.setMotionRate(rate),
@@ -451,7 +456,8 @@ const visualServices: ScoreNarrationServices &
   ActivationLabelServices &
   RackLabelServices &
   PresentedActionServices &
-  RewardLedgerServices & { playfieldRocking: RockingSink } = {
+  RewardLedgerServices &
+  ShopBurnServices & { playfieldRocking: RockingSink } = {
   get scoreNarration() {
     return presenter.narration;
   },
@@ -468,6 +474,8 @@ const visualServices: ScoreNarrationServices &
   passiveRack: passiveRackView,
   // Where a scheduled rocking resume reaches the playfield controller (#783).
   playfieldRocking: rockingRelay,
+  // The shop's outgoing burn, advanced on this scheduler (#880).
+  shopBurn: { effect: () => shopView.burnEffect() },
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
 // Hidden time never counts as presentation time, even when the browser stops sending frames.

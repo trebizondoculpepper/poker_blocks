@@ -1,4 +1,4 @@
-import { shopExitResponse } from "./scene-traits/shop-exit-response";
+import { shopExitResponse, type ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
   createPlayfieldRockingController,
   type PlayfieldRockingServices,
@@ -152,6 +152,8 @@ export type SceneHost = {
     cameraView: Pick<CameraViewService, "beginShopEntrance">;
     /** The rocking controller's narrow capabilities (#783). */
     playfieldRocking: PlayfieldRockingServices;
+    /** The shared visual-event scheduler, for controller traits' required effects (#880). */
+    visualEvents: ShopExitScheduler;
     overlays: Pick<
       Overlays,
       | "showMenu"
