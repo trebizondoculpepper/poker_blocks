@@ -66,8 +66,8 @@
     "uses": 3,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
-      "game-run-controller.ts": 1,
-      "game-run.ts": 1
+      "game-run.ts": 1,
+      "traits/destructible.ts": 1
     }
   },
   "block.dazzle_pop": {
@@ -145,15 +145,22 @@
     }
   },
   "round.cleared": {
+    "uses": 2,
+    "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
+      "game-modes.ts": 1
+    }
+  },
+  "result.stage_won.enter": {
     "uses": 1,
     "files": {
-      "game-run-controller.ts": 1
+      "game-modes.ts": 1
     }
   },
   "round.failed": {
     "uses": 1,
     "files": {
-      "game-run-controller.ts": 1
+      "game-modes.ts": 1
     }
   },
   "round.start": {
@@ -221,13 +228,13 @@
   "shop.stock.burn": {
     "uses": 1,
     "files": {
-      "game-run-controller.ts": 1
+      "game-modes.ts": 1
     }
   },
   "run.lost": {
     "uses": 1,
     "files": {
-      "game-run-controller.ts": 1
+      "game-modes.ts": 1
     }
   },
   "attract.card.bonk": {
@@ -258,10 +265,11 @@
     }
   },
   "ui.hover": {
-    "uses": 3,
+    "uses": 4,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
       "menus.ts": 1,
+      "shop-offer-presentation.ts": 1,
       "traits/menu-action.ts": 1
     }
   },
@@ -402,7 +410,7 @@
   "shop.leave": {
     "uses": 1,
     "files": {
-      "game-run-controller.ts": 1
+      "game-modes.ts": 1
     }
   },
   "material.activate.wood": {

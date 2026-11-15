@@ -99,6 +99,23 @@ describe("passive token visuals (#125)", () => {
     expect(visual.geometry.boundingBox!.max.x).toBeCloseTo(1.45 / 2);
   });
 
+  it("paints a face's own ink over its category palette: Seeing Red's red suits (#1005)", () => {
+    const definition = passiveDefinitions.get("seeing-red");
+    const inks: string[] = [];
+    const visual = createPassiveVisual(
+      { symbol: definition.symbol, palette, faces: definition.faces },
+      1,
+      (used, face) => {
+        inks.push(face.ink ?? used.ink);
+        return painter(used, face);
+      },
+    );
+    expect(visual.faces.every(({ label }) => label === "♥♦")).toBe(true);
+    expect(new Set(inks)).toEqual(new Set(["#ff5a52"]));
+    // Same artwork on every face: one shared texture.
+    expect(visual.textures).toHaveLength(1);
+  });
+
   it("draws a test-only shape without editing the renderer or the rack", () => {
     passiveShapes.register("test-tetrahedron", {
       geometry: () => new THREE.TetrahedronGeometry(0.7, 0).toNonIndexed(),
@@ -138,5 +155,73 @@ describe("adding a token's extras (#630)", () => {
     addExtras(mesh, [extra]);
     expect(mesh.children).toEqual([extra]);
     errors.mockRestore();
+  });
+});
+
+describe("face artwork fitted to its shape's outline (#1002)", async () => {
+  const { faceLayout, passiveShapes, triangleFaceOutline } = await import("./passive-visual");
+  it("centres a triangular face's label at its incentre, inside every edge", () => {
+    const { points, centre, radius } = faceLayout(triangleFaceOutline);
+    expect(points).toEqual([
+      { x: 0, y: 256 },
+      { x: 256, y: 256 },
+      { x: 128, y: 0 },
+    ]);
+    expect(centre.x).toBeCloseTo(128, 9);
+    // The incircle touches the bottom edge: centre.y + radius is the bottom.
+    expect(centre.y + radius).toBeCloseTo(256, 6);
+    expect(radius).toBeGreaterThan(60);
+    expect(radius).toBeLessThan(128);
+  });
+
+  it("gives triangle-faced dice their outline, and leaves the cube's square face alone", () => {
+    expect(passiveShapes.get("icosahedron").faceOutline).toBe(triangleFaceOutline);
+    expect(passiveShapes.get("octahedron").faceOutline).toBe(triangleFaceOutline);
+    expect(passiveShapes.get("cube").faceOutline).toBeUndefined();
+  });
+
+  it("hands the painter its shape's outline", () => {
+    const outlines: unknown[] = [];
+    createPassiveVisual(
+      { symbol: "20", palette, shape: "icosahedron" },
+      1,
+      (used, face, outline) => {
+        outlines.push(outline);
+        return painter(used, face);
+      },
+    );
+    expect(new Set(outlines)).toEqual(new Set([triangleFaceOutline]));
+  });
+});
+
+describe("mass passive artwork (#1009)", async () => {
+  const { faceIcons, iconCluster } = await import("./passive-visual");
+  const { passiveDefinitions } = await import("./passives");
+  await import("./trial-modifiers");
+  const iconOf = (id: string) => passiveDefinitions.get(id).faces?.[0]?.icon;
+
+  it("registers drawn feather and anvil icons", () => {
+    expect(faceIcons.has("feather")).toBe(true);
+    expect(faceIcons.has("anvil")).toBe(true);
+    // Ace Exchange's bin of Aces (#1004).
+    expect(faceIcons.has("aceBin")).toBe(true);
+    expect(passiveDefinitions.get("ace-exchange").faces?.[0]?.icon).toEqual({
+      name: "aceBin",
+      count: 1,
+    });
+    expect(iconCluster(1)).toHaveLength(1);
+    expect(iconCluster(3)).toHaveLength(3);
+  });
+
+  it("gives Light a feather and Heavy an anvil: one for Mean, three for Total", () => {
+    expect(iconOf("trial-light-mean-mass")).toEqual({ name: "feather", count: 1 });
+    expect(iconOf("trial-light-total-mass")).toEqual({ name: "feather", count: 3 });
+    expect(iconOf("trial-heavy-mean-mass")).toEqual({ name: "anvil", count: 1 });
+    expect(iconOf("trial-heavy-total-mass")).toEqual({ name: "anvil", count: 3 });
+    expect(iconOf("light-stack")).toEqual({ name: "feather", count: 3 });
+    expect(iconOf("heavy-stack")).toEqual({ name: "anvil", count: 3 });
+    // Mean and Total stay in the names.
+    expect(passiveDefinitions.get("trial-heavy-mean-mass").name).toMatch(/mean/);
+    expect(passiveDefinitions.get("trial-light-total-mass").name).toMatch(/total/);
   });
 });

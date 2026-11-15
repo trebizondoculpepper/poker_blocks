@@ -239,6 +239,8 @@ describe("game modes composed from traits", () => {
         },
       },
       shopStock: { source: "shop" },
+      shopExitResponse: { burnSound: "shop.stock.burn", leaveSound: "shop.leave" },
+      shopOfferPresentation: { cycle: "bar", phaseStep: 0.25, bob: 0.03, tiltDegrees: 4 },
       deckPanel: { opens: "openDeck" },
       runInPlay: {},
       enterSound: { sfx: "shop.open" },
@@ -297,6 +299,7 @@ describe("game modes composed from traits", () => {
         dialog: gameDialogs.gameOver,
       },
       musicCue: { operations: [{ op: "windDown" }] },
+      enterSound: { sfx: "run.lost" },
     });
   });
 
@@ -356,6 +359,8 @@ describe("game modes composed from traits", () => {
       selectable: { sources: [{ source: "hand" }, { source: "field" }] },
       discardBin: {},
       committedEventSounds: {},
+      outcomeCues: { won: "round.cleared", lost: "round.failed" },
+      playfieldRockingController: {},
       deckPanel: { opens: "openDeck" },
       runInPlay: {},
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },

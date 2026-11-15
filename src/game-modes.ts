@@ -1,3 +1,5 @@
+import type { PlayfieldRockingConfig } from "./playfield-rocking";
+import type { ShopOfferPresentationConfig } from "./shop-offer-presentation";
 import type { DropTargetGuideConfig } from "./visual/drop-target-guide";
 import type { BlockTitleConfig } from "./scene-traits/block-title";
 import type { SpringAnchorSettings } from "./traits/spring-anchor";
@@ -88,11 +90,18 @@ export type SceneTraits = {
   passiveRackView: { source: string };
   /** The shop's stock is on show, and its offers may be bought, while this scene is in front. */
   shopStock: { source: string };
+  /** The stock dances to the beat and the hovered offer is emphasised (#774). */
+  shopOfferPresentation: Partial<ShopOfferPresentationConfig>;
   /**
    * The blurred card attract sequence is the background while this scene is in front (#147).
    * It is cosmetic: it draws no game state and its randomness is not the session's.
    */
   attractBackground: Record<never, never>;
+  /**
+   * Automatic rocking pauses after a board turn, eases back in, and runs slower the heavier
+   * the field (#783; doc/playfield-rocking.md). Settings override the documented defaults.
+   */
+  playfieldRockingController: Partial<PlayfieldRockingConfig>;
   /** Reusable, scaled music-reactive words made of letter blocks. */
   blockTitle: BlockTitleConfig;
   /** Laser guides to where a drag is guided, or a red X when it would be refused (#922). */
@@ -210,8 +219,15 @@ export type SceneTraits = {
   musicTrack: { operations: readonly MusicOperation[] };
   /** Entering this scene plays a sound: a stage's start, the shop opening (#93). */
   enterSound: { sfx: SoundEffectId };
+  /**
+   * A stage's outcome cue (#881; doc/outcome-presentation.md, "Two distinct result cues"):
+   * played once the deciding action's required sequence finishes, before the result scene.
+   */
+  outcomeCues: { won: SoundEffectId; lost: SoundEffectId };
   /** Leaving this scene plays a sound: the title or settings screen closing. */
   exitSound: { sfx: SoundEffectId };
+  /** Presents the committed `shop.left` receipt (#880): its burn and cues. */
+  shopExitResponse: { burnSound: SoundEffectId; leaveSound: SoundEffectId };
   /** Entering the shop runs its camera entrance, unless motion is reduced (#93). */
   shopEntrance: Record<never, never>;
   /**
@@ -312,6 +328,11 @@ const playSceneTraits: Partial<SceneTraits> = {
   selectable: { sources: [{ source: "hand" }, { source: "field" }] },
   discardBin: {},
   committedEventSounds: {},
+  // The stage's outcome cues, once its deciding sequence has finished (#881).
+  outcomeCues: { won: "round.cleared", lost: "round.failed" },
+  // Rocking waits a second after a turn, eases in over a second, and slows as the field gets
+  // heavier: rate 1 at 5 kg, at most 1.5 (doc/playfield-rocking.md defaults).
+  playfieldRockingController: {},
   deckPanel: { opens: "openDeck" },
   runInPlay: {},
   ...escapeOpensPause,
@@ -668,6 +689,11 @@ export const sceneDefinitions = [
         },
       },
       shopStock: { source: "shop" },
+      // Leaving presents its committed receipt (#880): the stock that left burns, with its cue
+      // as the burn starts (only if any left) and the leave cue once it is done.
+      shopExitResponse: { burnSound: "shop.stock.burn", leaveSound: "shop.leave" },
+      // Stock dances a bar-long bob/tilt, rippling a quarter beat per offer (#774).
+      shopOfferPresentation: { cycle: "bar", phaseStep: 0.25, bob: 0.03, tiltDegrees: 4 },
       // Laser guide to the dragged offer's preferred target, or a red X when it can't be
       // bought (#924; doc/presentation-contracts.md, "Laser target-guide controller").
       dropTargetGuide: {
@@ -693,6 +719,8 @@ export const sceneDefinitions = [
     name: "stage-won",
     traits: {
       tableBackground: {},
+      // Its own entrance cue, separate from the stage's cleared cue (#881).
+      enterSound: { sfx: "result.stage_won.enter" },
       // The reward ledger, then Visit shop below it once every row has counted in (#951).
       resultMenu: {
         information: "stageReward",
@@ -706,6 +734,8 @@ export const sceneDefinitions = [
     name: "game-over",
     traits: {
       tableBackground: {},
+      // Game Over keeps run.lost, now as its entrance cue (#881).
+      enterSound: { sfx: "run.lost" },
       // The run's stats, then New run and Main menu below them once they are written (#949).
       resultMenu: {
         information: "runStats",

@@ -210,7 +210,7 @@ export function createPlayPresenter(options: {
   /** A safe point to save the run. */
   save(): void;
   /** The stage's outcome has been announced. */
-  decided(outcome: RoundOutcome, now: number): void;
+  decided(outcome: RoundOutcome, now: number, occurrence?: string): void;
   /** The shared visual-event scheduler score narration is queued on (#547). */
   visualEvents: VisualScheduler;
 }): PlayPresenter {
@@ -277,9 +277,9 @@ export function createPlayPresenter(options: {
       shownScore = score;
       options.changed();
     },
-    decide({ score, outcome }) {
+    decide({ score, outcome, occurrence }) {
       shownScore = score;
-      options.decided(outcome, frameNow);
+      options.decided(outcome, frameNow, occurrence);
       options.changed();
     },
   };
@@ -482,7 +482,11 @@ export function createPlayPresenter(options: {
         flights,
         effects: [],
         lines: game().lastScoredLines,
-        endpoint: { score: game().state.round.score, outcome: roundOutcome(game().state) },
+        endpoint: {
+          score: game().state.round.score,
+          outcome: roundOutcome(game().state),
+          occurrence: `${game().lastCommittedActionId ?? "play"}:outcome`,
+        },
         slot: narration.reserve(),
         drawn,
         // The softer material where each block meets the structure decides its sound (#232),

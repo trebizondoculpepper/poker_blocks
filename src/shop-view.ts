@@ -1,3 +1,4 @@
+import { unitsToMs, type EffectHandle } from "./visual-events/scheduler";
 import type { DropGuideProvider } from "./visual/drop-target-guide";
 import { blockName, blockFaceArt } from "./block-presentation";
 import { inspectBlock } from "./traits/inspectable";
@@ -22,12 +23,20 @@ import type { DragSource, Point } from "./drag-drop";
 import { returnToSource, stop as stopReturn, take } from "./return-to-source";
 import "./shop-view.css";
 import { blockOutline } from "./visual/block-outline";
+import type { DanceFloor } from "./dance/dance-floor";
+import {
+  createOfferPresentation,
+  type OfferPresentation,
+  type ShopOfferPresentationConfig,
+} from "./shop-offer-presentation";
 
 type DisplayedOffer = {
   offer: ShopOffer;
   item: HTMLElement;
   slot: HTMLElement;
+  /** The offer's layout/action root; its dance and feedback layers sit inside (#774). */
   cube: THREE.Object3D;
+  presentation: OfferPresentation;
   dispose(): void;
 };
 
@@ -52,8 +61,29 @@ export type ShopView = {
    */
   readonly guideProvider: DropGuideProvider;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
-  burnUnsold(reducedMotion: boolean): Promise<void>;
-  frame(): void;
+  /**
+   * The outgoing stock's burn as a shared-scheduler effect (#880; doc/game-architecture.md,
+   * "Today's scheduling"): it advances on the presentation clock it is given, staggered in
+   * game-time units, and finishes when every offer has burned. Cancelling finishes it at once.
+   */
+  /** `startMs`: the burn event's scheduled start; a late first frame catches up from it. */
+  burnEffect(startMs: number): EffectHandle;
+  /** Begin burning the displayed (outgoing) offers; `burnEffect` then advances it (#880). */
+  startBurn(reducedMotion: boolean): void;
+  /** Settle the outgoing burn at once, as completed: the overload summary (#880). */
+  finishBurn(): void;
+  /**
+   * When the burn in progress settles (#880): true if it ran to its end, false if it was cleared
+   * away (the scene left, a new run). True at once when nothing is burning.
+   */
+  outgoingDone(): Promise<boolean>;
+  /** Draw one frame; `delta` (seconds) advances the stock's ambient motion (#774). */
+  frame(delta?: number): void;
+  /**
+   * Present the stock's dance and hover emphasis with this configuration, or rest it (null).
+   * Called by the scene's `shopOfferPresentation` controller trait (#774).
+   */
+  present(config: Partial<ShopOfferPresentationConfig> | null): void;
   dispose(): void;
 };
 
@@ -246,6 +276,8 @@ export function createShopView(
   reducedMotion: () => boolean,
   /** Why buying would be refused now, without buying (`GameRun.purchaseVerdict`, #499). */
   verdict: (id: string, destination: OfferDestination) => { reason: string } | null,
+  /** The shared dance floor and the stock's presentation configuration (#774). */
+  presentation: { floor: Pick<DanceFloor, "join"> },
 ): ShopView {
   const stock = document.createElement("section");
   stock.className = "shop-stock";
@@ -298,8 +330,11 @@ export function createShopView(
   // same studio room for itself.
   const reflections = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
   const displayed: DisplayedOffer[] = [];
+  /** The configuration the scene's controller trait presents the stock with, or null. */
+  let presented: Partial<ShopOfferPresentationConfig> | null = null;
   let burn: {
-    startedAt: number;
+    /** The presentation time (ms) of its first update, the burn's start. */
+    startedAt: number | null;
     seconds: number;
     reduced: boolean;
     jobs: {
@@ -311,6 +346,8 @@ export function createShopView(
     resolve(): void;
   } | null = null;
   let burnPromise: Promise<void> | null = null;
+  /** Whether the last burn ran to its end, rather than being cleared away (#880). */
+  let burnCompleted = false;
   let entrance: Entrance | null = null;
   const pixelsPerUnit = 50;
   let canvasWidth = 0;
@@ -341,16 +378,41 @@ export function createShopView(
   }
 
   /** An offer's cube, holding its look's prepasses in the shop's context until disposed (#970). */
-  function makeCube(offer: ShopOffer): { cube: THREE.Object3D; dispose(): void } {
+  function makeCube(
+    offer: ShopOffer,
+    order: number,
+  ): { cube: THREE.Object3D; presentation: OfferPresentation; dispose(): void } {
     const made = offerViews.get(offer.kind).cube(offer.block);
     const release = prepasses.require(made.prepasses ?? []);
+    reflectInShop(made.cube, reflections.texture);
+    const layered = createOfferPresentation(made.cube, {
+      id: offer.block.id,
+      order,
+      floor: presentation.floor,
+    });
+    layered.present(presented);
     return {
-      cube: made.cube,
+      cube: layered.root,
+      presentation: layered,
       dispose: () => {
+        layered.dispose();
         release();
         made.dispose();
       },
     };
+  }
+
+  /** Forward the offer's real pointer and focus to its interaction-state provider (#774). */
+  function followInput(item: HTMLElement, offer: OfferPresentation): void {
+    const forward = (dom: string, type: string) =>
+      item.addEventListener(dom, () => offer.input(type));
+    forward("pointerenter", "input.enter");
+    forward("pointerleave", "input.leave");
+    forward("pointercancel", "input.leave");
+    forward("focus", "input.focus");
+    forward("blur", "input.blur");
+    forward("pointerdown", "input.press");
+    forward("pointerup", "input.release");
   }
 
   const contains = (element: HTMLElement | null, x: number, y: number) => {
@@ -395,7 +457,7 @@ export function createShopView(
     stock.classList.remove("is-burning");
     if (!visible) return;
     const spots = placeOffers(offers.map((offer) => offer.block.id));
-    for (const offer of offers) {
+    for (const [order, offer] of offers.entries()) {
       const view = offerViews.get(offer.kind);
       const name = view.name(offer.block);
       const description = view.describe(offer.block);
@@ -427,9 +489,9 @@ export function createShopView(
       tooltip.className = "shop-offer-description";
       tooltip.textContent = description;
       item.append(slot, label, tooltip);
-      const cube = makeCube(offer);
+      const cube = makeCube(offer, order);
       cube.cube.rotation.set(-0.34, 0.48, 0);
-      reflectInShop(cube.cube, reflections.texture);
+      followInput(item, cube.presentation);
       scene.add(cube.cube);
       displayed.push({ offer, item, slot, ...cube });
       stock.append(item);
@@ -445,32 +507,103 @@ export function createShopView(
     frame();
   }
 
-  /** Stagger the unsold offers' Perlin burn-out across roughly 1.5 seconds. */
-  function burnUnsold(reducedMotion: boolean): Promise<void> {
+  /** The burn's timing, in game-time units (#880): one offer, several, or reduced motion. */
+  const burnUnits = { single: 22.5, several: 15.75, reduced: 6, stagger: 6.75 };
+
+  /** Start burning every displayed offer; the burn advances only through `advanceBurn`. */
+  function startBurn(reducedMotion: boolean): void {
     finishEntrance();
-    if (burnPromise) return burnPromise;
+    if (burnPromise) return;
+    burnCompleted = false;
+    // Nothing left to burn (all bought): still an exit to wait on, which the scheduled effect
+    // settles on its first update, so the run waits for the exit scope and its cue.
     if (displayed.length === 0) {
-      render([], false);
-      return Promise.resolve();
+      burnPromise = new Promise((resolve) => {
+        burn = { startedAt: null, seconds: 0, reduced: reducedMotion, jobs: [], resolve };
+      });
+      return;
     }
     stock.classList.add("is-burning");
     buyTarget.hidden = true;
-    const seconds = reducedMotion ? 0.4 : displayed.length === 1 ? 1.5 : 1.05;
-    const stagger = reducedMotion || displayed.length === 1 ? 0 : 0.45 / (displayed.length - 1);
+    const seconds =
+      unitsToMs(
+        reducedMotion
+          ? burnUnits.reduced
+          : displayed.length === 1
+            ? burnUnits.single
+            : burnUnits.several,
+      ) / 1000;
+    const stagger =
+      reducedMotion || displayed.length === 1
+        ? 0
+        : unitsToMs(burnUnits.stagger) / (displayed.length - 1);
     burnPromise = new Promise((resolve) => {
       burn = {
-        startedAt: performance.now(),
+        startedAt: null,
         seconds,
         reduced: reducedMotion,
         jobs: displayed.map((entry, index) => ({
           entry,
-          delay: index * stagger * 1000,
+          delay: index * stagger,
           lastAt: 0,
         })),
         resolve,
       };
     });
-    return burnPromise;
+  }
+
+  /** Advance the burn to presentation time `now` (ms): finished once every offer has burned. */
+  function advanceBurn(now: number): "running" | "finished" {
+    if (!burn) return "finished";
+    burn.startedAt ??= now;
+    const startedAt = burn.startedAt;
+    for (const job of burn.jobs) {
+      if (now < startedAt + job.delay) continue;
+      if (!job.effect) {
+        job.entry.item.classList.add("is-burning");
+        job.entry.cube.traverse((part) => {
+          if (part instanceof THREE.LineSegments) part.visible = false;
+        });
+        job.effect = createMaterialise(job.entry.cube, {
+          seconds: burn.seconds,
+          reduced: burn.reduced,
+          out: true,
+        });
+        // From its intended start, so a late frame advances it rather than restarting it.
+        job.lastAt = startedAt + job.delay;
+      }
+      job.effect.update((now - job.lastAt) / 1000);
+      job.lastAt = now;
+    }
+    if (!burn.jobs.every(({ effect }) => effect && !effect.running)) return "running";
+    burnCompleted = true;
+    render([], false);
+    return "finished";
+  }
+
+  /**
+   * Settle the outgoing burn at once, as completed (#880): the summary when the scheduler could
+   * not admit the burn's effect, so the run is never left waiting.
+   */
+  function finishBurn(): void {
+    // Completed, even if the scheduler has just cleared the burn while failing it: the wait,
+    // which reads this when it settles, then lets the run move on.
+    burnCompleted = true;
+    if (!burn) return;
+    for (const job of burn.jobs) job.effect?.finish();
+    render([], false);
+  }
+
+  function burnEffect(startMs: number): EffectHandle {
+    if (burn && burn.startedAt === null) burn.startedAt = startMs;
+    return {
+      update: advanceBurn,
+      // Cut short (the scene left, a new run): the offers go at once, not completed.
+      cancel: () => {
+        if (burn) render([], false);
+      },
+      dispose: () => {},
+    };
   }
 
   /**
@@ -494,35 +627,11 @@ export function createShopView(
     stock.style.setProperty("--scatter-room", `${bottom - clear}px`);
   }
 
-  function frame(): void {
+  function frame(delta = 0): void {
     if (renderer.domElement.hidden) return;
     // Coins, rack space or stock may change mid-drag: the verdict follows them (#499).
     refreshGuidance();
     clearRack();
-    if (burn) {
-      const now = performance.now();
-      for (const job of burn.jobs) {
-        if (now < burn.startedAt + job.delay) continue;
-        if (!job.effect) {
-          job.entry.item.classList.add("is-burning");
-          job.entry.cube.traverse((part) => {
-            if (part instanceof THREE.LineSegments) part.visible = false;
-          });
-          job.effect = createMaterialise(job.entry.cube, {
-            seconds: burn.seconds,
-            reduced: burn.reduced,
-            out: true,
-          });
-          job.lastAt = now;
-        }
-        job.effect.update((now - job.lastAt) / 1000);
-        job.lastAt = now;
-      }
-      if (burn.jobs.every(({ effect }) => effect && !effect.running)) {
-        render([], false);
-        return;
-      }
-    }
     const bounds = host.getBoundingClientRect();
     const width = Math.max(1, Math.round(bounds.width));
     const height = Math.max(1, Math.round(bounds.height));
@@ -545,6 +654,14 @@ export function createShopView(
     );
     camera.lookAt(camera.position.x, camera.position.y, 0);
     for (const [index, entry] of displayed.entries()) {
+      // An action owns the pose while the offer enters, is carried, flies back or burns; the
+      // dance and hover layers rest until it is back in its slot (doc/shop-stock-motion.md).
+      const busy =
+        entrance !== null ||
+        burn !== null ||
+        dragging?.entry === entry ||
+        entry.item.classList.contains("is-returning");
+      entry.presentation.update(delta, busy, reducedMotion());
       const slot = entry.slot.getBoundingClientRect();
       // The DOM slot is the hit area and the projection's size reference. Keep the WebGL
       // offer inside it when compact landscape CSS shrinks the slot.
@@ -667,8 +784,24 @@ export function createShopView(
     dragVerdict: () => guidance && { targets: [...guidance.targets], reason: guidance.reason },
     guideProvider: shopGuideProvider(() => dragging?.entry.offer ?? null, dropTargets, verdict),
     render,
-    burnUnsold,
+    burnEffect,
+    startBurn,
+    finishBurn,
+    outgoingDone() {
+      const running = burnPromise;
+      return running ? running.then(() => burnCompleted) : Promise.resolve(true);
+    },
     frame,
+    present(config) {
+      presented = config;
+      for (const entry of displayed) {
+        entry.presentation.present(config);
+        // A fresh provider starts from the offer's real input state: focus and hover don't
+        // change just because the scene was covered and resumed.
+        if (entry.item.matches(":hover")) entry.presentation.input("input.enter");
+        if (document.activeElement === entry.item) entry.presentation.input("input.focus");
+      }
+    },
     dispose: () => {
       clear();
       prepasses.dispose();

@@ -14,7 +14,140 @@ import { Registry } from "./core/registry";
 import type { PassivePalette } from "./passives";
 
 /** One face's artwork: a label, or a standard pip pattern (1 to 6) instead of the label. */
-export type PassiveFaceDesign = { label: string; pips?: number };
+export type PassiveFaceDesign = {
+  label: string;
+  pips?: number;
+  /** This face's artwork colour; its category palette's ink when absent (#1005). */
+  ink?: string;
+  /**
+   * A registered drawn icon (`faceIcons`) in place of the label (#1009), shown `count` times
+   * (one, or a tight cluster of three), so its meaning survives any rotation of the token.
+   */
+  icon?: { name: string; count: 1 | 3 };
+};
+
+/** Draws one icon centred at (x, y), `size` pixels across, in the current fill colour. */
+export type FaceIconPainter = (
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  /** The face's colour, for an icon's cut-out parts; the fill colour is its ink. */
+  face: string,
+) => void;
+
+/** Face icons by name: a definition's face artwork names one; nothing asks what a passive is. */
+export const faceIcons = new Registry<FaceIconPainter>("face icon");
+
+// A feather (#1009): a long, narrow vane with notched barbs either side of a quill.
+faceIcons.register("feather", (context, x, y, size) => {
+  const s = size / 2;
+  context.save();
+  context.translate(x, y);
+  context.rotate(-Math.PI / 5);
+  // The vane, top to base: a smooth left edge and a right edge broken by two notches.
+  context.beginPath();
+  context.moveTo(0, -s);
+  context.quadraticCurveTo(s * 0.34, -s * 0.6, s * 0.3, -s * 0.15);
+  context.lineTo(s * 0.12, -s * 0.12);
+  context.lineTo(s * 0.32, 0.05 * s);
+  context.quadraticCurveTo(s * 0.3, s * 0.3, s * 0.22, s * 0.38);
+  context.lineTo(s * 0.06, s * 0.3);
+  context.lineTo(s * 0.12, s * 0.5);
+  context.lineTo(0, s * 0.55);
+  context.lineTo(-s * 0.16, s * 0.48);
+  context.lineTo(-s * 0.08, s * 0.32);
+  context.lineTo(-s * 0.26, s * 0.3);
+  context.quadraticCurveTo(-s * 0.36, -s * 0.4, 0, -s);
+  context.fill();
+  // The quill, running past the vane's base.
+  context.lineWidth = Math.max(2, size * 0.045);
+  context.lineCap = "round";
+  context.strokeStyle = context.fillStyle;
+  context.beginPath();
+  context.moveTo(0, -s * 0.8);
+  context.lineTo(0, s);
+  context.stroke();
+  context.restore();
+});
+
+// An anvil (#1009): a flat face with a horn, a waist and a broad foot.
+faceIcons.register("anvil", (context, x, y, size) => {
+  const s = size / 2;
+  context.save();
+  context.translate(x, y);
+  context.beginPath();
+  context.moveTo(-s * 0.55, -s * 0.45);
+  context.lineTo(s * 0.6, -s * 0.45);
+  context.lineTo(s, -s * 0.5);
+  context.quadraticCurveTo(s * 0.75, -s * 0.12, s * 0.45, -s * 0.1);
+  context.lineTo(s * 0.25, s * 0.05);
+  context.lineTo(s * 0.3, s * 0.45);
+  context.lineTo(s * 0.6, s * 0.65);
+  context.lineTo(-s * 0.6, s * 0.65);
+  context.lineTo(-s * 0.3, s * 0.45);
+  context.lineTo(-s * 0.25, s * 0.05);
+  context.lineTo(-s * 0.55, -s * 0.12);
+  context.closePath();
+  context.fill();
+  context.restore();
+});
+
+// A round bin with two Aces poking out of it (#1004): cards first, so the bin's rim overlaps
+// their lower ends.
+faceIcons.register("aceBin", (context, x, y, size, face) => {
+  const s = size / 2;
+  const ink = context.fillStyle;
+  context.save();
+  context.translate(x, y);
+  const card = (angle: number, dx: number) => {
+    context.save();
+    context.translate(dx, -s * 0.36);
+    context.rotate(angle);
+    const w = s * 0.56;
+    const h = s * 0.84;
+    // Cards in the face's colour with ink edges and letters, so they read on any palette.
+    context.fillStyle = face;
+    context.strokeStyle = ink;
+    context.lineWidth = Math.max(3, size * 0.045);
+    context.beginPath();
+    context.rect(-w / 2, -h / 2, w, h);
+    context.fill();
+    context.stroke();
+    context.fillStyle = ink;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.font = `bold ${Math.round(h * 0.5)}px system-ui, sans-serif`;
+    context.fillText("A", 0, -h * 0.08);
+    context.restore();
+  };
+  card(-0.32, -s * 0.2);
+  card(0.28, s * 0.2);
+  // The bin: a tapered body under an elliptical rim.
+  context.fillStyle = ink;
+  context.beginPath();
+  context.moveTo(-s * 0.62, -s * 0.02);
+  context.lineTo(s * 0.62, -s * 0.02);
+  context.lineTo(s * 0.48, s * 0.82);
+  context.quadraticCurveTo(0, s * 0.98, -s * 0.48, s * 0.82);
+  context.closePath();
+  context.fill();
+  context.beginPath();
+  context.ellipse(0, -s * 0.02, s * 0.66, s * 0.16, 0, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+});
+
+/** Where `count` icons sit around a centre, as offsets in icon sizes: one, or a tight trio. */
+export function iconCluster(count: 1 | 3): readonly (readonly [number, number])[] {
+  return count === 1
+    ? [[0, 0]]
+    : [
+        [-0.42, 0.28],
+        [0.42, 0.28],
+        [0, -0.4],
+      ];
+}
 
 /** A token's look. With no shape it is a cube; with no faces every face shows the symbol. */
 export type PassiveTokenAppearance = {
@@ -39,7 +172,22 @@ export type PassiveShape = {
   geometry(): THREE.BufferGeometry;
   /** Vertices that make one face: 6 for a quad (two triangles), 3 for a triangle. */
   verticesPerFace: number;
+  /**
+   * The part of the face texture a face actually shows, as a UV polygon (#1002). Its artwork is
+   * framed along this outline and its label fitted inside it. The whole square when absent.
+   */
+  faceOutline?: FaceOutline;
 };
+
+/** A face's visible region in its texture: UV points (u right, v up), in order. */
+export type FaceOutline = readonly (readonly [number, number])[];
+
+/** The visible part of a face texture under the triangle UVs below. */
+export const triangleFaceOutline: FaceOutline = [
+  [0, 0],
+  [1, 0],
+  [0.5, 1],
+];
 
 export const passiveShapes = new Registry<PassiveShape>("passive shape");
 
@@ -50,12 +198,13 @@ export const defaultPassiveShape = "cube";
 export type PassiveFacePainter = (
   palette: PassivePalette,
   face: PassiveFaceDesign,
+  outline?: FaceOutline,
 ) => THREE.Texture;
 
 /** Each triangular face shows a triangle cut from its face texture. */
 function withTriangleFaceUvs(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   const faces = geometry.getAttribute("position").count / 3;
-  const uvs = Array.from({ length: faces }, () => [0, 0, 1, 0, 0.5, 1]).flat();
+  const uvs = Array.from({ length: faces }, () => triangleFaceOutline.flat()).flat();
   geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   return geometry;
 }
@@ -67,10 +216,12 @@ passiveShapes.register("cube", {
 passiveShapes.register("octahedron", {
   geometry: () => withTriangleFaceUvs(new THREE.OctahedronGeometry(0.72, 0).toNonIndexed()),
   verticesPerFace: 3,
+  faceOutline: triangleFaceOutline,
 });
 passiveShapes.register("icosahedron", {
   geometry: () => withTriangleFaceUvs(new THREE.IcosahedronGeometry(0.76, 0).toNonIndexed()),
   verticesPerFace: 3,
+  faceOutline: triangleFaceOutline,
 });
 passiveShapes.register("d10", { geometry: () => trapezohedronGeometry(), verticesPerFace: 6 });
 
@@ -177,29 +328,115 @@ export function oppositePairOrder(centres: readonly THREE.Vector3[]): number[] {
 }
 
 /** The look every current passive had: its symbol in a framed face, or a pip pattern. */
-export function paintPassiveFace(palette: PassivePalette, face: PassiveFaceDesign): THREE.Texture {
+/**
+ * Where a face's artwork goes, in 256-pixel canvas space (#1002): the outline's points, its
+ * label centre and the radius of the largest circle there that stays inside every edge.
+ */
+export function faceLayout(outline: FaceOutline): {
+  points: { x: number; y: number }[];
+  centre: { x: number; y: number };
+  radius: number;
+} {
+  // Canvas rows run down; a CanvasTexture is flipped, so v = 1 is the canvas's top.
+  const points = outline.map(([u, v]) => ({ x: u * 256, y: (1 - v) * 256 }));
+  const n = points.length;
+  // The incentre for a triangle (vertices weighted by opposite side); the vertex mean otherwise.
+  const side = (i: number) => {
+    const a = points[(i + 1) % n]!;
+    const b = points[(i + 2) % n]!;
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+  const weights = n === 3 ? points.map((_, i) => side(i)) : points.map(() => 1);
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  const centre = {
+    x: points.reduce((sum, p, i) => sum + p.x * weights[i]!, 0) / total,
+    y: points.reduce((sum, p, i) => sum + p.y * weights[i]!, 0) / total,
+  };
+  const radius = Math.min(
+    ...points.map((a, i) => {
+      const b = points[(i + 1) % n]!;
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      return Math.abs((b.x - a.x) * (a.y - centre.y) - (a.x - centre.x) * (b.y - a.y)) / length;
+    }),
+  );
+  return { points, centre, radius };
+}
+
+const squareOutline: FaceOutline = [
+  [0, 0],
+  [1, 0],
+  [1, 1],
+  [0, 1],
+];
+
+export function paintPassiveFace(
+  palette: PassivePalette,
+  face: PassiveFaceDesign,
+  outline?: FaceOutline,
+): THREE.Texture {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 256;
   const context = canvas.getContext("2d")!;
   context.fillStyle = palette.face;
   context.fillRect(0, 0, 256, 256);
   context.strokeStyle = palette.edge;
-  context.lineWidth = 10;
-  context.strokeRect(12, 12, 232, 232);
-  context.lineWidth = 2;
-  context.strokeRect(24, 24, 208, 208);
-  context.fillStyle = palette.ink;
+  const { points, centre, radius } = faceLayout(outline ?? squareOutline);
+  /** The outline drawn `inset` pixels in from the face's edges, towards its centre. */
+  const frame = (inset: number, width: number) => {
+    const scale = (radius - inset) / radius;
+    context.lineWidth = width;
+    context.beginPath();
+    points.forEach(({ x, y }, i) => {
+      const px = centre.x + (x - centre.x) * scale;
+      const py = centre.y + (y - centre.y) * scale;
+      if (i === 0) context.moveTo(px, py);
+      else context.lineTo(px, py);
+    });
+    context.closePath();
+    context.stroke();
+  };
+  if (outline) {
+    frame(17, 10);
+    frame(28, 2);
+  } else {
+    // The square face keeps its original frame exactly.
+    context.lineWidth = 10;
+    context.strokeRect(12, 12, 232, 232);
+    context.lineWidth = 2;
+    context.strokeRect(24, 24, 208, 208);
+  }
+  context.fillStyle = face.ink ?? palette.ink;
   for (const [x, y] of pipLayouts[face.pips ?? 0] ?? []) {
     context.beginPath();
     context.arc(x, y, 17, 0, Math.PI * 2);
     context.fill();
   }
-  // A pip face carries no label: its pips are the artwork.
-  const label = face.pips ? "" : face.label;
+  // An icon face draws its registered icon (one, or a cluster of three) in the label's place.
+  if (face.icon) {
+    const { centre: at, radius: room } = faceLayout(outline ?? squareOutline);
+    const size = face.icon.count === 1 ? room * 1.1 : room * 0.62;
+    const paintIcon = faceIcons.get(face.icon.name);
+    for (const [dx, dy] of iconCluster(face.icon.count))
+      paintIcon(context, at.x + dx * size, at.y + dy * size, size, palette.face);
+  }
+  // A pip or icon face carries no label: its pips or icons are the artwork.
+  const label = face.pips || face.icon ? "" : face.label;
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.font = `bold ${label.length > 2 ? 92 : 116}px system-ui, sans-serif`;
-  context.fillText(label, 128, 131, 206);
+  if (!outline) {
+    // The square face keeps its original lettering exactly.
+    context.font = `bold ${label.length > 2 ? 92 : 116}px system-ui, sans-serif`;
+    context.fillText(label, 128, 131, 206);
+  } else {
+    // Fitted inside the frame: the text's box stays within the inner circle, with a margin.
+    const room = radius - 34;
+    let size = Math.floor(room * 1.25);
+    context.font = `bold ${size}px system-ui, sans-serif`;
+    const width = context.measureText(label).width;
+    if (width > room * 1.6) size = Math.floor((size * room * 1.6) / width);
+    context.font = `bold ${size}px system-ui, sans-serif`;
+    context.fillText(label, centre.x, centre.y + size * 0.04);
+  }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
@@ -318,8 +555,8 @@ function paintedVisual(
   geometry.scale(size, size, size);
   const painted = new Map<string, THREE.Texture>();
   const textureFor = (face: PassiveFaceDesign) => {
-    const key = `${face.label}\u0000${face.pips ?? ""}`;
-    const texture = painted.get(key) ?? paint(appearance.palette, face);
+    const key = `${face.label}\u0000${face.pips ?? ""}\u0000${face.ink ?? ""}\u0000${face.icon?.name ?? ""}${face.icon?.count ?? ""}`;
+    const texture = painted.get(key) ?? paint(appearance.palette, face, shape.faceOutline);
     painted.set(key, texture);
     return texture;
   };

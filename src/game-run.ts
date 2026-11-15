@@ -25,7 +25,7 @@ import type { BlockMaterial } from "./materials";
 import { changeCardMaterial } from "./card-material";
 import type { CardBlock } from "./cards";
 import { resaleValue } from "./resale";
-import { blockCanDestroy } from "./block-trait-behaviours";
+import { blockCanDestroy, blockDestroySound } from "./block-trait-behaviours";
 import { Registry } from "./core/registry";
 import { roundOutcome, type Dealer } from "./dealer";
 import type { GameState, PlacedBlock, PlayAction } from "./game-state";
@@ -123,6 +123,9 @@ export type RunSnapshot = {
  * Controls one game attempt: each stage → shop → next stage (or round).
  * It keeps the current facts while a registered dealer, chosen per stage, applies the rules.
  */
+/** How many run instances this page has made: each one's token is unique (#881). */
+let runInstances = 0;
+
 export class GameRun {
   private readonly dealers: Registry<Dealer>;
   private readonly config: RunRules;
@@ -249,6 +252,11 @@ export class GameRun {
     return this.lastFailure;
   }
 
+  /** The last committed action's ID (#881). */
+  private lastActionId: string | null = null;
+  /** This run instance's own token: action IDs restart with each run, so they need it (#881). */
+  private readonly runToken = `run${++runInstances}`;
+
   /**
    * Resolve one action as a transaction (#657; doc/game-events.md, "Delivery order, cascades and
    * failure"): its state changes, rewards, use consumption and random draws are staged, and an
@@ -290,6 +298,7 @@ export class GameRun {
       if (result === null) return null;
       this.actions.remember(id);
       this.version++;
+      this.lastActionId = id;
       this.lastFacts = action.facts;
       this.lastFailure = null;
       published = action.facts;
@@ -378,7 +387,14 @@ export class GameRun {
       // Two correlated facts: the authorized destruction, and the lower-level removal with its
       // reason. Both name the block and share this action's batch.
       const batchId = `${context.actionId}:destroy`;
-      this.passiveEvents.emit({ type: "block.destroyed", blockId, cause });
+      // Its configured destruction response, captured at commit for presentation (#879).
+      const sound = blockDestroySound(placed.block);
+      this.passiveEvents.emit({
+        type: "block.destroyed",
+        blockId,
+        cause,
+        ...(sound ? { sound } : {}),
+      });
       this.passiveEvents.emit({ type: "block.removed", blockId, cause });
       const delivered = this.passiveEvents.drain(
         undefined,
@@ -421,6 +437,11 @@ export class GameRun {
 
   /** Final results from the last play, shared by the stage total and presentation. */
   /** The field the last play scored, captured before its after-score steps (#904). */
+  /** The last committed action's ID: what its presentation responses are identified by (#881). */
+  get lastCommittedActionId(): string | null {
+    return this.lastActionId === null ? null : `${this.runToken}:${this.lastActionId}`;
+  }
+
   get lastScoringField(): GameState["field"] {
     return this.scoringField;
   }

@@ -1,3 +1,4 @@
+import { leaveShop } from "./shop-leave";
 import { discardRefusal } from "./discardable";
 import type { GameState } from "./game-state";
 import type { PreparedSession } from "./run-setup";
@@ -100,6 +101,9 @@ export type RunServices = {
   readonly frame: Pick<HudFrame, "layout" | "setLayout">;
 };
 
+/** A stage's decided outcome and its response occurrence ID (#881). */
+export type DecidedOutcome = { outcome: RoundOutcome; occurrence: string };
+
 export type GameRunController = {
   readonly game: GameRun;
   /**
@@ -147,7 +151,12 @@ export type GameRunController = {
   rackChanged(): void;
   autosave(): void;
   /** The presenter announced the stage's outcome. */
-  decided(outcome: RoundOutcome, now: number): void;
+  decided(outcome: RoundOutcome, now: number, occurrence?: string): void;
+  /**
+   * A stage's outcome, once its deciding action's required sequence has finished (#881): the
+   * scene's `outcomeCues` controller trait presents it. Fires once per decided outcome.
+   */
+  onDecided(listener: (decision: DecidedOutcome) => void): () => void;
   /** The HUD button: move to the next stage, the shop, the next round, or a new game. */
   takeNextAction(): void;
   /** A shop offer's price. */
@@ -243,6 +252,8 @@ export function createGameRunController<Context>(options: {
     restore: (mark: { state: number; draws: number }) => randomizer.restore(mark),
   };
   // Every run this controller holds publishes its committed facts to the same listeners (#755).
+  /** Who hears a stage's decided outcome (#881). */
+  const decidedListeners = new Set<(decision: DecidedOutcome) => void>();
   const committedListeners = new Set<(facts: readonly EventEnvelope[]) => void>();
   const adopt = (run: GameRun): GameRun => {
     run.onCommitted((facts) => {
@@ -473,16 +484,18 @@ export function createGameRunController<Context>(options: {
     const leavingShop = game.inShop;
     if (leavingShop) shopExitPending = true;
     try {
+      // Model first (doc/outcome-presentation.md, #880): see src/shop-leave.ts.
       if (leavingShop) {
         const session = game;
-        if (session.state.shopStock?.length) playSfx("shop.stock.burn");
-        await shop.burnUnsold(reducedMotion);
-        // A different run may have been started while the old shop was dissolving.
-        if (game !== session) return;
-      }
-      const moved = leavingShop ? game.leaveShop() : game.advance();
-      if (!moved) return;
-      if (leavingShop) playSfx("shop.leave");
+        const proceed = await leaveShop({
+          commit: () => Boolean(session.leaveShop()),
+          save: autosave,
+          // The shop's exit response started this burn from the receipt; this only waits on it.
+          outgoingDone: () => shop.outgoingDone(),
+          current: () => game === session,
+        });
+        if (!proceed) return;
+      } else if (!game.advance()) return;
       // advance() may have ended the run (TypeScript still has the pre-call narrowing).
       if ((game.phase as RunPhase) === "over") {
         endRun();
@@ -504,7 +517,7 @@ export function createGameRunController<Context>(options: {
   /** The run is lost: the table stays behind the game over screen, which shows the totals. */
   function endRun(): void {
     gameOverAt = null;
-    playSfx("run.lost");
+    // Game Over's own entrance sound plays as its scene enters (#881).
     followRunPosition();
     updateHud();
     autosave();
@@ -881,7 +894,8 @@ export function createGameRunController<Context>(options: {
       services.field.remove(blockId);
       updateHud();
       autosave();
-      playSfx("block.destroyed");
+      // Its destruction sound is on the committed block.destroyed fact (#879), played by the
+      // scene's committedEventSounds: removal has no effect of its own to wait for.
       return true;
     },
     seedTable() {
@@ -916,15 +930,21 @@ export function createGameRunController<Context>(options: {
     drawReplacements,
     rackChanged: () => services.rack.render(game.state.passiveRack),
     autosave,
-    decided(outcome, now) {
-      if (outcome === "won") {
-        playSfx("round.cleared");
-        stageWonAt = now + stageWonDelayMs;
-      }
-      if (outcome === "lost") {
-        playSfx("round.failed");
-        gameOverAt = now + gameOverDelayMs;
-      }
+    decided(outcome, now, occurrence) {
+      // Its cue is the scene's to present (#881; doc/outcome-presentation.md): published here,
+      // before the result scene is scheduled, so the cue starts first.
+      // Its response occurrence: the committed play's, or the stage's when none was captured.
+      const decision = {
+        outcome,
+        occurrence: occurrence ?? `${game.lastCommittedActionId ?? "stage"}:outcome`,
+      };
+      for (const listener of Array.from(decidedListeners)) listener(decision);
+      if (outcome === "won") stageWonAt = now + stageWonDelayMs;
+      if (outcome === "lost") gameOverAt = now + gameOverDelayMs;
+    },
+    onDecided(listener) {
+      decidedListeners.add(listener);
+      return () => decidedListeners.delete(listener);
     },
     takeNextAction,
     offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),

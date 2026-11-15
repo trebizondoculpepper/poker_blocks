@@ -315,6 +315,14 @@ const entries = [
     variants: 1,
   },
   {
+    id: "result.stage_won.enter",
+    name: "Stage Won",
+    family: "round",
+    description: "The Stage Won screen appears, after the cleared cue has started",
+    // A stand-in until it has audio of its own (#881).
+    placeholder: "round.cleared",
+  },
+  {
     id: "round.failed",
     name: "Failed",
     family: "round",

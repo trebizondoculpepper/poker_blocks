@@ -1,3 +1,8 @@
+import { shopExitResponse, type ShopExitScheduler } from "./scene-traits/shop-leave-response";
+import {
+  createPlayfieldRockingController,
+  type PlayfieldRockingServices,
+} from "./playfield-rocking";
 import { beatShapes } from "./dance/beat-shapes";
 import { danceCycles } from "./dance/dance-floor";
 import type { TuningControl } from "./attract-tuning-panel";
@@ -138,6 +143,7 @@ export type SceneHost = {
       | "inventory"
       | "dispatch"
       | "onCommitted"
+      | "onDecided"
       | "hasSave"
       | "runStats"
       | "seed"
@@ -145,6 +151,10 @@ export type SceneHost = {
       | "stageReward"
     >;
     cameraView: Pick<CameraViewService, "beginShopEntrance">;
+    /** The rocking controller's narrow capabilities (#783). */
+    playfieldRocking: PlayfieldRockingServices;
+    /** The shared visual-event scheduler, for controller traits' required effects (#880). */
+    visualEvents: ShopExitScheduler;
     overlays: Pick<
       Overlays,
       | "showMenu"
@@ -232,6 +242,31 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       services.shop.render([], false);
       stockSources.get(config)?.();
       stockSources.delete(config);
+    },
+  });
+  // The stock dances to the shared beat and the hovered offer is emphasised while the scene is
+  // in front (#774; doc/shop-stock-motion.md). Covering rests it; resuming rejoins once.
+  behaviours.register("shopOfferPresentation", {
+    enter: ({ services }, config) => services.shop.present(config),
+    exit: ({ services }) => services.shop.present(null),
+    cover: ({ services }) => services.shop.present(null),
+    resume: ({ services }, config) => services.shop.present(config),
+  });
+  // Delayed, mass-dependent playfield rocking (#783): the controller owns the policy; the
+  // camera only takes the rate it is given.
+  const rocking = new WeakMap<object, ReturnType<typeof createPlayfieldRockingController>>();
+  behaviours.register("playfieldRockingController", {
+    enter({ services }, config) {
+      const controller = createPlayfieldRockingController(services.playfieldRocking, config);
+      rocking.set(config, controller);
+      controller.enter();
+    },
+    update: (_context, config) => rocking.get(config)?.update(),
+    cover: (_context, config) => rocking.get(config)?.cover(),
+    resume: (_context, config) => rocking.get(config)?.resume(),
+    exit(_context, config) {
+      rocking.get(config)?.exit();
+      rocking.delete(config);
     },
   });
   behaviours.register("blockTitle", blockTitle<Context>());
@@ -724,6 +759,36 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // pause menu) neither restarts nor changes it.
   // Each committed fact's configured sound, for plays and discards alike (#755).
   behaviours.register("committedEventSounds", committedEventSounds<Context>());
+  // The shop's exit response (#880; doc/outcome-presentation.md): it presents the committed
+  // shop.left receipt, burning exactly the stock that left, with the configured cues.
+  behaviours.register("shopExitResponse", shopExitResponse<Context>());
+  // A stage's outcome cue when its decided outcome arrives (#881): the trait's configuration
+  // names each outcome's sound, so the run controller plays none itself.
+  const outcomeStops = new WeakMap<object, () => void>();
+  /** Response occurrences already presented: a redelivered outcome never plays twice. */
+  const presentedOutcomes = new Set<string>();
+  behaviours.register("outcomeCues", {
+    enter({ services }, config) {
+      outcomeStops.get(config)?.();
+      outcomeStops.set(
+        config,
+        services.run.onDecided(({ outcome, occurrence }) => {
+          const cue = (config as Record<string, SoundEffectId>)[outcome];
+          // Only an outcome with a cue is recorded: a nonterminal one presents nothing.
+          if (!cue || presentedOutcomes.has(occurrence)) return;
+          presentedOutcomes.add(occurrence);
+          // Bounded: only recent occurrences can be redelivered.
+          if (presentedOutcomes.size > 64)
+            presentedOutcomes.delete(presentedOutcomes.values().next().value!);
+          services.sound(cue);
+        }),
+      );
+    },
+    exit(_context, config) {
+      outcomeStops.get(config)?.();
+      outcomeStops.delete(config);
+    },
+  });
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });

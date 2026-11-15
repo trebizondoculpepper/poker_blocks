@@ -18,7 +18,15 @@ export type MassComponent = { name: string; density: number; volume: number };
 
 export type PhysicalMass =
   | { components: readonly MassComponent[] }
-  | { effective: number; rationale: string };
+  | { effective: number; rationale: string }
+  /**
+   * Instance-derived (#1068; doc/material-mass-and-passives.md): a registered provider resolves
+   * each instance's mass from its own state. `rule` explains it where there is no instance.
+   */
+  | { provider: string; config?: unknown; rule: string };
+
+/** A resolved mass, or why it could not be resolved: never a fabricated zero. */
+export type MassReading = { kg: number } | { unavailable: string };
 
 /** A solid block of one substance, filling the whole nominal volume. */
 export const solid = (name: string, density: number): MassComponent[] => [
@@ -64,13 +72,46 @@ export const airFanHousing: MassComponent[] = [
   { name: "air", density: 1.2, volume: 0.8 },
 ];
 
+// Owner-agreed calibration (#1061, #1067; doc/material-mass-and-passives.md). Rounded effective
+// values replace earlier component estimates where the owner chose a total; the visual vessel
+// adds nothing to them.
+/** A solid litre of gold (NIST reference 19,320 kg/m³): the Heavy passive's reference too. */
+export const goldSolid: MassComponent[] = [{ name: "gold", density: 19320, volume: 1 }];
+/** One litre of water: the visual vessel adds no mass. */
+export const waterLitre: MassComponent[] = [{ name: "water", density: 1000, volume: 1 }];
+/** One litre of air at 1.2 kg/m³; decorative fans add no mass. */
+export const airLitre: MassComponent[] = [{ name: "air", density: 1.2, volume: 1 }];
+/** A closed 10 cm cube with a 1 cm fired-clay shell: (0.1³ - 0.08³) × 1800 = 0.8784 kg. */
+export const terracottaShell: MassComponent[] = [
+  { name: "fired clay shell", density: 1800, volume: (0.1 ** 3 - 0.08 ** 3) / nominalVolume },
+];
+const effective = (kg: number, rationale: string): PhysicalMass => ({ effective: kg, rationale });
+export const hollowSteelMass = effective(
+  2.2,
+  "Hollow cube of about 5 mm steel plate, rounded gameplay mass; not solid steel",
+);
+export const halfFilledEarthMass = effective(
+  0.8,
+  "Half-filled loose soil, mainly silica; effective bulk, not solid silica",
+);
+export const halfFilledCustardMass = effective(
+  0.5,
+  "Half-filled water/starch at water density; no shell surcharge",
+);
+export const gelatoMass = effective(0.5, "Owner's ice-cream gameplay calibration");
+export const cloudMass = effective(0.002, "Air plus moisture; approved effective value");
+export const fireCardMass = effective(0.01, "Authored light fictional card; no housing surcharge");
+export const emptyVesselMass = effective(0.001, "Approved effective mass");
+
 /** A recipe from components (shell, then fill). */
 export const massOf = (...parts: readonly MassComponent[][]): PhysicalMass => ({
   components: parts.flat(),
 });
 
-/** The recipe's mass, kg. */
+/** The recipe's mass, kg. An instance-derived recipe has none without its instance. */
 export function massKg(mass: PhysicalMass): number {
+  if ("provider" in mass)
+    throw new Error(`"${mass.provider}" mass is resolved per instance: ${mass.rule}`);
   return "effective" in mass
     ? mass.effective
     : mass.components.reduce(
@@ -82,6 +123,10 @@ export function massKg(mass: PhysicalMass): number {
 /** Everything wrong with a definition's recipe: a missing, empty or non-positive one. */
 export function validatePhysicalMass(owner: string, mass: PhysicalMass | undefined): string[] {
   if (!mass) return [`${owner}: no physical mass recipe`];
+  if ("provider" in mass)
+    return mass.provider && mass.rule
+      ? []
+      : [`${owner}: an instance-derived mass needs a provider and a rule`];
   if ("effective" in mass)
     return mass.effective > 0 && Number.isFinite(mass.effective) && mass.rationale
       ? []
@@ -103,8 +148,31 @@ export type MassAggregate = { totalKg: number; count: number; meanKg: number | n
  */
 export function aggregateMass<T>(
   scope: readonly T[],
-  recipeOf: (item: T) => PhysicalMass,
-): MassAggregate {
-  const totalKg = scope.reduce((sum, item) => sum + massKg(recipeOf(item)), 0);
+  readingOf: (item: T) => MassReading,
+): MassAggregate | { unavailable: string } {
+  let totalKg = 0;
+  for (const item of scope) {
+    const reading = readingOf(item);
+    if ("unavailable" in reading) return reading;
+    totalKg += reading.kg;
+  }
   return { totalKg, count: scope.length, meanKg: scope.length ? totalKg / scope.length : null };
 }
+
+/**
+ * A mass for people to read (#1069; doc/material-mass-and-passives.md): grams below 1 kg,
+ * kilograms otherwise, to at most three significant digits. Calculations keep full precision.
+ */
+export function formatMass(kg: number): string {
+  const [value, unit] = kg < 1 ? [kg * 1000, "g"] : [kg, "kg"];
+  return `${Number(value.toPrecision(3))} ${unit}`;
+}
+
+/** The inspection line for a resolved mass: weight, colloquially, though the data is mass. */
+export const weightLine = (kg: number): string => `Weight: ${formatMass(kg)}`;
+
+/** Magic: three times the shared Paper calibration, with no container surcharge. */
+export const magicMass = effective(
+  3 * massKg(massOf(paperShell)),
+  "Three times the shared Paper calibration; no container surcharge",
+);

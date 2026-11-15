@@ -243,3 +243,13 @@ button:focus-visible {
   background: #2b3550;
   font-size: 0.75rem;
 }
+
+/* The sound the room was opened at (#1012): marked, focused and in view, never auto-played. */
+.sound.selected {
+  outline: 2px solid #f2c14e;
+  outline-offset: 2px;
+}
+.selected-sound-message {
+  margin: 0 0 12px;
+  color: #f2c14e;
+}

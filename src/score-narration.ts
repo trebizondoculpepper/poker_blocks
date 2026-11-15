@@ -45,7 +45,15 @@ export type NarratedLine = {
  * Where a committed play left the stage, captured when it committed: narration and its
  * fallback show this, never the live model, which a later play may already have changed.
  */
-export type NarratedEndpoint = { score: number; outcome: RoundOutcome };
+export type NarratedEndpoint = {
+  score: number;
+  outcome: RoundOutcome;
+  /**
+   * The committed play's response occurrence (#881): its action ID with the outcome response,
+   * captured at commit, so a presentation can recognise a retry of the same outcome.
+   */
+  occurrence?: string;
+};
 
 /** A committed play: its lines and its captured endpoint. */
 export type NarratedPlay = { lines: readonly NarratedLine[]; endpoint: NarratedEndpoint };
