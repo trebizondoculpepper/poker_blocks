@@ -237,6 +237,8 @@ export function createMountRegistry<Pose, Appearance>(services: unknown = null) 
      * one already applied to the same mount is refused; so is one for a stale handle.
      */
     publish(update: MountProjectionUpdate, target: MountHandle | null = null): boolean {
+      // An update no projection is registered for applies nothing (#1164).
+      if (!mountProjections.has(update.handler)) return false;
       if (target) {
         const entry = live(target);
         if (!entry || update.correlation <= entry.correlation) return false;
