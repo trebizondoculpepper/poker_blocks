@@ -19,6 +19,11 @@
  * The average-pace projection and its crossing estimate are #1066's.
  */
 import type { CommittedMetadata } from "./command-codecs";
+import {
+  createPictureReleaseController,
+  pictureReleaseProducer,
+} from "./picture-release-controller";
+import type { AttachmentReleaseConfig } from "./visual/attachment-release";
 import type { EventEnvelope } from "./lifecycle/action";
 import type { PlacementPhase } from "./placement-phase";
 import {
@@ -54,6 +59,11 @@ export type StageScoreGraphConfig = {
   targetHeight?: number;
   /** Each new segment's growth, in game-time units (default 4). */
   growthUnits?: number;
+  /**
+   * The picture drops from its nails when the stage is lost (#1065): the release effect's
+   * configuration. Left out, it stays hung.
+   */
+  release?: AttachmentReleaseConfig;
 };
 
 export const observedStyle = { colour: "#1f5f8b", width: 4 };
@@ -186,6 +196,10 @@ export type StageScoreGraphHost = {
   room: THREE.Object3D;
   /** Where the hidden semantic summary goes. */
   host: HTMLElement;
+  /** Resolved reduced motion, read when a release starts. */
+  reducedMotion?: () => boolean;
+  /** The picture's impact cue as it lands, for a sound controller (#1080). */
+  impact?: (cue: string) => void;
 };
 
 /** The stage graph service: shown by the scene trait that composes it, hidden when it leaves. */
@@ -197,13 +211,16 @@ export function createStageScoreGraph(host: StageScoreGraphHost) {
     controller: ScoreGraphController;
     summary: HTMLElement;
     release: () => void;
+    /** The loss release, while one is configured (#1065). */
+    fall: { dispose(): void } | null;
   };
   let shown: Shown | null = null;
 
   const hide = () => {
     if (!shown) return;
-    const { surface, texture, picture, controller, summary, release } = shown;
+    const { surface, texture, picture, controller, summary, release, fall } = shown;
     shown = null;
+    fall?.dispose();
     controller.dispose();
     release();
     host.room.remove(picture.object);
@@ -251,7 +268,27 @@ export function createStageScoreGraph(host: StageScoreGraphHost) {
           },
         },
       });
-      shown = { surface, texture, picture, controller, summary, release };
+      // Composed after the graph's producer, so a failure's release follows its plot (#1065).
+      const fall = config.release
+        ? (() => {
+            const releaseProducer = host.compose(pictureReleaseProducer);
+            const made = createPictureReleaseController({
+              source: host.source,
+              phase: host.phase,
+              target: { object: picture.object, attachments: picture.attachments },
+              config: config.release,
+              reducedMotion: host.reducedMotion ?? (() => false),
+              impact: host.impact,
+            });
+            return {
+              dispose() {
+                made.dispose();
+                releaseProducer();
+              },
+            };
+          })()
+        : null;
+      shown = { surface, texture, picture, controller, summary, release, fall };
       // The stage as it stands, drawn at once: no replay.
       const history = host.history();
       if (history) controller.show(history);

@@ -368,6 +368,8 @@ const playSceneTraits: Partial<SceneTraits> = {
       position: [2.2, 1.0, -10],
       rotation: [0, -0.12, 0],
     },
+    // On a lost stage the left nail goes, it swings from the right, then falls (#1065).
+    release: { first: "left", pivot: "right", swingUnits: 6, fallUnits: 8 },
   },
   // The stage's outcome cues, once its deciding sequence has finished (#881).
   outcomeCues: { won: "round.cleared", lost: "round.failed" },
