@@ -203,6 +203,12 @@ describe("mass passive artwork (#1009)", async () => {
   it("registers drawn feather and anvil icons", () => {
     expect(faceIcons.has("feather")).toBe(true);
     expect(faceIcons.has("anvil")).toBe(true);
+    // Ace Exchange's bin of Aces (#1004).
+    expect(faceIcons.has("aceBin")).toBe(true);
+    expect(passiveDefinitions.get("ace-exchange").faces?.[0]?.icon).toEqual({
+      name: "aceBin",
+      count: 1,
+    });
     expect(iconCluster(1)).toHaveLength(1);
     expect(iconCluster(3)).toHaveLength(3);
   });
