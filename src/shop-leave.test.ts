@@ -1,56 +1,42 @@
 import { describe, expect, it } from "vite-plus/test";
-import { leaveShop, type ShopLeaveSteps } from "./shop-leave";
-
-function steps(overrides: Partial<ShopLeaveSteps> & { stock?: number } = {}) {
-  const log: string[] = [];
-  let release: () => void = () => {};
-  const burning = new Promise<void>((resolve) => (release = resolve));
-  let current = true;
-  const all: ShopLeaveSteps = {
-    outgoing: () => overrides.stock ?? 3,
-    commit: () => (log.push("commit"), true),
-    save: () => void log.push("save"),
-    burn: () => (log.push("burn"), burning),
-    sound: (id) => void log.push(`sound ${id}`),
-    current: () => current,
-    ...overrides,
-  };
-  return { all, log, release, newRun: () => (current = false) };
-}
+import { leaveShop } from "./shop-leave";
 
 describe("leaving the shop, model first (#880)", () => {
-  it("commits and saves before the burn, cues the burn at its start and leave at the end", async () => {
-    const s = steps();
-    const done = leaveShop(s.all);
+  it("commits and saves before waiting on the outgoing effect, then navigates", async () => {
+    const log: string[] = [];
+    let release: () => void = () => {};
+    const done = leaveShop({
+      commit: () => (log.push("commit"), true),
+      save: () => void log.push("save"),
+      outgoingDone: () => (log.push("wait"), new Promise<void>((r) => (release = r))),
+      current: () => true,
+    });
     await Promise.resolve();
-    // The model has already left, and nothing waits on the burn to commit it.
-    expect(s.log).toEqual(["commit", "save", "sound shop.stock.burn", "burn"]);
-    s.release();
+    expect(log).toEqual(["commit", "save", "wait"]);
+    release();
     expect(await done).toBe(true);
-    expect(s.log.at(-1)).toBe("sound shop.leave");
   });
 
-  it("plays no burn cue when nothing was in stock", async () => {
-    const s = steps({ stock: 0 });
-    s.release();
-    await leaveShop(s.all);
-    expect(s.log).not.toContain("sound shop.stock.burn");
-    expect(s.log).toContain("sound shop.leave");
+  it("does nothing more for a refused leave", async () => {
+    const log: string[] = [];
+    const navigate = await leaveShop({
+      commit: () => false,
+      save: () => void log.push("save"),
+      outgoingDone: () => (log.push("wait"), Promise.resolve()),
+      current: () => true,
+    });
+    expect(navigate).toBe(false);
+    expect(log).toEqual([]);
   });
 
-  it("presents nothing for a refused leave", async () => {
-    const s = steps({ commit: () => false });
-    expect(await leaveShop(s.all)).toBe(false);
-    expect(s.log).toEqual([]);
-  });
-
-  it("lets a run started during the burn take over: no leave cue, no navigation", async () => {
-    const s = steps();
-    const done = leaveShop(s.all);
-    await Promise.resolve();
-    s.newRun();
-    s.release();
-    expect(await done).toBe(false);
-    expect(s.log).not.toContain("sound shop.leave");
+  it("does not navigate once a new run has taken over", async () => {
+    expect(
+      await leaveShop({
+        commit: () => true,
+        save: () => {},
+        outgoingDone: () => Promise.resolve(),
+        current: () => false,
+      }),
+    ).toBe(false);
   });
 });

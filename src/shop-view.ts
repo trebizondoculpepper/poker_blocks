@@ -60,7 +60,13 @@ export type ShopView = {
    */
   readonly guideProvider: DropGuideProvider;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
-  burnUnsold(reducedMotion: boolean): Promise<void>;
+  /**
+   * Burn the displayed offers (all, or only those `ids` name: a receipt's captured outgoing
+   * stock, #880). Returns the burn in progress if one already is.
+   */
+  burnUnsold(reducedMotion: boolean, ids?: readonly string[]): Promise<void>;
+  /** The burn in progress, or an already-settled promise when there is none (#880). */
+  outgoingDone(): Promise<void>;
   /** Draw one frame; `delta` (seconds) advances the stock's ambient motion (#774). */
   frame(delta?: number): void;
   /**
@@ -489,23 +495,25 @@ export function createShopView(
   }
 
   /** Stagger the unsold offers' Perlin burn-out across roughly 1.5 seconds. */
-  function burnUnsold(reducedMotion: boolean): Promise<void> {
+  function burnUnsold(reducedMotion: boolean, ids?: readonly string[]): Promise<void> {
     finishEntrance();
     if (burnPromise) return burnPromise;
-    if (displayed.length === 0) {
+    // The receipt's captured outgoing stock when given; otherwise everything shown.
+    const burning = ids ? displayed.filter(({ offer }) => ids.includes(offer.block.id)) : displayed;
+    if (burning.length === 0) {
       render([], false);
       return Promise.resolve();
     }
     stock.classList.add("is-burning");
     buyTarget.hidden = true;
-    const seconds = reducedMotion ? 0.4 : displayed.length === 1 ? 1.5 : 1.05;
-    const stagger = reducedMotion || displayed.length === 1 ? 0 : 0.45 / (displayed.length - 1);
+    const seconds = reducedMotion ? 0.4 : burning.length === 1 ? 1.5 : 1.05;
+    const stagger = reducedMotion || burning.length === 1 ? 0 : 0.45 / (burning.length - 1);
     burnPromise = new Promise((resolve) => {
       burn = {
         startedAt: performance.now(),
         seconds,
         reduced: reducedMotion,
-        jobs: displayed.map((entry, index) => ({
+        jobs: burning.map((entry, index) => ({
           entry,
           delay: index * stagger * 1000,
           lastAt: 0,
@@ -719,6 +727,7 @@ export function createShopView(
     guideProvider: shopGuideProvider(() => dragging?.entry.offer ?? null, dropTargets, verdict),
     render,
     burnUnsold,
+    outgoingDone: () => burnPromise ?? Promise.resolve(),
     frame,
     present(config) {
       presented = config;

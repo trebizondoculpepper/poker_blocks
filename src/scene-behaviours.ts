@@ -1,3 +1,4 @@
+import { shopExitResponse } from "./scene-traits/shop-exit-response";
 import {
   createPlayfieldRockingController,
   type PlayfieldRockingServices,
@@ -755,6 +756,9 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // pause menu) neither restarts nor changes it.
   // Each committed fact's configured sound, for plays and discards alike (#755).
   behaviours.register("committedEventSounds", committedEventSounds<Context>());
+  // The shop's exit response (#880; doc/outcome-presentation.md): it presents the committed
+  // shop.left receipt, burning exactly the stock that left, with the configured cues.
+  behaviours.register("shopExitResponse", shopExitResponse<Context>());
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });

@@ -221,7 +221,7 @@
   "shop.stock.burn": {
     "uses": 1,
     "files": {
-      "shop-leave.ts": 1
+      "game-modes.ts": 1
     }
   },
   "run.lost": {
@@ -403,7 +403,7 @@
   "shop.leave": {
     "uses": 1,
     "files": {
-      "shop-leave.ts": 1
+      "game-modes.ts": 1
     }
   },
   "material.activate.wood": {

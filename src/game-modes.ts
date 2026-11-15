@@ -221,6 +221,8 @@ export type SceneTraits = {
   enterSound: { sfx: SoundEffectId };
   /** Leaving this scene plays a sound: the title or settings screen closing. */
   exitSound: { sfx: SoundEffectId };
+  /** Presents the committed `shop.left` receipt (#880): its burn and cues. */
+  shopExitResponse: { burnSound: SoundEffectId; leaveSound: SoundEffectId };
   /** Entering the shop runs its camera entrance, unless motion is reduced (#93). */
   shopEntrance: Record<never, never>;
   /**
@@ -680,6 +682,9 @@ export const sceneDefinitions = [
         },
       },
       shopStock: { source: "shop" },
+      // Leaving presents its committed receipt (#880): the stock that left burns, with its cue
+      // as the burn starts (only if any left) and the leave cue once it is done.
+      shopExitResponse: { burnSound: "shop.stock.burn", leaveSound: "shop.leave" },
       // Stock dances a bar-long bob/tilt, rippling a quarter beat per offer (#774).
       shopOfferPresentation: { cycle: "bar", phaseStep: 0.25, bob: 0.03, tiltDegrees: 4 },
       // Laser guide to the dragged offer's preferred target, or a red X when it can't be

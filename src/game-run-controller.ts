@@ -478,11 +478,10 @@ export function createGameRunController<Context>(options: {
       if (leavingShop) {
         const session = game;
         const proceed = await leaveShop({
-          outgoing: () => session.state.shopStock?.length ?? 0,
-          commit: () => session.leaveShop(),
+          commit: () => Boolean(session.leaveShop()),
           save: autosave,
-          burn: () => shop.burnUnsold(reducedMotion),
-          sound: playSfx,
+          // The shop's exit response started this burn from the receipt; this only waits on it.
+          outgoingDone: () => shop.outgoingDone(),
           current: () => game === session,
         });
         if (!proceed) return;

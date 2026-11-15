@@ -181,6 +181,7 @@ function recordingHost() {
           calls.push(`shop:${visible}:${offers.length}`),
         present: () => {},
         burnUnsold: () => Promise.resolve(),
+        outgoingDone: () => Promise.resolve(),
         frame: () => undefined,
         dispose: () => undefined,
       },
