@@ -61,6 +61,8 @@ export type Contribution = {
   /** The producer failed: its scope fails and the summary fallback runs once. */
   fail(reason: string): boolean;
   status(): ScopeStatus;
+  /** Hear its terminal status once (#1280); returns an unsubscribe. */
+  observe(listener: (status: ScopeStatus) => void): () => void;
 };
 
 type Hold = {
@@ -286,6 +288,7 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
           settleEmpty: () => settle("empty"),
           fail: (reason) => settle("failed", null, reason),
           status: () => scheduler.status(scope),
+          observe: (listener) => scheduler.observe(scope, listener),
         });
       }
       // The collection is closed: everything required is reserved before anything can settle.
