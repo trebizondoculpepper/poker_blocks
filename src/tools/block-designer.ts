@@ -245,6 +245,8 @@ export function createBlockDesigner(host: HTMLElement): BlockDesigner {
       built.forEach((block) => block.dispose());
       environment.dispose();
       renderer.dispose();
+      // Release the WebGL context itself: a page may hold only so many (#1365).
+      renderer.forceContextLoss();
       root.remove();
     },
   };

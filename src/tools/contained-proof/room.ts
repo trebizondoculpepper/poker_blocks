@@ -233,6 +233,8 @@ export function createContainedProofRoom(host: HTMLElement): ContainedProofRoom 
       vessels.forEach((vessel) => vessel.dispose());
       environment.dispose();
       renderer.dispose();
+      // Release the WebGL context itself: a page may hold only so many (#1365).
+      renderer.forceContextLoss();
       root.remove();
     },
   };

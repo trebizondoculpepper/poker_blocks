@@ -95,6 +95,14 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
   );
   // The front canvas's z-index lifts it over the HUD panels (src/style.css).
   host.append(front.domElement);
+  // A lost context draws nothing, silently: the room and table go blank (#1365). Say so, once per
+  // loss, with the likeliest cause.
+  for (const canvas of [renderer.domElement, front.domElement])
+    canvas.addEventListener("webglcontextlost", () =>
+      console.warn(
+        "The table's WebGL context was lost; the room and table can't draw. Too many live WebGL contexts on the page is the usual cause (#1365).",
+      ),
+    );
 
   // The hand keeps its neutral studio light; the board sits in the warmer card room,
   // whose overhead lamp (see createCardRoom) adds the shadows.
