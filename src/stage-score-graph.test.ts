@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { graphProducer, type GraphSeries } from "./score-graph-controller";
 import {
+  averagePace,
   createStageScoreGraph,
   stageGraphPlot,
   stageGraphSummary,
@@ -103,7 +104,107 @@ describe("the stage graph's plot data (#1064; doc/line-goes-up.md)", () => {
           [2, 150],
         ]),
       ),
-    ).toBe("Stage score 150, target 300, after 2 of 6 plays.");
+    ).toBe(
+      "Stage score 150, target 300, after 2 of 6 plays. Averaging 75 a play: the target by about play 4.",
+    );
+  });
+});
+
+describe("the average-pace projection (#1066; doc/line-goes-up.md)", () => {
+  it("uses the pace across every play, not the latest one, and marks where it meets the target", () => {
+    // 200 then 40: the latest delta is 40, the average pace 120 a play.
+    const graph = series([
+      [0, 0],
+      [1, 200],
+      [2, 240],
+    ]);
+    expect(averagePace(graph)).toEqual({
+      slope: 120,
+      crossing: 2.5,
+      crossingPlay: 3,
+      beyond: false,
+    });
+    const plot = stageGraphPlot(graph);
+    expect(plot.projections).toEqual([
+      expect.objectContaining({
+        points: [
+          [0, 0],
+          [6, 720],
+        ],
+      }),
+    ]);
+    // Distinct from the observed line and the target: its own dash.
+    expect(plot.projections![0]!.style.dash).not.toEqual(plot.references![0]!.style.dash);
+    expect(plot.references).toContainEqual(
+      expect.objectContaining({ axis: "x", value: 2.5, label: "Target ≈ play 3" }),
+    );
+    // Y follows observed totals, never the steep projection.
+    expect(plot.y.max).toBeCloseTo(300 / 0.8);
+    expect(stageGraphSummary(graph)).toContain("Averaging 120 a play: the target by about play 3.");
+  });
+
+  it("notes a crossing after the last play at the axis edge, never stretching the play axis", () => {
+    const slow = series([
+      [0, 0],
+      [1, 20],
+      [2, 40],
+    ]);
+    expect(averagePace(slow)).toMatchObject({ crossing: 15, beyond: true });
+    const plot = stageGraphPlot(slow);
+    expect(plot.x.max).toBe(6);
+    expect(plot.references).toContainEqual(
+      expect.objectContaining({ axis: "x", value: 6, label: "Target beyond available plays" }),
+    );
+    expect(stageGraphSummary(slow)).toContain("the target would come after the last play");
+  });
+
+  it("projects nothing before the first play, or with nothing scored, and claims no crossing", () => {
+    for (const graph of [
+      series([[0, 0]]),
+      series([
+        [0, 0],
+        [1, 0],
+        [2, 0],
+      ]),
+    ]) {
+      expect(averagePace(graph)).toBeNull();
+      const plot = stageGraphPlot(graph);
+      expect(plot.projections).toEqual([]);
+      expect(plot.references!.filter(({ axis }) => axis === "x")).toEqual([]);
+      expect(stageGraphSummary(graph)).not.toContain("Averaging");
+    }
+  });
+
+  it("keeps the pace but makes no crossing claim when the target is unavailable", () => {
+    const graph = series(
+      [
+        [0, 0],
+        [1, 90],
+      ],
+      { targetScore: 0 },
+    );
+    expect(averagePace(graph)).toEqual({
+      slope: 90,
+      crossing: null,
+      crossingPlay: null,
+      beyond: false,
+    });
+    expect(stageGraphPlot(graph).references).toEqual([]);
+    expect(stageGraphSummary(graph)).toContain("Averaging 90 a play.");
+  });
+
+  it("follows an overshoot: the pace keeps the average, the crossing lies behind it", () => {
+    const graph = series([
+      [0, 0],
+      [1, 400],
+    ]);
+    expect(averagePace(graph)).toMatchObject({
+      slope: 400,
+      crossing: 0.75,
+      crossingPlay: 1,
+      beyond: false,
+    });
+    expect(stageGraphPlot(graph).y.max).toBeCloseTo(400 / 0.8);
   });
 });
 
@@ -171,10 +272,12 @@ describe("the stage graph service (#1064)", () => {
     expect(composed).toEqual([graphProducer]);
     expect(listening()).toBe(1);
     // Restored without replay: the captured history, drawn at once.
-    expect(appended[0]!.textContent).toBe("Stage score 60, target 200, after 1 of 5 plays.");
+    expect(appended[0]!.textContent).toBe(
+      "Stage score 60, target 200, after 1 of 5 plays. Averaging 60 a play: the target by about play 4.",
+    );
     // Its accessible name carries the same words, since an image's text is presentational.
     expect(appended[0]!.attributes["aria-label"]).toBe(
-      "Stage score graph. Stage score 60, target 200, after 1 of 5 plays.",
+      "Stage score graph. Stage score 60, target 200, after 1 of 5 plays. Averaging 60 a play: the target by about play 4.",
     );
   });
 
