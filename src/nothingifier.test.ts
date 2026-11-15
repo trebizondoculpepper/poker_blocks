@@ -175,3 +175,18 @@ function mulberry(seed: number): () => number {
     return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+describe("the Nothingifier's committed removal fact (#1164 review)", () => {
+  it("publishes block.removed for the card it removes, so presentation holding it hears", () => {
+    const run = withRack();
+    const card = run.state.hand[0]!;
+    const types: { type: string; blockId?: string }[] = [];
+    run.onCommitted((facts) =>
+      facts.forEach(({ type, payload }) =>
+        types.push({ type, blockId: (payload as { blockId?: string }).blockId }),
+      ),
+    );
+    expect(run.applyRackItem("n1", card.id)).not.toBeNull();
+    expect(types).toContainEqual({ type: "block.removed", blockId: card.id });
+  });
+});
