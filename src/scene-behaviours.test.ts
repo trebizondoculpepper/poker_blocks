@@ -22,6 +22,7 @@ function recordingHost() {
   const host: SceneHost = {
     host: { dataset: {} } as HTMLElement,
     services: {
+      scoreGraph: { show: () => {}, hide: () => {} },
       visualEvents: {
         nowMs: 0,
         createScope: () => ({}) as never,

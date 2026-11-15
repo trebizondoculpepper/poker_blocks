@@ -29,6 +29,7 @@ import { saveKey } from "./save";
 import type { Scene } from "./scenes";
 import type { DestroyCause } from "./traits/destructible";
 import { standardGameFlow } from "./standard-game-flow";
+import type { StageScoreGraphConfig } from "./stage-score-graph";
 
 export { standardGameFlow };
 
@@ -236,6 +237,11 @@ export type SceneTraits = {
   /** A committed material transition's sound, scheduled on the shared scheduler (#539). */
   materialChangeSounds: Record<never, never>;
   /**
+   * The stage's score graph, hung in the room at its configured transform while this scene is on
+   * the stack (#1064; doc/line-goes-up.md).
+   */
+  stageScoreGraph: StageScoreGraphConfig;
+  /**
    * A stage's outcome cue (#881; doc/outcome-presentation.md, "Two distinct result cues"):
    * played once the deciding action's required sequence finishes, before the result scene.
    */
@@ -346,6 +352,16 @@ const playSceneTraits: Partial<SceneTraits> = {
   committedEventSounds: {},
   // What a card becomes is heard as it changes (#539).
   materialChangeSounds: {},
+  // The stage's score graph (#1064): framed on the back wall, toward the top right, behind the
+  // table and fixed in the room, so the camera sees it in perspective and the cards can pass in
+  // front of it. A reversible starting transform (doc/line-goes-up.md).
+  stageScoreGraph: {
+    picture: {
+      size: { width: 3.6, height: 2.25 },
+      position: [6.2, 0.3, -10],
+      rotation: [0, -0.12, 0],
+    },
+  },
   // The stage's outcome cues, once its deciding sequence has finished (#881).
   outcomeCues: { won: "round.cleared", lost: "round.failed" },
   // Rocking waits a second after a turn, eases in over a second, and slows as the field gets

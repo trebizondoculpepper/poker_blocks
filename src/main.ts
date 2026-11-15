@@ -1,4 +1,5 @@
 import { createPlacementPhase, placementProducer, scoringProducer } from "./placement-phase";
+import { createStageScoreGraph, type StageScoreGraph } from "./stage-score-graph";
 import { createActionPhases } from "./visual-events/action-phases";
 import type { TransitionAudioServices } from "./scene-traits/material-change-sounds";
 import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
@@ -165,6 +166,7 @@ type TraitContext = {
     renderer: TableRenderer;
     cameraView: CameraViewService;
     playfieldRocking: PlayfieldRockingServices;
+    scoreGraph: StageScoreGraph;
     visualEvents: ShopExitScheduler;
     audio: AudioService;
     hud: HudPanels;
@@ -275,6 +277,10 @@ const traitContext: TraitContext = {
     cameraView,
     get visualEvents() {
       return visualEvents;
+    },
+    // The stage score graph a stage scene composes (#1064), built with the run below.
+    get scoreGraph() {
+      return scoreGraph;
     },
     // The rocking controller's capabilities (#783): wiring only, no policy.
     playfieldRocking: {
@@ -507,13 +513,21 @@ const visualEvents = createVisualScheduler({ services: visualServices });
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
 document.addEventListener("visibilitychange", () => visualEvents.suspend());
 // Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).
-const placementPhase = createPlacementPhase(
-  run,
-  createActionPhases(visualEvents, {
-    plan: "scoring",
-    producers: [placementProducer, scoringProducer],
-  }),
-);
+const actionPhases = createActionPhases(visualEvents, {
+  plan: "scoring",
+  producers: [placementProducer, scoringProducer],
+});
+const placementPhase = createPlacementPhase(run, actionPhases);
+// The stage score graph (#1064): hung in the room (never the turning assembly), its producer
+// composed only while a scene shows it.
+const scoreGraph = createStageScoreGraph({
+  source: run,
+  history: () => run.committedState().round.history,
+  phase: placementPhase,
+  compose: (producer) => actionPhases.compose(producer),
+  room: view.scene,
+  host,
+});
 const presenter: PlayPresenter = createPlayPresenter({
   game: () => run.game,
   views: blockViews,
@@ -635,6 +649,7 @@ const step = (time: number) => {
   cameraView.update(playfield.time, playfield.delta);
   presenter.update(time, delta);
   visualEvents.update(time, document.visibilityState === "visible");
+  scoreGraph.frame();
   run.followOutcomes(time);
   field.update(playfield.time, run.reducedMotion);
   sceneManager.update(delta);

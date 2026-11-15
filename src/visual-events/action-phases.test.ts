@@ -355,3 +355,23 @@ describe("action-correlated presentation phases (#1218; doc/action-presentation-
     expect(landing.mock.calls[0]![0]).toEqual({ state: "finished" });
   });
 });
+
+describe("producers composed while a scene trait is mounted (#1064)", () => {
+  it("reserves for a composed producer only between compose and its removal", async () => {
+    const { createVisualScheduler } = await import("./scheduler");
+    const { createActionPhases, phaseProducers } = await import("./action-phases");
+    if (!phaseProducers.has("test.composed"))
+      phaseProducers.register("test.composed", { reserve: () => ({ slot: "postScoring" }) });
+    const phases = createActionPhases(createVisualScheduler(), { plan: "scoring", producers: [] });
+    const before = phases.commit("a1", {});
+    const release = phases.compose("test.composed");
+    const during = phases.commit("a2", {});
+    release();
+    release();
+    const after = phases.commit("a3", {});
+    const has = (result: typeof before) =>
+      result.ok && phases.contribution(result.key, "test.composed") !== null;
+    expect([has(before), has(during), has(after)]).toEqual([false, true, false]);
+    expect(() => phases.compose("no.such.producer")).toThrow();
+  });
+});
