@@ -99,6 +99,23 @@ describe("passive token visuals (#125)", () => {
     expect(visual.geometry.boundingBox!.max.x).toBeCloseTo(1.45 / 2);
   });
 
+  it("paints a face's own ink over its category palette: Seeing Red's red suits (#1005)", () => {
+    const definition = passiveDefinitions.get("seeing-red");
+    const inks: string[] = [];
+    const visual = createPassiveVisual(
+      { symbol: definition.symbol, palette, faces: definition.faces },
+      1,
+      (used, face) => {
+        inks.push(face.ink ?? used.ink);
+        return painter(used, face);
+      },
+    );
+    expect(visual.faces.every(({ label }) => label === "♥♦")).toBe(true);
+    expect(new Set(inks)).toEqual(new Set(["#ff5a52"]));
+    // Same artwork on every face: one shared texture.
+    expect(visual.textures).toHaveLength(1);
+  });
+
   it("draws a test-only shape without editing the renderer or the rack", () => {
     passiveShapes.register("test-tetrahedron", {
       geometry: () => new THREE.TetrahedronGeometry(0.7, 0).toNonIndexed(),

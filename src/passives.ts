@@ -436,6 +436,9 @@ const definitions: PassiveDefinition[] = [
     categoryTrait: { economyCategory: {} },
     name: "Seeing Red",
     symbol: "♥♦",
+    // Red suit icons on its category's face (#1005; doc/audition-followups.md): face artwork,
+    // not a per-passive palette (#81).
+    faces: Array.from({ length: 6 }, () => ({ label: "♥♦", ink: "#ff5a52" })),
     description: "Earns 1 coin for each Heart or Diamond discarded. Unlimited use.",
     traitId: "passive.event-rules",
     eventRules: [
