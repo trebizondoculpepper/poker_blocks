@@ -1747,3 +1747,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Captured visual mount reconciliation (#1161)
 
 [The scheduler interface](visual-event-interface.md#captured-snapshots-and-missing-presentation-mounts-1161) defines generation/revision-scoped mount handles, independent pose/appearance channels and commit-side captured projection updates. Delayed effects read presentation transforms only, never live GameRun ownership/material state. Registered missing-target policies either omit cosmetic work, retain an explicitly captured exit snapshot or present a captured required summary, with exactly-once bounded settlement. This supersedes the previously undefined missing-mount reference in #544/#548.
+
+## Shared narration text layout (#1046)
+
+[Shared fitted narration](presentation-contracts.md#shared-fitted-narration-text-and-over-item-activation-labels-1046) defines one content-independent measured text-block provider and separate registered anchor/placement capabilities for score and passive narration. Passive labels stay centered over projected item bounds; immutable descriptors and existing scheduler/pulse timing remain authoritative. The source audit distinguishes the current above/below captions from the proposed shared fitting capability. Runtime adopters must share the component rather than fork it.
