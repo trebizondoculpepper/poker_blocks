@@ -5,8 +5,10 @@
  * changing their motion. Earth composes it; nothing names earth.
  *
  * Lifecycle (doc/presentation-contracts.md, "Grass survives until fully buried", #765):
- * - **A blade stays where it grew.** Its root, lean and height are fixed in the block's own
- *   space when it is born; the moving soil never drags it along.
+ * - **A blade follows receding soil, never rising soil** (one-way surface constraint, #1090).
+ *   Each frame, a root left above the published surface is moved straight down onto it, and
+ *   keeps that place; a root under the surface stays put, so advancing soil covers the blade
+ *   rather than lifting it. Its born orientation, lean, width and growth never change.
  * - **Turning restarts the clock for new growth only.** When the block's world rotation moves by
  *   more than `turnDegrees` from where the stillness started, the timer resets, so no new blade
  *   is born until it is still again; existing blades stay. Camera movement doesn't change the
@@ -191,6 +193,18 @@ export const growingGrass: InclusionHandler = {
       return true;
     };
 
+    /**
+     * Pull blade `i`'s root down onto a surface that has receded beneath it (#765, #1090): with
+     * signed distance `d = n·r − h` (mesh space), a root more than the tolerance above moves by
+     * `−d·n`. Below or on the surface it stays, so rising soil buries rather than lifts it.
+     */
+    const reanchor = (i: number) => {
+      root.fromArray(bases, i * 3);
+      const d = root.dot(surface.normal) - surface.height / scale;
+      if (d <= tolerance) return;
+      root.addScaledVector(surface.normal, -d).toArray(bases, i * 3);
+    };
+
     return {
       meshes: [mesh],
       update({ delta, rotation, reducedMotion }) {
@@ -216,6 +230,7 @@ export const growingGrass: InclusionHandler = {
           if (!alive[i]) continue;
           const age = clock - births[i]!;
           const t = reducedMotion ? 1 : Math.min(age / config.growSeconds, 1);
+          reanchor(i);
           draw(i, t * t * (3 - 2 * t));
           if (buried(i)) retire(i);
         }
