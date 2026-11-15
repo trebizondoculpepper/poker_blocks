@@ -3,7 +3,7 @@ import type { ActivationDescriptorConfig } from "./activation-descriptor";
 import type { QuerySnapshot } from "./context-queries";
 import {
   composeCatalogue,
-  ordinaryCatalogue,
+  passiveCatalogue,
   releaseStatusInspection,
   type ReleaseStatusDeclaration,
 } from "./release-status";
@@ -674,15 +674,26 @@ export class PassiveEventQueue {
 
 /** Pick distinct definitions without depending on registry insertion order after each draw. */
 /**
- * The passives normal play may offer or grant: the registered definitions admitted by the ordinary
- * (certified-only) catalogue, in registration order (doc/release-status.md, #812).
+ * The passives normal play may offer or grant: the registered definitions the passive catalogue
+ * admits, certified and provisional alike (#1393), in registration order (doc/release-status.md).
  */
+/**
+ * The initial, reversible offer recipe for an implemented gameplay trial with no authored balance
+ * of its own (#1393; doc/release-status.md): 6 coins, unlocked from round 1, common weight.
+ * Material requirements still apply. Trials set it on their own definitions.
+ */
+export const trialOffer: PassiveShopBalance = Object.freeze({
+  basePrice: 6,
+  unlockRound: 1,
+  frequency: "trial",
+});
+
 export function ordinaryPassives(): PassiveDefinition[] {
   return composeCatalogue(
     passiveDefinitions.names().map((name) => passiveDefinitions.get(name)),
     ({ id }) => id,
     ({ releaseStatus }) => releaseStatus,
-    ordinaryCatalogue,
+    passiveCatalogue,
   ).map(({ definition }) => definition);
 }
 

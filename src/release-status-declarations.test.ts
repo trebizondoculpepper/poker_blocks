@@ -41,14 +41,25 @@ describe("release-status declarations (#812)", () => {
     expect(ids(ordinaryPassives())).toEqual(ids(all));
   });
 
-  it("never offers a provisional passive to normal play", () => {
+  it("admits provisional passives to normal play, and only passives (#1393)", async () => {
     const template = passiveDefinitions.get(passiveDefinitions.names()[0]!);
     passiveDefinitions.register("test.trial-passive", {
       ...template,
       id: "test.trial-passive",
       releaseStatus: { provisional: {} },
     });
-    expect(ids(ordinaryPassives())).not.toContain("test.trial-passive");
+    expect(ids(ordinaryPassives())).toContain("test.trial-passive");
+    // The shared certified-only catalogue (materials and every other family) is unchanged.
+    const { composeCatalogue, ordinaryCatalogue } = await import("./release-status");
+    const provisional = { id: "test.provisional", releaseStatus: { provisional: {} } };
+    expect(
+      composeCatalogue(
+        [provisional],
+        ({ id }) => id,
+        ({ releaseStatus }) => releaseStatus,
+        ordinaryCatalogue,
+      ),
+    ).toEqual([]);
   });
 
   it("shows provisional status in inspection and never a certification notice (#813, #923)", async () => {

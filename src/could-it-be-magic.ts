@@ -6,7 +6,9 @@
  * through the registered material change. With none eligible the conversion fails, the counter
  * still resets and nothing is banked. Artwork and shop availability are out of scope (#989).
  */
-import { passiveDefinitions, type PassiveDefinition } from "./passives";
+import { getMaterialDefinition } from "./materials";
+import { materialUnlockRound } from "./offer-eligibility";
+import { passiveDefinitions, trialOffer, type PassiveDefinition } from "./passives";
 import "./play-counter";
 
 /** The agreed provisional cadence. */
@@ -14,8 +16,10 @@ export const magicEvery = 4;
 
 export const couldItBeMagicNow: PassiveDefinition = {
   id: "trial-could-it-be-magic-now",
-  // Experimental catalogues only, never normal shops (doc/release-status.md).
+  // A provisional trial, offered in normal runs with the trial recipe (#1393), unlocked no
+  // earlier than Magic, which it names (the existing material-dependency rule).
   releaseStatus: { provisional: {} },
+  shop: { ...trialOffer, unlockRound: materialUnlockRound(getMaterialDefinition("magic")) },
   lifecycle: { parent: "rackItem" },
   name: "Could It Be Magic Now?",
   symbol: "✦",
