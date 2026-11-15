@@ -1,3 +1,4 @@
+import { prepareWebsite } from "./scripts/prepare-website";
 import { defineConfig } from "vite-plus";
 import { version } from "./package.json";
 import { buildVersion, gitIn } from "./scripts/versioning.ts";
@@ -17,10 +18,24 @@ const appVersion =
  */
 export default defineConfig(({ mode }) => ({
   base: "./",
+  plugins:
+    mode === "game"
+      ? []
+      : [
+          {
+            name: "static-website-reference-pages",
+            async buildStart() {
+              await prepareWebsite(import.meta.dirname);
+            },
+            async configureServer() {
+              await prepareWebsite(import.meta.dirname);
+            },
+          },
+        ],
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
   ...(mode === "game"
     ? { root: "game", build: { outDir: "../dist/game", emptyOutDir: true } }
-    : { build: { rollupOptions: { input: "index.html" } } }),
+    : { build: { rollupOptions: { input: ["index.html", "materials.html", "modifiers.html"] } } }),
   fmt: {},
   // The pre-commit hook (.vite-hooks/pre-commit) formats and lints only the staged files.
   staged: {
