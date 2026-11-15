@@ -8,19 +8,30 @@ import { blockName } from "../block-presentation";
 import { type CardBlock } from "../cards";
 import type { BlockTraitBehavior } from "../block-trait-behaviours";
 import { inspectable } from "./inspectable";
+import type { SoundEffectId } from "../audio/sfx-registry";
 
 /** What can destroy a block. "manual" is the testing mode's double-click. */
 export type DestroyCause = "manual";
 
-export type DestructibleTrait = { by: readonly DestroyCause[] };
+export type DestructibleTrait = {
+  by: readonly DestroyCause[];
+  /** Its destruction response (#879): the sound a successful destruction's fact carries. */
+  sound?: SoundEffectId;
+};
 
 /** Whether `cause` may destroy this block. A block without the trait cannot be destroyed. */
 export const destructibleBehavior: BlockTraitBehavior = {
   canDestroy: (config, _block, cause) => (config as DestructibleTrait).by.includes(cause),
+  destroySound: (config) => (config as DestructibleTrait).sound,
 };
 
 /** Dev mode configuration (testing only): which share of a deck is destructible, and by what. */
-export type DevDestructibleMix = { share: number; by: readonly DestroyCause[] };
+export type DevDestructibleMix = {
+  share: number;
+  by: readonly DestroyCause[];
+  /** The destruction response its blocks carry (#879); `block.destroyed` unless configured. */
+  sound?: SoundEffectId;
+};
 
 /** A stable number in [0, 1) for a card id, so the mix survives a reload without a seed. */
 function idFraction(id: string): number {
@@ -47,7 +58,7 @@ export function withDevDestructibleMix(
           ...chosen,
           traits: {
             ...chosen.traits,
-            destructible: { by: mix.by },
+            destructible: { by: mix.by, sound: mix.sound ?? "block.destroyed" },
             inspectable: inspectable(
               `${chosen.traits.inspectable?.inspect() ?? blockName(chosen)} · Destructible`,
             ),

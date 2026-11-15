@@ -371,6 +371,8 @@ export const weightPassives = {
 export const packingPassives = {
   // Dense (#1070): no bonus at or below 70%, exponent 1.3 when fully packed.
   dense: { neutral: 0.7, cap: 1, maximum: 1.3 },
+  // Sparse (#1071): no bonus at or above 20%, exponent 1.3 at or below 10%.
+  sparse: { neutral: 0.2, cap: 0.1, maximum: 1.3 },
 } as const;
 
 /** A provisional row-multiplier passive driven by a context query, validated as composed. */
@@ -407,6 +409,23 @@ function queryTrial(
 }
 
 for (const definition of [
+  // Sparse (#1071): a thinly spread field raises each scored row to up to the power 1.3.
+  queryTrial(
+    "sparse-packing",
+    "Sparse",
+    "□",
+    "Raises each scored row to a power of up to 1.3 the more thinly the playfield is spread: no bonus at 20% packing or more, 1.3 at 10% or less.",
+    {
+      query: "packingDensity",
+      value: "density",
+      curve: "exponentRamp",
+      params: packingPassives.sparse,
+      phase: "score.linePower",
+      effect: "power-line-score-by-query",
+    },
+    ["density"],
+    ["exponential"],
+  ),
   // Dense (#1070): a tightly packed field raises each scored row to up to the power 1.3.
   queryTrial(
     "dense-packing",
