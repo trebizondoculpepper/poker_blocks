@@ -11,7 +11,7 @@
  */
 import { Registry } from "./core/registry";
 import { query } from "./context-queries";
-import type { EventRule } from "./event-rules";
+import type { EventRule, RuleFrame } from "./event-rules";
 import { passiveRuleBuilders, type ParameterSchema } from "./configurable-passive";
 import { passiveDefinitions, type PassiveDefinition } from "./passives";
 import { ruleHandlers } from "./rule-handlers";
@@ -117,6 +117,38 @@ scoreCurves.register("lightInverse", {
   },
 });
 
+/** Quadratic ease-out (doc/material-mass-and-passives.md): quick early gain, flat at the cap. */
+export const easeOut = (t: number): number => 1 - (1 - t) ** 2;
+
+type MassEaseParams = { neutralKg: number; capKg: number; maximum: number };
+
+/**
+ * Light and Heavy (#1072, #1073): ×1 at the neutral mass, ×maximum at the cap mass, eased between
+ * with `easeOut`. The cap may lie either side of the neutral mass, so one curve serves both.
+ */
+scoreCurves.register("massEaseOut", {
+  factor: (m, raw) => {
+    const { neutralKg, capKg, maximum } = raw as MassEaseParams;
+    return 1 + (maximum - 1) * easeOut(clamp01((m - neutralKg) / (capKg - neutralKg)));
+  },
+  validate: (raw) => {
+    const { neutralKg, capKg, maximum } = (raw ?? {}) as Partial<MassEaseParams>;
+    return finite(neutralKg!, capKg!, maximum!) &&
+      neutralKg! > 0 &&
+      capKg! > 0 &&
+      neutralKg !== capKg &&
+      maximum! >= 1 &&
+      maximum! <= 10
+      ? []
+      : ["needs positive, distinct neutral and cap masses and a maximum from 1 to 10"];
+  },
+  parameters: {
+    maximum: { label: "Maximum factor", path: ["maximum"], min: 1, max: 10, step: 0.1 },
+    neutralKg: { label: "Neutral mass (kg)", path: ["neutralKg"], min: 0.01, max: 100 },
+    capKg: { label: "Cap mass (kg)", path: ["capKg"], min: 0.01, max: 400 },
+  },
+});
+
 type TierParams = { tiers: readonly { at: number; factor: number }[] };
 
 // The greatest attained tier's factor, ×1 below the first: tiers don't multiply together.
@@ -154,21 +186,37 @@ export type QueryFactorConfig = {
   value: string;
   curve: string;
   params: unknown;
+  /**
+   * The line phase it applies in (#1072). Absent, `score.beforeLineFinalized`, as every earlier
+   * trial was saved; weight passives multiply in `score.lineMultiply`.
+   */
+  phase?: string;
 };
+
+/** The curve's factor for the query's value on this pass's snapshot: ×1 when unavailable. */
+function queryFactor(config: QueryFactorConfig, frame: Readonly<RuleFrame>): number {
+  const snapshot = frame.event.score?.snapshot;
+  // Every query gets the row's scored subset as its scope; one that measures the whole field
+  // ignores it (doc/experiments/spatial-modifiers.md, "Scoring scope and frequency").
+  const scope = { ids: frame.event.score?.scoredIds ?? [] };
+  const result = snapshot ? query<Record<string, number>>(config.query, snapshot, scope) : null;
+  return result?.available === true
+    ? scoreCurves.get(config.curve).factor(result.value[config.value]!, config.params)
+    : 1;
+}
+
+// A neutral factor doesn't fire at all, so it changes nothing and claims no bonus
+// (doc/material-mass-and-passives.md, "Scoring scope, phases and four definitions").
+ruleHandlers.registerCondition<QueryFactorConfig, unknown>(
+  "query-factor-not-neutral",
+  (config, _selected, frame) => queryFactor(config, frame) !== 1,
+);
 
 // The row's working score × the curve's factor for the query's value on this pass's snapshot.
 ruleHandlers.registerEffect<QueryFactorConfig, unknown>(
   "multiply-line-score-by-query",
   (config, _selected, frame) => {
-    const snapshot = frame.event.score?.snapshot;
-    // Every query gets the row's scored subset as its scope; one that measures the whole field
-    // ignores it (doc/experiments/spatial-modifiers.md, "Scoring scope and frequency").
-    const scope = { ids: frame.event.score?.scoredIds ?? [] };
-    const result = snapshot ? query<Record<string, number>>(config.query, snapshot, scope) : null;
-    const factor =
-      result?.available === true
-        ? scoreCurves.get(config.curve).factor(result.value[config.value]!, config.params)
-        : 1;
+    const factor = queryFactor(config, frame);
     const before = frame.workingValue ?? 0;
     const after = before * factor;
     // The factor it actually applied, reported as it applies (#483).
@@ -202,9 +250,9 @@ export function validateQueryFactor(owner: string, config: QueryFactorConfig): s
 /** A trial's rules: one row multiplier on each scored line, from its query factor. */
 const queryFactorRules = (factor: QueryFactorConfig): EventRule[] => [
   {
-    on: "score.beforeLineFinalized",
+    on: factor.phase ?? "score.beforeLineFinalized",
     select: { id: "scored-line", config: {} },
-    where: { id: "always", config: {} },
+    where: { id: "query-factor-not-neutral", config: factor },
     effects: [{ id: "multiply-line-score-by-query", config: factor }],
   },
 ];
@@ -261,6 +309,14 @@ export const massTrials = {
   light: { maximum: 10, referenceKg: 0.2 },
 } as const;
 
+/**
+ * Owner-agreed weight passives (#1061; doc/material-mass-and-passives.md): total field mass,
+ * eased from ×1 at the neutral mass to ×10 at the cap, multiplied in `score.lineMultiply`.
+ */
+export const weightPassives = {
+  light: { neutralKg: 1, capKg: 0.1, maximum: 10 },
+} as const;
+
 /** A provisional row-multiplier passive driven by a context query, validated as composed. */
 function queryTrial(
   id: string,
@@ -293,6 +349,20 @@ function queryTrial(
 }
 
 for (const definition of [
+  // Light (#1072): a lighter field scores more, up to ×10 at or below 0.1 kg.
+  queryTrial(
+    "light-stack",
+    "Light",
+    "⇧",
+    "Multiplies each scored row by up to ×10 the lighter everything in the playfield is: ×1 at 1 kg or more, ×10 at 0.1 kg or less.",
+    {
+      query: "fieldMass",
+      value: "totalKg",
+      curve: "massEaseOut",
+      params: weightPassives.light,
+      phase: "score.lineMultiply",
+    },
+  ),
   queryTrial(
     "trial-dense-packing",
     "Dense (trial)",
