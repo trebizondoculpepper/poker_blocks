@@ -103,6 +103,15 @@ describe("stage score history (#1063; doc/line-goes-up.md)", () => {
     ).toBeNull();
   });
 
+  it("rejects a history whose cumulative total overflows to infinity (#1175)", () => {
+    const history = {
+      ...startStageHistory({ plays: 4, targetScore: 1 }),
+      start: { play: 0, total: Number.MAX_VALUE },
+      entries: [{ actionId: "a", play: 1, delta: Number.MAX_VALUE, total: Infinity }],
+    };
+    expect(parseStageHistory(history)).toBeNull();
+  });
+
   it("migrates a legacy save to a known checkpoint, without inventing earlier points", () => {
     const run = fresh();
     run.play({ cardId: run.state.hand[0].id }, "a1");
