@@ -105,18 +105,31 @@ jobs:
       - if: steps.version.outputs.publish != 'skip'
         run: vp test run --passWithNoTests
       - name: Build at the release version
+        id: build
         if: steps.version.outputs.publish != 'skip'
         env:
           POKER_BLOCKS_VERSION: ${{ steps.version.outputs.version }}
-        run: vp build --mode game
+        run: |
+          vp build --mode game
+          # itch_only may check out a tag from before the website migration. Its Vite config
+          # ignores the mode and still builds the game at dist; select the output we just built.
+          if [ -f dist/game/index.html ]; then
+            echo "directory=dist/game" >> "$GITHUB_OUTPUT"
+          elif [ -f dist/index.html ]; then
+            echo "directory=dist" >> "$GITHUB_OUTPUT"
+          else
+            echo "The game build has no index.html" >&2
+            exit 1
+          fi
       - name: Publish the GitHub release with the web build
         if: steps.version.outputs.publish == 'true'
         env:
+          WEB_BUILD_DIR: ${{ steps.build.outputs.directory }}
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           zip_name="poker-blocks-v${VERSION}-web.zip"
-          (cd dist/game && zip -qr "../../${zip_name}" .)
+          (cd "$WEB_BUILD_DIR" && zip -qr "${GITHUB_WORKSPACE}/${zip_name}" .)
           gh release create "v${VERSION}" "${zip_name}" \
             --target "$(git rev-parse HEAD)" \
             --title "Poker Blocks v${VERSION}" \
@@ -127,6 +140,7 @@ jobs:
       - name: Push the release to itch.io
         if: steps.version.outputs.publish != 'skip'
         env:
+          WEB_BUILD_DIR: ${{ steps.build.outputs.directory }}
           BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -137,4 +151,4 @@ jobs:
           curl -fsSL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
           unzip -q butler.zip -d butler
           chmod +x butler/butler
-          ./butler/butler push dist/game trebizondoculpepper/poker-blocks:html5 --userversion "${VERSION}"
+          ./butler/butler push "$WEB_BUILD_DIR" trebizondoculpepper/poker-blocks:html5 --userversion "${VERSION}"

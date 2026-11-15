@@ -32,3 +32,5 @@ The same release also goes to itch.io: `release.yml` pushes the web build with b
 ## Guardrail
 
 CI runs `scripts/version-guard.ts` on every PR and push, so `package.json`'s version can't drift: no ordinary commit may change it. Releases no longer change it at all; their version lives in the tag.
+
+The release workflow selects the built game output: `dist/game` for the website layout, or `dist` when an itch-only retry checks out a release tag from before that migration. Both publish with the playable `index.html` at the archive/upload root.
