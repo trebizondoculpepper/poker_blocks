@@ -179,6 +179,15 @@ export async function createControlStage(
     on("pointerdown", () => {
       pointerPressed = true;
     });
+    // A press that moved no focus must not mark the next keyboard focus as the pointer's (#1234).
+    // Focus from a press arrives before its release, so clearing after the release is safe.
+    const pressEnded = () => {
+      queueMicrotask(() => {
+        pointerPressed = false;
+      });
+    };
+    on("pointerup", pressEnded);
+    on("pointercancel", pressEnded);
     on("focus", () => {
       keyboardFocused = !pointerPressed;
       pointerPressed = false;
