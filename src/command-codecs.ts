@@ -22,6 +22,8 @@ export type CommandTarget = {
   /** Move a hand card or a rack item to another position (#1245): false when refused. */
   reorderHand(from: number, to: number): boolean;
   reorderPassive(from: number, to: number): boolean;
+  /** Use a rack item on a card (#1246): null when refused. */
+  applyRackItem(itemId: string, cardId: string): unknown;
 };
 
 export type CommandCodec = {
@@ -109,6 +111,25 @@ commandCodecs.register(
   "reorderPassive",
   reorder("reorderPassive", (target, from, to) => target.reorderPassive(from, to)),
 );
+
+/**
+ * Use a rack item on a card (#1246): the item's and card's opaque instance IDs, which the model's
+ * own transaction owner (`GameRun.applyRackItem`) captures when the use commits.
+ */
+commandCodecs.register("applyRackItem", {
+  version: 1,
+  normalize(args) {
+    const { itemId, cardId } = (args ?? {}) as { itemId?: unknown; cardId?: unknown };
+    return Object.freeze({
+      itemId: text(itemId, "applyRackItem itemId"),
+      cardId: text(cardId, "applyRackItem cardId"),
+    });
+  },
+  execute: (target, args) => {
+    const { itemId, cardId } = args as { itemId: string; cardId: string };
+    return target.applyRackItem(itemId, cardId) !== null;
+  },
+});
 
 /** Capture a command's descriptor now, before a caller can change its arguments. */
 export function describeCommand(command: string, args: unknown): CommandDescriptor {

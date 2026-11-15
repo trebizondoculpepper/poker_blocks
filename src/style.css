@@ -1752,3 +1752,27 @@ body,
   white-space: normal;
   line-height: normal;
 }
+
+/* A bin drawn by a registered presenter (#1078): its cube replaces the icon and label. */
+.discard-area.is-presented .discard-icon,
+.discard-area.is-presented .sell-icon,
+.discard-area.is-presented > .discard-label {
+  display: none;
+}
+.bin-control-cube {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* The shared control group's overlay (#1078): over the scene, never taking pointer input. */
+.control-group {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.control-group .control-stage-hit {
+  pointer-events: none;
+}
