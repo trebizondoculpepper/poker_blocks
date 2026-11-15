@@ -15,4 +15,12 @@ describe("committed action identity (#881)", () => {
     expect(game.lastCommittedActionId).toBeTruthy();
     expect(game.lastCommittedActionId).not.toBe(first);
   });
+
+  it("never repeats an occurrence across runs, though each run's action counter restarts", () => {
+    const one = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    const two = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0.25);
+    one.play({ cardId: one.state.hand[0]!.id });
+    two.play({ cardId: two.state.hand[0]!.id });
+    expect(one.lastCommittedActionId).not.toBe(two.lastCommittedActionId);
+  });
 });

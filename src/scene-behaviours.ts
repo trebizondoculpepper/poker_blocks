@@ -773,13 +773,14 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       outcomeStops.set(
         config,
         services.run.onDecided(({ outcome, occurrence }) => {
-          if (presentedOutcomes.has(occurrence)) return;
+          const cue = (config as Record<string, SoundEffectId>)[outcome];
+          // Only an outcome with a cue is recorded: a nonterminal one presents nothing.
+          if (!cue || presentedOutcomes.has(occurrence)) return;
           presentedOutcomes.add(occurrence);
           // Bounded: only recent occurrences can be redelivered.
           if (presentedOutcomes.size > 64)
             presentedOutcomes.delete(presentedOutcomes.values().next().value!);
-          const cue = (config as Record<string, SoundEffectId>)[outcome];
-          if (cue) services.sound(cue);
+          services.sound(cue);
         }),
       );
     },

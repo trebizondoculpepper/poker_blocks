@@ -1083,8 +1083,12 @@ describe("outcomeCues (#881)", () => {
     // A redelivery of the same committed response plays nothing more.
     decided("won");
     expect(sounds).toEqual(["round.cleared", "round.failed"]);
+    // A nonterminal outcome has no cue and is not recorded.
+    deliver({ outcome: "playing" as never, occurrence: "won-3" });
+    decided("won", "won-3");
+    expect(sounds).toEqual(["round.cleared", "round.failed", "round.cleared"]);
     behaviour.exit!(context, config);
     decided("won", "won-2");
-    expect(sounds).toHaveLength(2);
+    expect(sounds).toHaveLength(3);
   });
 });
