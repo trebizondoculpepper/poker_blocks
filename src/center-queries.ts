@@ -11,8 +11,7 @@
  * Neither changes the production pivot, which keeps its centroid policy.
  */
 import { contextQueries, type QueryResult, type QuerySnapshot } from "./context-queries";
-import { getMaterialDefinition, materialOf } from "./materials";
-import { massKg } from "./physical-mass";
+import { cardMassReading } from "./materials";
 
 export type Point = { x: number; y: number; z: number };
 export type Centroid = { centre: Point; count: number };
@@ -39,7 +38,9 @@ export function fieldMassCentre(state: QuerySnapshot): QueryResult<MassCentre> {
   const sum = { x: 0, y: 0, z: 0 };
   let totalKg = 0;
   for (const { block, cell } of state.field) {
-    const mass = massKg(getMaterialDefinition(materialOf(block)).mass);
+    const reading = cardMassReading(block);
+    if ("unavailable" in reading) return { available: false, reason: reading.unavailable };
+    const mass = reading.kg;
     totalKg += mass;
     sum.x += mass * cell.x;
     sum.y += mass * cell.y;
