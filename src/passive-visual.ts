@@ -14,7 +14,12 @@ import { Registry } from "./core/registry";
 import type { PassivePalette } from "./passives";
 
 /** One face's artwork: a label, or a standard pip pattern (1 to 6) instead of the label. */
-export type PassiveFaceDesign = { label: string; pips?: number };
+export type PassiveFaceDesign = {
+  label: string;
+  pips?: number;
+  /** This face's artwork colour; its category palette's ink when absent (#1005). */
+  ink?: string;
+};
 
 /** A token's look. With no shape it is a cube; with no faces every face shows the symbol. */
 export type PassiveTokenAppearance = {
@@ -188,7 +193,7 @@ export function paintPassiveFace(palette: PassivePalette, face: PassiveFaceDesig
   context.strokeRect(12, 12, 232, 232);
   context.lineWidth = 2;
   context.strokeRect(24, 24, 208, 208);
-  context.fillStyle = palette.ink;
+  context.fillStyle = face.ink ?? palette.ink;
   for (const [x, y] of pipLayouts[face.pips ?? 0] ?? []) {
     context.beginPath();
     context.arc(x, y, 17, 0, Math.PI * 2);
@@ -318,7 +323,7 @@ function paintedVisual(
   geometry.scale(size, size, size);
   const painted = new Map<string, THREE.Texture>();
   const textureFor = (face: PassiveFaceDesign) => {
-    const key = `${face.label}\u0000${face.pips ?? ""}`;
+    const key = `${face.label}\u0000${face.pips ?? ""}\u0000${face.ink ?? ""}`;
     const texture = painted.get(key) ?? paint(appearance.palette, face);
     painted.set(key, texture);
     return texture;
