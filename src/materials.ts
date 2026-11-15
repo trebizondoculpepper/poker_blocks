@@ -1571,8 +1571,11 @@ function glassContainerExperiments(): MaterialDefinition[] {
  */
 export const experimentalMaterials: readonly MaterialDefinition[] = [
   {
-    // The Present's wrapped look (#496, epic #492): a visual experiment for audition only, never
-    // dealt or stocked. Foil wrap, a contrasting shiny ribbon and rosette, folds underneath; its
+    // The Present's wrapped look (#496, epic #492), certified for the production stage-three
+    // Present reward (#1129, #1151; doc/release-status.md, "Production Present wrapper
+    // certification"). It stays out of `materialDefinitions`, so it is never dealt, stocked,
+    // sold or chosen as a Present's payload: only the reward wraps a card in it. Foil wrap, a
+    // contrasting shiny ribbon and rosette, folds underneath; its
     // colours come from each block's own art seed. A letter block's letter is printed over the
     // wrap in pale foil ink, which reads on red, green and blue alike (#558); a card's rank and
     // suit never are (its `cardFace` below).
@@ -1584,8 +1587,9 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
       provider: "storedPayload",
       rule: "Contents-derived: the same mass as the playable card it holds; the wrapping adds nothing.",
     },
-    // A prototype: experimental catalogues only (doc/release-status.md, #812).
-    releaseStatus: { provisional: {} },
+    // Certified (#1129): its public inspection carries no provisional warning. Certification
+    // admits nothing: no catalogue lists it, since it isn't in `materialDefinitions`.
+    releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
     lifecycle: { parent: "ordinaryCard" },
     lettering: { font: "Roboto Slab", fallback: "serif", weight: 400 },
