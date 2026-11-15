@@ -1313,13 +1313,21 @@ function refractiveCrystal(context: AssemblyContext): BlockAppearance {
   const mask = clearMask(texture);
   const inHand = surface(texture, definition.appearance, height);
   const onTable = clearOnTable(texture, mask, optics, size);
-  return appearanceBase(
-    context,
-    [texture, ...[height].filter((value) => value !== undefined), mask, print.texture],
-    Array.from({ length: 6 }, () => inHand),
-    [createCrystalFire(geometry), print.skin],
-    Array.from({ length: 6 }, () => onTable),
-  );
+  const fire = createCrystalFire(geometry);
+  declareMaskAdapters({
+    additiveShader: [fire.material as THREE.Material],
+    chunkSurface: [inHand, onTable, print.skin.material],
+  });
+  return {
+    ...appearanceBase(
+      context,
+      [texture, ...[height].filter((value) => value !== undefined), mask, print.texture],
+      Array.from({ length: 6 }, () => inHand),
+      [fire, print.skin],
+      Array.from({ length: 6 }, () => onTable),
+    ),
+    maskAdapter: "materialDeclared",
+  };
 }
 
 /** A copy of a face texture with its see-through pane filled (src/visual/approximate-crystal.ts). */
@@ -1358,13 +1366,21 @@ function approximateCrystal(context: AssemblyContext): BlockAppearance {
     optics.tableEnvironment,
     optics.iridescence,
   );
-  return appearanceBase(
-    context,
-    [texture, filled, ...[height].filter((value) => value !== undefined), print.texture],
-    Array.from({ length: 6 }, () => inHand),
-    [createFacetShell(geometry, optics.tint), print.skin],
-    Array.from({ length: 6 }, () => onTable),
-  );
+  const facets = createFacetShell(geometry, optics.tint);
+  declareMaskAdapters({
+    additiveShader: [facets.material as THREE.Material],
+    chunkSurface: [inHand, onTable, print.skin.material],
+  });
+  return {
+    ...appearanceBase(
+      context,
+      [texture, filled, ...[height].filter((value) => value !== undefined), print.texture],
+      Array.from({ length: 6 }, () => inHand),
+      [facets, print.skin],
+      Array.from({ length: 6 }, () => onTable),
+    ),
+    maskAdapter: "materialDeclared",
+  };
 }
 
 /**
@@ -1380,13 +1396,21 @@ function crystalV3(context: AssemblyContext): BlockAppearance {
   const inHand = surface(texture, definition.appearance, height);
   // A shader material in the board slot: the dev comparison room draws it; the game never does.
   const front = createCrystalV3Front() as unknown as THREE.MeshStandardMaterial;
-  return appearanceBase(
-    context,
-    [texture, ...[height].filter((value) => value !== undefined), print.texture],
-    Array.from({ length: 6 }, () => inHand),
-    [createCrystalV3Rear(geometry), print.skin],
-    Array.from({ length: 6 }, () => front),
-  );
+  const rear = createCrystalV3Rear(geometry);
+  declareMaskAdapters({
+    customShader: [front, rear.material],
+    chunkSurface: [inHand, print.skin.material],
+  });
+  return {
+    ...appearanceBase(
+      context,
+      [texture, ...[height].filter((value) => value !== undefined), print.texture],
+      Array.from({ length: 6 }, () => inHand),
+      [rear, print.skin],
+      Array.from({ length: 6 }, () => front),
+    ),
+    maskAdapter: "materialDeclared",
+  };
 }
 
 /**

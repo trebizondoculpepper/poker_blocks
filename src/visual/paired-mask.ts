@@ -133,11 +133,15 @@ export type MaskSide = { root: THREE.Object3D; maskAdapter?: string };
 
 /**
  * A part the mask covers: a mesh or points (animated extras, #1208). Three's own flags, not
- * instanceof, so a part from another copy of the library still counts. Lines (outlines, laser
- * edges) are #1209's.
+ * instanceof, so a part from another copy of the library still counts. Lines are outlines.
  */
 const drawnPart = (node: THREE.Object3D) =>
-  Boolean((node as THREE.Mesh).isMesh || (node as THREE.Points).isPoints);
+  Boolean(
+    (node as THREE.Mesh).isMesh ||
+    (node as THREE.Points).isPoints ||
+    // A look's edges (an outline's line segments) follow its coverage too (#1209).
+    (node as THREE.Line).isLine,
+  );
 
 /**
  * A part's adapter: its material's declaration, else the nearest on it or its ancestors within
@@ -329,6 +333,8 @@ export function createPairedMask(options: {
     renderOrder: number;
   }[] = [];
   const clones: THREE.Material[] = [];
+  const incomingParts: THREE.Object3D[] = [];
+  const outgoingLayers: number[] = [];
   for (const [role, side] of sides) {
     const made = new Map<string, Map<THREE.Material, THREE.Material>>();
     const adapterFor = (name: string) => {
@@ -359,8 +365,11 @@ export function createPairedMask(options: {
       object.material = Array.isArray(material) ? material.map(adapt) : adapt(material);
       // A shadow would show a look whole before it is.
       object.castShadow = false;
-      // The fading incoming look draws over the opaque outgoing one.
-      if (reduced && role === "incoming") object.renderOrder += 1;
+      // The fading incoming look draws over the outgoing one: placed after the loop, above every
+      // outgoing layer (#1338 review).
+      if (role === "incoming") incomingParts.push(object);
+      else if ([material].flat().some(({ transparent }) => transparent))
+        outgoingLayers.push(object.renderOrder);
       // The outgoing look writes no depth while it is faded over (#1264), so it draws after the
       // rest of the opaque scene: geometry behind it is already drawn and can't show through it
       // (#1273). The incoming look still draws over it, in the transparent pass.
@@ -373,6 +382,15 @@ export function createPairedMask(options: {
       )
         object.renderOrder += outgoingDrawLate;
     });
+  }
+  // Under reduced motion the incoming look, shifted as a whole so its own layers keep their order,
+  // draws after the outgoing look's last transparent layer (a crystal's print skin, say), so it
+  // fades over all of it rather than under its artwork (#1338 review). The outgoing opaque parts
+  // draw in the opaque pass before any of it.
+  if (reduced && incomingParts.length) {
+    const lowest = Math.min(...incomingParts.map(({ renderOrder }) => renderOrder));
+    const shift = Math.max(1, Math.max(lowest, ...outgoingLayers) - lowest + 1);
+    for (const part of incomingParts) part.renderOrder += shift;
   }
   const followMount = () => {
     mount.updateWorldMatrix(true, false);

@@ -113,7 +113,13 @@ function shaderMaskAdapter(fade: string | null): MaskAdapter {
 export const opticalShaderAdapter = shaderMaskAdapter("gl_FragColor.a");
 /** A prepass's capture material (a crystal's rear): masked, never faded. */
 export const opticalCaptureAdapter = shaderMaskAdapter(null);
+/** For premultiplied additive light (`additiveLight`): colour fades with alpha (#1338 review). */
+export const additiveShaderAdapter = shaderMaskAdapter("gl_FragColor");
 
 maskAdapters.register("materialDeclared", materialDeclaredAdapter);
 maskAdapters.register("opticalShader", opticalShaderAdapter);
 maskAdapters.register("opticalCapture", opticalCaptureAdapter);
+// Any other custom ShaderMaterial with a `position` attribute and a `main` (#1209): a custom
+// face shader. The same shared-uniform patch.
+maskAdapters.register("customShader", opticalShaderAdapter);
+maskAdapters.register("additiveShader", additiveShaderAdapter);
