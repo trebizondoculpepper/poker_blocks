@@ -580,6 +580,8 @@ const scoreGraph = createStageScoreGraph({
   compose: (producer) => actionPhases.compose(producer),
   room: view.scene,
   host,
+  scheduler: visualEvents,
+  reducedMotion: () => run.reducedMotion,
 });
 // A blast's survivors answer in place with their declared feedback, after scoring (#1174).
 const survivorFeedback = createResistanceFeedbackController({

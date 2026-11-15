@@ -13,8 +13,9 @@
  *   a silently unmasked surface.
  * - **`opticalShader`** patches the custom shader at `main`: the vertex shader passes the world
  *   position, and the fragment shader decides per view ray, as the chunk adapter does, whether
- *   this side draws. Under reduced motion it dithers complementary coverage by progress, so the
- *   opaque optical front never needs transparency or a disabled depth test. Its uniforms are the
+ *   this side draws. Under reduced motion it follows the chunk adapter's crossfade: the outgoing
+ *   look stays whole and writes no depth, the incoming one fades in over it, so any pair of
+ *   adapters agrees. Its uniforms are the
  *   original's own objects plus the mask's: the renderer-owned capture slots a prepass binds are
  *   shared, never copied, so the masked rear still feeds the registered capture.
  */
@@ -42,20 +43,16 @@ const decide = /* glsl */ `
     float matAlong = dot(matOrigin - cameraPosition, matFacing) / min(dot(matRay, matFacing), -1e-4);
     vec3 matHit = cameraPosition + matRay * matAlong;
     vec3 matLocal = (matFrame * vec4(matHit, 1.0)).xyz;
-    float matCut;
-    float matNoise;
+    // Under reduced motion nothing is cut: the outgoing look stays whole and the incoming one
+    // fades over it, exactly as the chunk adapter does, so mixed pairs agree (#1336 review).
     if (matReduced < 0.5) {
       vec3 matAt = matLocal * matFrequency + vec3(0.0, matTime * 0.9, matTime * 0.4);
-      matNoise = clamp(matFbm(matAt) * 1.6 + 0.5, 0.0, 1.0);
-      matCut = mix(-matEdge, 1.0 + matEdge, matProgress);
-    } else {
-      // Reduced motion: a still, fine dither of the same domain, complementary by progress.
-      matNoise = fract(sin(dot(floor(matLocal * 64.0), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-      matCut = matProgress;
+      float matNoise = clamp(matFbm(matAt) * 1.6 + 0.5, 0.0, 1.0);
+      float matCut = mix(-matEdge, 1.0 + matEdge, matProgress);
+      if (matOutgoing > 0.5) {
+        if (matNoise <= matCut) discard;
+      } else if (matNoise > matCut) discard;
     }
-    if (matOutgoing > 0.5) {
-      if (matNoise <= matCut) discard;
-    } else if (matNoise > matCut) discard;
   }
 `;
 
@@ -85,6 +82,14 @@ export const opticalShaderAdapter: MaskAdapter = {
       uniform vec3 matOrigin;
       ${NOISE}
       ${source.fragmentShader}`.replace(/void main\(\)\s*\{/, `void main() {${decide}`);
+    // The reduced-motion crossfade, as the chunk adapter does it: the incoming look's alpha
+    // follows progress (its main's last statement), the outgoing look writes no depth under it.
+    const end = made.fragmentShader.lastIndexOf("}");
+    made.fragmentShader = `${made.fragmentShader.slice(0, end)}
+      if (matReduced > 0.5 && matOutgoing < 0.5) gl_FragColor.a *= matProgress;
+    }${made.fragmentShader.slice(end + 1)}`;
+    if (uniforms.matReduced.value > 0.5 && role === "incoming") made.transparent = true;
+    if (uniforms.matReduced.value > 0.5 && role === "outgoing") made.depthWrite = false;
     return made;
   },
 };

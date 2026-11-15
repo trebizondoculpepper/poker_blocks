@@ -31,6 +31,7 @@ import {
   type OfferPresentation,
   type ShopOfferPresentationConfig,
 } from "./shop-offer-presentation";
+import { settleOfferRelease, type OfferReleaseTarget } from "./offer-release";
 
 type DisplayedOffer = {
   offer: ShopOffer;
@@ -52,6 +53,8 @@ export type ShopView = {
    * and moved follows the pointer, and dropped on BUY it's bought.
    */
   readonly dragSource: DragSource<DisplayedOffer>;
+  /** Lease a release target to offer drags (#1206; doc/drop-settlement.md); returns the release. */
+  releaseTarget(target: OfferReleaseTarget): () => void;
   /**
    * While an offer is dragged (#499): its drop targets and why a drop there would be refused
    * right now, or null reason when it would succeed. Null when nothing is being dragged.
@@ -744,6 +747,10 @@ export function createShopView(
     renderer.render(scene, camera);
   }
 
+  /** Targets leased to the shop that answer a released offer with a typed outcome (#1206). */
+  const releaseTargets = new Set<OfferReleaseTarget>();
+  /** Each release's settlement generation. */
+  let releaseGeneration = 0;
   /** The offer being dragged and where its press went down. */
   let dragging: { entry: DisplayedOffer; press: Point } | null = null;
   /** The live verdict for the dragged offer (#499), refreshed every frame while it is dragged. */
@@ -794,24 +801,46 @@ export function createShopView(
         entry.item.classList.remove("is-dragging");
         returnToSource(entry.item, { reducedMotion: reducedMotion(), className: "is-returning" });
       };
-      if (canceled || burn) return putBack();
       const view = offerViews.get(entry.offer.kind);
       const from = entry.item.getBoundingClientRect();
       const label = entry.item.dataset.label ?? "";
-      const onTarget = view.dropTargets
-        .flatMap((name) => dropTargets[name])
-        .some((target) => contains(target, clientX, clientY));
-      if (!onTarget || !buy(entry.offer.block.id, offerKind(entry.offer).destination))
-        return putBack();
-      animatePurchase(from, label, flightTargets[view.flightTarget]);
-      entry.item.style.translate = "";
-      entry.item.classList.remove("is-dragging");
+      // Source-settled outcomes (#1206; src/offer-release.ts): a leased release target answers
+      // first, else the ordinary purchase target decides.
+      settleOfferRelease(
+        {
+          owns: () => displayed.includes(entry),
+          putBack,
+          buy: () => buy(entry.offer.block.id, offerKind(entry.offer).destination),
+          purchased: () => {
+            animatePurchase(from, label, flightTargets[view.flightTarget]);
+            entry.item.style.translate = "";
+            entry.item.classList.remove("is-dragging");
+          },
+        },
+        {
+          generation: ++releaseGeneration,
+          canceled,
+          inert: Boolean(burn),
+          target: [...releaseTargets].find((target) => target.contains(clientX, clientY)) ?? null,
+          onPurchaseTarget: view.dropTargets
+            .flatMap((name) => dropTargets[name])
+            .some((target) => contains(target, clientX, clientY)),
+        },
+      );
     },
   };
 
   return {
     buyTarget,
     dragSource,
+    /**
+     * Lease a release target to the shop's offer drags (#1206): while held, a release over it is
+     * answered by its typed outcome with the offer's settlement. Returns the release.
+     */
+    releaseTarget(target: OfferReleaseTarget): () => void {
+      releaseTargets.add(target);
+      return () => void releaseTargets.delete(target);
+    },
     dragVerdict: () => guidance && { targets: [...guidance.targets], reason: guidance.reason },
     guideProvider: shopGuideProvider(() => dragging?.entry.offer ?? null, dropTargets, verdict),
     render,

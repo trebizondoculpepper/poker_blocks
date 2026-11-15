@@ -190,6 +190,7 @@ function recordingHost() {
       shop: {
         buyTarget: {} as HTMLElement,
         dragSource: { pick: () => null, begin: () => {}, move: () => {}, end: () => {} },
+        releaseTarget: () => () => {},
         dragVerdict: () => null,
         guideProvider: { preferred: () => [], refusal: () => null },
         render: (offers: readonly ShopOffer[], visible: boolean) =>
