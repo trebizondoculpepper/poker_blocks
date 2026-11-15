@@ -97,6 +97,7 @@ function recordingHost() {
       bin: {
         discardBinEntered: (entered) => void calls.push(`bin:${entered}`),
         sellBinEntered: (entered) => void calls.push(`sellBin:${entered}`),
+        sellBinCovered: (covered) => void calls.push(`sellBinCovered:${covered}`),
       },
       input: {
         enableDropTarget: ({ target }) => {

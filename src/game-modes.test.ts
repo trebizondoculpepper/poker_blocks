@@ -222,7 +222,7 @@ describe("game modes composed from traits", () => {
       tableBackground: {},
       handView: {},
       selectable: { sources: [{ source: "hand" }, { source: "field" }] },
-      sellBin: {},
+      sellBin: { presenter: "controlBlock" },
       passiveRackView: { source: "rack" },
       coinsPanel: {},
       dropTargetGuide: {

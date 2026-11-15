@@ -22,9 +22,8 @@ import { createMaterialise } from "./visual/materialise";
 import type { DragSource, Point } from "./drag-drop";
 import { returnToSource, stop as stopReturn, take } from "./return-to-source";
 import "./shop-view.css";
-import { createControlStage, type ControlStage } from "./block-menu/control-stage";
+import type { ControlGroup } from "./block-menu/control-group";
 import { withMotif } from "./visual/motif-face-art";
-import { sparkleEnvironment } from "./visual/attract-look";
 import { blockOutline } from "./visual/block-outline";
 import type { DanceFloor } from "./dance/dance-floor";
 import {
@@ -280,7 +279,11 @@ export function createShopView(
   /** Why buying would be refused now, without buying (`GameRun.purchaseVerdict`, #499). */
   verdict: (id: string, destination: OfferDestination) => { reason: string } | null,
   /** The shared dance floor and the stock's presentation configuration (#774). */
-  presentation: { floor: Pick<DanceFloor, "join"> },
+  presentation: {
+    floor: Pick<DanceFloor, "join">;
+    /** The shared control group the Buy block is drawn in (#1077, #1078); none, no cube. */
+    controls?: Pick<ControlGroup, "place">;
+  },
 ): ShopView {
   const stock = document.createElement("section");
   stock.className = "shop-stock";
@@ -294,44 +297,21 @@ export function createShopView(
     '<div class="shop-buy-cube"></div><span>Cards to deck · Passives to rack</span><small></small>';
   host.append(stock, buyTarget);
   const buyCubeHost = buyTarget.querySelector<HTMLElement>(".shop-buy-cube")!;
-  let buyStage: ControlStage | null = null;
   let buyVisible = false;
-  let disposed = false;
-  void createControlStage(
-    {
-      element: buyCubeHost,
-      createRenderer: () => new THREE.WebGLRenderer({ alpha: true, antialias: true }),
-      requestFrame: (callback) => requestAnimationFrame(callback),
-      cancelFrame: (handle) => cancelAnimationFrame(handle),
-      // The menu cubes' studio look, so the gold reads as gold.
-      environment: (stageRenderer) => sparkleEnvironment(stageRenderer as THREE.WebGLRenderer, 0),
-    },
-    [
-      {
-        id: "buy",
-        label: "BUY",
-        description: "Drop an offer here to buy it: cards go to your deck, passives to the rack.",
-        layout: ({ width, height }) => ({
-          x: width / 2,
-          y: height / 2,
-          size: Math.min(width, height) * 0.62,
-        }),
-        cube: {
-          material: "gold",
-          artwork: withMotif({ handler: "coin" }),
-          precession: { reducedMotion: reducedMotion() },
-        },
-      },
-    ],
-  ).then((stage) => {
-    if (disposed) return stage.dispose();
-    buyStage = stage;
-    if (buyVisible) stage.resume();
+  let buyCovered = false;
+  // On the group's one shared control stage, over this slot (#1078): no renderer of its own.
+  const buyControl = presentation.controls?.place(buyCubeHost, {
+    id: "buy",
+    label: "BUY",
+    description: "Drop an offer here to buy it: cards go to your deck, passives to the rack.",
+    cube: { material: "gold", artwork: withMotif({ handler: "coin" }), precession: {} },
   });
+  const showBuy = () => buyControl?.setHidden(!buyVisible || buyCovered);
+  showBuy();
   /** The Buy cube's current bounds: where purchases fly to (its explicit destination anchor). */
   const buyDestination = {
     getBoundingClientRect: () => {
-      const region = buyStage?.hitRegion("buy");
+      const region = buyControl?.hitRegion();
       return region
         ? new DOMRect(region.left, region.top, region.width, region.height)
         : buyCubeHost.getBoundingClientRect();
@@ -501,8 +481,7 @@ export function createShopView(
   function render(offers: readonly ShopOffer[], visible: boolean, animateEntrance = false): void {
     stock.hidden = buyTarget.hidden = renderer.domElement.hidden = !visible;
     buyVisible = visible;
-    if (visible) buyStage?.resume();
-    else buyStage?.cover();
+    showBuy();
     buyTarget.querySelector("small")!.textContent = `DECK ${deckSize()}`;
     clear();
     stock.replaceChildren();
@@ -846,12 +825,9 @@ export function createShopView(
     frame,
     present(config) {
       presented = config;
-      // The scene's own lifecycle: covered (null) rests the Buy cube, resumed restarts it (#1291).
-      if (config === null) buyStage?.cover();
-      else if (buyVisible) {
-        buyStage?.setReducedMotion(reducedMotion());
-        buyStage?.resume();
-      }
+      // The scene's own lifecycle: covered (null) hides the Buy cube, resumed shows it (#1291).
+      buyCovered = config === null;
+      showBuy();
       for (const entry of displayed) {
         entry.presentation.present(config);
         // A fresh provider starts from the offer's real input state: focus and hover don't
@@ -867,8 +843,7 @@ export function createShopView(
       renderer.dispose();
       renderer.domElement.remove();
       stock.remove();
-      disposed = true;
-      buyStage?.dispose();
+      buyControl?.remove();
       buyTarget.remove();
       sign.remove();
       skip.remove();
