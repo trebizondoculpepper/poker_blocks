@@ -12,7 +12,7 @@
  * neighbours until the next play. The results are then committed together. Unconfigured pairs
  * do nothing. Nothing here names a material.
  */
-import { findRunCard, transitionCapture } from "./card-material";
+import { findRunCard, transitionCapture, transitionSoundFor } from "./card-material";
 import type { GameEvent } from "./passives";
 import { stateBonuses } from "./state-bonuses";
 import { Registry } from "./core/registry";
@@ -23,12 +23,7 @@ import type { ReactionState } from "./passives";
 import type { SoundEffectId } from "./audio/sfx-registry";
 import { changeCardMaterial } from "./card-material";
 import { setCardStateBonus } from "./state-bonuses";
-import {
-  transitionSoundOf,
-  getMaterialDefinition,
-  materialOf,
-  type BlockMaterial,
-} from "./materials";
+import { getMaterialDefinition, materialOf, type BlockMaterial } from "./materials";
 import { commitCommands, registerRuleCommand, type CommandTarget } from "./rule-commands";
 import { cellKey, faceNormal, faces } from "./traits/attachable";
 
@@ -157,14 +152,14 @@ registerRuleCommand<{
   // A material transition (#539): a new material, or a new state that is part of what the card
   // is (Hot or Boiling Water). Its cue is the target's, whatever caused it, and is presented by
   // the scheduled transition response, so the reaction carries none of its own for it.
-  const targetState = [to.stateBonus ?? []]
+  const newState = [to.stateBonus ?? []]
     .flat()
-    .filter((id) => id !== from?.stateBonus && stateBonuses.has(id))
-    .map((id) => stateBonuses.get(id).transitionSound)
-    .find((cue) => cue !== undefined);
-  const transitionSound =
-    targetState ??
-    (changed !== before ? transitionSoundOf(to.material as BlockMaterial) : undefined);
+    .some(
+      (id) =>
+        id !== from?.stateBonus && stateBonuses.has(id) && stateBonuses.get(id).transitionSound,
+    );
+  // One resolver for every cause (#1132): the complete target state names the cue.
+  const transitionSound = newState || changed !== before ? transitionSoundFor(to) : undefined;
   if (transitionSound)
     return [
       { type: "reaction.applied", blockId, reaction: { from: from!, to } },
