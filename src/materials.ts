@@ -210,6 +210,13 @@ export type MaterialDefinition = {
      */
     exit?: ExitSequence;
     /**
+     * What a block of this material presents when it is actually triggered (#1172;
+     * doc/triggered-presentation.md): a registered on-trigger presentation response
+     * (src/triggered-presentation.ts) and its configuration, such as an explosion. Independent of
+     * its model `triggerable.responses`; absent, a trigger presents nothing of its own.
+     */
+    onTrigger?: { response: string; config?: unknown };
+    /**
      * How a block of this look answers a destruction it resisted (#1174;
      * doc/triggered-presentation.md, "Victim exit and survival feedback are separate
      * capabilities"): registered survivor responses run on its live visual, in place. An empty
