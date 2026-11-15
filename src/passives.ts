@@ -135,7 +135,16 @@ export type GameEvent = {
    * On `score.totalApplied` (#1063): the stage history point this commit appended, captured with
    * the history's generation, so consumers never read live state for it.
    */
-  stageHistory?: { generation: number; play: number; delta: number; total: number };
+  stageHistory?: {
+    generation: number;
+    plays?: number;
+    targetScore?: number;
+    play: number;
+    delta: number;
+    total: number;
+    /** The stage's history was just initialized: this is its start, not a scored play (#1305). */
+    reset?: boolean;
+  };
   /** On `run.ended` (#878): the run's terminal result. */
   result?: "lost";
 };
