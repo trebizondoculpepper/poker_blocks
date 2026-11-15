@@ -386,7 +386,7 @@ export async function createControlStage(
       disposed = true;
       if (frame !== null) host.cancelFrame(frame);
       frame = null;
-      for (const entry of [...mounted]) unmount(entry);
+      for (const entry of mounted.slice()) unmount(entry);
       environment?.dispose();
       renderer.dispose();
       canvas.remove();
