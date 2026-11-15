@@ -1,0 +1,62 @@
+# Composable drag-ghost audition (#1054)
+
+The next step is a **dev-only audition room**, not choosing a production carry treatment. Research #1047 / merged #1052 supplies the source audit. Required runtime slices: styles #1083, transition lifecycle #1084, room composition/controls #1055. No final owner choice or repeated research is needed before building these capabilities. Blue laser cube is the owner's preferred candidate, not production approval.
+
+## Reusable composition, real input
+
+A configured drag-source presentation controller composes three independent registered capabilities: ghost appearance, transition mask and gesture timing. The room composes those same production-reusable capabilities with Dev-prefixed controls/setup; it does not implement a second drag stack or effects inside a room-specific callback. The input adapter dispatches began/changed/ended/cancelled and source/target ownership as usual. It knows no effect, scene, mode or material identity. No trait is merely tested as an enabled flag: configured traits bring their lifecycle handlers.
+
+Use actual hand cards, field, sensors, attachment faces/guides, drag source and drop target handlers, accept/reject/return and accepted-flight presentation. Include single and multi-card drags with real opaque, transparent, contained, refractive and animated appearances. Do not substitute an isolated floating demo that cannot reveal target-face occlusion. Rotation/zoom, mouse, touch and keyboard-accessible controls retain their ordinary semantics. Placement/model/RNG rules and input availability are unchanged. The developer mode identity and console listing are declared only in `game-modes.ts`; room code lives under `src/tools/` and is excluded from production entry points.
+
+## Appearance endpoints (#1083)
+
+A style registry builds a gesture-owned endpoint visual from an explicit appearance/geometry/mount description, returning its own update/render/dispose handle. It may share immutable geometry/texture references under documented ownership but cannot mutate another block's materials or dispose shared resources. Each style declares any required prepasses; the active render host owns their targets and releases them with the gesture. No style is selected by material identity or a table of names.
+
+Required selector entries, separate from fade type and timing:
+
+- **Wireframe:** edges of the carried model's declared geometry, no filled faces. Preserve the geometry silhouette, not an unrelated square drawn on the screen.
+- **Face-free original model:** original model with its face-shader surfaces suppressed through explicit appearance-part bindings. Retain non-face model/edge components as declared by the appearance; do not infer faces from shader class or material name. This differs from rebuilding a generic cube and lets the owner compare how much internal/model detail remains.
+- **Blue laser cube:** a simplified cube at the carried block's bounds, with slightly thicker blue laser edges, using the actual `createLaserOutline` capability already used by the first-play ghost. Reuse its configuration/update/disposal path, not a visually similar duplicate shader. Initial line-width scale is 1.25 relative to the first-play outline, clamped to that renderer's supported range; color comes from the shared blue/cyan laser preset.
+
+A normal solid **baseline** is also available and bypasses ghosting entirely. Do not add forced rank/suit tags to face-free endpoints: loss of recognition versus target visibility is part of the audition. Baseline and ordinary appearances preserve their real artwork. A multi-card drag uses one gesture progress/settings snapshot but an endpoint at each real carried block's transform; it must still be recognizable as the carried group rather than one replacement cube.
+
+## Transition and mask capability (#1084)
+
+Transition handlers accept source and endpoint visuals plus captured numeric progress. They know no drag rules. Provide **simple opacity crossfade** and **Perlin dissolve**, independently selectable for every ghost endpoint. Transition support is an appearance/render capability, not a chain of material-type checks. Cloning face materials and setting `opacity` alone is insufficient: custom shaders or contained extras may ignore it, and depth-write can hide the target despite a faint color.
+
+Use a scoped render-layer mask/composite adapter for the carried group so the transition operates on the group's rendered contribution, including its declared extras/prepasses, rather than assuming every material has an alpha/emissive channel. The host supplies the group and camera/mount, captures only that contribution into owned transparent targets, and composites source/endpoint masks over the ordinary scene. Preserve the host renderer state, camera layers, target, clear alpha and background around captures through the shared render-pass preservation capability. Do not capture/repaint the whole game as a ghost image or affect unrelated cards/target guides. Render the actual animated appearance, not a static screenshot that freezes contents. This adapter is reusable outside the audition room.
+
+For crossfade progress `p`, source contribution is `1-p` and endpoint contribution is `p × strength`. For Perlin, a stable gesture-local spatial mask progressively replaces source samples with endpoint samples; at `p=0` source is complete and at `p=1` source is absent, endpoint at configured strength. Reuse the existing Perlin/materialise noise semantics where compatible, but apply the mask at the composited contribution so custom faces cannot remain solid. Noise is stable during a gesture (no reseeding every frame), uses cosmetic randomness only, and is not saved into gameplay. Transparent layers must not leave an invisible opaque depth blocker. Preserve the endpoint's own laser animation under both transition types.
+
+The appearance part/transition adapter is an explicit extension: current `BlockAppearance` has materials/extras/prepasses but no complete generic face-part/masked-layer interface. Document its concrete binding API in the implementation PR against this ownership contract. All required styles/transitions must work for the representative set; an unsupported appearance may report an explicit diagnostic during development, but silently keeping it opaque or disabling required options is not completion. Bounded cost measurement is required because source/endpoint captures add passes; no unmeasured performance claim is made here.
+
+## Gesture timing and ownership
+
+At began, capture an immutable settings snapshot and the source visual/mount references under a new gesture generation. The timing controller creates a gesture-owned scope on the one shared visual-event scheduler/presentation clock. After pickup delay, animate progress 0→1 over the configured duration; zero duration settles directly. The controller owns when, the transition owns the mask and the style owns its endpoint. Changed follows the real carried transform; it does not reschedule the delay. No private queue, `setTimeout`, frame-count delay or `performance.now()` deadline.
+
+Ended/cancelled/lost-capture/blur/source removal/scene exit invalidates the generation and cancels delay/fade once. Quick drop before delay never ghosts a later card. On a partial fade or rejected return, release the mask/endpoint and restore the original source appearance before its ordinary return presenter takes ownership. On an accepted drop, release the carry decoration at the normal source-to-flight handoff; destination/flight presentation owns its normal appearance, not a stale partial ghost state. Do not queue or reject gameplay while visual cleanup plays. Keep any other independently composed selection/availability state intact. Subsequent drag always starts from its own settings and appearance, not the previous endpoint.
+
+Reduced motion uses the selected endpoint immediately at began, skipping decorative delay/fade while leaving the style comparison and input intact. Baseline stays normal. Cover/teardown cancels the current gesture's decoration through existing input cancellation; resume does not resurrect it. Each handle releases its own prepass holds, targets, subscriptions and clones; no shared material mutation or double disposal.
+
+## Room controls and reproducibility (#1055)
+
+Expose clearly separate controls:
+
+| Control               | Initial configuration / range                        |
+| --------------------- | ---------------------------------------------------- |
+| Pickup-to-ghost delay | 3 units (0.2 s); 0–45 units, step 1                  |
+| Ghost fade duration   | 5 units (1/3 s); 0–30 units, step 1                  |
+| Transition            | Simple crossfade or Perlin dissolve                  |
+| Ghost appearance      | Wireframe, face-free original model, blue laser cube |
+| Endpoint strength     | 0.65; 0–1, step 0.05                                 |
+| Solid baseline        | Explicit baseline preset, no ghost decoration        |
+
+All finite timing configuration is in game-time units (1/15 s); UI labels also show converted seconds. These ranges/defaults are reversible audition tuning, not final gameplay choices. Control edits affect **the next gesture**; show that rule in the UI. Never mutate an in-flight captured settings payload or disable ordinary play while an animation runs. Provide reset-to-preset and Copy Settings with schema version, complete effective values and registered handler references; clipboard failure exposes selectable text. No hidden card contents, functions or credentials in that export. Reuse the existing parameter-schema/configuration pattern rather than one custom slider implementation per effect.
+
+The room must let the owner make useful moves and compare before/after target visibility, not just inspect a static ghost. Supply a mixed-material scenario and restart with the same seed/settings for comparison; no new telemetry/replay system is required. Carry offset/shrink can remain later optional auditions; neither touch-only offset nor a final production style blocks these required controls. Report rank/suit recognition and group shape as observations, not assumed requirements for face-free looks.
+
+## Evidence and acceptance limits
+
+`doc/research/drag-carry-visibility.md` audits carried-card placement and alternatives; its offset-first recommendation was a proposal, superseded as the next action by the owner's audition-first decision. `src/rendered-blocks.ts:RenderedBlock` and hand/field presentation own source meshes/materials/extras. `src/visual/block-appearance.ts:BlockAppearance` exposes geometry, face materials, extras and prepass references, but no universal transition interface. `src/visual/materialise.ts:createMaterialise` clones/patches/disposes materials; the research explicitly leaves custom shader coverage unverified, which is why opacity changes alone are not the shared contract. `src/scene-traits/first-play-prompt.ts:createGhost` calls `src/visual/laser-outline.ts:createLaserOutline`; reuse that actual effect. `src/visual/appearance-prepass.ts` supplies host-owned reference-counted passes and render-state preservation. These are inspectable seams, not a claim the new masked-layer/part-binding API already exists.
+
+Verify every required style × transition on opaque, transparent, contained, refractive and animated cards; single/group drags; moving attachment guides; mouse/touch; quick drop before delay; zero delay/duration; partial fade then accept/reject; repeated drag; lost capture/blur/removal/exit; appearance prepasses; resource/context counts and shared-asset isolation; reduced motion; normal production build exclusion; exported settings and clipboard failure. Provide a clip/screenshots with held-gesture settings and actual source revision, plus bounded extra pass/draw/cost measurements. Source-only audit or atomic synthetic drags do not prove visual acceptance. Production promotion requires a later owner audition decision and separate docs/runtime change.
