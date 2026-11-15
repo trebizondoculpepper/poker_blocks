@@ -67,6 +67,11 @@ export type BlockAppearance = {
    * reports a diagnostic instead of leaving the look opaque.
    */
   maskAdapter?: string;
+  /**
+   * The registered selection-feedback provider that shows this look selected, and its
+   * configuration (#1153, #1314; src/visual/selection-feedback.ts), declared by its assembly.
+   */
+  selectionFeedback?: { provider: string; config?: unknown };
 };
 
 const SIZE = 256;
@@ -1242,6 +1247,8 @@ function appearanceBase(
     edgeColor: context.definition.appearance.edge.color,
     edgeOpacity: context.definition.appearance.edge.opacity,
     extras,
+    // Built from standard materials it made itself: their emissive shows it selected (#1314).
+    selectionFeedback: { provider: "emissive" },
   };
 }
 
@@ -1423,6 +1430,8 @@ function crystalInternal(context: AssemblyContext): BlockAppearance {
     ),
     // Its front reads the inner image this pass captures, in whichever host draws it (#971).
     prepasses: [{ handler: "internalCapture" }],
+    // Its table front is a shader: an additive overlay shows it selected, in hand or on the table.
+    selectionFeedback: { provider: "overlay" },
   };
 }
 
