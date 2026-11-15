@@ -31,6 +31,8 @@ export type PairedMaskUniforms = {
   matReduced: { value: number };
   /** World → mount-local: the shared, following noise domain. */
   matFrame: { value: THREE.Matrix4 };
+  /** The mount's origin in world space: the view-facing plane both looks are decided on. */
+  matOrigin: { value: THREE.Vector3 };
 };
 
 export type MaskRole = "outgoing" | "incoming";
@@ -56,7 +58,12 @@ export const chunkSurfaceAdapter: MaskAdapter = {
     const before = original.onBeforeCompile.bind(original);
     const key = original.customProgramCacheKey.bind(original);
     made.customProgramCacheKey = () => `${key()}|pairedMask:${role}`;
-    if (uniforms.matReduced.value > 0.5) made.transparent = true;
+    // Reduced motion crossfades: only the incoming look fades, over an opaque outgoing one, so the
+    // pair never lets the background through (#1240).
+    if (uniforms.matReduced.value > 0.5 && role === "incoming") made.transparent = true;
+    // ...and the opaque outgoing look writes no depth meanwhile, so an incoming look smaller than
+    // it (inside it) still fades in over it rather than failing the depth test (#1264).
+    if (uniforms.matReduced.value > 0.5 && role === "outgoing") made.depthWrite = false;
     const outgoing = role === "outgoing" ? 1 : 0;
     made.onBeforeCompile = (shader, renderer) => {
       before(shader, renderer);
@@ -75,6 +82,7 @@ export const chunkSurfaceAdapter: MaskAdapter = {
         uniform float matReduced;
         uniform float matOutgoing;
         uniform mat4 matFrame;
+        uniform vec3 matOrigin;
         ${NOISE}
         ${shader.fragmentShader}`
         .replace(
@@ -82,8 +90,15 @@ export const chunkSurfaceAdapter: MaskAdapter = {
           `void main() {
           float matRim = 0.0;
           if (matReduced < 0.5) {
-            // The mount's own space: the pattern rides with the block, the same for both looks.
-            vec3 matLocal = (matFrame * vec4(matWorld, 1.0)).xyz;
+            // Decided per view ray, not per surface point (#1240): this fragment's ray from the
+            // camera meets the plane through the mount's origin facing the camera at one point,
+            // the same for both looks at this pixel whatever their size, so exactly one draws.
+            // That point, in the mount's own space, rides with the block.
+            vec3 matRay = normalize(matWorld - cameraPosition);
+            vec3 matFacing = normalize(cameraPosition - matOrigin);
+            float matAlong = dot(matOrigin - cameraPosition, matFacing) / min(dot(matRay, matFacing), -1e-4);
+            vec3 matHit = cameraPosition + matRay * matAlong;
+            vec3 matLocal = (matFrame * vec4(matHit, 1.0)).xyz;
             vec3 matAt = matLocal * matFrequency + vec3(0.0, matTime * 0.9, matTime * 0.4);
             float matNoise = clamp(matFbm(matAt) * 1.6 + 0.5, 0.0, 1.0);
             float matCut = mix(-matEdge, 1.0 + matEdge, matProgress);
@@ -99,7 +114,7 @@ export const chunkSurfaceAdapter: MaskAdapter = {
           "#include <dithering_fragment>",
           `#include <dithering_fragment>
           gl_FragColor.rgb += mix(matGlow, vec3(1.0, 0.97, 0.9), matRim * matRim) * matRim * 4.0;
-          if (matReduced > 0.5) gl_FragColor.a *= matOutgoing > 0.5 ? 1.0 - matProgress : matProgress;`,
+          if (matReduced > 0.5 && matOutgoing < 0.5) gl_FragColor.a *= matProgress;`,
         );
     };
     return made;
@@ -170,11 +185,13 @@ export function createPairedMask(options: {
     matGlow: { value: new THREE.Color(glow) },
     matReduced: { value: reduced ? 1 : 0 },
     matFrame: { value: new THREE.Matrix4() },
+    matOrigin: { value: new THREE.Vector3() },
   };
   const swapped: {
     mesh: THREE.Mesh;
     material: THREE.Material | THREE.Material[];
     castShadow: boolean;
+    renderOrder: number;
   }[] = [];
   const clones: THREE.Material[] = [];
   for (const [role, side] of sides) {
@@ -189,18 +206,28 @@ export function createPairedMask(options: {
       }
       return clone;
     };
-    side.root.traverse((object) => {
-      if (!(object instanceof THREE.Mesh)) return;
+    side.root.traverse((node) => {
+      // three's own flag, not instanceof, so a mesh from another copy of the library still counts.
+      if (!(node as THREE.Mesh).isMesh) return;
+      const object = node as THREE.Mesh;
       const material = object.material as THREE.Material | THREE.Material[];
-      swapped.push({ mesh: object, material, castShadow: object.castShadow });
+      swapped.push({
+        mesh: object,
+        material,
+        castShadow: object.castShadow,
+        renderOrder: object.renderOrder,
+      });
       object.material = Array.isArray(material) ? material.map(adapt) : adapt(material);
       // A shadow would show a look whole before it is.
       object.castShadow = false;
+      // The fading incoming look draws over the opaque outgoing one.
+      if (reduced && role === "incoming") object.renderOrder += 1;
     });
   }
   const followMount = () => {
     mount.updateWorldMatrix(true, false);
     uniforms.matFrame.value.copy(mount.matrixWorld).invert();
+    uniforms.matOrigin.value.setFromMatrixPosition(mount.matrixWorld);
   };
   followMount();
 
@@ -210,9 +237,10 @@ export function createPairedMask(options: {
   const restore = () => {
     if (!running) return false;
     running = false;
-    for (const { mesh, material, castShadow } of swapped) {
+    for (const { mesh, material, castShadow, renderOrder } of swapped) {
       mesh.material = material;
       mesh.castShadow = castShadow;
+      mesh.renderOrder = renderOrder;
     }
     for (const clone of clones) clone.dispose();
     clones.length = 0;

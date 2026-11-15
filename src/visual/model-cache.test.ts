@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vite-plus/test";
 import {
   createModelCache,
+  prepareBlueprint,
   staticPartsBlueprint,
   type ModelAsset,
   type ModelSource,
@@ -142,14 +143,18 @@ describe("prepared static-model cache (#1193; doc/imported-models.md)", () => {
     fetches[0]!.resolve();
     await flush();
     const parsed = scene();
+    const original = vi.spyOn(parsed.housing.geometry, "dispose");
+    parses[0]!.resolve(parsed);
+    const blueprint = (await a.ready)!;
+    // The baked primary is a copy; the parsed original is released at preparation.
+    expect(blueprint.primary.geometry).not.toBe(parsed.housing.geometry);
+    expect(original).toHaveBeenCalledTimes(1);
     const spies = [
-      vi.spyOn(parsed.housing.geometry, "dispose"),
+      vi.spyOn(blueprint.primary.geometry, "dispose"),
       vi.spyOn(parsed.rotor.geometry, "dispose"),
       vi.spyOn(parsed.housing.material, "dispose"),
       vi.spyOn(parsed.texture, "dispose"),
     ];
-    parses[0]!.resolve(parsed);
-    await a.ready;
     a.release();
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
     b.release();
@@ -166,6 +171,88 @@ describe("prepared static-model cache (#1193; doc/imported-models.md)", () => {
     expect(cache.size).toBe(2);
     cache.dispose();
     expect(cache.size).toBe(0);
+  });
+});
+
+describe("model cache follow-ups (#1259)", () => {
+  it("bakes a copy, so a geometry shared by several meshes is baked once per use", async () => {
+    const { scene: root, housing } = scene();
+    const twin = new THREE.Mesh(housing.geometry, housing.material);
+    twin.name = "twin";
+    twin.position.set(5, 0, 0);
+    root.add(twin);
+    const before = housing.geometry.getAttribute("position").array.slice();
+    const blueprint = staticPartsBlueprint({ scene: root }, { ...asset, parts: ["rotor", "twin"] });
+    expect(Array.from(housing.geometry.getAttribute("position").array)).toEqual(Array.from(before));
+    expect(blueprint.parts.find(({ ref }) => ref === "twin")!.geometry).toBe(housing.geometry);
+  });
+
+  it("disposes everything parsed when validation rejects it", async () => {
+    const { src, fetches, parses } = source();
+    const cache = createModelCache(src);
+    const lease = cache.acquire({ ...asset, parts: ["missing"] });
+    fetches[0]!.resolve();
+    await flush();
+    const parsed = scene();
+    const spies = [
+      vi.spyOn(parsed.housing.geometry, "dispose"),
+      vi.spyOn(parsed.rotor.geometry, "dispose"),
+      vi.spyOn(parsed.texture, "dispose"),
+    ];
+    parses[0]!.resolve(parsed);
+    await expect(lease.ready).rejects.toThrow('"missing" not found');
+    for (const spy of spies) expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps releases harmless after the cache itself is disposed", async () => {
+    const { src, fetches, parses } = source();
+    const cache = createModelCache(src);
+    const a = cache.acquire(asset);
+    const b = cache.acquire(asset);
+    fetches[0]!.resolve();
+    await flush();
+    const parsed = scene();
+    parses[0]!.resolve(parsed);
+    const blueprint = (await a.ready)!;
+    const spy = vi.spyOn(blueprint.primary.geometry, "dispose");
+    cache.dispose();
+    a.release();
+    b.release();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(cache.size).toBe(0);
+  });
+});
+
+describe("model cache shutdown and shared images (#1265)", () => {
+  it("disposes a parse that arrives after the cache shut down", async () => {
+    const { src, fetches, parses } = source();
+    const cache = createModelCache(src);
+    const lease = cache.acquire(asset);
+    fetches[0]!.resolve();
+    await flush();
+    cache.dispose();
+    const parsed = scene();
+    const spy = vi.spyOn(parsed.texture, "dispose");
+    parses[0]!.resolve(parsed);
+    expect(await lease.ready).toBeNull();
+    await flush();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a decoded image open while a kept texture still uses it", async () => {
+    const { scene: root, housing } = scene();
+    const close = vi.fn();
+    const image = { close, width: 1, height: 1 };
+    (housing.material as THREE.MeshStandardMaterial).map!.image = image;
+    // A mesh outside the manifest whose texture shares the same decoded image.
+    const extra = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ map: new THREE.Texture(image as never) }),
+    );
+    extra.name = "unlisted";
+    root.add(extra);
+    prepareBlueprint({ scene: root }, asset);
+    expect(close).not.toHaveBeenCalled();
   });
 });
 
