@@ -63,6 +63,7 @@ describe("bubble emission rate (#1232)", () => {
   it("emits none at zero frequency, building nothing at all", () => {
     expect(pool({ frequency: 0 }).bubbles.meshes).toEqual([]);
     expect(pool({ count: 0 }).bubbles.meshes).toEqual([]);
+    expect(pool({ count: 0.5 }).bubbles.meshes).toEqual([]);
   });
 
   it("births at its rate, independent of a much larger pool", () => {
@@ -71,6 +72,12 @@ describe("bubble emission rate (#1232)", () => {
     // Two seconds at five a second; slow risers, so none has reached the surface yet.
     expect(alive()).toBeGreaterThanOrEqual(9);
     expect(alive()).toBeLessThanOrEqual(11);
+  });
+
+  it("rounds a fractional pool down, never overrunning its arrays (#1304 review)", () => {
+    const { step, alive } = pool({ frequency: 600, count: 2.5 });
+    step(30);
+    expect(alive()).toBe(2);
   });
 
   it("never has more alive than its pool, however high the rate", () => {

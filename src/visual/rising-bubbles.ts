@@ -76,7 +76,9 @@ export const risingBubbles: InclusionHandler = {
     const config = raw as RisingBubblesConfig;
     // Emitting none, it is nothing at all: no pool, no geometry, no update (#1232).
     const rate = config.frequency ?? Number.POSITIVE_INFINITY;
-    if (!(rate > 0) || config.count < 1) return { meshes: [] };
+    // A whole number of bubbles: a tuned or imported fractional pool is rounded down (#1304 review).
+    const count = Math.max(0, Math.floor(config.count));
+    if (!(rate > 0) || count < 1) return { meshes: [] };
     const endSize = config.endSize ?? config.size;
     // The walls keep room for the largest a bubble gets.
     const largest = Math.max(config.size, endSize);
@@ -112,7 +114,6 @@ export const risingBubbles: InclusionHandler = {
       fits = limit.x > floor.x && limit.y > floor.y && limit.z > floor.z;
     };
     fit(new THREE.Matrix4());
-    const count = config.count;
     const positions = new Float32Array(count * 3);
     const alphas = new Float32Array(count * 3);
     const speed = new Float32Array(count);
