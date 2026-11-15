@@ -43,6 +43,32 @@ describe("stage score history (#1063; doc/line-goes-up.md)", () => {
     expect(history!.entries[0]).toMatchObject({ actionId: "a1", play: 1, total: score });
   });
 
+  it("exports the appended point with the committed scoring fact", () => {
+    const run = fresh();
+    const facts: { type: string; payload: unknown }[] = [];
+    run.onCommitted((published) => facts.push(...published));
+    run.play({ cardId: run.state.hand[0].id }, "a1");
+    const applied = facts.find(({ type }) => type === "score.totalApplied");
+    const { generation, entries } = run.state.round.history!;
+    expect((applied!.payload as { stageHistory?: unknown }).stageHistory).toEqual({
+      generation,
+      play: 1,
+      delta: entries[0].delta,
+      total: entries[0].total,
+    });
+  });
+
+  it("advances the generation when the run moves to its next stage", () => {
+    const run = fresh();
+    const first = run.state.round.history!.generation;
+    run.forceOutcome("won");
+    run.advance();
+    run.leaveShop();
+    const next = run.state.round.history;
+    expect(run.inStage).toBe(true);
+    expect(next!.generation).toBe(first + 1);
+  });
+
   it("records a zero-point play and never appends the same action twice", () => {
     const start = startStageHistory({ plays: 4, targetScore: 100 });
     const once = appendStagePlay(start, { actionId: "x", delta: 0 });

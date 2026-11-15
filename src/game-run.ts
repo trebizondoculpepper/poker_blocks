@@ -1,4 +1,9 @@
-import { appendStagePlay, legacyStageHistory, startStageHistory } from "./stage-score-history";
+import {
+  appendStagePlay,
+  legacyStageHistory,
+  startStageHistory,
+  type StageScoreHistory,
+} from "./stage-score-history";
 import type { DeckBuilderStep } from "./deck-builder";
 import {
   attachPlayfield,
@@ -102,9 +107,10 @@ export type RunFlowOutcome = RunPositionOutcome | "run.stage.won";
 const withStageHistory = (
   state: GameState,
   rules: { plays: number; targetScore: number },
+  previous?: StageScoreHistory,
 ): GameState => ({
   ...state,
-  round: { ...state.round, history: startStageHistory(rules, state.round.history) },
+  round: { ...state.round, history: startStageHistory(rules, previous) },
 });
 
 /** What a future save/Continue flow needs to restore a run. */
@@ -1042,7 +1048,22 @@ export class GameRun {
           : {}),
       },
     };
-    this.passiveEvents.emit({ type: "score.totalApplied", amount: total.value });
+    const history = this.currentState.round.history;
+    const point = history?.entries.at(-1);
+    this.passiveEvents.emit({
+      type: "score.totalApplied",
+      amount: total.value,
+      ...(history && point
+        ? {
+            stageHistory: {
+              generation: history.generation,
+              play: point.play,
+              delta: point.delta,
+              total: point.total,
+            },
+          }
+        : {}),
+    });
     this.drainPhase(context, "score", batchId);
 
     // 4. After score: its configured steps (reactions, then pending detonations).
@@ -1345,13 +1366,15 @@ export class GameRun {
 
   private startStage(kind: StageKind): void {
     const setup = this.config.stage(this.currentRound, kind);
+    // The dealer's reset replaces the round; the next history's generation follows this one.
+    const previous = this.currentState.round.history;
     this.activeDealer = this.dealers.get(setup.dealer);
     this.currentState = this.activeDealer.startStage(
       this.clearTable(this.currentState),
       setup,
       this.random,
     );
-    this.currentState = withStageHistory(this.currentState, setup);
+    this.currentState = withStageHistory(this.currentState, setup, previous);
     this.currentPhase = kind;
     this.passiveEvents.syncRack(this.currentState.passiveRack);
     this.lifecycle("stage.started");
