@@ -4,6 +4,8 @@ import { Block } from "./core/block";
 import { writingMaterial, type WritingOptions } from "./letter-block";
 import { defaultLettering, loadLettering } from "./visual/lettering";
 import { textFaceArt } from "./visual/text-face-art";
+import type { FaceArt } from "./visual/face-art";
+import type { Lettering } from "./visual/lettering";
 import { writtenBlock } from "./visual/written-block";
 import { menuAction } from "./traits/menu-action";
 import { interactionFeedback, disabledAppearance } from "./traits/interaction-feedback";
@@ -23,6 +25,11 @@ export type WordCubeOptions = WritingOptions & {
   feedback?: Partial<typeof interactionFeedback.defaults>;
   /** Compose ambient three-axis precession with these settings (#1075); none when absent. */
   precession?: Partial<typeof ambientPrecession.defaults>;
+  /**
+   * The face artwork the definition supplies for its label (#1147), such as a label with a
+   * registered motif (src/visual/motif-face-art.ts); the plain centred label by default.
+   */
+  artwork?: (text: string, lettering: Lettering) => FaceArt;
 };
 
 /** Create one cube. Scene traits own its outer transform, input hit tests and action routing. */
@@ -31,7 +38,7 @@ export async function createWordCube(text: string, options: WordCubeOptions) {
   const lettering = material.lettering ?? defaultLettering;
   await loadLettering(lettering, text);
   const visual = writtenBlock(
-    textFaceArt(text, lettering),
+    (options.artwork ?? textFaceArt)(text, lettering),
     {
       ...material,
       appearance: {
