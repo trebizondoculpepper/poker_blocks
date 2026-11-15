@@ -200,6 +200,7 @@ function recordingHost() {
         dispose: () => undefined,
       },
       run: {
+        onDecided: () => () => {},
         committedState: () => ({
           field: [],
           round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
@@ -1054,5 +1055,32 @@ describe("developer word tuning", () => {
     expect(updates.at(-1)).toMatchObject({ restAngleSpread: 1.5 });
     behaviour.exit!(host, {});
     expect(calls).toContain("attract:tuning-hide");
+  });
+});
+
+describe("outcomeCues (#881)", () => {
+  it("plays the configured cue for each decided outcome, once, and stops on exit", () => {
+    let decided: (outcome: "won" | "lost") => void = () => {};
+    const sounds: string[] = [];
+    const context = {
+      services: {
+        run: {
+          onDecided(listener: (outcome: "won" | "lost") => void) {
+            decided = listener;
+            return () => void (decided = () => {});
+          },
+        },
+        sound: (id: string) => void sounds.push(id),
+      },
+    } as unknown as SceneHost;
+    const config = { won: "round.cleared", lost: "round.failed" } as const;
+    const behaviour = sceneBehaviours<SceneHost>().get("outcomeCues");
+    behaviour.enter!(context, config);
+    decided("won");
+    decided("lost");
+    expect(sounds).toEqual(["round.cleared", "round.failed"]);
+    behaviour.exit!(context, config);
+    decided("won");
+    expect(sounds).toHaveLength(2);
   });
 });

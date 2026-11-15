@@ -219,6 +219,11 @@ export type SceneTraits = {
   musicTrack: { operations: readonly MusicOperation[] };
   /** Entering this scene plays a sound: a stage's start, the shop opening (#93). */
   enterSound: { sfx: SoundEffectId };
+  /**
+   * A stage's outcome cue (#881; doc/outcome-presentation.md, "Two distinct result cues"):
+   * played once the deciding action's required sequence finishes, before the result scene.
+   */
+  outcomeCues: { won: SoundEffectId; lost: SoundEffectId };
   /** Leaving this scene plays a sound: the title or settings screen closing. */
   exitSound: { sfx: SoundEffectId };
   /** Presents the committed `shop.left` receipt (#880): its burn and cues. */
@@ -323,6 +328,8 @@ const playSceneTraits: Partial<SceneTraits> = {
   selectable: { sources: [{ source: "hand" }, { source: "field" }] },
   discardBin: {},
   committedEventSounds: {},
+  // The stage's outcome cues, once its deciding sequence has finished (#881).
+  outcomeCues: { won: "round.cleared", lost: "round.failed" },
   // Rocking waits a second after a turn, eases in over a second, and slows as the field gets
   // heavier: rate 1 at 5 kg, at most 1.5 (doc/playfield-rocking.md defaults).
   playfieldRockingController: {},
@@ -712,6 +719,8 @@ export const sceneDefinitions = [
     name: "stage-won",
     traits: {
       tableBackground: {},
+      // Its own entrance cue, separate from the stage's cleared cue (#881).
+      enterSound: { sfx: "result.stage_won.enter" },
       // The reward ledger, then Visit shop below it once every row has counted in (#951).
       resultMenu: {
         information: "stageReward",
@@ -725,6 +734,8 @@ export const sceneDefinitions = [
     name: "game-over",
     traits: {
       tableBackground: {},
+      // Game Over keeps run.lost, now as its entrance cue (#881).
+      enterSound: { sfx: "run.lost" },
       // The run's stats, then New run and Main menu below them once they are written (#949).
       resultMenu: {
         information: "runStats",

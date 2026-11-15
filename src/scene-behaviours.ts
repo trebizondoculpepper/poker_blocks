@@ -143,6 +143,7 @@ export type SceneHost = {
       | "inventory"
       | "dispatch"
       | "onCommitted"
+      | "onDecided"
       | "hasSave"
       | "runStats"
       | "seed"
@@ -761,6 +762,25 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // The shop's exit response (#880; doc/outcome-presentation.md): it presents the committed
   // shop.left receipt, burning exactly the stock that left, with the configured cues.
   behaviours.register("shopExitResponse", shopExitResponse<Context>());
+  // A stage's outcome cue when its decided outcome arrives (#881): the trait's configuration
+  // names each outcome's sound, so the run controller plays none itself.
+  const outcomeStops = new WeakMap<object, () => void>();
+  behaviours.register("outcomeCues", {
+    enter({ services }, config) {
+      outcomeStops.get(config)?.();
+      outcomeStops.set(
+        config,
+        services.run.onDecided((outcome) => {
+          const cue = (config as Record<string, SoundEffectId>)[outcome];
+          if (cue) services.sound(cue);
+        }),
+      );
+    },
+    exit(_context, config) {
+      outcomeStops.get(config)?.();
+      outcomeStops.delete(config);
+    },
+  });
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });

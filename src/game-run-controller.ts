@@ -149,6 +149,11 @@ export type GameRunController = {
   autosave(): void;
   /** The presenter announced the stage's outcome. */
   decided(outcome: RoundOutcome, now: number): void;
+  /**
+   * A stage's outcome, once its deciding action's required sequence has finished (#881): the
+   * scene's `outcomeCues` controller trait presents it. Fires once per decided outcome.
+   */
+  onDecided(listener: (outcome: RoundOutcome) => void): () => void;
   /** The HUD button: move to the next stage, the shop, the next round, or a new game. */
   takeNextAction(): void;
   /** A shop offer's price. */
@@ -244,6 +249,8 @@ export function createGameRunController<Context>(options: {
     restore: (mark: { state: number; draws: number }) => randomizer.restore(mark),
   };
   // Every run this controller holds publishes its committed facts to the same listeners (#755).
+  /** Who hears a stage's decided outcome (#881). */
+  const decidedListeners = new Set<(outcome: RoundOutcome) => void>();
   const committedListeners = new Set<(facts: readonly EventEnvelope[]) => void>();
   const adopt = (run: GameRun): GameRun => {
     run.onCommitted((facts) => {
@@ -507,7 +514,7 @@ export function createGameRunController<Context>(options: {
   /** The run is lost: the table stays behind the game over screen, which shows the totals. */
   function endRun(): void {
     gameOverAt = null;
-    playSfx("run.lost");
+    // Game Over's own entrance sound plays as its scene enters (#881).
     followRunPosition();
     updateHud();
     autosave();
@@ -921,14 +928,15 @@ export function createGameRunController<Context>(options: {
     rackChanged: () => services.rack.render(game.state.passiveRack),
     autosave,
     decided(outcome, now) {
-      if (outcome === "won") {
-        playSfx("round.cleared");
-        stageWonAt = now + stageWonDelayMs;
-      }
-      if (outcome === "lost") {
-        playSfx("round.failed");
-        gameOverAt = now + gameOverDelayMs;
-      }
+      // Its cue is the scene's to present (#881; doc/outcome-presentation.md): published here,
+      // before the result scene is scheduled, so the cue starts first.
+      for (const listener of Array.from(decidedListeners)) listener(outcome);
+      if (outcome === "won") stageWonAt = now + stageWonDelayMs;
+      if (outcome === "lost") gameOverAt = now + gameOverDelayMs;
+    },
+    onDecided(listener) {
+      decidedListeners.add(listener);
+      return () => decidedListeners.delete(listener);
     },
     takeNextAction,
     offerPrice: (offer) => offerKind(offer).price(offer.block, game.offerRun),

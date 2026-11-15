@@ -145,15 +145,22 @@
     }
   },
   "round.cleared": {
+    "uses": 2,
+    "files": {
+      "audio/sfx-registry.ts (placeholder)": 1,
+      "game-modes.ts": 1
+    }
+  },
+  "result.stage_won.enter": {
     "uses": 1,
     "files": {
-      "game-run-controller.ts": 1
+      "game-modes.ts": 1
     }
   },
   "round.failed": {
     "uses": 1,
     "files": {
-      "game-run-controller.ts": 1
+      "game-modes.ts": 1
     }
   },
   "round.start": {
@@ -227,7 +234,7 @@
   "run.lost": {
     "uses": 1,
     "files": {
-      "game-run-controller.ts": 1
+      "game-modes.ts": 1
     }
   },
   "attract.card.bonk": {
