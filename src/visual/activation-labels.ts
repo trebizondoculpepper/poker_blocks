@@ -20,13 +20,29 @@
  */
 import { Registry } from "../core/registry";
 import { unitsToMs, type EffectHandle, visualHandlers } from "../visual-events/scheduler";
+import {
+  canvasTextMeasure,
+  createFittedTextLayout,
+  fittedTextProvider,
+  invalidateWhenFontsReady,
+  narrationTextStyle,
+  renderFittedText,
+  type TextMeasure,
+} from "./fitted-text";
 
 export type Point = { x: number; y: number };
 export type Size = { width: number; height: number };
 export type Rect = Point & Size;
 
-/** Turns an opaque anchor reference into a live point getter (null once the source is gone). */
-export type AnchorSpace = (anchor: unknown, services: unknown) => () => Point | null;
+/**
+ * A live anchor: a point, and the source's projected bounds when its provider can supply them
+ * (#1157; doc/presentation-contracts.md, "Placement capability: over the actual item"). All in the
+ * layer's CSS pixels.
+ */
+export type AnchorPoint = Point & { bounds?: Rect };
+
+/** Turns an opaque anchor reference into a live anchor getter (null once the source is gone). */
+export type AnchorSpace = (anchor: unknown, services: unknown) => () => AnchorPoint | null;
 export const labelAnchorSpaces = new Registry<AnchorSpace>("label anchor space");
 
 /** Space between a label and its anchor, and between stacked labels, in CSS pixels. */
@@ -71,12 +87,82 @@ export function placeLabels(
   return placed;
 }
 
+/** What a placement mode lays out with: the shared fitted-text layout of its layer. */
+export type LabelFitting = {
+  layout: ReturnType<typeof createFittedTextLayout>;
+};
+
+/**
+ * A registered placement mode, chosen by reference from the label's composition: how a label's
+ * text is laid into its element, and where the labels go. Never chosen by source or owner.
+ */
+export type LabelPlacement = {
+  /** Lay `text` into `element` for this anchor; the element's resulting size follows. */
+  render(
+    element: HTMLElement,
+    text: string,
+    anchor: AnchorPoint,
+    viewport: Size,
+    fit: LabelFitting,
+  ): void;
+  /** Where each label goes, in showing order. */
+  place(requests: readonly (Size & { anchor: AnchorPoint })[], viewport: Size): Rect[];
+};
+export const labelPlacements = new Registry<LabelPlacement>("label placement");
+
+/** The existing caption: plain text, above its point and clear of earlier captions. */
+labelPlacements.register("caption", {
+  render(element, text) {
+    if (element.textContent !== text) element.textContent = text;
+  },
+  place: (requests, viewport) => placeLabels(requests, viewport),
+});
+
+/**
+ * The over-item text budget (#1157): up to 1.6 times the item's width, at least 96 CSS px when
+ * space allows, at most 240 and never wider than the viewport; as tall as the narration profile's
+ * largest block, within the viewport.
+ */
+export function overBoundsBudget(bounds: Size, viewport: Size): Size {
+  const width = Math.min(viewport.width, Math.min(240, Math.max(96, bounds.width * 1.6)));
+  const tallest =
+    narrationTextStyle.maxLines * narrationTextStyle.maxPx * narrationTextStyle.lineHeight;
+  return { width: Math.max(1, width), height: Math.max(1, Math.min(viewport.height, tallest)) };
+}
+
+/**
+ * Centred over the source's projected bounds (or its point, from a point-only provider). Labels
+ * never move above or below to avoid each other, and are never re-anchored at the edges: the
+ * layer clips what falls outside it.
+ */
+labelPlacements.register("overBounds", {
+  render(element, text, anchor, viewport, fit) {
+    const budget = overBoundsBudget(anchor.bounds ?? { width: 0, height: 0 }, viewport);
+    const fitted = fit.layout.layout({ text, style: narrationTextStyle, ...budget });
+    renderFittedText(element, fitted, narrationTextStyle);
+    element.classList.add("activation-label-fitted");
+  },
+  place: (requests) =>
+    requests.map(({ anchor, width, height }) => {
+      const centre = anchor.bounds
+        ? {
+            x: anchor.bounds.x + anchor.bounds.width / 2,
+            y: anchor.bounds.y + anchor.bounds.height / 2,
+          }
+        : anchor;
+      return { x: centre.x - width / 2, y: centre.y - height / 2, width, height };
+    }),
+});
+
 /** One shown label: re-place it from its anchor, or remove it. */
 export type ShownLabel = { refresh(): boolean; remove(): void };
 
 export type ActivationLabelLayer = {
-  /** Show `text` (lines split on newlines) at a live anchor; announced once. */
-  show(text: string, anchor: () => Point | null): ShownLabel;
+  /**
+   * Show `text` (lines split on newlines) at a live anchor, laid out by a registered placement
+   * (the caption by default); announced once, in full.
+   */
+  show(text: string, anchor: () => AnchorPoint | null, placement?: string): ShownLabel;
   dispose(): void;
 };
 
@@ -89,35 +175,56 @@ export function createActivationLabelLayer(host: HTMLElement): ActivationLabelLa
   live.setAttribute("role", "status");
   live.setAttribute("aria-live", "polite");
   host.append(layer, live);
-  const labels: { element: HTMLElement; anchor: () => Point | null }[] = [];
+  type Shown = {
+    element: HTMLElement;
+    text: string;
+    anchor: () => AnchorPoint | null;
+    placement: string;
+  };
+  const labels: Shown[] = [];
+  // One measured layout for every fitted label in the layer, cached by text and budget.
+  const context = document.createElement("canvas").getContext("2d");
+  const measure: TextMeasure = context
+    ? canvasTextMeasure(context, getComputedStyle(host).fontFamily || "sans-serif")
+    : (text, px) => text.length * px * 0.55;
+  const fit: LabelFitting = { layout: createFittedTextLayout(fittedTextProvider, measure) };
 
   function layout(): void {
+    const viewport = { width: host.clientWidth, height: host.clientHeight };
     const visible = labels.flatMap((label) => {
-      const point = label.anchor();
-      label.element.hidden = !point;
-      return point ? [{ element: label.element, point }] : [];
+      const anchor = label.anchor();
+      label.element.hidden = !anchor;
+      return anchor ? [{ label, anchor }] : [];
     });
-    const rects = placeLabels(
-      visible.map(({ element, point }) => ({
-        width: element.offsetWidth,
-        height: element.offsetHeight,
-        anchor: point,
-      })),
-      { width: host.clientWidth, height: host.clientHeight },
-    );
-    visible.forEach(({ element }, index) => {
-      element.style.transform = `translate(${rects[index]!.x}px, ${rects[index]!.y}px)`;
-    });
+    // Each placement lays out its own labels, in showing order.
+    for (const name of new Set(visible.map(({ label }) => label.placement))) {
+      const mine = visible.filter(({ label }) => label.placement === name);
+      const placement = labelPlacements.get(name);
+      for (const { label, anchor } of mine)
+        placement.render(label.element, label.text, anchor, viewport, fit);
+      const rects = placement.place(
+        mine.map(({ label, anchor }) => ({
+          width: label.element.offsetWidth,
+          height: label.element.offsetHeight,
+          anchor,
+        })),
+        viewport,
+      );
+      mine.forEach(({ label }, index) => {
+        label.element.style.transform = `translate(${rects[index]!.x}px, ${rects[index]!.y}px)`;
+      });
+    }
   }
+  // Fonts becoming ready change the measurements: lay out again, once.
+  const stopFonts = invalidateWhenFontsReady(document.fonts, fit.layout, layout);
 
   return {
-    show(text, anchor) {
+    show(text, anchor, placement = "caption") {
       const element = document.createElement("div");
       element.className = "activation-label";
       element.setAttribute("aria-hidden", "true");
-      element.textContent = text;
       layer.append(element);
-      const entry = { element, anchor };
+      const entry: Shown = { element, text, anchor, placement };
       labels.push(entry);
       // Its own announcement entry, so labels appearing together are each announced (#918
       // review); it leaves with the label.
@@ -142,6 +249,7 @@ export function createActivationLabelLayer(host: HTMLElement): ActivationLabelLa
       };
     },
     dispose() {
+      stopFonts();
       labels.splice(0).forEach(({ element }) => element.remove());
       layer.remove();
       live.remove();
@@ -157,22 +265,31 @@ export type ActivationLabelPayload = {
   anchor: unknown;
   /** The presentation interval, in game-time units: the pulse's own length. */
   durationUnits: number;
+  /** A registered label placement (#1157); the caption when absent. */
+  placement?: string;
 };
 
 /** The services the handler reads: the layer to draw in. */
 export type ActivationLabelServices = { activationLabels?: ActivationLabelLayer };
 
 visualHandlers.register("activationLabel", (raw, context): "done" | EffectHandle => {
-  const { text, space, anchor, durationUnits } = raw as ActivationLabelPayload;
+  const {
+    text,
+    space,
+    anchor,
+    durationUnits,
+    placement = "caption",
+  } = raw as ActivationLabelPayload;
   const layer = (context.services as ActivationLabelServices | undefined)?.activationLabels;
-  // Nothing to draw in, nothing to say, or no such space: the event settles at once.
-  if (!layer || !text || !labelAnchorSpaces.has(space)) return "done";
+  // Nothing to draw in, nothing to say, or no such space or placement: it settles at once.
+  if (!layer || !text || !labelAnchorSpaces.has(space) || !labelPlacements.has(placement))
+    return "done";
   const point = labelAnchorSpaces.get(space)(anchor, context.services);
   if (!point()) return "done";
   const endsAt = context.scheduledAtMs + unitsToMs(durationUnits);
   // Started late, after its interval already ended: nothing is shown or announced (#918 review).
   if (context.nowMs >= endsAt) return "done";
-  const label = layer.show(text, point);
+  const label = layer.show(text, point, placement);
   return {
     update: (nowMs) => (nowMs >= endsAt || !label.refresh() ? "finished" : "running"),
     cancel: () => label.remove(),
