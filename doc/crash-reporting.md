@@ -10,6 +10,10 @@ Manual reports go through Sentry too. Reuse **Report a bug** beside **Get source
 
 The source-code link remains an ordinary external link. Report form description is required; name/email are optional, empty by default and never inferred from browser data. Explain that the report includes game diagnostics and, when available, a game screenshot. Allow the player to omit the screenshot. Do not transmit an abandoned form or capture its typed contents as breadcrumbs. Preserve description text on a failed submission, offer retry, prevent accidental duplicate submission and restore focus on close. Report status reflects SDK submission/queue state; a returned event ID is not proof that the server stored it. No screenshot or account login is required to send the description.
 
+## Console entry and phased diagnostic depth
+
+[Console bug reporting](console-bug-reporting.md) adds the owner-approved bare `bug` flow: generated message, existing/easy snapshots and console-free screenshot first; optional literal description/email-in-text later; independent owner-local visual diagnostics afterward. It reuses the common manual reporting controller and preserves this document’s private-data, transport-failure and external-setup boundaries. The console has no description or email prompt; the existing form experience above remains separate.
+
 ## Source audit and evidence-to-decision reasoning
 
 Audited main `a76d2427` before implementation:
