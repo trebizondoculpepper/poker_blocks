@@ -124,9 +124,9 @@ function sceneResources(scene: THREE.Object3D) {
     const mesh = object as THREE.Mesh;
     if (!mesh.isMesh) return;
     geometries.add(mesh.geometry);
-    for (const material of [mesh.material].flat()) {
-      materials.add(material);
-      for (const value of Object.values(material))
+    for (const surface of [mesh.material].flat()) {
+      materials.add(surface);
+      for (const value of Object.values(surface))
         if ((value as THREE.Texture | null)?.isTexture) textures.add(value as THREE.Texture);
     }
   });
@@ -170,7 +170,8 @@ export function prepareBlueprint(
     for (const value of Object.values(material))
       if ((value as THREE.Texture | null)?.isTexture) keptTextures.add(value as THREE.Texture);
   for (const geometry of held.geometries) if (!kept.geometries.has(geometry)) geometry.dispose();
-  for (const material of held.materials) if (!kept.materials.has(material)) material.dispose();
+  // Owned resources by object identity, never a table keyed by a kind of material.
+  for (const surface of held.materials) if (!kept.materials.has(surface)) surface.dispose();
   for (const texture of held.textures) if (!keptTextures.has(texture)) disposeTexture(texture);
   return blueprint;
 }
