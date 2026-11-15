@@ -299,21 +299,18 @@ export function createPairedMask(options: {
       if (!name) problem = `${role} look's ${node.name || node.type} declares no mask adapter`;
       else if (!maskAdapters.has(name))
         problem = `${role} look's mask adapter "${name}" is not registered`;
+      else {
+        // Its resolved adapter may refuse a material it can't adapt (#1336, #1338 reviews).
+        const adapter = maskAdapters.get(name);
+        for (const material of [
+          (node as THREE.Mesh).material as THREE.Material | THREE.Material[],
+        ].flat()) {
+          const refused = adapter.refuse?.(material) ?? null;
+          if (refused) problem ??= `${role} look: ${refused}`;
+        }
+      }
     });
     if (problem) return { ok: false, diagnostic: problem };
-  }
-  // Every material each side would adapt, checked before either look is touched (#1338 review).
-  for (const [role, side] of sides) {
-    const adapter = maskAdapters.get(side.maskAdapter!);
-    let refused: string | null = null;
-    side.root.traverse((node) => {
-      if (refused || !(node as THREE.Mesh).isMesh) return;
-      for (const material of [
-        (node as THREE.Mesh).material as THREE.Material | THREE.Material[],
-      ].flat())
-        refused ??= adapter.refuse?.(material) ?? null;
-    });
-    if (refused) return { ok: false, diagnostic: `${role} look: ${refused}` };
   }
   const uniforms: PairedMaskUniforms = {
     matProgress: { value: 0 },
