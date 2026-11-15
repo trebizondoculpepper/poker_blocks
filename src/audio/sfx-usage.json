@@ -258,10 +258,11 @@
     }
   },
   "ui.hover": {
-    "uses": 3,
+    "uses": 4,
     "files": {
       "audio/sfx-registry.ts (placeholder)": 1,
       "menus.ts": 1,
+      "shop-offer-presentation.ts": 1,
       "traits/menu-action.ts": 1
     }
   },

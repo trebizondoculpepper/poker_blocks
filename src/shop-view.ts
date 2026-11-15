@@ -22,12 +22,20 @@ import type { DragSource, Point } from "./drag-drop";
 import { returnToSource, stop as stopReturn, take } from "./return-to-source";
 import "./shop-view.css";
 import { blockOutline } from "./visual/block-outline";
+import type { DanceFloor } from "./dance/dance-floor";
+import {
+  createOfferPresentation,
+  type OfferPresentation,
+  type ShopOfferPresentationConfig,
+} from "./shop-offer-presentation";
 
 type DisplayedOffer = {
   offer: ShopOffer;
   item: HTMLElement;
   slot: HTMLElement;
+  /** The offer's layout/action root; its dance and feedback layers sit inside (#774). */
   cube: THREE.Object3D;
+  presentation: OfferPresentation;
   dispose(): void;
 };
 
@@ -53,7 +61,13 @@ export type ShopView = {
   readonly guideProvider: DropGuideProvider;
   render(offers: readonly ShopOffer[], visible: boolean, animateEntrance?: boolean): void;
   burnUnsold(reducedMotion: boolean): Promise<void>;
-  frame(): void;
+  /** Draw one frame; `delta` (seconds) advances the stock's ambient motion (#774). */
+  frame(delta?: number): void;
+  /**
+   * Present the stock's dance and hover emphasis with this configuration, or rest it (null).
+   * Called by the scene's `shopOfferPresentation` controller trait (#774).
+   */
+  present(config: Partial<ShopOfferPresentationConfig> | null): void;
   dispose(): void;
 };
 
@@ -246,6 +260,8 @@ export function createShopView(
   reducedMotion: () => boolean,
   /** Why buying would be refused now, without buying (`GameRun.purchaseVerdict`, #499). */
   verdict: (id: string, destination: OfferDestination) => { reason: string } | null,
+  /** The shared dance floor and the stock's presentation configuration (#774). */
+  presentation: { floor: Pick<DanceFloor, "join"> },
 ): ShopView {
   const stock = document.createElement("section");
   stock.className = "shop-stock";
@@ -298,6 +314,8 @@ export function createShopView(
   // same studio room for itself.
   const reflections = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04);
   const displayed: DisplayedOffer[] = [];
+  /** The configuration the scene's controller trait presents the stock with, or null. */
+  let presented: Partial<ShopOfferPresentationConfig> | null = null;
   let burn: {
     startedAt: number;
     seconds: number;
@@ -341,16 +359,41 @@ export function createShopView(
   }
 
   /** An offer's cube, holding its look's prepasses in the shop's context until disposed (#970). */
-  function makeCube(offer: ShopOffer): { cube: THREE.Object3D; dispose(): void } {
+  function makeCube(
+    offer: ShopOffer,
+    order: number,
+  ): { cube: THREE.Object3D; presentation: OfferPresentation; dispose(): void } {
     const made = offerViews.get(offer.kind).cube(offer.block);
     const release = prepasses.require(made.prepasses ?? []);
+    reflectInShop(made.cube, reflections.texture);
+    const layered = createOfferPresentation(made.cube, {
+      id: offer.block.id,
+      order,
+      floor: presentation.floor,
+    });
+    layered.present(presented);
     return {
-      cube: made.cube,
+      cube: layered.root,
+      presentation: layered,
       dispose: () => {
+        layered.dispose();
         release();
         made.dispose();
       },
     };
+  }
+
+  /** Forward the offer's real pointer and focus to its interaction-state provider (#774). */
+  function followInput(item: HTMLElement, offer: OfferPresentation): void {
+    const forward = (dom: string, type: string) =>
+      item.addEventListener(dom, () => offer.input(type));
+    forward("pointerenter", "input.enter");
+    forward("pointerleave", "input.leave");
+    forward("pointercancel", "input.leave");
+    forward("focus", "input.focus");
+    forward("blur", "input.blur");
+    forward("pointerdown", "input.press");
+    forward("pointerup", "input.release");
   }
 
   const contains = (element: HTMLElement | null, x: number, y: number) => {
@@ -395,7 +438,7 @@ export function createShopView(
     stock.classList.remove("is-burning");
     if (!visible) return;
     const spots = placeOffers(offers.map((offer) => offer.block.id));
-    for (const offer of offers) {
+    for (const [order, offer] of offers.entries()) {
       const view = offerViews.get(offer.kind);
       const name = view.name(offer.block);
       const description = view.describe(offer.block);
@@ -427,9 +470,9 @@ export function createShopView(
       tooltip.className = "shop-offer-description";
       tooltip.textContent = description;
       item.append(slot, label, tooltip);
-      const cube = makeCube(offer);
+      const cube = makeCube(offer, order);
       cube.cube.rotation.set(-0.34, 0.48, 0);
-      reflectInShop(cube.cube, reflections.texture);
+      followInput(item, cube.presentation);
       scene.add(cube.cube);
       displayed.push({ offer, item, slot, ...cube });
       stock.append(item);
@@ -494,7 +537,7 @@ export function createShopView(
     stock.style.setProperty("--scatter-room", `${bottom - clear}px`);
   }
 
-  function frame(): void {
+  function frame(delta = 0): void {
     if (renderer.domElement.hidden) return;
     // Coins, rack space or stock may change mid-drag: the verdict follows them (#499).
     refreshGuidance();
@@ -545,6 +588,14 @@ export function createShopView(
     );
     camera.lookAt(camera.position.x, camera.position.y, 0);
     for (const [index, entry] of displayed.entries()) {
+      // An action owns the pose while the offer enters, is carried, flies back or burns; the
+      // dance and hover layers rest until it is back in its slot (doc/shop-stock-motion.md).
+      const busy =
+        entrance !== null ||
+        burn !== null ||
+        dragging?.entry === entry ||
+        entry.item.classList.contains("is-returning");
+      entry.presentation.update(delta, busy, reducedMotion());
       const slot = entry.slot.getBoundingClientRect();
       // The DOM slot is the hit area and the projection's size reference. Keep the WebGL
       // offer inside it when compact landscape CSS shrinks the slot.
@@ -669,6 +720,16 @@ export function createShopView(
     render,
     burnUnsold,
     frame,
+    present(config) {
+      presented = config;
+      for (const entry of displayed) {
+        entry.presentation.present(config);
+        // A fresh provider starts from the offer's real input state: focus and hover don't
+        // change just because the scene was covered and resumed.
+        if (entry.item.matches(":hover")) entry.presentation.input("input.enter");
+        if (document.activeElement === entry.item) entry.presentation.input("input.focus");
+      }
+    },
     dispose: () => {
       clear();
       prepasses.dispose();

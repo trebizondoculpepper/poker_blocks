@@ -408,6 +408,7 @@ const shopView = createShopView(
   () => run.deckBlocks().length,
   () => run.reducedMotion,
   (id, destination) => run.game.purchaseVerdict(id, destination),
+  { floor: danceFloor },
 );
 shopView.render([], false);
 // The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
@@ -562,7 +563,7 @@ const step = (time: number) => {
   view.frame(cameraView.pivot.position, cameraView.structureRadius(), playfield.delta);
   input.frame();
   passiveRackView.frame(playfield.time, run.reducedMotion);
-  shopView.frame();
+  shopView.frame(delta);
   render();
 };
 const animate = (time: number) => {

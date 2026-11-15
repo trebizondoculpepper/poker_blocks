@@ -234,6 +234,14 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       stockSources.delete(config);
     },
   });
+  // The stock dances to the shared beat and the hovered offer is emphasised while the scene is
+  // in front (#774; doc/shop-stock-motion.md). Covering rests it; resuming rejoins once.
+  behaviours.register("shopOfferPresentation", {
+    enter: ({ services }, config) => services.shop.present(config),
+    exit: ({ services }) => services.shop.present(null),
+    cover: ({ services }) => services.shop.present(null),
+    resume: ({ services }, config) => services.shop.present(config),
+  });
   behaviours.register("blockTitle", blockTitle<Context>());
   // A laser guide over where a drag is guided to, or a red X when it would be refused (#922).
   behaviours.register("dropTargetGuide", dropTargetGuide<Context>());
