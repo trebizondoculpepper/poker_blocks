@@ -87,6 +87,14 @@ Before closing #1113 verify standard, shader/unlit, contained, transparent and r
 
 What an operation does to the selected cards is still to be decided.
 
+## Tabbed run status (#1369)
+
+[Run status](run-status.md) extends the existing deck-entry scene with a registered read-only tab host and independently composed Deck and Gameplay Status providers. Preserve all-live-card inventory queries/location markers, hidden/draw-order boundaries, complete shared inspection and existing pause/close navigation. Owners publish invalidation; generic UI dispatches captured provider content without polling, rescoring or identity branches. The source audit distinguishes existing inventory/inspection from missing tab host/state-publication seams and records small delivery/acceptance boundaries.
+
+### Appearance-owned scoring feedback (#1392)
+
+[Scoring appearance feedback](scoring-appearance-feedback.md) extends the registered appearance-binding pattern to row tint: providers own compatible channels and authored baselines; generic views publish color/strength without assuming a material class. Independent feedback contributions compose, and failed/disposed bindings cannot interrupt rendering or scheduler settlement.
+
 ## Inspectable trait
 
 **Target extension (#751):** [Acquired bonus artwork and inspection](presentation-contracts.md#acquired-bonus-artwork-and-inspection-432-751) defines full live bonus descriptions, separate from the compact face label.
@@ -1658,7 +1666,7 @@ Reproducible experiment briefs and measured outcomes live in [experiments](exper
 
 ## Provisional spatial-modifier trials
 
-[The experimental trial contract](experiments/spatial-modifiers.md#provisional-modifier-implementation-contract-814) defines registered snapshot queries, row contribution scope, provisional density/mass/diversity curves, dev controls and reproducibility. These are experiment-only targets, not certified normal-game modifiers. Implementations follow the release-status, physical-mass and deck-builder prerequisites.
+[The experimental trial contract](experiments/spatial-modifiers.md#provisional-modifier-implementation-contract-814) defines registered snapshot queries, row contribution scope, provisional density/mass/diversity curves, dev controls and reproducibility. Their parameters remain provisional, but implemented gameplay passives now enter the normal passive catalogue under [the owner-approved admission policy](release-status.md#normal-run-provisional-passive-trial-1382); they are not certified merely by being offered. Implementations follow the release-status, physical-mass and deck-builder prerequisites.
 
 ## Passive scenario bench and instance settings (#867)
 
@@ -1795,3 +1803,7 @@ The [scheduler terminal-status contract](scheduler-terminal-status.md) keeps ful
 ## Standalone menu controls and shop group layout (#1366)
 
 [The shared menu/control presentation contract](shop-control-blocks.md#standalone-menu-blocks-no-html-enclosure-1364--1366) requires standalone 3D menu blocks with transparent mounting/input wrappers, independently composed form/information and action outlets, and block-local accessible focus feedback. Shop composition puts Buy/Sell/Continue together directly below stock; Home → Settings keeps Back outside the form panel. Scene traits supply anchors/outlets and actions, while the common presenter renders them uniformly. No generic label/scene branching or change to action/drop ownership is authorized. Prior shop-layout summaries describing Continue at bottom-right are superseded for the shop only; other scenes retain their configured layouts. The linked contract records source evidence, delivery boundaries and verification limits.
+
+## Passive trial admission configuration (#1382)
+
+[The normal passive trial policy](release-status.md#normal-run-provisional-passive-trial-1382) changes passive catalogue configuration to admit certified and provisional gameplay definitions without changing generic admission or other families. Explicit authored offer data is required for previously unstocked trials; no release-status branch or global catalogue mutation supplies missing prices. Public provisional descriptions explain experimental balance rather than incorrectly prohibit normal play. Source evidence, initial tuning assumptions and acquisition verification are recorded in the linked contract.
