@@ -196,6 +196,8 @@ export type StageScoreGraphHost = {
   room: THREE.Object3D;
   /** Where the hidden semantic summary goes. */
   host: HTMLElement;
+  /** The shared scheduler, where a loss release's fall runs in its own scope (#1065). */
+  scheduler: Parameters<typeof createPictureReleaseController>[0]["scheduler"];
   /** Resolved reduced motion, read when a release starts. */
   reducedMotion?: () => boolean;
   /** The picture's impact cue as it lands, for a sound controller (#1080). */
@@ -275,6 +277,7 @@ export function createStageScoreGraph(host: StageScoreGraphHost) {
             const made = createPictureReleaseController({
               source: host.source,
               phase: host.phase,
+              scheduler: host.scheduler,
               target: { object: picture.object, attachments: picture.attachments },
               config: config.release,
               reducedMotion: host.reducedMotion ?? (() => false),

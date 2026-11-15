@@ -1,3 +1,4 @@
+import { createVisualScheduler } from "./visual-events/scheduler";
 import * as THREE from "three";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { graphProducer, type GraphSeries } from "./score-graph-controller";
@@ -240,6 +241,7 @@ describe("the stage graph service (#1064)", () => {
     let listening = 0;
     const room = new THREE.Group();
     const services: StageScoreGraphHost = {
+      scheduler: createVisualScheduler(),
       source: {
         onCommitted: () => {
           listening++;

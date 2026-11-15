@@ -37,6 +37,7 @@ function harness() {
   const controller = createPictureReleaseController({
     source,
     phase,
+    scheduler,
     target: {
       object,
       attachments: new Map([
@@ -57,7 +58,7 @@ function harness() {
     phase.contributionFor(key, producer)!.bind(completion.work);
     return completion;
   };
-  return { controller, commit, complete, step, cues, object };
+  return { controller, commit, complete, step, cues, object, phases };
 }
 
 describe("loss release of the hung graph (#1065)", () => {
@@ -85,5 +86,25 @@ describe("loss release of the hung graph (#1065)", () => {
     for (const id of ["l1", "l2"]) commit(id, ["stage.lost"]);
     step(40 * unitMs);
     expect(cues).toEqual(["picture.impact"]);
+  });
+
+  it("never holds the action: its phases settle while the picture is still falling", () => {
+    const { commit, step, cues, phases } = harness();
+    const key = commit("lose", ["stage.lost"]);
+    step(3 * unitMs);
+    expect(phases.status(key)).toEqual({ state: "finished" });
+    expect(cues).toEqual([]);
+    step(20 * unitMs);
+    expect(cues).toEqual(["picture.impact"]);
+  });
+
+  it("leaving mid-fall cancels it once: no later impact", () => {
+    const { controller, commit, step, cues } = harness();
+    commit("lose", ["stage.lost"]);
+    step(3 * unitMs);
+    controller.dispose();
+    controller.dispose();
+    step(30 * unitMs);
+    expect(cues).toEqual([]);
   });
 });
