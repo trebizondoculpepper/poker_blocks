@@ -161,21 +161,47 @@ describe("growing grass (#358)", () => {
     expect(blades[0]!.base.distanceTo(blades[1]!.base)).toBeGreaterThan(1e-6);
   });
 
-  it("keeps each blade where it grew while the soil moves under it (#765)", () => {
+  it("carries blades down with receding soil, and lets rising soil cover them (#765, #1090)", () => {
     const v = vessel();
     v.normal.set(Math.sin(0.26), Math.cos(0.26), 0);
     v.run(7);
     const grown = v.blades();
     expect(grown.length).toBeGreaterThan(0);
+    // The top levels: on the high side the soil recedes, on the low side it rises.
     v.normal.set(0, 1, 0);
     v.run(1 / 30);
     const after = v.blades();
-    // Every blade still shown has its root exactly where it grew: the level top didn't pull it
-    // onto itself. (Some on the low side are now wholly under the soil, and have gone.)
     expect(after.length).toBeGreaterThan(0);
-    for (const { base } of after)
-      expect(grown.some((before) => before.base.distanceTo(base) < 1e-6)).toBe(true);
-    expect(after.some(({ base }) => Math.abs(base.y) > 1e-3)).toBe(true);
+    for (const { base } of after) {
+      const before = grown.find(
+        (b) => Math.abs(b.base.x - base.x) < 1e-6 && Math.abs(b.base.z - base.z) < 1e-6,
+      )!;
+      expect(before).toBeDefined();
+      if (before.base.y > 1e-4)
+        // Receding side: moved straight down onto the new top, not left floating.
+        expect(base.y).toBeCloseTo(0, 5);
+      // Rising side: left where it was, under the soil, not lifted to the top.
+      else expect(base.y).toBeCloseTo(before.base.y, 6);
+    }
+    expect(after.some(({ base }) => base.y < -1e-3)).toBe(true);
+  });
+
+  it("keeps a reanchored blade's height and lean", () => {
+    const v = vessel();
+    v.normal.set(Math.sin(0.26), Math.cos(0.26), 0);
+    // Long enough that every blade is fully grown, so only reanchoring could change a blade.
+    v.run(12);
+    const grown = v.blades();
+    v.normal.set(0, 1, 0);
+    v.run(1 / 30);
+    for (const { base, tip } of v.blades()) {
+      const before = grown.find(
+        (b) => Math.abs(b.base.x - base.x) < 1e-6 && Math.abs(b.base.z - base.z) < 1e-6,
+      )!;
+      expect(tip.clone().sub(base).distanceTo(before.tip.clone().sub(before.base))).toBeLessThan(
+        1e-6,
+      );
+    }
   });
 
   it("retires a blade only when all of it is buried, and reuses its slot (#765)", () => {
