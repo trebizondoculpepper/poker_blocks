@@ -76,6 +76,8 @@ containedContents.register("stars", (boundary, raw) => {
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
   const material = new THREE.PointsMaterial({
+    // Masked by its own shader in a paired transition (#1208).
+    userData: { maskAdapter: "shaderSurface" },
     size: config.size * width,
     sizeAttenuation: true,
     // The shared star texture is attached on the first frame, so building the block needs no
