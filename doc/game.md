@@ -551,7 +551,7 @@ Stage-won Visit shop appears below the reward ledger only after all reward rows 
 
 ## Shop Continue presentation
 
-The shop Continue action is a fixed Paper word cube in the existing bottom-right exit area, not purchasable stock. See [Continue presentation](shop-continue-block.md).
+The shop Continue action is a Paper word cube grouped directly below shop stock with Buy and Sell, in that order, and is not purchasable stock. All three have equal apparent size and no visible HTML enclosure. The explanatory text sits centered at the very bottom of the screen, not beneath Buy. See [the shared shop-control layout](shop-control-blocks.md) for responsive placement and preserved action ownership; it supersedes the old bottom-right shop placement in [Continue presentation](shop-continue-block.md).
 
 ## Passive lifecycle and persistent progress
 
