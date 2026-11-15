@@ -41,11 +41,14 @@ if (!visualHandlers.has("test.scoring"))
 function harness() {
   const board = new THREE.Group();
   const table = new Map<string, RenderedBlock>();
+  /** Blocks played and still flying in. */
+  const flying = new Set<string>();
   const released: RenderedBlock[] = [];
   const made: RenderedBlock[] = [];
   const diagnosed: string[] = [];
   const host: Host = {
     block: (id) => table.get(id) ?? null,
+    arriving: (id) => flying.has(id),
     detachedView(block) {
       const ghost = view(block);
       made.push(ghost);
@@ -66,6 +69,7 @@ function harness() {
     rendered.cube.position.set(3, 0, 1);
     board.add(rendered.cube);
     table.set(block.id, rendered);
+    flying.delete(block.id);
     return rendered;
   };
   const listeners: Listener[] = [];
@@ -127,7 +131,7 @@ function harness() {
       composeProducer: (producer: string) => phases.compose(producer),
     },
   };
-  return { board, table, released, made, diagnosed, step, place, commit, trait, context };
+  return { board, table, flying, released, made, diagnosed, step, place, commit, trait, context };
 }
 
 const settings = { durationUnits: 7.5, reducedDurationUnits: 1.8 };
@@ -286,6 +290,7 @@ describe("material transitions (#1167)", () => {
   it("waits for a played block still landing, then shows its transition (#1358 review)", () => {
     const h = harness();
     h.trait.enter!(h.context as never, settings);
+    h.flying.add("a");
     h.commit([{ scored: 300 }, { change: "a", before: card("a", "ice") }]);
     h.step(100);
     // Not on the table yet: nothing built, nothing given up.
@@ -297,5 +302,37 @@ describe("material transitions (#1167)", () => {
     expect(block.cube.material).not.toBe(h.made[0]!.cube.material);
     h.step(800);
     expect(h.released).toEqual([h.made[0]]);
+  });
+
+  it("waits through a whole flight for a pre-score change, however long it takes (#1358 review)", () => {
+    const h = harness();
+    h.trait.enter!(h.context as never, settings);
+    h.flying.add("a");
+    h.commit([{ change: "a", before: card("a", "ice") }]);
+    // A 2.5 s flight, longer than any fixed one-second wait.
+    h.step(2500);
+    expect(h.made).toHaveLength(0);
+    h.place(card("a", "water"));
+    h.step(800);
+    expect(h.made).toHaveLength(1);
+    expect(h.released).toEqual([h.made[0]]);
+  });
+
+  it("lets a newer change replace one still waiting for its block to land (#1358, #1359 reviews)", () => {
+    const h = harness();
+    h.trait.enter!(h.context as never, settings);
+    h.flying.add("a");
+    h.commit([{ change: "a", before: card("a", "ice") }]);
+    h.step(100);
+    h.commit([{ change: "a", before: card("a", "steel") }]);
+    h.step(100);
+    const block = h.place(card("a", "water"));
+    const own = block.cube.material;
+    h.step(20);
+    // Only the newest builds, from its own old card.
+    expect(h.made.map(({ block: each }) => each)).toMatchObject([{ material: "steel" }]);
+    h.step(800);
+    expect(h.released).toHaveLength(1);
+    expect(block.cube.material).toBe(own);
   });
 });

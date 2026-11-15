@@ -545,6 +545,7 @@ const visualServices: ScoreNarrationServices &
   // ...and its look (#1167): the table block, and a detached view of its captured old card.
   materialTransitions: {
     block: (blockId) => field.blocks().find(({ block }) => block.id === blockId) ?? null,
+    arriving: (blockId) => field.arriving(blockId),
     detachedView(block) {
       const made = blockViews.create(block, cubeSize, "board");
       blockViews.transfer(made);

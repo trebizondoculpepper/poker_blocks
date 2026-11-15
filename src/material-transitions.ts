@@ -48,6 +48,8 @@ export type MaterialTransitionServices = {
   materialTransitions: {
     /** The block's live table view, or null when it is not on the table. */
     block(blockId: string): RenderedBlock | null;
+    /** Whether the block was played and is still flying in: it will be on the table. */
+    arriving(blockId: string): boolean;
     /** A detached view of a captured card, owned by the caller until released. */
     detachedView(block: CardBlock): RenderedBlock;
     /** Free a detached view, once. */
@@ -92,9 +94,9 @@ export const defaultMaterialTransition = "perlinDissolve";
 materialTransitionHandlers.register(defaultMaterialTransition, (request, host) => {
   const target = host.block(request.blockId);
   const parent = target?.cube.parent;
-  // Not on the table yet (a played block still landing): asked again on a later frame. If it
-  // never arrives (it went to the hand, or is gone), its new look simply shows.
-  if (!target || !parent) return notOnTableYet;
+  // Still flying in: asked again on a later frame. Not arriving either (a hand card, one gone):
+  // there is nothing on the table to show it on.
+  if (!target || !parent) return host.arriving(request.blockId) ? notOnTableYet : null;
   const { cube } = target;
   const ghost = host.detachedView(request.before);
   // A mount that follows the cube's pose, holding the ghost at the cube's own transform.
@@ -208,8 +210,11 @@ const prepare = (entry: Entry, host: Host) => {
   return made;
 };
 
-/** How long a transition whose phase opened waits for its block to land: 15 units (1 s). */
-const landingWaitUnits = 15;
+/**
+ * A safety bound on waiting for a block that is flying in (#1358 review): it waits while the
+ * table says the block is arriving, through the whole flight, and gives up only after 150 units.
+ */
+const landingWaitUnits = 150;
 
 const hostOf = (services: unknown) => (services as MaterialTransitionServices).materialTransitions;
 
@@ -232,6 +237,10 @@ visualHandlers.register(
         if (!current || current.started) return "finished";
         // Still landing: built the frame it is on the table, then held.
         const prepared = prepare(current, host);
+        if (!prepared) {
+          forgetTransition(id);
+          return "finished";
+        }
         if (prepared === notOnTableYet) return "running";
         if (prepared?.hold()) return "running";
         forgetTransition(id);
@@ -262,6 +271,8 @@ visualHandlers.register(materialTransitionHandler, (payload, context): EffectHan
   let last: number | null = null;
   return {
     update(nowMs) {
+      // Replaced by a newer change, or forgotten with its scope: it ends, never building late.
+      if (entries.get(id) !== entry) return "finished";
       const prepared = prepare(entry, host);
       // Its phase opened while the block was still landing: it waits for it, a little.
       if (prepared === notOnTableYet) {
