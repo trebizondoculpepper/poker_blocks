@@ -59,6 +59,12 @@ export type BlockAppearance = {
    * mounts the block requires them from its host while it is shown (src/visual/appearance-prepass.ts).
    */
   prepasses?: readonly PrepassReference[];
+  /**
+   * The registered paired-mask adapter this look's materials support (#1166,
+   * src/visual/paired-mask.ts), declared by its assembly. Absent: none, and a paired transition
+   * reports a diagnostic instead of leaving the look opaque.
+   */
+  maskAdapter?: string;
 };
 
 const SIZE = 256;
@@ -1262,7 +1268,8 @@ function sixFaces(context: AssemblyContext): BlockAppearance {
   const textures = [...faceCache.values()].flatMap(({ texture, height }) =>
     height ? [texture, height] : [texture],
   );
-  return appearanceBase(context, textures, materials);
+  // Plain standard-material faces: the chunk-based mask patch applies (#1166).
+  return { ...appearanceBase(context, textures, materials), maskAdapter: "chunkSurface" };
 }
 
 function brushedFaces(context: AssemblyContext): BlockAppearance {
@@ -1275,11 +1282,14 @@ function brushedFaces(context: AssemblyContext): BlockAppearance {
   const materials = textures.map((texture, face) =>
     surface(texture, definition.appearance, heights[face], angles[face]),
   );
-  return appearanceBase(
-    context,
-    [...textures, ...heights.filter((height) => height !== undefined)],
-    materials,
-  );
+  return {
+    ...appearanceBase(
+      context,
+      [...textures, ...heights.filter((height) => height !== undefined)],
+      materials,
+    ),
+    maskAdapter: "chunkSurface",
+  };
 }
 
 function refractiveCrystal(context: AssemblyContext): BlockAppearance {

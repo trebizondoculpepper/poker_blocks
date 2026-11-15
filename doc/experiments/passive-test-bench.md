@@ -58,3 +58,7 @@ Verify instance isolation/default preservation, unknown/invalid parameters, sche
 ## Run-host integration (#900)
 
 [Prepared scenario sessions and trial replacement](trial-session-adoption.md) places the registered setup/factory and injected host seam for #901/#902. Adopt the prepared run, identity universe, rules, RNG/checkpoints and provenance together; never hand a privately randomized scenario run to a host that replaces its hooks with another stream. #903 supplies the panel, #904 live readouts and #905 final mode composition; #821 remains export.
+
+## Committed command replay contract (#1237)
+
+[Command journaling](command-journal.md) supplies the missing authoritative input half: compatible commit metadata, explicit separate refill steps, version-2 evidence and isolated exact-build comparison. Fact-only or incomplete-provenance recordings are inspectable but cannot claim verified replay. Setup replay retains its composite semantics through a separate adapter.
