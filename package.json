@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev",
-    "build": "vp build",
+    "build": "vp build && vp build --mode game",
     "preview": "vp preview",
     "check": "vp check",
     "lint": "vp lint",
