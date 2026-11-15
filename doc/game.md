@@ -576,3 +576,7 @@ A framed graph on the room back wall shows cumulative stage score versus scoring
 ## Reporting a bug (#1339)
 
 The home and pause screens offer **Report a bug** beside **Get source code** in their existing footer. Reporting opens a Sentry feedback form so the player can describe a problem without needing a crash. Submitted reports include bounded game/build/browser diagnostics and an optional best-effort game screenshot. Unhandled errors are also reported automatically. Reports can feed linked GitHub issues through configured intake; submission never changes game outcomes. See [the reporting contract](crash-reporting.md) for data handling, failure behavior and setup prerequisites. This is an agreed target, not a claim that integration is already installed.
+
+## Run status viewer (#1337)
+
+The deck-counter entry opens a read-only status screen with **Deck** and **Gameplay Status** tabs. Deck shows all live run cards with location and material, plus shared hover/focus/tap inspection of weight and full bonuses; it does not reveal shuffled draw order or hidden Present contents. Gameplay Status shows round/stage, current/target score and installed modifiers with their descriptions and instance state. See [run status](run-status.md) for ownership, pause/focus, invalidation and verification. This target extends the existing deck view; it does not change gameplay or claim the tabbed implementation has shipped.

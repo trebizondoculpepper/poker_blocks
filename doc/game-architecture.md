@@ -1783,3 +1783,7 @@ The [scheduler terminal-status contract](scheduler-terminal-status.md) keeps ful
 ## Crash reporting and manual bug feedback (#1339)
 
 [Crash reporting](crash-reporting.md) defines the application-lifetime configured reporting controller, mechanical Sentry transport, registered bounded diagnostics and renderer-owned screenshot capture. Automatic errors and manual feedback share captured release/browser/game context without changing gameplay or blocking input. Reuse the existing home/pause footer Report a bug link to open Sentry feedback; diagnostics remain in Sentry and account-supported automation feeds safe summaries into GitHub. Developer-console composition stays separate. This target includes source audit, primary references, credential boundaries, cancellation/disposal, failure limits and focused delivery verification; no SDK or account integration is claimed by the documentation.
+
+## Tabbed run status (#1369)
+
+[Run status](run-status.md) extends the existing deck-entry scene with a registered read-only tab host and independently composed Deck and Gameplay Status providers. Preserve all-live-card inventory queries/location markers, hidden/draw-order boundaries, complete shared inspection and existing pause/close navigation. Owners publish invalidation; generic UI dispatches captured provider content without polling, rescoring or identity branches. The source audit distinguishes existing inventory/inspection from missing tab host/state-publication seams and records small delivery/acceptance boundaries.
