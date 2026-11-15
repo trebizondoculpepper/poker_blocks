@@ -147,7 +147,9 @@ export function triggeredWork(requests: readonly TriggeredRequest[]): EventDescr
 
 visualHandlers.register("triggered.explosions", (payload, context) => {
   const { requests } = payload as { requests: readonly TriggeredRequest[] };
-  const now = context.nowMs / unitMs;
+  // From the phase's own scheduled start, so a dispatch the scheduler's budget delayed keeps the
+  // shared timeline rather than pushing every causal step later (#1294 review).
+  const now = context.scheduledAtMs / unitMs;
   for (const request of requests) {
     const admitted = context.schedule({
       handler: request.handler,

@@ -351,3 +351,26 @@ describe("triggered effects in the committed action's post-scoring phase (#1172)
     expect(log).toEqual([]);
   });
 });
+
+describe("causal steps keep the phase's scheduled timeline (#1294 review)", () => {
+  it("dates each request from the dispatch's scheduled time, not a late start", async () => {
+    const { visualHandlers } = await import("./visual-events/scheduler");
+    const due: number[] = [];
+    const requests = [
+      { depth: 0, handler: "x", sourceId: "a" },
+      { depth: 2, handler: "x", sourceId: "b" },
+    ];
+    visualHandlers.get("triggered.explosions")({ requests }, {
+      nowMs: 900,
+      scheduledAtMs: 600,
+      scope: {} as never,
+      schedule: (description: { dueUnits: number }) => {
+        due.push(description.dueUnits);
+        return { accepted: true, handle: {} as never };
+      },
+      cancel: () => {},
+      services: {},
+    } as never);
+    expect(due).toEqual([600 / unitMs, 600 / unitMs + 2 * causalSpacingUnits]);
+  });
+});

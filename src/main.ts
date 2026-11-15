@@ -557,6 +557,8 @@ const presenter: PlayPresenter = createPlayPresenter({
   decided: (outcome, now, occurrence) => run.decided(outcome, now, occurrence),
   visualEvents,
   placementPhase,
+  // A reset takes the explosions' glare and afterimages with it (#1294 review).
+  resetFeedback: () => dazzle.clear(),
 });
 const input: TableInput = createTableInput({
   host,
@@ -693,6 +695,7 @@ if (import.meta.hot) {
     attract.dispose();
     blockTitles.dispose();
     presenter.dispose();
+    dazzle.dispose();
     hand.dispose();
     blockViews.disposeAll();
     field.dispose();
