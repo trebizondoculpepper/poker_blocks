@@ -171,6 +171,8 @@ export function createLaserLines(
     glowGeometry = tubes(config.glowRadius);
   const core = material(1),
     glow = material(0.18);
+  // Each takes part in a paired mask through the custom-shader adapter (#1209).
+  for (const each of [core, glow]) each.userData.maskAdapter = "customShader";
   const coreMesh = new THREE.Mesh(coreGeometry, core),
     glowMesh = new THREE.Mesh(glowGeometry, glow);
   coreMesh.renderOrder = glowMesh.renderOrder = 12;

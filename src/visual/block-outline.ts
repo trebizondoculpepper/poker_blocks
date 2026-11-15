@@ -16,17 +16,21 @@ export function blockOutline(
     transparent: live !== undefined || appearance.edgeOpacity < 1,
     opacity: live?.value ?? appearance.edgeOpacity,
   });
+  // The outline takes part in a paired mask through the chunk adapter (#1209).
+  material.userData.maskAdapter = "chunkSurface";
   const outline = new THREE.LineSegments(new THREE.EdgesGeometry(appearance.geometry), material);
   if (live)
     outline.onBeforeRender = () => {
+      // Whatever material it draws with now, a paired mask's clone included, stays live (#1209).
+      const current = outline.material as THREE.LineBasicMaterial;
       // A host showing a selection outline (fully opaque) keeps it while selected.
-      if (material.userData.selected === true) {
-        material.colorWrite = material.depthWrite = true;
+      if (current.userData.selected === true) {
+        current.colorWrite = current.depthWrite = true;
         return;
       }
-      material.opacity = live.value;
-      material.colorWrite = live.value > 0;
-      material.depthWrite = live.value > 0;
+      current.opacity = live.value;
+      current.colorWrite = live.value > 0;
+      current.depthWrite = live.value > 0;
     };
   return outline;
 }

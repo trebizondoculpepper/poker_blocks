@@ -210,8 +210,9 @@ export function createPairedMask(options: {
       return clone;
     };
     side.root.traverse((node) => {
-      // three's own flag, not instanceof, so a mesh from another copy of the library still counts.
-      if (!(node as THREE.Mesh).isMesh) return;
+      // three's own flags, not instanceof, so one from another copy of the library still counts.
+      // A look's edges (an outline's line segments) follow its coverage too (#1209).
+      if (!(node as THREE.Mesh).isMesh && !(node as THREE.Line).isLine) return;
       const object = node as THREE.Mesh;
       const material = object.material as THREE.Material | THREE.Material[];
       swapped.push({

@@ -91,3 +91,6 @@ export const opticalShaderAdapter: MaskAdapter = {
 
 maskAdapters.register("materialDeclared", materialDeclaredAdapter);
 maskAdapters.register("opticalShader", opticalShaderAdapter);
+// Any other custom ShaderMaterial with a `position` attribute and a `main` (#1209): a laser
+// outline, a custom face shader. The same shared-uniform patch.
+maskAdapters.register("customShader", opticalShaderAdapter);
