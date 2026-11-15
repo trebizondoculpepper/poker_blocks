@@ -241,14 +241,13 @@ export const fittedTextProvider: TextLayoutProvider = {
         Math.min(style.maxLines, Math.floor(height / (px * style.lineHeight))),
       );
       const all = paragraphs.flatMap((p) => wrap(p, px, width, measure));
-      const kept = all.slice(0, room);
+      let kept = all.slice(0, room);
       if (all.length > room || kept.some((line) => measure(line, px) > width)) {
-        kept[kept.length - 1] = ellipsizeKeepingNumbers(
-          all.slice(room - 1).join(" "),
-          px,
-          width,
-          measure,
-        );
+        const tail = ellipsizeKeepingNumbers(all.slice(room - 1).join(" "), px, width, measure);
+        // Operands too wide for one line wrap onto the lines before it, giving up words first,
+        // so every operand stays inside the width (#1188).
+        const tailLines = wrap(tail, px, width, measure);
+        kept = [...kept.slice(0, Math.max(0, room - tailLines.length)), ...tailLines];
         truncated = true;
       }
       chosen = { lines: kept, px };

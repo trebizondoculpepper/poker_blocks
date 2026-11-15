@@ -88,6 +88,15 @@ describe("fitted narration text (#1156; doc/presentation-contracts.md)", () => {
     for (const line of result.lines) expect(line.width).toBeLessThanOrEqual(110 + 1e-9);
   });
 
+  it("wraps preserved operands within the width when they don't fit on one line (#1188)", () => {
+    const text = "Many words here and then more words +1200 ×12 −300 +4500 ×99";
+    const result = fit(text, 70, 60);
+    const shown = result.lines.map(({ text: line }) => line).join(" ");
+    for (const operand of ["+1200", "×12", "−300", "+4500", "×99"])
+      expect(shown).toContain(operand);
+    for (const line of result.lines) expect(line.width).toBeLessThanOrEqual(70 + 1e-9);
+  });
+
   it("stays within the height budget when truncated (#1185)", () => {
     const result = fit("a b c d e f g h i j k l m n o p q r s t u v w x y z ".repeat(8), 90, 40);
     expect(result.truncated).toBe(true);
