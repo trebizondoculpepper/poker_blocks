@@ -361,6 +361,7 @@ describe("game modes composed from traits", () => {
       discardBin: {},
       committedEventSounds: {},
       materialChangeSounds: {},
+      destructionExits: {},
       outcomeCues: { won: "round.cleared", lost: "round.failed" },
       playfieldRockingController: {},
       deckPanel: { opens: "openDeck" },

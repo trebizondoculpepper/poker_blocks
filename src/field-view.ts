@@ -81,6 +81,13 @@ export type FieldView = {
    * The gap stays; nothing settles into it.
    */
   remove(blockId: string): void;
+  /**
+   * Take a destroyed block off the table as `remove` does, but hand its cube over instead of
+   * disposing it (#1173; doc/visual-event-interface.md, "Retain captured detached visual"): from
+   * now on it is no gameplay entity, never hit-tested or counted, and the caller owns it, calling
+   * `release` once to dispose it. Null when the block isn't on the table.
+   */
+  detach(blockId: string): { rendered: RenderedBlock; release(): void } | null;
   /** Forget every placed block (the cubes themselves are disposed elsewhere). */
   clear(): void;
   dispose(): void;
@@ -225,6 +232,25 @@ export function createFieldView(options: {
     },
     get massCenter() {
       return massCenter;
+    },
+    detach(blockId) {
+      const found = [...placed].find(([, { block }]) => block.id === blockId);
+      if (!found) return null;
+      const [key, rendered] = found;
+      pulses.get(blockId)?.stop();
+      pulses.delete(blockId);
+      placed.delete(key);
+      massCenter = removeCell(massCenter, rendered.cell!);
+      if (massCenter.count > 0) options.onCenter(centerOfGravity(massCenter));
+      let held = true;
+      return {
+        rendered,
+        release() {
+          if (!held) return;
+          held = false;
+          views.dispose(rendered);
+        },
+      };
     },
     remove(blockId) {
       pulses.get(blockId)?.stop();

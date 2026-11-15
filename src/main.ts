@@ -94,6 +94,9 @@ import { createDiagnosticRegistry } from "./diagnostics/debug-snapshot";
 import { registerSnapshotProviders, snapshotSections } from "./diagnostics/providers";
 import { debugSnapshotCommand } from "./diagnostics/snapshot-command";
 import { registerConsoleCommand } from "./console/commands";
+// Every exit effect registered, so a removed block's recipe can run (#511 review, #1173).
+import { createExitPresenter } from "./visual/exit-effects";
+import type { BlockExitServices, ExitPresenter } from "./visual/exit-presentation";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -171,6 +174,7 @@ type TraitContext = {
     overlays: Overlays;
     hand: HandView;
     field: FieldView;
+    exits: ExitPresenter;
     firstPlay: FirstPlayTable;
     actionLog: ActionLog;
     actionWatch: ActionWatch;
@@ -275,6 +279,10 @@ const traitContext: TraitContext = {
     cameraView,
     get visualEvents() {
       return visualEvents;
+    },
+    // The shared block-exit presenter (#1173), built with the scheduler below.
+    get exits() {
+      return exitPresenter;
     },
     // The rocking controller's capabilities (#783): wiring only, no policy.
     playfieldRocking: {
@@ -473,6 +481,7 @@ const visualServices: ScoreNarrationServices &
   PresentedActionServices &
   RewardLedgerServices &
   ShopBurnServices &
+  BlockExitServices &
   TransitionAudioServices &
   FieldLineServices & { playfieldRocking: RockingSink } = {
   get scoreNarration() {
@@ -500,10 +509,16 @@ const visualServices: ScoreNarrationServices &
   playfieldRocking: rockingRelay,
   // A committed material transition's sound (#539).
   transitionAudio: { play: (id) => playSfx(id) },
+  // Block exits on this scheduler (#549, #1173).
+  get blockExits() {
+    return exitPresenter.blockExits;
+  },
   // The shop's outgoing burn, advanced on this scheduler (#880).
   shopBurn: { effect: (startMs) => shopView.burnEffect(startMs) },
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
+// Removed blocks' exits (#1173), presented on that scheduler.
+const exitPresenter = createExitPresenter(visualEvents, () => run.reducedMotion);
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
 document.addEventListener("visibilitychange", () => visualEvents.suspend());
 // Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).

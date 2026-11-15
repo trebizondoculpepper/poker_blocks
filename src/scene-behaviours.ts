@@ -1,4 +1,7 @@
 import { materialChangeSounds } from "./scene-traits/material-change-sounds";
+import { destructionExits } from "./scene-traits/destruction-exits";
+import type { ExitPresenter } from "./visual/exit-presentation";
+import type { FieldView } from "./field-view";
 import { shopExitResponse, type ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
   createPlayfieldRockingController,
@@ -154,6 +157,10 @@ export type SceneHost = {
     cameraView: Pick<CameraViewService, "beginShopEntrance">;
     /** The rocking controller's narrow capabilities (#783). */
     playfieldRocking: PlayfieldRockingServices;
+    /** The table, for the destruction-exit controller to take a removed block's cube (#1173). */
+    field: Pick<FieldView, "detach">;
+    /** The shared block-exit presenter (#1173). */
+    exits: Pick<ExitPresenter, "start" | "dispose">;
     /** The shared visual-event scheduler, for controller traits' required effects (#880). */
     visualEvents: ShopExitScheduler;
     overlays: Pick<
@@ -820,6 +827,7 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   });
   // A committed material transition's sound, on the shared scheduler (#539).
   behaviours.register("materialChangeSounds", materialChangeSounds<Context>());
+  behaviours.register("destructionExits", destructionExits<Context>());
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });

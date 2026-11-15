@@ -29,6 +29,7 @@ import { saveKey } from "./save";
 import type { Scene } from "./scenes";
 import type { DestroyCause } from "./traits/destructible";
 import { standardGameFlow } from "./standard-game-flow";
+import type { DestructionExitsConfig } from "./scene-traits/destruction-exits";
 
 export { standardGameFlow };
 
@@ -235,6 +236,8 @@ export type SceneTraits = {
   enterSound: { sfx: SoundEffectId };
   /** A committed material transition's sound, scheduled on the shared scheduler (#539). */
   materialChangeSounds: Record<never, never>;
+  /** Removed table blocks play their exits while this scene is on the stack (#1173). */
+  destructionExits: DestructionExitsConfig;
   /**
    * A stage's outcome cue (#881; doc/outcome-presentation.md, "Two distinct result cues"):
    * played once the deciding action's required sequence finishes, before the result scene.
@@ -346,6 +349,8 @@ const playSceneTraits: Partial<SceneTraits> = {
   committedEventSounds: {},
   // What a card becomes is heard as it changes (#539).
   materialChangeSounds: {},
+  // A destroyed table block plays its own exit (#1173; doc/triggered-presentation.md).
+  destructionExits: {},
   // The stage's outcome cues, once its deciding sequence has finished (#881).
   outcomeCues: { won: "round.cleared", lost: "round.failed" },
   // Rocking waits a second after a turn, eases in over a second, and slows as the field gets
