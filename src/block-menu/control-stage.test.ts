@@ -199,6 +199,25 @@ describe("grouped 3D control stage (#1146; doc/shop-control-blocks.md)", () => {
     stage.dispose();
   });
 
+  it("ignores focus a pointer press caused, keeping the pointer's own hover (#1202)", async () => {
+    const h = harness();
+    const stage = await createControlStage(h.stageHost, controls);
+    const seen: string[] = [];
+    const events = ["input.enter", "input.focus", "input.blur", "input.leave"];
+    const stops = events.map((name) => stage.cube("a")!.block.on(name, () => void seen.push(name)));
+    h.buttons[0].fire("pointerdown", { pointerType: "mouse" });
+    // The pointer's own hover; what follows must add nothing.
+    seen.length = 0;
+    h.buttons[0].fire("focus");
+    h.buttons[0].fire("blur");
+    expect(seen).toEqual([]);
+    // Keyboard focus afterwards still forwards.
+    h.buttons[0].fire("focus");
+    expect(seen).toEqual(["input.enter", "input.focus"]);
+    stops.forEach((stop) => stop());
+    stage.dispose();
+  });
+
   it("displays the canvas at the host's CSS size, whatever its drawing buffer (#1191)", async () => {
     const h = harness();
     const stage = await createControlStage(h.stageHost, controls);
