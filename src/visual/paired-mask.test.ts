@@ -303,4 +303,20 @@ describe("paired block-local material masks (#1166; doc/presentation-contracts.m
       });
     });
   });
+
+  describe("live uniforms for masked shader clones (#1350)", () => {
+    it("follows entries the source's owner replaces or adds, and never leaks the mask's", async () => {
+      const { liveUniforms } = await import("./paired-mask");
+      const source: Record<string, THREE.IUniform> = { time: { value: 1 } };
+      const view = liveUniforms(source);
+      source.time = { value: 5 };
+      source.added = { value: 7 };
+      expect(view.time!.value).toBe(5);
+      expect(view.added!.value).toBe(7);
+      Object.assign(view, { matProgress: { value: 0.3 } });
+      expect(view.matProgress!.value).toBe(0.3);
+      expect("matProgress" in source).toBe(false);
+      expect(Object.keys(view)).toEqual(expect.arrayContaining(["time", "added", "matProgress"]));
+    });
+  });
 });
