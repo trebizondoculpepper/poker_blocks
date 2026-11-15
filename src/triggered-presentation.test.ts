@@ -96,6 +96,18 @@ describe("triggered requests, captured at commit (#1172)", () => {
     expect(Object.values(requests[0]!)).not.toContain(bomb);
   });
 
+  it("counts causal depth from the action's first trigger, even one that presents nothing", () => {
+    const requests = projectTriggered(
+      [
+        triggered(block("r1", "relay"), ["r1"]),
+        triggered(block("r2", "relay"), ["r1", "r2"]),
+        triggered(block("b1", "bomb"), ["r1", "r2", "b1"]),
+      ],
+      { definitionOf },
+    );
+    expect(requests.map(({ sourceId, depth }) => [sourceId, depth])).toEqual([["b1", 2]]);
+  });
+
   it("presents a lone source with no neighbours", () => {
     const requests = projectTriggered([triggered(block("b1", "bomb"), ["b1"])], { definitionOf });
     expect(requests).toHaveLength(1);
@@ -177,10 +189,10 @@ describe("an explosion effect (#1172)", () => {
 
   it("flashes once at its cell in the board's transform, runs its smoke out, and releases once", () => {
     const { host, log, placed } = recordingHost();
-    const effect = createExplosion(request, defaultExplosion, host);
-    expect(effect.update(0)).toBe("running");
-    // The board sits at x 10: the anchor follows its presentation transform.
+    const effect = createExplosion(request, defaultExplosion, host, 0);
+    // It pops as it starts. The board sits at x 10: the anchor follows its presentation transform.
     expect(log).toEqual(["place 2", "flash 12 6"]);
+    expect(effect.update(0)).toBe("running");
     let now = 0;
     let state = "running";
     while (state === "running" && now < 10_000) state = effect.update((now += 50));
@@ -197,17 +209,28 @@ describe("an explosion effect (#1172)", () => {
 
   it("under reduced motion still pops once, softened by the dazzle, and emits no smoke", () => {
     const { host, log } = recordingHost(true);
-    const effect = createExplosion(request, defaultExplosion, host);
+    const effect = createExplosion(request, defaultExplosion, host, 0);
     expect(effect.update(0)).toBe("finished");
     expect(log.filter((line) => line.startsWith("flash"))).toHaveLength(1);
   });
 
-  it("cancelled before it starts, it places and flashes nothing", () => {
+  it("catches up from its scheduled start after a late frame, never restarting its smoke", () => {
+    const { host } = recordingHost();
+    const lifetime =
+      (defaultExplosion.smoke.emitUnits * unitMs) / 1000 + defaultExplosion.smoke.lifetime;
+    // Scheduled at 1000 ms but first updated almost a lifetime later: it is nearly done.
+    const effect = createExplosion(request, defaultExplosion, host, 1000);
+    expect(effect.update(1000 + lifetime * 1000 - 50)).toBe("running");
+    expect(effect.update(1000 + lifetime * 1000 + 50)).toBe("finished");
+  });
+
+  it("cancelled, it releases once and finishes", () => {
     const { host, log } = recordingHost();
-    const effect = createExplosion(request, defaultExplosion, host);
+    const effect = createExplosion(request, defaultExplosion, host, 0);
     effect.cancel();
+    effect.dispose();
     expect(effect.update(0)).toBe("finished");
-    expect(log).toEqual(["remove"]);
+    expect(log.filter((line) => line === "remove")).toHaveLength(1);
   });
 });
 

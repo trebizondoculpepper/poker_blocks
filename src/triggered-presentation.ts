@@ -90,10 +90,15 @@ export function projectTriggered(
   }: Projection = {},
 ): TriggeredRequest[] {
   const found = new Map<string, Omit<TriggeredRequest, "depth"> & { steps: number }>();
+  // The action's first trigger, presenting or not: depth counts every causal step from it,
+  // relays and unconfigured roots included (doc/triggered-presentation.md).
+  let root = Infinity;
   for (const fact of facts) {
-    if (fact.type !== triggeredFact || found.has(fact.eventId)) continue;
+    if (fact.type !== triggeredFact) continue;
     const { trigger } = fact.payload as GameEvent;
     if (!trigger) continue;
+    root = Math.min(root, trigger.path.length);
+    if (found.has(fact.eventId)) continue;
     const { block, cell } = trigger.source;
     const configured = definitionOf(block).appearance.onTrigger;
     if (!configured) continue;
@@ -120,7 +125,6 @@ export function projectTriggered(
     });
   }
   const requests = [...found.values()];
-  const root = Math.min(...requests.map(({ steps }) => steps));
   return requests.map(({ steps, ...request }) =>
     Object.freeze({ ...request, depth: steps - root }),
   );
@@ -219,6 +223,8 @@ export function createExplosion(
   request: TriggeredRequest,
   config: ExplosionConfig,
   host: ExplosionHost,
+  /** When it was scheduled to start: a late frame catches up from here, never restarts. */
+  startedAtMs: number,
 ): EffectHandle {
   const anchor = new THREE.Group();
   const smoke = createSmokeBurst(
@@ -226,7 +232,7 @@ export function createExplosion(
     { random: () => host.random(), size: host.cubeSize },
     new THREE.Vector3(),
   );
-  let last: number | null = null;
+  let last = startedAtMs;
   let released = false;
   const release = () => {
     if (released) return;
@@ -234,16 +240,14 @@ export function createExplosion(
     host.remove(anchor);
     smoke.dispose();
   };
+  // It pops as it starts, when the scheduler starts it, not a frame later.
+  anchor.add(smoke.object);
+  host.place(anchor, request.cell);
+  anchor.updateWorldMatrix(true, false);
+  host.flash(anchor.getWorldPosition(new THREE.Vector3()), config.pop);
   return {
     update(nowMs) {
       if (released) return "finished";
-      if (last === null) {
-        last = nowMs;
-        anchor.add(smoke.object);
-        host.place(anchor, request.cell);
-        anchor.updateWorldMatrix(true, false);
-        host.flash(anchor.getWorldPosition(new THREE.Vector3()), config.pop);
-      }
       const delta = Math.max(0, nowMs - last) / 1000;
       last = nowMs;
       return smoke.update(delta, host.reducedMotion()) ? "running" : "finished";
@@ -256,5 +260,10 @@ export function createExplosion(
 visualHandlers.register("triggered.explosion", (payload, context) => {
   const request = payload as TriggeredRequest;
   const { triggeredEffects } = context.services as TriggeredEffectServices;
-  return createExplosion(request, request.config as ExplosionConfig, triggeredEffects);
+  return createExplosion(
+    request,
+    request.config as ExplosionConfig,
+    triggeredEffects,
+    context.scheduledAtMs,
+  );
 });
