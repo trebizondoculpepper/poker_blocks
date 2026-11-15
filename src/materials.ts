@@ -92,6 +92,12 @@ export type MaterialDefinition = {
    */
   cardFace?: string;
   traits: { transparent?: Record<string, never>; resistant?: ResistantTrait };
+  /**
+   * Traits a card must already carry to wear this material (#1421): a wrapper's material needs
+   * the contents it is made of (`opaqueContainer`). Random dealing never puts it on a card
+   * without them (doc/release-status.md, "Production Present wrapper certification").
+   */
+  requires?: readonly string[];
   /** Its release status: `certified` or `provisional` (doc/release-status.md, #812). */
   releaseStatus: ReleaseStatusDeclaration;
   /**
@@ -1614,6 +1620,8 @@ export const experimentalMaterials: readonly MaterialDefinition[] = [
     },
     // Certified (#1129): its public inspection carries no provisional warning. Certification
     // admits nothing: no catalogue lists it, since it isn't in `materialDefinitions`.
+    // Only a wrapper holding contents wears it: never dealt onto an ordinary card (#1421).
+    requires: ["opaqueContainer"],
     releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
     lifecycle: { parent: "ordinaryCard" },
@@ -1872,7 +1880,11 @@ const catalogueOf = (definitions: readonly MaterialDefinition[], access: Catalog
     ({ id }) => id,
     ({ releaseStatus }) => releaseStatus,
     access,
-  ).map(({ definition }) => definition);
+  )
+    .map(({ definition }) => definition)
+    // Pools deal onto plain cards: a material requiring traits they never carry (a wrapper's,
+    // #1421) is never a candidate, whatever its release status.
+    .filter(({ requires = [] }) => requires.length === 0);
 materialPools.register("gameplay", () => catalogueOf(materialDefinitions, ordinaryCatalogue));
 materialPools.register("registered", () =>
   // Built-ins only: a definition installed later (a dev fixture) resolves by ID but is never

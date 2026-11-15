@@ -28,7 +28,10 @@ describe("release-status declarations (#812)", () => {
   it("leaves the gameplay pool exactly as it was, and the registered pool holding both", () => {
     expect(ids(materialPools.get("gameplay")())).toEqual(ids(materialDefinitions));
     const registered = ids(materialPools.get("registered")());
-    expect(registered).toEqual(expect.arrayContaining(ids(experimentalMaterials)));
+    // Except a material a plain card can't wear, such as the wrapper's (#1421).
+    const wearable = experimentalMaterials.filter(({ requires = [] }) => requires.length === 0);
+    expect(registered).toEqual(expect.arrayContaining(ids(wearable)));
+    expect(registered).not.toContain("giftWrap");
     expect(registered).toEqual(expect.arrayContaining(ids(materialDefinitions)));
   });
 
