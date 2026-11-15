@@ -28,10 +28,13 @@ import {
 export type CommittedCapture = { factTypes: readonly string[] };
 
 /** A producer that reserves `slot` for any action whose facts include `fact`. */
-export function factProducer(config: { fact: string; slot: string }) {
+export function factProducer(config: { fact: string; slot: string; ordered?: string }) {
+  const reservation = config.ordered
+    ? { slot: config.slot, ordered: config.ordered }
+    : { slot: config.slot };
   return {
     reserve: (captured: unknown) =>
-      (captured as CommittedCapture).factTypes.includes(config.fact) ? { slot: config.slot } : null,
+      (captured as CommittedCapture).factTypes.includes(config.fact) ? reservation : null,
   };
 }
 
