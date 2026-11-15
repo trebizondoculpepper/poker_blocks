@@ -67,10 +67,32 @@ export const risingBubbles: InclusionHandler = {
     // Local (points) space to block-local space, where the volume is published.
     const toBlock = boundary.volumeScale;
     // Where a bubble's centre may be: the bounds, in points space, less its own extent.
-    const margin = (config.size * width) / 2;
-    const limit = bounds.max.clone().divideScalar(toBlock).subScalar(margin);
-    const floor = bounds.min.clone().divideScalar(toBlock).addScalar(margin);
-    const fits = limit.x > floor.x && limit.y > floor.y && limit.z > floor.z;
+    // The sprite keeps a world size (`keepWorldSize`: its size times the points' world y scale), so
+    // under a nonuniform or turned block its local extent differs per axis: a world sphere of that
+    // radius, carried back into points space, reaches `radius × |row i of the inverse|` along axis i.
+    const limit = new THREE.Vector3();
+    const floor = new THREE.Vector3();
+    const margin = new THREE.Vector3();
+    const linear = new THREE.Matrix3();
+    let fits = false;
+    const fit = (toWorld: THREE.Matrix4) => {
+      linear.setFromMatrix4(toWorld).multiplyScalar(toBlock);
+      const e = linear.elements;
+      // The world radius: half the world size, as keepWorldSize scales it (column y's length).
+      const radius = ((config.size * width) / 2) * Math.hypot(e[3]!, e[4]!, e[5]!);
+      if (!(Math.abs(linear.determinant()) > 1e-12)) return;
+      const inverse = linear.invert().elements;
+      // Column-major: row i of the inverse is (e[i], e[i + 3], e[i + 6]).
+      margin.set(
+        radius * Math.hypot(inverse[0]!, inverse[3]!, inverse[6]!),
+        radius * Math.hypot(inverse[1]!, inverse[4]!, inverse[7]!),
+        radius * Math.hypot(inverse[2]!, inverse[5]!, inverse[8]!),
+      );
+      limit.copy(bounds.max).divideScalar(toBlock).sub(margin);
+      floor.copy(bounds.min).divideScalar(toBlock).add(margin);
+      fits = limit.x > floor.x && limit.y > floor.y && limit.z > floor.z;
+    };
+    fit(new THREE.Matrix4());
     const count = config.count;
     const positions = new Float32Array(count * 3);
     const alphas = new Float32Array(count * 3);
@@ -132,7 +154,9 @@ export const risingBubbles: InclusionHandler = {
     const held = new THREE.Vector3();
     return {
       meshes: [points],
-      update({ delta, seconds, reducedMotion }) {
+      update({ delta, seconds, reducedMotion, toWorld }) {
+        // Where a whole bubble fits under this frame's transform.
+        fit(toWorld);
         if (reducedMotion) return;
         up.copy(rise);
         for (let i = 0; i < count; i++) {
