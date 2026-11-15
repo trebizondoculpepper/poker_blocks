@@ -31,6 +31,10 @@ The base hand size is a tuning value in `src/balance.ts`; another dealer may set
 
 These names and payloads are examples, not a frozen API.
 
+## Quantitative heat and Cloud adjacency (#1384)
+
+[Heat and Cloud](heat-and-cloud.md) defines registered snapshot heat-source contributions, configured Water thresholds and transactional single-source generation. Six-face heating and 26-neighbour random Cloud placement are independently configured capabilities. The source audit identifies the legacy pair-spawn mismatch and the required reusable command/query seams; no material identity branches, duplicate simulation or presentation RNG are authorized. Source ordering/reservations, new-state snapshot visibility, card ownership and scenario verification are explicit.
+
 ## Core runtime
 
 Four small modules under `src/core/` carry the trait pattern. They are independent of cards and of rendering, and none of them knows about a specific trait.
@@ -86,6 +90,18 @@ The appearance's feedback lifetime includes hand-to-board material handover and 
 Before closing #1113 verify standard, shader/unlit, contained, transparent and refractive appearances in all-material Dev4; selected/deselected baselines, repeated calls, independent shared assets, hand/board swap and material replacement, existing outline/lift/count badge, reduced motion and disposal. Supply actual sandbox-load evidence and selection checks; unit tests alone cannot prove that every registered appearance builds or looks correct. No new input lock, presentation timer or gameplay event is needed for this static feedback fix.
 
 What an operation does to the selected cards is still to be decided.
+
+## Required-scope result entry (#1389)
+
+[Result scope gating](result-scope-gating.md) removes the remaining legacy result deadlines and presenter-busy inference. A configured controller uses captured terminal facts and required action/exit scopes, with no extra automatic pause, generation-safe cover/resume and cancellation. Preserve the separately documented loss-burn 80-percent gate and optional outgoing tail.
+
+## Tabbed run status (#1369)
+
+[Run status](run-status.md) extends the existing deck-entry scene with a registered read-only tab host and independently composed Deck and Gameplay Status providers. Preserve all-live-card inventory queries/location markers, hidden/draw-order boundaries, complete shared inspection and existing pause/close navigation. Owners publish invalidation; generic UI dispatches captured provider content without polling, rescoring or identity branches. The source audit distinguishes existing inventory/inspection from missing tab host/state-publication seams and records small delivery/acceptance boundaries.
+
+### Appearance-owned scoring feedback (#1392)
+
+[Scoring appearance feedback](scoring-appearance-feedback.md) extends the registered appearance-binding pattern to row tint: providers own compatible channels and authored baselines; generic views publish color/strength without assuming a material class. Independent feedback contributions compose, and failed/disposed bindings cannot interrupt rendering or scheduler settlement.
 
 ## Inspectable trait
 
