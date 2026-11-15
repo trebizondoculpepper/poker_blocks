@@ -4,7 +4,8 @@
  * Every mounted offer, whatever its kind, gets the same layered presentation:
  *
  *   root (layout/action: slot projection, entrance, drag, return, burn — owned by the shop view)
- *     └ dance  (bob and tilt from the shared dance floor)
+ *     └ handoff (the displayed pose captured when an action takes over; eased away at rest)
+ *         └ dance  (bob and tilt from the shared dance floor)
  *         └ feedback (hover/focus/press emphasis, owned by `interactionFeedback`)
  *             └ the offer's model
  *
@@ -109,9 +110,11 @@ export function createOfferPresentation(
   options: { id: string; order: number; floor: Pick<DanceFloor, "join"> },
 ): OfferPresentation {
   const root = new THREE.Group();
+  const handoff = new THREE.Group();
   const dance = new THREE.Group();
   const feedback = new THREE.Group();
-  root.add(dance);
+  root.add(handoff);
+  handoff.add(dance);
   dance.add(feedback);
   feedback.add(model);
   const materials = new Set<THREE.Material>();
@@ -129,8 +132,38 @@ export function createOfferPresentation(
   };
   let live: Participation | null = null;
   let weight = 0;
+  let wasBusy = false;
+  const pose = new THREE.Matrix4();
+  const inner = new THREE.Matrix4();
+  const identity = {
+    position: new THREE.Vector3(),
+    quaternion: new THREE.Quaternion(),
+    scale: new THREE.Vector3(1, 1, 1),
+  };
+
+  /**
+   * Pose-preserving hand-off (doc/shop-stock-motion.md): when an action takes the offer, the
+   * displayed bob, tilt and hover emphasis move into the hand-off layer unchanged, so nothing
+   * shifts under the pointer while it is carried. The inner layers then start from rest.
+   */
+  function capture(): void {
+    dance.updateMatrix();
+    feedback.updateMatrix();
+    handoff.updateMatrix();
+    inner.multiplyMatrices(dance.matrix, feedback.matrix);
+    pose.multiplyMatrices(handoff.matrix, inner);
+    pose.decompose(handoff.position, handoff.quaternion, handoff.scale);
+    dance.position.set(0, 0, 0);
+    dance.rotation.set(0, 0, 0);
+    feedback.position.set(0, 0, 0);
+    feedback.scale.setScalar(1);
+    weight = 0;
+  }
 
   function rest(): void {
+    handoff.position.set(0, 0, 0);
+    handoff.quaternion.identity();
+    handoff.scale.setScalar(1);
     dance.position.y = 0;
     dance.rotation.z = 0;
     feedback.position.set(0, 0, 0);
@@ -175,15 +208,22 @@ export function createOfferPresentation(
     update(dt, busy, reducedMotion) {
       if (!live) return;
       const { block, config } = live;
+      if (busy && !wasBusy) capture();
+      wasBusy = busy;
+      const blend = reducedMotion ? 1 : 1 - Math.exp(-config.response * Math.max(0, dt));
+      // Held while the action owns the pose; given back smoothly once the offer rests.
+      if (!busy) {
+        handoff.position.lerp(identity.position, blend);
+        handoff.quaternion.slerp(identity.quaternion, blend);
+        handoff.scale.lerp(identity.scale, blend);
+      }
       if (live.available !== !busy) {
         live.available = !busy;
         block.emit("presentation.available", live.available);
       }
       block.settingsOf(interactionFeedback)!.reducedMotion = reducedMotion;
       const target = busy || reducedMotion ? 0 : 1;
-      weight = reducedMotion
-        ? 0
-        : weight + (target - weight) * (1 - Math.exp(-config.response * Math.max(0, dt)));
+      weight = reducedMotion ? 0 : weight + (target - weight) * blend;
       const amount = live.energy * weight;
       const angle = live.phase * Math.PI * 2;
       dance.position.y = Math.sin(angle) * config.bob * amount;

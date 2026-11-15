@@ -722,7 +722,13 @@ export function createShopView(
     frame,
     present(config) {
       presented = config;
-      for (const entry of displayed) entry.presentation.present(config);
+      for (const entry of displayed) {
+        entry.presentation.present(config);
+        // A fresh provider starts from the offer's real input state: focus and hover don't
+        // change just because the scene was covered and resumed.
+        if (entry.item.matches(":hover")) entry.presentation.input("input.enter");
+        if (document.activeElement === entry.item) entry.presentation.input("input.focus");
+      }
     },
     dispose: () => {
       clear();

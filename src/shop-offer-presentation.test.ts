@@ -19,21 +19,23 @@ function setup(order = 0, beat = 1) {
   offer.present({});
   const feedback = model.parent!;
   const dance = feedback.parent!;
+  const handoff = dance.parent!;
   const settle = (busy = false, frames = 120) => {
     for (let i = 0; i < frames; i += 1) {
       floor.update();
       offer.update(1 / 60, busy, reduced);
     }
   };
-  return { offer, floor, model, feedback, dance, settle, reduce: () => (reduced = true) };
+  return { offer, floor, model, feedback, dance, handoff, settle, reduce: () => (reduced = true) };
 }
 
 beforeEach(() => (played.length = 0));
 
 describe("shop offer presentation (#774)", () => {
   it("layers root > dance > feedback > model so no two writers share a transform", () => {
-    const { offer, model, feedback, dance } = setup();
-    expect(dance.parent).toBe(offer.root);
+    const { offer, model, feedback, dance, handoff } = setup();
+    expect(handoff.parent).toBe(offer.root);
+    expect(dance.parent).toBe(handoff);
     expect(feedback.parent).toBe(dance);
     expect(model.parent).toBe(feedback);
   });
@@ -56,14 +58,25 @@ describe("shop offer presentation (#774)", () => {
     expect(second.dance.position.y).toBeCloseTo(0.03 * Math.sin(Math.PI / 8), 4);
   });
 
-  it("rests the inner layers smoothly while an action owns the pose", () => {
-    const { offer, dance, settle } = setup();
+  it("keeps the displayed pose when an action takes over, then gives it back smoothly", () => {
+    const { offer, model, dance, handoff, settle } = setup();
+    offer.input("input.enter");
     settle();
-    offer.update(1 / 60, true, false);
-    // One frame later it has eased toward rest, not snapped.
-    expect(dance.position.y).toBeGreaterThan(0.02);
+    model.updateWorldMatrix(true, false);
+    const shown = model.matrixWorld.clone();
     settle(true);
-    expect(dance.position.y).toBeCloseTo(0, 4);
+    model.updateWorldMatrix(true, false);
+    // Carried: the world pose is unchanged however long the action lasts.
+    expect(
+      model.matrixWorld.equals(shown) ||
+        model.matrixWorld.elements.every((v, i) => Math.abs(v - shown.elements[i]!) < 1e-9),
+    ).toBe(true);
+    expect(dance.position.y).toBe(0);
+    // At rest again, the hand-off eases away rather than snapping.
+    offer.update(1 / 60, false, false);
+    expect(handoff.position.y).toBeGreaterThan(0.02);
+    settle(false);
+    expect(handoff.position.y).toBeCloseTo(0, 4);
   });
 
   it("does not dance with reduced motion", () => {
