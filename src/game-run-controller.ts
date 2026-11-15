@@ -101,6 +101,9 @@ export type RunServices = {
   readonly frame: Pick<HudFrame, "layout" | "setLayout">;
 };
 
+/** A stage's decided outcome and its response occurrence ID (#881). */
+export type DecidedOutcome = { outcome: RoundOutcome; occurrence: string };
+
 export type GameRunController = {
   readonly game: GameRun;
   /**
@@ -148,12 +151,12 @@ export type GameRunController = {
   rackChanged(): void;
   autosave(): void;
   /** The presenter announced the stage's outcome. */
-  decided(outcome: RoundOutcome, now: number): void;
+  decided(outcome: RoundOutcome, now: number, occurrence?: string): void;
   /**
    * A stage's outcome, once its deciding action's required sequence has finished (#881): the
    * scene's `outcomeCues` controller trait presents it. Fires once per decided outcome.
    */
-  onDecided(listener: (outcome: RoundOutcome) => void): () => void;
+  onDecided(listener: (decision: DecidedOutcome) => void): () => void;
   /** The HUD button: move to the next stage, the shop, the next round, or a new game. */
   takeNextAction(): void;
   /** A shop offer's price. */
@@ -250,7 +253,7 @@ export function createGameRunController<Context>(options: {
   };
   // Every run this controller holds publishes its committed facts to the same listeners (#755).
   /** Who hears a stage's decided outcome (#881). */
-  const decidedListeners = new Set<(outcome: RoundOutcome) => void>();
+  const decidedListeners = new Set<(decision: DecidedOutcome) => void>();
   const committedListeners = new Set<(facts: readonly EventEnvelope[]) => void>();
   const adopt = (run: GameRun): GameRun => {
     run.onCommitted((facts) => {
@@ -927,10 +930,15 @@ export function createGameRunController<Context>(options: {
     drawReplacements,
     rackChanged: () => services.rack.render(game.state.passiveRack),
     autosave,
-    decided(outcome, now) {
+    decided(outcome, now, occurrence) {
       // Its cue is the scene's to present (#881; doc/outcome-presentation.md): published here,
       // before the result scene is scheduled, so the cue starts first.
-      for (const listener of Array.from(decidedListeners)) listener(outcome);
+      // Its response occurrence: the committed play's, or the stage's when none was captured.
+      const decision = {
+        outcome,
+        occurrence: occurrence ?? `${game.lastCommittedActionId ?? "stage"}:outcome`,
+      };
+      for (const listener of Array.from(decidedListeners)) listener(decision);
       if (outcome === "won") stageWonAt = now + stageWonDelayMs;
       if (outcome === "lost") gameOverAt = now + gameOverDelayMs;
     },

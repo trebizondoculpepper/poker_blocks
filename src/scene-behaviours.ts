@@ -765,12 +765,19 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
   // A stage's outcome cue when its decided outcome arrives (#881): the trait's configuration
   // names each outcome's sound, so the run controller plays none itself.
   const outcomeStops = new WeakMap<object, () => void>();
+  /** Response occurrences already presented: a redelivered outcome never plays twice. */
+  const presentedOutcomes = new Set<string>();
   behaviours.register("outcomeCues", {
     enter({ services }, config) {
       outcomeStops.get(config)?.();
       outcomeStops.set(
         config,
-        services.run.onDecided((outcome) => {
+        services.run.onDecided(({ outcome, occurrence }) => {
+          if (presentedOutcomes.has(occurrence)) return;
+          presentedOutcomes.add(occurrence);
+          // Bounded: only recent occurrences can be redelivered.
+          if (presentedOutcomes.size > 64)
+            presentedOutcomes.delete(presentedOutcomes.values().next().value!);
           const cue = (config as Record<string, SoundEffectId>)[outcome];
           if (cue) services.sound(cue);
         }),

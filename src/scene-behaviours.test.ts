@@ -1060,14 +1060,16 @@ describe("developer word tuning", () => {
 
 describe("outcomeCues (#881)", () => {
   it("plays the configured cue for each decided outcome, once, and stops on exit", () => {
-    let decided: (outcome: "won" | "lost") => void = () => {};
+    let deliver: (decision: { outcome: "won" | "lost"; occurrence: string }) => void = () => {};
+    const decided = (outcome: "won" | "lost", occurrence = `${outcome}-1`) =>
+      deliver({ outcome, occurrence });
     const sounds: string[] = [];
     const context = {
       services: {
         run: {
-          onDecided(listener: (outcome: "won" | "lost") => void) {
-            decided = listener;
-            return () => void (decided = () => {});
+          onDecided(listener: typeof deliver) {
+            deliver = listener;
+            return () => void (deliver = () => {});
           },
         },
         sound: (id: string) => void sounds.push(id),
@@ -1078,9 +1080,11 @@ describe("outcomeCues (#881)", () => {
     behaviour.enter!(context, config);
     decided("won");
     decided("lost");
+    // A redelivery of the same committed response plays nothing more.
+    decided("won");
     expect(sounds).toEqual(["round.cleared", "round.failed"]);
     behaviour.exit!(context, config);
-    decided("won");
+    decided("won", "won-2");
     expect(sounds).toHaveLength(2);
   });
 });

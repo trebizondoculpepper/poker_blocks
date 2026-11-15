@@ -249,6 +249,9 @@ export class GameRun {
     return this.lastFailure;
   }
 
+  /** The last committed action's ID (#881). */
+  private lastActionId: string | null = null;
+
   /**
    * Resolve one action as a transaction (#657; doc/game-events.md, "Delivery order, cascades and
    * failure"): its state changes, rewards, use consumption and random draws are staged, and an
@@ -290,6 +293,7 @@ export class GameRun {
       if (result === null) return null;
       this.actions.remember(id);
       this.version++;
+      this.lastActionId = id;
       this.lastFacts = action.facts;
       this.lastFailure = null;
       published = action.facts;
@@ -428,6 +432,11 @@ export class GameRun {
 
   /** Final results from the last play, shared by the stage total and presentation. */
   /** The field the last play scored, captured before its after-score steps (#904). */
+  /** The last committed action's ID: what its presentation responses are identified by (#881). */
+  get lastCommittedActionId(): string | null {
+    return this.lastActionId;
+  }
+
   get lastScoringField(): GameState["field"] {
     return this.scoringField;
   }
