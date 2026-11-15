@@ -48,7 +48,9 @@ describe("paired block-local material masks (#1166; doc/presentation-contracts.m
     // Complementary roles: the outgoing side draws where the incoming one is not yet.
     expect(outgoing.uniforms.matOutgoing.value).toBe(1);
     expect(incoming.uniforms.matOutgoing.value).toBe(0);
-    expect(outgoing.fragmentShader).toContain("matFrame * vec4(matWorld, 1.0)");
+    // Decided per view ray at the mount's camera-facing plane, in the mount's space (#1240).
+    expect(outgoing.fragmentShader).toContain("matFrame * vec4(matHit, 1.0)");
+    expect(outgoing.uniforms.matOrigin).toBe(incoming.uniforms.matOrigin);
     // Progress moves both together, from start through mid-transition.
     mask.update(0.5);
     expect(outgoing.uniforms.matProgress.value).toBeCloseTo(0.5);
@@ -146,5 +148,33 @@ describe("paired block-local material masks (#1166; doc/presentation-contracts.m
     expect(clone.transparent).toBe(true);
     // oxlint-disable-next-line typescript/unbound-method -- comparing hook identity only
     expect(next.material.onBeforeCompile).toBe(THREE.Material.prototype.onBeforeCompile);
+  });
+
+  it("tracks the mount's origin for the view-facing decision plane (#1240)", () => {
+    const { mount, mask } = pair();
+    mount.position.set(3, 1, -2);
+    mask.update(0.1);
+    expect(mask.uniforms.matOrigin.value.toArray()).toEqual([3, 1, -2]);
+  });
+
+  it("crossfades under reduced motion with the outgoing look opaque underneath (#1240)", () => {
+    const mount = new THREE.Group();
+    const old = look(1);
+    const next = look(2);
+    mount.add(old.root, next.root);
+    const result = createPairedMask({
+      mount,
+      outgoing: { root: old.root, maskAdapter: "chunkSurface" },
+      incoming: { root: next.root, maskAdapter: "chunkSurface" },
+      reduced: true,
+    });
+    if (!result.ok) throw new Error(result.diagnostic);
+    expect((old.mesh.material as THREE.Material).transparent).toBe(false);
+    expect((next.mesh.material as THREE.Material).transparent).toBe(true);
+    expect(next.mesh.renderOrder).toBe(1);
+    const fragment = compile(next.mesh.material as THREE.Material).fragmentShader;
+    expect(fragment).toContain("matReduced > 0.5 && matOutgoing < 0.5");
+    result.mask.cancel();
+    expect(next.mesh.renderOrder).toBe(0);
   });
 });
