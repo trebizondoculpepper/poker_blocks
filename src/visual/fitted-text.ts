@@ -241,14 +241,27 @@ export const fittedTextProvider: TextLayoutProvider = {
         Math.min(style.maxLines, Math.floor(height / (px * style.lineHeight))),
       );
       const all = paragraphs.flatMap((p) => wrap(p, px, width, measure));
-      const kept = all.slice(0, room);
+      let kept = all.slice(0, room);
       if (all.length > room || kept.some((line) => measure(line, px) > width)) {
-        kept[kept.length - 1] = ellipsizeKeepingNumbers(
-          all.slice(room - 1).join(" "),
-          px,
-          width,
-          measure,
-        );
+        // The tail takes the last `lines` lines: everything from there on, ellipsized but keeping
+        // its operands, wrapped within the width (#1188). Grow it a line at a time until its
+        // wrap fits the lines it replaces, so a displaced line's operands join the tail too.
+        let tailLines: string[] = [];
+        for (let lines = 1; lines <= room; lines++) {
+          const tail = ellipsizeKeepingNumbers(
+            all.slice(room - lines).join(" "),
+            px,
+            width,
+            measure,
+          );
+          tailLines = wrap(tail, px, width, measure);
+          if (tailLines.length <= lines) {
+            kept = [...all.slice(0, room - lines), ...tailLines];
+            break;
+          }
+          // Even the whole rectangle can't hold every operand: operands outrank the height.
+          if (lines === room) kept = tailLines;
+        }
         truncated = true;
       }
       chosen = { lines: kept, px };
