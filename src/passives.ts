@@ -116,6 +116,8 @@ export type GameEvent = {
   trigger?: TriggerContext;
   /** On `block.removed` and `block.resisted` (#437): what destroyed it, or what it resisted. */
   cause?: string;
+  /** On `block.resisted` (#1174): the survivor as captured, for its feedback to answer from. */
+  survivor?: CardBlock;
   /**
    * The sound the committing configuration names, for presentation to play: on `block.removed`
    * (#435), `coins.gained` and a granted `passive.installed` (#538).

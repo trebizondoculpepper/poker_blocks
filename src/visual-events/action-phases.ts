@@ -193,6 +193,12 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
   /** Each ordered chain's latest contribution scope, this generation. */
   const chains = new Map<string, ScopeHandle>();
   const keyOf = ({ generation: g, actionId }: ActionKey) => `${g}:${actionId}`;
+  /**
+   * The composition's producers, in order: the configured ones, then any a composed scene trait
+   * adds while it is mounted (`compose`). Each commit snapshots them; a record in flight keeps its
+   * snapshot whatever changes later (doc/action-presentation-phases.md).
+   */
+  const composed: string[] = [...options.producers];
   const live = (key: ActionKey) =>
     key.generation === generation ? records.get(keyOf(key)) : undefined;
   const terminal = (scope: ScopeHandle) => scheduler.status(scope).state !== "pending";
@@ -207,6 +213,21 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
   return {
     get generation() {
       return generation;
+    },
+    /**
+     * Add a producer to the composition for actions committed from now on, until the returned
+     * removal (idempotent). A scene trait composes its own producer while it is mounted, so an
+     * unmounted one never reserves a contribution nothing will bind (#1064).
+     */
+    compose(producer: string): () => void {
+      phaseProducers.get(producer);
+      composed.push(producer);
+      let held = true;
+      return () => {
+        if (!held) return;
+        held = false;
+        composed.splice(composed.lastIndexOf(producer), 1);
+      };
     },
     /**
      * Open a committed action's record: snapshot the producers, reserve every contribution, then
@@ -230,7 +251,7 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
       evict();
       if (records.size >= maxRecords)
         return { ok: false, diagnostic: `action record limit ${maxRecords} reached` };
-      const producers = options.producers.map((name) => ({
+      const producers = composed.map((name) => ({
         name,
         producer: phaseProducers.get(name),
       }));
