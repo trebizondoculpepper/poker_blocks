@@ -413,6 +413,8 @@ This section is the agreed target design. It replaces the first-version placehol
 
 A passive whose effect names a material is never eligible before that material unlocks. The shop derives this from the passive's own rules (any material its rule configuration names) and the material's weight curve, and applies the same rule when stocking and when buying, so a stale or early offer is refused ([#165](https://github.com/trebizondoculpepper/poker_blocks/issues/165)). Balance validation fails a passive whose unlock round is earlier than a material it names.
 
+**Light unlocks in round 3 (#1474).** New shop offers and random passive grants cannot supply Light in rounds 1 or 2. Random grants use the recipient run's current round and the same authored unlock boundary as shop stock for every passive. Previously owned copies remain installed and usable. Light's price and scoring effect are unchanged; see [the acquisition contract](release-status.md#normal-run-provisional-passive-trial-1382).
+
 #### Unlocks and stock weights
 
 Material unlocks by round: 1 wood; 2 steel and earth (#371); 3 custard (#381); 4 ice, meat and fire; 6 gold; 7 prismatic crystal. Paper is never offered. Each material is the most common offer in its unlock round, then rarer but still offered.
