@@ -1256,10 +1256,13 @@ describe("transient windows and reduced motion as a configuration (#974)", () =>
         update: ({ reducedMotion }) => void contained.push(reducedMotion),
       }));
     const frames: boolean[] = [];
+    const created: boolean[] = [];
     const { env, memory } = fakeEnvironment();
     const calm: ProfilingCase = {
       ...testCase(memory),
       create(context) {
+        // Built under the run's setting from the start, not only told it at the first update.
+        created.push(context.reducedMotion);
         const one = testCase(memory).create(context) as {
           object: THREE.Object3D;
           dispose(): void;
@@ -1302,7 +1305,8 @@ describe("transient windows and reduced motion as a configuration (#974)", () =>
       expect(off.failures).toEqual([]);
       expect(new Set(frames)).toEqual(new Set([false]));
       expect(new Set(contained)).toEqual(new Set([false]));
-      frames.length = contained.length = 0;
+      expect(new Set(created)).toEqual(new Set([false]));
+      frames.length = contained.length = created.length = 0;
       await createProfilerRunner(env).run([["calm", calm]], {
         ...options,
         counts: [1],
@@ -1310,6 +1314,7 @@ describe("transient windows and reduced motion as a configuration (#974)", () =>
       });
       expect(new Set(frames)).toEqual(new Set([true]));
       expect(new Set(contained)).toEqual(new Set([true]));
+      expect(new Set(created)).toEqual(new Set([true]));
       // Afterwards the player's own setting is back in place.
       const probe: boolean[] = [];
       const putBack = setContainedReducedMotion(() => false);

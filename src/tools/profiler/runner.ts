@@ -503,7 +503,9 @@ export function createProfilerRunner(
       for (let index = 0; index < count; index++) {
         // A cancel stops the build between creations, not after the whole collection (#625).
         check();
-        const one = await untilAborted(profile.create({ seed: options.seed + index, phase }));
+        const one = await untilAborted(
+          profile.create({ seed: options.seed + index, phase, ...objectFrame }),
+        );
         one.object.position.copy(positions[index]!);
         collection.add(one.object);
         made.push(one);

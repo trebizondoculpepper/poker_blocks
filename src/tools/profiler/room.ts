@@ -334,7 +334,7 @@ export function createProfilerRoom(
         return;
       }
       pipeline = built;
-      one = await profilingCases.get(id).create({ seed: 1, phase });
+      one = await profilingCases.get(id).create({ seed: 1, phase, reducedMotion: false });
     } catch (error) {
       undoHost();
       throw error;

@@ -72,10 +72,15 @@ for (const definition of allMaterials()) {
 }
 
 /** One block's exit, played over and over: a fresh block starts as soon as the last has gone. */
-function repeatingExit(definition: MaterialDefinition, seed: number): ProfiledObject {
+function repeatingExit(
+  definition: MaterialDefinition,
+  seed: number,
+  reducedMotion: boolean,
+): ProfiledObject {
   const holder = new THREE.Group();
-  // The run's reduced-motion configuration, as its frames say (#974).
-  let reduced = false;
+  // The run's reduced-motion configuration, from creation on (#974): an effect that reads it when
+  // built (a shred's fragments) is built as the run asked, its first exit included.
+  let reduced = reducedMotion;
   const runner = createSteppedExits(() => reduced);
   const sequence = resolvedExit(definition.appearance)!;
   let generation = 0;
@@ -119,11 +124,13 @@ function repeatingExit(definition: MaterialDefinition, seed: number): ProfiledOb
 }
 
 /** Each phase of an exit case, by name: the block at rest, and its exit played on repeat. */
-const exitPhases: Record<string, (definition: MaterialDefinition, seed: number) => ProfiledObject> =
-  {
-    idle: (definition, seed) => tableBlock(standardDeck[seed % standardDeck.length]!, definition),
-    exit: repeatingExit,
-  };
+const exitPhases: Record<
+  string,
+  (definition: MaterialDefinition, seed: number, reducedMotion: boolean) => ProfiledObject
+> = {
+  idle: (definition, seed) => tableBlock(standardDeck[seed % standardDeck.length]!, definition),
+  exit: repeatingExit,
+};
 
 for (const definition of withExit())
   profilingCases.register(`exit:${definition.id}`, {
@@ -137,7 +144,8 @@ for (const definition of withExit())
       { name: "idle", sampling: "steady" },
       { name: "exit", sampling: "restarting" },
     ],
-    create: ({ seed, phase }) => exitPhases[phase ?? "idle"]!(definition, seed),
+    create: ({ seed, phase, reducedMotion }) =>
+      exitPhases[phase ?? "idle"]!(definition, seed, reducedMotion),
   });
 
 profilingCoverage.register("letter block", () => allMaterials().map(({ id }) => `letter:${id}`));

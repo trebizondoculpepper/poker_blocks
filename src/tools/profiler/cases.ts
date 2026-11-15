@@ -80,8 +80,14 @@ export type ProfilingCase = {
    * look whose parts respond to a turning block declares one. None: stationary only.
    */
   motions?: readonly MotionReference[];
-  /** Build one object through the production factory, with a fixed seed. */
-  create(context: { seed: number; phase?: string }): ProfiledObject | Promise<ProfiledObject>;
+  /**
+   * Build one object through the production factory, with a fixed seed, under the run's explicit
+   * configuration from the start (#974 review): an effect fixed at construction is built as the
+   * run asked.
+   */
+  create(
+    context: { seed: number; phase?: string } & ObjectFrame,
+  ): ProfiledObject | Promise<ProfiledObject>;
 };
 
 export const profilingCases = new Registry<ProfilingCase>("profiling case");
