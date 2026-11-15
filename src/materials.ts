@@ -14,6 +14,7 @@ import {
   paperShell,
   plasticShell,
   solid,
+  goldSolid,
   stainedLantern,
   type PhysicalMass,
   validatePhysicalMass,
@@ -515,7 +516,7 @@ export const materialDefinitions = [
   {
     id: "gold",
     // Authored physical mass (doc/playfield-rocking.md, #816).
-    mass: massOf(solid("gold", 19320)),
+    mass: massOf(goldSolid),
     // Approved for normal play (doc/release-status.md, #812).
     releaseStatus: { certified: {} },
     // Its lifecycle (doc/block-lifecycle-declarations.md, #917): an ordinary run card.
