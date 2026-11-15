@@ -110,7 +110,14 @@ export type LiquidSurface = {
  * opaque scene, so it asks its particles to join that capture. Contents with no such need
  * publish none, and particles keep their own look.
  */
-export type InteriorContribution = { include(particles: THREE.Points): void };
+export type InteriorContribution = {
+  /**
+   * Take part in the contents' optics (#1225; doc/optical-interiors.md). Returns the release:
+   * idempotent, it puts back whatever the registration changed, so a reused appearance never keeps
+   * a previous host's binding.
+   */
+  include(particles: THREE.Points): () => void;
+};
 
 /**
  * The volume particles may occupy and the way a buoyant one moves (#1230; doc/optical-interiors.md,

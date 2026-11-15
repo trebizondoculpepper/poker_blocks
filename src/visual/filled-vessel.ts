@@ -115,7 +115,18 @@ fluidLooks.register("opaqueFluid", (surface, raw) => {
 const transmissionCapture: InteriorContribution = {
   include(particles) {
     const { material: held } = particles;
-    for (const each of Array.isArray(held) ? held : Array.of(held)) {
+    const materials = Array.isArray(held) ? held : Array.of(held);
+    // What the registration changes, so its release puts it all back (#1227).
+    const before = materials.map((each) => ({
+      transparent: each.transparent,
+      blending: each.blending,
+      depthWrite: each.depthWrite,
+      alphaTest: each.alphaTest,
+      // Its own hook, if it had one (three.js's default lives on the prototype).
+      hook: Object.getOwnPropertyDescriptor(each, "onBeforeCompile"),
+    }));
+    const renderOrder = particles.renderOrder;
+    for (const each of materials) {
       each.transparent = false;
       each.blending = THREE.NormalBlending;
       each.depthWrite = true;
@@ -134,6 +145,19 @@ const transmissionCapture: InteriorContribution = {
       each.needsUpdate = true;
     }
     particles.renderOrder = containedLayers.contentsOpaque;
+    let registered = true;
+    return () => {
+      if (!registered) return;
+      registered = false;
+      materials.forEach((each, index) => {
+        const { hook, ...state } = before[index]!;
+        Object.assign(each, state);
+        if (hook) Object.defineProperty(each, "onBeforeCompile", hook);
+        else Reflect.deleteProperty(each, "onBeforeCompile");
+        each.needsUpdate = true;
+      });
+      particles.renderOrder = renderOrder;
+    };
   },
 };
 

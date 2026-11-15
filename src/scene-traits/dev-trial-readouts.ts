@@ -147,19 +147,19 @@ export function devTrialReadouts<
       host.append(panel);
       // The field as it stands; nothing scored yet in this view.
       panel.innerHTML = readoutHtml(trialReadout(run.committedState(), { field: [], lines: [] }));
+      // The rows the last fact-bearing action scored (none, if it scored nothing).
+      let scored: ReturnType<typeof run.lastScoring> = { field: [], lines: [] };
       // Each committed action, read as it commits: its state and the lines it scored.
       stop = run.onCommitted((facts) => {
         if (!panel) return;
-        // An action scored lines when one of its facts carries a scored line's context.
-        const scoredThisAction = facts.some(
-          ({ payload }) => (payload as { score?: unknown }).score !== undefined,
-        );
-        panel.innerHTML = readoutHtml(
-          trialReadout(
-            run.committedState(),
-            scoredThisAction ? run.lastScoring() : { field: [], lines: [] },
-          ),
-        );
+        // An action scored lines when one of its facts carries a scored line's context. A
+        // bookkeeping command with no facts at all (a refill or reorder, #1244) scores nothing and
+        // leaves the last scored rows readable; the state is still read afresh.
+        if (facts.length)
+          scored = facts.some(({ payload }) => (payload as { score?: unknown }).score !== undefined)
+            ? run.lastScoring()
+            : { field: [], lines: [] };
+        panel.innerHTML = readoutHtml(trialReadout(run.committedState(), scored));
       });
     },
     exit() {
