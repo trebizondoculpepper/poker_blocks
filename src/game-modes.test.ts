@@ -367,7 +367,6 @@ describe("game modes composed from traits", () => {
       runInPlay: {},
       keyAction: { key: "Escape", action: "openPause", sfx: "ui.click" },
       musicTrack: { operations: [{ op: "selectTrack", config: { plan: "stage" } }] },
-      enterSound: { sfx: "round.start" },
       devManualBlockDestroyer: { cause: "manual" },
     });
     // Every mode lists every scene, so a mode never loses a scene it did not mention.
