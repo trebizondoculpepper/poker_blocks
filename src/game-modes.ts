@@ -370,6 +370,8 @@ const playSceneTraits: Partial<SceneTraits> = {
     },
     // On a lost stage the left nail goes, it swings from the right, then falls (#1065).
     release: { first: "left", pivot: "right", swingUnits: 6, fallUnits: 8 },
+    // As it lands out of sight, its glass smashes, 3 units on (#1080).
+    impactSound: { sound: "round.picture_smash", delayUnits: 3 },
   },
   // The stage's outcome cues, once its deciding sequence has finished (#881).
   outcomeCues: { won: "round.cleared", lost: "round.failed" },
