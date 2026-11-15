@@ -1,3 +1,4 @@
+import type { SoundEffectId } from "./audio/sfx-registry";
 /**
  * State bonuses (#365; design in doc/game-architecture.md, "State bonuses (proposal)", #364):
  * a scoring bonus a card gains from a reaction, kept in one slot on the card
@@ -20,6 +21,12 @@ export type StateBonusDefinition = {
   /** Shown by the inspector, e.g. "Boiled (×2)". */
   name: string;
   modifier: ScoringModifier;
+  /**
+   * A state that is part of what the card *is* (Hot Water, Boiling Water) declares the sound of
+   * becoming it (#539; doc/presentation-contracts.md, "Target transition audio"): reaching it is
+   * a material transition. A state without one (a stoked flame) keeps its own reaction feedback.
+   */
+  transitionSound?: SoundEffectId;
 };
 
 export const stateBonuses = new Registry<StateBonusDefinition>("state bonus");
@@ -27,8 +34,16 @@ export const stateBonuses = new Registry<StateBonusDefinition>("state bonus");
 // The agreed amounts (#362): melting ice gives water +1, ordinary flame heats water +1, and
 // aggressive flame boils it ×2. Reactions assign them (#366–#369).
 stateBonuses.register("melted", { name: "Melted (+1)", modifier: { additive: 1 } });
-stateBonuses.register("heated", { name: "Heated (+1)", modifier: { additive: 1 } });
-stateBonuses.register("boiled", { name: "Boiled (×2)", modifier: { multiplicative: 2 } });
+stateBonuses.register("heated", {
+  name: "Heated (+1)",
+  modifier: { additive: 1 },
+  transitionSound: "reaction.heat",
+});
+stateBonuses.register("boiled", {
+  name: "Boiled (×2)",
+  modifier: { multiplicative: 2 },
+  transitionSound: "reaction.boil",
+});
 // Air stokes flame into aggressive flame (#370): a state with no score of its own, which
 // boils water beside it (#369).
 stateBonuses.register("aggressive", { name: "Aggressive", modifier: {} });

@@ -1,3 +1,4 @@
+import { materialChangeSounds } from "./scene-traits/material-change-sounds";
 import { shopExitResponse, type ShopExitScheduler } from "./scene-traits/shop-leave-response";
 import {
   createPlayfieldRockingController,
@@ -812,6 +813,8 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
       outcomeStops.delete(config);
     },
   });
+  // A committed material transition's sound, on the shared scheduler (#539).
+  behaviours.register("materialChangeSounds", materialChangeSounds<Context>());
   behaviours.register("enterSound", {
     enter: ({ services }, { sfx }) => services.sound(sfx),
   });

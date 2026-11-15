@@ -23,7 +23,7 @@ import "./triggers";
 import "./trigger-responses";
 import type { AppliedReaction } from "./reactions";
 import { setCardStateBonus } from "./state-bonuses";
-import { applyRackItem } from "./rack-item-effects";
+import { useRackItem } from "./rack-item-effects";
 import type { BlockMaterial } from "./materials";
 import { changeCardMaterial } from "./card-material";
 import type { CardBlock } from "./cards";
@@ -1124,9 +1124,17 @@ export class GameRun {
    * an item with none left leaves the rack. Null, changing nothing, when it is refused.
    */
   applyRackItem(itemId: string, cardId: string): GameState | null {
-    const next = applyRackItem(this.currentState, itemId, cardId);
-    if (next) this.currentState = next;
-    return next;
+    // A committed action (#539): its facts publish once it has, so presentation hears them.
+    return this.transact("useItem", undefined, () => {
+      // The material-change operation returns its own committed facts (#539): nothing is
+      // inferred from the state afterwards.
+      const used = useRackItem(this.currentState, itemId, cardId);
+      if (!used) return null;
+      this.currentState = used.state;
+      for (const { type, ...fact } of used.events) this.lifecycle(type, fact);
+      const next = used.state;
+      return next;
+    });
   }
 
   /** Discard one card, or several as one discard. */

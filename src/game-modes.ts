@@ -229,6 +229,8 @@ export type SceneTraits = {
   musicTrack: { operations: readonly MusicOperation[] };
   /** Entering this scene plays a sound: a stage's start, the shop opening (#93). */
   enterSound: { sfx: SoundEffectId };
+  /** A committed material transition's sound, scheduled on the shared scheduler (#539). */
+  materialChangeSounds: Record<never, never>;
   /**
    * A stage's outcome cue (#881; doc/outcome-presentation.md, "Two distinct result cues"):
    * played once the deciding action's required sequence finishes, before the result scene.
@@ -338,6 +340,8 @@ const playSceneTraits: Partial<SceneTraits> = {
   selectable: { sources: [{ source: "hand" }, { source: "field" }] },
   discardBin: {},
   committedEventSounds: {},
+  // What a card becomes is heard as it changes (#539).
+  materialChangeSounds: {},
   // The stage's outcome cues, once its deciding sequence has finished (#881).
   outcomeCues: { won: "round.cleared", lost: "round.failed" },
   // Rocking waits a second after a turn, eases in over a second, and slows as the field gets
@@ -713,6 +717,8 @@ export const sceneDefinitions = [
         },
       },
       shopStock: { source: "shop" },
+      // Items can change a card's material here too: its transition is heard (#539).
+      materialChangeSounds: {},
       // Leaving presents its committed receipt (#880): the stock that left burns, with its cue
       // as the burn starts (only if any left) and the leave cue once it is done.
       shopExitResponse: { burnSound: "shop.stock.burn", leaveSound: "shop.leave" },

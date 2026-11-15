@@ -445,9 +445,10 @@
     }
   },
   "reaction.heat": {
-    "uses": 1,
+    "uses": 2,
     "files": {
-      "materials.ts": 1
+      "materials.ts": 1,
+      "state-bonuses.ts": 1
     }
   },
   "reaction.stoke": {
@@ -457,9 +458,10 @@
     }
   },
   "reaction.boil": {
-    "uses": 1,
+    "uses": 2,
     "files": {
-      "materials.ts": 1
+      "materials.ts": 1,
+      "state-bonuses.ts": 1
     }
   },
   "reaction.cook": {

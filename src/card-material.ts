@@ -1,3 +1,6 @@
+import type { GameEvent, ReactionState } from "./passives";
+import type { SoundEffectId } from "./audio/sfx-registry";
+import { stateBonuses } from "./state-bonuses";
 import type { ScoringModifier } from "./scoring-modifier";
 /**
  * Permanent per-card material change (#387, split from #384): the model command a
@@ -21,7 +24,13 @@ import { roundEndResets } from "./round-end";
  * change clears them from the card and its saved ledger. Each owning module registers its own.
  */
 export const materialScopedStates = new Registry<true>("material-scoped card state");
-import { getMaterialDefinition, materialOf, withMaterial, type BlockMaterial } from "./materials";
+import {
+  getMaterialDefinition,
+  materialOf,
+  transitionSoundOf,
+  withMaterial,
+  type BlockMaterial,
+} from "./materials";
 
 /** What the run remembers about a card beyond its definition: its changed material. */
 export type CardState = {
@@ -113,3 +122,81 @@ roundEndResets.register("roundEndMaterial", (state) =>
       );
   }, state),
 );
+
+/** A card's resolved material and state, as a transition fact records it (#539). */
+export function transitionStateOf(card: CardBlock): ReactionState {
+  const stateBonus = [card.traits.stateBonus ?? []].flat()[0]?.id;
+  // A cooking step by its name from the material's own steps ("Raw", "Seared", ...).
+  const step = [card.traits.doneness ?? []]
+    .flat()
+    .map(({ step: index }) => getMaterialDefinition(materialOf(card)).cookable?.steps[index])[0];
+  return {
+    material: materialOf(card),
+    ...(stateBonus ? { stateBonus } : {}),
+    ...(step ? { doneness: step } : {}),
+  };
+}
+
+/** A card anywhere the run holds it. */
+export function findRunCard(state: GameState, cardId: string): CardBlock | undefined {
+  return [
+    ...state.hand,
+    ...state.field.map(({ block }) => block),
+    ...state.deck,
+    ...state.discardPile,
+  ].find(({ id }) => id === cardId);
+}
+
+/**
+ * The committed transition fact's payload (doc/presentation-contracts.md, "Committed transition
+ * fact"): the resolved before/after descriptors and the immutable before/after card snapshots,
+ * captured at the authoritative mutation, so a delayed response never reads newer live state.
+ * The pose is the presentation mount found by `blockId`.
+ */
+export function transitionCapture(before: CardBlock, after: CardBlock) {
+  return {
+    transition: { from: transitionStateOf(before), to: transitionStateOf(after) },
+    snapshots: { before, after },
+  };
+}
+
+/**
+ * The sound of becoming a resolved state (#539): a target state that declares its own transition
+ * sound (Hot or Boiling Water), else the target material's. One resolver for every cause.
+ */
+export function transitionSoundFor(state: ReactionState): SoundEffectId {
+  const own = [state.stateBonus ?? []]
+    .flat()
+    .filter((id) => stateBonuses.has(id))
+    .map((id) => stateBonuses.get(id).transitionSound)
+    .find((sound) => sound !== undefined);
+  return own ?? transitionSoundOf(state.material as BlockMaterial);
+}
+
+/**
+ * The authoritative material change as a committed operation (#539): the new state and the
+ * `block.materialChanged` fact it captured, or null (changing nothing) when refused or already
+ * that material. Every cause that changes a card's material outside a reaction uses this.
+ */
+export function changeMaterialCommitted(
+  state: GameState,
+  cardId: string,
+  material: BlockMaterial,
+): { state: GameState; events: GameEvent[] } | null {
+  const next = changeCardMaterial(state, cardId, material);
+  const before = findRunCard(state, cardId);
+  const after = next && findRunCard(next, cardId);
+  if (!next || !before || !after) return null;
+  const capture = transitionCapture(before, after);
+  return {
+    state: next,
+    events: [
+      {
+        type: "block.materialChanged",
+        blockId: cardId,
+        ...capture,
+        transitionSound: transitionSoundFor(capture.transition.to),
+      },
+    ],
+  };
+}

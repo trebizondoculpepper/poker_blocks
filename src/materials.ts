@@ -112,6 +112,11 @@ export type MaterialDefinition = {
    */
   acoustics: { character: string; hardness: number; attach: SoundEffectId };
   /**
+   * The sound of a card becoming this material (#539; doc/presentation-contracts.md, "Target
+   * transition audio"), whatever caused it. Its attach sound when left out.
+   */
+  transitionSound?: SoundEffectId;
+  /**
    * How the material changes a line it contributes to (#141). Left out until the material's
    * scoring is designed: meat, fire and ice wait on #104–#106.
    */
@@ -1890,3 +1895,9 @@ instanceMassProviders.register("storedPayload", (card) => {
   if ("provider" in recipe) return { unavailable: "its stored contents cannot nest" };
   return { kg: massKg(recipe) };
 });
+
+/** The sound of a card becoming `material` (#539): its own transition sound, else its attach. */
+export function transitionSoundOf(material: BlockMaterial): SoundEffectId {
+  const definition = getMaterialDefinition(material);
+  return definition.transitionSound ?? definition.acoustics.attach;
+}
