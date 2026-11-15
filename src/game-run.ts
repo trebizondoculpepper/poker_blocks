@@ -1305,8 +1305,21 @@ export class GameRun {
   reorderHand(from: number, to: number): boolean {
     const hand = moveItem(this.currentState.hand, from, to);
     if (!hand) return false;
-    this.currentState = { ...this.currentState, hand };
-    return true;
+    // A move to where it already is changes nothing: valid, but no committed step (#1245).
+    if (from === to) return true;
+    // One committed action with no facts (#1245; doc/experiments/command-journal.md): its
+    // canonical command is published, so a journal can replay it.
+    return (
+      this.transact(
+        "reorderHand",
+        undefined,
+        () => {
+          this.currentState = { ...this.currentState, hand };
+          return true;
+        },
+        { name: "reorderHand", args: { from, to } },
+      ) !== null
+    );
   }
 
   /**
@@ -1319,9 +1332,20 @@ export class GameRun {
     if (this.currentPhase === "over") return false;
     const passiveRack = moveItem(this.currentState.passiveRack, from, to);
     if (!passiveRack) return false;
-    this.currentState = { ...this.currentState, passiveRack };
-    this.passiveEvents.syncRack(passiveRack);
-    return true;
+    if (from === to) return true;
+    // Committed like a hand reorder (#1245): the rack order later responses follow is replayable.
+    return (
+      this.transact(
+        "reorderPassive",
+        undefined,
+        () => {
+          this.currentState = { ...this.currentState, passiveRack };
+          this.passiveEvents.syncRack(passiveRack);
+          return true;
+        },
+        { name: "reorderPassive", args: { from, to } },
+      ) !== null
+    );
   }
 
   /**
