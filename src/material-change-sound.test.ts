@@ -84,6 +84,10 @@ describe("transition audio response (#539)", async () => {
       publish: (f: { eventId: string; payload: unknown }[]) => publish(f),
       run,
       exit: () => trait.exit!(context as never, config),
+      reenter: () => {
+        trait.exit!(context as never, config);
+        trait.enter!(context as never, config);
+      },
     };
   }
 
@@ -101,6 +105,20 @@ describe("transition audio response (#539)", async () => {
     h.publish([fact]);
     h.run(3);
     expect(h.played).toHaveLength(1);
+  });
+
+  it("hears a new run's transitions after re-entry, though their event IDs repeat", () => {
+    const h = harness();
+    const fact = {
+      eventId: "auto:1:1",
+      payload: { type: "block.materialChanged", transitionSound: "material.attach.steel" },
+    };
+    h.publish([fact]);
+    h.run(3);
+    h.reenter();
+    h.publish([fact]);
+    h.run(3);
+    expect(h.played).toEqual(["material.attach.steel", "material.attach.steel"]);
   });
 
   it("cancels what has not played when the scene exits", () => {

@@ -33,8 +33,6 @@ export function materialChangeSounds<
   },
 >(): SceneTraitBehaviour<Context, Record<never, never>> {
   const live = new WeakMap<object, { stop(): void; scope: ScopeHandle }>();
-  /** Committed transitions already scheduled: a redelivery never plays twice. */
-  const scheduled = new Set<string>();
   const release = (config: object, visualEvents: ShopExitScheduler) => {
     const held = live.get(config);
     if (!held) return;
@@ -47,6 +45,10 @@ export function materialChangeSounds<
       release(config, services.visualEvents);
       const { visualEvents } = services;
       const scope = visualEvents.createScope(null);
+      // Committed transitions already scheduled while this entry lives: a redelivery never plays
+      // twice. Fresh for each entry, so a new run's restarted event IDs are never mistaken for an
+      // earlier run's.
+      const scheduled = new Set<string>();
       const stop = services.run.onCommitted((facts) => {
         for (const { eventId, payload } of facts) {
           const { transitionSound } = payload as GameEvent;
