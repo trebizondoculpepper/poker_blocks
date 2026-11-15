@@ -128,6 +128,8 @@ export type ActionPhasesOptions = {
   maxRecords?: number;
   /** A registered scheduler fallback that summarises a failed contribution from its payload. */
   fallback?: string;
+  /** The services the scheduler hands its fallbacks, for summaries this registry runs itself. */
+  services?: unknown;
 };
 
 export function createActionPhases(scheduler: VisualScheduler, options: ActionPhasesOptions) {
@@ -187,12 +189,23 @@ export function createActionPhases(scheduler: VisualScheduler, options: ActionPh
       /** A contribution that could not be reserved: its summary runs once, now. */
       const summarise = (producer: string, reason: string) => {
         diagnostics.push(`${producer}: ${reason}`);
-        if (options.fallback)
+        if (!options.fallback) return;
+        // The same services and containment the scheduler gives its own fallbacks (#1255): a
+        // throwing summary is reported afterwards and never interrupts the collection.
+        try {
           visualFallbacks.get(options.fallback)({
             reason,
-            services: null,
+            services: options.services ?? null,
             payload: { producer, captured },
           });
+        } catch (error) {
+          diagnostics.push(
+            `${producer}: summary failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          queueMicrotask(() => {
+            throw error;
+          });
+        }
       };
       for (const { name, producer } of producers) {
         // One producer's throw is contained: the collection still closes (#1251).
