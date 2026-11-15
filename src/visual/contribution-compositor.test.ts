@@ -163,4 +163,25 @@ describe("contribution compositor (#1199; doc/drag-ghost-audition.md)", () => {
     });
     compositor.dispose();
   });
+
+  it("keeps an object's prepass-only layers while it is captured (#1312)", () => {
+    const { source, compositor } = setup();
+    const offsetOnly = new THREE.Mesh();
+    offsetOnly.layers.set(7);
+    offsetOnly.layers.enable(0);
+    source.add(offsetOnly);
+    const scene = new THREE.Scene();
+    scene.add(source);
+    const { renderer } = recording();
+    compositor.render({
+      renderer,
+      scene,
+      camera: new THREE.PerspectiveCamera(),
+    } as unknown as ContributionFrame);
+    expect(offsetOnly.layers.isEnabled(7)).toBe(true);
+    expect(offsetOnly.layers.isEnabled(0)).toBe(false);
+    expect(offsetOnly.layers.isEnabled(contributionLayer)).toBe(true);
+    compositor.dispose();
+    expect(offsetOnly.layers.mask).toBe((1 << 7) | 1);
+  });
 });
