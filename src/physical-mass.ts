@@ -64,6 +64,35 @@ export const airFanHousing: MassComponent[] = [
   { name: "air", density: 1.2, volume: 0.8 },
 ];
 
+// Owner-agreed calibration (#1061, #1067; doc/material-mass-and-passives.md). Rounded effective
+// values replace earlier component estimates where the owner chose a total; the visual vessel
+// adds nothing to them.
+/** One litre of water: the visual vessel adds no mass. */
+export const waterLitre: MassComponent[] = [{ name: "water", density: 1000, volume: 1 }];
+/** One litre of air at 1.2 kg/m³; decorative fans add no mass. */
+export const airLitre: MassComponent[] = [{ name: "air", density: 1.2, volume: 1 }];
+/** A closed 10 cm cube with a 1 cm fired-clay shell: (0.1³ - 0.08³) × 1800 = 0.8784 kg. */
+export const terracottaShell: MassComponent[] = [
+  { name: "fired clay shell", density: 1800, volume: (0.1 ** 3 - 0.08 ** 3) / nominalVolume },
+];
+const effective = (kg: number, rationale: string): PhysicalMass => ({ effective: kg, rationale });
+export const hollowSteelMass = effective(
+  2.2,
+  "Hollow cube of about 5 mm steel plate, rounded gameplay mass; not solid steel",
+);
+export const halfFilledEarthMass = effective(
+  0.8,
+  "Half-filled loose soil, mainly silica; effective bulk, not solid silica",
+);
+export const halfFilledCustardMass = effective(
+  0.5,
+  "Half-filled water/starch at water density; no shell surcharge",
+);
+export const gelatoMass = effective(0.5, "Owner's ice-cream gameplay calibration");
+export const cloudMass = effective(0.002, "Air plus moisture; approved effective value");
+export const fireCardMass = effective(0.01, "Authored light fictional card; no housing surcharge");
+export const emptyVesselMass = effective(0.001, "Approved effective mass");
+
 /** A recipe from components (shell, then fill). */
 export const massOf = (...parts: readonly MassComponent[][]): PhysicalMass => ({
   components: parts.flat(),
@@ -120,3 +149,9 @@ export function formatMass(kg: number): string {
 
 /** The inspection line for a resolved mass: weight, colloquially, though the data is mass. */
 export const weightLine = (kg: number): string => `Weight: ${formatMass(kg)}`;
+
+/** Magic: three times the shared Paper calibration, with no container surcharge. */
+export const magicMass = effective(
+  3 * massKg(massOf(paperShell)),
+  "Three times the shared Paper calibration; no container surcharge",
+);

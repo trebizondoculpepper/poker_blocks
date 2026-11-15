@@ -7,42 +7,46 @@ import {
 } from "./materials";
 import { aggregateMass, massKg, validatePhysicalMass } from "./physical-mass";
 
-/** doc/playfield-rocking.md, "Density calibration and full current catalogue". */
+/**
+ * Base materials: doc/material-mass-and-passives.md (#1061, #1067). Experimental variants
+ * that only change the visual vessel inherit their base material's mass; the empty lantern
+ * and dark fluid keep their explicit recipes.
+ */
 const catalogue: Record<string, number> = {
   paper: 0.016,
   wood: 0.65,
-  steel: 7.85,
-  prismatic: 2.5,
+  steel: 2.2,
+  prismatic: 3.5,
   gold: 19.32,
-  earth: 0.873,
-  terracotta: 1.8,
+  earth: 0.8,
+  terracotta: 0.8784,
   ice: 0.917,
   meat: 1.05,
-  fire: 0.678165,
-  custard: 0.6255,
-  gelato: 0.083,
-  cloud: 0.04866,
-  water: 0.598,
-  magic: 0.0755,
+  fire: 0.01,
+  custard: 0.5,
+  gelato: 0.5,
+  cloud: 0.002,
+  water: 1,
+  magic: 0.048,
   giftWrap: 0.0635,
-  emptyVessel: 0.048,
-  airVent: 0.15146,
+  emptyVessel: 0.001,
+  airVent: 0.0012,
   emptyLantern: 0.464,
-  custardLantern: 1.0415,
-  flameLantern: 0.464165,
-  waterInLantern: 1.014,
-  cloudInLantern: 0.46466,
-  earthInLantern: 1.289,
-  magicLockLantern: 0.4915,
-  aggressiveFlame: 0.678165,
-  custardFrame: 1.2555,
-  waterInPlastic: 0.598,
-  earthInPlastic: 0.873,
-  hotWaterInPlastic: 0.598,
-  boilingWaterInPlastic: 0.598,
+  custardLantern: 0.5,
+  flameLantern: 0.01,
+  waterInLantern: 1,
+  cloudInLantern: 0.002,
+  earthInLantern: 0.8,
+  magicLockLantern: 0.048,
+  aggressiveFlame: 0.01,
+  custardFrame: 0.5,
+  waterInPlastic: 1,
+  earthInPlastic: 0.8,
+  hotWaterInPlastic: 1,
+  boilingWaterInPlastic: 1,
   darkFluid: 0.543,
-  cloudInPlastic: 0.04866,
-  magicLock: 0.0755,
+  cloudInPlastic: 0.002,
+  magicLock: 0.048,
 };
 
 const all: readonly MaterialDefinition[] = [...materialDefinitions, ...experimentalMaterials];
@@ -115,8 +119,8 @@ describe("field mass query (#816)", () => {
     };
     const mass = fieldMass(state as never);
     expect(mass.count).toBe(2);
-    expect(mass.totalKg).toBeCloseTo(7.85 + 0.65, 9);
-    expect(mass.meanKg).toBeCloseTo(4.25, 9);
+    expect(mass.totalKg).toBeCloseTo(2.2 + 0.65, 9);
+    expect(mass.meanKg).toBeCloseTo(1.425, 9);
     expect(fieldMass({ ...state, field: [] } as never).meanKg).toBeNull();
   });
 });
