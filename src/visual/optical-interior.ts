@@ -46,8 +46,9 @@ export type InteriorClipping = {
   /** Uniforms its GLSL reads. */
   readonly uniforms: Record<string, THREE.IUniform>;
   /**
-   * GLSL defining `bool interiorInside(vec3 local, vec3 radius)`: whether a sprite of that
-   * volume-local radius, centred at that volume-local point, lies wholly inside.
+   * GLSL defining `bool interiorInside(vec3 local, vec3 right, vec3 up)`: whether the
+   * screen-aligned square sprite centred at that volume-local point, whose half-axes along the
+   * camera's right and up are `right` and `up` in volume-local space, lies wholly inside.
    */
   readonly glsl: string;
   /** Bring its uniforms up to date for this frame (a live liquid top, for instance). */
@@ -83,9 +84,10 @@ interiorClipping.register("convexCube", {
       glsl: /* glsl */ `
         uniform vec3 clipHalf;
         uniform vec4 clipPlane;
-        bool interiorInside(vec3 p, vec3 radius) {
-          if (any(greaterThan(abs(p) + radius, clipHalf))) return false;
-          float reach = max(radius.x, max(radius.y, radius.z));
+        bool interiorInside(vec3 p, vec3 right, vec3 up) {
+          // The square's reach along each axis, and along the surface's normal (#1289 review).
+          if (any(greaterThan(abs(p) + abs(right) + abs(up), clipHalf))) return false;
+          float reach = abs(dot(clipPlane.xyz, right)) + abs(dot(clipPlane.xyz, up));
           return dot(clipPlane.xyz, clipPlane.xyz) == 0.0 || dot(p, clipPlane.xyz) + reach <= clipPlane.w;
         }
       `,
@@ -216,7 +218,8 @@ export function interiorViewDepth(hardware: number, clip: THREE.Vector3): number
 
 const proxyVertex = (clipping: string) => /* glsl */ `
   uniform mat4 toVolume;
-  uniform vec3 radius;
+  uniform vec3 halfRight;
+  uniform vec3 halfUp;
   uniform float worldSize;
   uniform float pointScale;
   uniform float attenuate;
@@ -227,7 +230,7 @@ const proxyVertex = (clipping: string) => /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     vec3 local = (toVolume * vec4(position, 1.0)).xyz;
     // The declared volume clips the whole sprite, not only its centre.
-    if (!interiorInside(local, radius)) {
+    if (!interiorInside(local, halfRight, halfUp)) {
       gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
       gl_PointSize = 0.0;
       return;
@@ -407,7 +410,8 @@ export function createInteriorCapture(options: InteriorCaptureOptions = {}) {
       uniforms: {
         ...clipping.uniforms,
         toVolume: { value: new THREE.Matrix4() },
-        radius: { value: new THREE.Vector3() },
+        halfRight: { value: new THREE.Vector3() },
+        halfUp: { value: new THREE.Vector3() },
         worldSize: { value: packet.worldSize },
         pointScale: { value: 1 },
         attenuate: { value: 1 },
@@ -491,11 +495,8 @@ export function createInteriorCapture(options: InteriorCaptureOptions = {}) {
       .multiplyScalar(extent / 2);
     right.applyMatrix3(toLocal);
     up.applyMatrix3(toLocal);
-    uniforms.radius!.value.set(
-      Math.abs(right.x) + Math.abs(up.x),
-      Math.abs(right.y) + Math.abs(up.y),
-      Math.abs(right.z) + Math.abs(up.z),
-    );
+    uniforms.halfRight!.value.copy(right);
+    uniforms.halfUp!.value.copy(up);
     uniforms.worldSize!.value = world;
     uniforms.attenuate!.value = perspective ? 1 : 0;
     uniforms.orthoScale!.value = projection[5]!;

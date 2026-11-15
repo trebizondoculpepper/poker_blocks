@@ -91,6 +91,19 @@ function volume(x = 0, colour = 0xffffff): InteriorRegistration & { group: THREE
   };
 }
 
+/** A drawn proxy's sprite reach along each volume axis: |half right| + |half up|. */
+const reachOf = (object: THREE.Object3D) => {
+  const { uniforms } = (object as THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>)
+    .material;
+  const right = uniforms.halfRight!.value as THREE.Vector3;
+  const up = uniforms.halfUp!.value as THREE.Vector3;
+  return new THREE.Vector3(
+    Math.abs(right.x) + Math.abs(up.x),
+    Math.abs(right.y) + Math.abs(up.y),
+    Math.abs(right.z) + Math.abs(up.z),
+  );
+};
+
 const leased = (result: InteriorLease | InteriorUnavailable): InteriorLease => {
   if ("unavailable" in result) throw new Error(result.unavailable);
   return result;
@@ -390,7 +403,9 @@ describe("optical interior conventions (#1227)", () => {
     expect(cube.uniforms.clipPlane!.value.toArray()).toEqual([0, 0, 0, 0]);
     cube.update!();
     expect(cube.uniforms.clipPlane!.value.toArray()).toEqual([0, 1, 0, 0.1]);
-    expect(cube.glsl).toContain("bool interiorInside(vec3 p, vec3 radius)");
+    expect(cube.glsl).toContain("bool interiorInside(vec3 p, vec3 right, vec3 up)");
+    // The surface test projects the square's half-axes on its normal (#1289 review).
+    expect(cube.glsl).toContain("abs(dot(clipPlane.xyz, right)) + abs(dot(clipPlane.xyz, up))");
     expect(() => interiorClipping.get("convexCube").create({ halfSize: 0 })).toThrow(RangeError);
   });
 
@@ -525,16 +540,13 @@ describe("optical interior capture: review findings (#1289)", () => {
     leased(capture.register(volume()));
     const frame = host(renderer);
     capture.render(frame);
-    const radius = (draws[0]!.object as THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>)
-      .material.uniforms.radius!.value as THREE.Vector3;
+    const radius = reachOf(draws[0]!.object);
     // Perspective: three.js draws `worldSize / -z` pixels per half screen, so `0.05 / P[5]` wide.
     expect(radius.x).toBeCloseTo(0.05 / 2 / frame.camera.projectionMatrix.elements[5]!, 9);
     const ortho = new THREE.OrthographicCamera(-2, 2, 1, -1, 0.1, 100);
     ortho.position.set(0, 0, 5);
     capture.render({ ...frame, camera: ortho });
-    const orthoRadius = (
-      draws[1]!.object as THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>
-    ).material.uniforms.radius!.value as THREE.Vector3;
+    const orthoRadius = reachOf(draws[1]!.object);
     expect(orthoRadius.x).toBeCloseTo(0.05 / 2, 9);
   });
 
@@ -549,8 +561,7 @@ describe("optical interior capture: review findings (#1289)", () => {
     const ortho = new THREE.OrthographicCamera(-2, 2, 1, -1, 0.1, 100);
     ortho.position.set(0, 0, 5);
     capture.render({ ...host(renderer), camera: ortho });
-    const radius = (draws[0]!.object as THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>)
-      .material.uniforms.radius!.value as THREE.Vector3;
+    const radius = reachOf(draws[0]!.object);
     // The square's half-width 0.1 along screen x and y, seen 45° turned: 0.1 × (cos + sin).
     expect(radius.x).toBeCloseTo(0.1 * Math.SQRT2, 9);
     expect(radius.y).toBeCloseTo(0.1 * Math.SQRT2, 9);
