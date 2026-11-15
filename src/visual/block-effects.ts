@@ -122,6 +122,8 @@ export function createParticles(capacity: number, colour: number) {
   geometry.setAttribute("puffSize", new THREE.BufferAttribute(sizes, 1));
   geometry.setAttribute("puffAlpha", new THREE.BufferAttribute(alphas, 1));
   const material = new THREE.ShaderMaterial({
+    // Masked by its own shader in a paired transition (#1208).
+    userData: { maskAdapter: "shaderSurface" },
     uniforms: {
       map: { value: puff() },
       colour: { value: new THREE.Color(colour) },
