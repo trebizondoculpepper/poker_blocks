@@ -2,7 +2,12 @@ import { describe, expect, it } from "vite-plus/test";
 import { standardDeck } from "./cards";
 import { Registry } from "./core/registry";
 import { baseDealer, type Dealer } from "./dealer";
-import { createExperimentRecorder, experimentRecordFormat } from "./experiment-recorder";
+import {
+  createExperimentRecorder,
+  experimentRecordFormat,
+  readExperimentRecord,
+  type StartingProvenance,
+} from "./experiment-recorder";
 import { GameRun } from "./game-run";
 import type { RunRules } from "./run-rules";
 
@@ -27,6 +32,12 @@ function makeRun(targetScore = 10) {
   };
   return { run, source, draws: () => draws };
 }
+
+/** A run with a recorder over it, given the recorder's options. */
+const trial = (options: Parameters<typeof createExperimentRecorder>[1]) => {
+  const { run, source } = makeRun();
+  return { run, recorder: createExperimentRecorder(source, options) };
+};
 
 /** Play the first `count` hand cards as one line. */
 const playLine = (run: GameRun, count = 5) => {
@@ -147,5 +158,120 @@ describe("the experiment trial recorder (#935)", () => {
     recorded.run.discard(recorded.run.state.hand[0]!.id);
     expect(recorded.draws()).toBe(plain.draws());
     expect(recorded.run.state).toEqual(plain.run.state);
+  });
+});
+
+describe("version-2 records: committed commands and starting provenance (#1247)", () => {
+  const provenance = (): StartingProvenance => ({
+    configuration: { format: "poker-blocks.experiment-config", version: 1 },
+    snapshot: { round: 1 },
+    ids: { c1: "card-1" },
+    checkpoint: { state: 42, draws: 3 },
+    setup: [{ command: "play", version: 1, args: { cardId: "c1" } }],
+  });
+
+  it("records each committed command, and a refill or reorder as its own step with nothing scored", () => {
+    const { run, recorder } = trial({ start: provenance });
+    run.play({ cardId: run.state.hand[0]!.id });
+    run.refillHand();
+    run.reorderHand(0, 2);
+    const { actions, version } = recorder.record();
+    expect(version).toBe(2);
+    expect(
+      actions.map(({ kind, command }) => [kind, (command as { command: string }).command]),
+    ).toEqual([
+      ["play", "play"],
+      ["refillHand", "refillHand"],
+      ["reorderHand", "reorderHand"],
+    ]);
+    for (const step of actions.slice(1)) {
+      expect(step.facts).toEqual([]);
+      expect(step.awarded).toBe(0);
+      expect(step.counterfactuals).toEqual([]);
+      // No stale rows: an earlier play's scoring never shows as this step's.
+      expect(step.metrics.scored).toEqual([]);
+    }
+    expect(new Set(actions.map(({ actionId }) => actionId)).size).toBe(3);
+  });
+
+  it("captures the installer's starting provenance once, and is replayable when all is complete", () => {
+    let calls = 0;
+    const { run, recorder } = trial({ start: () => (calls++, provenance()) });
+    run.play({ cardId: run.state.hand[0]!.id });
+    const record = recorder.record();
+    expect(calls).toBe(1);
+    expect(record.start).toEqual(provenance());
+    expect(record.completeness).toEqual({
+      start: { complete: true },
+      commands: { complete: true },
+    });
+    expect(readExperimentRecord(record)).toMatchObject({ ok: true, version: 2, replayable: true });
+  });
+
+  it("never substitutes a start it wasn't given: missing or invalid provenance is unavailable", () => {
+    const none = trial({}).recorder.record();
+    expect(none.start).toEqual({ unavailable: expect.stringContaining("no starting provenance") });
+    expect(none.completeness.start.complete).toBe(false);
+    const midSession = trial({
+      start: () => ({ unavailable: "installed mid-session" }),
+    }).recorder.record();
+    expect(midSession.start).toEqual({ unavailable: "installed mid-session" });
+    const broken = trial({
+      start: () => ({ ...provenance(), checkpoint: { state: Number.NaN, draws: 0 } }),
+    }).recorder.record();
+    expect(broken.start).toEqual({ unavailable: expect.stringContaining("checkpoint") });
+    const read = readExperimentRecord(none);
+    expect(read).toMatchObject({ ok: true, replayable: false });
+    expect((read as { diagnostics: string[] }).diagnostics[0]).toContain("start unavailable");
+  });
+
+  it("marks its commands incomplete from the first step without a codec", () => {
+    const { run, recorder } = trial({ start: provenance });
+    run.play({ cardId: run.state.hand[0]!.id });
+    // Leaving a won stage commits an action no codec describes yet.
+    run.forceOutcome("won");
+    run.advance();
+    const record = recorder.record();
+    const from = record.actions.findIndex(({ command }) => "unavailable" in command);
+    expect(from).toBeGreaterThan(0);
+    expect(record.completeness.commands).toEqual({
+      complete: false,
+      from,
+      reason: expect.stringContaining("no command codec"),
+    });
+    expect(readExperimentRecord(record)).toMatchObject({ replayable: false });
+  });
+
+  it("keeps a version-1 record inspectable, never replayable", () => {
+    const legacy = { format: "poker-blocks.experiment-record", version: 1, actions: [] };
+    expect(readExperimentRecord(legacy)).toMatchObject({
+      ok: true,
+      version: 1,
+      replayable: false,
+      diagnostics: [expect.stringContaining("facts, not commands")],
+    });
+    expect(readExperimentRecord({ format: "other" })).toEqual({
+      ok: false,
+      diagnostic: "not an experiment record",
+    });
+    expect(
+      readExperimentRecord({ format: "poker-blocks.experiment-record", version: 9 }),
+    ).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it("records the model's random checkpoint with each step when one is configured", () => {
+    const { run, recorder } = trial({ start: provenance });
+    let draws = 0;
+    run.attachRandomCheckpoints({
+      checkpoint: () => ({ state: 7, draws: ++draws }),
+      restore: () => {},
+    } as never);
+    run.play({ cardId: run.state.hand[0]!.id });
+    expect(recorder.record().actions[0]!.checkpoint).toEqual({
+      state: 7,
+      draws: expect.any(Number),
+    });
   });
 });

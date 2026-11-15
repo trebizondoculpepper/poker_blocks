@@ -19,19 +19,36 @@
  * - **Outcome:** the first `stage.won` or `stage.lost` it hears is the trial's final outcome.
  * - **No side effects.** It draws no randomness, mutates nothing, replays nothing when it starts
  *   (a restored or adopted run begins an empty record) and stops listening on `dispose`.
+ *
+ * Version 2 (#1247; doc/experiments/command-journal.md, "Recorder, provenance and verification"):
+ * - **Commands.** Each entry carries the model's committed metadata: its action kind, its
+ *   canonical command descriptor (or explicit unavailable reason) and the model random
+ *   checkpoint after it. A committed command with no facts (a refill, a reorder) is an entry of its
+ *   own, with nothing awarded and no scoring rows or counterfactuals of an earlier play.
+ * - **Start.** The installed trial's starting point (configuration artifact, committed snapshot,
+ *   logical ID map, starting random checkpoint, setup commands) comes only from the explicit
+ *   provider whoever installed the trial supplies, captured once as recording begins. None, or one
+ *   that can't say, is recorded as unavailable: never the current cursor or a seed in its place.
+ * - **Completeness.** Commands are complete until the first entry without a command codec; from
+ *   that index the record is marked incomplete, with the reason. A record is offered for verified
+ *   replay only when its start and its commands are both complete.
+ * - Version 1 records stay readable (`readExperimentRecord`) as fact evidence, never replayable.
  */
 import { Registry } from "./core/registry";
+import type { CommittedMetadata } from "./command-codecs";
 import type { EventEnvelope } from "./lifecycle/action";
 import type { GameState } from "./game-state";
 import type { PassiveScoredLine } from "./passive-effects";
 import { trialReadout, type TrialReadout } from "./scene-traits/dev-trial-readouts";
 
 export const experimentRecordFormat = "poker-blocks.experiment-record";
-export const experimentRecordVersion = 1;
+export const experimentRecordVersion = 2;
 
 /** What the recorder reads: the run service's committed channel and committed state. */
 export type RecorderSource = {
-  onCommitted(listener: (facts: readonly EventEnvelope[]) => void): () => void;
+  onCommitted(
+    listener: (facts: readonly EventEnvelope[], metadata: CommittedMetadata) => void,
+  ): () => void;
   committedState(): Pick<GameState, "field" | "round">;
   lastScoring(): { field: GameState["field"]; lines: readonly PassiveScoredLine[] };
 };
@@ -58,6 +75,12 @@ export type RecordedAction = {
   /** Its place in this trial's record. */
   index: number;
   actionId: string;
+  /** The model's name for what kind of action committed. */
+  kind: string;
+  /** Its canonical command (#1243), or why none is available. */
+  command: CommittedMetadata["command"];
+  /** The model random source's checkpoint after it, when one is configured. */
+  checkpoint?: { state: number; draws: number };
   facts: RecordedFact[];
   /** The points the model actually applied in this action (0 when it scored nothing). */
   awarded: number;
@@ -76,9 +99,32 @@ export type ParameterChange = {
   change: unknown;
 };
 
+/** The installed trial's starting point, as its installer captured it (#1247). */
+export type StartingProvenance = {
+  /** The validated configuration artifact it was installed from (#934), or null if none. */
+  configuration: unknown;
+  /** The committed state it began from, as plain data. */
+  snapshot: unknown;
+  /** Runtime instance IDs to the logical IDs the configuration names. */
+  ids: Record<string, string>;
+  /** The model random source's checkpoint at the start, before any player command. */
+  checkpoint: { state: number; draws: number };
+  /** The setup commands executed once before the first player command, in order. */
+  setup: readonly unknown[];
+};
+
+/** What the record can support: verified replay needs both complete. */
+export type RecordCompleteness = {
+  start: { complete: true } | { complete: false; reason: string };
+  commands: { complete: true } | { complete: false; from: number; reason: string };
+};
+
 export type ExperimentRecord = {
   format: typeof experimentRecordFormat;
   version: typeof experimentRecordVersion;
+  /** The installed trial's starting provenance, or why it is unavailable. */
+  start: StartingProvenance | { unavailable: string };
+  completeness: RecordCompleteness;
   /** The committed state when recording began: the trial's starting point. */
   initial: { score: number; field: number };
   actions: RecordedAction[];
@@ -108,33 +154,79 @@ factRecordings.register("score.totalApplied", ({ payload }, entry) => {
 factRecordings.register("stage.won", (_fact, entry) => void (entry.outcome ??= "won"));
 factRecordings.register("stage.lost", (_fact, entry) => void (entry.outcome ??= "lost"));
 
+/** Validate a provider's starting provenance: plain, with a finite checkpoint and an ID map. */
+function startingProvenance(
+  provider: (() => StartingProvenance | { unavailable: string }) | undefined,
+): StartingProvenance | { unavailable: string } {
+  if (!provider) return { unavailable: "no starting provenance was provided for this trial" };
+  let given: StartingProvenance | { unavailable: string };
+  try {
+    given = provider();
+  } catch (error) {
+    return {
+      unavailable: `starting provenance failed: ${error instanceof Error ? error.message : "unknown"}`,
+    };
+  }
+  if ("unavailable" in given) return { unavailable: String(given.unavailable) };
+  const { checkpoint, ids, setup } = given;
+  if (!Number.isFinite(checkpoint?.state) || !Number.isFinite(checkpoint?.draws))
+    return { unavailable: "the starting random checkpoint is missing or not finite" };
+  if (typeof ids !== "object" || ids === null || !Array.isArray(setup))
+    return { unavailable: "the starting provenance has no logical ID map or setup list" };
+  return plain(given);
+}
+
 export function createExperimentRecorder(
   source: RecorderSource,
-  options: { counterfactuals?: readonly CounterfactualProvider[] } = {},
+  options: {
+    counterfactuals?: readonly CounterfactualProvider[];
+    /** The installed trial's starting point, from whoever installed it (#1247). */
+    start?: () => StartingProvenance | { unavailable: string };
+  } = {},
 ) {
   const counterfactuals = options.counterfactuals ?? [];
   const start = source.committedState();
+  const provenance = startingProvenance(options.start);
   const record: ExperimentRecord = {
     format: experimentRecordFormat,
     version: experimentRecordVersion,
+    start: provenance,
+    completeness: {
+      start:
+        "unavailable" in provenance
+          ? { complete: false, reason: provenance.unavailable }
+          : { complete: true },
+      commands: { complete: true },
+    },
     initial: { score: start.round.score, field: start.field.length },
     actions: [],
     parameterChanges: [],
     outcome: null,
   };
-  let stop: (() => void) | null = source.onCommitted((facts) => {
-    if (!facts.length) return;
+  let stop: (() => void) | null = source.onCommitted((facts, metadata) => {
+    // A committed command with no facts (a refill, a reorder) is still a step (#1247).
     const state = source.committedState();
     const entry = { awarded: 0, scored: false, outcome: null as "won" | "lost" | null };
     for (const fact of facts)
       if (factRecordings.has(fact.type)) factRecordings.get(fact.type)(fact, entry);
     // Rows count only for an action that scored; otherwise the last scoring is an older play's.
     const scoring = entry.scored ? source.lastScoring() : { field: [], lines: [] };
-    const actionId = facts[0]!.actionId;
+    const actionId = metadata?.actionId ?? facts[0]?.actionId ?? "unknown";
+    const command = metadata?.command ?? { unavailable: "no committed metadata" };
+    // The first step without a command codec makes the record's commands incomplete from there.
+    if ("unavailable" in command && record.completeness.commands.complete)
+      record.completeness.commands = {
+        complete: false,
+        from: record.actions.length,
+        reason: command.unavailable,
+      };
     record.actions.push(
       plain({
         index: record.actions.length,
         actionId,
+        kind: metadata?.kind ?? "unknown",
+        command,
+        ...(metadata?.checkpoint ? { checkpoint: { ...metadata.checkpoint } } : {}),
         facts: facts.map(({ type, phase, sequence, subjectIds, payload }) => ({
           type,
           phase,
@@ -173,3 +265,46 @@ export function createExperimentRecorder(
 }
 
 export type ExperimentRecorder = ReturnType<typeof createExperimentRecorder>;
+
+/** A record read back for inspection, and whether it may be offered for verified replay. */
+export type ReadRecord =
+  | { ok: true; version: 1 | 2; record: unknown; replayable: boolean; diagnostics: string[] }
+  | { ok: false; diagnostic: string };
+
+/**
+ * Read an exported record (#1247). Version 2 is replayable only when its start and commands are
+ * complete; version 1 recorded facts, not commands, so it stays inspectable evidence and is never
+ * upgraded to verified replay by guessing them.
+ */
+export function readExperimentRecord(value: unknown): ReadRecord {
+  const record = value as Omit<Partial<ExperimentRecord>, "version"> & { version?: unknown };
+  if (typeof value !== "object" || value === null || record.format !== experimentRecordFormat)
+    return { ok: false, diagnostic: "not an experiment record" };
+  if (record.version === 1)
+    return {
+      ok: true,
+      version: 1,
+      record: plain(value),
+      replayable: false,
+      diagnostics: ["version 1 records facts, not commands: inspectable only, never replayed"],
+    };
+  if (record.version !== experimentRecordVersion)
+    return {
+      ok: false,
+      diagnostic: `unsupported experiment record version ${String(record.version)}`,
+    };
+  const { start, commands } = record.completeness ?? {};
+  const diagnostics = [
+    ...(start && !start.complete ? [`start unavailable: ${start.reason}`] : []),
+    ...(commands && !commands.complete
+      ? [`commands incomplete from step ${commands.from}: ${commands.reason}`]
+      : []),
+  ];
+  return {
+    ok: true,
+    version: 2,
+    record: plain(value),
+    replayable: Boolean(start?.complete && commands?.complete),
+    diagnostics,
+  };
+}
