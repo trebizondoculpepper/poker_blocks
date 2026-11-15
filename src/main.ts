@@ -84,7 +84,7 @@ import { createDropTargetGuide, dropGuideProviders } from "./visual/drop-target-
 import type { DropTargetGuides } from "./scene-traits/drop-target-guide";
 import { appVersion } from "./version";
 import { createVisualScheduler, unitMs } from "./visual-events/scheduler";
-import { createResistanceFeedbackController } from "./resistance-feedback";
+import { createResistanceFeedbackController, survivorProducer } from "./resistance-feedback";
 import type { ScoreNarrationServices } from "./score-narration";
 import type { RewardLedgerServices } from "./reward-ledger";
 import {
@@ -505,13 +505,6 @@ const visualServices: ScoreNarrationServices &
   shopBurn: { effect: (startMs) => shopView.burnEffect(startMs) },
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
-// A blast's survivors answer in place with their declared feedback (#1174).
-const survivorFeedback = createResistanceFeedbackController({
-  source: run,
-  scheduler: visualEvents,
-  mount: (blockId) => field.blocks().find(({ block }) => block.id === blockId)?.cube ?? null,
-  reducedMotion: () => run.reducedMotion,
-});
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
 document.addEventListener("visibilitychange", () => visualEvents.suspend());
 // Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).
@@ -519,9 +512,16 @@ const placementPhase = createPlacementPhase(
   run,
   createActionPhases(visualEvents, {
     plan: "scoring",
-    producers: [placementProducer, scoringProducer],
+    producers: [placementProducer, scoringProducer, survivorProducer],
   }),
 );
+// A blast's survivors answer in place with their declared feedback, after scoring (#1174).
+const survivorFeedback = createResistanceFeedbackController({
+  source: run,
+  phase: placementPhase,
+  mount: (blockId) => field.blocks().find(({ block }) => block.id === blockId)?.cube ?? null,
+  reducedMotion: () => run.reducedMotion,
+});
 const presenter: PlayPresenter = createPlayPresenter({
   runScoped: [survivorFeedback],
   game: () => run.game,

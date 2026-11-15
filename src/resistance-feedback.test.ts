@@ -10,7 +10,9 @@ import {
   withMaterial,
   type MaterialDefinition,
 } from "./materials";
-import { createResistanceFeedbackController } from "./resistance-feedback";
+import { createPlacementPhase, placementProducer, scoringProducer } from "./placement-phase";
+import { createResistanceFeedbackController, survivorProducer } from "./resistance-feedback";
+import { createActionPhases, createCompletionAdapter } from "./visual-events/action-phases";
 import { createVisualScheduler } from "./visual-events/scheduler";
 
 type Listener = (facts: readonly EventEnvelope[], metadata: CommittedMetadata) => void;
@@ -23,31 +25,45 @@ function harness(options: { mounted?: boolean; reduced?: boolean } = {}) {
     for (let t = 0; t < ms; t += 10) scheduler.update((now += 10), true);
   };
   const listeners: Listener[] = [];
+  const source = {
+    onCommitted(listener: Listener) {
+      listeners.push(listener);
+      return () => void listeners.splice(listeners.indexOf(listener), 1);
+    },
+  };
+  const phases = createActionPhases(scheduler, {
+    plan: "scoring",
+    producers: [placementProducer, scoringProducer, survivorProducer],
+  });
+  const phase = createPlacementPhase(source, phases);
   const cube = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
   cube.position.set(1, 2, 3);
   const diagnostics: string[] = [];
   const controller = createResistanceFeedbackController({
-    source: {
-      onCommitted(listener) {
-        listeners.push(listener);
-        return () => listeners.splice(listeners.indexOf(listener), 1);
-      },
-    },
-    scheduler,
+    source,
+    phase,
     mount: () => (options.mounted === false ? null : cube),
     reducedMotion: () => options.reduced ?? false,
     diagnose: (message) => diagnostics.push(message),
   });
-  const resisted = (block: ReturnType<typeof steel>, actionId = "a1") => {
+  const resisted = (block: ReturnType<typeof steel>, actionId = "a1", extra: string[] = []) => {
     const facts = [
+      ...extra.map((type) => ({ type, payload: {} })),
       {
         type: "block.resisted",
         payload: { blockId: block.id, cause: "explosion", survivor: block },
       },
     ] as unknown as EventEnvelope[];
     for (const listener of listeners.slice()) listener(facts, { actionId } as CommittedMetadata);
+    return phase.latest!;
   };
-  return { controller, cube, step, resisted, diagnostics, listeners };
+  /** That action's scoring narration finished. */
+  const scored = (key: ReturnType<typeof resisted>) => {
+    const completion = createCompletionAdapter();
+    phase.contributionFor(key, scoringProducer)!.bind(completion.work);
+    completion.done();
+  };
+  return { controller, cube, step, resisted, scored, diagnostics, listeners, phases };
 }
 
 const steel = () => withMaterial(standardDeck[0]!, getMaterialDefinition("steel"));
@@ -108,25 +124,44 @@ describe("resistance feedback (#1174; doc/triggered-presentation.md)", () => {
     expectHome(cube);
   });
 
-  it("dispose cancels what is playing once, restoring the visual, and ignores later facts", () => {
-    const { controller, cube, step, resisted, listeners } = harness();
+  it("plays after the action's scoring, not before it (#1174 review)", () => {
+    const { cube, step, resisted, scored } = harness();
+    const key = resisted(steel(), "a1", ["score.totalApplied"]);
+    step(100);
+    expect(overlays(cube)).toBe(0);
+    scored(key);
+    step(30);
+    expect(overlays(cube)).toBe(1);
+  });
+
+  it("a phase reset cancels playing feedback once, restoring the visual", () => {
+    const { controller, cube, step, resisted, phases } = harness();
     resisted(steel());
     step(30);
-    controller.dispose();
-    controller.dispose();
+    controller.reset();
+    phases.reset();
     expect(overlays(cube)).toBe(0);
     expectHome(cube);
-    expect(listeners).toHaveLength(0);
+  });
+
+  it("dispose stops listening, once", () => {
+    const { controller, cube, step, resisted, listeners } = harness();
+    const before = listeners.length;
+    controller.dispose();
+    controller.dispose();
+    // Only the controller's own subscription goes; the action phases keep theirs.
+    expect(listeners).toHaveLength(before - 1);
     resisted(steel(), "a2");
     step(100);
     expect(overlays(cube)).toBe(0);
   });
 
   it("reset cancels what is playing and forgets deliveries: a new run's same IDs play again", () => {
-    const { controller, cube, step, resisted } = harness();
+    const { controller, cube, step, resisted, phases } = harness();
     resisted(steel());
     step(30);
     controller.reset();
+    phases.reset();
     expect(overlays(cube)).toBe(0);
     expectHome(cube);
     resisted(steel());
