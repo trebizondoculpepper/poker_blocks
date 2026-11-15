@@ -32,6 +32,8 @@ export type FaceIconPainter = (
   x: number,
   y: number,
   size: number,
+  /** The face's colour, for an icon's cut-out parts; the fill colour is its ink. */
+  face: string,
 ) => void;
 
 /** Face icons by name: a definition's face artwork names one; nothing asks what a passive is. */
@@ -87,6 +89,51 @@ faceIcons.register("anvil", (context, x, y, size) => {
   context.lineTo(-s * 0.25, s * 0.05);
   context.lineTo(-s * 0.55, -s * 0.12);
   context.closePath();
+  context.fill();
+  context.restore();
+});
+
+// A round bin with two Aces poking out of it (#1004): cards first, so the bin's rim overlaps
+// their lower ends.
+faceIcons.register("aceBin", (context, x, y, size, face) => {
+  const s = size / 2;
+  const ink = context.fillStyle;
+  context.save();
+  context.translate(x, y);
+  const card = (angle: number, dx: number) => {
+    context.save();
+    context.translate(dx, -s * 0.36);
+    context.rotate(angle);
+    const w = s * 0.56;
+    const h = s * 0.84;
+    // Cards in the face's colour with ink edges and letters, so they read on any palette.
+    context.fillStyle = face;
+    context.strokeStyle = ink;
+    context.lineWidth = Math.max(3, size * 0.045);
+    context.beginPath();
+    context.rect(-w / 2, -h / 2, w, h);
+    context.fill();
+    context.stroke();
+    context.fillStyle = ink;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.font = `bold ${Math.round(h * 0.5)}px system-ui, sans-serif`;
+    context.fillText("A", 0, -h * 0.08);
+    context.restore();
+  };
+  card(-0.32, -s * 0.2);
+  card(0.28, s * 0.2);
+  // The bin: a tapered body under an elliptical rim.
+  context.fillStyle = ink;
+  context.beginPath();
+  context.moveTo(-s * 0.62, -s * 0.02);
+  context.lineTo(s * 0.62, -s * 0.02);
+  context.lineTo(s * 0.48, s * 0.82);
+  context.quadraticCurveTo(0, s * 0.98, -s * 0.48, s * 0.82);
+  context.closePath();
+  context.fill();
+  context.beginPath();
+  context.ellipse(0, -s * 0.02, s * 0.66, s * 0.16, 0, 0, Math.PI * 2);
   context.fill();
   context.restore();
 });
@@ -370,7 +417,7 @@ export function paintPassiveFace(
     const size = face.icon.count === 1 ? room * 1.1 : room * 0.62;
     const paintIcon = faceIcons.get(face.icon.name);
     for (const [dx, dy] of iconCluster(face.icon.count))
-      paintIcon(context, at.x + dx * size, at.y + dy * size, size);
+      paintIcon(context, at.x + dx * size, at.y + dy * size, size, palette.face);
   }
   // A pip or icon face carries no label: its pips or icons are the artwork.
   const label = face.pips || face.icon ? "" : face.label;
