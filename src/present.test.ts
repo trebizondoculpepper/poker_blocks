@@ -81,3 +81,23 @@ describe("a Present on winning the round's last stage (#651; doc/presents.md)", 
     expect(after[0]!.traits.opaqueContainer).toEqual(before!.traits.opaqueContainer);
   });
 });
+
+describe("playing a Present from the hand (#1270)", () => {
+  it("publishes the revealed card in the wrapper's place in the placed order", async () => {
+    const { createPresent, storedPlayable } = await import("./present");
+    const run = new GameRun(dealerRegistry, demoRunRules, standardDeck, () => 0);
+    const present = createPresent(
+      "present.1",
+      storedPlayable({ ...standardDeck[5]!, id: "contents.1" }),
+    );
+    const snapshot = run.snapshot();
+    const resumed = GameRun.fromSnapshot(dealerRegistry, demoRunRules, standardDeck, {
+      ...snapshot,
+      state: { ...snapshot.state, hand: [present, ...snapshot.state.hand] },
+    });
+    expect(resumed.play({ cardId: "present.1" })).not.toBeNull();
+    // Presentation matches the played source to what landed by this order, not by its own ID.
+    expect(resumed.lastPlacedOrder).toEqual(["contents.1"]);
+    expect(resumed.state.field.map(({ block }) => block.id)).toEqual(["contents.1"]);
+  });
+});

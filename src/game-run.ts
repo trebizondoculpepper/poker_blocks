@@ -880,6 +880,12 @@ export class GameRun {
    * rack item's conversion, #988), so the presenter redraws each changed block.
    */
   lastReactions: readonly AppliedReaction[] = [];
+  /**
+   * The last committed play's placed identities, in placement order, after any opening replaced a
+   * wrapper with its revealed card (#1270): presentation matches each played source to what
+   * actually landed by position, never by the source's own identity.
+   */
+  lastPlacedOrder: readonly string[] = [];
   /** The play being resolved collects its delivered material changes here. */
   private playReactions: AppliedReaction[] | null = null;
   /** The aggregate rules that changed the last play's total, for presentation. */
@@ -1071,6 +1077,7 @@ export class GameRun {
     this.drainPhase(context, "afterScore", batchId);
     this.runSteps(phases.afterScore, steps, context, "afterScore", batchId);
     this.lastReactions = reactions;
+    this.lastPlacedOrder = Object.freeze([...order]);
     this.playReactions = null;
 
     // 5. Settle: the stage outcome, then play.completed last, both in the settle phase and batch.
