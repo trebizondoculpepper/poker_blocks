@@ -1770,3 +1770,7 @@ Independent post-score traits use [reserved action contributions and phase compl
 ### Optical interior contributions (#1225)
 
 [Appearance-owned interior capture](optical-interiors.md) composes shell-free volume capabilities with the existing pooled bubbles. Renderer-context registrations own bounded isolated color/depth tiles; the optical front resolves those before outer reflection/print. Shared captures/resources and explicit clipping prevent neighbor leakage without generic material branches or per-block full-scene renders. This prototype extension requires separate implementation and visual/cost evidence.
+
+### Terminal presentation scope ownership (#1235)
+
+The [scheduler terminal-status contract](scheduler-terminal-status.md) keeps full records only for unresolved work and weakly retains terminal status by externally held opaque handles. Cleanup and parent/child accounting precede release; late observation remains truthful without preserving payload, service or listener graphs for an entire session.
