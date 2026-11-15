@@ -5,7 +5,7 @@ import {
   materialDefinitions,
   type MaterialDefinition,
 } from "./materials";
-import { aggregateMass, massKg, validatePhysicalMass } from "./physical-mass";
+import { aggregateMass, massKg, validatePhysicalMass, type MassAggregate } from "./physical-mass";
 
 /**
  * Base materials: doc/material-mass-and-passives.md (#1061, #1067). Experimental variants
@@ -28,7 +28,6 @@ const catalogue: Record<string, number> = {
   cloud: 0.002,
   water: 1,
   magic: 0.048,
-  giftWrap: 0.0635,
   emptyVessel: 0.001,
   airVent: 0.0012,
   emptyLantern: 0.464,
@@ -61,7 +60,7 @@ describe("authored physical mass (#816)", () => {
   it("matches the documented catalogue for every definition it lists", () => {
     for (const definition of all) {
       const expected = catalogue[definition.id];
-      if (expected === undefined) continue;
+      if (expected === undefined || "provider" in definition.mass) continue;
       expect(massKg(definition.mass), definition.id).toBeCloseTo(expected, 9);
     }
     expect(Object.keys(catalogue).every((id) => all.some((d) => d.id === id))).toBe(true);
@@ -86,11 +85,12 @@ describe("authored physical mass (#816)", () => {
   it("totals, counts and averages a scope; an empty scope has no mean", () => {
     const byId = new Map(all.map((definition) => [definition.id, definition.mass]));
     const tenWood = Array.from({ length: 10 }, () => "wood");
-    const wood = aggregateMass(tenWood, (id) => byId.get(id)!);
+    const reading = (id: string) => ({ kg: massKg(byId.get(id)!) });
+    const wood = aggregateMass(tenWood, reading) as MassAggregate;
     expect(wood.totalKg).toBeCloseTo(6.5, 9);
     expect(wood.count).toBe(10);
     expect(wood.meanKg).toBeCloseTo(0.65, 9);
-    expect(aggregateMass([] as string[], (id) => byId.get(id)!)).toEqual({
+    expect(aggregateMass([] as string[], reading)).toEqual({
       totalKg: 0,
       count: 0,
       meanKg: null,
@@ -117,10 +117,10 @@ describe("field mass query (#816)", () => {
       coins: 0,
       round: { score: 0, targetScore: 0, movesLeft: 0, discardsLeft: 0 },
     };
-    const mass = fieldMass(state as never);
+    const mass = fieldMass(state as never) as MassAggregate;
     expect(mass.count).toBe(2);
     expect(mass.totalKg).toBeCloseTo(2.2 + 0.65, 9);
     expect(mass.meanKg).toBeCloseTo(1.425, 9);
-    expect(fieldMass({ ...state, field: [] } as never).meanKg).toBeNull();
+    expect((fieldMass({ ...state, field: [] } as never) as MassAggregate).meanKg).toBeNull();
   });
 });
