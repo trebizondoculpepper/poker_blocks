@@ -9,7 +9,12 @@ vi.mock("three", async (importOriginal) => {
   const real = await importOriginal<typeof import("three")>();
   class FakeRenderer {
     readonly canvas = made++ === 0 ? ("back" as const) : ("front" as const);
-    readonly domElement = { classList: { add() {} }, setAttribute() {}, remove() {} };
+    readonly domElement = {
+      classList: { add() {} },
+      setAttribute() {},
+      remove() {},
+      addEventListener() {},
+    };
     readonly shadowMap = { enabled: false, type: 0 };
     autoClear = true;
     outputColorSpace = "";
