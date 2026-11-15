@@ -3,11 +3,93 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0b1020" />
-    <title>Poker Blocks</title>
+    <meta name="theme-color" content="#140d0b" />
+    <meta
+      name="description"
+      content="Poker Blocks: poker solitaire in three dimensions. Build with card blocks, score poker hands along every line."
+    />
+    <title>Poker Blocks: poker solitaire in three dimensions</title>
+    <script>
+      // Old game links (?mode=…, ?room=…) keep opening the game (#1406; doc/game-website.md).
+      if (location.search) location.replace("./game/" + location.search + location.hash);
+    </script>
+    <link rel="stylesheet" href="./src/website/site.css" />
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <a class="skip" href="#play">Skip to Play</a>
+    <header class="hero">
+      <h1 class="title" aria-label="Poker Blocks">
+        <span class="word" data-blocks="POKER" data-looks="paper wood gold steel crystal"></span>
+        <span
+          class="word"
+          data-blocks="BLOCKS"
+          data-looks="crystal steel paper gold wood paper"
+        ></span>
+      </h1>
+      <p class="tagline">Poker solitaire in three dimensions.</p>
+      <a id="play" class="block-button gold" href="./game/">
+        <span class="face">▶ Play Poker Blocks</span>
+      </a>
+      <p class="note">Plays right here in your browser. No download, no sign-up.</p>
+    </header>
+
+    <main>
+      <section class="block-section" aria-labelledby="build">
+        <div class="section-cube" data-cube="wood" aria-hidden="true">♠</div>
+        <h2 id="build">Build in three dimensions</h2>
+        <p>
+          Your hand is a row of card blocks. Pick one or more and drag them onto a free face of the
+          structure on the table: on top, beside or underneath what is already there. Turn the
+          structure to see every side and find the best place to build.
+        </p>
+      </section>
+
+      <section class="block-section" aria-labelledby="score">
+        <div class="section-cube" data-cube="paper" aria-hidden="true">♥</div>
+        <h2 id="score">Make scoring lines</h2>
+        <p>
+          Every straight row of touching blocks, along any of the three directions, scores as a
+          poker hand. The game picks the strongest hand the row can make. A long row scores its best
+          five cards, not every overlap. After each play the score is explained, line by line: the
+          hand, its base value, what changed it and the total.
+        </p>
+        <div class="hand-row" aria-label="A row scoring a royal flush">
+          <span class="card" data-rank="10" data-suit="♠"></span>
+          <span class="card" data-rank="J" data-suit="♠"></span>
+          <span class="card" data-rank="Q" data-suit="♠"></span>
+          <span class="card" data-rank="K" data-suit="♠"></span>
+          <span class="card" data-rank="A" data-suit="♠"></span>
+        </div>
+      </section>
+
+      <section class="block-section" aria-labelledby="shape">
+        <div class="section-cube" data-cube="crystal" aria-hidden="true">♦</div>
+        <h2 id="shape">Shape your strategy</h2>
+        <p>
+          Blocks come in materials, and you can install modifiers on your rack. Each one changes
+          scoring, or what happens on the table, at its own moment, and some only work in the right
+          place or order. Inspect any block or modifier in the game to see exactly what it does.
+        </p>
+      </section>
+
+      <section class="block-section" aria-labelledby="target">
+        <div class="section-cube" data-cube="gold" aria-hidden="true">♣</div>
+        <h2 id="target">Reach the target</h2>
+        <p>
+          Each stage gives you a target score and a limited number of plays. Reach it to win the
+          stage, then spend what you earned in the shop to grow your run. Fall short and the run
+          ends.
+        </p>
+      </section>
+
+      <a class="block-button gold again" href="./game/"
+        ><span class="face">▶ Play Poker Blocks</span></a
+      >
+    </main>
+
+    <footer class="table-edge">
+      <nav aria-label="Project links" class="links" data-project-links></nav>
+    </footer>
+    <script type="module" src="./src/website/site.ts"></script>
   </body>
 </html>

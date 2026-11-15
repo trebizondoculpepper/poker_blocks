@@ -302,7 +302,9 @@ export type MenuItem = {
  * A link shown in a panel's footer. `href` is the destination; a link without one shows the
  * build version, which is data rather than a destination.
  */
-export type PanelLink = { label: string; href?: string };
+// The project's links live in their own small module, shared with the website (#1406).
+export { projectHome, projectLinks, type PanelLink } from "./project-links";
+import { projectLinks, type PanelLink } from "./project-links";
 /** A condition a menu item can require; its test lives in the menu traits' registry. */
 export type MenuCondition = "inRun" | "hasSave";
 export type ModeScene = Scene<SceneTraits>;
@@ -590,13 +592,8 @@ export const gameDialogs = {
 const pauseMenu: SceneTraits["menu"] = { label: "Paused" };
 
 /** Where the project lives. Links to it come from here, so the URL is configured once. */
-export const projectHome = "https://github.com/trebizondoculpepper/poker_blocks";
 
 /** The footer links: where the version comes from, the source, and where to report a bug (#129). */
-export const projectLinks: readonly PanelLink[] = [
-  { label: "Get source code", href: projectHome },
-  { label: "Report a bug", href: `${projectHome}/issues/new` },
-];
 
 /**
  * The game's block title, on the title and pause menus, as tuned in dev7: a 6 s precession,
