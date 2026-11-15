@@ -175,9 +175,12 @@ describe("paired block-local material masks (#1166; doc/presentation-contracts.m
     expect(old.material.depthWrite).toBe(true);
     expect((next.mesh.material as THREE.Material).transparent).toBe(true);
     expect(next.mesh.renderOrder).toBe(1);
+    // The depthless outgoing look draws after the opaque scene (#1273).
+    expect(old.mesh.renderOrder).toBe(1000);
     const fragment = compile(next.mesh.material as THREE.Material).fragmentShader;
     expect(fragment).toContain("matReduced > 0.5 && matOutgoing < 0.5");
     result.mask.cancel();
     expect(next.mesh.renderOrder).toBe(0);
+    expect(old.mesh.renderOrder).toBe(0);
   });
 });
