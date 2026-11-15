@@ -40,6 +40,8 @@ type Pending = {
   mount: (blockId: string) => THREE.Object3D | null;
   reducedMotion: () => boolean;
   diagnose: (message: string) => void;
+  /** The owning controller's set of running feedback, ended on its dispose (#1319). */
+  running: Set<() => void>;
 };
 
 const pending = new Map<string, Pending>();
@@ -69,11 +71,13 @@ visualHandlers.register("survivor.feedback", (payload, context): "done" | Effect
   const end = () => {
     if (ended) return;
     ended = true;
+    entry.running.delete(end);
     effects.forEach((effect) => {
       effect.finish();
       effect.dispose();
     });
   };
+  entry.running.add(end);
   return {
     update(nowMs) {
       const delta = Math.max(0, nowMs - last) / 1000;
@@ -104,6 +108,7 @@ export function createResistanceFeedbackController(options: {
   const diagnose = options.diagnose ?? ((message: string) => console.warn(message));
   const seen = new Set<string>();
   const mine = new Set<string>();
+  const running = new Set<() => void>();
   let disposed = false;
   const stop = options.source.onCommitted((facts, metadata) => {
     if (disposed) return;
@@ -136,6 +141,7 @@ export function createResistanceFeedbackController(options: {
       mount: options.mount,
       reducedMotion: options.reducedMotion,
       diagnose,
+      running,
     });
     mine.add(id);
     if (
@@ -156,12 +162,13 @@ export function createResistanceFeedbackController(options: {
   };
   return {
     reset,
-    /** Stop listening, once; feedback not yet started is dropped. */
+    /** Stop listening and end running feedback (restoring its visuals), once (#1319). */
     dispose() {
       if (disposed) return;
       disposed = true;
       stop();
       reset();
+      [...running].forEach((end) => end());
     },
   };
 }
