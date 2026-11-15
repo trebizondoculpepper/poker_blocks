@@ -10,26 +10,43 @@ export type CardRoom = {
   /** Keep the table under the structure and the shadow camera around it. */
   frame(center: THREE.Vector3, radius: number, delta: number): void;
   setShadowQuality(quality: ShadowQuality): void;
+  /** Remove every part it added and free what it owns, once (#1372). */
+  dispose(): void;
 };
 
 const shadowMapSizes: Record<Exclude<ShadowQuality, "off">, number> = { high: 2048, low: 1024 };
 
 /**
- * The card room, drawn on `layer` (the back canvas, #116). Its shadows are set up on every
- * renderer in `renderers`, so blocks drawn on the front canvas shade one another too.
+ * The room's stationary backdrop (#1372; doc/room-scenery.md): its own texture, shown as the
+ * scene's background while mounted. Disposing restores whatever background was there before and
+ * frees the texture.
  */
-export function createCardRoom(
-  scene: THREE.Scene,
-  renderers: readonly THREE.WebGLRenderer[],
-  layer: number,
-): CardRoom {
-  scene.background = roomBackdrop();
-  for (const renderer of renderers) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+export function createRoomBackdrop(scene: THREE.Scene) {
+  const previous = scene.background;
+  const texture = roomBackdrop();
+  scene.background = texture;
+  let disposed = false;
+  return {
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      if (scene.background === texture) scene.background = previous;
+      texture.dispose();
+    },
+  };
+}
 
+/**
+ * The gameplay table (#1372; doc/room-scenery.md): the baize and rim beneath the blocks, drawn on
+ * `layer`. It receives their shadows and follows the field's centre and size, but it is the
+ * scene's child, not the rotating assembly's, so turning the blocks never turns it.
+ */
+export function createGameTable(scene: THREE.Scene, layer: number) {
   const table = new THREE.Group();
+  const baizeMap = baizeTexture();
   const baize = new THREE.Mesh(
     new THREE.CircleGeometry(1, 96),
-    new THREE.MeshStandardMaterial({ map: baizeTexture(), roughness: 0.95, metalness: 0 }),
+    new THREE.MeshStandardMaterial({ map: baizeMap, roughness: 0.95, metalness: 0 }),
   );
   baize.rotation.x = -Math.PI / 2;
   baize.receiveShadow = true;
@@ -42,18 +59,12 @@ export function createCardRoom(
   table.add(baize, rim);
   for (const part of [table, baize, rim]) part.layers.set(layer);
   scene.add(table);
-
-  // The lamp sits above and slightly in front, so shadows fall back and down onto the
-  // baize while the faces turned toward the camera stay well lit.
-  const lamp = boardLamp();
-  scene.add(lamp, lamp.target);
-  const lampOffset = boardLampOffset;
-
   let tableY: number | null = null;
   let tableRadius: number | null = null;
-
+  let disposed = false;
   return {
-    frame(center, radius, delta) {
+    object: table,
+    frame(center: THREE.Vector3, radius: number, delta: number) {
       const wantY = center.y - radius - 0.5;
       const wantRadius = Math.max(9, radius * 3);
       const ease = tableY === null ? 1 : Math.min(1, delta * 3);
@@ -62,7 +73,33 @@ export function createCardRoom(
         tableRadius === null ? wantRadius : tableRadius + (wantRadius - tableRadius) * ease;
       table.position.set(center.x, tableY, center.z);
       table.scale.setScalar(tableRadius);
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      table.removeFromParent();
+      for (const mesh of [baize, rim]) {
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+      baizeMap.dispose();
+    },
+  };
+}
 
+/**
+ * The overhead lamp that casts the blocks' shadows on the table (#1372): above and slightly in
+ * front, so shadows fall back and down while the faces turned to the camera stay lit. Its shadow
+ * camera follows the field; its quality is set on every renderer that draws shadowed blocks.
+ */
+export function createShadowLamp(scene: THREE.Scene, renderers: readonly THREE.WebGLRenderer[]) {
+  for (const renderer of renderers) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const lamp = boardLamp();
+  scene.add(lamp, lamp.target);
+  const lampOffset = boardLampOffset;
+  let disposed = false;
+  return {
+    frame(center: THREE.Vector3, radius: number) {
       lamp.target.position.copy(center);
       lamp.position.copy(center).add(lampOffset);
       const shadowCamera = lamp.shadow.camera;
@@ -75,7 +112,7 @@ export function createCardRoom(
         shadowCamera.updateProjectionMatrix();
       }
     },
-    setShadowQuality(quality) {
+    setShadowQuality(quality: ShadowQuality) {
       const enabled = quality !== "off";
       for (const renderer of renderers) renderer.shadowMap.enabled = enabled;
       lamp.castShadow = enabled;
@@ -95,10 +132,44 @@ export function createCardRoom(
         }
       });
     },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      lamp.removeFromParent();
+      lamp.target.removeFromParent();
+      lamp.shadow.map?.dispose();
+      lamp.dispose();
+    },
   };
 }
 
-/** A dim card room: warm panelled walls fading into shadow, with a soft vignette. */
+/**
+ * The card room, drawn on `layer` (the back canvas, #116): the backdrop, the table and the
+ * shadow lamp, each owned on its own (#1372), composed as before. Its shadows are set up on every
+ * renderer in `renderers`, so blocks drawn on the front canvas shade one another too.
+ */
+export function createCardRoom(
+  scene: THREE.Scene,
+  renderers: readonly THREE.WebGLRenderer[],
+  layer: number,
+): CardRoom {
+  const backdrop = createRoomBackdrop(scene);
+  const table = createGameTable(scene, layer);
+  const lamp = createShadowLamp(scene, renderers);
+  return {
+    frame(center, radius, delta) {
+      table.frame(center, radius, delta);
+      lamp.frame(center, radius);
+    },
+    setShadowQuality: (quality) => lamp.setShadowQuality(quality),
+    dispose() {
+      lamp.dispose();
+      table.dispose();
+      backdrop.dispose();
+    },
+  };
+}
+
 function roomBackdrop(): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 512;

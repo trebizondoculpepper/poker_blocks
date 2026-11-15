@@ -31,6 +31,10 @@ The base hand size is a tuning value in `src/balance.ts`; another dealer may set
 
 These names and payloads are examples, not a frozen API.
 
+## Quantitative heat and Cloud adjacency (#1384)
+
+[Heat and Cloud](heat-and-cloud.md) defines registered snapshot heat-source contributions, configured Water thresholds and transactional single-source generation. Six-face heating and 26-neighbour random Cloud placement are independently configured capabilities. The source audit identifies the legacy pair-spawn mismatch and the required reusable command/query seams; no material identity branches, duplicate simulation or presentation RNG are authorized. Source ordering/reservations, new-state snapshot visibility, card ownership and scenario verification are explicit.
+
 ## Core runtime
 
 Four small modules under `src/core/` carry the trait pattern. They are independent of cards and of rendering, and none of them knows about a specific trait.
