@@ -67,6 +67,8 @@ export const airFanHousing: MassComponent[] = [
 // Owner-agreed calibration (#1061, #1067; doc/material-mass-and-passives.md). Rounded effective
 // values replace earlier component estimates where the owner chose a total; the visual vessel
 // adds nothing to them.
+/** A solid litre of gold (NIST reference 19,320 kg/m³): the Heavy passive's reference too. */
+export const goldSolid: MassComponent[] = [{ name: "gold", density: 19320, volume: 1 }];
 /** One litre of water: the visual vessel adds no mass. */
 export const waterLitre: MassComponent[] = [{ name: "water", density: 1000, volume: 1 }];
 /** One litre of air at 1.2 kg/m³; decorative fans add no mass. */
