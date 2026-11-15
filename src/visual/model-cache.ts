@@ -124,7 +124,7 @@ function sceneResources(scene: THREE.Object3D) {
     const mesh = object as THREE.Mesh;
     if (!mesh.isMesh) return;
     geometries.add(mesh.geometry);
-    for (const surface of [mesh.material].flat()) {
+    for (const surface of ([] as THREE.Material[]).concat(mesh.material)) {
       materials.add(surface);
       for (const value of Object.values(surface))
         if ((value as THREE.Texture | null)?.isTexture) textures.add(value as THREE.Texture);
