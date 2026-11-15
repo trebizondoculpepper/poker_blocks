@@ -19,8 +19,10 @@ export const gameplayHudZones: readonly { element: HudElement; zone: FrameZone }
   { element: "round", zone: "top-left" },
   { element: "coins", zone: "top-left" },
   { element: "menu", zone: "top-right" },
+  // The shop's controls in one row, in this order: Buy, Sell (the discard bin), Continue (#1335;
+  // doc/shop-control-blocks.md). The zone moves under the stock while Buy shows.
   { element: "shopBuy", zone: "bottom-left" },
   { element: "discard", zone: "bottom-left" },
+  { element: "shopExit", zone: "bottom-left" },
   { element: "deck", zone: "bottom-right" },
-  { element: "shopExit", zone: "bottom-right" },
 ];
