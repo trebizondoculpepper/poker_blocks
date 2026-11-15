@@ -327,7 +327,9 @@ const entries = [
     name: "Failed",
     family: "round",
     description: "Plays run out before the target score is reached",
-    prompt: "Gentle descending deflating tones, a soft sad wind-down, not harsh",
+    // Bass-guitar outcome family (#1013, #1030): Cleared's slap-bass timbre, a deflated melody.
+    prompt:
+      "Short solo funky slap bass guitar riff, same warm studio tone as a confident slap bass lick, but deflated and unsuccessful: three slow descending slightly sour notes ending on a flat dropping slide, comedic letdown, no drums, no other instruments",
     durationSeconds: 2,
     promptInfluence: 0.5,
     variants: 1,
