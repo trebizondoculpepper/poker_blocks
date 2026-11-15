@@ -1107,13 +1107,12 @@ describe("motion rows (#973)", () => {
           object: THREE.Object3D;
           dispose(): void;
         };
-        one.object.rotation.set(0.3, 0, 0);
         return {
           ...one,
           update() {
             const list = angles.get(row) ?? [];
-            const facing = new THREE.Vector3(1, 0, 0).applyQuaternion(one.object.quaternion);
-            list.push(+Math.atan2(-facing.z, facing.x).toFixed(4));
+            const tipped = new THREE.Vector3(0, 1, 0).applyQuaternion(one.object.quaternion);
+            list.push(+Math.atan2(tipped.z, tipped.y).toFixed(4));
             angles.set(row, list);
           },
         };
@@ -1137,7 +1136,7 @@ describe("motion rows (#973)", () => {
     expect(memory.geometries).toBe(0);
   });
 
-  it("restarts the pose from rest at every warm-up and sample set", async () => {
+  it("restarts the motion at every warm-up and sample set, from where the block is, never snapping back", async () => {
     const { quarterTurns } = await import("./motion");
     const { env, memory } = fakeEnvironment();
     const turns: number[] = [];
@@ -1153,8 +1152,8 @@ describe("motion rows (#973)", () => {
           ...one,
           update(dt) {
             if (!dt) return;
-            const facing = new THREE.Vector3(1, 0, 0).applyQuaternion(one.object.quaternion);
-            turns.push(+Math.atan2(-facing.z, facing.x).toFixed(4));
+            const tipped = new THREE.Vector3(0, 1, 0).applyQuaternion(one.object.quaternion);
+            turns.push(+Math.atan2(tipped.z, tipped.y).toFixed(4));
           },
         };
       },
@@ -1169,8 +1168,44 @@ describe("motion rows (#973)", () => {
     });
     const quarter = +(Math.PI / 2).toFixed(4);
     const half = +Math.PI.toFixed(4);
-    // Stationary row: 2 warm-up + 4 sampled frames at rest. Motion row: warm-up 1 s, 2 s; then the
-    // sample set starts over: 1 s, 2 s, 3 s, 4 s.
-    expect(turns).toEqual([0, 0, 0, 0, 0, 0, quarter, quarter, quarter, quarter, half, half]);
+    // Stationary row: 2 warm-up + 4 sampled frames at rest. Motion row: the warm-up turns a
+    // quarter and holds (1 s, 2 s); the sample set replays the same motion from there, with no
+    // jump back: a quarter more and hold, then another (shown as -quarter past half a turn).
+    expect(turns).toEqual([0, 0, 0, 0, 0, 0, quarter, quarter, half, half, -quarter, -quarter]);
+  });
+
+  it("never turns faster than the motion itself across set boundaries (no reset spike for dust)", async () => {
+    const { quarterTurns } = await import("./motion");
+    const { angularSpeed } = await import("../../visual/dust");
+    const { env, memory } = fakeEnvironment();
+    let fastest = 0;
+    const turning: ProfilingCase = {
+      ...testCase(memory),
+      motions: [quarterTurns],
+      create(context) {
+        const one = testCase(memory).create(context) as {
+          object: THREE.Object3D;
+          dispose(): void;
+        };
+        let previous: THREE.Quaternion | null = null;
+        return {
+          ...one,
+          update(dt) {
+            const now = one.object.quaternion.clone();
+            if (previous && dt) fastest = Math.max(fastest, angularSpeed(previous, now, dt));
+            previous = now;
+          },
+        };
+      },
+    };
+    await createProfilerRunner(env).run([["cube", turning]], {
+      ...options,
+      counts: [1],
+      warmupFrames: 30,
+      frames: 60,
+    });
+    // A smoothstep quarter turn over 1 s peaks at 1.5 × (π/2) rad/s; a snap back would be far more.
+    expect(fastest).toBeGreaterThan(1);
+    expect(fastest).toBeLessThanOrEqual(1.5 * (Math.PI / 2) + 1e-6);
   });
 });

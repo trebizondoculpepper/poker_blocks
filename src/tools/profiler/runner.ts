@@ -290,15 +290,23 @@ export function createProfilerRunner(
   let clockStep = defaultClockStep;
 
   /**
-   * The running row's motion (#973): its registered driver's pose at the run-clock time since the
-   * current set started, applied over each object's own resting pose. Stationary leaves it be.
+   * The running row's motion (#973): its registered driver's turn at the run-clock time since the
+   * current set started, applied over the pose each object had when the set started. Stationary
+   * leaves it be.
    */
   let pose = profilingMotions.get(stationary.driver).create({});
   let setStartedAt = 0;
   const resting = new Map<ProfiledObject, THREE.Quaternion>();
   const turn = new THREE.Quaternion();
-  /** Start the motion over: each warm-up and sample set begins from the resting pose. */
-  const startSet = () => void (setStartedAt = clockSeconds);
+  /**
+   * Start the motion over for a set (#973): the driver's time restarts, from the pose each object
+   * has now, so the set replays the same motion without a jump that pose-fed parts (dust,
+   * fluids) would read as a sudden turn.
+   */
+  const startSet = (objects: readonly ProfiledObject[]) => {
+    setStartedAt = clockSeconds;
+    for (const each of objects) resting.set(each, each.object.quaternion.clone());
+  };
 
   /** The running run's cancel signal, so frame waits can be abandoned when it fires. */
   let signal: AbortSignal | undefined;
@@ -415,7 +423,7 @@ export function createProfilerRunner(
     const gpu: number[] = [];
     let spoiled = env.hidden();
     const changesBefore = env.visibilityChanges();
-    startSet();
+    startSet(objects);
     let last = env.now();
     let setCounts = rendererCounts();
     for (let i = 0; i < options.frames; i++) {
@@ -487,9 +495,10 @@ export function createProfilerRunner(
         const one = await untilAborted(profile.create({ seed: options.seed + index, phase }));
         one.object.position.copy(positions[index]!);
         collection.add(one.object);
-        resting.set(one, one.object.quaternion.clone());
         made.push(one);
       }
+      // A new collection starts at rest: its first, compiling frame inherits no earlier set's turn.
+      startSet(made);
       check();
     } catch (error) {
       remove(made);
@@ -507,7 +516,7 @@ export function createProfilerRunner(
   }
 
   async function warm(objects: readonly ProfiledObject[], options: RunOptions, check: () => void) {
-    startSet();
+    startSet(objects);
     for (let i = 0; i < options.warmupFrames; i++) {
       check();
       await waitFrame();

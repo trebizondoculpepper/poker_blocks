@@ -5,7 +5,9 @@
  * triggers (dust, fluid slosh, settling) is measured without spinning everything.
  *
  * A driver turns the run's clock time since the start of a set into a world-space turn the runner
- * applies to every object on top of its own resting pose. Pure: the same time gives the same turn.
+ * applies to every object on top of the pose it had when the set started. Pure: the same time
+ * gives the same turn, so every set replays the same motion, continuing from where the last left
+ * the block rather than snapping back (a snap would read as a violent turn to dust).
  */
 import * as THREE from "three";
 import { Registry } from "../../core/registry";
@@ -28,10 +30,14 @@ export const profilingMotions = new Registry<MotionDriver>("profiling motion");
 /** Every case's first cohort: at rest, its ambient animation only. */
 export const stationary: MotionReference = { driver: "stationary" };
 
-/** The standard motion (doc/presentation-contracts.md): a quarter turn, a hold, repeated. */
+/**
+ * The standard motion (doc/presentation-contracts.md): a quarter turn, a hold, repeated. It tips
+ * the block about a horizontal axis, so which way is down inside it changes and gravity-driven
+ * parts (a levelling fluid, settling scoops) respond, as dust does to any turn (#973 review).
+ */
 export const quarterTurns: MotionReference = {
   driver: "quarterTurns",
-  config: { turnSeconds: 1, holdSeconds: 1 },
+  config: { turnSeconds: 1, holdSeconds: 1, axisX: 1, axisY: 0, axisZ: 0 },
 };
 
 /** A motion as a result records it: its reference, with its driver's tag where it has one. */
@@ -46,22 +52,22 @@ profilingMotions.register("stationary", {
   create: () => (_seconds, turn) => void turn.identity(),
 });
 
-const up = new THREE.Vector3(0, 1, 0);
-
 /**
- * A smooth quarter turn about world up over `turnSeconds`, held for `holdSeconds`, repeated:
- * each cycle starts where the last ended, so the block keeps turning the same way.
+ * A smooth quarter turn about a world axis (`axisX/Y/Z`, horizontal by default) over
+ * `turnSeconds`, held for `holdSeconds`, repeated: each cycle starts where the last ended, so the
+ * block keeps turning the same way.
  */
 profilingMotions.register("quarterTurns", {
   label: "quarter turns",
   tag: "quarter turns",
-  create({ turnSeconds = 1, holdSeconds = 1 }) {
+  create({ turnSeconds = 1, holdSeconds = 1, axisX = 1, axisY = 0, axisZ = 0 }) {
+    const axis = new THREE.Vector3(axisX, axisY, axisZ).normalize();
     const cycle = turnSeconds + holdSeconds;
     return (seconds, turn) => {
       const done = Math.floor(seconds / cycle);
       const into = Math.min((seconds - done * cycle) / turnSeconds, 1);
       const eased = into * into * (3 - 2 * into);
-      turn.setFromAxisAngle(up, ((done + eased) * Math.PI) / 2);
+      turn.setFromAxisAngle(axis, ((done + eased) * Math.PI) / 2);
     };
   },
 });
