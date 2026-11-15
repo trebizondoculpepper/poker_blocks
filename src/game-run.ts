@@ -1237,16 +1237,22 @@ export class GameRun {
    */
   applyRackItem(itemId: string, cardId: string): GameState | null {
     // A committed action (#539): its facts publish once it has, so presentation hears them.
-    return this.transact("useItem", undefined, () => {
-      // The material-change operation returns its own committed facts (#539): nothing is
-      // inferred from the state afterwards.
-      const used = useRackItem(this.currentState, itemId, cardId);
-      if (!used) return null;
-      this.currentState = used.state;
-      for (const { type, ...fact } of used.events) this.lifecycle(type, fact);
-      const next = used.state;
-      return next;
-    });
+    return this.transact(
+      "useItem",
+      undefined,
+      () => {
+        // The material-change operation returns its own committed facts (#539): nothing is
+        // inferred from the state afterwards.
+        const used = useRackItem(this.currentState, itemId, cardId);
+        if (!used) return null;
+        this.currentState = used.state;
+        for (const { type, ...fact } of used.events) this.lifecycle(type, fact);
+        const next = used.state;
+        return next;
+      },
+      // Its canonical command (#1246): captured as called, published only if the use commits.
+      { name: "applyRackItem", args: { itemId, cardId } },
+    );
   }
 
   /** Discard one card, or several as one discard. */
