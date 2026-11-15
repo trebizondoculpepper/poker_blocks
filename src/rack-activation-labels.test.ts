@@ -69,3 +69,25 @@ describe("rack activation labels (#919)", () => {
     expect(space("passive.1", {})()).toBeNull();
   });
 });
+
+describe("rack label anchors follow the rendered token (#1213)", () => {
+  it("projects the token's own bounds, so a moving token moves its label", async () => {
+    const THREE = await import("three");
+    const { projectedBounds } = await import("./passive-rack");
+    const camera = new THREE.OrthographicCamera(-2, 2, 1, -1, 0.1, 30);
+    camera.position.set(0, 0, 8);
+    camera.lookAt(0, 0, 0);
+    const token = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5));
+    const canvas = { left: 100, top: 20, width: 400, height: 200 };
+    const origin = { left: 0, top: 0 };
+    const atSlot = projectedBounds(token, camera, canvas, origin)!;
+    // 0.5 world units of a 4-unit-wide view on a 400px canvas: 50px, centred at 300.
+    expect(atSlot.width).toBeCloseTo(50);
+    expect(atSlot.x + atSlot.width / 2).toBeCloseTo(300);
+    // Mid-reorder, the token is a world unit to the right: so is its anchor.
+    token.position.x = 1;
+    const moving = projectedBounds(token, camera, canvas, origin)!;
+    expect(moving.x + moving.width / 2).toBeCloseTo(400);
+    expect(projectedBounds(new THREE.Group(), camera, canvas, origin)).toBeNull();
+  });
+});

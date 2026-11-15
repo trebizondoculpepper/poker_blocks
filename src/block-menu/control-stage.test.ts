@@ -218,6 +218,20 @@ describe("grouped 3D control stage (#1146; doc/shop-control-blocks.md)", () => {
     stage.dispose();
   });
 
+  it("forgets a press that moved no focus, so later keyboard focus still forwards (#1234)", async () => {
+    const h = harness();
+    const stage = await createControlStage(h.stageHost, controls);
+    const seen: string[] = [];
+    const stop = stage.cube("a")!.block.on("input.focus", () => void seen.push("focus"));
+    h.buttons[0].fire("pointerdown", { pointerType: "mouse" });
+    h.buttons[0].fire("pointerup", { pointerType: "mouse", clientX: 0, clientY: 0 });
+    await Promise.resolve();
+    h.buttons[0].fire("focus");
+    expect(seen).toEqual(["focus"]);
+    stop();
+    stage.dispose();
+  });
+
   it("displays the canvas at the host's CSS size, whatever its drawing buffer (#1191)", async () => {
     const h = harness();
     const stage = await createControlStage(h.stageHost, controls);
