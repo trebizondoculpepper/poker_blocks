@@ -1,4 +1,13 @@
-import { createPlacementPhase, placementProducer, scoringProducer } from "./placement-phase";
+import {
+  createPlacementPhase,
+  placementProducer,
+  scoringProducer,
+  type PlacementPhase,
+} from "./placement-phase";
+import { createStageScoreGraph, type StageScoreGraph } from "./stage-score-graph";
+import { triggeredProducer, type TriggeredEffectServices } from "./triggered-presentation";
+import { createDazzle } from "./visual/dazzle";
+import { cosmeticRandom } from "./visual/block-effects";
 import { createActionPhases } from "./visual-events/action-phases";
 import type { TransitionAudioServices } from "./scene-traits/material-change-sounds";
 import type { ShopBurnServices, ShopExitScheduler } from "./scene-traits/shop-leave-response";
@@ -95,6 +104,9 @@ import { createDiagnosticRegistry } from "./diagnostics/debug-snapshot";
 import { registerSnapshotProviders, snapshotSections } from "./diagnostics/providers";
 import { debugSnapshotCommand } from "./diagnostics/snapshot-command";
 import { registerConsoleCommand } from "./console/commands";
+// Every exit effect registered, so a removed block's recipe can run (#511 review, #1173).
+import { createExitPresenter } from "./visual/exit-effects";
+import type { BlockExitServices, ExitPresenter } from "./visual/exit-presentation";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Missing app element");
@@ -166,12 +178,16 @@ type TraitContext = {
     renderer: TableRenderer;
     cameraView: CameraViewService;
     playfieldRocking: PlayfieldRockingServices;
+    scoreGraph: StageScoreGraph;
     visualEvents: ShopExitScheduler;
     audio: AudioService;
     hud: HudPanels;
     overlays: Overlays;
     hand: HandView;
     field: FieldView;
+    exits: ExitPresenter;
+    actionPhase: PlacementPhase;
+    composeProducer(producer: string): () => void;
     firstPlay: FirstPlayTable;
     actionLog: ActionLog;
     actionWatch: ActionWatch;
@@ -276,6 +292,18 @@ const traitContext: TraitContext = {
     cameraView,
     get visualEvents() {
       return visualEvents;
+    },
+    // The shared block-exit presenter (#1173), built with the scheduler below.
+    get exits() {
+      return exitPresenter;
+    },
+    get actionPhase() {
+      return placementPhase;
+    },
+    composeProducer: (producer) => actionPhases.compose(producer),
+    // The stage score graph a stage scene composes (#1064), built with the run below.
+    get scoreGraph() {
+      return scoreGraph;
     },
     // The rocking controller's capabilities (#783): wiring only, no policy.
     playfieldRocking: {
@@ -466,6 +494,11 @@ const shopView = createShopView(
   { floor: danceFloor, controls: shopControls },
 );
 shopView.render([], false);
+// Triggered explosions' pops (#1172): one dazzle over the table, seen through its camera.
+const dazzle = createDazzle(host, cameraView.camera, {
+  random: cosmeticRandom,
+  reducedMotion: () => run.reducedMotion,
+});
 // The one shared visual-event scheduler (#546, #547). Its handlers reach presentation through
 // these services; the frame loop below advances its clock.
 const visualServices: ScoreNarrationServices &
@@ -474,8 +507,10 @@ const visualServices: ScoreNarrationServices &
   PresentedActionServices &
   RewardLedgerServices &
   ShopBurnServices &
+  BlockExitServices &
   TransitionAudioServices &
-  FieldLineServices & { playfieldRocking: RockingSink } = {
+  FieldLineServices &
+  TriggeredEffectServices & { playfieldRocking: RockingSink } = {
   get scoreNarration() {
     return presenter.narration;
   },
@@ -501,20 +536,47 @@ const visualServices: ScoreNarrationServices &
   playfieldRocking: rockingRelay,
   // A committed material transition's sound (#539).
   transitionAudio: { play: (id) => playSfx(id) },
+  // Block exits on this scheduler (#549, #1173).
+  get blockExits() {
+    return exitPresenter.blockExits;
+  },
   // The shop's outgoing burn, advanced on this scheduler (#880).
   shopBurn: { effect: (startMs) => shopView.burnEffect(startMs) },
+  // Triggered effects at their captured cells, moving with the board (#1172).
+  triggeredEffects: {
+    place: (object, cell) => field.placeObject(object, cell),
+    remove: (object) => field.removeObject(object),
+    addToWorld: (object) => view.scene.add(object),
+    removeFromWorld: (object) => view.scene.remove(object),
+    get cubeSize() {
+      return field.cubeSize;
+    },
+    flash: (at, look) => dazzle.flash(at, { look }),
+    reducedMotion: () => run.reducedMotion,
+    random: cosmeticRandom,
+  },
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
+// Removed blocks' exits (#1173), presented on that scheduler.
+const exitPresenter = createExitPresenter(visualEvents, () => run.reducedMotion);
 // Hidden time never counts as presentation time, even when the browser stops sending frames.
 document.addEventListener("visibilitychange", () => visualEvents.suspend());
 // Committed actions' presentation records (#1218): a play's flight binds to its own action (#1219).
-const placementPhase = createPlacementPhase(
-  run,
-  createActionPhases(visualEvents, {
-    plan: "scoring",
-    producers: [placementProducer, scoringProducer, survivorProducer],
-  }),
-);
+const actionPhases = createActionPhases(visualEvents, {
+  plan: "scoring",
+  producers: [placementProducer, scoringProducer, triggeredProducer, survivorProducer],
+});
+const placementPhase = createPlacementPhase(run, actionPhases);
+// The stage score graph (#1064): hung in the room (never the turning assembly), its producer
+// composed only while a scene shows it.
+const scoreGraph = createStageScoreGraph({
+  source: run,
+  history: () => run.committedState().round.history,
+  phase: placementPhase,
+  compose: (producer) => actionPhases.compose(producer),
+  room: view.scene,
+  host,
+});
 // A blast's survivors answer in place with their declared feedback, after scoring (#1174).
 const survivorFeedback = createResistanceFeedbackController({
   source: run,
@@ -545,6 +607,8 @@ const presenter: PlayPresenter = createPlayPresenter({
   visualEvents,
   placementPhase,
   committed: run,
+  // A reset takes the explosions' glare and afterimages with it (#1294 review).
+  resetFeedback: () => dazzle.clear(),
 });
 const input: TableInput = createTableInput({
   host,
@@ -644,6 +708,8 @@ const step = (time: number) => {
   cameraView.update(playfield.time, playfield.delta);
   presenter.update(time, delta);
   visualEvents.update(time, document.visibilityState === "visible");
+  scoreGraph.frame();
+  dazzle.update(delta);
   run.followOutcomes(time);
   field.update(playfield.time, run.reducedMotion);
   sceneManager.update(delta);
@@ -681,6 +747,7 @@ if (import.meta.hot) {
     attract.dispose();
     blockTitles.dispose();
     presenter.dispose();
+    dazzle.dispose();
     hand.dispose();
     blockViews.disposeAll();
     field.dispose();

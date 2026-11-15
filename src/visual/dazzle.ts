@@ -263,6 +263,17 @@ export function createDazzle(
     get active(): number {
       return blooms.length + ghosts.length;
     },
+    /**
+     * Take every glare, bloom and afterimage off now (#1294 review): a presentation reset (quitting
+     * to the title, a new run) never leaves an old discharge drawing over what follows.
+     */
+    clear() {
+      for (const { element } of [...blooms, ...ghosts]) element.remove();
+      blooms.length = 0;
+      ghosts.length = 0;
+      glareFrames = 0;
+      glare.style.opacity = "0";
+    },
     dispose() {
       layer.remove();
       blooms.length = 0;
