@@ -475,7 +475,7 @@ const visualServices: ScoreNarrationServices &
   // Where a scheduled rocking resume reaches the playfield controller (#783).
   playfieldRocking: rockingRelay,
   // The shop's outgoing burn, advanced on this scheduler (#880).
-  shopBurn: { effect: () => shopView.burnEffect() },
+  shopBurn: { effect: (startMs) => shopView.burnEffect(startMs) },
 };
 const visualEvents = createVisualScheduler({ services: visualServices });
 // Hidden time never counts as presentation time, even when the browser stops sending frames.

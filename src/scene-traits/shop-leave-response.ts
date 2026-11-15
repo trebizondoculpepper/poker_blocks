@@ -23,11 +23,12 @@ import {
 export type ShopExitResponseConfig = { burnSound: SoundEffectId; leaveSound: SoundEffectId };
 
 /** What the scheduled burn handler reaches through the scheduler's services. */
-export type ShopBurnServices = { shopBurn: { effect(): EffectHandle } };
+export type ShopBurnServices = { shopBurn: { effect(startMs: number): EffectHandle } };
 
 export const shopBurnHandler = "shop.burnOutgoing";
+// Advanced from its scheduled start, so a late first frame catches up rather than restarting.
 visualHandlers.register(shopBurnHandler, (_payload, context) =>
-  (context.services as ShopBurnServices).shopBurn.effect(),
+  (context.services as ShopBurnServices).shopBurn.effect(context.scheduledAtMs),
 );
 
 export type ShopExitScheduler = {

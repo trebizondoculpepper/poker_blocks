@@ -6,8 +6,10 @@ import { shopExitResponse } from "./shop-leave-response";
 function harness(frames = 3, limits?: { pendingGlobal: number }) {
   const log: string[] = [];
   let left = frames;
+  const starts: number[] = [];
   const shopBurn = {
-    effect: () => ({
+    effect: (startMs: number) => ({
+      ...(starts.push(startMs) ? {} : {}),
       update: () => (--left <= 0 ? ("finished" as const) : ("running" as const)),
       cancel: () => void log.push("burn cancelled"),
       dispose: () => {},
@@ -56,6 +58,7 @@ function harness(frames = 3, limits?: { pendingGlobal: number }) {
       ]),
     exit: () => trait.exit!(context as never, config),
     visualEvents,
+    starts,
   };
 }
 
@@ -109,6 +112,17 @@ describe("shopExitResponse on the shared scheduler (#880)", () => {
     h.visualEvents.update(1e7, true);
     expect(h.log).toContain("burn finished at once");
     expect(h.log.at(-1)).toBe("sound shop.leave");
+  });
+
+  it("hands the burn its scheduled start, so a late first frame catches up", () => {
+    const h = harness();
+    h.run(3);
+    const scheduledAt = h.visualEvents.nowMs;
+    h.leave(["a"]);
+    // A long-stalled frame: the effect still starts from when it was scheduled, not from now.
+    h.visualEvents.update(5000, true);
+    expect(h.starts).toEqual([scheduledAt]);
+    expect(h.visualEvents.nowMs).toBeGreaterThan(scheduledAt);
   });
 
   it("presents nothing for other facts", () => {

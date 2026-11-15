@@ -66,7 +66,8 @@ export type ShopView = {
    * "Today's scheduling"): it advances on the presentation clock it is given, staggered in
    * game-time units, and finishes when every offer has burned. Cancelling finishes it at once.
    */
-  burnEffect(): EffectHandle;
+  /** `startMs`: the burn event's scheduled start; a late first frame catches up from it. */
+  burnEffect(startMs: number): EffectHandle;
   /** Begin burning the displayed (outgoing) offers; `burnEffect` then advances it (#880). */
   startBurn(reducedMotion: boolean): void;
   /** Settle the outgoing burn at once, as completed: the overload summary (#880). */
@@ -555,8 +556,9 @@ export function createShopView(
   function advanceBurn(now: number): "running" | "finished" {
     if (!burn) return "finished";
     burn.startedAt ??= now;
+    const startedAt = burn.startedAt;
     for (const job of burn.jobs) {
-      if (now < burn.startedAt + job.delay) continue;
+      if (now < startedAt + job.delay) continue;
       if (!job.effect) {
         job.entry.item.classList.add("is-burning");
         job.entry.cube.traverse((part) => {
@@ -567,7 +569,8 @@ export function createShopView(
           reduced: burn.reduced,
           out: true,
         });
-        job.lastAt = now;
+        // From its intended start, so a late frame advances it rather than restarting it.
+        job.lastAt = startedAt + job.delay;
       }
       job.effect.update((now - job.lastAt) / 1000);
       job.lastAt = now;
@@ -591,7 +594,8 @@ export function createShopView(
     render([], false);
   }
 
-  function burnEffect(): EffectHandle {
+  function burnEffect(startMs: number): EffectHandle {
+    if (burn && burn.startedAt === null) burn.startedAt = startMs;
     return {
       update: advanceBurn,
       // Cut short (the scene left, a new run): the offers go at once, not completed.

@@ -188,7 +188,11 @@ function recordingHost() {
         render: (offers: readonly ShopOffer[], visible: boolean) =>
           calls.push(`shop:${visible}:${offers.length}`),
         present: () => {},
-        burnEffect: () => ({ update: () => "finished" as const, cancel() {}, dispose() {} }),
+        burnEffect: (_startMs: number) => ({
+          update: () => "finished" as const,
+          cancel() {},
+          dispose() {},
+        }),
         startBurn: () => {},
         finishBurn: () => {},
         outgoingDone: () => Promise.resolve(true),
