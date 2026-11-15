@@ -1721,3 +1721,7 @@ The [shop Continue contract](shop-continue-block.md) composes a non-modal HUD wo
 ## Composable stage score graph (#1082)
 
 [Line Goes Up](line-goes-up.md) defines authoritative persisted per-stage score history and four reusable capabilities: a plain-data 2D plot surface, a positioned world-space framed picture, a committed-score presentation controller, and an explicitly triggered attachment-release effect. Graph placement is scene configuration, not background logic; score-history mutation is model commit work, not a presentation subscription. All finite graph/fall/sound timing uses the shared scheduler. This is an owner-approved target for #1063–#1066, #1080 and #1085–#1087, not a claim these interfaces are already implemented.
+
+## Composed shop control presentation (#992)
+
+[Shop control blocks](shop-control-blocks.md) defines a shared configured cube stage for Buy/Sell/Continue, independent appearance/motion/input capabilities, explicit purchase/sale ownership, and a reusable return-source-then-invoke-action target for Continue. Three-axis precession is the shared result-menu capability, not shop-specific animation. Scene configuration supplies anchors and presentation references; generic services have no phase/control identity branches. Runtime follows after this and the motion contracts merge.
