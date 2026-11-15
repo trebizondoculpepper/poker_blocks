@@ -126,7 +126,7 @@ For example, a pair of sevens scores `(7+7)×2 = 28` and three sevens score `(7+
 
 Provisional rules to confirm in review:
 
-- **Long lines:** a line of 6 or more scores the five-card subset with the highest points. On a tie, the stronger hand type wins, then the first subset in line order.
+- **Long lines (owner rule, 2026-11-15, #1267):** a line of 6 or more scores the five-card subset with the **strongest poker hand type first**, whatever its points: a full house beats two pair even when the two pair would score more. Among subsets of that same hand type, the one with the highest **unmodified** points wins: the cards' intrinsic scorable values times the hand multiplier, excluding material additions, multipliers and powers, acquired bonuses and passive contributions. Those modifiers apply only after the contributors are chosen, so they can't change which subset is selected. An exact tie of hand type and unmodified points goes to the first subset in line order. For example, two Kings, three Queens and two Jacks select the full house QQQKK, unmodified `(12+12+12+13+13)×5 = 310`; materials on the Jacks can't make two pair win or swap the pair to Jacks. Only the selected contributors activate (except independently documented row-presence rules), and evaluating candidates publishes no activation and draws no randomness. This supersedes the earlier "highest points first, stronger type on ties" rule.
 - **Aces in straights:** aces are high only (10-J-Q-K-A). Whether A-2-3-4-5 also counts is open question 10.
 - **Five of a kind** and other hands that need a modified deck are not scored yet.
 
