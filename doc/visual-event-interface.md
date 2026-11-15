@@ -95,3 +95,7 @@ Verify two valid plays while earlier feedback runs; a material replacement and a
 ## Action-correlated contribution reservations (#1216)
 
 [The phase interface](action-presentation-phases.md) adds an action-generation keyed registry of reserved contribution handles over these same scheduler scopes. Producers reserve before sealing; scoring completion opens independent post-score work; full required completion includes that work before an outcome cue. It adds no second timed queue or live-model access. Existing private flight and narration scopes require explicit adaptation, not assumed nesting.
+
+## Terminal scope lifetime (#1235)
+
+[Terminal status ownership](scheduler-terminal-status.md) releases full scope/config/listener records after settlement while weak handle-keyed immutable status preserves late status/observe semantics. Generation disposal cancels active work; it does not falsify already terminal results. Scope counts describe unresolved owned records, not historical actions.
