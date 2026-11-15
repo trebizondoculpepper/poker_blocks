@@ -161,12 +161,41 @@ function adapterOf(node: THREE.Object3D, side: MaskSide): string | undefined {
  * dither. A ShaderMaterial's clone **shares its live uniform values**, so a contained simulation
  * keeps animating while masked, and the source material is never changed.
  */
+/**
+ * A live view of a source material's uniforms (#1350): reads, including entries the source's owner
+ * replaces or adds at render time, always come from the source; the mask's own uniforms are kept
+ * apart, so the source never gains them.
+ */
+export function liveUniforms(
+  source: Record<string, THREE.IUniform>,
+): Record<string, THREE.IUniform> {
+  const own: Record<string, THREE.IUniform> = {};
+  return new Proxy(source, {
+    get: (target, key) => (key in own ? own[key as string] : Reflect.get(target, key)),
+    set: (_target, key, value) => {
+      own[key as string] = value as THREE.IUniform;
+      return true;
+    },
+    has: (target, key) => key in own || key in target,
+    ownKeys: (target) => [...new Set([...Reflect.ownKeys(target), ...Reflect.ownKeys(own)])],
+    getOwnPropertyDescriptor: (target, key) =>
+      key in own
+        ? { value: own[key as string], writable: true, enumerable: true, configurable: true }
+        : Reflect.getOwnPropertyDescriptor(target, key),
+  });
+}
+
+/*
+ * Points (#1350): the mask is decided per **sprite**, from its vertex position, so a particle
+ * (a bubble, a star) appears or goes whole rather than being cut through; sprites here are a few
+ * pixels across, so no per-pixel coverage is attempted.
+ */
 export const shaderSurfaceAdapter: MaskAdapter = {
   adapt(original, uniforms, role) {
     const made = original.clone();
     made.userData = original.userData;
     const shared = (original as THREE.ShaderMaterial).uniforms;
-    if (shared) (made as THREE.ShaderMaterial).uniforms = { ...shared };
+    if (shared) (made as THREE.ShaderMaterial).uniforms = liveUniforms(shared);
     const before = original.onBeforeCompile.bind(original);
     const key = original.customProgramCacheKey.bind(original);
     made.customProgramCacheKey = () => `${key()}|pairedMaskShader:${role}`;
