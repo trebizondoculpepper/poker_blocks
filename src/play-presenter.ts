@@ -436,7 +436,18 @@ export function createPlayPresenter(options: {
     if (elapsed < lasts) return true;
     playing = playing.filter((other) => other !== action);
     action.effects.forEach((effect) => effect.finish());
+    // Each landing is checked against the flight's own mount first (#1164), kept current by
+    // committed facts: a block removed mid-flight is never adopted into the field at all, and a
+    // changed one is adopted with its latest appearance. Never the live model or the cell.
     for (const flight of action.flights) {
+      const latest = flightMounts.resolve(flight.mount);
+      flightMounts.remove(flight.mount);
+      if (!latest) {
+        // Removed while it flew (the Nothingifier, #156): nothing of it lands.
+        views.dispose(flight.source);
+        if (flight.target) field.remove(flight.target.block.id);
+        continue;
+      }
       if (flight.target) {
         views.dispose(flight.source);
         flight.target.cube.visible = true;
@@ -446,20 +457,9 @@ export function createPlayPresenter(options: {
         // Same look in hand and on the table: the flying block simply stays.
         field.adopt(flight.source, flight.cell);
       }
-    }
-    // A block changed while it flew (a transmogrifier dropped on it mid-flight, #389) lands as
-    // the model has it now, and one removed while it flew (the Nothingifier, #156) doesn't
-    // stay: model first, presentation catches up.
-    // From the flight's own mount, which committed facts kept current (#1164): never the live
-    // model, and never whatever now occupies the captured cell.
-    for (const flight of action.flights) {
-      const latest = flightMounts.resolve(flight.mount);
-      flightMounts.remove(flight.mount);
-      const shown = field.blocks().find(({ block }) => block.id === flight.landing.id);
-      if (!shown) continue;
-      if (!latest) field.remove(shown.block.id);
-      else if (latest.appearance !== flight.landing) {
-        field.remove(shown.block.id);
+      // Changed while it flew (a transmogrifier mid-flight, #389): it lands as last committed.
+      if (latest.appearance !== flight.landing) {
+        field.remove(flight.landing.id);
         field.add(latest.appearance, flight.cell);
       }
     }
@@ -680,6 +680,8 @@ export function createPlayPresenter(options: {
       for (const scope of Array.from(actionScopes)) options.visualEvents.cancel(scope);
       // Bound flights are cancelled with their action records' generation (#1219).
       options.placementPhase?.reset();
+      // Their mounts end with them (#1164 review).
+      flightMounts.resetGeneration();
       resetting = false;
       actionScopes.clear();
       waiting.clear();
