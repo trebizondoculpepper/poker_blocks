@@ -7,19 +7,40 @@
 import type { ConsoleCommand } from "../console/commands";
 import type { DebugSnapshot } from "./debug-snapshot";
 
-/** The browser clipboard; a refusal or a missing API resolves false, never throws. */
-export async function copyToClipboard(text: string): Promise<boolean> {
+/** What copying achieved: copied, or not, with the explanation the clipboard capability gives. */
+export type CopyResult = { copied: true } | { copied: false; explanation: string };
+
+/** Over plain HTTP on a network address the browser offers no clipboard at all (#1260). */
+export const insecureContextExplanation =
+  "Automatic clipboard copying requires HTTPS or localhost. Select the snapshot text above and copy it manually.";
+/** Any other refusal in a secure context: permission, focus or an unavailable API. */
+export const refusedExplanation = "could not copy: select the snapshot text above instead";
+
+/**
+ * The browser clipboard. It never throws: an insecure context, where the browser withholds the
+ * clipboard, is explained as such; any other refusal keeps the generic explanation.
+ */
+export async function copyToClipboard(
+  text: string,
+  environment: { isSecureContext?: boolean; clipboard?: Pick<Clipboard, "writeText"> } = {
+    isSecureContext: globalThis.isSecureContext,
+    clipboard: globalThis.navigator?.clipboard,
+  },
+): Promise<CopyResult> {
+  if (environment.isSecureContext === false)
+    return { copied: false, explanation: insecureContextExplanation };
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
+    if (!environment.clipboard) throw new Error("no clipboard");
+    await environment.clipboard.writeText(text);
+    return { copied: true };
   } catch {
-    return false;
+    return { copied: false, explanation: refusedExplanation };
   }
 }
 
 export function debugSnapshotCommand(
   snapshot: () => DebugSnapshot,
-  copyText: (text: string) => Promise<boolean> = copyToClipboard,
+  copyText: (text: string) => Promise<CopyResult> = copyToClipboard,
 ): ConsoleCommand {
   return {
     name: "debug snapshot",
@@ -29,10 +50,10 @@ export function debugSnapshotCommand(
       // One line, so the console's screen limit can never cut off the start of the report,
       // and the whole of it stays selectable if the clipboard refuses.
       const text = JSON.stringify(snapshot());
-      void copyText(text).then((copied) =>
-        copied
+      void copyText(text).then((result) =>
+        result.copied
           ? host.say("snapshot copied to the clipboard", "output")
-          : host.say("could not copy: select the snapshot text above instead", "error"),
+          : host.say(result.explanation, "error"),
       );
       return text;
     },
