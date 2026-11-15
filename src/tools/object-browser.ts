@@ -41,6 +41,8 @@ type BrowsedObject = {
   note?: string;
   /** Its release status's public presentation (#813, #923): a list badge and page lines, if any. */
   status?: ReleaseStatusPresentation;
+  /** A link to where it can be experienced (#1012), with a short explanation. */
+  action?: { label: string; href: string; note: string };
   properties: unknown;
   /** A model to turn in the preview, or nothing for objects without one (a sound). */
   /** A preview, with any prepasses its look declares (#971) for the browser's own renderer. */
@@ -183,6 +185,12 @@ const categories: readonly Category[] = [
       soundEffects.map((effect) => ({
         id: effect.id,
         name: effect.name,
+        // The browser shows a sound's record; the listening room plays it (#1012).
+        action: {
+          label: "Open in listening room",
+          href: listeningRoomLink(effect.id),
+          note: "Opens the sound's row in the listening room, ready to play. Nothing plays until you press it.",
+        },
         properties: {
           ...effect,
           usage: (usage as Record<string, unknown>)[effect.id] ?? { uses: 0, files: {} },
@@ -190,6 +198,11 @@ const categories: readonly Category[] = [
       })),
   },
 ];
+
+/** The same-origin listening room, opened at one registered sound (#1012). */
+export function listeningRoomLink(id: string): string {
+  return `/sfx.html?sound=${encodeURIComponent(id)}`;
+}
 
 export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
   const root = document.createElement("section");
@@ -207,6 +220,10 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
       <p class="object-browser-id" data-browser="id"></p>
       <p class="object-browser-note" data-browser="note"></p>
       <p class="object-browser-status-line" data-browser="status"></p>
+      <p class="object-browser-action" data-browser="action-row">
+        <a data-browser="action" target="_blank" rel="noopener"></a>
+        <span data-browser="action-note"></span>
+      </p>
       <div class="object-browser-preview" data-browser="preview"></div>
       <div class="object-browser-view" data-browser="view">
         <button type="button" data-browser="auto">Auto rotate</button>
@@ -353,6 +370,10 @@ export function createObjectBrowser(host: HTMLElement): ObjectBrowser {
     part("note").hidden = !object.note;
     part("status").textContent = (object.status?.lines ?? []).join("\n");
     part("status").hidden = !object.status?.lines.length;
+    part("action-row").hidden = !object.action;
+    part<HTMLAnchorElement>("action").href = object.action?.href ?? "";
+    part("action").textContent = object.action?.label ?? "";
+    part("action-note").textContent = object.action?.note ?? "";
     showPreview(object);
     showProperties(object.properties);
   }
