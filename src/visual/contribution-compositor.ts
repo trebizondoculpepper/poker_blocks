@@ -112,11 +112,14 @@ void main() {
   vec2 local = (vUv - origin) * vec2(aspect, 1.0);
   vec4 s = texture2D(sourceMap, vUv);
   vec4 e = texture2D(endpointMap, vUv);
-  // Premultiplied, so a faded contribution never leaves a solid colour.
-  vec4 c = transition(vec4(s.rgb * s.a, s.a), vec4(e.rgb * e.a, e.a), local);
-  gl_FragColor = c;
-  // The targets hold linear colour: convert to the output's colour space like any scene draw.
+  // Captures cleared to transparent black and drawn with normal blending already hold
+  // premultiplied colour (#1312): composite them as they are, so translucent cards don't darken.
+  vec4 c = transition(s, e, local);
+  // The targets hold linear, premultiplied colour. Convert straight colour to the output's colour
+  // space like any scene draw, then premultiply again for the blend (#1312).
+  gl_FragColor = vec4(c.a > 0.0 ? c.rgb / c.a : vec3(0.0), c.a);
   #include <colorspace_fragment>
+  gl_FragColor.rgb *= gl_FragColor.a;
 }`;
 
 export function createContributionCompositor(options: {
@@ -168,13 +171,21 @@ export function createContributionCompositor(options: {
   compositeScene.add(quad);
   const compositeCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
+  /**
+   * Out of the ordinary render (layer 0) and onto the capture layer, keeping any other layers it
+   * was on (#1312): prepasses that select objects by their own layer still find them.
+   */
+  const onCaptureLayer = (object: THREE.Object3D, layer: number) => {
+    const mask = saved.get(object) ?? object.layers.mask;
+    object.layers.mask = (mask & ~1) | (1 << layer);
+  };
   // Move each side onto its own layer, remembering every object's mask to restore once.
   const saved = new Map<THREE.Object3D, number>();
   const assign = () =>
     sides.forEach((side, index) =>
       side.root.traverse((object) => {
         if (!saved.has(object)) saved.set(object, object.layers.mask);
-        object.layers.set(layers[index]!);
+        onCaptureLayer(object, layers[index]!);
       }),
     );
   assign();
@@ -191,7 +202,7 @@ export function createContributionCompositor(options: {
     // Objects added to a side since the last frame join its layer too.
     side.root.traverse((object) => {
       if (!saved.has(object)) saved.set(object, object.layers.mask);
-      object.layers.set(layers[index]!);
+      onCaptureLayer(object, layers[index]!);
     });
     frame.camera.layers.set(layers[index]!);
     frame.renderer.setRenderTarget(targets[index]!);
