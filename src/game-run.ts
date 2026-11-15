@@ -1,3 +1,4 @@
+import { appendStagePlay, legacyStageHistory, startStageHistory } from "./stage-score-history";
 import type { DeckBuilderStep } from "./deck-builder";
 import {
   attachPlayfield,
@@ -97,6 +98,15 @@ export type RunPositionOutcome = `run.position.${RunPhase}`;
  */
 export type RunFlowOutcome = RunPositionOutcome | "run.stage.won";
 
+/** Each stage starts its own score history at (0, 0) with its resolved allowance (#1063). */
+const withStageHistory = (
+  state: GameState,
+  rules: { plays: number; targetScore: number },
+): GameState => ({
+  ...state,
+  round: { ...state.round, history: startStageHistory(rules, state.round.history) },
+});
+
 /** What a future save/Continue flow needs to restore a run. */
 export type RunSnapshot = {
   round: number;
@@ -179,7 +189,7 @@ export class GameRun {
     const setup = config.stage(1, "stage-1");
     this.activeDealer = dealers.get(setup.dealer);
     // One stage start, so the opening deck is shuffled once and the hand is its top (#551).
-    this.currentState = this.activeDealer.startGame(cards, random, setup);
+    this.currentState = withStageHistory(this.activeDealer.startGame(cards, random, setup), setup);
     this.passiveEvents.syncRack(this.currentState.passiveRack);
     this.lifecycle("stage.started");
   }
@@ -210,6 +220,18 @@ export class GameRun {
     session.deckRecipe = snapshot.deckRecipe;
     session.randomCursor = snapshot.random;
     session.actions = ActionLedger.restore(snapshot.actions);
+    // A save from before stage history (#1063) keeps its score as a known checkpoint.
+    if (session.inStage && !snapshot.state.round.history) {
+      const history = legacyStageHistory(
+        snapshot.state.round,
+        config.stage(snapshot.round, snapshot.phase as StageKind).plays,
+      );
+      if (history)
+        session.currentState = {
+          ...session.currentState,
+          round: { ...session.currentState.round, history },
+        };
+    }
     session.passiveEvents.syncRack(snapshot.state.passiveRack);
     // A stage saved after it was decided already announced its outcome.
     session.decidedStage =
@@ -1006,7 +1028,19 @@ export class GameRun {
     this.runStats = recordPlay(this.runStats, total.value, order.length);
     this.currentState = {
       ...this.currentState,
-      round: { ...this.currentState.round, score: scoreBefore + total.value },
+      round: {
+        ...this.currentState.round,
+        score: scoreBefore + total.value,
+        // The scoring commit owns the stage history, in the same transaction (#1063).
+        ...(this.currentState.round.history
+          ? {
+              history: appendStagePlay(this.currentState.round.history, {
+                actionId: context.actionId,
+                delta: total.value,
+              }),
+            }
+          : {}),
+      },
     };
     this.passiveEvents.emit({ type: "score.totalApplied", amount: total.value });
     this.drainPhase(context, "score", batchId);
@@ -1317,6 +1351,7 @@ export class GameRun {
       setup,
       this.random,
     );
+    this.currentState = withStageHistory(this.currentState, setup);
     this.currentPhase = kind;
     this.passiveEvents.syncRack(this.currentState.passiveRack);
     this.lifecycle("stage.started");
