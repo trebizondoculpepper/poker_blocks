@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 /** Every scene each fake WebGL renderer was asked to draw, in order. */
-const drawn: { canvas: "back" | "front"; scene: THREE.Scene }[] = [];
+const drawn: { canvas: "back" | "front"; scene: THREE.Scene; renderer?: unknown }[] = [];
 let made = 0;
 
 vi.mock("three", async (importOriginal) => {
@@ -24,7 +24,7 @@ vi.mock("three", async (importOriginal) => {
     clearDepth() {}
     dispose() {}
     render(scene: THREE.Scene) {
-      drawn.push({ canvas: this.canvas, scene });
+      drawn.push({ canvas: this.canvas, scene, renderer: this });
     }
   }
   class FakePmrem {
@@ -86,5 +86,54 @@ describe("table renderer layer ownership (#789)", () => {
     table.render(camera, camera);
     expect(drawn.some(({ scene }) => scene === table.handScene)).toBe(true);
     expect(drawn.some(({ scene }) => scene === table.scene)).toBe(false);
+  });
+});
+
+describe("ordered back composition (#1373; doc/room-scenery.md)", () => {
+  it("draws backdrop, then each background contribution, then the table, restoring state", async () => {
+    const { createTableRenderer } = await import("./table-renderer");
+    const table = createTableRenderer(element(), element());
+    const backdrop = new THREE.Texture();
+    table.scene.background = backdrop;
+    table.tableEntered(true);
+    const camera = new THREE.PerspectiveCamera();
+    const order: string[] = [];
+    const remove = table.addBackground({ render: () => void order.push("decorations") });
+    const autoClear = table.renderer.autoClear;
+    drawn.length = 0;
+    table.render(camera, camera);
+    const back = drawn.filter(({ renderer }) => renderer === table.renderer);
+    // The backdrop alone first, then the table scene without a background to erase it.
+    expect(back[0]!.scene.background).toBe(null);
+    expect(back[0]!.scene).not.toBe(table.scene);
+    expect(order).toEqual(["decorations"]);
+    expect(back.at(-1)!.scene).toBe(table.scene);
+    expect(table.scene.background).toBe(backdrop);
+    expect(table.renderer.autoClear).toBe(autoClear);
+    remove();
+    order.length = 0;
+    table.render(camera, camera);
+    expect(order).toEqual([]);
+  });
+
+  it("puts the backdrop, auto-clear and camera layers back when a contribution throws", async () => {
+    const { createTableRenderer } = await import("./table-renderer");
+    const table = createTableRenderer(element(), element());
+    const backdrop = new THREE.Texture();
+    table.scene.background = backdrop;
+    table.tableEntered(true);
+    const camera = new THREE.PerspectiveCamera();
+    camera.layers.set(3);
+    const autoClear = table.renderer.autoClear;
+    const remove = table.addBackground({
+      render: () => {
+        throw new Error("lost");
+      },
+    });
+    expect(() => table.render(camera, camera)).toThrow("lost");
+    expect(table.scene.background).toBe(backdrop);
+    expect(table.renderer.autoClear).toBe(autoClear);
+    expect(camera.layers.mask).toBe(1 << 3);
+    remove();
   });
 });
