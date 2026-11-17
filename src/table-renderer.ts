@@ -149,6 +149,13 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
     const background = scene.background;
     const autoClear = renderer.autoClear;
     const layers = camera.layers.mask;
+    // Everything a contribution may change on the shared renderer (doc/room-scenery.md).
+    const target = renderer.getRenderTarget();
+    const viewport = renderer.getViewport(new THREE.Vector4());
+    const scissor = renderer.getScissor(new THREE.Vector4());
+    const scissorTest = renderer.getScissorTest();
+    const clearColour = renderer.getClearColor(new THREE.Color());
+    const clearAlpha = renderer.getClearAlpha();
     try {
       backdropOnly.background = background;
       renderer.autoClear = false;
@@ -164,6 +171,11 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
       scene.background = background;
       renderer.autoClear = autoClear;
       camera.layers.mask = layers;
+      renderer.setRenderTarget(target);
+      renderer.setViewport(viewport);
+      renderer.setScissor(scissor);
+      renderer.setScissorTest(scissorTest);
+      renderer.setClearColor(clearColour, clearAlpha);
     }
   }
 

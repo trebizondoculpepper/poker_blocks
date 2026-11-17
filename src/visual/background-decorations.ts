@@ -53,7 +53,16 @@ export function createBackgroundDecorationHost(options: { layoutHeight?: number 
   const key = new THREE.DirectionalLight(0xffffff, 1.2);
   key.position.set(-2, 3, 5);
   scene.add(ambient, key);
-  const camera = new THREE.OrthographicCamera(-1, 1, height / 2, -height / 2, 0.1, 100);
+  // Square to start (width = height), matching `width` below, so a square first surface needs
+  // no resize to be right.
+  const camera = new THREE.OrthographicCamera(
+    -height / 2,
+    height / 2,
+    height / 2,
+    -height / 2,
+    0.1,
+    100,
+  );
   camera.position.set(0, 0, 50);
   const size = new THREE.Vector2();
   let width = height;
