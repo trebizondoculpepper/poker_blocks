@@ -87,6 +87,7 @@ import { registerBinControlPresenter } from "./bin-control-presenter";
 import { createControlGroup } from "./block-menu/control-group";
 import { createSelectionBadge, type SelectionBadge } from "./selection-badge";
 import { createDiscardTarget, createTableInput, type TableInput } from "./table-input";
+import { createBackgroundDecorationHost } from "./visual/background-decorations";
 import { createTableRenderer, type TableRenderer } from "./table-renderer";
 import { createHudFrame } from "./hud-frame";
 import { gameplayHudZones, type HudElement } from "./hud-layout";
@@ -128,6 +129,10 @@ const discardArea = createDiscardTarget(host);
 const bin = createBinView(discardArea);
 const selectionBadge = createSelectionBadge(host);
 const view: TableRenderer = createTableRenderer(host, backgrounds);
+// Stationary background decorations (#1373; doc/room-scenery.md): drawn between the backdrop and
+// the table, under their own layout camera. Scenery is mounted by whatever owns it (#1374).
+const backgroundDecorations = createBackgroundDecorationHost();
+const removeBackgroundDecorations = view.addBackground(backgroundDecorations);
 const render = () => view.render(cameraView.camera, cameraView.handCamera);
 // The playfield rocking resume relay (#783): the scheduler's handler reaches the controller here.
 const rockingRelay = createRockingRelay();
@@ -791,6 +796,8 @@ frame = requestAnimationFrame(animate);
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    removeBackgroundDecorations();
+    backgroundDecorations.dispose();
     survivorFeedback.dispose();
     // The shop's shared control stage and its overlay (#1298).
     shopControls.dispose();

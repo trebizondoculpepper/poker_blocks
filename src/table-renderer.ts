@@ -22,6 +22,9 @@ import {
   type PrepassRequirements,
 } from "./visual/appearance-prepass";
 
+/** A background stage the back canvas draws between the backdrop and the table. */
+export type BackgroundContribution = { render(renderer: THREE.WebGLRenderer): void };
+
 export type TableRenderer = {
   /** The back canvas's renderer: the room and table. Input listens on its canvas. */
   readonly renderer: THREE.WebGLRenderer;
@@ -53,6 +56,12 @@ export type TableRenderer = {
    * render contexts (the board and the hand), each with its own targets.
    */
   readonly prepasses: PrepassRequirements;
+  /**
+   * Add a background contribution (#1373; doc/room-scenery.md, "Render ordering"): drawn on the
+   * back canvas after the stationary backdrop and before the table, in registration order, each
+   * preserving the colour before it. Returns how to remove it.
+   */
+  addBackground(contribution: BackgroundContribution): () => void;
   /** Per frame: the card room's lamp follows the structure. */
   frame(center: THREE.Vector3, radius: number, delta: number): void;
   dispose(): void;
@@ -125,8 +134,53 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
   /** Prepasses take presentation time; the table's main renders don't, so none is counted. */
   const still = { delta: 0, reducedMotion: false };
 
-  /** The back pass: the room and table, with every shadow-casting block standing in. */
+  /** Background contributions, by handle, in registration order (#1373). */
+  const contributions = new Set<{ contribution: BackgroundContribution }>();
+  /** An empty scene that draws only the backdrop image, once, before the contributions. */
+  const backdropOnly = new THREE.Scene();
+
+  /**
+   * The back pass, in order (#1373): the stationary backdrop image, then each background
+   * contribution over it, then the table and its shadows through the gameplay camera, which
+   * covers the contributions by screen order, never by comparing their depths. The board scene's
+   * background, auto-clear and camera layers are put back even if a stage throws.
+   */
   function renderBack(camera: THREE.Camera): void {
+    const background = scene.background;
+    const autoClear = renderer.autoClear;
+    const layers = camera.layers.mask;
+    // Everything a contribution may change on the shared renderer (doc/room-scenery.md).
+    const target = renderer.getRenderTarget();
+    const viewport = renderer.getViewport(new THREE.Vector4());
+    const scissor = renderer.getScissor(new THREE.Vector4());
+    const scissorTest = renderer.getScissorTest();
+    const clearColour = renderer.getClearColor(new THREE.Color());
+    const clearAlpha = renderer.getClearAlpha();
+    try {
+      backdropOnly.background = background;
+      renderer.autoClear = false;
+      renderer.clear();
+      if (background) renderer.render(backdropOnly, camera);
+      for (const { contribution } of contributions) contribution.render(renderer);
+      // The table's own pass keeps what is behind it: no background, a fresh depth buffer.
+      scene.background = null;
+      renderer.clearDepth();
+      renderTable(camera);
+    } finally {
+      backdropOnly.background = null;
+      scene.background = background;
+      renderer.autoClear = autoClear;
+      camera.layers.mask = layers;
+      renderer.setRenderTarget(target);
+      renderer.setViewport(viewport);
+      renderer.setScissor(scissor);
+      renderer.setScissorTest(scissorTest);
+      renderer.setClearColor(clearColour, clearAlpha);
+    }
+  }
+
+  /** The room and table, with every shadow-casting block standing in. */
+  function renderTable(camera: THREE.Camera): void {
     const casters: { mesh: THREE.Mesh; material: THREE.Mesh["material"] }[] = [];
     scene.traverse((object) => {
       const mesh = object as THREE.Mesh;
@@ -135,14 +189,14 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
       mesh.material = shadowOnly;
       mesh.layers.enable(backgroundLayer);
     });
-    const layers = camera.layers.mask;
     camera.layers.set(backgroundLayer);
-    renderer.clear();
-    renderer.render(scene, camera);
-    camera.layers.mask = layers;
-    for (const { mesh, material } of casters) {
-      mesh.material = material;
-      mesh.layers.disable(backgroundLayer);
+    try {
+      renderer.render(scene, camera);
+    } finally {
+      for (const { mesh, material } of casters) {
+        mesh.material = material;
+        mesh.layers.disable(backgroundLayer);
+      }
     }
   }
 
@@ -166,6 +220,11 @@ export function createTableRenderer(host: HTMLElement, backgrounds: HTMLElement)
   }
 
   return {
+    addBackground(contribution) {
+      const entry = { contribution };
+      contributions.add(entry);
+      return () => void contributions.delete(entry);
+    },
     renderer,
     front,
     scene,
