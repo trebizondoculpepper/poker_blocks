@@ -22,7 +22,7 @@ import {
   type ActivationLabelPayload,
   type AnchorPoint,
 } from "./visual/activation-labels";
-import { unitMs } from "./visual-events/scheduler";
+import { unitMs, type EffectHandle } from "./visual-events/scheduler";
 
 const slotWidth = 72;
 const slotGap = 8;
@@ -87,6 +87,13 @@ export type RackLabelAnchors = {
   anchorOf(sourceId: string): () => AnchorPoint | null;
 };
 export type RackLabelServices = { passiveRack?: RackLabelAnchors };
+
+/** The rack as the visual-event service that shows installed items' activation pulses (#540). */
+export type RackPulseHost = {
+  presents(this: void, sourceId: string): boolean;
+  pulse(sourceId: string, fromMs: number, nowMs: number): EffectHandle | null;
+};
+export type RackPulseHostServices = { rackPulses?: RackPulseHost };
 
 /**
  * The rack's label anchor space (#919): the opaque anchor is the item's instance id, resolved
@@ -159,7 +166,16 @@ export function projectedBounds(
 }
 
 /** A fixed screen-space rack with one Three.js scene for all rotating passive blocks. */
-export function createPassiveRack(host: HTMLElement): {
+export function createPassiveRack(
+  host: HTMLElement,
+  options: {
+    /**
+     * The presentation clock now, in milliseconds: the one the shared scheduler runs on, so a
+     * pulse's scheduled start and the frame advancing it are the same time base (#540 review).
+     */
+    clock(): number;
+  },
+): {
   element: HTMLElement;
   /**
    * A scene composing `passiveRackView` came to the front, or left (#187). The rack is shown,
@@ -177,10 +193,17 @@ export function createPassiveRack(host: HTMLElement): {
   preview(order: readonly string[] | null): void;
   frame(time: number, reducedMotion: boolean): void;
   /**
-   * A rule from this source fired: if it is an installed passive, play its category's
-   * activation effect and sound. Other sources (a card's own rules) are not in the rack.
+   * Whether this rack shows a pulse for the committed source: true for an installed passive,
+   * false for anything else (a card's own rules, an item that has left the rack). The already
+   * decided activation is shown by `pulse` (#540); this only says whether there is one to show.
    */
-  activate(sourceId: string): void;
+  presents(this: void, sourceId: string): boolean;
+  /**
+   * Begin one installed item's activation pulse and sound, presented as of `fromMs` (its
+   * scheduled start on the presentation clock) while that clock reads `nowMs`. Null when
+   * nothing is shown: the item has left the rack, or its pulse would already have ended.
+   */
+  pulse(sourceId: string, fromMs: number, nowMs: number): EffectHandle | null;
   /**
    * The label shown beside an installed item when it activates in a scored line (#919): its
    * text from the item's own composed descriptor, lasting as long as its pulse, anchored to its
@@ -375,7 +398,10 @@ export function createPassiveRack(host: HTMLElement): {
     preview(next) {
       place(next ?? order);
     },
+    // The playfield's own time drives the cubes; the pulses run on the presentation clock their
+    // starts were scheduled on, which differs after hidden time or a held scene (#540 review).
     frame(time, reducedMotion) {
+      const pulseTime = options.clock();
       for (const [index, entry] of [...rendered.values()].entries()) {
         const { mesh, targetX, arrivalAt, item } = entry;
         const arrived = arrivalAt === null || time >= arrivalAt || reducedMotion;
@@ -388,7 +414,7 @@ export function createPassiveRack(host: HTMLElement): {
           );
           if (arrivalAt !== null && (reducedMotion || time - arrivalAt >= 360))
             entry.arrivalAt = null;
-          entry.pulse.frame(time, reducedMotion);
+          entry.pulse.frame(pulseTime, reducedMotion);
         }
         const angle = reducedMotion ? 0 : time * 0.00028;
         mesh.rotation.set(
@@ -399,12 +425,33 @@ export function createPassiveRack(host: HTMLElement): {
       }
       if (rendered.size) draw(reducedMotion);
     },
-    activate(sourceId) {
+    presents(sourceId) {
+      return rendered.has(sourceId);
+    },
+    pulse(sourceId, fromMs, nowMs) {
       const entry = rendered.get(sourceId);
-      if (!entry) return;
+      if (!entry) return null;
       const activation = passiveActivation(entry.block);
-      entry.pulse.start(activation.effect, performance.now());
+      const endsAt = fromMs + pulseMilliseconds(activation.effect);
+      // Started after its own interval already ended (a budget-delayed dispatch): nothing shows,
+      // rather than a burst of feedback for a moment that is over.
+      if (nowMs >= endsAt) return null;
+      // A repeat restarts the same pulse, so this start owns it: an earlier effect that settles
+      // later must not put back the activation that replaced it (#540 review).
+      const start = entry.pulse.start(activation.effect, fromMs);
       playSfx(activation.sfx);
+      const stop = () => {
+        if (entry.pulse.owns(start)) entry.pulse.stop();
+      };
+      return {
+        update: (at) => {
+          if (at < endsAt) return "running";
+          stop();
+          return "finished";
+        },
+        cancel: stop,
+        dispose: stop,
+      };
     },
     labelFor(activation) {
       const entry = rendered.get(activation.sourceId);

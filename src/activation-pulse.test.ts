@@ -67,6 +67,22 @@ describe("activation pulse (#485)", () => {
     expect(target.material.emissiveIntensity).toBe(0.2);
   });
 
+  it("tells each start whether it still owns the pulse, so a repeat is never cut short (#540)", () => {
+    const target = mount();
+    const p = createActivationPulse(target);
+    const first = p.start(pulse, 0);
+    // The same item activates again mid-pulse: a repeat restarts the timing, not the ownership.
+    const second = p.start(pulse, 100);
+    expect(p.owns(first)).toBe(false);
+    expect(p.owns(second)).toBe(true);
+    // The first one settling must leave the newer pulse running.
+    p.frame(100 + pulseMilliseconds(pulse) / 2, false);
+    expect(p.running).toBe(true);
+    expect(target.object.scale.x).toBeGreaterThan(2);
+    p.frame(100 + pulseMilliseconds(pulse), false);
+    expect(p.running).toBe(false);
+  });
+
   it("a passive's look is its own when composed, else its category's", () => {
     const base = {
       id: "p",
