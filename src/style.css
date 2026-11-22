@@ -1343,13 +1343,13 @@ body,
   color: #111;
 }
 
-/* The in-run deck view (#175): a read-only list of the deck by rank. */
-.deck-view {
+/* The in-run run status panel (#175, #1378): a read-only tabbed list, the deck first. */
+.status-host {
   position: absolute;
   z-index: 12;
   inset: 0;
   display: grid;
-  /* Safe: when the deck overflows a short screen, it starts at the top and scrolls. */
+  /* Safe: when the panel overflows a short screen, it starts at the top and scrolls. */
   align-content: safe center;
   justify-items: center;
   gap: 12px;
@@ -1360,67 +1360,101 @@ body,
   font-family: system-ui, sans-serif;
 }
 
-.deck-view[hidden] {
+.status-host[hidden] {
   display: none;
 }
 
-.deck-view-heading {
+.status-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.status-tab {
+  min-width: 88px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #8191a777;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font:
+    700 14px system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.status-tab[aria-selected="true"] {
+  border-color: #9ce6d7;
+  background: #9ce6d7;
+  color: #10202b;
+}
+
+.status-panel {
+  display: grid;
+  gap: 10px;
+  width: min(760px, 100%);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.status-panel:focus-visible,
+.status-tab:focus-visible,
+.status-row:focus-visible,
+.status-back:focus-visible {
+  outline: 2px solid #9ce6d7;
+  outline-offset: 2px;
+}
+
+.status-heading {
   margin: 0;
   color: #9ce6d7;
   font-size: 15px;
   letter-spacing: 0.18em;
 }
 
-.deck-view-details {
-  min-height: 1.4em;
+.status-summary,
+.status-details,
+.status-unavailable {
   margin: 0;
   font-size: 14px;
 }
 
-.deck-view-ranks {
-  display: grid;
-  gap: 6px;
-  width: min(760px, 100%);
+.status-details {
+  min-height: 1.4em;
 }
 
-.deck-view-rank {
+.status-unavailable {
+  color: #f2c14e;
+}
+
+.status-rows {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: 6px;
 }
 
-.deck-view-rank-label {
-  width: 2.2em;
-  color: #9ce6d7;
-  font-weight: 800;
-  text-align: right;
-}
-
-.deck-view-block {
+/* A readable entry: solid and high-contrast, and never disabled-looking when it says something. */
+.status-row {
   min-width: 44px;
   min-height: 44px;
-  padding: 0 6px;
+  padding: 0 8px;
   border: 1px solid #8191a777;
   border-radius: 6px;
   background: #f6f0e3;
+  color: #111;
   font:
     800 15px system-ui,
     sans-serif;
   cursor: help;
 }
 
-.deck-view-location {
-  margin-left: 3px;
-  font-size: 0.75em;
-  opacity: 0.75;
-}
-.deck-view-block:focus-visible {
-  outline: 2px solid #9ce6d7;
-  outline-offset: 2px;
+.status-row:disabled {
+  cursor: default;
+  opacity: 0.9;
 }
 
-.deck-view-back {
+.status-back {
   min-width: 120px;
   min-height: 44px;
   border: 1px solid #9ce6d7;

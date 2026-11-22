@@ -59,7 +59,8 @@ import { createHandView, type HandView } from "./hand-view";
 import { createHudPanels, type HudPanels } from "./hud-panels";
 // Registers the word-cube HUD action presenter (#780).
 import "./block-menu/hud-word-cube";
-import { createDeckView, type DeckView } from "./deck-view";
+import { createStatusView, type StatusView } from "./status-view";
+import { runStatusTabs } from "./run-status-scene";
 import { createOverlays, type Overlays } from "./overlays";
 import { createDialogPresenter } from "./block-menu/block-menus";
 import { createPresentationClock, type PresentationClock } from "./presentation-clock";
@@ -215,7 +216,7 @@ type TraitContext = {
     shop: ShopView;
     dropTargetGuides: DropTargetGuides;
     rack: { viewEntered(entered: boolean, capacity: number): void };
-    deckView: DeckView;
+    deckView: StatusView;
     devShopBalanceEditor: ShopBalanceEditor;
     devObjectBrowser: ShopBalanceEditor;
     devBlockDesigner: ShopBalanceEditor;
@@ -233,7 +234,19 @@ type TraitContext = {
 };
 const attract = createAttractBackground(backgrounds);
 const blockTitles = createBlockTitles(() => host, danceFloor);
-const deckView = createDeckView(host);
+// The read-only run status panel (#1378): its tabs are built from the run as they are shown.
+const deckView: StatusView = createStatusView(host, {
+  tabs: () =>
+    runStatusTabs({
+      inventory: () => run.inventory(),
+      onCommitted: (listener) => run.onCommitted(listener),
+    }),
+  close: () => {
+    playSfx("ui.back");
+    run.dispatch("back");
+  },
+  diagnose: (message) => console.warn(message),
+});
 // The developer tool has its own build boundary; production never imports its UI or data.
 const devShopBalanceEditor: ShopBalanceEditor = import.meta.env.DEV
   ? (await import("./tools/shop-balance-editor")).createShopBalanceEditor(host)

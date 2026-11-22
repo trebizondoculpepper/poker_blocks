@@ -58,7 +58,7 @@ import {
 } from "./scene-traits/dev-manual-block-destroyer";
 import { SceneTraitRegistry } from "./scenes";
 import { Registry } from "./core/registry";
-import type { DeckView } from "./deck-view";
+import type { StatusView } from "./status-view";
 import type { ShopBalanceEditor } from "./tools/shop-balance-editor";
 import { devHudStyleAudition, hudStyle } from "./scene-traits/hud-style";
 import type { SoundEffectId } from "./audio/sfx-registry";
@@ -103,8 +103,8 @@ export type SceneHost = {
     dropTargetGuides: DropTargetGuides;
     /** The passive rack, shown while a scene composing `passiveRackView` is on the stack. */
     rack: { viewEntered(entered: boolean, capacity: number): void };
-    /** The read-only deck view (#175). */
-    deckView: Pick<DeckView, "show" | "hide">;
+    /** The read-only run status panel (#175, #1378); its first tab is the deck. */
+    deckView: Pick<StatusView, "show" | "hide">;
     devShopBalanceEditor: Pick<ShopBalanceEditor, "show" | "hide">;
     devObjectBrowser: Pick<ShopBalanceEditor, "show" | "hide">;
     devBlockDesigner: Pick<ShopBalanceEditor, "show" | "hide">;
@@ -410,20 +410,9 @@ export function sceneBehaviours<Context extends SceneHost>(): SceneTraitRegistry
     resume: ({ services }) => services.bin.sellBinCovered(false),
   });
   behaviours.register("deckView", {
-    // Read-only: the run's inventory (#472), every live card marked with where it is; its Back
-    // button goes back. It never changes the run.
-    enter({ services }) {
-      const records = services.run.inventory();
-      const where = new Map(records.map(({ card, icon, label }) => [card, { icon, label }]));
-      services.deckView.show(
-        records.map(({ card }) => card),
-        () => {
-          services.sound("ui.back");
-          services.run.dispatch("back");
-        },
-        (card) => where.get(card),
-      );
-    },
+    // Read-only: the run status panel (#1378), whose first tab is the run's inventory (#472),
+    // every live card marked with where it is; its Back goes back. It never changes the run.
+    enter: ({ services }) => services.deckView.show(),
     exit: ({ services }) => services.deckView.hide(),
   });
   behaviours.register("devAttractTuning", {

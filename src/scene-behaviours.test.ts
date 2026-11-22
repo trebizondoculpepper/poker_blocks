@@ -18,7 +18,6 @@ function recordingHost() {
   const calls: string[] = [];
   const runAll = new Set<() => void>();
   const shown = new Set<HudPanel>();
-  let deckClose = () => {};
   /** Who waits on the stage-won ledger: the test finishes it when it likes (#951). */
   const ledgerWaiters = new Set<() => void>();
   const host: SceneHost = {
@@ -128,10 +127,8 @@ function recordingHost() {
         cancelGestures: () => void calls.push("gestures:cancel"),
       },
       deckView: {
-        show: (blocks: readonly unknown[], close: () => void) => {
-          calls.push(`deck:${blocks.length}`);
-          deckClose = close;
-        },
+        // The run status panel (#1378): the scene only shows and hides it; its tabs are its own.
+        show: () => void calls.push("deck:show"),
         hide: () => void calls.push("deck:hide"),
       },
       devShopBalanceEditor: {
@@ -295,7 +292,7 @@ function recordingHost() {
     ledgerWaiters.clear();
     waiting.forEach((ready) => ready());
   };
-  return { host, calls, runAll, shown, closeDeck: () => deckClose(), finishLedger };
+  return { host, calls, runAll, shown, finishLedger };
 }
 
 const scene = (id: string, traits: Partial<SceneTraits>) => ({ id, traits });
@@ -520,16 +517,14 @@ describe("scene traits own their behaviour", () => {
     expect(calls).toContain("proof:hide");
   });
 
-  it("lists the deck read-only and goes back from its Back button (#175)", () => {
-    const { host, calls, closeDeck } = recordingHost();
+  it("shows the read-only run status panel and hides it again (#175, #1378)", () => {
+    const { host, calls } = recordingHost();
     const scenes = new SceneManager(sceneBehaviours(), host);
     scenes.register(scene("table", {}));
     scenes.register(scene("deck", { deckView: {} }));
     scenes.switchTo("table");
     scenes.push("deck");
-    expect(calls).toEqual(["deck:0"]);
-    closeDeck();
-    expect(calls).toContain("action:back");
+    expect(calls).toEqual(["deck:show"]);
     scenes.switchTo("table");
     expect(calls).toContain("deck:hide");
   });
